@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- The shell before any JavaScript runs. It carries "en" because that is
+     what the language negotiation resolves an unasked question to
+     (src/i18n/index.ts); src/i18n sets the real language on this element as
+     soon as it loads, before the first paint of the app. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plak</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/touch-icon.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

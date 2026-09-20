@@ -1,0 +1,20 @@
+{
+  "interactiveLogin": true,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {
+          "requestParam": "grant_type",
+          "match": "authorization_code",
+          "claims": {
+            "acr": "http://eidas.europa.eu/LoA/substantial",
+            "email_verified": true
+          }
+        }
+      ]
+    }
+  ]
+}

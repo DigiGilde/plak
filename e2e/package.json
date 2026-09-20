@@ -1,0 +1,11 @@
+{
+  "name": "plak-e2e",
+  "private": true,
+  "description": "E2E-suite (Playwright) tegen de Plak compose-stack (spec 13)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

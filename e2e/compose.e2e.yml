@@ -1,0 +1,50 @@
+# E2E overlay on dev/compose.yml. Run from the repo root as a separate
+# compose project, so the regular dev stack (port 8080) is left alone:
+#
+#   podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml up -d --build
+#
+# Differences from dev:
+# - own host ports (18888/18889, overridable via PLAK_E2E_PORT and
+#   PLAK_E2E_OIDC_PORT), because 8080/8081 may be taken;
+# - mock OIDC with interactiveLogin so the suite can log in as multiple
+#   identities (dev always logs in as dev-beheerder);
+# - looser rate limits: the suite does in seconds what a human does in
+#   minutes, and the limit values themselves are already covered by
+#   backend tests.
+
+services:
+  # Rootless Podman re-chowns an EMPTY named volume on every container
+  # start to the owner of that image's mountpoint (root, because /content
+  # is in no image); as a result the app (uid 1000) cannot create
+  # /content/_tmp as soon as nginx or a bare start touches the volume.
+  # This one-off service makes the volume non-empty with the right owner;
+  # Podman leaves non-empty volumes alone.
+  content-owner:
+    image: docker.io/library/postgres:16
+    user: "0:0"
+    entrypoint: ["sh", "-c", "mkdir -p /content/_tmp && chown -R 1000:1000 /content"]
+    volumes:
+      - content:/content
+    restart: "no"
+
+  mock-oidc:
+    environment:
+      JSON_CONFIG_PATH: /app/mock-oidc-config.e2e.json
+    volumes:
+      - ../e2e/mock-oidc-config.e2e.json:/app/mock-oidc-config.e2e.json:ro
+    ports: !override
+      - "127.0.0.1:${PLAK_E2E_OIDC_PORT:-18889}:8080"
+
+  app:
+    depends_on:
+      content-owner:
+        condition: service_completed_successfully
+    environment:
+      PLAK_BASE_URL: http://beheer.plak.localhost:${PLAK_E2E_PORT:-18888}
+      PLAK_CONTENT_BASE_URL: http://plak.localhost:${PLAK_E2E_PORT:-18888}
+      PLAK_RATELIMIT_LOGIN_MAX: "100"
+      PLAK_RATELIMIT_API_MAX: "600"
+
+  nginx:
+    ports: !override
+      - "127.0.0.1:${PLAK_E2E_PORT:-18888}:8080"

@@ -1,0 +1,203 @@
+# Preparatory: the repo has no remote yet, so this workflow has never run.
+# It records how Plak will end up on ZAD: build and push the image, then
+# deploy with zad-actions.
+#
+# Needed in advance, outside this file:
+#   - repository secret ZAD_API_KEY (to create in the ZAD portal);
+#   - repository variable ZAD_PROJECT_ID (ZAD's project key, with the
+#     suffix the platform assigns);
+#   - a ZAD project following deploy/plak-project.example.yaml, with the
+#     deployment `productie` and the component `beheer`.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: github.event.action != 'closed'
+    uses: ./.github/workflows/ci.yml
+
+  # A dependabot PR does not need a preview environment; the gate above
+  # still runs over it.
+  bouw:
+    if: github.event.action != 'closed' && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Imagetag bepalen
+        id: tag
+        run: |
+          naam="${REGISTRY}/${IMAGE_NAME}"
+          naam="$(echo "${naam}" | tr '[:upper:]' '[:lower:]')"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "image=${naam}:pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=${naam}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Inloggen bij het register
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Needed for the cache step below: the default driver cannot export
+      # cache, this action boots one with the docker-container driver.
+      - name: Buildx klaarzetten
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # Build context is the repo root: the image bundles the built admin
+      # SPA from frontend/ alongside the backend (see
+      # containers/plak/Containerfile).
+      - name: Image bouwen en pushen
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: containers/plak/Containerfile
+          push: true
+          tags: ${{ steps.tag.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: SBOM genereren (CycloneDX)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          format: cyclonedx
+          output: sbom.cdx.json
+          version: v0.74.0
+
+      - name: SBOM bewaren
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
+
+      # Everything in the log first, only then the gate. The difference
+      # between "not found" and "seen, deliberately not blocked" is
+      # exactly what an auditor asks first.
+      - name: Image scannen, volledig rapport (trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          trivyignores: .trivyignore.yaml
+          format: table
+          exit-code: "0"
+          version: v0.74.0
+
+      # A red scan fails `bouw` and thereby also `preview` and `productie`;
+      # the tag stays in the registry, but nothing deploys with it.
+      - name: Image scannen, poort op hoog en kritiek (trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}
+          trivyignores: .trivyignore.yaml
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.74.0
+
+  preview:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    needs: bouw
+    permissions:
+      contents: read
+      pull-requests: write
+    environment:
+      name: pr${{ github.event.pull_request.number }}
+      url: ${{ steps.uitrol.outputs.url }}
+    steps:
+      # clone-from copies the `productie` deployment, but DROPS THE WEB
+      # ADDRESS: a preview lands on the cluster address with a single host,
+      # not on beheer.plak.<domain> plus plak.<domain>. `components` is
+      # also on the clone's exclusion list, so production's env vars do
+      # not come along: a preview needs its own
+      # PLAK_BASE_URL/PLAK_CONTENT_BASE_URL. This action (v2) cannot set
+      # that; see docs/deploying-on-zad.md, "Wat nog openstaat".
+      - name: Uitrollen naar ZAD
+        id: uitrol
+        uses: RijksICTGilde/zad-actions/deploy@5ad04045d781ed153ad75625305bf14d57496128 # v2
+        with:
+          api-key: ${{ secrets.ZAD_API_KEY }}
+          project-id: ${{ vars.ZAD_PROJECT_ID }}
+          deployment-name: pr${{ github.event.pull_request.number }}
+          component: beheer
+          image: ${{ needs.bouw.outputs.image }}
+          clone-from: productie
+          comment-on-pr: true
+
+  opruimen:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      packages: write
+      pull-requests: write
+    steps:
+      - name: Preview opruimen
+        uses: RijksICTGilde/zad-actions/cleanup@5ad04045d781ed153ad75625305bf14d57496128 # v2
+        with:
+          api-key: ${{ secrets.ZAD_API_KEY }}
+          project-id: ${{ vars.ZAD_PROJECT_ID }}
+          deployment-name: pr${{ github.event.pull_request.number }}
+          delete-github-deployments: true
+          delete-container: true
+          container-org: ${{ github.repository_owner }}
+          container-name: ${{ github.event.repository.name }}
+          container-tag: pr-${{ github.event.pull_request.number }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # The automatic GITHUB_TOKEN may not delete an environment; that
+          # needs a PAT with repo admin rights as github-admin-token. Turn
+          # on both lines once that exists.
+          delete-github-env: false
+
+  productie:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [ci, bouw]
+    permissions:
+      contents: read
+    environment:
+      name: productie
+      url: ${{ steps.uitrol.outputs.url }}
+    steps:
+      - name: Uitrollen naar ZAD
+        id: uitrol
+        uses: RijksICTGilde/zad-actions/deploy@5ad04045d781ed153ad75625305bf14d57496128 # v2
+        with:
+          api-key: ${{ secrets.ZAD_API_KEY }}
+          project-id: ${{ vars.ZAD_PROJECT_ID }}
+          deployment-name: productie
+          component: beheer
+          image: ${{ needs.bouw.outputs.image }}

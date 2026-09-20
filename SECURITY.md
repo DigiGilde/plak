@@ -1,0 +1,51 @@
+# Security policy
+
+## Responsible disclosure
+
+Plak is still under development and is not running in production yet
+(see `README.md`, status: under development). If you have found a
+security vulnerability anyway, report it responsibly:
+
+- Report vulnerabilities privately, not through a public GitHub issue.
+- Get in touch through `digigilde@rijksoverheid.nl` (see
+  `publiccode.yml`, `maintenance.contacts`).
+- Give us reasonable time to investigate and fix the problem before you
+  publish details.
+- Do not take any action beyond what is needed to demonstrate the
+  vulnerability (no data exfiltration, no disruption of the service).
+
+We confirm receipt as soon as we can and keep you posted on the
+progress until the problem is solved.
+
+## security.txt
+
+Both hosts serve a `security.txt` conforming to RFC 9116 under
+`/.well-known/security.txt`, with the same document, so that the
+retrieval URL is always covered by a `Canonical` line. The file is
+rendered per request (`backend/src/plak/platform/security_txt.py`);
+`Expires` lies 90 days ahead, counted from the start of the current UTC
+day, so that it never expires without anyone doing anything.
+
+Three things to know:
+
+- `digigilde@rijksoverheid.nl` is the same address as in
+  `publiccode.yml`. The CVD routes of NCSC-NL follow it as the second
+  through fourth `Contact`, so a reporter ends up somewhere either way.
+- A `Contact` line to a GitHub advisory is missing on purpose: this repo
+  has no remote yet, and a contact route that 404s is worse than one
+  route fewer. As soon as the repo is public that line belongs there
+  first, just like a `Policy` pointing at this file.
+- We do not sign the file with PGP. `sectxt` recommends it, but signing
+  asks for key management and rotation that this repo has nowhere else,
+  and a signature that expires is more harmful than no signature. This is
+  a deliberate choice, not an omission.
+
+`backend/tests/test_security_txt.py` runs the rendered file through
+`sectxt`, the parser behind the Digital Trust Center's check.
+
+## Scope
+
+This policy covers the code in this repository, the CLI (`cli/`) and the
+`publiceer` action (`actions/`) included. Vulnerabilities in underlying
+infrastructure (ZAD, the OIDC provider in use, and so on) you report to
+the administrator of that service.

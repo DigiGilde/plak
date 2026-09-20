@@ -1,0 +1,19 @@
+{
+  "name": "plak",
+  "description": "The Plak plugin: skills for publishing a static site to a Plak instance.",
+  "owner": {
+    "name": "Plak team",
+    "email": "digigilde@rijksoverheid.nl"
+  },
+  "plugins": [
+    {
+      "name": "plak",
+      "source": "./plugin",
+      "description": "Publish a static site to a Plak instance: a preview by default, live only when the user asks for it.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Plak team"
+      }
+    }
+  ]
+}

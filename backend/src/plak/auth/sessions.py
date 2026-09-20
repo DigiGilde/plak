@@ -1,0 +1,425 @@
+"""Server-side sessions with a signed __Host cookie (BFF).
+
+The browser receives only a signed reference to a server-side session record;
+claims never stand on their own in the cookie. Signing is HMAC-SHA256 with
+PLAK_SESSION_SECRET (itsdangerous style, without the extra dependency). The
+store is in-memory: Plak runs with replicas:1, sessions
+deliberately do not survive a restart.
+
+Two session kinds: the management session
+(`__Host-plak-session`, SameSite=Strict, with a CSRF cookie)
+on the management origin and the content session (`__Host-plak-content`,
+SameSite=Lax, without management authority) on the content origin. One store
+holds both; the field `kind` plus the separate cookie name keep them apart,
+also on a single shared host (dev). `session_from_request` returns management
+sessions only, `content_session_from_request` content sessions only.
+"""
+
+from __future__ import annotations
+
+import base64
+import enum
+import hashlib
+import hmac
+import secrets
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi import Request, Response
+
+SESSION_COOKIE = "__Host-plak-session"
+CSRF_COOKIE = "__Host-plak-csrf"
+LOGIN_COOKIE = "__Host-plak-login"
+CONTENT_SESSION_COOKIE = "__Host-plak-content"
+CONTENT_LOGIN_COOKIE = "__Host-plak-content-login"
+KEY_COOKIE = "__Secure-plak-key"
+CSRF_HEADER = "X-CSRF-Token"
+
+MAX_SESSION_AGE = timedelta(hours=12)
+MAX_LOGIN_ATTEMPT_AGE = timedelta(minutes=10)
+
+# The root of the beheer host, where the SPA lives (platform/spa.py).
+DEFAULT_RETURN_TO = "/"
+# The root of the content host is the public front page (platform/pages.py);
+# a content login without a valid returnTo (which the serving router always
+# supplies) lands there.
+DEFAULT_CONTENT_RETURN_TO = "/"
+
+
+class SessionKind(enum.StrEnum):
+    ADMIN = "admin"
+    CONTENT = "content"
+
+# Same pattern as InMemoryCounter in ratelimit.py: expired sessions/attempts
+# that are never looked up again (e.g. abandoned logins) would otherwise linger
+# forever, because get_session()/take_attempt() only clean up what is actually
+# looked up.
+_CLEANUP_INTERVAL = 128
+
+
+@dataclass(frozen=True)
+class Visitor:
+    """Derived from session + request, without a member lookup up front."""
+
+    sub: str | None
+    email: str | None
+    email_verified: bool
+    key_cookie: str | None
+    key_query: str | None
+
+
+@dataclass(frozen=True)
+class Session:
+    id: str
+    sub: str
+    email: str | None
+    email_verified: bool
+    acr: str
+    csrf_token: str
+    created_at: datetime
+    kind: SessionKind = SessionKind.ADMIN
+    # For the id_token_hint of an RP-initiated logout; it never leaves the
+    # server except back to the issuer that made it.
+    id_token: str | None = None
+    # For the periodic re-validation against the IdP (auth/revalidation.py).
+    # Never logged, never in an audit ref, never sent to the browser; repr=False
+    # keeps it out of a dataclass dump in a log line or a traceback.
+    refresh_token: str | None = field(default=None, repr=False)
+    # The `sid` claim of the id token: what a back-channel logout matches on.
+    sid: str | None = None
+    # When the IdP last confirmed this session; the recheck interval counts
+    # from here. None means: not since it was created.
+    checked_at: datetime | None = None
+    # Backoff after a soft failure: no new check before this moment.
+    recheck_not_before: datetime | None = None
+
+    @property
+    def last_confirmed_at(self) -> datetime:
+        return self.checked_at or self.created_at
+
+
+@dataclass(frozen=True)
+class LoginAttempt:
+    id: str
+    state: str
+    nonce: str
+    code_verifier: str
+    return_to: str
+    created_at: datetime
+    kind: SessionKind = SessionKind.ADMIN
+
+
+@dataclass
+class SessionStore:
+    _sessions: dict[str, Session] = field(default_factory=dict)
+    _attempts: dict[str, LoginAttempt] = field(default_factory=dict)
+    _calls: int = field(default=0, repr=False)
+
+    def create_session(
+        self,
+        *,
+        sub: str,
+        email: str | None,
+        email_verified: bool,
+        acr: str,
+        kind: SessionKind = SessionKind.ADMIN,
+        id_token: str | None = None,
+        refresh_token: str | None = None,
+        sid: str | None = None,
+    ) -> Session:
+        self._tick()
+        session = Session(
+            id=secrets.token_urlsafe(32),
+            sub=sub,
+            email=email,
+            email_verified=email_verified,
+            acr=acr,
+            csrf_token=secrets.token_urlsafe(32),
+            created_at=datetime.now(UTC),
+            kind=kind,
+            id_token=id_token,
+            refresh_token=refresh_token,
+            sid=sid,
+        )
+        self._sessions[session.id] = session
+        return session
+
+    def mark_checked(self, session_id: str, *, refresh_token: str | None, at: datetime) -> Session | None:
+        """Records that the IdP confirmed this session, with the rotated
+        refresh token when the IdP handed one out. A session that disappeared
+        in the meantime stays gone."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+        updated = replace(
+            session,
+            refresh_token=refresh_token or session.refresh_token,
+            checked_at=at,
+            recheck_not_before=None,
+        )
+        self._sessions[session_id] = updated
+        return updated
+
+    def defer_check(self, session_id: str, *, until: datetime) -> None:
+        """Backoff after a check that could not be completed; the session itself
+        stays as it is."""
+        session = self._sessions.get(session_id)
+        if session is not None:
+            self._sessions[session_id] = replace(session, recheck_not_before=until)
+
+    def sessions_for_logout(self, *, sid: str | None, sub: str | None) -> list[Session]:
+        """The sessions a back-channel logout token points at: on `sid` when it
+        carries one (one login at the OP), otherwise on `sub` (everything of
+        this person). Both session kinds count."""
+        if sid:
+            return [session for session in self._sessions.values() if session.sid == sid]
+        if sub:
+            return [session for session in self._sessions.values() if session.sub == sub]
+        return []
+
+    def get_session(self, session_id: str) -> Session | None:
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
+        if datetime.now(UTC) - session.created_at > MAX_SESSION_AGE:
+            self._sessions.pop(session_id, None)
+            return None
+        return session
+
+    def delete_session(self, session_id: str) -> None:
+        self._sessions.pop(session_id, None)
+
+    def create_attempt(
+        self,
+        *,
+        state: str,
+        nonce: str,
+        code_verifier: str,
+        return_to: str,
+        kind: SessionKind = SessionKind.ADMIN,
+    ) -> LoginAttempt:
+        self._tick()
+        attempt = LoginAttempt(
+            id=secrets.token_urlsafe(32),
+            state=state,
+            nonce=nonce,
+            code_verifier=code_verifier,
+            return_to=return_to,
+            created_at=datetime.now(UTC),
+            kind=kind,
+        )
+        self._attempts[attempt.id] = attempt
+        return attempt
+
+    def take_attempt(self, attempt_id: str) -> LoginAttempt | None:
+        """Fetches a login attempt and removes it straight away (single-use)."""
+        attempt = self._attempts.pop(attempt_id, None)
+        if attempt is None:
+            return None
+        if datetime.now(UTC) - attempt.created_at > MAX_LOGIN_ATTEMPT_AGE:
+            return None
+        return attempt
+
+    def _tick(self) -> None:
+        self._calls += 1
+        if self._calls % _CLEANUP_INTERVAL == 0:
+            self.cleanup()
+
+    def cleanup(self) -> int:
+        """Removes expired sessions and login attempts that were never looked up
+        again. Returns the number of items removed."""
+        now_ = datetime.now(UTC)
+        expired_sessions = [
+            session_id for session_id, session in self._sessions.items() if now_ - session.created_at > MAX_SESSION_AGE
+        ]
+        for session_id in expired_sessions:
+            del self._sessions[session_id]
+
+        expired_attempts = [
+            attempt_id
+            for attempt_id, attempt in self._attempts.items()
+            if now_ - attempt.created_at > MAX_LOGIN_ATTEMPT_AGE
+        ]
+        for attempt_id in expired_attempts:
+            del self._attempts[attempt_id]
+
+        return len(expired_sessions) + len(expired_attempts)
+
+
+def sign(secret: str, value: str) -> str:
+    signature = hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).digest()
+    short = base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+    return f"{value}.{short}"
+
+
+# Session cookies and the key cookie share PLAK_SESSION_SECRET; a bare id
+# would let a signature valid for one cookie be replayed as another (both are
+# UUID strings). The prefix ties a signature to this one purpose.
+_KEY_COOKIE_PURPOSE = "key:"
+
+
+def sign_key_cookie(secret: str, key_id: str) -> str:
+    """Signs a key id for the __Secure-plak-key cookie, purpose-tagged so its
+    signature cannot be replayed as a session or CSRF cookie value."""
+    return sign(secret, f"{_KEY_COOKIE_PURPOSE}{key_id}")
+
+
+def check_signature(secret: str, token: str) -> str | None:
+    """Returns the signed value, or None for an invalid token."""
+    value, separation, _ = token.rpartition(".")
+    if not separation or not value:
+        return None
+    if not hmac.compare_digest(sign(secret, value), token):
+        return None
+    return value
+
+
+def valid_return_to(value: str | None, default: str = DEFAULT_RETURN_TO) -> str:
+    """Paths within our own origin only; everything else falls back to `default`."""
+    if not value:
+        return default
+    if any(char in value for char in ("\\", "\r", "\n", "\x00")):
+        return default
+    if not value.startswith("/") or value.startswith("//"):
+        return default
+    return value
+
+
+def _session_from_cookie(request: Request, cookie: str, kind: SessionKind) -> Session | None:
+    token = request.cookies.get(cookie)
+    if not token:
+        return None
+    secret = request.app.state.settings.session_secret
+    session_id = check_signature(secret, token)
+    if session_id is None:
+        return None
+    store: SessionStore = request.app.state.session_store
+    session = store.get_session(session_id)
+    if session is None or session.kind is not kind:
+        return None
+    return session
+
+
+def session_from_request(request: Request) -> Session | None:
+    """Management session from `__Host-plak-session`; a content session never counts here."""
+    return _session_from_cookie(request, SESSION_COOKIE, SessionKind.ADMIN)
+
+
+def content_session_from_request(request: Request) -> Session | None:
+    """Content session from `__Host-plak-content`; a management session never counts here."""
+    return _session_from_cookie(request, CONTENT_SESSION_COOKIE, SessionKind.CONTENT)
+
+
+def _key_id_from_cookie(request: Request) -> str | None:
+    """Key id from the signed key cookie. A cookie with a bad signature, or a
+    validly signed value from another cookie's purpose, comes back as ""
+    rather than None, so the gate refuses it as KEY_INVALID instead of
+    treating the visitor as someone without a key."""
+    token = request.cookies.get(KEY_COOKIE)
+    if token is None:
+        return None
+    value = check_signature(request.app.state.settings.session_secret, token)
+    if value is None or not value.startswith(_KEY_COOKIE_PURPOSE):
+        return ""
+    return value.removeprefix(_KEY_COOKIE_PURPOSE)
+
+
+def visitor_from_request(request: Request) -> Visitor:
+    """Viewer for the serving layer: based on the content session only."""
+    session = content_session_from_request(request)
+    return Visitor(
+        sub=session.sub if session else None,
+        email=session.email if session else None,
+        email_verified=session.email_verified if session else False,
+        key_cookie=_key_id_from_cookie(request),
+        key_query=request.query_params.get("key"),
+    )
+
+
+def set_session_cookies(response: Response, session: Session, secret: str) -> None:
+    # SameSite=Strict: the management origin has no cross-site
+    # navigation need, and Strict turns away requests started from the content
+    # origin.
+    response.set_cookie(
+        SESSION_COOKIE,
+        sign(secret, session.id),
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        path="/",
+    )
+    # Double submit: readable by the SPA, so deliberately not HttpOnly.
+    response.set_cookie(
+        CSRF_COOKIE,
+        session.csrf_token,
+        httponly=False,
+        secure=True,
+        samesite="strict",
+        path="/",
+    )
+
+
+def clear_session_cookies(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
+    response.delete_cookie(CSRF_COOKIE, path="/", secure=True, samesite="strict")
+
+
+def clear_content_session_cookie(response: Response) -> None:
+    response.delete_cookie(CONTENT_SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
+
+
+def set_content_session_cookie(response: Response, session: Session, secret: str) -> None:
+    # SameSite=Lax: a shared link to restricted content has to open
+    # straight away on an existing content session, also from mail or chat.
+    # No CSRF cookie: the content origin has no session-borne mutations.
+    response.set_cookie(
+        CONTENT_SESSION_COOKIE,
+        sign(secret, session.id),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def csrf_valid(request: Request, session: Session) -> bool:
+    """Double submit: header and cookie must both carry the session CSRF token."""
+    header = request.headers.get(CSRF_HEADER)
+    cookie = request.cookies.get(CSRF_COOKIE)
+    if not header or not cookie:
+        return False
+    return hmac.compare_digest(header, session.csrf_token) and hmac.compare_digest(cookie, session.csrf_token)
+
+
+__all__ = [
+    "CONTENT_LOGIN_COOKIE",
+    "CONTENT_SESSION_COOKIE",
+    "CSRF_COOKIE",
+    "CSRF_HEADER",
+    "DEFAULT_CONTENT_RETURN_TO",
+    "DEFAULT_RETURN_TO",
+    "KEY_COOKIE",
+    "LOGIN_COOKIE",
+    "MAX_LOGIN_ATTEMPT_AGE",
+    "MAX_SESSION_AGE",
+    "SESSION_COOKIE",
+    "LoginAttempt",
+    "Session",
+    "SessionKind",
+    "SessionStore",
+    "Visitor",
+    "check_signature",
+    "clear_content_session_cookie",
+    "clear_session_cookies",
+    "content_session_from_request",
+    "csrf_valid",
+    "session_from_request",
+    "set_content_session_cookie",
+    "set_session_cookies",
+    "sign",
+    "sign_key_cookie",
+    "valid_return_to",
+    "visitor_from_request",
+]

@@ -1,0 +1,163 @@
+# Preparatory: the repo has no remote yet, so this workflow has never run.
+# It describes the gates that `just lint`, `just test` and the frontend
+# build already enforce locally, so they run along once the repo is on a
+# GitHub remote.
+#
+# This workflow has no trigger of its own: deploy.yml calls it, so a
+# deploy cannot bypass the gate and the checks run once per commit
+# instead of twice.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: uv installeren
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: uv run ruff check src tests
+
+      # From the repo root, so ruff uses its defaults for cli/ instead of
+      # backend/pyproject.toml; --project only picks the pinned ruff.
+      - name: Lint CLI (ruff)
+        run: uv run --project backend ruff check cli/plak_cli cli/tests
+
+      # The DB tests run PostgreSQL 16 via testcontainers. The
+      # GitHub-hosted ubuntu runner has Docker on board, but the conftest
+      # by default looks for a Podman socket and SKIPS the tests when it
+      # does not find one. Setting DOCKER_HOST is thus not a luxury: it is
+      # the difference between running and silently skipping. On a runner
+      # without a container runtime the step below fails with a clear
+      # message instead of going green on skipped tests.
+      - name: Containerruntime controleren
+        run: |
+          if [ ! -S /var/run/docker.sock ]; then
+            echo "Geen containerruntime op deze runner: testcontainers kan geen PostgreSQL starten." >&2
+            echo "Draai deze job op een runner met Docker of Podman, of zet DOCKER_HOST." >&2
+            exit 1
+          fi
+
+      - name: Backend-tests (testcontainers)
+        working-directory: backend
+        env:
+          DOCKER_HOST: unix:///var/run/docker.sock
+        # -rs shows the reason for every skipped test, so a silently
+        # skipped container test stays visible in the log.
+        run: uv run python -m pytest -q -rs
+
+  # cli/ is its own uv project (the `plak` command), separate from the
+  # backend. Its lint runs in the backend job, on the ruff pinned there.
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: uv installeren
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: cli/uv.lock
+
+      - name: CLI-tests
+        working-directory: cli
+        run: uv run pytest tests -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Afhankelijkheden installeren
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+
+      # Must be before the tests: the CSP gate reads frontend/dist/index.html.
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Frontend-tests
+        working-directory: frontend
+        run: npm test
+
+      # Deliberately runs once more, separate from the suite above, so the
+      # CI log names this gate explicitly: the built index.html may not
+      # carry an inline <script> without src, otherwise the admin CSP
+      # (script-src 'self', no unsafe-inline) no longer matches what is
+      # served.
+      - name: CSP-check op de gebouwde SPA
+        working-directory: frontend
+        run: npx vitest run tests/build-output.test.ts
+
+  vulnerabilities:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: uv installeren
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      # uv export instead of the venv: pip-audit then reads exactly what
+      # the lockfile pins, including the dev group, and nothing from the
+      # runner.
+      - name: Backend-afhankelijkheden scannen (pip-audit)
+        env:
+          REQUIREMENTS: ${{ runner.temp }}/requirements.txt
+        run: |
+          uv export --directory backend --frozen --no-emit-project --quiet \
+            --format requirements-txt -o "$REQUIREMENTS"
+          flags=()
+          while IFS= read -r id; do
+            if [ -n "$id" ]; then
+              flags+=(--ignore-vuln "$id")
+            fi
+          done < <(uv run --script .github/scripts/vulnerabilities.py ids)
+          uvx pip-audit@2.10.1 --requirement "$REQUIREMENTS" --disable-pip \
+            --progress-spinner off ${flags[@]+"${flags[@]}"}
+
+      # npm audit reads the lockfile and does not need node_modules; the
+      # script does the filtering, because npm audit has no ignore list.
+      - name: Frontend-afhankelijkheden scannen (npm audit)
+        env:
+          REPORT: ${{ runner.temp }}/npm-audit.json
+        run: |
+          npm audit --json --prefix frontend > "$REPORT" || true
+          uv run --script .github/scripts/vulnerabilities.py npm-audit "$REPORT"

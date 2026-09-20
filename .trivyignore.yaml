@@ -1,0 +1,19 @@
+# Findings we know about and deliberately leave in place, with a date on
+# which they come back automatically. Trivy reads this file itself;
+# pip-audit and npm audit are hooked into it via
+# .github/scripts/kwetsbaarheden.py, so there is one place where an
+# accepted finding is written down.
+vulnerabilities:
+  - id: PYSEC-2026-1845
+    expired_at: 2026-12-31
+    statement: >-
+      pytest, alleen dev-groep. De fix vraagt pytest 9 en de pin in
+      backend/pyproject.toml staat op <9; dat is een eigen upgrade met een
+      eigen testronde. Komt niet in het image: containers/plak/Containerfile
+      draait uv sync --frozen --no-dev.
+  - id: GHSA-82fw-gwwq-j7x9
+    expired_at: 2026-12-31
+    statement: >-
+      @vitest/mocker, alleen devDependencies. De fix vraagt een major van
+      vitest en dat is een eigen upgrade. Zit niet in de SPA-bundel:
+      npm audit --omit=dev meldt hem niet.

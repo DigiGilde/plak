@@ -1,0 +1,32 @@
+{
+  "interactiveLogin": false,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {
+          "requestParam": "grant_type",
+          "match": "authorization_code",
+          "claims": {
+            "sub": "dev-beheerder",
+            "acr": "http://eidas.europa.eu/LoA/substantial",
+            "email": "beheerder@plak.local",
+            "email_verified": true
+          }
+        },
+        {
+          "requestParam": "grant_type",
+          "match": "refresh_token",
+          "claims": {
+            "sub": "dev-beheerder",
+            "acr": "http://eidas.europa.eu/LoA/substantial",
+            "email": "beheerder@plak.local",
+            "email_verified": true
+          }
+        }
+      ]
+    }
+  ]
+}

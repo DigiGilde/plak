@@ -1,0 +1,22 @@
+{
+  "interactiveLogin": true,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {
+          "requestParam": "subject",
+          "match": "*",
+          "claims": {
+            "sub": "${subject}",
+            "acr": "http://eidas.europa.eu/LoA/substantial",
+            "email": "${subject}@plak.local",
+            "email_verified": true
+          }
+        }
+      ]
+    }
+  ]
+}

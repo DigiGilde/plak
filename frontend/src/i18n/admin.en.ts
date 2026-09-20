@@ -1,0 +1,96 @@
+/**
+ * English counterpart of admin.nl.ts. Typed against it, so a key present in
+ * one language and missing from the other is a compile error rather than a
+ * raw key on screen.
+ */
+import type { adminNl } from './admin.nl';
+
+export const adminEn: Record<keyof typeof adminNl, string> = {
+  // -- Column headers shared by the admin tables ----------------------------
+  'admin.column.member': 'Member',
+  'admin.column.role': 'Role',
+  'admin.column.actions': 'Actions',
+
+  // -- Shared controls ------------------------------------------------------
+  'admin.retry': 'Try again',
+  'admin.confirm.keep': 'Keep',
+  'admin.rowActions.label': 'Actions for {label}',
+  'admin.notice.unknownError': 'Unknown error.',
+  'admin.errorBanner.status': 'Error code {status}.',
+
+  // -- Platform administration ----------------------------------------------
+  'admin.members.column.created': 'Created',
+  'admin.members.column.activity': 'Last activity',
+  'admin.members.search.label': 'Search for a member by name or email address',
+  'admin.members.search.placeholder': 'Search for a member',
+  'admin.members.loading': 'Loading members...',
+  'admin.members.loadFailed': 'Something went wrong while fetching the members.',
+  'admin.members.table.label': 'Platform members',
+  'admin.members.empty': 'There are no members to show yet.',
+  'admin.members.notFound': 'No member found.',
+  'admin.members.notFound.detail': "Nothing matches '{query}'.",
+  'admin.members.standing.admin': 'Platform administrator',
+  'admin.members.standing.member': 'Member',
+  'admin.members.standing.noAccess': 'No access',
+  'admin.members.action.revoke': 'Withdraw access',
+  'admin.members.action.restore': 'Give access back',
+  'admin.members.action.promote': 'Make platform administrator',
+  'admin.members.action.demote': 'Take away the administrator role',
+  'admin.members.blocked.bootstrap': 'bootstrap account',
+  'admin.members.blocked.lastAdmin': 'last administrator',
+  'admin.members.roleFailed': 'Changing the role of {name} did not work',
+  'admin.members.activateFailed': 'Activating {name} did not work',
+  'admin.members.deactivateFailed': 'Deactivating {name} did not work',
+
+  // -- Linked devices -------------------------------------------------------
+  'admin.devices.subtitle': 'Every device that got access to your account through {command}.',
+  'admin.devices.loading': 'Loading devices',
+  'admin.devices.empty': 'No linked devices yet',
+  'admin.devices.empty.detail':
+    'Run plak login on your computer to link the Plak CLI to your account.',
+  'admin.devices.unknownClient': 'Unknown program',
+  'admin.devices.neverUsed': 'not yet',
+  'admin.devices.times': 'Linked {linked} - last used {lastUsed} - expires {expires}',
+  'admin.devices.unlink': 'Unlink',
+  'admin.devices.unlink.label': 'Unlink {name}',
+  'admin.devices.confirm.title': 'Unlink {name}?',
+  'admin.devices.confirm.text':
+    'This device loses access to your account straight away and has to run plak login again to link up once more.',
+  'admin.devices.confirm.keep': 'Keep the link',
+  'admin.devices.confirm.confirm': 'Unlink device',
+  'admin.devices.unlinkFailed': '{name} not unlinked',
+  'admin.devices.unlinkFailed.detail': 'Unlinking did not work.',
+
+  // -- Site members: the members tab of a site ------------------------------
+  'admin.siteMembers.inherited.summary.one': '{count} member via the group {group}',
+  'admin.siteMembers.inherited.summary.many': '{count} members via the group {group}',
+  'admin.siteMembers.inherited.note':
+    'These roles apply to the whole group and you change them there, not here: {link}.',
+  'admin.siteMembers.inherited.link': 'members of the group {group}',
+  'admin.siteMembers.inherited.table': 'Members via the group',
+  'admin.siteMembers.table': 'Members with a role on this site',
+  'admin.siteMembers.empty': 'Nobody has a role of their own on this site',
+  'admin.siteMembers.empty.detail': 'Give someone a role below that only applies here.',
+  'admin.siteMembers.viaGroup': 'via the group',
+  'admin.siteMembers.keepsViaGroup': 'Stays {role} via the group',
+  'admin.siteMembers.action.setRole': 'Make {role}',
+  'admin.siteMembers.action.remove': 'Remove role',
+  'admin.siteMembers.action.remove.noAccess': 'Cannot reach this site afterwards',
+  'admin.siteMembers.addFailed': 'Giving {name} a role on this site did not work',
+  'admin.siteMembers.roleFailed': 'Changing the site role of {name} did not work',
+  'admin.siteMembers.removeFailed': 'Removing the site role of {name} did not work',
+  'admin.siteMembers.suggestion.alreadyMember': '{name} (already a member)',
+  'admin.siteMembers.form.heading': 'Give someone a role on this site',
+  'admin.siteMembers.form.hint':
+    'A site role only widens: whoever may already do more through the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first; Plak does not create an account here.',
+  'admin.siteMembers.form.identifier': 'Name or email address',
+  'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
+  'admin.siteMembers.form.identifier.help':
+    'From two letters onwards we search the names and addresses of everyone who has logged in before.',
+  'admin.siteMembers.form.identifier.required': 'A name from the list or an email address',
+  'admin.siteMembers.form.identifier.invalid':
+    'Choose someone from the list, or fill in an email address',
+  'admin.siteMembers.form.noSuggestions': 'Nobody found',
+  'admin.siteMembers.form.role': 'Role',
+  'admin.siteMembers.form.submit': 'Give role',
+};

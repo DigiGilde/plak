@@ -1,0 +1,52 @@
+publiccodeYmlVersion: "0.4"
+
+name: Plak
+url: https://github.com/minbzk/plak
+softwareType: standalone/web
+platforms:
+  - web
+
+categories:
+  - content-management
+  - collaboration
+  - document-management
+
+developmentStatus: development
+
+softwareVersion: "0.0.0"
+releaseDate: "2026-07-18"
+
+legal:
+  license: EUPL-1.2
+
+maintenance:
+  type: internal
+  contacts:
+    - name: Robbert Bos
+      email: digigilde@rijksoverheid.nl
+
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - nl
+
+description:
+  nl:
+    localisedName: Plak
+    shortDescription: >-
+      Statische sites publiceren en delen met previews per pull request,
+      met vijf toegangsniveaus.
+    longDescription: >-
+      Plak is een platform waarmee overheidsorganisaties statische
+      sites eenvoudig publiceren en delen: publiek, achter SSO Rijk, met
+      genodigden op e-mailadres, of via een geheime link. Elke pull
+      request kan een eigen preview krijgen. Plak is de opvolger van
+      moza-publiceer-rapportages en herbouwt hetzelfde beveiligingsontwerp
+      in de huisstandaard-stack (FastAPI, Vue, PostgreSQL), met een
+      herbruikbare publicatie-action voor CI.
+    features:
+      - Publiceren van statische sites op een eigen groep/site-pad
+      - PR-previews met automatische opruiming
+      - "Vijf toegangsniveaus: publiek, geheime link, SSO Rijk, groepsleden, genodigden"
+      - Beheer-SPA voor groepen, sites, toegang en deploy-tokens
+      - Herbruikbare GitHub/Forgejo-action voor publicatie in CI

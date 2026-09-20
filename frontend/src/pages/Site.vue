@@ -1,0 +1,195 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch, watchEffect } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+import * as plak from '@/api/plak';
+import { ApiError } from '@/api/client';
+import type { GroupDetail, Me, Site } from '@/api/types';
+import { fetchCurrentMember } from '@/composables/currentMember';
+import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { setDocumentTitle } from '@/title';
+import { t } from '@/i18n';
+import ErrorBanner from '@/components/ErrorBanner.vue';
+
+const route = useRoute();
+const router = useRouter();
+
+const groupSlug = computed(() => String(route.params.group ?? ''));
+const siteSlug = computed(() => String(route.params.site ?? ''));
+
+const loading = ref(true);
+const error = ref<unknown>(null);
+const detail = ref<GroupDetail | null>(null);
+/** Content origin from `/me`; the tabs build every shared link on it. */
+const contentBase = ref('');
+
+const site = computed<Site | null>(
+  () => detail.value?.sites.find((p) => p.slug === siteSlug.value) ?? null,
+);
+
+/** Fetches group and session; throws when the site cannot be shown. */
+async function fetchData(): Promise<void> {
+  const [fetched, loggedIn] = await Promise.all([
+    plak.group(groupSlug.value),
+    fetchCurrentMember(),
+  ]);
+  // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
+  contentBase.value = (loggedIn as Me | null)?.contentBaseUrl ?? '';
+  if (!fetched.sites.some((p) => p.slug === siteSlug.value)) {
+    throw new ApiError({
+      type: 'about:blank',
+      title: t('site.notFound.title'),
+      status: 404,
+      detail: t('site.notFound.detail', { site: siteSlug.value, group: groupSlug.value }),
+    });
+  }
+  detail.value = fetched;
+}
+
+async function load(): Promise<void> {
+  if (!groupSlug.value || !siteSlug.value) {
+    return;
+  }
+  loading.value = true;
+  error.value = null;
+  try {
+    await fetchData();
+  } catch (f) {
+    error.value = f;
+    detail.value = null;
+  } finally {
+    loading.value = false;
+  }
+}
+
+/**
+ * Refresh after a change in a tab, deliberately without `loading`: that would
+ * tear down title, tab bar and the whole tab subtree and rebuild them. It would
+ * take the tab's notification component with it, in the very tick where the tab
+ * puts its confirmation into it ("Versie gepubliceerd", "Toegang
+ * opgeslagen"), and make the tab bar flicker on every change.
+ */
+async function refresh(): Promise<void> {
+  try {
+    await fetchData();
+  } catch {
+    // The tab refetches the same data itself and reports there what went
+    // wrong; leaving the header on the last known answer beats pulling the
+    // page out from under the user.
+  }
+}
+
+onMounted(load);
+watch(() => [groupSlug.value, siteSlug.value], load);
+
+watchEffect(() => {
+  setBreadcrumbs(route.path, [
+    { text: t('nav.overview'), href: '/' },
+    { text: detail.value?.group.name ?? groupSlug.value, href: `/${groupSlug.value}` },
+    { text: siteSlug.value },
+  ]);
+});
+
+interface TabDefinition {
+  name: string;
+  label: string;
+  path: string;
+  /** Fixed, never derived from the label: a test id may not change with the language. */
+  testid: string;
+}
+
+const TABS = computed<readonly TabDefinition[]>(() => [
+  { name: 'site-overview', label: t('site.tabs.overview'), path: '', testid: 'tab-overzicht' },
+  {
+    name: 'site-previews',
+    label: t('site.tabs.previews'),
+    path: 'previews',
+    testid: 'tab-previews',
+  },
+  {
+    name: 'site-versions',
+    label: t('site.tabs.versions'),
+    path: 'versions',
+    testid: 'tab-versies',
+  },
+  { name: 'site-access', label: t('site.tabs.access'), path: 'access', testid: 'tab-toegang' },
+  { name: 'site-members', label: t('site.tabs.members'), path: 'members', testid: 'tab-leden' },
+  { name: 'site-deploy', label: t('site.tabs.deploy'), path: 'deploy', testid: 'tab-deploy' },
+]);
+
+const currentTab = computed(() => TABS.value.find((tab) => tab.name === route.name));
+
+// The site name is the distinguishing part, so it comes first; the tab is
+// dropped on the overview, where it would only repeat the page itself.
+watchEffect(() => {
+  setDocumentTitle(site.value?.title || siteSlug.value, currentTab.value?.path ? currentTab.value.label : null);
+});
+
+function tabPath(tab: TabDefinition): string {
+  const base = `/${groupSlug.value}/${siteSlug.value}`;
+  return tab.path === '' ? base : `${base}/${tab.path}`;
+}
+
+function goToTab(tab: TabDefinition): void {
+  void router.push(tabPath(tab));
+}
+
+function afterRemoval(): void {
+  void router.replace('/');
+}
+</script>
+
+<template>
+  <nldd-simple-section>
+    <nldd-activity-indicator v-if="loading" :text="t('site.loading')"></nldd-activity-indicator>
+
+    <ErrorBanner v-else-if="error" :error="error" />
+
+    <template v-else-if="site">
+      <!--
+        Vertical rhythm of the site page and all its tabs, one scale. Taken
+        from the design system's form spacing (dist/css/form-section.css): every
+        step stands for one relation, so equal relations get equal distance.
+
+          4   a value and the line that explains it
+          8   a heading and the content belonging under it
+          16  separate blocks within one section
+          24  sections among each other
+
+        Title and tab bar together form the page header (16); the content below
+        starts at the section distance (24).
+      -->
+      <nldd-title :size="2">
+        <h1>{{ site.title || site.slug }}</h1>
+        <span slot="subtitle">{{ groupSlug }}/{{ siteSlug }}</span>
+      </nldd-title>
+
+      <nldd-spacer size="16"></nldd-spacer>
+
+      <nldd-tab-bar navigation :accessible-label="t('site.tabs.label')" data-testid="site-tabs">
+        <nldd-tab-bar-item
+          v-for="tab in TABS"
+          :key="tab.name"
+          :text="tab.label"
+          :href="tabPath(tab)"
+          :current="route.name === tab.name || undefined"
+          :data-testid="tab.testid"
+          @click.prevent="goToTab(tab)"
+        ></nldd-tab-bar-item>
+      </nldd-tab-bar>
+
+      <nldd-spacer size="24"></nldd-spacer>
+
+      <router-view v-slot="{ Component }">
+        <component
+          :is="Component"
+          :group="groupSlug"
+          :site="siteSlug"
+          :content-base="contentBase"
+          @removed="afterRemoval"
+          @changed="refresh"
+        />
+      </router-view>
+    </template>
+  </nldd-simple-section>
+</template>

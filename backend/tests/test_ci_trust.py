@@ -1,0 +1,382 @@
+"""Tests for ci/trust.py: trusted_repository against a site_repositories row,
+check_live_deploy, audit_refs, actor identifiers. Uses the migrated test
+database (migrated_dsn); container-free tests live in test_ci_tokens.py and
+test_ci_providers.py."""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+import pytest_asyncio
+from helpers_ci import FORGEJO_HOST, FORGEJO_ISSUER, MockCi
+
+from plak.audit import vocabulary
+from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer, ProviderClient
+from plak.ci.tokens import CiTokenError, VerifiedCiToken
+from plak.ci.trust import (
+    AUDIT_CLAIMS,
+    audit_refs,
+    check_live_deploy,
+    ci_actor_identifier,
+    refused_actor_identifier,
+    trusted_repository,
+)
+from plak.constants import AccessBase
+from plak.db import make_engine, make_session_factory
+from plak.models.ci import CiProvider, SiteRepository
+from plak.models.identity import Group
+from plak.models.publication import Site
+
+DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
+GITHUB_ISSUER_OBJ = Issuer(CiProvider.GITHUB, GITHUB_HOST, GITHUB_ISSUER)
+FORGEJO_ISSUER_OBJ = Issuer(CiProvider.FORGEJO, FORGEJO_HOST, FORGEJO_ISSUER)
+
+
+def _token(issuer: Issuer, **claims: object) -> VerifiedCiToken:
+    return VerifiedCiToken(issuer=issuer, claims=claims)
+
+
+@pytest_asyncio.fixture
+async def factory(migrated_dsn: str):
+    from plak.config import Settings
+
+    settings = Settings(
+        db_url=migrated_dsn,
+        content_root="/onbestaand/plak-content",
+        oidc_issuer="https://idp.example",
+        oidc_client_id="plak",
+        oidc_client_private_jwk="{}",
+        session_secret="sessie-geheim-van-minstens-32-bytes!",
+        audit_pepper="audit-pepper-van-minstens-32-bytes!!",
+        audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        content_base_url="https://plak.example",
+    )
+    engine = make_engine(settings)
+    session_factory = make_session_factory(engine)
+    try:
+        yield session_factory
+    finally:
+        await engine.dispose()
+
+
+async def _make_site(factory, *, slug: str = "website") -> Site:
+    group = Group(
+        id=uuid.uuid4(), slug=f"groep-{uuid.uuid4().hex[:8]}", name="Groep", default_access_base=AccessBase.PUBLIC
+    )
+    site = Site(id=uuid.uuid4(), group_id=group.id, slug=slug, title="Website", access_base=AccessBase.PUBLIC)
+    async with factory() as db:
+        db.add_all([group, site])
+        await db.commit()
+    return site
+
+
+async def _add_repository(
+    factory,
+    site: Site,
+    *,
+    provider: CiProvider = CiProvider.GITHUB,
+    host: str = GITHUB_HOST,
+    owner: str = "minbzk",
+    repo: str = "website",
+    repository_id: int = 1001,
+    owner_id: int = 2002,
+    live_branch: str | None = None,
+) -> SiteRepository:
+    row = SiteRepository(
+        id=uuid.uuid4(),
+        site_id=site.id,
+        provider=provider,
+        host=host,
+        owner=owner,
+        repo=repo,
+        repository_id=repository_id,
+        owner_id=owner_id,
+        live_branch=live_branch,
+    )
+    async with factory() as db:
+        db.add(row)
+        await db.commit()
+    return row
+
+
+class TestTrustedRepositoryIdPath:
+    async def test_no_row_refused(self, factory):
+        site = await _make_site(factory)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+        assert exc.value.status == 403
+
+    async def test_provider_mismatch_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, provider=CiProvider.GITHUB, host=GITHUB_HOST)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_host_mismatch_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST)
+        other_forgejo = Issuer(CiProvider.FORGEJO, "https://forgejo.example", "https://forgejo.example/api/actions")
+        token = _token(other_forgejo, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_id_match_accepted(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001", repository_owner_id="2002")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.repository_id == 1001
+        assert trusted.owner_id == 2002
+
+    async def test_id_mismatch_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="9999")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_owner_id_mismatch_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001", repository_owner_id="9999")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_owner_id_absent_accepted(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.repository_id == 1001
+
+    async def test_github_without_ids_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+
+class TestTrustedRepositoryForgejoNamePath:
+    async def test_name_match_accepted_with_rest_confirmation(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 1001, 2002)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="MinBZK/Website")  # case-insensitive
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(ci.client()))
+        assert trusted.owner == "minbzk"
+        assert trusted.repo == "website"
+
+    async def test_name_mismatch_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 1001, 2002)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/andere-repo")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(ci.client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_rest_says_different_id_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()
+        # Recreated under the same name: the REST answer no longer has the stored id.
+        ci.add_forgejo("minbzk", "website", 9999, 2002)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(ci.client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_rest_404_refused(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()  # repository not registered: REST answers 404
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(ci.client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_rest_unreachable_returns_503(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 1001, 2002)
+        url = FORGEJO_HOST + "/api/v1/repos/minbzk/website"
+        ci.failures[url] = 500
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(ci.client()))
+        assert exc.value.reason == vocabulary.CI_PROVIDER_UNREACHABLE
+        assert exc.value.status == 503
+
+    async def test_second_call_within_5min_cached(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002,
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 1001, 2002)
+        providers = ProviderClient(ci.client())
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            await trusted_repository(db, token, site, providers)
+        request_count = len(ci.requests)
+        async with factory() as db:
+            await trusted_repository(db, token, site, providers)
+        assert len(ci.requests) == request_count  # served from the 5-minute positive cache
+
+
+class TestCheckLiveDeploy:
+    def _repository(self, live_branch):
+        from plak.ci.trust import TrustedRepository
+
+        return TrustedRepository(
+            provider=CiProvider.GITHUB,
+            host=GITHUB_HOST,
+            owner="minbzk",
+            repo="website",
+            repository_id=1001,
+            owner_id=2002,
+            live_branch=live_branch,
+        )
+
+    # (live_branch, event_name, ref, allowed); event None leaves the claim out.
+    CASES = (
+        *[(None, event, "refs/heads/feature", True) for event in ("push", "workflow_dispatch", "schedule")],
+        (None, "push", "refs/tags/v1", True),
+        *[("main", event, "refs/heads/main", True) for event in ("push", "workflow_dispatch", "schedule")],
+        *[
+            (branch, event, ref, False)
+            for branch in (None, "main")
+            for ref in ("refs/heads/main", "refs/pull/7/merge")
+            for event in (
+                "pull_request",
+                "pull_request_target",
+                "pull_request_review",
+                "issue_comment",
+                "workflow_run",
+                "discussion",
+                "release",
+                "onbekend",
+                "",
+                None,
+            )
+        ],
+        ("main", "push", "refs/heads/feature", False),
+        ("main", "push", "refs/tags/v1", False),
+        ("main", "workflow_dispatch", "refs/heads/mainx", False),
+        ("main", "schedule", None, False),
+    )
+
+    @pytest.mark.parametrize(("live_branch", "event", "ref", "allowed"), CASES)
+    def test_live_deploy_policy(self, live_branch, event, ref, allowed):
+        claims = {}
+        if event is not None:
+            claims["event_name"] = event
+        if ref is not None:
+            claims["ref"] = ref
+        token = _token(GITHUB_ISSUER_OBJ, **claims)
+        if allowed:
+            check_live_deploy(self._repository(live_branch), token)
+            return
+        with pytest.raises(CiTokenError) as exc:
+            check_live_deploy(self._repository(live_branch), token)
+        assert exc.value.reason == vocabulary.CI_BRANCH_NOT_ALLOWED
+        assert exc.value.status == 403
+
+
+class TestAuditAndIdentifiers:
+    def test_audit_refs_caps_length_and_stringifies_ints(self):
+        token = _token(
+            GITHUB_ISSUER_OBJ,
+            repository="minbzk/website",
+            ref="refs/heads/main",
+            sha="a" * 300,
+            run_id=4242,
+            workflow="Publiceer",
+            event_name="push",
+        )
+        refs = audit_refs(token)
+        assert refs["provider"] == "github"
+        assert refs["sha"] == "a" * 200
+        assert refs["run_id"] == "4242"
+        assert set(refs) <= {"provider", *AUDIT_CLAIMS}
+
+    def test_audit_refs_skips_absent_claims(self):
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website")
+        refs = audit_refs(token)
+        assert "ref" not in refs
+        assert refs["repository"] == "minbzk/website"
+
+    def test_refused_actor_identifier_with_repository_id(self):
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001")
+        assert refused_actor_identifier(token) == ci_actor_identifier(CiProvider.GITHUB, GITHUB_HOST, "1001")
+
+    def test_refused_actor_identifier_falls_back_to_lowercased_name(self):
+        token = _token(FORGEJO_ISSUER_OBJ, repository="MinBZK/Website")
+        assert refused_actor_identifier(token) == ci_actor_identifier(
+            CiProvider.FORGEJO, FORGEJO_HOST, "minbzk/website"
+        )
+
+    def test_refused_actor_identifier_with_neither_claim(self):
+        token = _token(GITHUB_ISSUER_OBJ)
+        assert refused_actor_identifier(token) == ci_actor_identifier(CiProvider.GITHUB, GITHUB_HOST, "")
+
+    def test_trusted_repository_origin_github(self):
+        from plak.ci.trust import TrustedRepository
+
+        repository = TrustedRepository(
+            provider=CiProvider.GITHUB, host=GITHUB_HOST, owner="minbzk", repo="website",
+            repository_id=1001, owner_id=2002, live_branch=None,
+        )
+        assert repository.origin == "github.com/minbzk/website"
+        assert repository.actor_identifier == ci_actor_identifier(CiProvider.GITHUB, GITHUB_HOST, 1001)
+
+    def test_trusted_repository_origin_forgejo(self):
+        from plak.ci.trust import TrustedRepository
+
+        repository = TrustedRepository(
+            provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="robbertbos", repo="waggle",
+            repository_id=1, owner_id=2, live_branch=None,
+        )
+        assert repository.origin == "code.overheid.nl/robbertbos/waggle"
