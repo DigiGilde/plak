@@ -1,0 +1,64 @@
+[project]
+name = "plak-api"
+version = "0.1.0"
+description = "Plak API - statische sites publiceren en delen met previews per PR"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.34,<1",
+    "sqlalchemy[asyncio]>=2.0,<3",
+    "asyncpg>=0.30,<1",
+    "alembic>=1.14,<2",
+    "authlib>=1.3,<2",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    "python-multipart>=0.0.18,<1",
+    "httpx>=0.28,<1",
+    "cryptography>=44,<51",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.25,<1",
+    "testcontainers>=4,<5",
+    "ruff>=0.9,<1",
+    "pytest-cov>=6,<8",
+    "pyyaml>=6,<7",
+    # The parser behind the Digital Trust Center's security.txt check, so the
+    # file is validated where it is written rather than after a deploy.
+    "sectxt>=0.9,<1",
+    # Validates deploy/plak-project.example.yaml against ZAD's own
+    # project_v2.json when that schema is available on disk.
+    "jsonschema>=4,<5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "SIM",
+    "FAST",
+    "ASYNC",
+    "S",
+    "RUF",
+    "C4",
+    "DTZ",
+    "A",
+    "PIE",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S110"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plak"]

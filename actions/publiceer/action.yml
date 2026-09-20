@@ -1,0 +1,130 @@
+name: 'publish'
+description: >-
+  Publishes a dist directory or file to Plak (live or as a preview), or
+  cleans up a preview. Works on GitHub Actions and Forgejo Actions.
+author: 'Plak'
+
+inputs:
+  host:
+    description: >-
+      Admin origin of the Plak instance (the PLAK_BASE_URL), for example
+      https://beheer.plak.example.nl, without an /admin suffix. The deploy
+      API exists only on this host; the content host answers with a 404.
+    required: true
+  site:
+    description: 'Slug of group and site, in the form group/site.'
+    required: true
+  dist-path:
+    description: >-
+      Path to the dist directory to publish, or to a single
+      .html/.zip/.tar.gz/.tgz file. Required unless teardown is 'true'.
+    required: false
+    default: ''
+  preview-ref:
+    description: >-
+      Preview ref (pr-42, say). Without this field it is a live deploy. With
+      teardown 'true' this field is required: it says which preview is
+      removed.
+    required: false
+    default: ''
+  base-path:
+    description: >-
+      Directory inside the bundle that becomes the root of the site, dist for
+      example. Needed when the bundle holds more than the site itself;
+      whatever sits beside it is not published. Without this field Plak works
+      out the root itself, and refuses the deploy if there is no index.html
+      there.
+    required: false
+    default: ''
+  teardown:
+    description: >-
+      Set to 'true' to clean up the preview with preview-ref instead of
+      publishing (on a PR close event, say). Idempotent.
+    required: false
+    default: 'false'
+
+outputs:
+  version-id:
+    description: 'ID of the published version. Empty when teardown has run.'
+    value: ${{ steps.publish.outputs.version-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    # setup-uv puts uv on PATH for every step that follows. enable-cache
+    # 'auto' means: cache on GitHub-hosted runners, and no cache upload on
+    # self-hosted ones, where uv keeps its cache on the runner's own disk and
+    # an Actions cache service may not exist at all.
+    - name: Install uv
+      uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      with:
+        enable-cache: 'auto'
+
+    - name: Check OIDC access
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          exit 0
+        fi
+        cat >&2 <<'EOF'
+        Error: no OIDC token available; the CLI cannot log in.
+        On GitHub Actions: set in the workflow (job or workflow level)
+          permissions:
+            id-token: write
+            contents: read
+        On Forgejo Actions: set on the runner (runner config or workflow)
+          enable-openid-connect: true
+        Working locally, use 'plak login' instead of this action.
+        EOF
+        exit 2
+
+    - name: Publish
+      id: publish
+      if: ${{ inputs.teardown != 'true' }}
+      shell: bash
+      env:
+        PLAK_HOST: ${{ inputs.host }}
+        PLAK_SITE: ${{ inputs.site }}
+        PLAK_INPUT_DIST_PATH: ${{ inputs.dist-path }}
+        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
+        PLAK_INPUT_BASE_PATH: ${{ inputs.base-path }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PLAK_INPUT_DIST_PATH" ]; then
+          echo "Error: dist-path is required unless teardown is 'true'" >&2
+          exit 2
+        fi
+        ARGS=(publish "$PLAK_INPUT_DIST_PATH" --host "$PLAK_HOST" --site "$PLAK_SITE")
+        if [ -n "$PLAK_PREVIEW_REF" ]; then
+          ARGS+=(--preview "$PLAK_PREVIEW_REF")
+        fi
+        if [ -n "$PLAK_INPUT_BASE_PATH" ]; then
+          ARGS+=(--base-path "$PLAK_INPUT_BASE_PATH")
+        fi
+        # --output-file, not capturing stdout: stdout also carries the
+        # '::add-mask::' command for the OIDC token, and $(...) would pull
+        # that into the version-id variable.
+        ARGS+=(--output-file "$GITHUB_OUTPUT")
+        # github.action_path is actions/publiceer/ inside the checked-out
+        # plak repository; the CLI project sits two levels up, in cli/.
+        # --project, not uvx: the same invocation contributors use from a
+        # checkout, so one form is documented and exercised.
+        uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
+
+    - name: Remove preview
+      if: ${{ inputs.teardown == 'true' }}
+      shell: bash
+      env:
+        PLAK_HOST: ${{ inputs.host }}
+        PLAK_SITE: ${{ inputs.site }}
+        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PLAK_PREVIEW_REF" ]; then
+          echo "Error: preview-ref is required when teardown is 'true'" >&2
+          exit 2
+        fi
+        uv run --project "${{ github.action_path }}/../../cli" plak \
+          preview-remove "$PLAK_PREVIEW_REF" \
+          --host "$PLAK_HOST" --site "$PLAK_SITE"

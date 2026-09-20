@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest';
+
+import { contentUrl, siteUrl } from './format';
+
+describe('contentUrl and siteUrl', () => {
+  it('builds content paths on the given content origin', () => {
+    expect(contentUrl('https://sites.plak.test', '/nldd/website/_preview/pr-42/')).toBe(
+      'https://sites.plak.test/nldd/website/_preview/pr-42/',
+    );
+    expect(siteUrl('https://sites.plak.test', 'nldd', 'website')).toBe(
+      'https://sites.plak.test/nldd/website/',
+    );
+  });
+
+  it('is insensitive to a trailing slash on the base or a leading slash on the path', () => {
+    expect(contentUrl('https://sites.plak.test/', '/nldd/website/')).toBe(
+      'https://sites.plak.test/nldd/website/',
+    );
+    expect(contentUrl('https://sites.plak.test', 'nldd/website/')).toBe(
+      'https://sites.plak.test/nldd/website/',
+    );
+  });
+
+  it('never builds on the origin of the admin SPA itself', () => {
+    // jsdom runs on https://plak.test/; the content host is a different origin.
+    expect(siteUrl('https://sites.plak.test', 'nldd', 'website')).not.toContain(
+      window.location.origin,
+    );
+  });
+});

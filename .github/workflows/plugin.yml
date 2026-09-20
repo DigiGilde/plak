@@ -1,0 +1,51 @@
+# Manifest checks for the `plak` Claude Code plugin in `plugin/`.
+#
+# `claude plugin validate` reads the two manifests and costs nothing: no
+# model is called. The behaviour tests next to them (`plugin/evals/`) do
+# call a model and are therefore a local command, not a job here; see
+# docs/skill.md.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: Plugin
+
+on:
+  pull_request:
+    paths:
+      - "plugin/**"
+      - ".claude-plugin/**"
+      - ".github/workflows/plugin.yml"
+  push:
+    branches: [main]
+    paths:
+      - "plugin/**"
+      - ".claude-plugin/**"
+      - ".github/workflows/plugin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate the plugin and marketplace manifests
+        run: |
+          claude plugin validate ./plugin --strict
+          claude plugin validate . --strict

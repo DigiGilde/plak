@@ -1,0 +1,81 @@
+/* Our own shell around Swagger UI: a header with the brand and a way back to
+   the beheer environment. The rest of the page is Swagger UI's own stylesheet,
+   and that goes for the dark theme too: `docs-theme.js` sets the class that
+   switches it on, and `swagger-ui.css` then sets `color-scheme: dark` itself. */
+
+:root {
+  color-scheme: light;
+
+  --docs-grond: #fff;
+  --docs-kop-grond: #f3f3f3;
+  --docs-kop-rand: #d4d4d4;
+  --docs-merk: #154273;
+  --docs-merk-contrast: #fff;
+}
+
+:root.dark-mode {
+  /* color-scheme comes from swagger-ui.css here, along with the page ground. */
+  --docs-grond: #1c2022;
+  --docs-kop-grond: #2a2f31;
+  --docs-kop-rand: #3b4245;
+  /* Rijksblauw reaches only 3:1 on this ground; this lighter tint 6.5:1. */
+  --docs-merk: #8fb8e0;
+  --docs-merk-contrast: #1c2022;
+}
+
+body {
+  margin: 0;
+  background: var(--docs-grond);
+  font-family: "RO Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+.docs-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--docs-kop-rand);
+  background: var(--docs-kop-grond);
+}
+
+.docs-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--docs-merk);
+}
+
+.docs-brand__block {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--docs-merk);
+  color: var(--docs-merk-contrast);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.docs-header__divider {
+  flex: 1 1 auto;
+}
+
+.docs-header a {
+  color: var(--docs-merk);
+  font-size: 16px;
+}
+
+#swagger-ui .topbar {
+  display: none;
+}
+
+/* Swagger UI puts its own info block in a narrow column; the description here
+   is long enough to earn the full width. */
+#swagger-ui .swagger-ui .info {
+  margin: 24px 0;
+}

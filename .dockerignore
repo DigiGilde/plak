@@ -1,0 +1,24 @@
+# Build context for containers/plak/Containerfile is the repo root; only
+# backend/ and frontend/ (without dependencies and build artifacts) go to
+# the build.
+# Named .dockerignore because the compose provider (docker-compose) only
+# reads that name; podman build reads it too.
+.git
+.github
+actions
+artifacts
+cli
+db
+dev
+docs
+e2e
+skills
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/*.tsbuildinfo
+frontend/dist
+frontend/coverage

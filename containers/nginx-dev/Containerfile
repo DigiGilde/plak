@@ -1,0 +1,12 @@
+FROM docker.io/nginxinc/nginx-unprivileged:1.27-alpine
+
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY --chmod=0755 10-resolver.sh /docker-entrypoint.d/10-resolver.sh
+
+# 10-resolver.sh writes the resolver at startup; /etc/nginx is not writable
+# for the nginx user, so the real file lives on /tmp.
+USER root
+RUN ln -s /tmp/resolver.conf /etc/nginx/resolver.conf
+USER nginx
+
+EXPOSE 8080

@@ -1,0 +1,33 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+*.local
+secrets/
+.secrets/
+*.pem
+*.key
+
+.superpowers/
+.DS_Store
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+coverage/
+
+# Working documents of the superpowers skills: design and plan files that
+# belong to the build process, not the delivered code.
+docs/superpowers/
+
+# Read versions of design and review moments: snapshots that belong to the
+# build process, not the delivered code.
+artifacts/
+
+# Eval runs write reports here
+plugin/evals/results/
+plugin/eval-result.json

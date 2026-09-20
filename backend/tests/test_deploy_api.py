@@ -1,0 +1,1100 @@
+"""Tests for api/deploys.py and api/errors.py: CI ID token, CLI token and
+session auth, repository trust and live branch, preview semantics, teardown
+and problem+json for every failure class (spec §8).
+
+The tests build an app of their own (router + middleware + error handlers)
+without touching main.py; the integration wires that in there later. Deploys
+really commit in the shared test container; conftest wipes the tables clean
+before every DB test.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import io
+import tracemalloc
+import uuid
+import zipfile
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import httpx
+import pytest_asyncio
+from fastapi import FastAPI
+from helpers_ci import AUDIENCE, FORGEJO_HOST, OMIT, MockCi
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from plak.api import deploys
+from plak.api.deploys import BearerOutsideDeploysMiddleware
+from plak.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
+from plak.audit.log import AuditLog
+from plak.audit.pseudonymisation import pseudonymise
+from plak.auth import sessions
+from plak.ci.providers import ProviderClient
+from plak.ci.tokens import CiTokenVerifier
+from plak.cli import service as cli
+from plak.config import Settings
+from plak.constants import AccessBase, Role
+from plak.db import make_engine, make_session_factory
+from plak.ingest.store import ContentStore
+from plak.models.audit import ActorKind, AuditLogEntry
+from plak.models.ci import CiProvider, SiteRepository
+from plak.models.cli import CliSession
+from plak.models.identity import Group, GroupMember, Member, MemberStatus
+from plak.models.publication import Preview, Site, Version, VersionTarget
+
+BASE_URL = "https://plak.example"
+DEPLOY_PATH = "/-/api/v1/sites/nldd/website/deploys"
+
+
+def _make_settings(tmp_path: Path, dsn: str, **overrides: object) -> Settings:
+    base: dict[str, object] = {
+        "db_url": dsn,
+        "content_root": tmp_path / "content",
+        "oidc_issuer": "https://idp.example",
+        "oidc_client_id": "plak",
+        "oidc_client_private_jwk": "{}",
+        "oidc_required_acr": "urn:acr:hoog",
+        "session_secret": "sessie-geheim-van-minstens-32-bytes!",
+        "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
+        "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        "content_base_url": "https://plak.example",
+        "base_url": AUDIENCE,
+    }
+    base.update(overrides)
+    return Settings(**base)
+
+
+def _make_app(settings: Settings, mock_ci: MockCi | None = None) -> FastAPI:
+    app = FastAPI()
+    register_error_handlers(app)
+    app.add_middleware(BearerOutsideDeploysMiddleware)
+    app.include_router(deploys.router)
+
+    @app.get("/-/api/v1/groups")
+    async def _groups() -> list:  # target for the bearer-elsewhere tests
+        return []
+
+    @app.get("/-/api/v1/ratelimit-demo")
+    async def _demo() -> None:
+        raise ApiError(429, "TOO_MANY_REQUESTS", headers={"Retry-After": "7"})
+
+    engine = make_engine(settings)
+    factory = make_session_factory(engine)
+    app.state.settings = settings
+    app.state.engine = engine
+    app.state.session_factory = factory
+    app.state.session_store = sessions.SessionStore()
+    app.state.content_store = ContentStore(settings.content_root)
+    app.state.audit_log = AuditLog(factory, settings.audit_pepper, settings.audit_ip_key_bytes)
+    mock_ci = mock_ci or MockCi()
+    app.state.ci_verifier = CiTokenVerifier(settings, mock_ci.client())
+    app.state.ci_providers = ProviderClient(mock_ci.client())
+    return app
+
+
+@dataclass(frozen=True)
+class Environment:
+    app: FastAPI
+    settings: Settings
+    session_factory: async_sessionmaker[AsyncSession]
+    member: Member
+    outsider: Member
+    group: Group
+    site: Site
+    second_site: Site
+    other_group: Group
+    other_site: Site
+    ci: MockCi
+    cli_token: str
+
+    @property
+    def ci_token(self) -> str:
+        """A push to main of minbzk/website, the repository linked to nldd/website."""
+        return self.ci.token()
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=self.app), base_url=BASE_URL, follow_redirects=False
+        )
+
+    def session_for(self, sub: str) -> tuple[dict[str, str], dict[str, str]]:
+        """Returns (cookies, headers) for a logged-in admin session with CSRF."""
+        session = self.app.state.session_store.create_session(
+            sub=sub, email=f"{sub}@example.org", email_verified=True, acr="urn:acr:hoog"
+        )
+        cookies = {
+            sessions.SESSION_COOKIE: sessions.sign(self.settings.session_secret, session.id),
+            sessions.CSRF_COOKIE: session.csrf_token,
+        }
+        headers = {sessions.CSRF_HEADER: session.csrf_token}
+        return cookies, headers
+
+
+async def _cli_login(factory: async_sessionmaker[AsyncSession], member: Member) -> str:
+    """Runs the device flow for `member` and returns the CLI access token."""
+    async with factory() as db:
+        created = await cli.create_device_authorization(db, client_name="plak-cli test", ip_truncated=None)
+    async with factory() as db:
+        member_row = await db.get(Member, member.id)
+        await cli.decide(db, created.user_code, member_row, approve=True)
+    async with factory() as db:
+        issued = await cli.exchange_device_code(db, created.device_code)
+    return issued.access_token
+
+
+@asynccontextmanager
+async def _environment(tmp_path: Path, dsn: str, **overrides: object):
+    settings = _make_settings(tmp_path, dsn, **overrides)
+    mock_ci = MockCi()
+    mock_ci.add_forgejo("minbzk", "website", 3003, 4004)
+    app = _make_app(settings, mock_ci)
+    factory = app.state.session_factory
+    try:
+        member = Member(
+            id=uuid.uuid4(), sso_subject="sub-actief", email="actief@example.org", status=MemberStatus.ACTIVE
+        )
+        outsider = Member(
+            id=uuid.uuid4(), sso_subject="sub-buiten", email="buiten@example.org", status=MemberStatus.ACTIVE
+        )
+        group = Group(id=uuid.uuid4(), slug="nldd", name="NLDD", default_access_base=AccessBase.PUBLIC)
+        other_group = Group(
+            id=uuid.uuid4(), slug="extern", name="Extern", default_access_base=AccessBase.PUBLIC
+        )
+        site = Site(
+            id=uuid.uuid4(),
+            group_id=group.id,
+            slug="website",
+            title="Website",
+            access_base=AccessBase.PUBLIC,
+        )
+        second_site = Site(
+            id=uuid.uuid4(), group_id=group.id, slug="docs", title="Docs", access_base=AccessBase.PUBLIC
+        )
+        other_site = Site(
+            id=uuid.uuid4(),
+            group_id=other_group.id,
+            slug="site",
+            title="Site",
+            access_base=AccessBase.PUBLIC,
+        )
+        async with factory() as db:
+            db.add_all([member, outsider, group, other_group])
+            await db.flush()
+            db.add_all(
+                [
+                    GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN),
+                    site,
+                    second_site,
+                    other_site,
+                ]
+            )
+            await db.commit()
+        async with factory() as db:
+            db.add(
+                SiteRepository(
+                    site_id=site.id,
+                    provider=CiProvider.GITHUB,
+                    host="https://github.com",
+                    owner="minbzk",
+                    repo="website",
+                    repository_id=1001,
+                    owner_id=2002,
+                    live_branch="main",
+                )
+            )
+            await db.commit()
+        cli_token = await _cli_login(factory, member)
+
+        yield Environment(
+            app=app,
+            settings=settings,
+            session_factory=factory,
+            member=member,
+            outsider=outsider,
+            group=group,
+            site=site,
+            second_site=second_site,
+            other_group=other_group,
+            other_site=other_site,
+            ci=mock_ci,
+            cli_token=cli_token,
+        )
+    finally:
+        await app.state.engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def environment(tmp_path: Path, migrated_dsn: str):
+    async with _environment(tmp_path, migrated_dsn) as env:
+        yield env
+
+
+def _zip_bytes(files: dict[str, bytes] | None = None) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for path, content in (files or {"index.html": b"<h1>hoi</h1>"}).items():
+            archive.writestr(path, content)
+    return buffer.getvalue()
+
+
+def _upload(data: bytes | None = None) -> dict:
+    return {"file": ("site.zip", data if data is not None else _zip_bytes(), "application/zip")}
+
+
+def _bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+BOUNDARY = "plak-testgrens"
+MULTIPART_HEADERS = {"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"}
+
+
+def _part_header(field: str, filename: str | None = None) -> bytes:
+    disposition = f'form-data; name="{field}"'
+    if filename is not None:
+        disposition += f'; filename="{filename}"'
+    return f"--{BOUNDARY}\r\nContent-Disposition: {disposition}\r\n\r\n".encode()
+
+
+def _multipart_parts(
+    filename: str, content_chunks: list[bytes], fields: dict[str, str] | None = None
+) -> list[bytes]:
+    """Hand-built multipart body as separate chunks, so a test can count how
+    much of the stream was actually consumed."""
+    parts_: list[bytes] = []
+    for name, value in (fields or {}).items():
+        parts_.append(_part_header(name) + value.encode() + b"\r\n")
+    parts_.append(_part_header("file", filename))
+    parts_.extend(content_chunks)
+    parts_.append(f"\r\n--{BOUNDARY}--\r\n".encode())
+    return parts_
+
+
+class _Counter:
+    """Async iterator over chunks that tracks how many have been requested."""
+
+    def __init__(self, parts_: list[bytes]) -> None:
+        self.parts_ = parts_
+        self.delivered = 0
+
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self._read()
+
+    async def _read(self) -> AsyncIterator[bytes]:
+        for part_item in self.parts_:
+            self.delivered += 1
+            yield part_item
+
+
+def _tmp_dir(environment: Environment) -> Path:
+    return environment.settings.content_root / "_tmp"
+
+
+def _assert_problem(resp: httpx.Response, status: int) -> dict:
+    assert resp.status_code == status
+    assert resp.headers["content-type"] == PROBLEM_CONTENT_TYPE
+    content = resp.json()
+    assert content["status"] == status
+    assert content["title"]
+    assert content["detail"]
+    return content
+
+
+async def test_live_deploy_with_ci_token(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+
+    assert resp.status_code == 201
+    version_id = uuid.UUID(resp.json()["versionId"])
+
+    async with environment.session_factory() as db:
+        version = await db.scalar(select(Version).where(Version.id == version_id))
+        live_id = await db.scalar(select(Site.live_version_id).where(Site.id == environment.site.id))
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+    assert version is not None
+    assert version.target == VersionTarget.LIVE
+    assert version.ci_repository == "github.com/minbzk/website"
+    assert version.member_id is None
+    assert live_id == version_id
+    assert (environment.settings.content_root / version.storage_ref / "index.html").is_file()
+    assert row.actor_kind == ActorKind.CI
+    assert row.actor_pseudonym == pseudonymise(environment.settings.audit_pepper, "github:https://github.com:1001")
+    assert row.result == "allowed"
+    assert row.refs["repository"] == "minbzk/website"
+    assert row.refs["ref"] == "refs/heads/main"
+    assert row.refs["sha"] == "0123456789abcdef0123456789abcdef01234567"
+    assert row.refs["run_id"] == "4242"
+    assert row.refs["workflow"] == "Publiceer"
+    assert row.refs["event_name"] == "push"
+    assert row.refs["provider"] == "github"
+
+
+async def test_ci_token_never_lands_in_the_audit_log(environment: Environment) -> None:
+    token = environment.ci_token
+    async with environment.client() as client:
+        await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+        await client.post("/-/api/v1/sites/nldd/docs/deploys", files=_upload(), headers=_bearer(token))
+
+    async with environment.session_factory() as db:
+        rows = (await db.execute(select(AuditLogEntry))).scalars().all()
+    assert len(rows) == 2
+    for row in rows:
+        assert token not in str(row.refs)
+        assert token.split(".")[2] not in str(row.refs)
+
+
+async def test_live_deploy_from_another_branch_refused_after_reading(environment: Environment) -> None:
+    token = environment.ci.token(ref="refs/heads/feature", sub="repo:minbzk/website:ref:refs/heads/feature")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+
+    content = _assert_problem(resp, 403)
+    assert content["code"] == "CI_BRANCH_NOT_ALLOWED"
+    assert "main" in content["detail"]
+    async with environment.session_factory() as db:
+        versions = await db.scalar(select(func.count()).select_from(Version))
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+    assert versions == 0
+    assert row.result == "refused"
+    assert row.reason_code == "CI_BRANCH_NOT_ALLOWED"
+    assert row.actor_kind == ActorKind.CI
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_live_deploy_from_a_pull_request_on_the_live_branch_refused(environment: Environment) -> None:
+    token = environment.ci.token(event_name="pull_request")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert _assert_problem(resp, 403)["code"] == "CI_BRANCH_NOT_ALLOWED"
+
+
+async def test_preview_from_any_branch_is_allowed(environment: Environment) -> None:
+    token = environment.ci.token(ref="refs/pull/7/merge", event_name="pull_request")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), data={"preview": "pr-7"}, headers=_bearer(token))
+    assert resp.status_code == 201
+
+
+async def test_without_live_branch_every_branch_may_go_live(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(live_branch=None))
+        await db.commit()
+    token = environment.ci.token(ref="refs/heads/feature")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+        assert resp.status_code == 201
+        # Without a live branch the event allowlist still holds.
+        for event in ("pull_request", "workflow_run", "issue_comment"):
+            refused = await client.post(
+                DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci.token(event_name=event))
+            )
+            assert _assert_problem(refused, 403)["code"] == "CI_BRANCH_NOT_ALLOWED"
+        missing = await client.post(
+            DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci.token(event_name=OMIT))
+        )
+        assert _assert_problem(missing, 403)["code"] == "CI_BRANCH_NOT_ALLOWED"
+        preview = await client.post(
+            DEPLOY_PATH,
+            files=_upload(),
+            data={"preview": "pr-3"},
+            headers=_bearer(environment.ci.token(event_name="workflow_run")),
+        )
+        assert preview.status_code == 201
+
+
+async def test_ci_token_for_a_site_without_that_repository_403(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            "/-/api/v1/sites/nldd/docs/deploys", files=_upload(), headers=_bearer(environment.ci_token)
+        )
+    content = _assert_problem(resp, 403)
+    assert content["code"] == "CI_REPOSITORY_NOT_TRUSTED"
+    async with environment.session_factory() as db:
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+    # A refused CI actor is pseudonymised on the claimed repository id.
+    assert row.actor_pseudonym == pseudonymise(environment.settings.audit_pepper, "github:https://github.com:1001")
+
+
+async def test_ci_token_from_another_repository_403(environment: Environment) -> None:
+    token = environment.ci.token(repository="minbzk/ander", repository_id="999")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert _assert_problem(resp, 403)["code"] == "CI_REPOSITORY_NOT_TRUSTED"
+
+
+async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(
+            update(SiteRepository).values(
+                provider=CiProvider.FORGEJO, host=FORGEJO_HOST, repository_id=3003, owner_id=4004
+            )
+        )
+        await db.commit()
+    token = environment.ci.token("forgejo", repository="MinBZK/Website")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert resp.status_code == 201
+    assert FORGEJO_HOST + "/api/v1/repos/minbzk/website" in environment.ci.requests
+
+    async with environment.session_factory() as db:
+        version = (await db.execute(select(Version))).scalar_one()
+    assert version.ci_repository == "code.overheid.nl/minbzk/website"
+
+
+async def test_forgejo_unreachable_for_the_recheck_503(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(
+            update(SiteRepository).values(
+                provider=CiProvider.FORGEJO, host=FORGEJO_HOST, repository_id=3003, owner_id=4004
+            )
+        )
+        await db.commit()
+    environment.ci.failures[FORGEJO_HOST + "/api/v1/repos/minbzk/website"] = 502
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci.token("forgejo"))
+        )
+    assert _assert_problem(resp, 503)["code"] == "CI_PROVIDER_UNREACHABLE"
+    assert "www-authenticate" not in resp.headers
+
+
+async def test_ci_token_with_wrong_audience_401(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci.token(aud="https://elders.example"))
+        )
+    assert _assert_problem(resp, 401)["code"] == "CI_AUDIENCE_MISMATCH"
+    assert resp.headers["www-authenticate"].startswith("Bearer")
+
+
+async def test_ci_token_from_an_unknown_issuer_401(environment: Environment) -> None:
+    token = environment.ci.token(iss="https://token.elders.example")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert _assert_problem(resp, 401)["code"] == "CI_ISSUER_UNKNOWN"
+    async with environment.session_factory() as db:
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+    assert row.actor_kind == ActorKind.ANONYMOUS
+    assert row.reason_code == "CI_ISSUER_UNKNOWN"
+
+
+async def test_expired_ci_token_401(environment: Environment) -> None:
+    token = environment.ci.token(exp=int(datetime.now(UTC).timestamp()) - 600)
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert _assert_problem(resp, 401)["code"] == "CI_TOKEN_INVALID"
+
+
+async def test_ci_token_without_expiry_401(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci.token(exp=OMIT)))
+    assert _assert_problem(resp, 401)["code"] == "CI_TOKEN_INVALID"
+
+
+async def test_unknown_bearer_format_401(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer("plak_abcdefgh_" + "0" * 32))
+    content = _assert_problem(resp, 401)
+    assert content["code"] == "TOKEN_INVALID"
+    assert resp.headers["www-authenticate"].startswith("Bearer")
+
+
+async def test_cli_token_deploys_as_its_member(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
+
+    assert resp.status_code == 201
+    async with environment.session_factory() as db:
+        version = (await db.execute(select(Version))).scalar_one()
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+        session = (await db.execute(select(CliSession))).scalar_one()
+    assert version.member_id == environment.member.id
+    assert version.ci_repository is None
+    assert row.actor_kind == ActorKind.MEMBER
+    assert row.actor_pseudonym == pseudonymise(environment.settings.audit_pepper, "sub-actief")
+    assert row.refs["via"] == "cli"
+    assert row.refs["cli_session"] == str(session.id)
+    assert session.last_used_at is not None
+    assert environment.cli_token not in str(row.refs)
+
+
+async def test_cli_token_of_a_member_without_role_403(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            "/-/api/v1/sites/extern/site/deploys", files=_upload(), headers=_bearer(environment.cli_token)
+        )
+    assert _assert_problem(resp, 403)["code"] == "INSUFFICIENT_ROLE"
+
+
+async def test_cli_token_of_a_deactivated_member_403(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(
+            update(Member).where(Member.id == environment.member.id).values(status=MemberStatus.DEACTIVATED)
+        )
+        await db.commit()
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
+    assert _assert_problem(resp, 403)["code"] == "MEMBER_NOT_ACTIVE"
+
+
+async def test_cli_token_needs_no_csrf(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/pr-1", headers=_bearer(environment.cli_token)
+        )
+    assert resp.status_code == 204
+
+
+async def test_deploy_of_archive_with_wrapping_dir(environment: Environment) -> None:
+    """Manual upload of a zipped folder: the site lands on the site root,
+    not on /{group}/{site}/dist/."""
+    data = _zip_bytes({"dist/": b"", "dist/index.html": b"<h1>hoi</h1>", "dist/assets/s.css": b"body{}"})
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(data), headers=_bearer(environment.ci_token))
+
+    assert resp.status_code == 201
+    version_id = uuid.UUID(resp.json()["versionId"])
+
+    async with environment.session_factory() as db:
+        version = await db.scalar(select(Version).where(Version.id == version_id))
+    assert version is not None
+    version_dir = environment.settings.content_root / version.storage_ref
+    assert (version_dir / "index.html").is_file()
+    assert (version_dir / "assets" / "s.css").is_file()
+    assert not (version_dir / "dist").exists()
+
+
+async def test_bundle_without_index_422_with_suggestion(environment: Environment) -> None:
+    """The zipped site folder: a 422 instead of a 201 with a site that 404s,
+    with the suggestion machine-readable in the problem+json response."""
+    data = _zip_bytes({"mijnsite/README.md": b"x", "mijnsite/dist/index.html": b"<h1>hoi</h1>"})
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(data), headers=_bearer(environment.ci_token))
+
+    content = _assert_problem(resp, 422)
+    assert content["code"] == "NO_INDEX"
+    assert content["indexCandidates"] == ["dist/index.html"]
+    assert "dist/index.html" in content["detail"]
+
+
+async def test_refused_bundle_leaves_nothing_behind(environment: Environment) -> None:
+    data = _zip_bytes({"mijnsite/README.md": b"x", "mijnsite/dist/index.html": b"<h1>hoi</h1>"})
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(data), headers=_bearer(environment.ci_token))
+    assert resp.status_code == 422
+
+    async with environment.session_factory() as db:
+        versions = (await db.execute(select(Version))).scalars().all()
+        live_id = await db.scalar(select(Site.live_version_id).where(Site.id == environment.site.id))
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert versions == []
+    assert live_id is None
+    assert row.result == "refused"
+    assert row.reason_code == "NO_INDEX"
+    assert not (environment.settings.content_root / "nldd").exists()
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_base_path_creates_that_dir_the_root(environment: Environment) -> None:
+    data = _zip_bytes(
+        {
+            "mijnsite/README.md": b"x",
+            "mijnsite/dist/index.html": b"<h1>hoi</h1>",
+            "mijnsite/dist/assets/s.css": b"body{}",
+        }
+    )
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(data),
+            data={"basePath": "dist"},
+            headers=_bearer(environment.ci_token),
+        )
+
+    assert resp.status_code == 201, resp.text
+    version_id = uuid.UUID(resp.json()["versionId"])
+    async with environment.session_factory() as db:
+        version = await db.scalar(select(Version).where(Version.id == version_id))
+    version_dir = environment.settings.content_root / version.storage_ref
+    assert (version_dir / "index.html").is_file()
+    assert (version_dir / "assets" / "s.css").is_file()
+    assert not (version_dir / "README.md").exists()
+
+
+async def test_invalid_base_path_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(),
+            data={"basePath": "../ontsnapping"},
+            headers=_bearer(environment.ci_token),
+        )
+
+    content = _assert_problem(resp, 422)
+    assert content["code"] == "BASE_PATH_INVALID"
+
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert row.reason_code == "BASE_PATH_INVALID"
+    assert row.refs["base_path"] == "../ontsnapping"
+
+
+async def test_preview_deploy_with_base_path(environment: Environment) -> None:
+    data = _zip_bytes({"mijnsite/README.md": b"x", "mijnsite/dist/index.html": b"<p>pr</p>"})
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(data),
+            data={"preview": "pr-9", "basePath": "dist"},
+            headers=_bearer(environment.ci_token),
+        )
+
+    assert resp.status_code == 201, resp.text
+    version_id = uuid.UUID(resp.json()["versionId"])
+    async with environment.session_factory() as db:
+        version = await db.scalar(select(Version).where(Version.id == version_id))
+        preview = await db.scalar(select(Preview).where(Preview.site_id == environment.site.id))
+    assert version.target == VersionTarget.PREVIEW
+    assert preview.ref == "pr-9"
+    index = environment.settings.content_root / version.storage_ref / "index.html"
+    assert index.read_bytes() == b"<p>pr</p>"
+
+
+async def test_preview_deploy_with_ci_token_from_a_pull_request(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(),
+            data={"preview": "pr-42"},
+            headers=_bearer(environment.ci.token(ref="refs/pull/42/merge", event_name="pull_request")),
+        )
+
+    assert resp.status_code == 201
+    version_id = uuid.UUID(resp.json()["versionId"])
+
+    async with environment.session_factory() as db:
+        preview = await db.scalar(
+            select(Preview).where(Preview.site_id == environment.site.id, Preview.ref == "pr-42")
+        )
+        live_id = await db.scalar(select(Site.live_version_id).where(Site.id == environment.site.id))
+    assert preview is not None
+    assert preview.version_id == version_id
+    assert live_id is None
+    remaining = preview.expires_at - datetime.now(UTC)
+    assert timedelta(days=29) < remaining < timedelta(days=31)
+
+
+async def test_preview_ref_becomes_slug_validated(environment: Environment) -> None:
+    async with environment.client() as client:
+        for error_ref in ("PR-42", "pr_42", "-pr", "pr-", "a" * 64):
+            resp = await client.post(
+                DEPLOY_PATH,
+                files=_upload(),
+                data={"preview": error_ref},
+                headers=_bearer(environment.ci_token),
+            )
+            _assert_problem(resp, 422)
+
+    async with environment.session_factory() as db:
+        count = await db.scalar(select(func.count()).select_from(Version))
+    assert count == 0
+
+
+async def test_bearer_outside_deploy_endpoints_401(environment: Environment) -> None:
+    async with environment.client() as client:
+        # A valid token on a different API endpoint.
+        resp = await client.get("/-/api/v1/groups", headers=_bearer(environment.ci_token))
+        content = _assert_problem(resp, 401)
+        assert "www-authenticate" in resp.headers
+        assert content["status"] == 401
+
+        # On arbitrary non-API paths, and on the deploy path with the wrong
+        # method, bearer is refused too.
+        resp = await client.get("/nldd/website/", headers=_bearer(environment.ci_token))
+        _assert_problem(resp, 401)
+
+        resp = await client.get(DEPLOY_PATH, headers=_bearer(environment.ci_token))
+        _assert_problem(resp, 401)
+
+        # Without bearer the same endpoint stays reachable as usual.
+        resp = await client.get("/-/api/v1/groups")
+        assert resp.status_code == 200
+
+
+async def test_revoked_cli_token_401_with_www_authenticate(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        session = (await db.execute(select(CliSession))).scalar_one()
+        await cli.revoke(db, session.id)
+
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
+
+    assert _assert_problem(resp, 401)["code"] == "TOKEN_INVALID"
+    assert resp.headers["www-authenticate"].startswith("Bearer")
+
+
+async def test_expired_cli_token_401_with_www_authenticate(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(CliSession).values(access_expires_at=datetime.now(UTC) - timedelta(minutes=1)))
+        await db.commit()
+
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
+
+    _assert_problem(resp, 401)
+    assert resp.headers["www-authenticate"].startswith("Bearer")
+
+
+async def test_unknown_site_404(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            "/-/api/v1/sites/nldd/onbestaand/deploys",
+            files=_upload(),
+            headers=_bearer(environment.ci_token),
+        )
+    _assert_problem(resp, 404)
+
+
+async def test_session_deploy_with_csrf(environment: Environment) -> None:
+    cookies, headers = environment.session_for("sub-actief")
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=headers)
+
+    assert resp.status_code == 201
+    version_id = uuid.UUID(resp.json()["versionId"])
+    async with environment.session_factory() as db:
+        version = await db.scalar(select(Version).where(Version.id == version_id))
+    assert version.member_id == environment.member.id
+    assert version.ci_repository is None
+
+
+async def test_session_without_csrf_header_403(environment: Environment) -> None:
+    cookies, _ = environment.session_for("sub-actief")
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.post(DEPLOY_PATH, files=_upload())
+    _assert_problem(resp, 403)
+
+
+async def test_without_session_and_without_token_401(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload())
+    _assert_problem(resp, 401)
+
+
+async def test_session_of_not_group_member_403(environment: Environment) -> None:
+    cookies, headers = environment.session_for("sub-buiten")
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=headers)
+    _assert_problem(resp, 403)
+
+
+async def test_refused_deploy_is_audited_once(environment: Environment) -> None:
+    """api/deploys.py marks its own refusals audited, so the generic ApiError
+    handler in api/errors.py does not add a second, thinner admin_access row."""
+    cookies, headers = environment.session_for("sub-buiten")
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=headers)
+    _assert_problem(resp, 403)
+
+    async with environment.session_factory() as db:
+        rows = (await db.execute(select(AuditLogEntry))).scalars().all()
+    assert [row.action for row in rows] == ["deploy"]
+
+
+async def test_teardown_idempotent_204(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, files=_upload(), data={"preview": "pr-7"}, headers=_bearer(environment.ci_token)
+        )
+        assert resp.status_code == 201
+        version_id = uuid.UUID(resp.json()["versionId"])
+
+        async with environment.session_factory() as db:
+            storage_ref = await db.scalar(select(Version.storage_ref).where(Version.id == version_id))
+        assert (environment.settings.content_root / storage_ref).is_dir()
+
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token)
+        )
+        assert resp.status_code == 204
+
+        # Idempotent: deleting again stays a 204, also for a ref that has
+        # never existed.
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token)
+        )
+        assert resp.status_code == 204
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/nooit-bestaan",
+            headers=_bearer(environment.ci_token),
+        )
+        assert resp.status_code == 204
+
+    async with environment.session_factory() as db:
+        preview_count = await db.scalar(select(func.count()).select_from(Preview))
+        version_count = await db.scalar(select(func.count()).select_from(Version))
+    assert preview_count == 0
+    assert version_count == 0
+    assert not (environment.settings.content_root / storage_ref).exists()
+
+
+async def test_teardown_invalid_ref_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/PR_7", headers=_bearer(environment.ci_token)
+        )
+    _assert_problem(resp, 422)
+
+
+async def test_teardown_via_session(environment: Environment) -> None:
+    cookies, headers = environment.session_for("sub-actief")
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.delete(
+            "/-/api/v1/sites/nldd/website/previews/pr-9", headers=headers
+        )
+    assert resp.status_code == 204
+
+
+async def test_upload_above_max_body_413(tmp_path: Path, migrated_dsn: str) -> None:
+    async with _environment(tmp_path, migrated_dsn, ingest_max_body=64) as environment:
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                files=_upload(_zip_bytes({"index.html": b"x" * 4096})),
+                headers=_bearer(environment.ci_token),
+            )
+        _assert_problem(resp, 413)
+        assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_oversized_body_without_content_length_stops_413_before_end_of_stream(
+    tmp_path: Path, migrated_dsn: str
+) -> None:
+    """Chunked upload (no Content-Length): the body limit is watched
+    incrementally and reading stops as soon as it is exceeded, well before the
+    end."""
+    limit = 64 * 1024
+    async with _environment(tmp_path, migrated_dsn, ingest_max_body=limit) as environment:
+        parts_ = _multipart_parts("site.zip", [b"\0" * 4096] * 256)  # ~1 MB
+        counter = _Counter(parts_)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                content=counter,
+                headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS},
+            )
+        content = _assert_problem(resp, 413)
+        assert content["code"] == "BODY_TOO_LARGE"
+        # At most the limit plus one chunk was read, not the whole stream.
+        assert counter.delivered <= limit // 4096 + 2
+        assert counter.delivered < len(parts_)
+        assert list(_tmp_dir(environment).iterdir()) == []
+
+    async with environment.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(Version)) == 0
+
+
+async def test_content_length_above_limit_413_without_too_read(tmp_path: Path, migrated_dsn: str) -> None:
+    async with _environment(tmp_path, migrated_dsn, ingest_max_body=64 * 1024) as environment:
+        parts_ = _multipart_parts("site.zip", [b"\0" * 4096] * 256)
+        counter = _Counter(parts_)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                content=counter,
+                headers={
+                    **_bearer(environment.ci_token),
+                    **MULTIPART_HEADERS,
+                    "Content-Length": str(sum(len(s) for s in parts_)),
+                },
+            )
+        _assert_problem(resp, 413)
+        assert counter.delivered == 0
+        assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_unauthenticated_does_not_read_the_body(environment: Environment) -> None:
+    parts_ = _multipart_parts("site.zip", [_zip_bytes()])
+    counter = _Counter(parts_)
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, content=counter, headers=MULTIPART_HEADERS)
+    _assert_problem(resp, 401)
+    assert counter.delivered == 0
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_truncated_multipart_422_without_version(environment: Environment) -> None:
+    """Without a closing boundary the upload is incomplete: fail-closed 422, no
+    versie and no spool leftovers."""
+    parts_ = _multipart_parts("site.zip", [_zip_bytes()])[:-1]
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=_Counter(parts_), headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    _assert_problem(resp, 422)
+    async with environment.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(Version)) == 0
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_no_multipart_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            content=b"{}",
+            headers={**_bearer(environment.ci_token), "Content-Type": "application/json"},
+        )
+    _assert_problem(resp, 422)
+
+
+async def test_second_file_field_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=[
+                ("file", ("site.zip", _zip_bytes(), "application/zip")),
+                ("extra", ("ander.zip", _zip_bytes(), "application/zip")),
+            ],
+            headers=_bearer(environment.ci_token),
+        )
+    _assert_problem(resp, 422)
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_preview_field_for_the_file_works_also(environment: Environment) -> None:
+    parts_ = _multipart_parts("site.zip", [_zip_bytes()], fields={"preview": "pr-5"})
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=_Counter(parts_), headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    assert resp.status_code == 201, resp.text
+    async with environment.session_factory() as db:
+        preview = await db.scalar(select(Preview).where(Preview.site_id == environment.site.id))
+    assert preview is not None
+    assert preview.ref == "pr-5"
+
+
+async def test_spool_and_workdir_empty_after_success(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+    assert resp.status_code == 201
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_upload_streams_without_the_body_in_memory_too_keep(
+    tmp_path: Path, migrated_dsn: str
+) -> None:
+    """A 64 MB html upload through a generator: peak memory of the whole
+    request handling (spool plus ingest) stays orders of magnitude below the
+    body."""
+    size = 64 * 1024 * 1024
+    chunk = b"<p>" + b"a" * (64 * 1024 - 7) + b"</p>"
+    count = size // len(chunk)
+
+    async def body() -> AsyncIterator[bytes]:
+        yield _part_header("file", "rapport.html")
+        for _ in range(count):
+            yield chunk
+        yield f"\r\n--{BOUNDARY}--\r\n".encode()
+
+    async with _environment(tmp_path, migrated_dsn) as environment:
+        tracemalloc.start()
+        try:
+            async with environment.client() as client:
+                resp = await client.post(
+                    DEPLOY_PATH, content=body(), headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+                )
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert resp.status_code == 201, resp.text
+        version_id = uuid.UUID(resp.json()["versionId"])
+        async with environment.session_factory() as db:
+            storage_ref = await db.scalar(select(Version.storage_ref).where(Version.id == version_id))
+        index = environment.settings.content_root / storage_ref / "index.html"
+        assert index.stat().st_size == count * len(chunk)
+        assert peak < 8 * 1024 * 1024, f"piek {peak} bytes voor een lichaam van {size} bytes"
+        assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_unpacked_file_above_limit_413(tmp_path: Path, migrated_dsn: str) -> None:
+    async with _environment(tmp_path, migrated_dsn, ingest_max_file=8) as environment:
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                files=_upload(_zip_bytes({"index.html": b"x" * 1024})),
+                headers=_bearer(environment.ci_token),
+            )
+        _assert_problem(resp, 413)
+
+
+async def test_invalid_archive_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, files=_upload(b"dit is geen zip"), headers=_bearer(environment.ci_token)
+        )
+    _assert_problem(resp, 422)
+
+
+async def test_missing_file_field_422(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, data={"preview": "pr-1"}, headers=_bearer(environment.ci_token)
+        )
+    content = _assert_problem(resp, 422)
+    assert "file" in content["detail"]
+
+
+async def test_429_problem_json_with_retry_after(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.get("/-/api/v1/ratelimit-demo")
+    _assert_problem(resp, 429)
+    assert resp.headers["retry-after"] == "7"
+
+
+async def test_concurrent_same_ref_deploys_give_one_preview_row(environment: Environment) -> None:
+    async def deploy(number: int) -> httpx.Response:
+        async with environment.client() as client:
+            return await client.post(
+                DEPLOY_PATH,
+                files=_upload(_zip_bytes({"index.html": f"<p>deploy {number}</p>".encode()})),
+                data={"preview": "pr-13"},
+                headers=_bearer(environment.ci_token),
+            )
+
+    first, second_one = await asyncio.gather(deploy(1), deploy(2))
+    assert first.status_code == 201
+    assert second_one.status_code == 201
+    version_ids = {uuid.UUID(first.json()["versionId"]), uuid.UUID(second_one.json()["versionId"])}
+    assert len(version_ids) == 2
+
+    async with environment.session_factory() as db:
+        query = select(Preview).where(Preview.site_id == environment.site.id)
+        previews = (await db.execute(query)).scalars().all()
+        query = select(Version).where(Version.site_id == environment.site.id)
+        versions = (await db.execute(query)).scalars().all()
+
+    assert len(previews) == 1
+    assert previews[0].ref == "pr-13"
+    assert previews[0].version_id in version_ids
+    assert len(versions) == 1
+    assert versions[0].id == previews[0].version_id
+
+    # Only the file tree of the winning versie is left.
+    sitedir = environment.settings.content_root / "nldd" / "website"
+    assert {entry.name for entry in sitedir.iterdir()} == {str(previews[0].version_id)}

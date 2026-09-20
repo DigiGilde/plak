@@ -1,0 +1,229 @@
+# Plak on ZAD: example project file.
+#
+# ZAD does not accept Kubernetes manifests. A project is this declarative
+# YAML file; the Operations Manager generates Deployment, Service, Ingress,
+# PVC, Secret and the Keycloak client from it. This file is an EXAMPLE: the
+# real project file lives in the ZAD projects repository and is edited via
+# the portal, `zadctl` or the API. See docs/deploying-on-zad.md for the
+# step plan, the secrets and the open questions for the platform team.
+#
+# Validated against opi/schemas/project_v2.json and opi/core/project_schema.py
+# from RijksICTGilde/RIG-Cluster, main of 20 September 2026. That code applies
+# no version-specific dispatch: every file is checked against this one schema,
+# whatever `schema-version` it names.
+#
+# WHAT THE PLATFORM TEAM MUST APPROVE (without these two the deployment falls
+# back to the cluster address and neither public hostname appears at all, see
+# the project-level `domains` block below):
+#   1. the domain rijksapp.nl for this project;
+#   2. the subdomain `plak` on that domain.
+#
+# WHAT DIFFERS PER ENVIRONMENT:
+#   - `subdomain` and `base-domain`, and thereby PLAK_BASE_URL,
+#     PLAK_CONTENT_BASE_URL and the second OIDC redirect URI;
+#   - the image (CI sets that per deploy, this file does not need it);
+#   - the secrets (user-env-vars, set per deployment with `zadctl env`).
+
+name: plak
+display-name: "Plak"
+description: "Statische sites publiceren en delen, met previews per pull request"
+
+# The Operations Manager's own latest schema version is currently 2.2
+# (opi/services/schema_migration.py, LATEST_SCHEMA_VERSION), not 2.8 as an
+# earlier draft of this file claimed. `schema-version` only drives migration
+# dispatch on write, not which shape validates: the shapes below (services as
+# single-key entries, `domains` at project root, the web address fields
+# directly on the deployment) are simply what opi/schemas/project_v2.json
+# requires today.
+schema-version: 2.2
+
+clusters:
+  - odcn-production
+
+users:
+  - email: vul-in@minbzk.nl
+    role: admin
+
+# A service-entry is either a bare string or a single-key object keyed by the
+# service name itself (project_v2.json's `service-entry`, "oneOf: string |
+# object with exactly one property"); `- name: ... / config: ...` (two keys)
+# is not a valid shape and is rejected.
+services:
+  - publish-on-web
+  - postgresql-database
+  - persistent-storage
+  - keycloak:
+      config:
+        # sso-only: the project realm brokers to the rig-platform realm and
+        # that to SSO Rijk (SAML). Plak has no local accounts.
+        template: sso-only
+        # The deployment client automatically gets https://{host}/* for every
+        # ingress host of the deployment, but the root web address is not
+        # included: once `domain-format` is set explicitly the platform does
+        # not add the root host to that list. The callback on the content
+        # origin thus needs to be added here by hand, per environment.
+        additional_redirect_uris:
+          - "https://plak.rijksapp.nl/-/oauth2/callback"
+
+# Domain/subdomain approval. This is a project-level property in the schema
+# (project_v2.json's `domains`), not nested under a service; opi/connectors/
+# subdomain.py reads it as `project_data.get("domains")`. Requesting it
+# yourself gives status `requested`; a platform admin sets it to `approved`.
+# As long as that has not happened the deployment falls back to the format
+# component-deployment-project on the cluster address and no host below
+# matches what PLAK_BASE_URL/PLAK_CONTENT_BASE_URL say. The platform manages
+# this block itself: a write action via the portal or the API leaves it as
+# is, even if the caller does not send it along.
+domains:
+  allowed-domains:
+    - domain: rijksapp.nl
+      status: requested
+      supports-dots: true
+      issuer: letsencrypt
+      restricted-subdomains: true
+  allowed-subdomains:
+    - domain: rijksapp.nl
+      subdomains:
+        - name: plak
+          status: requested
+
+components:
+  # The component name is the first label of the hostname
+  # ({component}.{subdomain}.{domain}), so this one component is called
+  # `beheer` and not `app`: it serves beheer.plak.rijksapp.nl. It is also
+  # the component that serves plak.rijksapp.nl via `root-component` on the
+  # deployment. One component is enough because the app itself does content,
+  # SPA and host separation (ADR: no nginx sidecar; ZAD knows exactly one
+  # container per component).
+  - name: beheer
+    type: deployment
+    ports:
+      inbound: [8080]
+      outbound: [443, 5432]
+    # No health-check service: without that service the platform checks the
+    # component at TCP level on its first inbound port, and that is exactly
+    # what we want. An HTTP probe would not work: /healthz does not exist
+    # on either public host and the probe arrives with the pod IP as Host,
+    # which the app rejects.
+    services:
+      - publish-on-web
+      - keycloak
+      - postgresql-database
+      - persistent-storage:
+          config:
+            # 1Gi is our chosen starting size, not a known ceiling; the
+            # actual platform maximum is unconfirmed (docs/deploying-on-zad.md
+            # §9/§10). Once the content store runs up against it,
+            # minio-storage is the route (bucket per deployment), via the
+            # ContentStore abstraction in the app.
+            - name: content
+              size: 1Gi
+              mount-path: /content
+    resources:
+      # The platform only reads the nested requests/limits shape; a loose
+      # `cpu:`/`memory:` next to it is ignored and silently gives the
+      # defaults. Limits of odcn-production: request <= 1024Mi / 250m,
+      # limit <= 4096Mi.
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+    aliases:
+      # postgresql-database is now one shared user (the read/write vs.
+      # read-only role split was removed from the project); it provides
+      # DATABASE_SERVER_HOST/-PORT/-USER, DATABASE_PASSWORD and DATABASE_DB.
+      # Plak wants one DSN. Note: the password is filled in literally, not
+      # percent-encoded.
+      PLAK_DB_URL: "postgresql+asyncpg://${DATABASE_SERVER_USER}:${DATABASE_PASSWORD}@${DATABASE_SERVER_HOST}:${DATABASE_SERVER_PORT}/${DATABASE_DB}"
+
+deployments:
+  - name: productie
+    cluster: odcn-production
+    namespace: plak
+    # `domain-format`, `domain-mode`, `subdomain`, `base-domain`, `issuer` and
+    # `root-component` are direct properties of the deployment object itself
+    # (project_v2.json's `deployment` def, additionalProperties: false), not
+    # nested under a service config; opi/utils/naming.py's find_root_component
+    # reads `deployment.get("root-component")` and the hostname builder reads
+    # the others the same way.
+    #
+    # `domain-format: component.subdomain` gives {component}.{subdomain}.
+    # {domain}, i.e. beheer.plak.rijksapp.nl. `domain-mode: nice-url` still
+    # exists in the schema (project_v2.json, optional) and is not derived
+    # from `domain-format`: opi/manager/project_manager.py reads
+    # `deployment.get("domain-mode")` literally, and both the root ingress
+    # (the bare {subdomain}.{domain} host) and the platform's nice-url
+    # subdomain registration are gated on it being exactly "nice-url". Set
+    # it explicitly, alongside `domain-format` and `root-component`, or the
+    # second hostname is never created even with an approved domain.
+    domain-format: component.subdomain
+    domain-mode: nice-url
+    subdomain: plak
+    base-domain: rijksapp.nl
+    issuer: letsencrypt
+    # Lets the same component also serve the address without the first
+    # label: beheer.plak.rijksapp.nl (beheer) and plak.rijksapp.nl (content).
+    root-component: beheer
+    backup:
+      # The scheduling happens here; `backup.enabled` at the bottom only
+      # sets the label that makes the PVC eligible for backup. Without this
+      # block the platform creates nothing automatically and after a
+      # deleted site there is only something to restore if someone started
+      # a run manually. RRULE (RFC 5545 subset), times in Europe/Amsterdam.
+      # A clone (preview) deliberately does not inherit this block, so it
+      # only affects production.
+      schedule: "FREQ=DAILY;BYHOUR=2;BYMINUTE=0"
+      resource_types:
+        - pvc
+        - database
+    components:
+      - reference: beheer
+        # CI overwrites this on every deploy (upsert-deployment).
+        image: "ghcr.io/minbzk/plak:latest"
+        env-vars:
+          PLAK_ENVIRONMENT: "productie"
+          PLAK_CONTENT_ROOT: "/content"
+          # Must match the two hosts above exactly: the app derives host
+          # separation, the HSTS decision and every shareable URL from
+          # them. PLAK_BASE_URL (the beheer component's own ingress host)
+          # could be filled by the platform via a `${PUBLIC_HOST}` user-env-
+          # var instead (docs/PUBLIC_HOST_SUBSTITUTION.md in the ZAD
+          # platform's own repository, not this one), but
+          # PLAK_CONTENT_BASE_URL cannot: PUBLIC_HOST always resolves to the
+          # component's own primary ingress hostname, never to the separate
+          # root ingress that `root-component` adds, so the content origin
+          # stays hand-typed per environment either way. Both are kept
+          # literal here for symmetry.
+          PLAK_BASE_URL: "https://beheer.plak.rijksapp.nl"
+          PLAK_CONTENT_BASE_URL: "https://plak.rijksapp.nl"
+          PLAK_OIDC_ISS_REQUIRED: "true"
+          # The ZAD Keycloak provides a client-secret client;
+          # private_key_jwt cannot be set up via self-service.
+          # PLAK_OIDC_ISSUER, PLAK_OIDC_CLIENT_ID and
+          # PLAK_OIDC_CLIENT_SECRET come from the service's OIDC_*
+          # variables.
+          PLAK_OIDC_CLIENT_AUTH: "client_secret_post"
+          # Empty: the ZAD Keycloak only advertises acr "0" and "1", so any
+          # eIDAS LoA requirement would lock everyone out. The app logs at
+          # startup that there is no acr check.
+          PLAK_OIDC_REQUIRED_ACR: ""
+          # The HAProxy router adds X-Forwarded-For in append mode; Plak
+          # takes the last untrusted hop. The exact CIDR of the router pods
+          # is a question for the platform team; these are the RFC1918
+          # ranges as a safe starting value, without public ranges.
+          PLAK_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+          # The `sub` from the ZAD Keycloak of the first platform admin;
+          # they thereby get in without a member record. Different per
+          # environment.
+          PLAK_BOOTSTRAP_ADMIN_SUB: "vul-in"
+        # The secrets are NOT here. Set them per deployment with
+        # `zadctl env` (AGE-encrypted in this file as user-env-vars):
+        #   PLAK_SESSION_SECRET   at least 32 bytes
+        #   PLAK_AUDIT_PEPPER    at least 32 bytes, never rotate without a plan
+
+# Only the PVC label that makes the content volume eligible for backup.
+# The scheduling itself is under `deployments[].backup.schedule`.
+backup:
+  enabled: true

@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Runs the E2E suite (spec 13): brings the compose stack up on its own
+# ports as a separate compose project (plak-e2e), waits for health,
+# runs Playwright and tears the stack down again.
+#
+# Environment variables:
+#   PLAK_E2E_PORT        host port for nginx (default 18888)
+#   PLAK_E2E_OIDC_PORT   host port for the mock OIDC (default 18889)
+#   PLAK_E2E_KEEP_UP=1   keep the stack running afterwards (debugging)
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT="plak-e2e"
+export PLAK_E2E_PORT="${PLAK_E2E_PORT:-18888}"
+export PLAK_E2E_OIDC_PORT="${PLAK_E2E_OIDC_PORT:-18889}"
+
+COMPOSE=(podman compose -p "${PROJECT}" -f dev/compose.yml -f e2e/compose.e2e.yml)
+
+if ! command -v podman >/dev/null 2>&1; then
+    echo "podman niet gevonden op PATH." >&2
+    exit 1
+fi
+if podman machine list --format '{{.Name}}' >/dev/null 2>&1; then
+    running="$(podman machine list --format '{{.Running}}' 2>/dev/null | head -n1)"
+    if [[ "${running}" != "true" ]]; then
+        echo "Podman-machine draait niet; start 'm met 'podman machine start'." >&2
+        exit 1
+    fi
+fi
+
+# Dev secrets: reuse dev/.secrets/ when present; creating them via
+# dev/up.sh here is not possible (that script keeps hanging in the
+# foreground), so generate them the same way.
+SECRETS_DIR="${REPO_ROOT}/dev/.secrets"
+APP_ENV="${SECRETS_DIR}/app.env"
+POSTGRES_ENV="${SECRETS_DIR}/postgres.env"
+if [[ ! -f "${APP_ENV}" || ! -f "${POSTGRES_ENV}" ]]; then
+    echo "Genereer dev-secrets in ${SECRETS_DIR} ..."
+    mkdir -p "${SECRETS_DIR}"
+    chmod 700 "${SECRETS_DIR}"
+    postgres_password="$(openssl rand -hex 24)"
+    # Separate account from the superuser the container bootstraps with; the
+    # init script (dev/postgres-init) creates it.
+    app_db_password="$(openssl rand -hex 24)"
+    session_secret="$(openssl rand -hex 32)"
+    audit_pepper="$(openssl rand -hex 32)"
+    audit_ip_key="$(openssl rand -base64 32)"
+    oidc_jwk="$(
+        cd "${REPO_ROOT}/backend" && uv run python - <<'PY'
+import base64
+import json
+
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+
+def b64url(n: int) -> str:
+    length = (n.bit_length() + 7) // 8
+    return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
+
+
+key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+priv = key.private_numbers()
+pub = priv.public_numbers
+
+jwk = {
+    "kty": "RSA",
+    "use": "sig",
+    "alg": "RS256",
+    "kid": "plak-dev",
+    "n": b64url(pub.n),
+    "e": b64url(pub.e),
+    "d": b64url(priv.d),
+    "p": b64url(priv.p),
+    "q": b64url(priv.q),
+    "dp": b64url(priv.dmp1),
+    "dq": b64url(priv.dmq1),
+    "qi": b64url(priv.iqmp),
+}
+print(json.dumps(jwk))
+PY
+    )"
+    cat > "${POSTGRES_ENV}" <<EOF
+POSTGRES_PASSWORD=${postgres_password}
+PLAK_DB_PASSWORD=${app_db_password}
+EOF
+    cat > "${APP_ENV}" <<EOF
+PLAK_DB_URL=postgresql+asyncpg://plak:${app_db_password}@postgres:5432/plak
+PLAK_SESSION_SECRET=${session_secret}
+PLAK_AUDIT_PEPPER=${audit_pepper}
+PLAK_AUDIT_IP_KEY=${audit_ip_key}
+PLAK_OIDC_CLIENT_PRIVATE_JWK=${oidc_jwk}
+EOF
+    chmod 600 "${APP_ENV}" "${POSTGRES_ENV}"
+fi
+
+cd "${REPO_ROOT}"
+
+cleanup() {
+    status=$?
+    # The Playwright step leaves the CWD in e2e/; the COMPOSE paths are
+    # relative to the repo root, so back to the root for logs and teardown.
+    cd "${REPO_ROOT}"
+    if [[ "${PLAK_E2E_KEEP_UP:-0}" == "1" ]]; then
+        echo "PLAK_E2E_KEEP_UP=1: stack blijft draaien (project ${PROJECT})."
+        return "${status}"
+    fi
+    if [[ ${status} -ne 0 ]]; then
+        echo "== laatste app/nginx-logs (run faalde) =="
+        "${COMPOSE[@]}" logs --tail 50 app nginx || true
+    fi
+    "${COMPOSE[@]}" down -v --remove-orphans || true
+    return "${status}"
+}
+trap cleanup EXIT
+
+echo "== stack starten (project ${PROJECT}, poort ${PLAK_E2E_PORT}) =="
+"${COMPOSE[@]}" up -d --build
+
+echo "== wachten op gezondheid =="
+ready=""
+for _ in $(seq 1 60); do
+    if curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
+            "http://127.0.0.1:${PLAK_E2E_PORT}/healthz-proxy" \
+        && curl -fsS -o /dev/null -H "Host: plak.localhost" \
+            "http://127.0.0.1:${PLAK_E2E_PORT}/healthz-proxy" \
+        && curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
+            "http://127.0.0.1:${PLAK_E2E_PORT}/"; then
+        ready="ja"
+        break
+    fi
+    sleep 2
+done
+if [[ -z "${ready}" ]]; then
+    echo "Stack werd niet gezond binnen 120 seconden." >&2
+    exit 1
+fi
+
+echo "== Playwright draaien =="
+cd "${REPO_ROOT}/e2e"
+if [[ ! -d node_modules ]]; then
+    if [[ -f package-lock.json ]]; then
+        npm ci
+    else
+        npm install
+    fi
+fi
+npx playwright install chromium
+npx playwright test "$@"

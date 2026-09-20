@@ -1,0 +1,98 @@
+/* nldd-app-view and most NLDD layout components use height: 100%; that
+   requires the ancestors (html, body, #app) to have a height as well, or the
+   whole app collapses to height 0 and you get an empty page. */
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/* The work width: the column that gets worked in, the same size on every page.
+   Measured in Chromium at a root font of 16 px, in a window of 1400 px, with
+   the widest content these pages hold: the site table asks 651 px, the
+   member table 619 px, the token table 530 px, the header row of the overview
+   610 px (h1 408 + gap 16 + button 186) and the tab bar of the group page
+   462 px. Nothing asks for more. 45rem (720 px) sits just above that: room for
+   a longer site title without the fixed columns drifting apart, and 80 px
+   above the 640 px below which nldd-table hides its secondary columns. In rem,
+   so the size grows with the text size.
+
+   The cap hangs on the design system's body token, so it holds for the whole
+   page: the page sections, the toolbar (which reads the token, see the
+   .toolbar CSS in App.vue) and the footer. That way the brand, the h1 and the
+   tables start on the same x, and the tables and the footer links end on the
+   same right edge; capping the content alone would have left the brand at the
+   old 1280, drifting away from the h1. */
+:root {
+  --plak-work-width: 45rem;
+  --semantics-page-sections-body-max-width: var(--plak-work-width);
+
+  /* Left over: GroepsledenBeheer.vue and TokensBeheer.vue still cap their
+     table separately. That is now the same size as the work width, so those
+     two rules (and this variable) can go. */
+  --plak-table-max-width: var(--plak-work-width);
+}
+
+/* Page header: title on the left, primary action on the right, and the action
+   drops to its own line as soon as it no longer fits beside the title.
+
+   This started out in the `end` slot of nldd-title. That slot does not shrink
+   (flex-shrink: 0) and does not drop, so the title got the leftover width and
+   broke up letter by letter: measured at 320 px the h1 was 90 px wide and
+   164 px tall, and with the font size at 200% zero px wide, 1477 px tall, with
+   a button of 321 px in a window of 320 (scrollWidth 352). That is a reflow
+   WCAG 1.4.10 does not allow.
+
+   The title grows along so the button stays right-aligned while there is room;
+   min-width: 0 then lets it shrink to the point where the wrap kicks in,
+   instead of breaking the row open. */
+.page-header > nldd-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Names something for a screen reader without taking room on screen. Not
+   `display: none` and not `visibility: hidden`: both would take it out of the
+   accessibility tree, which is the whole point of the class. */
+.alleen-schermlezer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* One long word cannot wrap, so at 200% text it runs off a 320 px screen:
+   "Bewaartermijn" measured 359 px in an h2 that was 288 px wide, and pushed
+   the privacy page to a scrollWidth of 374 (WCAG 1.4.10). Hyphenation first,
+   because the pages are Dutch and the browser knows where the syllables are;
+   breaking mid-word only where even that does not fit. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+/* nldd-status-bar pins its height to 24px (--primitives-space-24, hard pixels)
+   while its text is 0.889rem and grows with it. At 200 percent text a 28px
+   line sits in a 24px box with overflow: hidden, and the bar clips its own
+   glyphs, short labels included (WCAG 1.4.4). The component offers no
+   attribute or documented property for this; the token reaches through the
+   shadow boundary but is not a public knob, so this goes once
+   NederlandseDigitaleDienst/design-system#249 is fixed. max() keeps the 24px
+   the design means and grows only when the text no longer fits. */
+nldd-status-bar {
+  --components-status-bar-height: max(24px, 1.5em);
+}

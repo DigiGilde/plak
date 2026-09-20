@@ -1,0 +1,140 @@
+# Podman dev stack: nginx (dumb reverse proxy) + app + postgres + mock OIDC.
+# The app itself serves content, SPA and host separation (course correction
+# 2026-09-12 decision 1); nginx only passes the Host through and provides
+# the oidc alias. Secrets come from dev/.secrets/ (outside git, see
+# dev/up.sh) via env_file.
+#
+# containers/ says how images are built, dev/ says how the local stack
+# runs: this file only wires build contexts, volumes and env for the
+# images defined under containers/.
+#
+# Explicit project name: this file lives in dev/, one level under the repo
+# root, so without this podman would derive the project name "dev" from the
+# directory and orphan the volumes of the existing "plak" project.
+name: plak
+
+services:
+  # POSTGRES_USER is the image's superuser and a bootstrap account only: the
+  # init script creates the ordinary account `plak` that owns the database and
+  # that the app, the migrations and the retention job run on, the way the one
+  # account on ZAD is an ordinary owner. The image runs its init scripts on an
+  # empty data directory only, so changing this needs `podman compose down -v`.
+  postgres:
+    image: docker.io/library/postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: plak
+    env_file:
+      - path: .secrets/postgres.env
+        required: false
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d plak"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mock-oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    environment:
+      JSON_CONFIG_PATH: /app/mock-oidc-config.json
+      SERVER_PORT: "8080"
+    volumes:
+      # Path relative to dev/. The default keeps a bare `podman compose up`
+      # working; dev/up.sh points PLAK_MOCK_CONFIG at the interactive config
+      # when PLAK_MOCK_INTERACTIVE_LOGIN is set.
+      - ${PLAK_MOCK_CONFIG:-./mock-oidc-config.json}:/app/mock-oidc-config.json:ro
+    ports:
+      - "127.0.0.1:8081:8080"
+
+  # One-off: migrates the schema. Runs on PLAK_DB_URL, the one account,
+  # from dev/.secrets/app.env (dev/up.sh), like production on ZAD.
+  migrate:
+    build:
+      context: ..
+      dockerfile: containers/plak/Containerfile
+    env_file:
+      - path: .secrets/app.env
+        required: false
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: ..
+      dockerfile: containers/plak/Containerfile
+    env_file:
+      - path: .secrets/app.env
+        required: false
+    environment:
+      PLAK_CONTENT_ROOT: /content
+      # Via nginx (alias oidc.plak.localhost), not directly mock-oidc: this
+      # way browser and app see the same issuer URL and the app's exact
+      # issuer check matches the mock's Host-derived issuer.
+      PLAK_OIDC_ISSUER: http://oidc.plak.localhost:8080/default
+      PLAK_OIDC_CLIENT_ID: plak-dev
+      PLAK_OIDC_REQUIRED_ACR: http://eidas.europa.eu/LoA/substantial
+      PLAK_BOOTSTRAP_ADMIN_SUB: dev-beheerder
+      PLAK_ENVIRONMENT: dev
+      # Two origins (spec §4a): the app separates them itself on the Host
+      # header, see docs/local-development.md for the /etc/hosts rules.
+      PLAK_BASE_URL: http://beheer.plak.localhost:8080
+      PLAK_CONTENT_BASE_URL: http://plak.localhost:8080
+      # Built Vue SPA from the host instead of the copy in the image, so
+      # `just build-spa` is visible directly without a rebuild.
+      PLAK_SPA_PATH: /spa
+      # The source mount below comes from macOS via the podman machine;
+      # inotify events do not reach the container there, so --reload sees
+      # nothing without polling.
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - content:/content
+      - ../frontend/dist:/spa:ro
+      # Backend source from the host, same as the SPA above: without this
+      # mount your change only shows up after an image rebuild. The
+      # migration service still runs from the image, so a new migration
+      # still needs `podman compose build`.
+      - ../backend/src:/app/src:ro
+    command:
+      - uvicorn
+      - plak.main:create_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      # See the CMD in containers/plak/Containerfile: the access log would
+      # write secret links (?key=...) in plain text.
+      - --no-access-log
+      - --reload
+      - --reload-dir
+      - /app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-oidc:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+  nginx:
+    build:
+      context: ../containers/nginx-dev
+      dockerfile: Containerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      default:
+        aliases:
+          - oidc.plak.localhost
+    depends_on:
+      - app
+
+volumes:
+  postgres-data:
+  content:
