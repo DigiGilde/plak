@@ -95,7 +95,7 @@ export const publishNl = {
   'publish.deploy.loading': 'Deploy-instellingen laden',
   'publish.deploy.heading': 'Publiceren vanuit GitHub of Forgejo',
   'publish.deploy.intro':
-    'Een gekoppeld repository mag vanuit zijn workflow naar deze site publiceren, zonder geheim: de CI-omgeving bewijst wie hij is met een OIDC ID-token.',
+    'Koppel het repository waarin je site staat. Een push naar de live-branch publiceert daarna automatisch een nieuwe versie.',
   'publish.deploy.repo.liveBranch': 'Live-branch: {branch}',
   'publish.deploy.repo.anyBranch': 'elke branch',
   'publish.deploy.repo.linkedBy': 'Gekoppeld door {who}',
@@ -104,9 +104,9 @@ export const publishNl = {
   'publish.deploy.repo.unlink': 'Ontkoppelen',
   'publish.deploy.repo.empty': 'Nog geen repository gekoppeld',
   'publish.deploy.repo.emptyAdmin':
-    'Koppel een repository om er zonder geheim vanuit te kunnen publiceren.',
+    'Koppel een repository; een push naar de live-branch publiceert daarna automatisch.',
   'publish.deploy.repo.emptyReader':
-    'Vraag een beheerder van deze site om een repository te koppelen; daarna kan het vanuit zijn workflow naar deze site publiceren, zonder geheim.',
+    'Vraag een beheerder van deze site om een repository te koppelen; daarna publiceert een push naar de live-branch automatisch.',
   'publish.deploy.repo.link': 'Repository koppelen',
   'publish.deploy.repo.linked': 'Repository gekoppeld',
   'publish.deploy.repo.linkedDetail': '{repo} mag nu publiceren naar deze site.',
@@ -139,7 +139,23 @@ export const publishNl = {
 
   // -- Deploy tab: the ready-made workflow ---------------------------------------
   'publish.deploy.workflow.hint':
-    'Kant-en-klare workflow voor {provider} Actions. Vervang {code} door de vastgepinde commit van de action; geen geheim nodig, de action bewijst zich met een ID-token.',
+    'Kant-en-klare workflow voor {provider} Actions. Vervang {code} door de vastgepinde commit van de action.',
+  'publish.deploy.workflow.path':
+    'Zet dit bestand op {path} in het repository. Na een push naar de live-branch staat de nieuwe versie in {link}.',
+
+  // -- Deploy tab: why this is safe ------------------------------------------------
+  'publish.deploy.safety.summary': 'Waarom is dit veilig?',
+  'publish.deploy.safety.noSecret':
+    'Er komt geen geheim in het repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Plak controleert die handtekening.',
+  'publish.deploy.safety.scoped':
+    'Dat token bewijst alleen welk repository de run start; Plak accepteert het hier omdat jij precies dat repository aan deze site gekoppeld hebt.',
+  'publish.deploy.safety.liveRestricted':
+    'Live publiceren kan alleen vanaf de ingestelde live-branch, en alleen via een push, een handmatige run of een schedule, nooit vanuit een pull request.',
+  'publish.deploy.safety.previews':
+    'Previews mogen vanaf elke branch, ook vanuit een pull request, en raken de live site nooit.',
+  'publish.deploy.safety.audited': 'Elke publicatie staat in het auditlog.',
+  'publish.deploy.safety.unlink':
+    'Ontkoppel je het repository, dan stopt publiceren vanuit CI meteen.',
 
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'Vanaf je eigen computer',

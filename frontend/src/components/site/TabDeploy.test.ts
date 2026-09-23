@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
+import { _setLocaleForTest } from '@/i18n';
 import TabDeploy from './TabDeploy.vue';
 import { serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
 
@@ -553,5 +554,68 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const linkCliLink = wrapper.find('[data-testid="cli-koppelen-link"]');
     expect(linkCliLink.attributes('href')).toBe('/cli-koppelen');
     expect(wrapper.html()).toContain('plak login');
+  });
+
+  it('names the workflow file path and links to the versions tab', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
+    expect(richText.textContent).toContain('.github/workflows/publiceer.yml');
+
+    const versionsLink = wrapper.find('[data-testid="deploy-naar-versies"]');
+    expect(versionsLink.attributes('href')).toBe('/nldd/website/versions');
+    expect(versionsLink.text()).toBe('Versies');
+  });
+
+  it('names the Forgejo workflow file path for a Forgejo repository', async () => {
+    backend.data.repositories[0]!.provider = 'forgejo';
+    backend.data.repositories[0]!.host = 'https://code.overheid.nl';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
+    expect(richText.textContent).toContain('.forgejo/workflows/publiceer.yml');
+  });
+});
+
+describe('TabDeploy: why this is safe', () => {
+  it('is present and closed by default, with a summary that names the question', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    expect(block.element.tagName.toLowerCase()).toBe('details');
+    expect(block.attributes('open')).toBeUndefined();
+    expect(block.find('summary').text()).toBe('Waarom is dit veilig?');
+  });
+
+  it('expands to show the facts on click', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    await block.find('summary').trigger('click');
+
+    const text = block.text();
+    expect(text).toContain('Er komt geen geheim in het repository');
+    expect(text).toContain('nooit vanuit een pull request');
+    expect(text).toContain('raken de live site nooit');
+    expect(text).toContain('auditlog');
+    expect(text).toContain('stopt publiceren vanuit CI meteen');
+  });
+
+  it('shows the same section in English', async () => {
+    _setLocaleForTest('en');
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    expect(block.find('summary').text()).toBe('Why is this safe?');
+    expect(block.text()).toContain('No secret is stored in the repository');
+    expect(block.text()).toContain('never touch the live site');
+
+    _setLocaleForTest('nl');
   });
 });

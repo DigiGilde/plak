@@ -434,6 +434,15 @@ const workflowHint = computed(() =>
   }),
 );
 
+// Matches the workflow files docs/publishing.md shows for each provider.
+const workflowPath = computed(() =>
+  repository.value?.provider === 'forgejo'
+    ? '.forgejo/workflows/publiceer.yml'
+    : '.github/workflows/publiceer.yml',
+);
+
+const workflowPathHint = computed(() => segments('publish.deploy.workflow.path', ['path', 'link']));
+
 const cliInstall = computed(() =>
   segments('publish.deploy.cli.install', ['repo', 'folder', 'install', 'upgrade', 'run']),
 );
@@ -473,6 +482,24 @@ plak logout
           <h2 id="kop-repository">{{ t('publish.deploy.heading') }}</h2>
           <span slot="subtitle">{{ t('publish.deploy.intro') }}</span>
         </nldd-title>
+
+        <!-- A native details/summary rather than a toggle of our own: it is
+             keyboard operable by itself, announces its open state, and lets the
+             browser find text inside it with ctrl+F while it is closed. NLDD has
+             no accordion component, so the styling hangs on its tokens. -->
+        <details class="veiligheid" data-testid="deploy-veiligheid">
+          <summary>{{ t('publish.deploy.safety.summary') }}</summary>
+          <nldd-rich-text class="veiligheid-inhoud">
+            <ul>
+              <li>{{ t('publish.deploy.safety.noSecret') }}</li>
+              <li>{{ t('publish.deploy.safety.scoped') }}</li>
+              <li>{{ t('publish.deploy.safety.liveRestricted') }}</li>
+              <li>{{ t('publish.deploy.safety.previews') }}</li>
+              <li>{{ t('publish.deploy.safety.audited') }}</li>
+              <li>{{ t('publish.deploy.safety.unlink') }}</li>
+            </ul>
+          </nldd-rich-text>
+        </details>
 
         <nldd-container layout="stack" gap="16">
           <template v-if="!editing">
@@ -648,6 +675,15 @@ plak logout
 
           <nldd-rich-text v-if="repository">
             <p>{{ workflowHint[0] }}<code>&lt;commit-sha&gt;</code>{{ workflowHint[1] }}</p>
+            <p>
+              {{ workflowPathHint[0] }}<code>{{ workflowPath }}</code
+              >{{ workflowPathHint[1]
+              }}<nldd-link
+                :href="`/${group}/${site}/versions`"
+                data-testid="deploy-naar-versies"
+              >{{ t('site.tabs.versions') }}</nldd-link
+              >{{ workflowPathHint[2] }}
+            </p>
             <nldd-code-viewer language="yaml" data-testid="workflow-snippet">{{
               workflowSnippet
             }}</nldd-code-viewer>
@@ -693,3 +729,32 @@ plak logout
     @close="unlinkOpen = false"
   />
 </template>
+
+<style scoped>
+.veiligheid {
+  border: var(--semantics-surfaces-border-width, 1px) solid
+    var(--semantics-surfaces-base-border-color, #e6e8ea);
+  border-radius: var(--semantics-surfaces-corner-radius, 12px);
+  background: var(--semantics-surfaces-tinted-background-color, #f6f7f8);
+}
+
+/* No display: flex or block here: both drop the native disclosure triangle in
+   Chrome and Safari, and there is no component icon to put in its place. */
+.veiligheid > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  color: var(--semantics-content-color, inherit);
+  font: var(--primitives-font-body-md-semi-bold-snug, inherit);
+}
+
+.veiligheid > summary:focus-visible {
+  outline: var(--semantics-focus-ring-outline);
+  outline-offset: var(--semantics-focus-ring-outline-offset);
+  box-shadow: var(--semantics-focus-ring-box-shadow);
+  border-radius: var(--semantics-surfaces-corner-radius, 12px);
+}
+
+.veiligheid-inhoud {
+  padding: 0 16px 16px;
+}
+</style>
