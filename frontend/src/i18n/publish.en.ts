@@ -95,7 +95,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.loading': 'Loading deploy settings',
   'publish.deploy.heading': 'Publishing from GitHub or Forgejo',
   'publish.deploy.intro':
-    'A linked repository may publish to this site from its workflow, without a secret: the CI environment proves who it is with an OIDC ID token.',
+    'Link the repository your site lives in. A push to the live branch then publishes a new version automatically.',
   'publish.deploy.repo.liveBranch': 'Live branch: {branch}',
   'publish.deploy.repo.anyBranch': 'any branch',
   'publish.deploy.repo.linkedBy': 'Linked by {who}',
@@ -104,9 +104,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.repo.unlink': 'Unlink',
   'publish.deploy.repo.empty': 'No repository linked yet',
   'publish.deploy.repo.emptyAdmin':
-    'Link a repository to publish from it without a secret.',
+    'Link a repository; a push to the live branch then publishes automatically.',
   'publish.deploy.repo.emptyReader':
-    'Ask an admin of this site to link a repository; after that it can publish to this site from its workflow, without a secret.',
+    'Ask an admin of this site to link a repository; after that a push to the live branch publishes automatically.',
   'publish.deploy.repo.link': 'Link repository',
   'publish.deploy.repo.linked': 'Repository linked',
   'publish.deploy.repo.linkedDetail': '{repo} may now publish to this site.',
@@ -139,7 +139,23 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
 
   // -- Deploy tab: the ready-made workflow ---------------------------------------
   'publish.deploy.workflow.hint':
-    'A ready-made workflow for {provider} Actions. Replace {code} with the pinned commit of the action; no secret needed, the action proves itself with an ID token.',
+    'A ready-made workflow for {provider} Actions. Replace {code} with the pinned commit of the action.',
+  'publish.deploy.workflow.path':
+    'Save this file at {path} in the repository. After a push to the live branch, the new version shows up in {link}.',
+
+  // -- Deploy tab: why this is safe ------------------------------------------------
+  'publish.deploy.safety.summary': 'Why is this safe?',
+  'publish.deploy.safety.noSecret':
+    'No secret is stored in the repository: the forge (GitHub or Forgejo) itself signs a short-lived token for exactly this workflow run, and Plak checks that signature.',
+  'publish.deploy.safety.scoped':
+    'That token only proves which repository the run started from; Plak accepts it here because you linked exactly that repository to this site.',
+  'publish.deploy.safety.liveRestricted':
+    'Publishing live only works from the live branch you set, and only from a push, a manual run or a schedule, never from a pull request.',
+  'publish.deploy.safety.previews':
+    'Previews are allowed from any branch, including a pull request, and never touch the live site.',
+  'publish.deploy.safety.audited': 'Every publish is recorded in the audit log.',
+  'publish.deploy.safety.unlink':
+    'Unlink the repository and publishing from CI stops immediately.',
 
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'From your own computer',
