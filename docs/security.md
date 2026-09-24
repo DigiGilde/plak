@@ -23,8 +23,8 @@ the app or was deliberately postponed (base image digests, DPIA, pentest).
 | `acr` from a configured list (`PLAK_OIDC_REQUIRED_ACR`); empty = no acr check and no `acr_values`, with a startup warning in production. Adjusted because the ZAD Keycloak only supplies `acr` `0`/`1` | implemented: `auth/oidc.py`, `backend/tests/test_oidc.py`; see `docs/local-development.md`, OIDC configuration |
 | Client authentication `private_key_jwt` (default) or `client_secret_post`/`client_secret_basic` via `PLAK_OIDC_CLIENT_AUTH`; exactly the matching secrets required, error messages without secret values. `client_secret_*` deviates from the NL GOV OIDC profile (private_key_jwt or mTLS) and exists for the ZAD Keycloak, which only creates client-secret clients; the ZAD variables `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are the source for the `PLAK_OIDC_*` settings | implemented: `config.py`, `auth/oidc.py`, `backend/tests/test_config.py`, `backend/tests/test_oidc.py` |
 | `at_hash` validation when present in the id token | implemented: `auth/oidc.py`, `backend/tests/test_oidc.py` |
-| `__Host-` session cookie: HttpOnly, Secure, `Path=/`, SameSite=Strict (spec §7; only the content session is Lax, and it is `__Secure-` with a path per site, see the row below) | implemented: `auth/sessions.py`, `backend/tests/test_sessions.py` |
-| Content session (SameSite=Lax) separate from the admin session; admin routes refuse content sessions, content serving refuses admin sessions | implemented: `auth/sessions.py` (`SessionKind`), `platform/pages.py`, `backend/tests/test_sessions.py` |
+| `__Host-` session cookie: HttpOnly, Secure, `Path=/`, SameSite=Strict (spec §7; only the content session differs, and it is `__Secure-` with a path per site and SameSite=None, see the row below and "Why the content cookies are SameSite=None") | implemented: `auth/sessions.py`, `backend/tests/test_sessions.py` |
+| Content session (SameSite=None, see below) separate from the admin session; admin routes refuse content sessions, content serving refuses admin sessions | implemented: `auth/sessions.py` (`SessionKind`), `platform/pages.py`, `backend/tests/test_sessions.py` |
 | Content session cookie scoped per site (`__Secure-plak-content`, `Path=/{group}/{site}/`), with an anchor under `/-/` and a flag at `/` that carries no authority. One session behind all three, so revocation, the 12-hour age and the kind check are unchanged. It narrows what one session reaches: a site this browser has not opened carries no cookie at all. It does not make the site boundary browser-enforced, because a cookie path is matched against the requested URL and not against the page that asks: a fetch aimed at a site the visitor has already opened still carries that site's cookie. What enforces the boundary is the origin per site; what catches the rest is the subresource check. `__Host-` had to go because that prefix requires `Path=/`; what it also forbade (a `Domain` attribute) is given up only for this cookie, never for the beheer session | implemented: `auth/sessions.py`, `platform/pages.py`, `serving/router.py`, `backend/tests/test_sessions.py`, `backend/tests/test_serving.py` |
 | Session id rotation on login | implemented: `platform/pages.py` (an existing session of the same kind expires at the callback), `backend/tests/test_sessions.py` |
 | Logging out on the admin host exclusively via POST, and only from the admin origin itself (`admin_origin_ok`). POST alone is no guard there: the content host is same-site with the admin host, so `SameSite=Strict` still sends the session cookie along with a form on a published site. The content leg keeps accepting GET, for the reason in the row below | implemented: `platform/pages.py`, `api/origin_guard.py`, `backend/tests/test_sessions.py` |
@@ -44,7 +44,7 @@ the app or was deliberately postponed (base image digests, DPIA, pentest).
 | Neutral 404s, byte-identical on refusal and on non-existence | implemented: `serving/response.py` (`neutral_404_response`, the single construction point), `backend/tests/test_access_gate.py`, `backend/tests/test_serving.py` |
 | Constant-time comparison of secret link verifiers | implemented: `access/keys.py`, `backend/tests/test_keys.py` |
 | Constant-time comparison of CLI tokens (device code, access and refresh token): selector plus SHA-256 hash, with a dummy hash for an unknown selector so that an unknown selector takes as long as a wrong secret | implemented: `cli/service.py` (`matches`, `_DUMMY_HASH`), `backend/tests/test_cli_service.py` |
-| `__Secure-` key cookie, HttpOnly, SameSite=Lax, path exactly on site/preview | implemented: `auth/sessions.py` (`KEY_COOKIE`), `serving/router.py`, `backend/tests/test_serving.py` |
+| `__Secure-` key cookie, HttpOnly, SameSite=None (see "Why the content cookies are SameSite=None"), path exactly on site/preview | implemented: `auth/sessions.py` (`KEY_COOKIE`), `serving/router.py`, `backend/tests/test_serving.py` |
 | Secret link without a code: `?key=selector` only shows a code page for a usable key of that site, everything beyond that stays the neutral 404; the code goes in the body of a POST, never in the URL | implemented: `serving/code_page.py`, `access/gate.py` (`code_page_needed`), `access/keys.py` (`verify_parts`, `selector_usable`, `compare_dummy`), `backend/tests/test_code_page.py` |
 | Secret link: `?key=` is redeemed (cookie plus 302 to the URL without `key`); key never in audit, returnTo or access log | implemented: `serving/router.py`, `containers/plak/Containerfile` and `justfile` (`--no-access-log`), `backend/tests/test_serving.py` |
 | Expired preview gets the neutral 404 straight away at the access decision itself (not only via the purge job) | implemented: `access/gate.py` (`REASON_PREVIEW_EXPIRED`), `backend/tests/test_access_gate.py` |
@@ -147,9 +147,9 @@ those CDNs therefore does not stay with one site. The code runs in the page of
 every site whose visitor loads it, on the content origin, with whatever that
 page can reach.
 
-The per-site sandbox reduces that substantially: a sandboxed document has no
-cookies and cannot reach another site's content, so a compromised script is
-limited to the page it ran in. It is not the whole answer. It does not stop the
+The per-site sandbox reduces that substantially: a sandboxed document cannot
+read another site's content or storage, so a compromised script is limited to
+the page it ran in. It is not the whole answer. It does not stop the
 CDN seeing every visitor of every site that loads from it, it does not stop the
 script doing whatever that one page does, and it holds only for the documents
 that are sandboxed.
@@ -177,13 +177,12 @@ sandbox allow-scripts allow-forms allow-popups
 
 The load-bearing part is what is *not* in that list: without `allow-same-origin`
 the browser gives the document an opaque origin. It is then same-origin with
-nothing at all, so it can read no other document on this hostname, its own
-requests carry no cookies, and it can write none. Scripts, forms and popups
-stay allowed, so an ordinary page keeps working.
+nothing at all, so it can read no other document on this hostname and can
+neither read nor write storage. Scripts, forms and popups stay allowed, so an
+ordinary page keeps working.
 
 Verified in a browser against the dev stack, with and without the directive.
-With the sandbox the page's own stylesheet, script and image load normally
-(they are ordinary subresource loads, which the sandbox does not touch),
+With the sandbox the page's own stylesheet, script and image load normally,
 `window.origin` reads `null`, `localStorage`, `sessionStorage` and
 `document.cookie` throw a `SecurityError`, a `fetch` of another site's path
 fails instead of returning that site's HTML, and a window opened on another
@@ -191,11 +190,15 @@ site's path cannot be read by the opener. Without it, the same page reads the
 other site's page in full.
 
 The price is real and falls on the publisher: no `localStorage`, no
-`sessionStorage`, no cookies, and no same-origin `fetch` of the site's own
-files either. A site that stores anything in the browser stops working until
-its owner turns the shielding off, which is why the switch and its explanation
-sit next to the external-sources switch on the site's access screen, in the
-words a publisher uses ("een onthouden voorkeur, een half ingevuld formulier").
+`sessionStorage`, no `document.cookie`, and nothing the browser fetches in
+CORS mode. That last one is measured, not derived: from an opaque origin a web
+font, a module script and a `fetch` of the site's own files go out with
+`Origin: null` and no cookie, and Plak sets no CORS headers, so the browser
+refuses them. A site that stores anything in the browser, or serves its own
+web font, or loads ES modules, stops working until its owner turns the
+shielding off, which is why the switch and its explanation sit next to the
+external-sources switch on the site's access screen, in the words a publisher
+uses ("een onthouden voorkeur, een half ingevuld formulier").
 
 What this does and does not buy, stated plainly. It protects the visitors of
 *other* sites against this one: content published here cannot reach across to
@@ -210,6 +213,75 @@ The same two exceptions as for external sources apply. The neutral 404 keeps
 the plain `CONTENT_CSP` whatever a site sets, because it has to stay
 byte-identical across every cause of refusal. The code page for a secret link
 keeps it too: it is a page of the platform itself.
+
+### Why the content cookies are SameSite=None
+
+The shielding above has a consequence the first version of it missed. An
+opaque origin is cross-site with *everything*, the document's own site
+included. Measured in a browser: the subresource requests a sandboxed page
+makes for its own stylesheet, script and image arrive with
+`Sec-Fetch-Site: cross-site`, without an `Origin` and without a `Referer`,
+whatever `Referrer-Policy` the response carries. Under `SameSite=Lax` the
+browser therefore withholds the content session cookie there, and every
+non-public site was served as a page without a single one of its own assets,
+while public sites were unaffected because they need no cookie.
+
+There is no request signal that separates such a load from a third party's,
+so the site cookie (`__Secure-plak-content`) and the secret-link cookie
+(`__Secure-plak-key`) are `SameSite=None; Secure`. The anchor and the presence
+flag stay `Lax`: they are only ever read on a top-level navigation, which Lax
+covers, and the anchor is the cookie that can mint a site cookie for the next
+site.
+
+What that opens, shape by shape, for a site this browser has a cookie for:
+
+- **Top-level navigation** from another site: unchanged. Lax already sent the
+  cookie on a top-level GET navigation, and the visitor sees where they land.
+- **`fetch`/XHR**: the request goes out with the cookie, the answer is
+  unreadable. Reading a cross-origin response needs CORS, and Plak sets no
+  CORS headers anywhere; `no-cors` yields an opaque response. So the pages
+  themselves, which is where the content is, stay out of reach.
+- **`<iframe>`**: `frame-ancestors 'none'` on every content response, the
+  neutral 404 included, so the browser refuses to render either and the two
+  fail identically.
+- **`<img>`**: a real image of the site loads. The including page cannot read
+  its pixels (the canvas is tainted) but does learn that it exists and what
+  its intrinsic dimensions are, for a path it guessed.
+- **`<link rel=stylesheet>`**: the site's stylesheet loads and applies.
+  `cssRules` throws a `SecurityError`, but the effect is observable through
+  `getComputedStyle`, so a private site's CSS has to be treated as readable by
+  a page that knows its URL.
+- **`<script src>`**: a real script asset of the site executes in the
+  including page. `X-Content-Type-Options: nosniff` keeps HTML pages and the
+  neutral 404 from executing, but whatever a non-public site puts in a `.js`
+  file is then readable through its own globals. Data does not belong in an
+  asset of a non-public site.
+- **Mutations**: none. The content origin has no session-borne mutation and
+  therefore no CSRF cookie. Its only POST is `/-/code`, which is anonymous and
+  guarded by its own origin check (`Origin`, falling back to
+  `Sec-Fetch-Site`), so a form on another site fails there. The content logout
+  is a GET and deliberately forgeable.
+
+Accepted, in short: a third-party page can have a visited site's assets loaded
+with the visitor's credentials and observe their effect, but not read its
+pages. The alternatives are worse. Not sandboxing non-public sites inverts the
+model, since those are the sites with something to protect and any published
+page can attack them. Serving assets of a non-public site without credentials
+is the access gate with a hole in it. A separate cookie for the sandboxed case
+only would be attachable by a third party in exactly the same way, so it buys
+nothing but a second thing to revoke. `Cross-Origin-Resource-Policy:
+same-site` was tried and rejected on measurement: an opaque origin is not
+same-site, so it blocks the page's own assets as thoroughly as a stranger's.
+`_foreign_subresource` cannot help here either; it only looks at same-origin
+requests, and a cross-site rule would have to allow requests without a
+`Referer`, which is exactly what a third party can arrange.
+
+Browsers that block or partition third-party cookies are the residual risk in
+the other direction: where a browser treats the opaque origin as a third party
+to the site, it withholds the cookie again and the assets of a non-public
+sandboxed site do not load. Verified working in Chromium; the durable fix for
+both sides is an origin per site, which makes the sandbox and this exception
+unnecessary at once.
 
 ## Ingest and storage
 
@@ -329,7 +401,7 @@ the same OIDC client as the admin login (PKCE, state, nonce, iss check,
 `__Host-` login cookie), with redirect URI `{PLAK_CONTENT_BASE_URL}/-/oauth2/callback`;
 that second redirect URI has to be registered at the IdP alongside
 `{PLAK_BASE_URL}/-/oauth2/callback`. The outcome is a content session
-(`__Secure-plak-content`, HttpOnly, Secure, SameSite=Lax,
+(`__Secure-plak-content`, HttpOnly, Secure, SameSite=None,
 `Path=/{group}/{site}/`, 12 hours, no CSRF cookie, with an anchor under `/-/`
 and a presence flag at `/`, see the cookie row above) without admin
 authority: `session_from_request` (admin and API) accepts kind `admin` only, content serving kind `content` only,

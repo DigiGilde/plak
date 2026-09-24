@@ -432,7 +432,11 @@ def _redeem_key(
 ) -> Response:
     """Redeems a valid ?key=: set the cookie and 302 to the same URL without
     key (other query parameters stay). The actual response comes from the
-    follow-up request on the cookie route."""
+    follow-up request on the cookie route.
+
+    SameSite=None for the same reason as the content session cookie
+    (auth/sessions.py): a sandboxed page is cross-site with its own site, so
+    under Lax the key would reach the page and none of its assets."""
     if kind == "preview":
         path = f"/{quote(group)}/{quote(site)}/_preview/{quote(ref or '')}/"
     else:
@@ -444,7 +448,7 @@ def _redeem_key(
         path=path,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
     )
     return response
 

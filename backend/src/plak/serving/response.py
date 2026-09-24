@@ -51,9 +51,15 @@ EXTERNAL_SOURCES: dict[str, tuple[str, ...]] = {
 # What the sandbox adds. All sites share one hostname, so without this a page
 # runs on the same origin as every other site's pages. Leaving out
 # allow-same-origin gives the document an opaque origin: it can read no other
-# document on this host, its own requests carry no cookies and it can write
-# none. Its stylesheets, scripts, images and fonts are ordinary subresource
-# loads and keep working; browser storage does not.
+# document on this host and it stores nothing.
+#
+# The opaque origin makes the page cross-site with its own site as well. Its
+# no-cors subresources (stylesheets, classic scripts, images, media) do load,
+# and reach the gate with the site's credentials, but only because those
+# cookies are SameSite=None (auth/sessions.py). What cannot work here is what
+# the browser fetches in CORS mode: web fonts, module scripts and fetch/XHR
+# arrive with `Origin: null` and no cookie, and this app sets no CORS headers.
+# A site that needs those has to have the switch off.
 SANDBOX: dict[str, tuple[str, ...]] = {
     "sandbox": ("allow-scripts", "allow-forms", "allow-popups"),
 }
