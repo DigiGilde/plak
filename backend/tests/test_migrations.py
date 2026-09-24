@@ -10,6 +10,7 @@ from datetime import timedelta
 
 import asyncpg
 import pytest
+from helpers_audit import insert_aged_audit_row
 
 from plak import i18n
 from plak.audit import vocabulary
@@ -154,18 +155,7 @@ async def test_audit_log_delete_refused_by_trigger(db_connection: asyncpg.Connec
 
 
 async def _audit_row(conn: asyncpg.Connection, action: str, result: str, age: timedelta) -> uuid.UUID:
-    audit_id = uuid.uuid4()
-    await conn.execute(
-        """
-        INSERT INTO audit_log_entries (id, actor_kind, action, result, occurred_at)
-        VALUES ($1, 'system', $2, $3, now() - $4::interval)
-        """,
-        audit_id,
-        action,
-        result,
-        age,
-    )
-    return audit_id
+    return await insert_aged_audit_row(conn, action, result, age)
 
 
 async def _deletable(conn: asyncpg.Connection, audit_id: uuid.UUID) -> bool:
