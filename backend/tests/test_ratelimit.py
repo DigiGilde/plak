@@ -162,6 +162,19 @@ async def test_counter_evict_oldest_bucket_on_overrun_max() -> None:
     assert r.count == 1  # "a" was the oldest and got evicted, so a fresh bucket
 
 
+async def test_counter_evicts_oldest_window_not_first_seen_key() -> None:
+    counter = InMemoryCounter(max_keys=2)
+    await counter.increment("a", 10, now_=0.0)
+    await counter.increment("b", 10, now_=1.0)
+    # "a" opens a fresh window and is from now on the youngest bucket, even
+    # though it was the first key seen.
+    await counter.increment("a", 10, now_=20.0)
+    await counter.increment("c", 10, now_=21.0)
+
+    assert (await counter.increment("a", 10, now_=22.0)).count == 2
+    assert (await counter.increment("b", 10, now_=22.0)).count == 1
+
+
 # --- Middleware: window behaviour, reset, backstop, 429 + Retry-After -------------------
 
 
@@ -253,6 +266,29 @@ async def test_global_backstop_stores_to_about_all_keys() -> None:
     # every request comes from a different (trusted-XFF) key, so the per-key
     # budget (1000) is never reached: only the backstop (3) fires.
     assert statuses == [200, 200, 200, 429]
+
+
+async def test_refused_key_does_not_spend_the_global_backstop() -> None:
+    """One key that runs into its own limit may not exhaust the shared
+    backstop, which would refuse every other client for the rest of the
+    window."""
+    settings = _make_settings(
+        ratelimit_api_max=2,
+        ratelimit_api_window_s=60,
+        ratelimit_api_global_max=5,
+        trusted_proxies="127.0.0.1/32",
+    )
+    async with _make_client(settings, clock=_FakeClock(), client_ip="127.0.0.1") as client:
+        attacker = [
+            (
+                await client.get("/-/api/v1/x", headers={"x-forwarded-for": "203.0.113.9"})
+            ).status_code
+            for _ in range(10)
+        ]
+        other = await client.get("/-/api/v1/x", headers={"x-forwarded-for": "198.51.100.7"})
+
+    assert attacker == [200, 200] + [429] * 8
+    assert other.status_code == 200
 
 
 async def test_authenticated_counted_per_member_not_per_ip() -> None:

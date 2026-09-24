@@ -11,6 +11,7 @@ import enum
 import logging
 import math
 import time
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -121,7 +122,7 @@ class InMemoryCounter:
     """
 
     def __init__(self, max_keys: int = _DEFAULT_MAX_KEYS) -> None:
-        self._buckets: dict[str, _Bucket] = {}
+        self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
         self._max_keys = max_keys
         self._calls = 0
 
@@ -138,6 +139,10 @@ class InMemoryCounter:
         if bucket is None or (now_ - bucket.window_start) >= bucket.window_s:
             bucket = _Bucket(window_start=now_, window_s=window_s)
             self._buckets[key] = bucket
+            # A new window only lands at the end of the insertion order after an
+            # explicit move: assigning an existing key keeps its old position.
+            # `_evict_oldest` reads that order as the order of `window_start`.
+            self._buckets.move_to_end(key)
         bucket.count += 1
 
         if len(self._buckets) > self._max_keys:
@@ -154,8 +159,7 @@ class InMemoryCounter:
         return len(expired)
 
     def _evict_oldest(self) -> None:
-        oldest_key = min(self._buckets, key=lambda s: self._buckets[s].window_start)
-        del self._buckets[oldest_key]
+        self._buckets.popitem(last=False)
 
     def __len__(self) -> int:
         return len(self._buckets)
@@ -204,19 +208,22 @@ class RateLimitMiddleware:
         try:
             key = await self._determine_key(request)
             per_key = await self._counter.increment(f"{klass.value}:{key}", limit.window_s, now_)
-            backstop = await self._counter.increment(f"{klass.value}:{_BACKSTOP_KEY}", limit.window_s, now_)
+            if per_key.count > limit.max:
+                # The backstop stays uncharged for a request that is already
+                # refused: otherwise one key could spend the shared budget of
+                # its whole class and lock every other client out.
+                refusal_s: float | None = per_key.remaining_s
+            else:
+                backstop = await self._counter.increment(f"{klass.value}:{_BACKSTOP_KEY}", limit.window_s, now_)
+                refusal_s = backstop.remaining_s if backstop.count > limit.global_max else None
         except Exception:
             _logger.exception("Ratelimit-teller kapot; verzoek fail-closed geweigerd (klasse=%s)", klass.value)
             response = _too_many_requests_response(limit.window_s, accept_language)
             await response(scope, receive, send)
             return
 
-        if per_key.count > limit.max:
-            response = _too_many_requests_response(per_key.remaining_s, accept_language)
-            await response(scope, receive, send)
-            return
-        if backstop.count > limit.global_max:
-            response = _too_many_requests_response(backstop.remaining_s, accept_language)
+        if refusal_s is not None:
+            response = _too_many_requests_response(refusal_s, accept_language)
             await response(scope, receive, send)
             return
 
