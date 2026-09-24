@@ -8,10 +8,10 @@ app has to supply on app.state: settings (Settings), session_store
 (SessionStore), session_factory (async_sessionmaker), content_store
 (ContentStore) and audit_log (AuditLog).
 
-Order per request: path validation -> access decision -> audit -> key redeem
--> If-None-Match -> file resolution -> response. The lexical 301 (site or
-subroute root without a slash) sits in separate routes before any existence
-or access check and therefore leaks nothing.
+Order per request: path validation -> access decision -> fetch-metadata guard
+-> audit -> key redeem -> file resolution -> If-None-Match -> response. The
+lexical 301 (site or subroute root without a slash) sits in separate routes
+before any existence or access check and therefore leaks nothing.
 
 Viewers are content sessions only; a management session never
 counts here. A login redirect goes to `/-/login` on the same host. A valid
@@ -27,7 +27,7 @@ usable key of this site (serving/code_page.py). An allow is audited for
 from __future__ import annotations
 
 import uuid
-from urllib.parse import parse_qsl, quote, urlencode
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Request
 from sqlalchemy import select
@@ -55,9 +55,15 @@ from plak.serving import code_page, resolution, response
 REASON_PATH_INVALID = "PATH_INVALID"
 REASON_UNKNOWN_VERSION = "UNKNOWN_VERSION"
 REASON_UNKNOWN_STORAGE = "UNKNOWN_STORAGE"
+REASON_FOREIGN_SUBRESOURCE = "FOREIGN_SUBRESOURCE"
 
 AUDIT_ACTION = "content_access"
 _AUDIT_PATH_MAX = 200
+_FETCH_TOKEN_MAX = 20
+
+# What a browser reports for a top-level navigation and for an embedded
+# document. Everything else is a subresource of some page.
+_NAVIGATION_DESTS = frozenset({"document", "iframe", "frame"})
 
 router = APIRouter()
 
@@ -102,6 +108,57 @@ def _lexical_slash_redirect(request: Request, group: str) -> Response:
 
 def _is_page(rel: str) -> bool:
     return resolution.display_path(rel).lower().endswith((".html", ".htm"))
+
+
+def _fetch_token(request: Request, header: str) -> str | None:
+    """A `Sec-Fetch-*` value, normalised to the small set of tokens the spec
+    allows; anything longer is not one of them and is cut off."""
+    value = request.headers.get(header)
+    if value is None:
+        return None
+    return value.strip().lower()[:_FETCH_TOKEN_MAX]
+
+
+def _site_prefix(request: Request) -> str:
+    # From the raw path, so the comparison with a Referer is done in the same
+    # percent-encoding the browser used.
+    return "/".join(request.url.path.split("/", 3)[:3]) + "/"
+
+
+def _referer_within_site(request: Request) -> bool:
+    referer = request.headers.get("Referer")
+    if not referer:
+        return False
+    try:
+        parts = urlsplit(referer)
+    except ValueError:
+        return False
+    if parts.hostname is not None and parts.hostname != request.url.hostname:
+        return False
+    return parts.path.startswith(_site_prefix(request))
+
+
+def _foreign_subresource(request: Request) -> bool:
+    """Whether this is a subresource request made by another site's page.
+
+    Every site of every group is served from one hostname under a path prefix,
+    and the content session cookie has `Path=/`, so a page that runs its own
+    JavaScript can `fetch()` any other site the visitor has access to and the
+    browser attaches the credentials. The durable fix is an origin per site;
+    until then non-public content is served to a subresource request only when
+    `Referer` puts it inside the same `/{group}/{site}/`.
+
+    Top-level navigation is untouched: following a link from one site to
+    another is something the visitor does and sees. So is a request that
+    carries no `Sec-Fetch-Site` at all (curl, a link checker, a browser older
+    than the header): it brings no ambient credentials the way a page-driven
+    request does, the same reasoning as `_same_origin` in serving/code_page.py.
+    """
+    if _fetch_token(request, "Sec-Fetch-Site") != "same-origin":
+        return False
+    if _fetch_token(request, "Sec-Fetch-Dest") in _NAVIGATION_DESTS:
+        return False
+    return not _referer_within_site(request)
 
 
 async def _audit(
@@ -161,7 +218,21 @@ async def _serve(
         # route and no audit; these are routing misses, not access refusals.
         return response.neutral_404_response()
 
-    refs: dict = {"kind": kind, "group": group, "site": site, "path": rest[:_AUDIT_PATH_MAX]}
+    refs: dict = {
+        "kind": kind,
+        "group": group,
+        "site": site,
+        "path": rest[:_AUDIT_PATH_MAX],
+        # Fetch metadata, so a request made by another site's page can be told
+        # apart afterwards. Fixed tokens from the browser, no personal data.
+        "fetch_dest": _fetch_token(request, "Sec-Fetch-Dest"),
+        "fetch_site": _fetch_token(request, "Sec-Fetch-Site"),
+        # Whether a Referer came along at all, never which one. A refusal on a
+        # subresource dest without one is the signature of a page that
+        # suppressed its own referrer and so broke its own assets, which reads
+        # the same as another site's fetch and is not the same thing.
+        "referer_present": bool(request.headers.get("Referer")),
+    }
     if ref is not None:
         refs["ref"] = ref
     if version_str is not None:
@@ -216,6 +287,24 @@ async def _serve(
         await _audit(request, visitor, vocabulary.REFUSED, REASON_KEY_CODE_REQUIRED, refs)
         return code_page.code_page_response(request, code_selector, _path_without_key(request))
 
+    version_view = kind == "version"
+    noindex = kind in ("preview", "version")
+
+    # Before the login redirect, and therefore whether or not the visitor has
+    # a session: a subresource of another site's page is never a navigation,
+    # so nobody logs in because of it, and a 302 would say that this site
+    # exists. Not before the neutral 404, which is this answer already and
+    # keeps the reason that really refused.
+    decided_access = decision.effective_access
+    if (
+        decision.kind is not DecisionKind.NEUTRAL_404
+        and decided_access is not None
+        and (version_view or not decided_access.is_public)
+        and _foreign_subresource(request)
+    ):
+        await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
+        return response.neutral_404_response()
+
     if decision.kind is DecisionKind.NEUTRAL_404:
         await _audit(request, visitor, "refused", decision.reason_code, refs)
         return response.neutral_404_response()
@@ -223,17 +312,16 @@ async def _serve(
     if decision.kind is DecisionKind.LOGIN_REDIRECT:
         await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
         query = urlencode({"returnTo": _path_without_key(request)})
-        return RedirectResponse(f"{PATH_CONTENT_LOGIN}?{query}", status_code=302)
+        return RedirectResponse(
+            f"{PATH_CONTENT_LOGIN}?{query}", status_code=302, headers={"Cache-Control": "no-store"}
+        )
 
-    access = decision.effective_access
+    access = decided_access
     version_id_allowed = decision.version_id
     if storage_ref is None or version_id_allowed is None or access is None:
         # Allowed but no (complete) version record: an inconsistent reference.
         await _audit(request, visitor, "refused", REASON_UNKNOWN_STORAGE, refs)
         return response.neutral_404_response()
-
-    version_view = kind == "version"
-    noindex = kind in ("preview", "version")
 
     if key_cookie is not None:
         return _redeem_key(request, key_cookie, group, site, kind, ref)
@@ -246,16 +334,6 @@ async def _serve(
             refs["selector"] = decision.key_selector
         await _audit(request, visitor, vocabulary.ALLOWED, decision.reason_code, refs)
 
-    etag = response.etag_for(version_id_allowed)
-    if response.if_none_match_matches(request.headers.get("if-none-match"), etag):
-        return response.make_304(
-            resolution.display_path(rel),
-            version_id_allowed,
-            access,
-            version_view=version_view,
-            noindex=noindex,
-        )
-
     store: ContentStore = request.app.state.content_store
     outcome_ = resolution.resolve(store, storage_ref, rel)
 
@@ -264,13 +342,25 @@ async def _serve(
         target = f"{request.url.path}/"
         if request.url.query:
             target = f"{target}?{request.url.query}"
-        return RedirectResponse(target, status_code=301)
+        return RedirectResponse(target, status_code=301, headers={"Cache-Control": "no-store"})
 
     if (
         outcome_.kind is resolution.ResolutionKind.FILE
         and outcome_.rel_path is not None
         and outcome_.file_path is not None
     ):
+        # The conditional answer comes after resolution, not before: a 304 for
+        # a path that has no file would tell an intermediary that a
+        # non-existent resource is fresh.
+        etag = response.etag_for(version_id_allowed)
+        if response.if_none_match_matches(request.headers.get("if-none-match"), etag):
+            return response.make_304(
+                outcome_.rel_path,
+                version_id_allowed,
+                access,
+                version_view=version_view,
+                noindex=noindex,
+            )
         return response.make_content_response(
             rel_path=outcome_.rel_path,
             file_path=outcome_.file_path,

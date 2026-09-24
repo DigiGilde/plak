@@ -192,7 +192,9 @@ async def _seed(factory, store: ContentStore) -> World:
                 "stijl.css": b"body{}",
             },
         )
-        internal_live = new_version(internal, {"index.html": b"<h1>intern</h1>"})
+        internal_live = new_version(
+            internal, {"index.html": b"<h1>intern</h1>", "stijl.css": b"body{}"}
+        )
         without_404_live = new_version(without_404, {"index.html": b"<h1>kaal</h1>"})
         external_live = new_version(external, {"index.html": b"<h1>extern</h1>", "stijl.css": b"body{}"})
         external_preview = new_version(
@@ -389,6 +391,14 @@ class TestLiveServing:
         assert response.headers["cache-control"] == "max-age=31536000, immutable"
         assert response.headers["content-type"] == "text/css"
 
+    async def test_private_asset_is_not_immutable(self, client, environment):
+        # The URL is not content-addressed and survives a redeploy, so
+        # `immutable` would hide a new version even on a reload.
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        response = await client.get("/aurora/intern/stijl.css")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "private, max-age=31536000"
+
     async def test_mjs_gets_text_javascript(self, client):
         response = await client.get("/aurora/site/app.mjs")
         assert response.status_code == 200
@@ -397,6 +407,9 @@ class TestLiveServing:
     async def test_directory_301_after_allow(self, client):
         response = await client.get("/aurora/site/docs")
         assert response.status_code == 301
+        # A 301 is heuristically cacheable: without no-store a shared cache
+        # could hand the directory of a private site to the next visitor.
+        assert response.headers["cache-control"] == "no-store"
         assert response.headers["location"] == "/aurora/site/docs/"
         followed = await client.get("/aurora/site/docs/")
         assert followed.status_code == 200
@@ -443,18 +456,30 @@ class TestPathValidation:
 
 
 class TestEtag304:
-    async def test_if_none_match_gives_304_without_store(self, client, environment, monkeypatch):
+    async def test_if_none_match_gives_304(self, client, environment):
         etag = f'"{environment.world.site_live_id}"'
-
-        def boom(*args, **kwargs):
-            raise AssertionError("store aangeraakt bij 304")
-
-        monkeypatch.setattr(environment.store, "file_path", boom)
         response = await client.get("/aurora/site/", headers={"If-None-Match": etag})
         assert response.status_code == 304
         assert response.content == b""
         assert response.headers["etag"] == etag
         assert response.headers["cache-control"] == "no-cache, must-revalidate"
+
+    async def test_no_304_for_a_path_without_a_file(self, client, environment):
+        # The conditional answer comes after resolution; a 304 here would let
+        # an intermediary treat a non-existent resource as fresh.
+        response = await client.get("/aurora/zonder404/bestaat-niet", headers={"If-None-Match": "*"})
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
+
+    async def test_no_304_for_a_path_that_falls_back_to_404_html(self, client, environment):
+        response = await client.get("/aurora/site/bestaat-niet", headers={"If-None-Match": "*"})
+        assert response.status_code == 404
+        assert response.content == SITE_404
+
+    async def test_no_304_for_a_directory_that_still_has_to_redirect(self, client, environment):
+        response = await client.get("/aurora/site/docs", headers={"If-None-Match": "*"})
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/site/docs/"
 
     async def test_weak_etag_matches_also(self, client, environment):
         response = await client.get(
@@ -496,7 +521,7 @@ class TestKey:
         assert followed.status_code == 200
         assert followed.content == SECRET_INDEX
         assert followed.headers["cache-control"] == "private, no-cache, must-revalidate"
-        assert followed.headers["referrer-policy"] == "no-referrer"
+        assert followed.headers["referrer-policy"] == "same-origin"
         assert "set-cookie" not in followed.headers
 
     async def test_redeem_keeps_other_query_parameters_and_deep_path(self, client, environment):
@@ -693,6 +718,284 @@ class TestNeutral404ByteIdentical:
         assert headers == _header_list(via_client)
 
 
+class TestForeignSubresource:
+    """Every site shares one hostname and the content session cookie has
+    `Path=/`, so a page of one site can fetch another site with the visitor's
+    own credentials. Non-public content is served to a subresource request
+    only when the Referer puts it inside the same site.
+    """
+
+    SUBRESOURCE: ClassVar[dict[str, str]] = {
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+    }
+
+    @staticmethod
+    def _viewer(client, environment) -> None:
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+
+    async def test_a_fetch_from_another_site_is_refused(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"}
+        )
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
+
+    async def test_the_sites_own_subresources_keep_loading(self, client, environment):
+        self._viewer(client, environment)
+        for dest in ("style", "script", "image", "font", "empty"):
+            response = await client.get(
+                "/aurora/intern/stijl.css",
+                headers={
+                    "Sec-Fetch-Site": "same-origin",
+                    "Sec-Fetch-Dest": dest,
+                    "Referer": f"{BASE_URL}/aurora/intern/",
+                },
+            )
+            assert response.status_code == 200, dest
+
+    async def test_a_deeper_page_of_the_same_site_counts_as_its_own(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/stijl.css",
+            headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/intern/diep/pagina.html"},
+        )
+        assert response.status_code == 200
+
+    async def test_navigation_from_another_site_keeps_working(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Dest": "document",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        assert response.status_code == 200
+        assert response.content == b"<h1>intern</h1>"
+
+    @pytest.mark.parametrize("dest", ["iframe", "frame"])
+    async def test_an_embedded_document_keeps_working(self, client, environment, dest):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": dest},
+        )
+        assert response.status_code == 200
+
+    async def test_a_client_without_fetch_metadata_is_not_turned_away(self, client, environment):
+        # curl, a link checker, a browser older than the header: no ambient
+        # credentials, so nothing to abuse, and breaking them would cost more
+        # than the guard wins.
+        self._viewer(client, environment)
+        response = await client.get("/aurora/intern/")
+        assert response.status_code == 200
+
+    async def test_a_request_the_visitor_started_themselves_is_not_turned_away(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/", headers={"Sec-Fetch-Site": "none", "Sec-Fetch-Dest": "document"}
+        )
+        assert response.status_code == 200
+
+    async def test_an_anonymous_foreign_subresource_is_the_neutral_404_not_a_login_redirect(
+        self, client, environment
+    ):
+        # Without a session the login redirect would otherwise win, and a 302
+        # says that this site exists. Nobody logs in because of a stylesheet
+        # fetch, so for this class the neutral 404 comes first.
+        reference = await client.get("/aurora/bestaat-niet/")
+        refused = await client.get(
+            "/aurora/intern/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"}
+        )
+        assert refused.status_code == 404
+        assert "location" not in refused.headers
+        assert refused.content == reference.content
+        assert _header_list(refused) == _header_list(reference)
+
+    async def test_an_anonymous_navigation_still_goes_to_the_login(self, client, environment):
+        response = await client.get(
+            "/aurora/intern/",
+            headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Dest": "document",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        assert response.status_code == 302
+        assert response.headers["location"] == "/-/login?returnTo=%2Faurora%2Fintern%2F"
+
+    async def test_an_anonymous_refusal_is_audited_as_a_foreign_subresource(self, client, environment):
+        await client.get(
+            "/aurora/intern/stijl.css",
+            headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"},
+        )
+        rows = await _audit_rows(environment)
+        assert len(rows) == 1
+        assert rows[0].result == "refused"
+        assert rows[0].reason_code == "FOREIGN_SUBRESOURCE"
+        assert rows[0].actor_pseudonym is None
+
+    async def test_a_site_that_does_not_exist_keeps_its_own_refusal_reason(self, client, environment):
+        # The neutral 404 is already the answer there, so the guard must not
+        # take the reason over from the gate.
+        await client.get(
+            "/aurora/bestaat-niet/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"}
+        )
+        rows = await _audit_rows(environment)
+        assert len(rows) == 1
+        assert rows[0].reason_code == "UNKNOWN_SITE"
+
+    async def test_public_content_is_untouched(self, client, environment):
+        response = await client.get(
+            "/aurora/site/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/intern/"}
+        )
+        assert response.status_code == 200
+        assert response.content == SITE_INDEX
+
+    async def test_a_referer_on_another_host_does_not_count(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={**self.SUBRESOURCE, "Referer": "https://kwaad.example/aurora/intern/"},
+        )
+        assert response.status_code == 404
+
+    async def test_a_referer_that_only_starts_the_same_does_not_count(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/internaat/"}
+        )
+        assert response.status_code == 404
+
+    async def test_a_subresource_without_a_referer_is_refused(self, client, environment):
+        # Our own answers carry a Referrer-Policy that sends the referrer
+        # same-origin, so a site's own page always supplies one.
+        self._viewer(client, environment)
+        response = await client.get("/aurora/intern/stijl.css", headers=self.SUBRESOURCE)
+        assert response.status_code == 404
+
+    async def test_a_version_view_is_guarded_although_the_site_is_public(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        path = f"/aurora/site/_version/{environment.world.site_live_id}/"
+        response = await client.get(
+            path, headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/intern/"}
+        )
+        assert response.status_code == 404
+
+    async def test_the_boundary_is_the_site_so_a_preview_counts_as_its_own(self, client, environment):
+        # Live, preview and _version of one site are one publishing team, so
+        # the prefix that decides is `/{group}/{site}/` and not the subroute.
+        response = await client.get(
+            "/aurora/site/_preview/pr-42/",
+            headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"},
+        )
+        assert response.status_code == 200
+
+    async def test_the_refusal_is_the_same_neutral_404_as_every_other(self, client, environment):
+        reference = await client.get("/nergens/niks/")
+        self._viewer(client, environment)
+        refused = await client.get(
+            "/aurora/intern/", headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"}
+        )
+        assert refused.status_code == 404
+        assert refused.content == reference.content
+        assert _header_list(refused) == _header_list(reference)
+
+    async def test_the_refusal_is_audited_with_the_fetch_metadata(self, client, environment):
+        self._viewer(client, environment)
+        await client.get(
+            "/aurora/intern/stijl.css",
+            headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/site/"},
+        )
+        rows = await _audit_rows(environment)
+        assert len(rows) == 1
+        assert rows[0].result == "refused"
+        assert rows[0].reason_code == "FOREIGN_SUBRESOURCE"
+        assert rows[0].refs["fetch_dest"] == "empty"
+        assert rows[0].refs["fetch_site"] == "same-origin"
+        # The Referer is what decided, and it is a URL of a visitor; only its
+        # presence is recorded, never the value.
+        assert rows[0].refs["referer_present"] is True
+        assert BASE_URL not in json.dumps(rows[0].refs)
+        assert "aurora/site" not in json.dumps(rows[0].refs)
+
+    async def test_an_allow_carries_the_fetch_metadata_too(self, client, environment):
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Dest": "document",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        assert response.status_code == 200
+        rows = await _audit_rows(environment)
+        assert len(rows) == 1
+        assert rows[0].result == "allowed"
+        assert rows[0].refs["fetch_dest"] == "document"
+
+    async def test_without_the_headers_the_references_say_so(self, client, environment):
+        self._viewer(client, environment)
+        await client.get("/aurora/intern/")
+        rows = await _audit_rows(environment)
+        assert rows[0].refs["fetch_dest"] is None
+        assert rows[0].refs["fetch_site"] is None
+        assert rows[0].refs["referer_present"] is False
+
+    async def test_a_site_that_suppresses_its_own_referrer_is_recognisable(self, client, environment):
+        # Same refusal, different cause: with a Referer it is another site
+        # reaching for this one, without one it is a site whose own pages
+        # suppress the referrer and therefore break their own assets.
+        self._viewer(client, environment)
+        await client.get(
+            "/aurora/intern/stijl.css",
+            headers={"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "style"},
+        )
+        await client.get(
+            "/aurora/intern/stijl.css",
+            headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Dest": "style",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        rows = sorted(await _audit_rows(environment), key=lambda row: row.refs["referer_present"])
+        assert [row.reason_code for row in rows] == ["FOREIGN_SUBRESOURCE", "FOREIGN_SUBRESOURCE"]
+        assert [row.refs["referer_present"] for row in rows] == [False, True]
+        # The Referer decided, but it is a visitor's URL and stays out.
+        assert "aurora/site" not in json.dumps(rows[1].refs)
+
+    async def test_an_allow_records_the_referer_presence_too(self, client, environment):
+        # Refusals and allows have to be comparable, or the field says nothing
+        # to whoever goes looking.
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Dest": "document",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        assert response.status_code == 200
+        rows = await _audit_rows(environment)
+        assert rows[0].result == "allowed"
+        assert rows[0].refs["referer_present"] is True
+
+    async def test_an_empty_referer_counts_as_none(self, client, environment):
+        self._viewer(client, environment)
+        await client.get("/aurora/intern/", headers={**self.SUBRESOURCE, "Referer": ""})
+        rows = await _audit_rows(environment)
+        assert rows[0].refs["referer_present"] is False
+
+
 class Test404Html:
     async def test_authorized_visitor_gets_root_404_html(self, client, environment):
         response = await client.get("/aurora/site/bestaat-niet")
@@ -724,6 +1027,7 @@ class TestLoginRedirect:
         response = await client.get("/aurora/intern/")
         assert response.status_code == 302
         assert response.headers["location"] == "/-/login?returnTo=%2Faurora%2Fintern%2F"
+        assert response.headers["cache-control"] == "no-store"
 
     async def test_deep_path_with_query_in_return_to(self, client):
         response = await client.get("/aurora/intern/docs/pagina.html?x=1")
