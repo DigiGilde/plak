@@ -55,6 +55,8 @@ archive contains, so also to what falls outside the chosen root.
 
 from __future__ import annotations
 
+import gzip
+import logging
 import re
 import stat
 import tarfile
@@ -68,6 +70,8 @@ from plak import i18n, messages
 from plak.config import Settings
 from plak.constants import INDEX_FILE, RESERVED_SEGMENTS
 from plak.messages import Msg
+
+_logger = logging.getLogger(__name__)
 
 READ_CHUNK = 8192
 
@@ -109,6 +113,16 @@ class BundleError(Exception):
         self.reason = messages.code_of(key)
         self.index_candidates = index_candidates
         super().__init__(messages.render(i18n.API_DEFAULT, self.message))
+
+
+def _unreadable(error: Exception) -> str:
+    """Logs the unreadable archive and returns what the client may be told.
+
+    Never `str(error)`: an OSError names the absolute path of the spool file
+    on the server, and a problem+json `detail` carries no internal details.
+    """
+    _logger.warning("Archief onleesbaar", exc_info=error)
+    return type(error).__name__
 
 
 class Destination(Protocol):
@@ -632,14 +646,139 @@ def _start_loop(scan: _Scan, limits: Limits) -> _Loop:
     )
 
 
+# The tail of a zip: the end-of-central-directory record, behind it a comment
+# of at most 65535 bytes, and in a zip64 the locator that points at the record
+# holding the real totals.
+_EOCD_SIGNATURE = b"PK\x05\x06"
+_EOCD_SIZE = 22
+_MAX_ZIP_COMMENT = 65535
+_ZIP64_LOCATOR_SIGNATURE = b"PK\x06\x07"
+_ZIP64_LOCATOR_SIZE = 20
+_ZIP64_EOCD_SIGNATURE = b"PK\x06\x06"
+_ZIP64_EOCD_SIZE = 56
+# One record in the central directory: the fixed fields, with the name, the
+# extra field and the comment behind them.
+_CENTRAL_SIGNATURE = b"PK\x01\x02"
+_CENTRAL_RECORD_SIZE = 46
+
+
+def _eocd_start(tail: bytes, tail_offset: int, size: int) -> int | None:
+    """Where the end-of-central-directory record begins in `tail`, or None.
+
+    Scanned from the back, because a comment of up to 65535 bytes may follow
+    the record and those bytes can hold the signature themselves. A candidate
+    counts only when its comment length reaches exactly the end of the file.
+    """
+    end = len(tail)
+    while True:
+        start = tail.rfind(_EOCD_SIGNATURE, 0, end)
+        if start < 0:
+            return None
+        if len(tail) - start >= _EOCD_SIZE:
+            comment = int.from_bytes(tail[start + 20 : start + 22], "little")
+            if tail_offset + start + _EOCD_SIZE + comment == size:
+                return start
+        end = start + len(_EOCD_SIGNATURE) - 1
+
+
+def _zip64_directory_size(handle: IO[bytes], tail: bytes, start: int, size: int) -> int | None:
+    """The size of the central directory out of the zip64 record, which the
+    classic record refers to as soon as a total does not fit in its own
+    fields. None as soon as that trail does not hold up."""
+    locator = start - _ZIP64_LOCATOR_SIZE
+    if locator < 0 or tail[locator : locator + 4] != _ZIP64_LOCATOR_SIGNATURE:
+        return None
+    offset = int.from_bytes(tail[locator + 8 : locator + 16], "little")
+    if offset + _ZIP64_EOCD_SIZE > size:
+        return None
+    handle.seek(offset)
+    record = handle.read(_ZIP64_EOCD_SIZE)
+    if record[:4] != _ZIP64_EOCD_SIGNATURE:
+        return None
+    return int.from_bytes(record[40:48], "little")
+
+
+def _count_central_records(handle: IO[bytes], start: int, limit: int) -> int:
+    """The number of records in the central directory, counted to at most
+    `limit` + 1: enough to decide, cheap for an archive that claims millions.
+
+    Counting stops at the first record that does not parse. zipfile stumbles
+    over that same record, so it never builds more objects than were counted
+    here; the claimed number of entries is deliberately not trusted, because
+    zipfile reads to the end of the directory and not to that number.
+    """
+    handle.seek(start)
+    count = 0
+    while count <= limit:
+        record = handle.read(_CENTRAL_RECORD_SIZE)
+        if len(record) < _CENTRAL_RECORD_SIZE or record[:4] != _CENTRAL_SIGNATURE:
+            return count
+        # The name, the extra field and the comment sit behind the record.
+        behind = sum(int.from_bytes(record[at : at + 2], "little") for at in (28, 30, 32))
+        handle.seek(behind, 1)
+        count += 1
+    return count
+
+
+def _zip_entry_bound(handle: IO[bytes], limit: int) -> int | None:
+    """How many entries the zip holds, counted to at most `limit` + 1, or None
+    when the tail does not parse (zipfile then refuses the archive).
+
+    zipfile parses the whole central directory into memory the moment the
+    archive opens, hundreds of bytes per entry, so an entry counter over
+    `infolist()` comes too late: an archive that ships millions of entries has
+    then already cost gigabytes. Walking the directory itself costs nothing
+    beyond the records walked, and stops at the limit.
+    """
+    handle.seek(0, 2)
+    size = handle.tell()
+    tail_size = min(size, _EOCD_SIZE + _MAX_ZIP_COMMENT)
+    handle.seek(size - tail_size)
+    tail = handle.read(tail_size)
+    start = _eocd_start(tail, size - tail_size, size)
+    if start is None:
+        return None
+    directory_size = int.from_bytes(tail[start + 12 : start + 16], "little")
+    total = int.from_bytes(tail[start + 10 : start + 12], "little")
+    zip64_size = 0
+    if total == 0xFFFF or directory_size == 0xFFFFFFFF:
+        found = _zip64_directory_size(handle, tail, start, size)
+        if found is None:
+            return None
+        directory_size = found
+        zip64_size = _ZIP64_EOCD_SIZE + _ZIP64_LOCATOR_SIZE
+    # The directory ends where its own records end: right in front of the
+    # zip64 records, if any, and the classic record. Reckoning back from there
+    # rather than from the claimed offset keeps a zip with something in front
+    # of it (a self-extracting header) working, exactly as zipfile does.
+    directory_start = size - tail_size + start - zip64_size - directory_size
+    if directory_start < 0:
+        return None
+    return _count_central_records(handle, directory_start, limit)
+
+
+def _check_zip_entry_bound(source: Path, limits: Limits) -> None:
+    try:
+        with source.open("rb") as handle:
+            found = _zip_entry_bound(handle, limits.max_archive_entries)
+    except OSError as error:
+        raise BundleError("INVALID_ARCHIVE.zip", params={"error": _unreadable(error)}) from error
+    if found is not None and found > limits.max_archive_entries:
+        raise BundleError(
+            "TOO_MANY_FILES.archive_entries", params={"limit": limits.max_archive_entries}
+        )
+
+
 def _unpack_zip(source: Path, destination: Destination, limits: Limits, base: tuple[str, ...]) -> _Outcome:
     # zipfile reads the whole central directory into memory as soon as the
-    # archive opens: the entry counter below bounds the unpacking, not that
-    # first peak, which scales with the number of entries in the upload.
+    # archive opens, so the entry counter below does not bound that first
+    # peak: the tail of the archive says beforehand how many entries that
+    # directory holds at most.
+    _check_zip_entry_bound(source, limits)
     try:
         archive = zipfile.ZipFile(source)
     except (zipfile.BadZipFile, OSError) as error:
-        raise BundleError("INVALID_ARCHIVE.zip", params={"error": error}) from error
+        raise BundleError("INVALID_ARCHIVE.zip", params={"error": _unreadable(error)}) from error
 
     with archive:
         # The central directory is in memory already; this extra pass over
@@ -672,7 +811,9 @@ def _unpack_zip(source: Path, destination: Destination, limits: Limits, base: tu
             except BundleError:
                 raise
             except (zipfile.BadZipFile, OSError, RuntimeError) as error:
-                raise BundleError("INVALID_ARCHIVE.zip_entry", params={"error": error}) from error
+                raise BundleError(
+                    "INVALID_ARCHIVE.zip_entry", params={"error": _unreadable(error)}
+                ) from error
             loop.index_seen = loop.index_seen or placement.path == INDEX_FILE
     return loop.outcome()
 
@@ -713,16 +854,64 @@ def _tar_scan(source: Path, limits: Limits, base: tuple[str, ...]) -> _Scan:
     return scan
 
 
+class _TarSource(gzip.GzipFile):
+    """The gzip stream under the tar, with the raw header blocks within reach.
+
+    tarfile decodes a member name only up to the first NUL byte, so an entry
+    declared `index.html\\0.bak` arrives as `index.html` and the archive
+    listing disagrees with what lands on disk. The raw header is the only
+    place where that byte is still visible.
+
+    Blocks read since the previous member was handed over are kept: that is
+    the header of the member being handed over now, and in front of it the
+    long-name blocks that belong to it.
+    """
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(filename=str(path), mode="rb")
+        self._blocks: dict[int, bytes] = {}
+
+    def read(self, size: int = -1) -> bytes:
+        start = self.tell()
+        data = super().read(size)
+        if len(data) == tarfile.BLOCKSIZE:
+            self._blocks[start] = data
+        return data
+
+    def raw_name_of(self, member: tarfile.TarInfo) -> bytes:
+        """The name bytes this member was declared under, NUL padding removed.
+
+        A name too long for the header sits in a block of its own: the GNU
+        variant puts it behind its own header, the pax variant in a record
+        tarfile reads NUL and all, so `_safe_segments` refuses that one on the
+        name itself. The bookkeeping is dropped along the way: a member is
+        handed over once.
+        """
+        header = self._blocks.get(member.offset, b"")
+        if header[156:157] == tarfile.GNUTYPE_LONGNAME:
+            raw_name = self._blocks.get(member.offset + tarfile.BLOCKSIZE, b"")
+        else:
+            raw_name = header[0:100]
+        self._blocks.clear()
+        return raw_name.rstrip(b"\0")
+
+
 def _unpack_tar(source: Path, destination: Destination, limits: Limits, base: tuple[str, ...]) -> _Outcome:
     try:
         loop = _start_loop(_tar_scan(source, limits, base), limits)
-        # Deliberately r:gz and not the stream mode r|gz: GzipFile
+        # Deliberately a GzipFile and not the stream mode r|gz: GzipFile
         # decompresses per read with max_length (8KB), the stream mode per
         # whole gzip block, which for highly compressible data can be tens of
         # MB per block. Members are read in order, so GzipFile never has to
         # seek back.
-        with tarfile.open(source, mode="r:gz") as archive:
+        with _TarSource(source) as stream_source, tarfile.open(fileobj=stream_source, mode="r:") as archive:
             for member in archive:
+                raw_name = stream_source.raw_name_of(member)
+                if b"\0" in raw_name:
+                    raise BundleError(
+                        "NULL_BYTE",
+                        params={"path": raw_name.decode(archive.encoding, "surrogateescape")},
+                    )
                 if member.issym():
                     raise BundleError("SYMLINK_REFUSED", params={"name": member.name})
                 if member.islnk():
@@ -746,7 +935,7 @@ def _unpack_tar(source: Path, destination: Destination, limits: Limits, base: tu
     except BundleError:
         raise
     except (tarfile.TarError, OSError, EOFError) as error:
-        raise BundleError("INVALID_ARCHIVE.tar", params={"error": error}) from error
+        raise BundleError("INVALID_ARCHIVE.tar", params={"error": _unreadable(error)}) from error
     return loop.outcome()
 
 
@@ -756,7 +945,7 @@ def _unpack_html(source: Path, destination: Destination, limits: Limits) -> _Out
         with source.open("rb") as stream:
             _write_entry(stream, INDEX_FILE, source.stat().st_size, tree, destination, limits)
     except OSError as error:
-        raise BundleError("INVALID_ARCHIVE.html", params={"error": error}) from error
+        raise BundleError("INVALID_ARCHIVE.html", params={"error": _unreadable(error)}) from error
     return _Outcome(count=tree.count, root_seen=True, index_seen=True)
 
 

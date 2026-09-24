@@ -6,6 +6,7 @@ from __future__ import annotations
 import gzip
 import io
 import stat
+import struct
 import tarfile
 import tracemalloc
 import uuid
@@ -64,9 +65,10 @@ def make_tar(
     entries: dict[str, bytes],
     links: tuple[tuple[str, str, bytes], ...] = (),
     dirs: tuple[str, ...] = (),
+    tar_format: int = tarfile.DEFAULT_FORMAT,
 ) -> bytes:
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as archive:
+    with tarfile.open(fileobj=buf, mode="w:gz", format=tar_format) as archive:
         for name in dirs:
             info = tarfile.TarInfo(name)
             info.type = tarfile.DIRTYPE
@@ -202,12 +204,48 @@ class TestPathValidation:
         assert reason_of(error) == "ABSOLUTE_PATH"
 
     def test_null_byte_refused(self):
-        # zipfile and tarfile already cut names off at the null byte
-        # themselves; on top of that the normalisation refuses null bytes
-        # fail-closed.
         with pytest.raises(BundleError) as error:
             _safe_segments("a\x00b")
         assert reason_of(error) == "NULL_BYTE"
+
+    def test_tar_null_byte_in_the_name_refused(self, unpack: UnpackFn):
+        """tarfile cuts a member name off at the null byte before the unpacker
+        sees it, so an entry declared `index.html\\0.bak` would quietly become
+        the index.html of the site: the archive listing and what the server
+        serves then say different things. The raw header still shows the byte,
+        and that is what is refused on."""
+        data = make_tar({"index.html": b"<h1>hoi</h1>", "index.html\x00.bak": b"kwaad"})
+        with pytest.raises(BundleError) as error:
+            unpack("site.tar.gz", data)
+        assert reason_of(error) == "NULL_BYTE"
+        assert "index.html\\x00.bak" in str(error.value)
+
+    def test_tar_null_byte_in_a_gnu_long_name_refused(self, unpack: UnpackFn):
+        # A name too long for the header sits in a block of its own; the GNU
+        # format truncates it at the null byte just the same.
+        name = "n" * 120 + "\x00.bak"
+        data = make_tar({"index.html": b"h", name: b"kwaad"}, tar_format=tarfile.GNU_FORMAT)
+        with pytest.raises(BundleError) as error:
+            unpack("site.tar.gz", data)
+        assert reason_of(error) == "NULL_BYTE"
+
+    def test_tar_null_byte_in_a_pax_long_name_refused(self, unpack: UnpackFn):
+        # The pax format hands the null byte over unharmed, so there the path
+        # check itself refuses. The counter-test to the two above: both routes
+        # end in the same refusal.
+        name = "n" * 120 + "\x00.bak"
+        data = make_tar({"index.html": b"h", name: b"kwaad"}, tar_format=tarfile.PAX_FORMAT)
+        with pytest.raises(BundleError) as error:
+            unpack("site.tar.gz", data)
+        assert reason_of(error) == "NULL_BYTE"
+
+    def test_tar_long_names_without_a_null_byte_are_unpacked(self, unpack: UnpackFn):
+        # The counter-test to the refusals above: a long name is not itself a
+        # reason to refuse, in either format.
+        name = "n" * 120 + ".html"
+        for tar_format in (tarfile.GNU_FORMAT, tarfile.PAX_FORMAT):
+            data = make_tar({"index.html": b"h", name: b"x"}, tar_format=tar_format)
+            assert unpack("site.tar.gz", data) == {"index.html": b"h", name: b"x"}
 
     def test_empty_path_refused(self, unpack: UnpackFn):
         with pytest.raises(BundleError) as error:
@@ -786,6 +824,161 @@ class TestLimits:
         assert len(result["a/b/c/d/e.txt"]) == 100_000
 
 
+def make_eocd(total: int, directory_size: int = 0, comment: bytes = b"") -> bytes:
+    """The end-of-central-directory record a zip ends with, without a central
+    directory in front of it: the tail the unpacker reads first."""
+    fields = struct.pack(
+        "<4sHHHHLLH",
+        b"PK\x05\x06",
+        0,
+        0,
+        min(total, 0xFFFF),
+        min(total, 0xFFFF),
+        directory_size,
+        0,
+        len(comment),
+    )
+    return fields + comment
+
+
+def make_zip64_tail(signature: bytes = b"PK\x06\x06", record_offset: int = 0) -> bytes:
+    """A zip64 tail without an archive in front of it: the record with the real
+    totals, the locator pointing at it, and a classic record whose own fields
+    are full."""
+    record = struct.pack("<4sQHHLLQQQQ", signature, 44, 45, 45, 0, 0, 7, 7, 0, 0)
+    locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, record_offset, 1)
+    return record + locator + make_eocd(0xFFFF)
+
+
+def as_zip64(data: bytes) -> bytes:
+    """The same archive with a zip64 tail: above 65535 entries the classic
+    record holds no totals any more and refers to the zip64 record, which is
+    the shape a bundle that really has too many entries arrives in."""
+    eocd = data.rindex(b"PK\x05\x06")
+    directory_size, directory_offset = struct.unpack("<LL", data[eocd + 12 : eocd + 20])
+    record = struct.pack(
+        "<4sQHHLLQQQQ", b"PK\x06\x06", 44, 45, 45, 0, 0, 0, 0, directory_size, directory_offset
+    )
+    locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, eocd, 1)
+    tail = struct.pack("<4sHHHHLLH", b"PK\x05\x06", 0, 0, 0xFFFF, 0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0)
+    return data[:eocd] + record + locator + tail
+
+
+def make_crowded_zip(entries: int, comment: bytes = b"") -> bytes:
+    """A zip with more entries than `max_archive_entries` allows, each of them
+    empty: what the count costs is the walk over the central directory, not
+    the contents."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as archive:
+        archive.comment = comment
+        for i in range(entries):
+            archive.writestr(f"d{i}/x", b"")
+    return buf.getvalue()
+
+
+class TestZipEntryCount:
+    """zipfile parses the whole central directory into memory the moment the
+    archive opens: hundreds of bytes per entry, before a single entry has been
+    counted. The entries are therefore counted in that directory itself first,
+    up to the limit and no further; otherwise one upload of a few hundred
+    megabytes costs gigabytes of memory in the worker and so takes the backend
+    down for every group and every site."""
+
+    def test_more_entries_than_the_limit_refused(self, unpack: UnpackFn):
+        data = make_crowded_zip(LIMITS.max_archive_entries + 1)
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", data)
+        assert reason_of(error) == "TOO_MANY_FILES"
+        assert "entries" in str(error.value)
+
+    def test_the_count_stops_at_the_limit(self, tmp_path: Path):
+        """The point of the whole check: an archive that ships far more entries
+        than are allowed costs no memory per entry, because the count stops at
+        the limit and zipfile never gets to open it."""
+        source = tmp_path / "veel.zip"
+        source.write_bytes(make_crowded_zip(50 * LIMITS.max_archive_entries))
+        target = tmp_path / "target"
+        target.mkdir()
+
+        tracemalloc.start()
+        with pytest.raises(BundleError) as error:
+            unpack_archive("veel.zip", source, DirDestination(target), LIMITS)
+        peak = tracemalloc.get_traced_memory()[1]
+        tracemalloc.stop()
+
+        assert reason_of(error) == "TOO_MANY_FILES"
+        # zipfile holds roughly half a KB per entry; the walk holds one record.
+        assert peak < LIMITS.max_archive_entries * 500
+
+    def test_a_directory_that_holds_more_than_it_claims(self, unpack: UnpackFn):
+        # zipfile reads to the end of the central directory and not to the
+        # number of entries the tail claims, so that number is not trusted.
+        data = bytearray(make_crowded_zip(LIMITS.max_archive_entries + 1))
+        eocd = data.rindex(b"PK\x05\x06")
+        data[eocd + 8 : eocd + 12] = struct.pack("<HH", 1, 1)
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", bytes(data))
+        assert reason_of(error) == "TOO_MANY_FILES"
+
+    def test_zip64_entries_are_counted_too(self, unpack: UnpackFn):
+        data = as_zip64(make_crowded_zip(LIMITS.max_archive_entries + 1))
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", data)
+        assert reason_of(error) == "TOO_MANY_FILES"
+
+    def test_a_directory_that_stops_making_sense_is_left_to_zipfile(self, unpack: UnpackFn):
+        """Counting stops at the first record that does not parse; zipfile
+        stumbles over that same record and refuses the archive."""
+        data = bytearray(make_crowded_zip(LIMITS.max_archive_entries + 1))
+        directory = data.index(b"PK\x01\x02")
+        data[directory : directory + 4] = b"PK\x01\x03"
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", bytes(data))
+        assert reason_of(error) == "INVALID_ARCHIVE"
+
+    @pytest.mark.parametrize(
+        ("what", "tail"),
+        [
+            ("no record at all", b"dit is geen zip"),
+            ("record cut short", b"PK\x05\x06" + b"\0" * 5),
+            ("comment length does not add up", make_eocd(1, comment=b"x")[:-1]),
+            ("directory in front of the start of the file", make_eocd(1, directory_size=1 << 20)),
+            ("no directory at all", make_eocd(1)),
+            ("zip64 locator missing", make_eocd(0xFFFF)),
+            ("zip64 record not where the locator says", make_zip64_tail(record_offset=1 << 40)),
+            ("zip64 record is not one", make_zip64_tail(signature=b"PK\x06\x08")),
+        ],
+    )
+    def test_a_tail_that_does_not_parse_is_left_to_zipfile(
+        self, unpack: UnpackFn, what: str, tail: bytes
+    ):
+        """A tail nothing can be read out of is not a count of its own: the
+        archive goes to zipfile, which refuses it on its own terms (as an
+        unreadable archive, or as one holding nothing)."""
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", tail)
+        assert reason_of(error) in ("INVALID_ARCHIVE", "EMPTY_ARCHIVE"), what
+
+    def test_a_signature_in_the_comment_does_not_hide_the_real_record(self, unpack: UnpackFn):
+        # The record may be followed by a comment of up to 65535 bytes, and
+        # those bytes can hold the signature themselves. Only the record whose
+        # comment length reaches the end of the file counts; were the fake one
+        # taken, nothing would be counted and this bundle would go through.
+        data = make_crowded_zip(
+            LIMITS.max_archive_entries + 1, comment=b"PK\x05\x06" + b"\0" * 30
+        )
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", data)
+        assert reason_of(error) == "TOO_MANY_FILES"
+
+    def test_an_ordinary_comment_leaves_the_bundle_alone(self, unpack: UnpackFn):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as archive:
+            archive.comment = b"gemaakt met plak" * 10
+            archive.writestr("index.html", b"<h1>hoi</h1>")
+        assert unpack("site.zip", buf.getvalue()) == {"index.html": b"<h1>hoi</h1>"}
+
+
 class TestTarPrepass:
     """A tar has no index, so determining the root takes a pass of its own over
     the headers. Jumping to the next header means decompressing everything in
@@ -926,6 +1119,7 @@ def test_limits_from_settings(tmp_path):
         audit_pepper="p" * 32,
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         content_base_url="https://plak.example",
+        environment="dev",
         ingest_max_file=1,
         ingest_max_total=2,
         ingest_max_files=3,
@@ -1040,6 +1234,25 @@ class TestBrokenArchive:
             unpack("site.zip", bytes(raw))
         assert reason_of(error) == "INVALID_ARCHIVE"
         assert "Zip entry unreadable" in str(error.value)
+
+    def test_an_unreadable_archive_names_no_path_on_the_server(self, tmp_path: Path):
+        """The `detail` of a refusal carries no internal details (api/errors.py).
+        A name the filesystem will not take makes the store's own spool path
+        part of the OSError, and that must not travel along to the deployer."""
+        long_name = "a" * 300 + ".html"
+        for filename, data in (
+            ("site.tar.gz", make_tar({"index.html": b"h", long_name: b"x"})),
+            ("site.zip", make_zip({"index.html": b"h", long_name: b"x"})),
+        ):
+            source = tmp_path / f"upload-{filename}"
+            source.write_bytes(data)
+            target = tmp_path / f"target-{filename}"
+            target.mkdir()
+            with pytest.raises(BundleError) as error:
+                unpack_archive(filename, source, DirDestination(target), LIMITS)
+            assert reason_of(error) == "INVALID_ARCHIVE"
+            assert str(tmp_path) not in str(error.value)
+            assert "OSError" in str(error.value)
 
     def test_html_that_not_too_open_is(self, tmp_path: Path):
         # The store normally hands over a file; if that turns out not to be
