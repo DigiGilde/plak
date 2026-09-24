@@ -30,10 +30,16 @@ def parse_trusted_proxies(value: str) -> tuple[Network, ...]:
     return tuple(networks)
 
 
-def _is_trusted(ip: str, networks: tuple[Network, ...]) -> bool:
+def _parse(ip: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
-        address = ipaddress.ip_address(ip)
+        return ipaddress.ip_address(ip)
     except ValueError:
+        return None
+
+
+def _is_trusted(ip: str, networks: tuple[Network, ...]) -> bool:
+    address = _parse(ip)
+    if address is None:
         return False
     return any(address in network for network in networks)
 
@@ -45,6 +51,10 @@ def client_ip(request: Request, trusted_networks: tuple[Network, ...]) -> str:
     and then from right to left: trusted hops are skipped, the first untrusted
     address is the client. When every entry is trusted (or there is no XFF),
     the peer itself counts.
+
+    An entry that is not a parseable IP address ends the walk and the peer
+    counts: the value is the client's own to write, and returning it would
+    hand an unparseable "address" to callers that must truncate or encrypt it.
     """
     remote = request.client.host if request.client else UNKNOWN
     if not _is_trusted(remote, trusted_networks):
@@ -55,7 +65,10 @@ def client_ip(request: Request, trusted_networks: tuple[Network, ...]) -> str:
         candidate = part.strip()
         if not candidate:
             continue
-        if _is_trusted(candidate, trusted_networks):
+        address = _parse(candidate)
+        if address is None:
+            return remote
+        if any(address in network for network in trusted_networks):
             continue
         return candidate
     return remote
