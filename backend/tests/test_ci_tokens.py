@@ -16,7 +16,13 @@ from helpers_ci import AUDIENCE, FORGEJO_HOST, FORGEJO_ISSUER, OMIT, MockCi
 
 from plak.audit import vocabulary
 from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer
-from plak.ci.tokens import CiTokenError, CiTokenVerifier, VerifiedCiToken, looks_like_jwt
+from plak.ci.tokens import (
+    MAX_TOKEN_LENGTH,
+    CiTokenError,
+    CiTokenVerifier,
+    VerifiedCiToken,
+    looks_like_jwt,
+)
 from plak.config import Settings
 from plak.models.ci import CiProvider
 
@@ -111,6 +117,18 @@ class TestShape:
         header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=").decode()
         with pytest.raises(CiTokenError) as exc:
             await _verifier(ci).verify(f"{header}.YWJj.sig")
+        assert exc.value.reason == vocabulary.CI_TOKEN_INVALID
+
+    async def test_deeply_nested_payload_refused(self):
+        """json.loads answers deep nesting with RecursionError rather than
+        ValueError, and such a payload fits well inside MAX_TOKEN_LENGTH."""
+        ci = MockCi()
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=").decode()
+        payload = base64.urlsafe_b64encode(b"[" * 12000).rstrip(b"=").decode()
+        token = f"{header}.{payload}.sig"
+        assert len(token) < MAX_TOKEN_LENGTH
+        with pytest.raises(CiTokenError) as exc:
+            await _verifier(ci).verify(token)
         assert exc.value.reason == vocabulary.CI_TOKEN_INVALID
 
     async def test_non_object_header_refused(self):

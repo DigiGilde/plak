@@ -11,7 +11,9 @@ before every DB test.
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
+import logging
 import tracemalloc
 import uuid
 import zipfile
@@ -22,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_ci import AUDIENCE, FORGEJO_HOST, OMIT, MockCi
@@ -34,12 +37,14 @@ from plak.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handl
 from plak.audit.log import AuditLog
 from plak.audit.pseudonymisation import pseudonymise
 from plak.auth import sessions
+from plak.ci import trust
 from plak.ci.providers import ProviderClient
 from plak.ci.tokens import CiTokenVerifier
 from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
+from plak.ingest.service import IngestService
 from plak.ingest.store import ContentStore
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.ci import CiProvider, SiteRepository
@@ -707,6 +712,143 @@ async def test_preview_ref_becomes_slug_validated(environment: Environment) -> N
     async with environment.session_factory() as db:
         count = await db.scalar(select(func.count()).select_from(Version))
     assert count == 0
+
+
+async def test_long_base_path_is_capped_in_the_audit_refs(environment: Environment) -> None:
+    """A form field is attacker-controlled up to MAX_FIELD_BYTES; the log keeps
+    no more of it than a CI claim."""
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(),
+            data={"basePath": "a" * 1000},
+            headers=_bearer(environment.ci_token),
+        )
+
+    _assert_problem(resp, 422)
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert row.refs["base_path"] == "a" * trust.MAX_CLAIM_LENGTH
+
+
+async def test_invalid_preview_ref_is_not_recorded(environment: Environment) -> None:
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            files=_upload(),
+            data={"preview": "P" * 1000},
+            headers=_bearer(environment.ci_token),
+        )
+
+    content = _assert_problem(resp, 422)
+    assert content["code"] == "PREVIEW_REF_INVALID"
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert "preview" not in row.refs
+
+
+async def test_deeply_nested_ci_token_401(environment: Environment) -> None:
+    """A payload of thousands of nested arrays makes json.loads raise
+    RecursionError; that is a refusal, never an unhandled 500."""
+    header = base64.urlsafe_b64encode(b'{"alg":"RS256"}').rstrip(b"=").decode()
+    payload = base64.urlsafe_b64encode(b"[" * 12000).rstrip(b"=").decode()
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(f"{header}.{payload}.sig"))
+
+    content = _assert_problem(resp, 401)
+    assert content["code"] == "CI_TOKEN_INVALID"
+
+
+async def test_malformed_multipart_carries_no_parser_text(environment: Environment) -> None:
+    """api/errors.py: `detail` never carries internal details, so the wording
+    python-multipart chose stays out of the answer."""
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            content=b"rommel",
+            headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS},
+        )
+
+    content = _assert_problem(resp, 422)
+    assert content["code"] == "MULTIPART_INVALID"
+    assert content["detail"] == "Invalid multipart request."
+
+
+async def _no_space(*_args: object, **_kwargs: object) -> None:
+    raise OSError(28, "No space left on device")
+
+
+async def test_failed_upload_still_writes_a_refused_audit_row(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(deploys, "_spool_upload", _no_space)
+    async with environment.client() as client:
+        with pytest.raises(OSError, match="No space left"):
+            await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert row.result == "refused"
+    assert row.reason_code == deploys.AUDIT_REASON_INTERNAL
+
+
+async def test_failed_ingest_still_writes_a_refused_audit_row(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A full disk halfway through the unpack leaves no version, but it does
+    leave a row."""
+    monkeypatch.setattr(IngestService, "deploy", _no_space)
+    async with environment.client() as client:
+        with pytest.raises(OSError, match="No space left"):
+            await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+        assert await db.scalar(select(func.count()).select_from(Version)) == 0
+    assert row.result == "refused"
+    assert row.reason_code == deploys.AUDIT_REASON_INTERNAL
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_a_failing_audit_write_does_not_mask_the_ingest_failure(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The audit row is best-effort inside the handler: whatever it does, the
+    original failure is what the operator reads and what the client answers on."""
+
+    async def no_audit(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("audit log unreachable")
+
+    monkeypatch.setattr(IngestService, "deploy", _no_space)
+    monkeypatch.setattr(deploys, "_audit", no_audit)
+
+    with caplog.at_level(logging.ERROR, logger=deploys.__name__):
+        async with environment.client() as client:
+            with pytest.raises(OSError, match="No space left") as raised:
+                await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+
+    chain = []
+    error: BaseException | None = raised.value
+    while error is not None:
+        chain.append(type(error))
+        error = error.__context__
+    assert RuntimeError not in chain
+    assert "audit log unreachable" in caplog.text
+
+    # The client sees what it saw before: the generic 500, no exception text.
+    transport = httpx.ASGITransport(app=environment.app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+    assert resp.status_code == 500
+    assert "No space left" not in resp.text
 
 
 async def test_bearer_outside_deploy_endpoints_401(environment: Environment) -> None:
