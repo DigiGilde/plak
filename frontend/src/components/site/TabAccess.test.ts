@@ -358,6 +358,27 @@ describe('TabAccess: invitees', () => {
     expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(true);
   });
 
+  it('removes an invitee it just added, by the id the server gave back', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+      value: 'nieuw@voorbeeld.nl',
+    });
+    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await untilIdle();
+
+    fireDetailEvent(
+      wrapper.find('[data-testid="genodigde-verwijderen-nieuw@voorbeeld.nl"]').element,
+      'select',
+      {},
+    );
+    await untilIdle();
+
+    expect(backend.data.invitees.map((g) => g.identifier)).not.toContain('nieuw@voorbeeld.nl');
+    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(false);
+  });
+
   it('rolls back the row and shows the backend error on a duplicate', async () => {
     const wrapper = makeWrapper();
     await untilIdle();

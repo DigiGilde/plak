@@ -10,6 +10,7 @@ import GroupMembersManager from './GroupMembersManager.vue';
 
 const member: GroupMember = {
   groupSlug: 'nldd',
+  memberId: 'lid-7',
   identifier: 'lid@voorbeeld.nl',
   name: 'lid@voorbeeld.nl',
   email: 'lid@voorbeeld.nl',
@@ -33,7 +34,7 @@ function suggestionOf(overrides: Partial<MemberSuggestion> = {}): MemberSuggesti
 function mountComponent(props: {
   members?: GroupMember[];
   add?: (identifier: string, role: Role) => Promise<GroupMember>;
-  remove?: (identifier: string) => Promise<void>;
+  remove?: (memberId: string) => Promise<void>;
   setRole?: (identifier: string, role: Role) => Promise<GroupMember>;
   search?: (query: string) => Promise<MemberSuggestion[]>;
 }) {
@@ -248,7 +249,7 @@ describe('GroupMembersManager (filled)', () => {
     await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
 
     expect(pageRows(wrapper)).toHaveLength(0);
-    expect(remove).toHaveBeenCalledWith('lid@voorbeeld.nl');
+    expect(remove).toHaveBeenCalledWith('lid-7');
     expect(wrapper.emitted('removed')).toBeUndefined();
 
     confirm();
@@ -266,7 +267,7 @@ describe('GroupMembersManager (changing role)', () => {
 
     await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-editor');
 
-    expect(setRole).toHaveBeenCalledWith('lid@voorbeeld.nl', 'editor');
+    expect(setRole).toHaveBeenCalledWith('lid-7', 'editor');
     expect(wrapper.emitted('roleChanged')?.[0]).toEqual([promoted]);
   });
 

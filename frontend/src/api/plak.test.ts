@@ -173,12 +173,12 @@ describe('invitees (empty, filled, error)', () => {
     expect(error.problem.status).toBe(422);
   });
 
-  it('adds and removes again', async () => {
-    await plak.addInvitee('nldd', 'website', 'extra@voorbeeld.nl');
+  it('adds and removes again, by id and not by address', async () => {
+    const added = await plak.addInvitee('nldd', 'website', 'extra@voorbeeld.nl');
     let list = await plak.invitees('nldd', 'website');
     expect(list.map((g) => g.identifier)).toContain('extra@voorbeeld.nl');
 
-    await plak.removeInvitee('nldd', 'website', 'extra@voorbeeld.nl');
+    await plak.removeInvitee('nldd', 'website', added.id);
     list = await plak.invitees('nldd', 'website');
     expect(list.map((g) => g.identifier)).not.toContain('extra@voorbeeld.nl');
   });
@@ -296,13 +296,14 @@ describe('group members and platform members', () => {
     let members = await plak.groupMembers('nldd');
     expect(members.map((l) => l.identifier)).toContain('collega@voorbeeld.nl');
 
-    await plak.removeGroupMember('nldd', 'collega@voorbeeld.nl');
+    await plak.removeGroupMember('nldd', added.memberId);
     members = await plak.groupMembers('nldd');
     expect(members.map((l) => l.identifier)).not.toContain('collega@voorbeeld.nl');
   });
 
   it('changes the role of a group member', async () => {
-    const changed = await plak.setGroupRole('nldd', 'ada@voorbeeld.nl', 'admin');
+    const ada = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'ada@voorbeeld.nl')!;
+    const changed = await plak.setGroupRole('nldd', ada.memberId, 'admin');
     expect(changed.role).toBe('admin');
 
     const members = await plak.groupMembers('nldd');

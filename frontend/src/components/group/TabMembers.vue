@@ -29,12 +29,12 @@ function add(identifier: string, role: Role): Promise<GroupMember> {
   return api.addGroupMember(props.group, identifier, role);
 }
 
-function remove(identifier: string): Promise<void> {
-  return api.removeGroupMember(props.group, identifier);
+function remove(memberId: string): Promise<void> {
+  return api.removeGroupMember(props.group, memberId);
 }
 
-function setRole(identifier: string, role: Role): Promise<GroupMember> {
-  return api.setGroupRole(props.group, identifier, role);
+function setRole(memberId: string, role: Role): Promise<GroupMember> {
+  return api.setGroupRole(props.group, memberId, role);
 }
 
 function search(query: string): Promise<MemberSuggestion[]> {

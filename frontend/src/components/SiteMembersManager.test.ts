@@ -12,6 +12,7 @@ function memberWith(overrides: Partial<SiteMember>): SiteMember {
   return {
     groupSlug: 'nldd',
     siteSlug: 'website',
+    memberId: 'lid-7',
     identifier: 'lid@voorbeeld.nl',
     name: 'lid@voorbeeld.nl',
     email: 'lid@voorbeeld.nl',
@@ -24,6 +25,7 @@ function memberWith(overrides: Partial<SiteMember>): SiteMember {
 
 /** Reaches the site through the group only: no site role of their own. */
 const viaGroup = memberWith({
+  memberId: 'lid-3',
   identifier: 'ada@voorbeeld.nl',
   name: 'Ada Vermeer',
   email: 'ada@voorbeeld.nl',
@@ -33,6 +35,7 @@ const viaGroup = memberWith({
 
 /** An outsider: a role on this site and nothing in the group. */
 const siteOnly = memberWith({
+  memberId: 'lid-8',
   identifier: 'buiten@voorbeeld.nl',
   name: 'Bo Buiten',
   email: 'buiten@voorbeeld.nl',
@@ -42,6 +45,7 @@ const siteOnly = memberWith({
 
 /** A group member whose site role widens what the group gives them. */
 const both = memberWith({
+  memberId: 'lid-4',
   identifier: 'zoe@voorbeeld.nl',
   name: 'Zoë de Wit',
   email: 'zoe@voorbeeld.nl',
@@ -63,7 +67,7 @@ function suggestionOf(overrides: Partial<MemberSuggestion> = {}): MemberSuggesti
 function mountComponent(props: {
   members?: SiteMember[];
   add?: (identifier: string, role: Role) => Promise<SiteMember>;
-  remove?: (identifier: string) => Promise<void>;
+  remove?: (memberId: string) => Promise<void>;
   setRole?: (identifier: string, role: Role) => Promise<SiteMember>;
   search?: (query: string) => Promise<MemberSuggestion[]>;
 }) {
@@ -298,7 +302,7 @@ describe('SiteMembersManager (row menu)', () => {
 
     await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-buiten@voorbeeld.nl-editor');
 
-    expect(setRole).toHaveBeenCalledWith('buiten@voorbeeld.nl', 'editor');
+    expect(setRole).toHaveBeenCalledWith('lid-8', 'editor');
     expect(wrapper.emitted('roleChanged')?.[0]).toEqual([changed]);
   });
 
@@ -316,7 +320,7 @@ describe('SiteMembersManager (row menu)', () => {
 
     expect(siteRows(wrapper)).toHaveLength(0);
     expect(cellTexts(inheritedRows(wrapper)[0]!)).toEqual(['Zoë de Wit', 'Lezer']);
-    expect(remove).toHaveBeenCalledWith('zoe@voorbeeld.nl');
+    expect(remove).toHaveBeenCalledWith('lid-4');
 
     confirm();
     await flushPromises();

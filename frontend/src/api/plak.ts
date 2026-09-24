@@ -155,10 +155,10 @@ export function addInvitee(
 export function removeInvitee(
   groupSlug: string,
   siteSlug: string,
-  identifier: string,
+  inviteeId: string,
 ): Promise<void> {
   return request<void>(
-    `${sitePath(groupSlug, siteSlug)}/invitees/${encodeURIComponent(identifier)}`,
+    `${sitePath(groupSlug, siteSlug)}/invitees/${encodeURIComponent(inviteeId)}`,
     { method: 'DELETE' },
   );
 }
@@ -289,11 +289,11 @@ export function addGroupMember(
 
 export function setGroupRole(
   groupSlug: string,
-  identifier: string,
+  memberId: string,
   role: Role,
 ): Promise<GroupMember> {
   return request<GroupMember>(
-    `${groupPath(groupSlug)}/members/${encodeURIComponent(identifier)}/role`,
+    `${groupPath(groupSlug)}/members/${encodeURIComponent(memberId)}/role`,
     {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -316,8 +316,8 @@ export function searchGroupMembers(
   );
 }
 
-export function removeGroupMember(groupSlug: string, identifier: string): Promise<void> {
-  return request<void>(`${groupPath(groupSlug)}/members/${encodeURIComponent(identifier)}`, {
+export function removeGroupMember(groupSlug: string, memberId: string): Promise<void> {
+  return request<void>(`${groupPath(groupSlug)}/members/${encodeURIComponent(memberId)}`, {
     method: 'DELETE',
   });
 }
@@ -349,11 +349,11 @@ export function addSiteMember(
 export function setSiteRole(
   group: string,
   site: string,
-  identifier: string,
+  memberId: string,
   role: Role,
 ): Promise<SiteMember> {
   return request<SiteMember>(
-    `${sitePath(group, site)}/members/${encodeURIComponent(identifier)}/role`,
+    `${sitePath(group, site)}/members/${encodeURIComponent(memberId)}/role`,
     {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -373,8 +373,8 @@ export function searchSiteMembers(
   );
 }
 
-export function removeSiteMember(group: string, site: string, identifier: string): Promise<void> {
-  return request<void>(`${sitePath(group, site)}/members/${encodeURIComponent(identifier)}`, {
+export function removeSiteMember(group: string, site: string, memberId: string): Promise<void> {
+  return request<void>(`${sitePath(group, site)}/members/${encodeURIComponent(memberId)}`, {
     method: 'DELETE',
   });
 }

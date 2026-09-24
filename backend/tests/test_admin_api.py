@@ -864,7 +864,9 @@ class TestGroupMembers:
         members = (await client.get(f"{BASE}/groups/team/members")).json()
         assert [member["identifier"] for member in members] == ["a@example.nl", "b@example.nl"]
 
-        response = await client.delete(f"{BASE}/groups/team/members/b@example.nl", headers=headers)
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}", headers=headers
+        )
         assert response.status_code == 204
         members = (await client.get(f"{BASE}/groups/team/members")).json()
         assert [member["identifier"] for member in members] == ["a@example.nl"]
@@ -966,7 +968,9 @@ class TestGroupMembers:
         add people, so removing the last member makes the groep unrecoverable."""
         headers = login(client, app, sub="lid-a", email="a@example.nl")
 
-        response = await client.delete(f"{BASE}/groups/team/members/a@example.nl", headers=headers)
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_a.id}", headers=headers
+        )
         assert response.status_code == 409
         assert response.json()["code"] == "LAST_GROUP_MEMBER"
 
@@ -983,7 +987,9 @@ class TestGroupMembers:
             )
         ).status_code == 201
 
-        response = await client.delete(f"{BASE}/groups/team/members/a@example.nl", headers=headers)
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_a.id}", headers=headers
+        )
         assert response.status_code == 204
 
         # a is no longer a member and cannot add themselves back; b can.
@@ -1009,6 +1015,25 @@ class TestGroupMembers:
             f"{BASE}/groups/team/members", json={"identifier": "a@example.nl"}, headers=headers
         )
         assert response.status_code == 409
+
+    async def test_removal_by_id_is_404_for_an_unknown_id_and_a_non_member(
+        self, client, app, data
+    ):
+        """The id in the path is not a licence: it still has to belong to a
+        member of this group."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        unknown = await client.delete(
+            f"{BASE}/groups/team/members/{uuid.uuid4()}", headers=headers
+        )
+        assert unknown.status_code == 404
+        assert unknown.json()["code"] == "UNKNOWN_MEMBER"
+
+        outsider = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}", headers=headers
+        )
+        assert outsider.status_code == 404
+        assert outsider.json()["code"] == "NOT_GROUP_MEMBER"
 
     async def test_not_group_member_may_no_members_manage(self, client, app, data):
         headers = login(client, app, sub="lid-b", email="b@example.nl")
@@ -1054,7 +1079,7 @@ class TestGroupMembers:
 
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.put(
-            f"{BASE}/groups/team/members/b@example.nl/role",
+            f"{BASE}/groups/team/members/{data.member_b.id}/role",
             json={"role": "editor"},
             headers=headers,
         )
@@ -1072,7 +1097,7 @@ class TestGroupMembers:
         await _join_group(factory, data.group, data.member_b, Role.EDITOR)
         headers_b = login(client, app, sub="lid-b", email="b@example.nl")
         response = await client.put(
-            f"{BASE}/groups/team/members/b@example.nl/role",
+            f"{BASE}/groups/team/members/{data.member_b.id}/role",
             json={"role": "admin"},
             headers=headers_b,
         )
@@ -1082,7 +1107,7 @@ class TestGroupMembers:
     async def test_role_change_unknown_member_and_outsider_404(self, client, app, data):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.put(
-            f"{BASE}/groups/team/members/bestaat-niet@example.nl/role",
+            f"{BASE}/groups/team/members/{uuid.uuid4()}/role",
             json={"role": "editor"},
             headers=headers,
         )
@@ -1090,7 +1115,7 @@ class TestGroupMembers:
         assert response.json()["code"] == "UNKNOWN_MEMBER"
 
         response = await client.put(
-            f"{BASE}/groups/team/members/b@example.nl/role",
+            f"{BASE}/groups/team/members/{data.member_b.id}/role",
             json={"role": "editor"},
             headers=headers,
         )
@@ -1103,7 +1128,7 @@ class TestGroupMembers:
         await _join_group(factory, data.group, data.member_b, Role.EDITOR)
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.put(
-            f"{BASE}/groups/team/members/a@example.nl/role",
+            f"{BASE}/groups/team/members/{data.member_a.id}/role",
             json={"role": "editor"},
             headers=headers,
         )
@@ -1119,7 +1144,9 @@ class TestGroupMembers:
     async def test_the_last_group_admin_cannot_be_removed(self, client, app, data, factory):
         await _join_group(factory, data.group, data.member_b, Role.READER)
         headers = login(client, app, sub="lid-a", email="a@example.nl")
-        response = await client.delete(f"{BASE}/groups/team/members/a@example.nl", headers=headers)
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_a.id}", headers=headers
+        )
         assert response.status_code == 409
         assert response.json()["code"] == "LAST_GROUP_ADMIN"
 
@@ -1131,7 +1158,7 @@ class TestGroupMembers:
         await _join_group(factory, data.group, data.member_b, Role.ADMIN)
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.put(
-            f"{BASE}/groups/team/members/a@example.nl/role",
+            f"{BASE}/groups/team/members/{data.member_a.id}/role",
             json={"role": "reader"},
             headers=headers,
         )
@@ -1355,7 +1382,7 @@ class TestSiteMembers:
         assert (added.json()["groupRole"], added.json()["siteRole"]) == (None, "reader")
 
         changed = await client.put(
-            f"{BASE}/sites/team/site/members/b@example.nl/role",
+            f"{BASE}/sites/team/site/members/{data.member_b.id}/role",
             json={"role": "editor"},
             headers=headers,
         )
@@ -1363,7 +1390,7 @@ class TestSiteMembers:
         assert (changed.json()["siteRole"], changed.json()["effectiveRole"]) == ("editor", "editor")
 
         removed = await client.delete(
-            f"{BASE}/sites/team/site/members/b@example.nl", headers=headers
+            f"{BASE}/sites/team/site/members/{data.member_b.id}", headers=headers
         )
         assert removed.status_code == 204
 
@@ -1378,7 +1405,7 @@ class TestSiteMembers:
         headers = login(client, app, sub="lid-a", email="a@example.nl")
 
         removed = await client.delete(
-            f"{BASE}/sites/team/site/members/b@example.nl", headers=headers
+            f"{BASE}/sites/team/site/members/{data.member_b.id}", headers=headers
         )
         assert removed.status_code == 204
 
@@ -1425,12 +1452,12 @@ class TestSiteMembers:
 
         refused = {
             "wijzigen": await client.put(
-                f"{BASE}/sites/team/site/members/bestaat-niet@example.nl/role",
+                f"{BASE}/sites/team/site/members/{uuid.uuid4()}/role",
                 json={"role": "editor"},
                 headers=headers,
             ),
             "weghalen": await client.delete(
-                f"{BASE}/sites/team/site/members/bestaat-niet@example.nl", headers=headers
+                f"{BASE}/sites/team/site/members/{uuid.uuid4()}", headers=headers
             ),
         }
         for what, response in refused.items():
@@ -1455,12 +1482,12 @@ class TestSiteMembers:
 
         refused = {
             "wijzigen": await client.put(
-                f"{BASE}/sites/team/site/members/b@example.nl/role",
+                f"{BASE}/sites/team/site/members/{data.member_b.id}/role",
                 json={"role": "admin"},
                 headers=headers,
             ),
             "weghalen": await client.delete(
-                f"{BASE}/sites/team/site/members/b@example.nl", headers=headers
+                f"{BASE}/sites/team/site/members/{data.member_b.id}", headers=headers
             ),
         }
         for what, response in refused.items():
@@ -1480,12 +1507,12 @@ class TestSiteMembers:
                 headers=headers,
             ),
             "wijzigen": await client.put(
-                f"{BASE}/sites/team/site/members/a@example.nl/role",
+                f"{BASE}/sites/team/site/members/{data.member_a.id}/role",
                 json={"role": "reader"},
                 headers=headers,
             ),
             "weghalen": await client.delete(
-                f"{BASE}/sites/team/site/members/a@example.nl", headers=headers
+                f"{BASE}/sites/team/site/members/{data.member_a.id}", headers=headers
             ),
         }
         for what, response in refused.items():
@@ -1777,16 +1804,47 @@ class TestInvitees:
         items = (await client.get(f"{BASE}/sites/team/site/invitees")).json()
         assert [invitee["identifier"] for invitee in items] == ["gast@example.nl"]
 
+        invitee_id = items[0]["id"]
         response = await client.delete(
-            f"{BASE}/sites/team/site/invitees/GAST@example.nl", headers=headers
+            f"{BASE}/sites/team/site/invitees/{invitee_id}", headers=headers
         )
         assert response.status_code == 204
         assert (await client.get(f"{BASE}/sites/team/site/invitees")).json() == []
 
         response = await client.delete(
-            f"{BASE}/sites/team/site/invitees/gast@example.nl", headers=headers
+            f"{BASE}/sites/team/site/invitees/{invitee_id}", headers=headers
         )
         assert response.status_code == 404
+
+    async def test_an_invitee_of_another_site_cannot_be_removed_here(
+        self, client, app, data, factory
+    ):
+        """The id in the path is not a licence: it still has to sit on the
+        list of the site in the path."""
+        async with factory() as db:
+            other = Site(
+                group_id=data.group.id,
+                slug="andere",
+                title="Andere",
+                access_base=AccessBase.SITE_TEAM,
+                created_by=data.member_a.id,
+            )
+            db.add(other)
+            await db.commit()
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        added = await client.post(
+            f"{BASE}/sites/team/site/invitees",
+            json={"identifier": "gast@example.nl"},
+            headers=headers,
+        )
+        assert added.status_code == 201
+
+        response = await client.delete(
+            f"{BASE}/sites/team/andere/invitees/{added.json()['id']}", headers=headers
+        )
+        assert response.status_code == 404
+        assert response.json()["code"] == "UNKNOWN_INVITEE"
+        assert len((await client.get(f"{BASE}/sites/team/site/invitees")).json()) == 1
 
 
 # -- Keys -------------------------------------------------------------------

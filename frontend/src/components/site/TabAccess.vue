@@ -209,6 +209,8 @@ async function addInvitee(): Promise<void> {
   if (inviteeEmpty.value) return;
   // Provisional row: visible at once, the server confirms in the background.
   const provisional: Invitee = {
+    // Empty until the server answers: the id only exists once the add lands.
+    id: '',
     groupSlug: props.group,
     siteSlug: props.site,
     identifier,
@@ -217,15 +219,20 @@ async function addInvitee(): Promise<void> {
   };
   // If the address is already there, there is nothing to run ahead of; the
   // server reports the duplicate and the row stays where it was.
-  if (!invitees.value.some((g) => g.identifier === identifier)) {
+  const newRow = !invitees.value.some((g) => g.identifier === identifier);
+  if (newRow) {
     invitees.value = [...invitees.value, provisional];
   }
   inviteeEmail.value = '';
   try {
     const invitee = await plak.addInvitee(props.group, props.site, identifier);
-    invitees.value = invitees.value.map((g) => (g === provisional ? invitee : g));
+    // Matched on the address, not on object identity: the ref hands back a
+    // reactive proxy of the provisional row, never the object itself.
+    invitees.value = invitees.value.map((g) => (g.identifier === identifier ? invitee : g));
   } catch (f) {
-    invitees.value = invitees.value.filter((g) => g !== provisional);
+    if (newRow) {
+      invitees.value = invitees.value.filter((g) => g.identifier !== identifier);
+    }
     inviteeEmail.value = identifier;
     inviteeError.value = errorText(f, t('publish.access.invitees.addFailed'));
   }
@@ -235,7 +242,7 @@ async function removeInvitee(invitee: Invitee): Promise<void> {
   const previous = invitees.value;
   invitees.value = invitees.value.filter((g) => g.identifier !== invitee.identifier);
   try {
-    await plak.removeInvitee(props.group, props.site, invitee.identifier);
+    await plak.removeInvitee(props.group, props.site, invitee.id);
   } catch (f) {
     invitees.value = previous;
     notices.value?.notify(

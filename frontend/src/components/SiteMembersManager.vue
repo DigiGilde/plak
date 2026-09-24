@@ -34,8 +34,8 @@ const props = defineProps<{
   /** Display name of the group, as the summary of the collapsed block names it. */
   groupName: string;
   add: (identifier: string, role: Role) => Promise<SiteMember>;
-  remove: (identifier: string) => Promise<void>;
-  setRole: (identifier: string, role: Role) => Promise<SiteMember>;
+  remove: (memberId: string) => Promise<void>;
+  setRole: (memberId: string, role: Role) => Promise<SiteMember>;
   search: (query: string) => Promise<MemberSuggestion[]>;
 }>();
 
@@ -59,6 +59,8 @@ const COLUMNS_INHERITED = 'minmax(12rem, 1fr) 9rem';
 const COLUMNS_INHERITED_SM = 'minmax(0, 1fr) 9rem';
 
 interface Row {
+  /** Empty on a provisional row: the member id only exists once the add lands. */
+  memberId: string;
   identifier: string;
   name: string;
   email: string;
@@ -163,6 +165,7 @@ const rows = computed<Row[]>(() => [
     if (effectiveRole === null) return [];
     return [
       {
+        memberId: member.memberId,
         identifier: member.identifier,
         name: member.name || member.identifier,
         email: member.email,
@@ -225,6 +228,7 @@ async function onAdd(): Promise<void> {
     provisional.value = [
       ...provisional.value,
       {
+        memberId: '',
         identifier,
         name: identifier,
         email: identifier,
@@ -279,7 +283,7 @@ function actionsFor(row: Row): RowAction[] {
 
 async function onRole(row: Row, role: Role): Promise<void> {
   try {
-    emit('roleChanged', await props.setRole(row.identifier, role));
+    emit('roleChanged', await props.setRole(row.memberId, role));
   } catch (error) {
     notify(t('admin.siteMembers.roleFailed', { name: row.name }), error);
   }
@@ -288,7 +292,7 @@ async function onRole(row: Row, role: Role): Promise<void> {
 async function onRemove(row: Row): Promise<void> {
   losingSiteRole.value = [...losingSiteRole.value, row.identifier];
   try {
-    await props.remove(row.identifier);
+    await props.remove(row.memberId);
     emit('removed', row.identifier);
   } catch (error) {
     notify(t('admin.siteMembers.removeFailed', { name: row.name }), error);
