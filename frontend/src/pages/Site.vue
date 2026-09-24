@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client';
 import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { groupPath } from '@/composables/slug';
 import { setDocumentTitle } from '@/title';
 import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -85,7 +86,7 @@ watch(() => [groupSlug.value, siteSlug.value], load);
 watchEffect(() => {
   setBreadcrumbs(route.path, [
     { text: t('nav.overview'), href: '/' },
-    { text: detail.value?.group.name ?? groupSlug.value, href: `/${groupSlug.value}` },
+    { text: detail.value?.group.name ?? groupSlug.value, href: groupPath(groupSlug.value) },
     { text: siteSlug.value },
   ]);
 });

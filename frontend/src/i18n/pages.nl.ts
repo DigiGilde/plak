@@ -129,7 +129,7 @@ export const pagesNl = {
   'page.cliPair.confirm.account': 'Je koppelt dit programma aan {account}',
   'page.cliPair.confirm.accountHint':
     'Het programma kan daarna publiceren met al jouw rollen, tot je het ontkoppelt.',
-  'page.cliPair.confirm.client': 'Programma: {name}',
+  'page.cliPair.confirm.client': 'Programma, zoals het zichzelf noemt: "{name}"',
   'page.cliPair.confirm.requested': 'Aangevraagd: {time}',
   'page.cliPair.confirm.network': 'Vanaf netwerk {network}',
   'page.cliPair.confirm.otherNetwork.title':

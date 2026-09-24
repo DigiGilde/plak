@@ -20,6 +20,7 @@ import type { Me, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { groupPath } from '@/composables/slug';
 import SecretLink from '@/components/site/SecretLink.vue';
 import { accessSummary, formatTimestamp, siteUrl } from '@/format';
 import { t } from '@/i18n';
@@ -125,7 +126,7 @@ watch(() => [groupSlug.value, siteSlug.value], load);
 watchEffect(() => {
   setBreadcrumbs(route.path, [
     { text: t('nav.overview'), href: '/' },
-    { text: groupName.value || groupSlug.value, href: `/${groupSlug.value}` },
+    { text: groupName.value || groupSlug.value, href: groupPath(groupSlug.value) },
     { text: site.value?.title ?? siteSlug.value },
   ]);
 });

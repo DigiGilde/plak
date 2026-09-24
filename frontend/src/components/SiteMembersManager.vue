@@ -23,6 +23,7 @@ import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import type { MemberSuggestion, Role, SiteMember } from '@/api/types';
 import { looksLikeEmail, useMemberSearch } from '@/composables/memberSearch';
 import { useNotices, type Notice } from '@/composables/notices';
+import { groupPath } from '@/composables/slug';
 import { roleLabel, ROLES, ROLE_ICONS, siteRoleHint } from '@/format';
 import { t } from '@/i18n';
 
@@ -312,7 +313,7 @@ async function onRemove(row: Row): Promise<void> {
         <nldd-text size="sm" color="secondary">
           {{ inheritedNote[0]
           }}<nldd-link
-            :href="`/${group}/-/members`"
+            :href="groupPath(group, '/-/members')"
             size="inherit"
             data-testid="leden-naar-groep"
           >{{ t('admin.siteMembers.inherited.link', { group: groupName }) }}</nldd-link

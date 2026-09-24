@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SLUG_RE, slugify, slugifyTyped } from './slug';
+import { groupPath, SLUG_RE, slugify, slugifyTyped } from './slug';
 
 describe('slugify', () => {
   it.each([
@@ -41,4 +41,19 @@ describe('slugifyTyped (normalizing while typing)', () => {
     expect(slugifyTyped('Mijn!!! Site')).toBe('mijn-site');
     expect(slugifyTyped('a___b')).toBe('a-b');
   });
+});
+
+describe('groupPath', () => {
+  it('builds the path of a group that the backend could have issued', () => {
+    expect(groupPath('nldd')).toBe('/nldd');
+    expect(groupPath('nldd', '/-/members')).toBe('/nldd/-/members');
+  });
+
+  it.each(['//example.com', '/\\example.com', '/\\/example.com', 'Nldd', 'a b', '-nldd'])(
+    'gives no path for %s, so it can never become an off-origin href',
+    (value) => {
+      expect(groupPath(value)).toBeUndefined();
+      expect(groupPath(value, '/-/members')).toBeUndefined();
+    },
+  );
 });

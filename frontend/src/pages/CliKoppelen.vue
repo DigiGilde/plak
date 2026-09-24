@@ -164,7 +164,15 @@ onMounted(async () => {
   }
 });
 
-const clientName = computed(() => authorization.value?.clientName || t('page.cliPair.unknownClient'));
+// The name comes from the device-flow client itself, so the line says so and
+// quotes it: unattributed, it reads as a sentence of ours above the approve
+// button.
+const clientLine = computed(() => {
+  const claimed = authorization.value?.clientName;
+  return claimed
+    ? t('page.cliPair.confirm.client', { name: claimed })
+    : t('page.cliPair.unknownClient');
+});
 const accountLabel = computed(() => {
   const current = member.value;
   if (!current) return '';
@@ -249,7 +257,7 @@ const accountLabel = computed(() => {
       ></nldd-banner>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-rich-text>
-        <p data-testid="code-programma">{{ t('page.cliPair.confirm.client', { name: clientName }) }}</p>
+        <p data-testid="code-programma">{{ clientLine }}</p>
         <p data-testid="code-tijdstip">
           {{ t('page.cliPair.confirm.requested', { time: formatTimestamp(authorization.createdAt) }) }}
         </p>

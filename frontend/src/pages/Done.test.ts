@@ -201,6 +201,21 @@ describe('Done (reload and share)', () => {
     wrapper.unmount();
   });
 
+  // Same trail, same rule: an impossible group slug may not become a link off
+  // our own origin.
+  it.each(['//example.com', '/\\example.com', '/\\/example.com'])(
+    'leaves the group crumb of %s without an href',
+    async (slug) => {
+      const wrapper = await mountComponent(`/${encodeURIComponent(slug)}/website/done`);
+      await flushPromises();
+
+      const crumbs = breadcrumbsFor(router.currentRoute.value.path);
+      expect(crumbs[1]).toEqual({ text: slug, href: undefined });
+
+      wrapper.unmount();
+    },
+  );
+
   it('fetches again as soon as the route points to a different site', async () => {
     backend.data.sites.push({
       groupSlug: 'nldd',
