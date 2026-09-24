@@ -63,6 +63,7 @@ def _settings(content_root) -> Settings:
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         base_url=APP_BASE_URL,
         content_base_url=CONTENT_BASE_URL,
+        environment="dev",
     )
 
 

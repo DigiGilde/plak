@@ -51,6 +51,7 @@ async def factory(migrated_dsn: str):
         audit_pepper="audit-pepper-van-minstens-32-bytes!!",
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         content_base_url="https://plak.example",
+        environment="dev",
     )
     engine = make_engine(settings)
     session_factory = make_session_factory(engine)

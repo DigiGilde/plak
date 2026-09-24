@@ -58,6 +58,7 @@ def app(tmp_path_factory) -> FastAPI:
         audit_pepper="audit-pepper-van-minstens-32-bytes!!",
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         content_base_url="https://plak.example",
+        environment="dev",
         base_url="https://beheer.plak.example",
     )
     return create_app(settings)

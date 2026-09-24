@@ -29,6 +29,7 @@ def _set_required_env(monkeypatch, **overrides):
         "PLAK_AUDIT_PEPPER": "y" * 32,
         "PLAK_AUDIT_IP_KEY": base64.b64encode(b"z" * 32).decode(),
         "PLAK_CONTENT_BASE_URL": "https://plak.example",
+        "PLAK_ENVIRONMENT": "dev",
     }
     values.update(overrides)
     for key, value in values.items():
@@ -478,6 +479,7 @@ class TestZadSourceMapping:
             "PLAK_AUDIT_IP_KEY": base64.b64encode(b"z" * 32).decode(),
             "PLAK_OIDC_CLIENT_AUTH": "client_secret_post",
             "PLAK_CONTENT_BASE_URL": "https://plak.example",
+            "PLAK_ENVIRONMENT": "dev",
             "OIDC_DISCOVERY_URL": self.DISCOVERY_URL,
             "OIDC_CLIENT_ID": "plak-prd",
             "OIDC_CLIENT_SECRET": "zad-geheim",

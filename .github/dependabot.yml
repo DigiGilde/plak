@@ -35,6 +35,22 @@ updates:
           - minor
           - patch
 
+  - package-ecosystem: uv
+    directory: /cli
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 5
+    groups:
+      cli:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
   - package-ecosystem: npm
     directories:
       - /frontend

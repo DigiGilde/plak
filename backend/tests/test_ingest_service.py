@@ -80,6 +80,7 @@ def _settings(content_root: Path) -> Settings:
         audit_pepper="p" * 32,
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         content_base_url="https://plak.example",
+        environment="dev",
     )
 
 

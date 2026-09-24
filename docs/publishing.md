@@ -669,12 +669,16 @@ the OAuth 2.0 Device Authorization Grant (RFC 8628), without you ever
 entering a password or client secret yourself:
 
 ```bash
-uv tool install "git+https://github.com/minbzk/plak#subdirectory=cli"
+uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"
 plak login --host https://beheer.plak.example.org
 ```
 
-`uv tool upgrade plak` brings in a newer version later. From a checkout of
-this repository the same command runs without installing anything:
+`<commit-sha>` is a placeholder: fill in a real commit, an unpinned install
+tracks `main` and is not how you should install this. See `README.md` for why
+and for what to pin it to until a tagged release exists; a newer version then
+means reinstalling with a newer commit's SHA, not `uv tool upgrade plak`. From
+a checkout of this repository the same command runs without installing
+anything:
 `uv run --project cli plak login --host ...`, and so for every command
 below.
 

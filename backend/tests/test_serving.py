@@ -74,6 +74,7 @@ def make_settings(content_root: Path) -> Settings:
         audit_pepper="audit-pepper-van-minstens-32-bytes!!",
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         content_base_url=BASE_URL,
+        environment="dev",
     )
 
 
