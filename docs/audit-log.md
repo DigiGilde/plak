@@ -259,6 +259,8 @@ the same way: one account for the app, for alembic and for the purge job.
 The guarantee therefore rests entirely on the triggers from migration
 `0001_base`:
 
+- `audit_log_chain` stamps `occurred_at` on every `INSERT` and hashes the row
+  into its chain; see below.
 - `audit_log_no_update` refuses every `UPDATE` on `audit_log_entries`,
   always.
 - `audit_log_delete_after_retention` refuses every `DELETE` of a row that
@@ -275,6 +277,53 @@ can disable the trigger, rewrite the function, `TRUNCATE` the table or drop
 it. An attacker who gets hold of the runtime credentials can therefore do so
 too. The triggers stop mistakes and off-hand commands, not an owner who
 deliberately wants to wipe the log.
+
+## The integrity chain
+
+Append-only says a row cannot be changed. It says nothing about whether a row
+is true. `INSERT` is the one thing the app account is supposed to do, so
+inventing history needs no trigger switched off at all: before the chain, a
+row could carry someone else's `actor_pseudonym`, made-up `refs` and an
+`occurred_at` two years back, and it would read back exactly as written.
+
+Every row is therefore hashed on insert, by `audit_log_chain` in `0001_base`:
+
+- `occurred_at` is set by the trigger to `clock_timestamp()`, whatever the
+  statement carried. The moment a row claims is the database's, not the
+  caller's.
+- The row gets a position in a chain, `chain_shard` plus `chain_seq`, and a
+  `chain_hash` over the previous row's hash and its own content. The content
+  is fed in length-prefixed, so no two different rows can produce the same
+  hash input.
+- Removing a row, rewriting one or back-dating one leaves every row behind it
+  in that chain with a hash that no longer follows, and the break says where.
+
+**Sixteen chains, not one.** A chain is a serialisation point: an insert has
+to read the tail of its chain under a lock, and audit rows are written on
+essentially every request. One global chain would put every audit write in
+the application behind a single lock. The chain a row lands in follows from
+its id, so sixteen chains spread that contention sixteen ways while the shard
+stays part of the hash (a row cannot be moved to another chain unnoticed).
+The lock is a transaction-scoped advisory lock, so it is released on commit
+or rollback and cannot outlive its writer; the app writes each audit row in a
+transaction of its own.
+
+**Checking it.** `python -m plak.audit.chain` (`just verify-audit-log`) walks
+every chain and reports the first break in each, on the same `PLAK_DB_URL`.
+It recomputes the hashes with the very same SQL function the trigger uses, so
+the check cannot drift away from the write.
+
+**What it does not prove.** The account is still the owner of the schema. An
+attacker holding those credentials can disable the trigger, rewrite rows and
+recompute every hash afterwards, and `verify-audit-log` will say the chain is
+whole. The same goes for rows dropped off the end of a chain: nothing is left
+that pointed at them. What the chain buys is that tampering now has to be
+complete and deliberate to go unnoticed, and that a verifier outside this
+database, holding a chain hash from an earlier moment, can tell that the
+history was rewritten. Only shipping the log off-host, to an append-only WORM
+sink or a SIEM the runtime account cannot reach, makes the log authoritative
+against its own owner; that is an infrastructure decision, and it has not
+been taken.
 
 ## Access
 

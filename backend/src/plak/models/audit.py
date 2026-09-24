@@ -22,7 +22,15 @@ class ActorKind(enum.StrEnum):
 
 class AuditLogEntry(IDMixin, Base):
     """Rows are never updated or deleted: the migration installs triggers that refuse
-    UPDATE and DELETE on this table (on top of the separate runtime DB account)."""
+    UPDATE and DELETE on this table. They hold for every session on the one database
+    account Plak has, including the app's own, so an owner who disables them gets past
+    them; `docs/audit-log.md` says what that costs.
+
+    The chain columns (`chain_shard`, `chain_seq`, `chain_hash`) are deliberately not
+    mapped here: they are written by the BEFORE INSERT trigger and read by
+    `audit/chain.py`, and a mapping would invite the application to supply them.
+    `occurred_at` is overwritten by that same trigger, whatever the INSERT carried.
+    """
 
     __tablename__ = "audit_log_entries"
 

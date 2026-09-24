@@ -60,6 +60,116 @@ CREATE CONSTRAINT TRIGGER ck_groups_keep_one_admin
     FOR EACH ROW EXECUTE FUNCTION guard_last_group_admin();
 """
 
+# The audit log is one hash chain per shard, not one global chain: every INSERT
+# has to read the tail of its chain under a lock, and a single chain would
+# serialise every audit write in the application behind one lock. Sixteen
+# chains spread that contention while keeping each chain short enough to walk.
+# The shard follows from the row id, so a row cannot be moved to another chain
+# without breaking its hash.
+_CHAIN_SHARDS = 16
+# First key of the two-key advisory lock, so the chain locks cannot collide
+# with pg_advisory_xact_lock(hashtext(...)) in audit/log.py, which uses the
+# one-key form. 0x504C414B, "PLAK" in ASCII.
+_CHAIN_LOCK_NAMESPACE = 1347571531
+
+# Length-prefixed encoding, so that no two different rows can produce the same
+# hash input: 0x00 for NULL, otherwise 0x01, the length as eight bytes, and the
+# bytes themselves. Without the length, ('ab', 'c') and ('a', 'bc') would hash
+# alike.
+_CHAIN_PART_FUNCTION = r"""
+CREATE FUNCTION audit_log_chain_part(value bytea) RETURNS bytea AS $$
+    SELECT CASE
+        WHEN value IS NULL THEN '\x00'::bytea
+        ELSE '\x01'::bytea || int8send(octet_length(value)::bigint) || value
+    END;
+$$ LANGUAGE sql IMMUTABLE;
+"""
+
+# One definition of the hash input, used by the trigger that writes it and by
+# audit/chain.py that checks it, so the two cannot drift apart. STABLE, not
+# IMMUTABLE, only because to_char is: the encoding itself is timezone
+# independent (the timestamp is converted to UTC first) and locale independent
+# (the format has no month or day names).
+_CHAIN_HASH_FUNCTION = """
+CREATE FUNCTION audit_log_chain_hash(
+    previous_hash bytea,
+    entry_id uuid,
+    actor_kind text,
+    actor_pseudonym text,
+    action text,
+    result text,
+    reason_code text,
+    refs jsonb,
+    ip_truncated text,
+    ip_encrypted bytea,
+    occurred_at timestamptz,
+    chain_shard smallint,
+    chain_seq bigint
+) RETURNS bytea AS $$
+    SELECT sha256(
+        audit_log_chain_part(previous_hash)
+        || audit_log_chain_part(convert_to(entry_id::text, 'UTF8'))
+        || audit_log_chain_part(convert_to(actor_kind, 'UTF8'))
+        || audit_log_chain_part(convert_to(actor_pseudonym, 'UTF8'))
+        || audit_log_chain_part(convert_to(action, 'UTF8'))
+        || audit_log_chain_part(convert_to(result, 'UTF8'))
+        || audit_log_chain_part(convert_to(reason_code, 'UTF8'))
+        || audit_log_chain_part(convert_to(refs::text, 'UTF8'))
+        || audit_log_chain_part(convert_to(ip_truncated, 'UTF8'))
+        || audit_log_chain_part(ip_encrypted)
+        || audit_log_chain_part(convert_to(
+            to_char(timezone('UTC', occurred_at), 'YYYY-MM-DD"T"HH24:MI:SS.US'), 'UTF8'))
+        || audit_log_chain_part(convert_to(chain_shard::text, 'UTF8'))
+        || audit_log_chain_part(convert_to(chain_seq::text, 'UTF8'))
+    );
+$$ LANGUAGE sql STABLE;
+"""
+
+# occurred_at is stamped here and not left to the column default, so a caller
+# cannot pick the moment its row claims to have happened. clock_timestamp(),
+# not now(): read while holding the lock it makes occurred_at rise with
+# chain_seq within a shard, which audit/chain.py checks as well.
+#
+# The lock is what keeps two concurrent inserts from claiming the same
+# predecessor. It is held until the end of the inserting transaction, so an
+# audit row written inside a long transaction blocks the other writers in its
+# shard for that long; the app writes its audit rows in a transaction of their
+# own (audit/log.py).
+_CHAIN_FUNCTION = (
+    """
+CREATE FUNCTION audit_log_chain() RETURNS trigger AS $$
+DECLARE
+    previous_seq bigint;
+    previous_hash bytea;
+BEGIN
+    NEW.chain_shard := abs(mod(hashtext(NEW.id::text)::bigint, $SHARDS$))::smallint;
+    PERFORM pg_advisory_xact_lock($LOCK$, NEW.chain_shard::int);
+    NEW.occurred_at := clock_timestamp();
+    SELECT chain_seq, chain_hash INTO previous_seq, previous_hash
+    FROM audit_log_entries
+    WHERE chain_shard = NEW.chain_shard
+    ORDER BY chain_seq DESC
+    LIMIT 1;
+    NEW.chain_seq := coalesce(previous_seq, 0) + 1;
+    NEW.chain_hash := audit_log_chain_hash(
+        previous_hash, NEW.id, NEW.actor_kind::text, NEW.actor_pseudonym, NEW.action,
+        NEW.result, NEW.reason_code, NEW.refs, NEW.ip_truncated, NEW.ip_encrypted,
+        NEW.occurred_at, NEW.chain_shard, NEW.chain_seq
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
+    .replace("$SHARDS$", str(_CHAIN_SHARDS))
+    .replace("$LOCK$", str(_CHAIN_LOCK_NAMESPACE))
+)
+
+_CHAIN_TRIGGER = """
+CREATE TRIGGER audit_log_chain
+BEFORE INSERT ON audit_log_entries
+FOR EACH ROW EXECUTE FUNCTION audit_log_chain();
+"""
+
 
 def _enum(*values: str, name: str, create_type: bool) -> postgresql.ENUM:
     return postgresql.ENUM(*values, name=name, create_type=create_type)
@@ -425,6 +535,13 @@ def upgrade() -> None:
         sa.Column("ip_truncated", sa.String(), nullable=True),
         sa.Column("ip_encrypted", sa.LargeBinary(), nullable=True),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        # Filled by audit_log_chain() on INSERT, never by the application: no
+        # server_default, so a statement that omits them gets the trigger's
+        # values and a statement that supplies them has them overwritten.
+        sa.Column("chain_shard", sa.SmallInteger(), nullable=False),
+        sa.Column("chain_seq", sa.BigInteger(), nullable=False),
+        sa.Column("chain_hash", sa.LargeBinary(), nullable=False),
+        sa.UniqueConstraint("chain_shard", "chain_seq", name="uq_audit_log_entries_chain_position"),
     )
 
     op.create_table(
@@ -458,9 +575,11 @@ def upgrade() -> None:
     op.create_index("ix_cli_refresh_tokens_session_id", "cli_refresh_tokens", ["session_id"])
 
     # Append-only: triggers refuse UPDATE always, and DELETE until a row has
-    # outlived its retention. This is the second layer next to account
-    # separation (the runtime account has INSERT/SELECT only; the cleanup
-    # account may DELETE, but only what this trigger lets through).
+    # outlived its retention. There is no account separation to lean on: ZAD
+    # hands out one PostgreSQL user, and that user owns this schema. The
+    # triggers therefore apply to the app, to alembic and to the purge job
+    # alike, and an owner who wants to can disable them. They stop mistakes
+    # and off-hand commands, not a deliberate owner; see docs/audit-log.md.
     op.execute(
         """
         CREATE FUNCTION audit_log_append_only() RETURNS trigger AS $$
@@ -477,6 +596,17 @@ def upgrade() -> None:
         FOR EACH ROW EXECUTE FUNCTION audit_log_append_only()
         """
     )
+    # Per-row integrity chain: every row carries a hash over its predecessor's
+    # hash and its own content, so removing or rewriting a row leaves the rest
+    # of its chain unverifiable. It does not stop the owner of the schema, who
+    # can switch the trigger off and recompute the whole chain; what it buys is
+    # that tampering has to be complete to go unnoticed, and that an outside
+    # verifier holding an earlier chain hash can tell. audit/chain.py walks it.
+    op.execute(_CHAIN_PART_FUNCTION)
+    op.execute(_CHAIN_HASH_FUNCTION)
+    op.execute(_CHAIN_FUNCTION)
+    op.execute(_CHAIN_TRIGGER)
+
     # The retention lives here and nowhere else the cleanup could override:
     # the job asks the database what has expired. Shortening a term is a
     # schema change, which is what a retention decision should cost.
@@ -553,7 +683,14 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS content_viewer_delete_after_retention ON content_viewers")
     op.execute("DROP FUNCTION IF EXISTS content_viewer_delete_after_retention()")
     op.execute("DROP TRIGGER IF EXISTS audit_log_delete_after_retention ON audit_log_entries")
+    op.execute("DROP TRIGGER IF EXISTS audit_log_chain ON audit_log_entries")
     op.execute("DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log_entries")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_chain()")
+    op.execute(
+        "DROP FUNCTION IF EXISTS audit_log_chain_hash("
+        "bytea, uuid, text, text, text, text, text, jsonb, text, bytea, timestamptz, smallint, bigint)"
+    )
+    op.execute("DROP FUNCTION IF EXISTS audit_log_chain_part(bytea)")
     op.execute("DROP FUNCTION IF EXISTS audit_log_delete_after_retention()")
     op.execute("DROP FUNCTION IF EXISTS audit_log_retention(text, text)")
     op.execute("DROP FUNCTION IF EXISTS audit_log_append_only()")

@@ -63,6 +63,10 @@ lint:
 purge-audit-log:
     cd backend && uv run python -m plak.audit.retention
 
+# Controleer de integriteitsketen van het auditlog; vraagt PLAK_DB_URL
+verify-audit-log:
+    cd backend && uv run python -m plak.audit.chain
+
 # Scan de afhankelijkheden zoals de CI-job `vulnerabilities` dat doet
 scan:
     #!/usr/bin/env bash

@@ -13,7 +13,7 @@ from datetime import timedelta
 import asyncpg
 import pytest
 import pytest_asyncio
-from helpers_audit import AuditRecorder
+from helpers_audit import AuditRecorder, insert_aged_audit_row
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from plak.audit import retention, vocabulary
@@ -237,17 +237,7 @@ async def test_write_strict_limited_is_atomic_under_concurrency(
 async def _committed_row(dsn: str, action: str, result: str, age: timedelta) -> uuid.UUID:
     connection = await asyncpg.connect(dsn.replace("postgresql+asyncpg://", "postgresql://", 1))
     try:
-        return await connection.fetchval(
-            """
-            INSERT INTO audit_log_entries (id, actor_kind, action, result, occurred_at)
-            VALUES ($1, 'system', $2, $3, now() - $4::interval)
-            RETURNING id
-            """,
-            uuid.uuid4(),
-            action,
-            result,
-            age,
-        )
+        return await insert_aged_audit_row(connection, action, result, age)
     finally:
         await connection.close()
 
