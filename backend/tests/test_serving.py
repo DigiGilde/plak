@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 import httpx
 import pytest
@@ -432,7 +432,7 @@ class TestLiveServing:
     async def test_private_asset_is_not_immutable(self, client, environment):
         # The URL is not content-addressed and survives a redeploy, so
         # `immutable` would hide a new version even on a reload.
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
         response = await client.get("/aurora/intern/stijl.css")
         assert response.status_code == 200
         assert response.headers["cache-control"] == "private, max-age=31536000"
@@ -657,7 +657,7 @@ class TestPreview:
         assert "location" not in response.headers
 
     async def test_login_gated_preview_with_session(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/site/",))
         response = await client.get("/aurora/site/_preview/pr-besloten/")
         assert response.status_code == 200
         assert response.headers["cache-control"] == "private, no-cache, must-revalidate"
@@ -670,7 +670,7 @@ class TestPreview:
 
 class TestVersionView:
     async def test_active_group_member_sees_version(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
         response = await client.get(f"/aurora/site/_version/{environment.world.preview_version_id}/")
         assert response.status_code == 200
         assert response.content == PREVIEW_INDEX
@@ -687,7 +687,7 @@ class TestVersionView:
         assert response.status_code == 404
 
     async def test_not_member_neutral_404(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="buitenstaander")
+        set_content_session_cookie(client, environment.app, sub="buitenstaander", sites=("/aurora/site/",))
         response = await client.get(f"/aurora/site/_version/{environment.world.site_live_id}/")
         assert response.status_code == 404
 
@@ -712,7 +712,7 @@ class TestExternalSources:
         assert response.headers["content-security-policy"] == EXTERNAL_CSP
 
     async def test_version_view_gets_the_external_policy(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/extern/",))
         response = await client.get(f"/aurora/extern/_version/{environment.world.external_live_id}/")
         assert response.status_code == 200
         assert response.headers["content-security-policy"] == EXTERNAL_CSP
@@ -745,7 +745,7 @@ class TestSandbox:
         assert response.headers["content-security-policy"] == SANDBOX_CSP
 
     async def test_version_view_gets_the_sandbox(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/afgeschermd/",))
         response = await client.get(
             f"/aurora/afgeschermd/_version/{environment.world.sandboxed_live_id}/"
         )
@@ -801,11 +801,94 @@ class TestNeutral404ByteIdentical:
         assert headers == _header_list(via_client)
 
 
+class TestSiteScopedSession:
+    """The content session cookie carries `Path=/{group}/{site}/`, so a
+    request aimed at a site this browser has not opened carries no session and
+    the gate sees an anonymous visitor. No header is read for this, and that
+    is the point: nothing here can be shaped by the page that asks. It is not
+    the whole site boundary, because a cookie path is matched against the
+    requested URL and not against the asking page, so a site the visitor has
+    opened does have a cookie that goes along; `_foreign_subresource` and the
+    origin per site are what hold there.
+    """
+
+    async def test_the_site_it_was_issued_for_keeps_working(self, client, environment):
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",)
+        )
+        assert (await client.get("/aurora/intern/")).status_code == 200
+        assert (await client.get("/aurora/intern/stijl.css")).status_code == 200
+
+    async def test_a_session_for_one_site_is_anonymous_on_another(self, client, environment):
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/site/",)
+        )
+        response = await client.get("/aurora/intern/")
+        assert response.status_code == 302
+        assert response.headers["location"].startswith("/-/login?")
+
+    async def test_the_refusal_is_the_missing_cookie_and_not_the_referer_guard(self, client, environment):
+        """The same request as the fetch this fixes, but with no fetch
+        metadata, so `_foreign_subresource` returns False and cannot be what
+        refuses it. What is left is a visitor without a session."""
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/site/",)
+        )
+        response = await client.get("/aurora/intern/", headers={"Referer": f"{BASE_URL}/aurora/site/"})
+        assert response.status_code == 302
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [("login_redirect", "LOGIN_REQUIRED")]
+
+
+class TestFirstVisitToPreviewOrVersion:
+    """Neither route hands an anonymous visitor a login redirect of its own,
+    so without the presence flag a member's first request to a site would be
+    the neutral 404 although they are logged in."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
+
+    async def test_a_member_without_the_site_cookie_is_sent_to_the_login(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        path = f"/aurora/site/_version/{environment.world.site_live_id}/"
+        response = await client.get(path, headers=self.NAVIGATION)
+        assert response.status_code == 302
+        assert response.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}"
+
+    async def test_a_preview_likewise(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        response = await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
+        assert response.status_code == 302
+
+    async def test_an_anonymous_visitor_keeps_the_neutral_404(self, client, environment):
+        for path in (
+            f"/aurora/site/_version/{environment.world.site_live_id}/",
+            "/aurora/site/_preview/pr-besloten/",
+        ):
+            response = await client.get(path, headers=self.NAVIGATION)
+            assert response.status_code == 404, path
+            assert "location" not in response.headers, path
+
+    async def test_a_subresource_gets_no_redirect_to_chain(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        response = await client.get(
+            f"/aurora/site/_version/{environment.world.site_live_id}/",
+            headers={"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "empty"},
+        )
+        assert response.status_code == 404
+
+    async def test_live_content_needs_none_of_this(self, client, environment):
+        """Wherever a session could grant anything on live content, the gate
+        already answers an anonymous visitor with the login redirect, so the
+        presence flag changes nothing there."""
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        response = await client.get("/aurora/geheim/", headers=self.NAVIGATION)
+        assert response.status_code == 404
+
+
 class TestForeignSubresource:
-    """Every site shares one hostname and the content session cookie has
-    `Path=/`, so a page of one site can fetch another site with the visitor's
-    own credentials. Non-public content is served to a subresource request
-    only when the Referer puts it inside the same site.
+    """Defence in depth beside the site-scoped session cookie, for a request
+    that does carry a credential of its own: non-public content is served to a
+    subresource request only when the Referer puts it inside the same site.
     """
 
     SUBRESOURCE: ClassVar[dict[str, str]] = {
@@ -816,7 +899,14 @@ class TestForeignSubresource:
 
     @staticmethod
     def _viewer(client, environment) -> None:
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        # A cookie for every site in play, so this guard and not the scoped
+        # cookie is what these tests measure.
+        set_content_session_cookie(
+            client,
+            environment.app,
+            sub="willekeurige-kijker",
+            sites=("/aurora/site/", "/aurora/intern/", "/aurora/geheim/"),
+        )
 
     async def test_a_fetch_from_another_site_is_refused(self, client, environment):
         self._viewer(client, environment)
@@ -964,7 +1054,7 @@ class TestForeignSubresource:
         assert response.status_code == 404
 
     async def test_a_version_view_is_guarded_although_the_site_is_public(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
         path = f"/aurora/site/_version/{environment.world.site_live_id}/"
         response = await client.get(
             path, headers={**self.SUBRESOURCE, "Referer": f"{BASE_URL}/aurora/intern/"}
@@ -1123,7 +1213,7 @@ class TestLoginRedirect:
         assert response.headers["location"] == "/-/login?returnTo=%2Faurora%2Fintern%2F%3Fx%3D1"
 
     async def test_with_content_session_does_content(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
         response = await client.get("/aurora/intern/")
         assert response.status_code == 200
         assert response.content == b"<h1>intern</h1>"
@@ -1202,7 +1292,9 @@ class TestAudit:
     async def test_looking_at_protected_content_becomes_audited(self, client, environment):
         """Viewing non-public content is logged, with the short retention
         (docs/audit-log.md). Sleutel, sso and a login-gated preview each count."""
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/", "/aurora/site/")
+        )
         assert (await client.get("/aurora/intern/")).status_code == 200
         assert (await client.get("/aurora/site/_preview/pr-besloten/")).status_code == 200
 
@@ -1262,7 +1354,7 @@ class TestAudit:
         assert "sleutelwaarde" not in row
 
     async def test_version_access_becomes_audited(self, client, environment):
-        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
         response = await client.get(f"/aurora/site/_version/{environment.world.site_live_id}/")
         assert response.status_code == 200
         rows = await _audit_rows(environment)

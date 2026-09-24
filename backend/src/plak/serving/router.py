@@ -14,7 +14,9 @@ lexical 301 (site or subroute root without a slash) sits in separate routes
 before any existence or access check and therefore leaks nothing.
 
 Viewers are content sessions only; a management session never
-counts here. A login redirect goes to `/-/login` on the same host. A valid
+counts here. The content session cookie is scoped to `/{group}/{site}/`, so a
+request aimed at another site carries no session and the gate sees an
+anonymous visitor. A login redirect goes to `/-/login` on the same host. A valid
 `?key=` is redeemed: the key cookie rides along on a 302 to the same URL
 without `key`, so the key is not left behind in the address bar, the history
 or logs. A `?key=` that carries the selector alone (a link shared without its
@@ -38,6 +40,7 @@ from plak import net
 from plak.access import gate, keys
 from plak.access.decision import (
     REASON_KEY_CODE_REQUIRED,
+    REASON_LOGIN_REQUIRED,
     AccessDecision,
     DecisionKind,
     neutral_404,
@@ -142,11 +145,12 @@ def _foreign_subresource(request: Request) -> bool:
     """Whether this is a subresource request made by another site's page.
 
     Every site of every group is served from one hostname under a path prefix,
-    and the content session cookie has `Path=/`, so a page that runs its own
-    JavaScript can `fetch()` any other site the visitor has access to and the
-    browser attaches the credentials. The durable fix is an origin per site;
-    until then non-public content is served to a subresource request only when
-    `Referer` puts it inside the same `/{group}/{site}/`.
+    so a page that runs its own JavaScript can `fetch()` any other site on the
+    same origin. The site-scoped session cookie is what takes the visitor's
+    credentials out of such a request; this check stays beside it as a second
+    line, and holds where a request carries a credential of its own: non-public
+    content goes to a subresource request only when `Referer` puts it inside
+    the same `/{group}/{site}/`. The durable fix is an origin per site.
 
     Top-level navigation is untouched: following a link from one site to
     another is something the visitor does and sees. So is a request that
@@ -310,16 +314,33 @@ async def _serve(
         await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
         return response.neutral_404_response()
 
+    # A preview or a _version view is often the first thing a member opens of
+    # a site, and the content session cookie is scoped per site, so that first
+    # request carries none. Neither route ever hands an anonymous visitor a
+    # login redirect of its own, so the answer would be the neutral 404 for a
+    # member who is in fact logged in. Only for a browser that says it has a
+    # content session and only for a top-level navigation: an anonymous
+    # visitor keeps the byte-identical 404, and another site's page cannot
+    # chain this into a session for a request of its own. Live content needs
+    # none of this: wherever a session could grant anything there, the gate
+    # already answers an anonymous visitor with the login redirect.
+    if (
+        decision.kind is DecisionKind.NEUTRAL_404
+        and kind in ("preview", "version")
+        and visitor.sub is None
+        and sessions.content_presence(request)
+        and sessions.top_level_navigation(request)
+    ):
+        await _audit(request, visitor, "login_redirect", REASON_LOGIN_REQUIRED, refs)
+        return _login_redirect(request)
+
     if decision.kind is DecisionKind.NEUTRAL_404:
         await _audit(request, visitor, "refused", decision.reason_code, refs)
         return response.neutral_404_response()
 
     if decision.kind is DecisionKind.LOGIN_REDIRECT:
         await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
-        query = urlencode({"returnTo": _path_without_key(request)})
-        return RedirectResponse(
-            f"{PATH_CONTENT_LOGIN}?{query}", status_code=302, headers={"Cache-Control": "no-store"}
-        )
+        return _login_redirect(request)
 
     access = decided_access
     version_id_allowed = decision.version_id
@@ -391,6 +412,13 @@ async def _serve(
         external_sources=external_sources,
         sandbox=sandbox,
         status_code=404,
+    )
+
+
+def _login_redirect(request: Request) -> Response:
+    query = urlencode({"returnTo": _path_without_key(request)})
+    return RedirectResponse(
+        f"{PATH_CONTENT_LOGIN}?{query}", status_code=302, headers={"Cache-Control": "no-store"}
     )
 
 

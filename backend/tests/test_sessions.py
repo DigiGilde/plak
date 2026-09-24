@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 import httpx
 import pytest
@@ -29,7 +30,9 @@ import plak.auth.sessions as sessions_mod
 from plak import i18n
 from plak.audit import vocabulary
 from plak.auth.sessions import (
+    CONTENT_ANCHOR_COOKIE,
     CONTENT_LOGIN_COOKIE,
+    CONTENT_PRESENCE_COOKIE,
     CONTENT_SESSION_COOKIE,
     CSRF_COOKIE,
     LOGIN_COOKIE,
@@ -123,6 +126,10 @@ async def content_client(app):
     spelled the same on both hosts, so the Host header picks the flow."""
     async with make_content_test_client(app) as client:
         yield client
+
+
+def _cookie_value(response, name: str) -> str:
+    return _set_cookie_header(response, name).split("=", 1)[1].split(";", 1)[0]
 
 
 def _set_cookie_header(response, name: str) -> str:
@@ -359,7 +366,7 @@ class TestContentLogout:
         async with make_content_test_client(app) as content_client:
             await _complete_content_login(content_client, idp)
             session_id = check_signature(
-                app.state.settings.session_secret, content_client.cookies.get(CONTENT_SESSION_COOKIE)
+                app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
             )
 
             response = await content_client.get("/-/logout?from=beheer")
@@ -367,7 +374,7 @@ class TestContentLogout:
         assert response.status_code == 303
         assert response.headers["location"] == "https://beheer.plak.example/"
         assert app.state.session_store.get_session(session_id) is None
-        assert CONTENT_SESSION_COOKIE + "=" in " ".join(response.headers.get_list("set-cookie"))
+        assert CONTENT_ANCHOR_COOKIE + "=" in " ".join(response.headers.get_list("set-cookie"))
 
     async def test_a_direct_content_logout_stays_on_the_content_host(self, content_client, idp):
         await _complete_content_login(content_client, idp)
@@ -387,7 +394,7 @@ class TestContentLogout:
         await complete_login(client, idp)
         await _complete_content_login(content_client, idp)
         content_id = check_signature(
-            app.state.settings.session_secret, content_client.cookies.get(CONTENT_SESSION_COOKIE)
+            app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
         )
 
         first = await client.post("/-/logout")
@@ -614,8 +621,14 @@ class TestContentLogin:
         assert "httponly" in header
         assert "secure" in header
         assert "samesite=lax" in header
-        assert "path=/;" in header or header.endswith("path=/")
+        # Scoped to the site the visitor was heading to, never wider.
+        assert "path=/fin/rapport/" in header
         assert "domain=" not in header
+        anchor = _set_cookie_header(response, CONTENT_ANCHOR_COOKIE).lower()
+        assert "httponly" in anchor
+        assert "secure" in anchor
+        assert "samesite=lax" in anchor
+        assert "path=/-/" in anchor
         # No admin session and no CSRF cookie: the content origin has no
         # session-borne mutations.
         headers_ = response.headers.get_list("set-cookie")
@@ -674,7 +687,7 @@ class TestContentLogin:
         from starlette.requests import Request
 
         async with make_test_client(app) as client:
-            session = set_content_session_cookie(client, app)
+            session = set_content_session_cookie(client, app, sites=("/fin/rapport/",))
             client.cookies.set(
                 SESSION_COOKIE,
                 sign(app.state.settings.session_secret, session.id),
@@ -685,7 +698,7 @@ class TestContentLogin:
         scope = {
             "type": "http",
             "method": "GET",
-            "path": "/",
+            "path": "/fin/rapport/",
             "headers": [(b"cookie", cookie_header.encode())],
             "app": app,
             "query_string": b"",
@@ -720,9 +733,9 @@ class TestContentLogin:
     async def test_content_session_rotates_on_new_login(self, content_client, app, idp):
         secret = app.state.settings.session_secret
         await _complete_content_login(content_client, idp, return_to="/fin/")
-        first = check_signature(secret, content_client.cookies.get(CONTENT_SESSION_COOKIE))
+        first = check_signature(secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE))
         await _complete_content_login(content_client, idp, return_to="/fin/")
-        second_one = check_signature(secret, content_client.cookies.get(CONTENT_SESSION_COOKIE))
+        second_one = check_signature(secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE))
         assert first != second_one
         assert app.state.session_store.get_session(first) is None
         assert app.state.session_store.get_session(second_one) is not None
@@ -731,10 +744,101 @@ class TestContentLogin:
         # Rotation is per kind: an admin login does not touch the content session.
         await _complete_content_login(content_client, idp, return_to="/fin/")
         content_id = check_signature(
-            app.state.settings.session_secret, content_client.cookies.get(CONTENT_SESSION_COOKIE)
+            app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
         )
         await complete_login(client, idp)
         assert app.state.session_store.get_session(content_id) is not None
+
+
+class TestContentCookiePerSite:
+    """The content session cookie is scoped to one `/{group}/{site}/`, so
+    opening a second site arrives at the login without one. With the anchor
+    session still valid that costs a redirect and no login."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
+
+    async def test_a_second_site_gets_a_cookie_without_touching_the_idp(self, content_client, app, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        first = check_signature(
+            app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
+        )
+        idp.token_requests.clear()
+
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN, params={"returnTo": "/fin/jaarverslag/"}, headers=self.NAVIGATION
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/fin/jaarverslag/"
+        assert idp.token_requests == []
+        header = _set_cookie_header(response, CONTENT_SESSION_COOKIE).lower()
+        assert "path=/fin/jaarverslag/" in header
+        # The same session, one cookie more: nothing rotated, nothing revoked.
+        minted = _cookie_value(response, CONTENT_SESSION_COOKIE)
+        assert check_signature(app.state.settings.session_secret, minted) == first
+        assert app.state.session_store.get_session(first) is not None
+
+    async def test_a_subresource_gets_no_cookie_out_of_the_login(self, content_client, idp):
+        """The mint plus the redirect back would otherwise be a two-hop way
+        for a page on one site to have the browser attach a session to a
+        request aimed at another."""
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN,
+            params={"returnTo": "/fin/jaarverslag/"},
+            headers={"Sec-Fetch-Dest": "empty", "Sec-Fetch-Site": "same-origin"},
+        )
+        assert response.status_code == 302
+        assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+
+    async def test_without_a_session_the_login_is_the_ordinary_one(self, content_client, idp):
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN, params={"returnTo": "/fin/jaarverslag/"}, headers=self.NAVIGATION
+        )
+        assert response.status_code == 302
+        assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+
+    async def test_a_return_to_outside_a_site_mints_nothing(self, content_client, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        response = await content_client.get(PATH_CONTENT_LOGIN, params={"returnTo": "/"}, headers=self.NAVIGATION)
+        assert response.status_code == 302
+        assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+
+    async def test_the_logout_clears_every_site_cookie_it_handed_out(self, content_client, app, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        await content_client.get(
+            PATH_CONTENT_LOGIN, params={"returnTo": "/fin/jaarverslag/"}, headers=self.NAVIGATION
+        )
+        session_id = check_signature(
+            app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
+        )
+
+        response = await content_client.get("/-/logout")
+
+        cleared = {
+            (k.split("=", 1)[0], k.lower().split("path=", 1)[1].split(";", 1)[0])
+            for k in response.headers.get_list("set-cookie")
+            if "max-age=0" in k.lower()
+        }
+        assert (CONTENT_ANCHOR_COOKIE, "/-/") in cleared
+        assert (CONTENT_PRESENCE_COOKIE, "/") in cleared
+        assert (CONTENT_SESSION_COOKIE, "/fin/rapport/") in cleared
+        assert (CONTENT_SESSION_COOKIE, "/fin/jaarverslag/") in cleared
+        assert app.state.session_store.get_session(session_id) is None
+        assert content_client.cookies.get(CONTENT_SESSION_COOKIE) is None
+
+    async def test_a_site_cookie_that_outlives_the_logout_opens_nothing(self, content_client, app, idp):
+        """Whatever a browser does with the deletions, the session behind the
+        id is gone, and a cookie without a session is an anonymous visitor."""
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        token = content_client.cookies.get(CONTENT_SESSION_COOKIE)
+        await content_client.get("/-/logout")
+
+        content_client.cookies.set(
+            CONTENT_SESSION_COOKIE, token, domain="content.plak.example", path="/fin/rapport/"
+        )
+        cookie_header = f"{CONTENT_SESSION_COOKIE}={token}"
+        assert content_session_from_request(_request_with_cookies(app, cookie_header)) is None
 
 
 class TestContentViewerUpsert:

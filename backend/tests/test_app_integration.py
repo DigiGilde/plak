@@ -237,16 +237,20 @@ async def test_ratelimit_counts_content_session_per_viewer_not_per_ip(tmp_path: 
     # Both clients share the ASGI transport's IP; only the session tells them
     # apart.
     async with app.router.lifespan_context(app):
+        # The lexical 301 of a preview root: no DB call either, and unlike
+        # /{group}/{site} it sits inside the site, so the site-scoped content
+        # session cookie comes along and can key the limit.
+        path = "/nldd/website/_preview/pr-1"
         async with _client_for(app) as anonymous:
             for _ in range(2):
-                assert (await anonymous.get("/nldd/website")).status_code == 301
-            assert (await anonymous.get("/nldd/website")).status_code == 429
+                assert (await anonymous.get(path)).status_code == 301
+            assert (await anonymous.get(path)).status_code == 429
 
         async with _client_for(app) as watcher:
-            set_content_session_cookie(watcher, app, sub="kijker-1")
+            set_content_session_cookie(watcher, app, sub="kijker-1", sites=("/nldd/website/",))
             for _ in range(2):
-                assert (await watcher.get("/nldd/website")).status_code == 301
-            resp = await watcher.get("/nldd/website")
+                assert (await watcher.get(path)).status_code == 301
+            resp = await watcher.get(path)
 
     assert resp.status_code == 429
 

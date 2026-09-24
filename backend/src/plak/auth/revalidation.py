@@ -32,7 +32,11 @@ from plak import net
 from plak.audit import vocabulary
 from plak.audit.log import Actor
 from plak.auth.oidc import ClientRejectedError, OidcError, RefreshRejectedError
-from plak.auth.sessions import content_session_from_request, session_from_request
+from plak.auth.sessions import (
+    content_anchor_session_from_request,
+    content_session_from_request,
+    session_from_request,
+)
 from plak.models.audit import ActorKind
 
 if TYPE_CHECKING:
@@ -108,7 +112,12 @@ async def revalidate_sessions(request: Request) -> None:
     if settings.idp_recheck_seconds <= 0:
         return
     interval = timedelta(seconds=settings.idp_recheck_seconds)
-    for session in (session_from_request(request), content_session_from_request(request)):
+    # The anchor as well: on the paths under `/-/` it is the only content
+    # cookie there is, and the login hands out a site cookie from it.
+    for session in (
+        session_from_request(request),
+        content_session_from_request(request) or content_anchor_session_from_request(request),
+    ):
         if session is not None:
             await _revalidate(request, session, interval)
 

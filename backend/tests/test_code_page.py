@@ -350,7 +350,7 @@ class TestTheCodePageBeatsTheLoginRedirect:
         self, client, environment, invitees
     ):
         await _set_access(environment, AccessBase.NOBODY, invitees=invitees)
-        set_content_session_cookie(client, environment.app, sub="buitenstaander")
+        set_content_session_cookie(client, environment.app, sub="buitenstaander", sites=("/aurora/geheim/",))
         response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
         assert _is_code_page(response)
 
@@ -358,7 +358,9 @@ class TestTheCodePageBeatsTheLoginRedirect:
         """A session on base sso: the allow comes first and the selector never
         reaches the code page."""
         await _set_access(environment, AccessBase.SSO)
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/geheim/",)
+        )
         response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
         assert response.status_code == 200
         assert response.content == SECRET_INDEX
