@@ -14,6 +14,7 @@ function site(slug: string, title: string): Site {
     title,
     access: { base: 'public', keys: false, invitees: false },
     externalSources: false,
+    sandbox: true,
     liveVersionId: null,
     createdBy: 'dev-beheerder',
     hasLiveVersion: false,

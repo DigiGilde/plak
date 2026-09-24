@@ -75,6 +75,7 @@ X-Accel path and no nginx logic.
 |---|---|
 | Content CSP (§5.7 regime) on all content routes | implemented: `serving/response.py` (`CONTENT_CSP`, on the neutral 404 too), `backend/tests/test_serving.py` |
 | External sources per site (on by default) | implemented: `sites.external_sources`, `serving/response.py` (`CONTENT_CSP_EXTERNAL`), `api/admin.py` (`PUT /sites/{group}/{site}/external-sources`, site role admin, CSRF, audit action `site_external_sources`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "External sources" below |
+| Shielding from other sites per site (on by default) | implemented: `sites.sandbox`, `serving/response.py` (`SANDBOX`, `CONTENT_CSP_SANDBOX`), `api/admin.py` (`PUT /sites/{group}/{site}/sandbox`, site role admin, CSRF, audit action `site_sandbox`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "Shielding from other sites" below |
 | Admin CSP (§9 regime, stricter) on everything on the admin host | implemented: the app serves the SPA itself with this CSP (`platform/spa.py`, `backend/tests/test_spa.py`), and HTML on the admin host that carries no CSP of its own gets the same regime from `security_headers.py`. The regime follows the host, not the path: a path rule would make a refusal on the content host distinguishable from an ordinary neutral 404. `/-/api/docs` does carry a CSP of its own (`DOCS_CSP` in `api/docs.py`): identical, apart from `style-src`, which allows `'unsafe-inline'` because Swagger UI puts style attributes on its elements. `script-src` stays `'self'`; the page has no inline script, the Swagger bootstrap sits in `docs-init.js`; JSON answers only get `frame-ancestors 'none'` (`backend/tests/test_security_headers.py`) |
 | HSTS (includeSubDomains) | implemented: app middleware `security_headers.py`, only with an https `PLAK_BASE_URL`, `max-age=31536000; includeSubDomains`; preload deliberately not |
 | `Permissions-Policy` | implemented: `camera=(), microphone=(), geolocation=()` on every answer |
@@ -155,6 +156,59 @@ that are sandboxed.
 Whoever cannot accept that turns the switch off per site and bundles the
 library into the dist; for confidential pages that is the advice, in those
 words, in the interface.
+
+### Shielding from other sites
+
+Every site of every group is served from one hostname, and published content
+may run its own JavaScript. Without a countermeasure the pages of site A are
+same-origin with the pages of site B: a script on A can fetch B's paths on the
+visitor's authority and read the answer, open B in a window and read the
+document, or overwrite the cookies of the shared origin. That was reproduced
+end to end, not derived on paper. Giving every site its own origin is not
+available to this project, so the equivalent has to come out of the response.
+
+The content CSP therefore carries, per site and on by default
+(`sites.sandbox`, server default true):
+
+```
+sandbox allow-scripts allow-forms allow-popups
+```
+
+The load-bearing part is what is *not* in that list: without `allow-same-origin`
+the browser gives the document an opaque origin. It is then same-origin with
+nothing at all, so it can read no other document on this hostname, its own
+requests carry no cookies, and it can write none. Scripts, forms and popups
+stay allowed, so an ordinary page keeps working.
+
+Verified in a browser against the dev stack, with and without the directive.
+With the sandbox the page's own stylesheet, script and image load normally
+(they are ordinary subresource loads, which the sandbox does not touch),
+`window.origin` reads `null`, `localStorage`, `sessionStorage` and
+`document.cookie` throw a `SecurityError`, a `fetch` of another site's path
+fails instead of returning that site's HTML, and a window opened on another
+site's path cannot be read by the opener. Without it, the same page reads the
+other site's page in full.
+
+The price is real and falls on the publisher: no `localStorage`, no
+`sessionStorage`, no cookies, and no same-origin `fetch` of the site's own
+files either. A site that stores anything in the browser stops working until
+its owner turns the shielding off, which is why the switch and its explanation
+sit next to the external-sources switch on the site's access screen, in the
+words a publisher uses ("een onthouden voorkeur, een half ingevuld formulier").
+
+What this does and does not buy, stated plainly. It protects the visitors of
+*other* sites against this one: content published here cannot reach across to
+what that visitor may see elsewhere on the hostname. It is per site, so a site
+whose owner turns the shielding off is back in the shared-origin situation, for
+its own visitors and towards every other site, and the platform as a whole is
+not isolated by this. It is a default that most sites can keep, not a boundary
+the platform can enforce, and it does not replace the access gate: a page that
+is refused is still refused.
+
+The same two exceptions as for external sources apply. The neutral 404 keeps
+the plain `CONTENT_CSP` whatever a site sets, because it has to stay
+byte-identical across every cause of refusal. The code page for a secret link
+keeps it too: it is a page of the platform itself.
 
 ## Ingest and storage
 

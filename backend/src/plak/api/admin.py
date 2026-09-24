@@ -335,6 +335,23 @@ class ExternalSourcesBody(ApiModel):
     )
 
 
+class SandboxBody(ApiModel):
+    """Of de content van deze site afgeschermd wordt van de andere sites."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"sandbox": True}]})
+
+    sandbox: bool = Field(
+        description=(
+            "`true` (de standaard) serveert de content met een CSP-sandbox zonder "
+            "`allow-same-origin`, waardoor de pagina een eigen, lege herkomst krijgt: hij kan "
+            "geen enkele andere site op deze hostnaam lezen, krijgt geen cookies mee en kan "
+            "niets in de browser bewaren. Eigen stijlen, scripts, afbeeldingen en lettertypen "
+            "laden gewoon. `false` zet de pagina terug op de gedeelde herkomst, nodig voor een "
+            "site die `localStorage`, `sessionStorage` of een cookie gebruikt."
+        )
+    )
+
+
 class PreviewAccessBody(ApiModel):
     """Een afwijkende toegang voor een preview, of `null` om die af te zetten."""
 
@@ -630,6 +647,13 @@ class SiteOut(ApiModel):
         description=(
             "Of de content van deze site scripts, stijlen en lettertypen van een vaste lijst "
             "externe hosts mag laden. Standaard `true`; uitzetten is een extra beperking."
+        )
+    )
+    sandbox: bool = Field(
+        description=(
+            "Of de content van deze site afgeschermd wordt van de andere sites op dezelfde "
+            "hostnaam. Standaard `true`; uitzetten is nodig voor een site die iets in de "
+            "browser bewaart."
         )
     )
     live_version_id: uuid.UUID | None = Field(
@@ -1337,6 +1361,7 @@ def _site_json(
         title=site.title,
         access=AccessOut(base=site.access_base, keys=site.access_keys, invitees=site.access_invitees),
         external_sources=site.external_sources,
+        sandbox=site.sandbox,
         live_version_id=site.live_version_id,
         created_by=str(site.created_by) if site.created_by else "",
         has_live_version=site.live_version_id is not None,
@@ -2624,6 +2649,45 @@ def make_admin_router() -> APIRouter:
             member,
             "site_external_sources",
             {"group": group_slug, "site": site_slug, "external_sources": body.external_sources},
+        )
+        return (await _sites_json(db, group, [site]))[0]
+
+    @router.put(
+        "/sites/{group_slug}/{site_slug}/sandbox",
+        tags=[TAG_SITES],
+        summary="Afscherming van andere sites aan- of uitzetten",
+        response_description="De site met zijn nieuwe instelling.",
+        description=(
+            "Alle sites delen een hostnaam. Staat deze afscherming aan, de standaard, dan wordt "
+            "de content geserveerd met een CSP-sandbox zonder `allow-same-origin`: de pagina "
+            "krijgt een eigen, lege herkomst en kan geen enkele andere site op die hostnaam "
+            "lezen, krijgt geen cookies mee en kan niets in de browser bewaren. Eigen stijlen, "
+            "scripts, afbeeldingen en lettertypen laden gewoon. Uitzetten is nodig voor een site "
+            "die `localStorage`, `sessionStorage` of een cookie gebruikt, en zet die site terug "
+            "op de herkomst die hij met alle andere sites deelt. De wijziging geldt onmiddellijk "
+            "voor elke volgende aanvraag van de content, voor de live site, previews en "
+            "versieweergaven.\n\n"
+            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+        ),
+        responses=_errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE),
+    )
+    async def set_sandbox(
+        request: Request,
+        group_slug: str,
+        site_slug: str,
+        body: SandboxBody,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+    ) -> SiteOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        site.sandbox = body.sandbox
+        await db.commit()
+        await _audit(
+            request,
+            member,
+            "site_sandbox",
+            {"group": group_slug, "site": site_slug, "sandbox": body.sandbox},
         )
         return (await _sites_json(db, group, [site]))[0]
 

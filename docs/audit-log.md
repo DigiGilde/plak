@@ -108,7 +108,7 @@ who attempted it, and more personal data adds little for investigation.
 | `group_create`, `group_delete`, `group_default_visibility` | `allowed` |
 | `group_member_add`, `group_member_remove`, `group_member_role` | `allowed` |
 | `site_create`, `site_delete`, `site_visibility`, `version_set_live` | `allowed` |
-| `site_external_sources` | `allowed` |
+| `site_external_sources`, `site_sandbox` | `allowed` |
 | `site_member_add`, `site_member_remove`, `site_member_role` | `allowed` |
 | `preview_visibility` | `allowed` |
 | `invitee_add`, `invitee_remove` | `allowed` |
@@ -127,6 +127,12 @@ on unlinking only group and site.
 toestaan": `refs.external_sources` is the new state (`true` or `false`),
 alongside group and site. The toggle is on by default; a row with `false`
 therefore means someone deliberately turned it off.
+
+`site_sandbox` is about the site toggle "Afschermen van andere sites"
+(shield from other sites): `refs.sandbox` is the new state (`true` or
+`false`), alongside group and site. The toggle is on by default, so a row with
+`false` means someone deliberately gave up the shielding, normally because
+their site needs browser storage.
 
 `group_default_visibility`, `site_visibility` and `preview_visibility` carry
 no single level, but the three fields access is made of: `refs.base`

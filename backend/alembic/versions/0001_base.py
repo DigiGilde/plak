@@ -273,6 +273,7 @@ def upgrade() -> None:
         sa.Column("access_keys", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("access_invitees", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("external_sources", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column("sandbox", sa.Boolean(), nullable=False, server_default=sa.true()),
         # The FK to versions.id follows below, after creating the versions table
         # (circular dependency sites <-> versions).
         sa.Column("live_version_id", postgresql.UUID(as_uuid=True), nullable=True),

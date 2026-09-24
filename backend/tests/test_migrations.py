@@ -391,6 +391,17 @@ async def test_external_sources_defaults_to_on(db_connection: asyncpg.Connection
     ) is True
 
 
+async def test_sandbox_defaults_to_on(db_connection: asyncpg.Connection) -> None:
+    """The safe value is the one a row gets for free: a site that never names
+    the column is served with its own origin, and the SPA switch is what gives
+    that up."""
+    group_id = await _make_group(db_connection)
+    site_id = await _make_site(db_connection, group_id)
+    assert await db_connection.fetchval(
+        "SELECT sandbox FROM sites WHERE id = $1", site_id
+    ) is True
+
+
 async def test_access_base_enum_refuses_unknown_value(db_connection: asyncpg.Connection) -> None:
     group_id = uuid.uuid4()
     with pytest.raises(asyncpg.PostgresError):

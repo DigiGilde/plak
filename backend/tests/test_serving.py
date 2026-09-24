@@ -56,6 +56,10 @@ EXTERNAL_CSP = (
     "object-src 'none'"
 )
 
+SANDBOX_DIRECTIVE = "; sandbox allow-scripts allow-forms allow-popups"
+
+SANDBOX_CSP = FULL_CSP + SANDBOX_DIRECTIVE
+
 SITE_INDEX = b"<h1>site</h1>"
 SITE_404 = b"<h1>site-404</h1>"
 PREVIEW_INDEX = b"<h1>preview</h1>"
@@ -88,6 +92,7 @@ class World:
     key_plain: str
     key_id: uuid.UUID
     external_live_id: uuid.UUID
+    sandboxed_live_id: uuid.UUID
 
 
 @dataclass
@@ -120,15 +125,16 @@ async def _seed(factory, store: ContentStore) -> World:
         await db.flush()
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
 
-        # External sources are on by default, so the sites that must show
-        # the strict CSP turn it off here; `extern` leaves the default as
-        # is.
+        # Both content switches are on by default, so the sites that must show
+        # the strict CSP turn them off here; `extern` and `afgeschermd` each
+        # leave one of them at its default.
         site = Site(
             group_id=group.id,
             slug="site",
             title="Site",
             access_base=AccessBase.PUBLIC,
             external_sources=False,
+            sandbox=False,
         )
         secret = Site(
             group_id=group.id,
@@ -137,6 +143,7 @@ async def _seed(factory, store: ContentStore) -> World:
             access_base=AccessBase.NOBODY,
             access_keys=True,
             external_sources=False,
+            sandbox=False,
         )
         internal = Site(
             group_id=group.id,
@@ -144,6 +151,7 @@ async def _seed(factory, store: ContentStore) -> World:
             title="Intern",
             access_base=AccessBase.SSO,
             external_sources=False,
+            sandbox=False,
         )
         empty = Site(
             group_id=group.id,
@@ -151,6 +159,7 @@ async def _seed(factory, store: ContentStore) -> World:
             title="Leeg",
             access_base=AccessBase.PUBLIC,
             external_sources=False,
+            sandbox=False,
         )
         without_404 = Site(
             group_id=group.id,
@@ -158,9 +167,23 @@ async def _seed(factory, store: ContentStore) -> World:
             title="Zonder",
             access_base=AccessBase.PUBLIC,
             external_sources=False,
+            sandbox=False,
         )
-        external = Site(group_id=group.id, slug="extern", title="Extern", access_base=AccessBase.PUBLIC)
-        db.add_all([site, secret, internal, empty, without_404, external])
+        external = Site(
+            group_id=group.id,
+            slug="extern",
+            title="Extern",
+            access_base=AccessBase.PUBLIC,
+            sandbox=False,
+        )
+        sandboxed = Site(
+            group_id=group.id,
+            slug="afgeschermd",
+            title="Afgeschermd",
+            access_base=AccessBase.PUBLIC,
+            external_sources=False,
+        )
+        db.add_all([site, secret, internal, empty, without_404, external, sandboxed])
         await db.flush()
 
         def new_version(site: Site, files: dict[str, bytes], target=VersionTarget.LIVE) -> Version:
@@ -197,6 +220,12 @@ async def _seed(factory, store: ContentStore) -> World:
         )
         without_404_live = new_version(without_404, {"index.html": b"<h1>kaal</h1>"})
         external_live = new_version(external, {"index.html": b"<h1>extern</h1>", "stijl.css": b"body{}"})
+        sandboxed_live = new_version(
+            sandboxed, {"index.html": b"<h1>afgeschermd</h1>", "stijl.css": b"body{}"}
+        )
+        sandboxed_preview = new_version(
+            sandboxed, {"index.html": b"<h1>afgeschermd-preview</h1>"}, target=VersionTarget.PREVIEW
+        )
         external_preview = new_version(
             external, {"index.html": b"<h1>extern-preview</h1>"}, target=VersionTarget.PREVIEW
         )
@@ -210,6 +239,8 @@ async def _seed(factory, store: ContentStore) -> World:
                 without_404_live,
                 external_live,
                 external_preview,
+                sandboxed_live,
+                sandboxed_preview,
             ]
         )
         await db.flush()
@@ -219,9 +250,15 @@ async def _seed(factory, store: ContentStore) -> World:
         internal.live_version_id = internal_live.id
         without_404.live_version_id = without_404_live.id
         external.live_version_id = external_live.id
+        sandboxed.live_version_id = sandboxed_live.id
 
         db.add(Preview(site_id=site.id, ref="pr-42", version_id=preview_version.id))
         db.add(Preview(site_id=external.id, ref="pr-extern", version_id=external_preview.id))
+        db.add(
+            Preview(
+                site_id=sandboxed.id, ref="pr-afgeschermd", version_id=sandboxed_preview.id
+            )
+        )
         db.add(
             Preview(
                 site_id=site.id,
@@ -243,6 +280,7 @@ async def _seed(factory, store: ContentStore) -> World:
             key_plain=plain,
             key_id=key.id,
             external_live_id=external_live.id,
+            sandboxed_live_id=sandboxed_live.id,
         )
         await db.commit()
         return world
@@ -683,6 +721,51 @@ class TestExternalSources:
         """The 404 stays byte-identical whatever a site allows; it may not
         become a way to tell which site a path belonged to."""
         response = await client.get("/aurora/extern/bestaat-niet/")
+        assert response.status_code == 404
+        assert response.headers["content-security-policy"] == FULL_CSP
+
+
+class TestSandbox:
+    """The per-site shielding: on by default, and it adds the sandbox directive
+    to every response that carries the content CSP."""
+
+    async def test_a_site_that_switched_it_off_gets_the_policy_without_sandbox(self, client):
+        response = await client.get("/aurora/site/")
+        assert "sandbox" not in response.headers["content-security-policy"]
+
+    async def test_live_page_and_asset_get_the_sandbox_by_default(self, client):
+        for path in ("/aurora/afgeschermd/", "/aurora/afgeschermd/stijl.css"):
+            response = await client.get(path)
+            assert response.status_code == 200, path
+            assert response.headers["content-security-policy"] == SANDBOX_CSP, path
+
+    async def test_preview_gets_the_sandbox(self, client):
+        response = await client.get("/aurora/afgeschermd/_preview/pr-afgeschermd/")
+        assert response.status_code == 200
+        assert response.headers["content-security-policy"] == SANDBOX_CSP
+
+    async def test_version_view_gets_the_sandbox(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="lid-actief")
+        response = await client.get(
+            f"/aurora/afgeschermd/_version/{environment.world.sandboxed_live_id}/"
+        )
+        assert response.status_code == 200
+        assert response.headers["content-security-policy"] == SANDBOX_CSP
+
+    async def test_it_rides_along_with_external_sources(self, client, environment):
+        """The two switches are independent, so a site with both on has to get
+        both additions rather than whichever the code looked at last."""
+        async with environment.factory() as db:
+            site = (await db.scalars(select(Site).where(Site.slug == "afgeschermd"))).one()
+            site.external_sources = True
+            await db.commit()
+        response = await client.get("/aurora/afgeschermd/")
+        assert response.headers["content-security-policy"] == EXTERNAL_CSP + SANDBOX_DIRECTIVE
+
+    async def test_neutral_404_keeps_the_policy_without_sandbox(self, client):
+        """The 404 stays byte-identical whatever a site sets; it may not become
+        a way to tell which site a path belonged to."""
+        response = await client.get("/aurora/afgeschermd/bestaat-niet/")
         assert response.status_code == 404
         assert response.headers["content-security-policy"] == FULL_CSP
 

@@ -36,6 +36,7 @@ const site: Site = {
   title: 'Mijn site',
   access: { base: 'public', keys: false, invitees: false },
   externalSources: false,
+  sandbox: true,
   liveVersionId: null,
   createdBy: 'dev-beheerder',
   hasLiveVersion: false,

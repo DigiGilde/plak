@@ -253,4 +253,14 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.access.external.on': 'External sources are on.',
   'publish.access.external.off': 'External sources are off.',
   'publish.access.external.failed': 'External sources not saved',
+
+  // -- Access tab: shielding from other sites ----------------------------------------
+  'publish.access.sandbox.heading': 'Shielding from other sites',
+  'publish.access.sandbox.intro':
+    'On unless you turn it off. All sites live at the same web address. While the shielding is on, the code on your pages can see nothing of the other sites at that address, and that same code can store nothing in the visitor\'s browser either: a remembered preference, a half-filled form, anything that goes through localStorage, sessionStorage or a cookie will not work. Your own styles, scripts, images and fonts load as usual. Turn the shielding off and your site can store in the browser again, but it also shares the web address with every other site once more: the code on your pages can then reach everything the visitor is allowed to see there. Only do that for a site whose content you trust.',
+  'publish.access.sandbox.label': 'Shield from other sites',
+  'publish.access.sandbox.saved': 'Shielding saved',
+  'publish.access.sandbox.on': 'Shielding is on.',
+  'publish.access.sandbox.off': 'Shielding is off.',
+  'publish.access.sandbox.failed': 'Shielding not saved',
 };

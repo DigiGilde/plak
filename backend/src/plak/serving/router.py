@@ -273,13 +273,18 @@ async def _serve(
         storage_ref: str | None = None
         key_cookie: str | None = None
         external_sources = False
+        sandbox = False
         if decision.kind is DecisionKind.ALLOW:
             version = await db.get(Version, decision.version_id)
             storage_ref = version.storage_ref if version is not None else None
             if version is not None:
-                external_sources = bool(
-                    await db.scalar(select(Site.external_sources).where(Site.id == version.site_id))
-                )
+                row = (
+                    await db.execute(
+                        select(Site.external_sources, Site.sandbox).where(Site.id == version.site_id)
+                    )
+                ).one_or_none()
+                if row is not None:
+                    external_sources, sandbox = bool(row.external_sources), bool(row.sandbox)
             key_cookie = await _key_cookie_value(request, db, group, site, decision, visitor)
 
     if code_selector is not None:
@@ -369,6 +374,7 @@ async def _serve(
             version_view=version_view,
             noindex=noindex,
             external_sources=external_sources,
+            sandbox=sandbox,
         )
 
     path_404 = resolution.find_404_page(store, storage_ref)
@@ -383,6 +389,7 @@ async def _serve(
         version_view=version_view,
         noindex=noindex,
         external_sources=external_sources,
+        sandbox=sandbox,
         status_code=404,
     )
 
