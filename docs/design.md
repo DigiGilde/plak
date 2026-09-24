@@ -268,17 +268,22 @@ more). Unknown is `application/octet-stream`. Every content response carries
 ### 5.4 ETag and 304
 
 `ETag` is the version id. `If-None-Match` is answered by the application itself
-with a 304, without touching the store; the 304 carries `ETag`,
-`Cache-Control`, `nosniff` and, where it applies, `X-Robots-Tag`. Code:
-`serving/response.py` (`etag_for`, `if_none_match_matches`, `make_304`). Guarded
-by: `test_serving.py`.
+with a 304, after resolution has found a file: a 304 for a path without a file
+would let an intermediary treat a non-existent resource as fresh. The 304
+carries `ETag`, `Cache-Control`, `nosniff` and, where it applies,
+`X-Robots-Tag`. Code: `serving/response.py` (`etag_for`,
+`if_none_match_matches`, `make_304`). Guarded by: `test_serving.py`.
 
 ### 5.5 Cache-Control
 
 HTML gets `no-cache, must-revalidate`, every other asset
-`max-age=31536000, immutable`. The prefix `private, ` is added whenever the
-effective access is not public, and always for a `_version` view. Code:
-`serving/response.py` (`cache_control`). Guarded by: `test_serving.py`.
+`max-age=31536000`, with `immutable` on top for public content only: an asset
+URL is not content-addressed and survives a redeploy, and private content has
+no shared cache to win the extra reach back from. The prefix `private, ` is
+added whenever the effective access is not public, and always for a `_version`
+view. The login redirect and the directory 301 carry `no-store`, because a 301
+is heuristically cacheable. Code: `serving/response.py` (`cache_control`),
+`serving/router.py`. Guarded by: `test_serving.py`.
 
 ### 5.6 The neutral 404
 
@@ -341,6 +346,39 @@ disallows nothing.
 Code: `serving/router.py`, `platform/spa.py` (`spa_headers`),
 `platform/pages.py` (`ROBOTS_TXT_ADMIN`, `ROBOTS_TXT_CONTENT`). Guarded by:
 `test_serving.py`, `test_spa.py`, `test_front_page.py`.
+
+### 5.10 Subresources of another site
+
+Every site of every group is served from one hostname under a path prefix, the
+content session cookie has `Path=/` and uploaded content may run its own
+JavaScript. So a page of site A can `fetch()` site B and the browser attaches
+the visitor's credentials; the gate then decides correctly on a visitor who
+does have access. The durable answer is an origin per site. Until then non-public
+content is served to a subresource request only when the request says it comes
+from the same site: `Sec-Fetch-Site: same-origin` plus a `Sec-Fetch-Dest` other
+than `document`, `iframe` or `frame` needs a `Referer` whose path lies inside
+`/{group}/{site}/`. Live, preview and `_version` of one site are one publishing
+team and therefore one boundary.
+
+Two things deliberately fall outside it. A top-level navigation is something
+the visitor does and sees, also from one site to another. And a request without
+`Sec-Fetch-Site` at all (curl, a link checker, an older browser) is served: it
+carries no ambient credentials, the same reasoning as the origin check on
+`/-/code` (§7.4).
+
+This leans on the site's own pages supplying a `Referer`, which is why
+`Referrer-Policy` on a site with secret links is `same-origin` and no longer
+`no-referrer` (§7.2). A refusal is the neutral 404 (§5.6), audited with reason
+`FOREIGN_SUBRESOURCE`.
+
+The check sits before the login redirect, so it decides the same way with a
+session and without one: nobody logs in because of a stylesheet fetch, and a
+302 would tell an anonymous caller that this site exists. It does not sit
+before the neutral 404, which is this answer already; a refusal the gate made
+itself keeps the reason that really refused (`UNKNOWN_SITE` and the rest).
+
+Code: `serving/router.py` (`_foreign_subresource`). Guarded by:
+`test_serving.py`.
 
 ## 6. Ingest
 
@@ -441,9 +479,12 @@ them (a CHECK on `previews`), and it replaces the site's policy rather than
 merging with it. An expired preview is a neutral 404 at the decision itself; the
 cleanup job is only the safety net.
 
-`Referrer-Policy: no-referrer` hangs on the configuration (`access_keys` is on
+`Referrer-Policy: same-origin` hangs on the configuration (`access_keys` is on
 for this site), not on the way this visitor got in, so the header does not vary
-per visitor; everything else gets `strict-origin-when-cross-origin`.
+per visitor; everything else gets `strict-origin-when-cross-origin`. Both send
+nothing to another origin, and the page URL never carries the verifier: a
+`?key=` is redeemed with a 302 that strips it. Not `no-referrer`, because the
+guard of §5.10 needs a site's own pages to identify themselves.
 
 Code: `access/gate.py` (`decide`, `decide_preview`, `_assess`),
 `access/decision.py`, `serving/response.py`. Guarded by: `test_access_gate.py`

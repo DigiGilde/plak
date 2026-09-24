@@ -49,6 +49,7 @@ the app or was deliberately postponed (base image digests, DPIA, pentest).
 | Expired preview gets the neutral 404 straight away at the access decision itself (not only via the purge job) | implemented: `access/gate.py` (`REASON_PREVIEW_EXPIRED`), `backend/tests/test_access_gate.py` |
 | `_version` views exclusively for active group members, every access audited | implemented: `access/gate.py`, `serving/router.py`, `backend/tests/test_access_gate.py`, `backend/tests/test_serving.py` |
 | Path validation before every access check (traversal, null bytes, backslashes, percent-encoded) | implemented: `serving/resolution.py` (`normalise_rest`), `backend/tests/test_resolution.py` |
+| Non-public content is not served to a subresource request from another site's page on the same origin (one hostname for every site, so the cookies ride along); navigation and clients without `Sec-Fetch-*` stay through. A stopgap while every site shares one origin, see design.md §5.10 | implemented: `serving/router.py` (`_foreign_subresource`), `backend/tests/test_serving.py` |
 
 Serving (§5) is done entirely by the app itself:
 `FileResponse` with Range, ETag/304 and the fixed header set, and the
@@ -317,11 +318,11 @@ site without a live version, an unknown site or group, and a preview. Otherwise
 the page itself would betray which selectors exist. The page names no
 site title and no group name: only that a code is needed, an input field,
 a button and an error line. It carries the same headers as protected content
-(`no-store`, `noindex`, the `CONTENT_CSP`), except for `Referrer-Policy`, which
-is `same-origin` here: under `no-referrer` Chrome anonymises the Origin of the
-form navigation to `Origin: null`, which would cost the origin guard its teeth.
-The page URL carries only the selector, never the verifier, so a same-origin
-`Referer` to our own POST target leaks nothing.
+(`no-store`, `noindex`, the `CONTENT_CSP`, `Referrer-Policy: same-origin`).
+That policy is not `no-referrer`, because under `no-referrer` Chrome anonymises
+the Origin of the form navigation to `Origin: null`, which would cost the origin
+guard its teeth. The page URL carries only the selector, never the verifier, so
+a same-origin `Referer` to our own POST target leaks nothing.
 
 The code goes with a POST to `/-/code` (the only POST path on the
 content host), with the selector and the intended path in the body; the path

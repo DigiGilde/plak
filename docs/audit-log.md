@@ -20,7 +20,7 @@ in step.
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
-| `refs` | what it is about: group, site, path, route template, and for a secret link the selector. Never an email address, the secret part of a link, a token or a query string |
+| `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), and for a secret link the selector. Never an email address, the secret part of a link, a token or a query string |
 | `ip_truncated` | IPv4 truncated to /24, IPv6 to /48 |
 | `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
@@ -50,6 +50,24 @@ always stays usable to find someone again, verified email address or not.
 | `content_access` | `login_redirect` | an anonymous visitor was sent to log in |
 
 Public content is never logged.
+
+Every `content_access` row carries `refs.fetch_dest` and `refs.fetch_site`: the
+`Sec-Fetch-Dest` and `Sec-Fetch-Site` the browser sent, or `null` when it sent
+neither. They are fixed tokens from the browser, never a URL and never
+anything about the person, and they are what makes a request made by another
+site's page recognisable afterwards.
+
+Beside them stands `refs.referer_present`: whether a `Referer` came along at
+all, never which one. It is there to tell two refusals apart that otherwise
+read identically. A `FOREIGN_SUBRESOURCE` refusal with a `Referer` is what the
+guard is for, another site's page reaching for this one. The same refusal on a
+`style`, `script`, `image` or `font` destination *without* a `Referer` is
+almost always a site breaking its own assets: its pages suppress the referrer
+themselves (`<meta name="referrer" content="no-referrer">` or a
+`referrerpolicy` attribute), so the guard can no longer see that the request
+comes from the site itself. That is a bug report about a published site, not an
+attack, and the two need to be distinguishable without ever writing down a
+visitor's URL.
 
 A secret link can also be shared without the code: `?key=` then carries only
 the selector and the visitor gets a page that asks for the code. That page
@@ -192,7 +210,8 @@ shown), `KEY_CODE_INVALID` (a wrong code submitted),
 `KEY_CODE_THROTTLED` (more attempts than the limit per selector allows),
 `PATH_INVALID`, `NO_LIVE_VERSION`, `PREVIEW_EXPIRED`,
 `UNKNOWN_GROUP`, `UNKNOWN_SITE`, `UNKNOWN_PREVIEW`, `UNKNOWN_VERSION`,
-`UNKNOWN_STORAGE`.
+`UNKNOWN_STORAGE`, `FOREIGN_SUBRESOURCE` (non-public content asked for as a
+subresource of another site's page, see design.md §5.10).
 
 **Login** (`login`, `refused`): `IDP_ERROR` (the IdP reported an error
 itself), `IDP_UNREACHABLE` (the link with the IdP is not working: metadata,

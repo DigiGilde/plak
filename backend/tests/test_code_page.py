@@ -524,13 +524,13 @@ class TestHandingInTheCode:
         )
         assert _is_neutral_404(response)
 
-    async def test_the_code_page_keeps_its_referrer_while_content_does_not(self, client, environment):
+    async def test_the_code_page_and_the_content_keep_the_same_referrer_policy(self, client, environment):
         page = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
         assert page.headers["referrer-policy"] == "same-origin"
         await self._post(client, environment)
         content = await client.get("/aurora/geheim/")
         assert content.status_code == 200
-        assert content.headers["referrer-policy"] == "no-referrer"
+        assert content.headers["referrer-policy"] == "same-origin"
 
     async def test_a_cross_site_fetch_without_origin_is_the_neutral_404(self, client, environment):
         headers = {"content-type": "application/x-www-form-urlencoded", "sec-fetch-site": "cross-site"}

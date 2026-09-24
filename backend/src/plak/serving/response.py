@@ -111,11 +111,18 @@ def if_none_match_matches(header: str | None, etag: str) -> bool:
 
 
 def cache_control(content_type: str, access: AccessPolicy, *, version_view: bool) -> str:
-    is_html = content_type.startswith("text/html")
-    base = "no-cache, must-revalidate" if is_html else "max-age=31536000, immutable"
-    if version_view or not access.is_public:
-        return f"private, {base}"
-    return base
+    private = version_view or not access.is_public
+    if content_type.startswith("text/html"):
+        base = "no-cache, must-revalidate"
+    elif private:
+        # An asset URL is not content-addressed: `/{group}/{site}/assets/x.css`
+        # survives a redeploy, so `immutable` keeps a new version out of sight
+        # even on a reload. Public content keeps it for the reach a shared
+        # cache gives it; private content has no shared cache to gain from.
+        base = "max-age=31536000"
+    else:
+        base = "max-age=31536000, immutable"
+    return f"private, {base}" if private else base
 
 
 def _base_headers(
@@ -133,9 +140,12 @@ def _base_headers(
         "ETag": etag_for(version_id),
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": content_csp(external_sources=external_sources),
-        # no-referrer wherever a secret link can carry the visitor in,
-        # because the URL itself is then the credential.
-        "Referrer-Policy": "no-referrer" if access.keys else "strict-origin-when-cross-origin",
+        # same-origin wherever a secret link can carry the visitor in: nothing
+        # goes to another origin, and the page URL never holds the verifier
+        # (a `?key=` is redeemed with a 302 that strips it). Not no-referrer,
+        # because the router needs a Referer of its own to tell a site's own
+        # subresources from another site's (see _foreign_subresource).
+        "Referrer-Policy": "same-origin" if access.keys else "strict-origin-when-cross-origin",
     }
     if noindex:
         headers["X-Robots-Tag"] = NOINDEX
