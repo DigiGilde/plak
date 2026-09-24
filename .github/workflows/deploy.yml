@@ -38,7 +38,13 @@ jobs:
 
   # A dependabot PR does not need a preview environment; the gate above
   # still runs over it.
+  #
+  # needs: ci, so an image only gets built (and can only reach a preview or
+  # production) once the tests pass; without this a pull request can deploy
+  # unreviewed, untested code to a preview that inherits production secrets
+  # (see the preview job below).
   bouw:
+    needs: ci
     if: github.event.action != 'closed' && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
@@ -127,7 +133,9 @@ jobs:
   preview:
     if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
-    needs: bouw
+    # bouw already needs: ci, so this is transitively gated too; named
+    # explicitly to match productie's needs: [ci, bouw] below.
+    needs: [ci, bouw]
     permissions:
       contents: read
       pull-requests: write

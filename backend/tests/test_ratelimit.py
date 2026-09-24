@@ -41,6 +41,7 @@ def _make_settings(**overrides: object) -> Settings:
         "session_secret": "s" * 32,
         "audit_pepper": "p" * 32,
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        "environment": "dev",
         "trusted_proxies": "",
         "content_base_url": "https://plak.example",
     }

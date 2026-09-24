@@ -364,10 +364,48 @@ with their `OIDC_*` variables, and the component-wide user-env-vars.
 
 So set component-wide what may be the same in every environment
 (`zadctl env add -c beheer`, without `--deployment`), so that a preview
-inherits it; with `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` that is a
-deliberate choice, because previews and production then share the same values.
-What differs per environment, `PLAK_BASE_URL` and `PLAK_CONTENT_BASE_URL`,
-stays manual work per preview. See §10, question 7.
+inherits it. What differs per environment, `PLAK_BASE_URL` and
+`PLAK_CONTENT_BASE_URL`, stays manual work per preview. See §10, question 7.
+
+**This is a real security gap, not a cosmetic one, for `PLAK_SESSION_SECRET`,
+`PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY`.** Setting those three
+component-wide so a preview inherits them means a preview and production
+share the signing secret, the audit pseudonymisation pepper and the audit
+IP-address key. Anyone with write access to the repository can open a pull
+request, get it deployed as a preview (gated on CI passing as of the `needs:
+ci` change in `deploy.yml`, but not on review), and from that code mint
+session cookies production accepts, and decrypt production's audited IP
+addresses. `PLAK_DB_URL` is shared by design (one ZAD PostgreSQL service, no
+`CREATE ROLE`, see §7) and is a separate, platform-level gap.
+
+The schema itself supports a deployment-scoped value
+(`components[].user-env-vars` written with `zadctl env add --deployment`,
+§5); the gap is that nothing in this repository's CI can set it for a
+preview `zad-actions/deploy` creates on the fly. Checked against
+`RijksICTGilde/zad-actions` `deploy/action.yml` at both the pinned `v2`
+(commit `5ad04045d781ed153ad75625305bf14d57496128`) and the latest release at
+the time of writing, `v4.2.0`: neither version's `deploy` action has an
+input for env-vars, user-env-vars or secrets, only `api-key`, `project-id`,
+`deployment-name`, `component`/`components`, `image`, `clone-from` and the
+PR-comment/health-check/domain options. There is no separate zad-actions
+action for setting environment values either (`deploy`, `cleanup` and
+`scheduled-cleanup` are the only three). So there is no supported,
+automatable way today to give a CI-created preview its own session secret,
+audit pepper or audit IP key.
+
+This needs a decision from the user or the platform team, not a code change
+here:
+- ask the platform team to add an env-vars/secrets input to
+  `zad-actions/deploy`, or a way to seed deployment-scoped user-env-vars
+  before or during preview creation; or
+- accept a manual step (an administrator runs `zadctl env add --deployment
+  pr<nummer>` for every preview before it is usable), which removes the
+  self-service nature of PR previews; or
+- turn off preview deployments on ZAD entirely until one of the above
+  exists.
+Until one of these is chosen, previews and production sharing these three
+secrets is a known, accepted risk for anyone with write access to this
+repository, not an oversight.
 
 ## 9. Storage sizing, and MinIO as the next step
 
@@ -435,20 +473,41 @@ is not there:
    the certificate budget per platform domain), or deliberately accept
    previews on one host. For now: not solved, previews stay on the cluster
    address.
-7. **How does a preview get its settings?** A clone does not copy the
-   `components` block of the source, so a preview starts without env-vars and
-   without deployment user-env-vars (§8); without `PLAK_CONTENT_ROOT`,
-   `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` the pod does not even start.
-   What is the same in every environment can go component-wide, and a
-   component-wide user-env-var with `${PUBLIC_HOST}` is filled in by the
-   platform per deployment with its own web address (including scheme). That
-   leaves `PLAK_CONTENT_BASE_URL`, which on one host coincides with
-   `PLAK_BASE_URL` (question 6). The deploy action can set neither of them.
-   For now: manually per preview, and so again with every new PR.
+7. **How does a preview get its settings, and can it get its own
+   `PLAK_SESSION_SECRET`/`PLAK_AUDIT_PEPPER`/`PLAK_AUDIT_IP_KEY`?** A clone
+   does not copy the `components` block of the source, so a preview starts
+   without env-vars and without deployment user-env-vars (§8); without
+   `PLAK_CONTENT_ROOT`, `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` the pod
+   does not even start. What is the same in every environment can go
+   component-wide, and a component-wide user-env-var with `${PUBLIC_HOST}`
+   is filled in by the platform per deployment with its own web address
+   (including scheme). That leaves `PLAK_CONTENT_BASE_URL`, which on one
+   host coincides with `PLAK_BASE_URL` (question 6). Checked `deploy/action.yml`
+   of `RijksICTGilde/zad-actions` at `v2` and at `v4.2.0` (the latest release
+   as of writing): neither has an input for env-vars, user-env-vars or
+   secrets, and there is no separate action for setting them either. So the
+   deploy action can set none of `PLAK_CONTENT_BASE_URL`,
+   `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` or `PLAK_AUDIT_IP_KEY` per
+   preview, and component-wide is currently the only way a preview boots at
+   all. That means preview and production share the signing secret, the
+   audit pepper and the audit IP key, which is a security gap (see §8) that
+   needs either a capability from the platform team or a deliberate
+   trade-off from us (manual per-preview secrets, or no preview
+   deployments), not a code fix. For now: unresolved, previews and
+   production share these secrets.
 8. **Is there an acceptance environment of SSO Rijk or of the `rig-platform`
    realm?** None was found; the sandbox authenticates against the production
    realm. For now: the mock OIDC in the dev stack, plus the production realm
    for the real check.
+9. **Can a preview get its own PostgreSQL database instead of sharing
+   production's?** Not investigated here: the `postgresql-database` service
+   delivers one database per component (§7), a clone does not copy the
+   `postgresql-database` service block if that ever changed to be
+   per-environment, and provisioning a second database (or a second
+   `postgresql-database` service instance) for every PR preview is a
+   platform-capacity and schema question, not something to guess at from
+   this repository. Flagged for the platform team; see also question 7's
+   secret-sharing gap, which is the higher-severity issue for now.
 
 ## See also
 

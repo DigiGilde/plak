@@ -32,6 +32,7 @@ def _settings(**overrides) -> Settings:
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        "environment": "dev",
         "content_base_url": "https://plak.example",
     }
     base.update(overrides)

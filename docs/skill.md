@@ -32,8 +32,12 @@ the site you publish, not for this repository.
 The skill needs the `plak` CLI on your PATH:
 
 ```bash
-uv tool install "git+https://github.com/minbzk/plak#subdirectory=cli"
+uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"
 ```
+
+`<commit-sha>` is a placeholder to fill in yourself; a bare install without a
+ref tracks `main` and is not how you should install this. See `README.md` for
+why, and for what to pin it to until a tagged release exists.
 
 ## What the skill does
 

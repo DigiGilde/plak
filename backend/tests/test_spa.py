@@ -381,6 +381,7 @@ def _settings(tmp_path: Path, spa_path: Path) -> Settings:
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         base_url=ADMIN_URL,
         content_base_url=CONTENT_URL,
+        environment="dev",
         spa_path=spa_path,
     )
 

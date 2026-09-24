@@ -50,6 +50,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        "environment": "dev",
         "base_url": ADMIN,
         "content_base_url": CONTENT,
         "spa_path": tmp_path / "dist",

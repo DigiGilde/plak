@@ -121,7 +121,12 @@ class Settings(BaseSettings):
     # once nothing left needs revealing from before the rotation.
     audit_ip_key_previous: str | None = None
     audit_lookup_daily_limit: int = Field(default=25, ge=1, le=1000)
-    environment: str = "dev"
+    # Fails closed: a deployment that forgets to set PLAK_ENVIRONMENT refuses
+    # to start (see _production_requirements below) instead of silently
+    # skipping every production validator (trusted proxies, OIDC issuer
+    # requirements, base url, https). dev/compose.yml sets PLAK_ENVIRONMENT=
+    # dev explicitly for local development.
+    environment: str = "productie"
     base_url: str | None = None
     # Two origins, always: the beheer host and the content host are
     # separate origins, and the app derives the content host from this URL.

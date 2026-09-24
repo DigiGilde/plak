@@ -129,7 +129,9 @@ jobs:
         uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
           enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          cache-dependency-glob: |
+            backend/uv.lock
+            cli/uv.lock
 
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
@@ -143,6 +145,24 @@ jobs:
           REQUIREMENTS: ${{ runner.temp }}/requirements.txt
         run: |
           uv export --directory backend --frozen --no-emit-project --quiet \
+            --format requirements-txt -o "$REQUIREMENTS"
+          flags=()
+          while IFS= read -r id; do
+            if [ -n "$id" ]; then
+              flags+=(--ignore-vuln "$id")
+            fi
+          done < <(uv run --script .github/scripts/vulnerabilities.py ids)
+          uvx pip-audit@2.10.1 --requirement "$REQUIREMENTS" --disable-pip \
+            --progress-spinner off ${flags[@]+"${flags[@]}"}
+
+      # cli/ is the one component users install on their own machines
+      # (README.md); it has its own uv project and lockfile, separate from
+      # the backend, so it needs its own export-and-audit step.
+      - name: CLI-afhankelijkheden scannen (pip-audit)
+        env:
+          REQUIREMENTS: ${{ runner.temp }}/cli-requirements.txt
+        run: |
+          uv export --directory cli --frozen --no-emit-project --quiet \
             --format requirements-txt -o "$REQUIREMENTS"
           flags=()
           while IFS= read -r id; do

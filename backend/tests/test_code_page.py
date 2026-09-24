@@ -59,6 +59,7 @@ def make_settings(content_root: Path) -> Settings:
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         base_url=ADMIN_URL,
         content_base_url=BASE_URL,
+        environment="dev",
     )
 
 

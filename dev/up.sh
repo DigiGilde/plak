@@ -83,8 +83,14 @@ POSTGRES_PASSWORD=${postgres_password}
 PLAK_DB_PASSWORD=${app_db_password}
 EOF
 
+    # Percent-encoded for the DSN below: a DSN's password component has to be
+    # URL-encoded (RFC 3986), openssl-generated hex happens not to need it,
+    # but building the DSN by plain interpolation would silently break on a
+    # password with a ':', '@' or '/' in it.
+    app_db_password_urlenc="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${app_db_password}")"
+
     cat > "${APP_ENV}" <<EOF
-PLAK_DB_URL=postgresql+asyncpg://plak:${app_db_password}@postgres:5432/plak
+PLAK_DB_URL=postgresql+asyncpg://plak:${app_db_password_urlenc}@postgres:5432/plak
 PLAK_SESSION_SECRET=${session_secret}
 PLAK_AUDIT_PEPPER=${audit_pepper}
 PLAK_AUDIT_IP_KEY=${audit_ip_key}

@@ -222,6 +222,14 @@ deployments:
         # `zadctl env` (AGE-encrypted in this file as user-env-vars):
         #   PLAK_SESSION_SECRET   at least 32 bytes
         #   PLAK_AUDIT_PEPPER    at least 32 bytes, never rotate without a plan
+        #   PLAK_AUDIT_IP_KEY    base64 of 32 random bytes, see docs/deploying-on-zad.md
+        #
+        # A PR preview cannot get its own copy of these three the way
+        # productie can: the deploy action has no env-vars/secrets input, so
+        # they can currently only be set component-wide, which means a
+        # preview and productie share them. See docs/deploying-on-zad.md,
+        # "Linking CI" and §10 question 7, for why that is a security gap
+        # and not a convenience.
 
 # Only the PVC label that makes the content volume eligible for backup.
 # The scheduling itself is under `deployments[].backup.schedule`.

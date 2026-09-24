@@ -147,9 +147,12 @@ Then do not go on until the terminal shows "Logged in as ...".
    `http://beheer.plak.localhost:8080` too), `127.0.0.0/8` and `[::1]`. Any
    other host without https is refused before anything is sent. If `plak` is
    not there yet, install it with
-   `uv tool install "git+https://github.com/minbzk/plak#subdirectory=cli"`
-   (upgrading: `uv tool upgrade plak`). When you work in a checkout of that
-   repository, `uv run --project cli plak ...` runs it without installing.
+   `uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"`
+   (`<commit-sha>` is a placeholder to fill in; an unpinned install tracks
+   `main` and is not how you should install this. Pinned to a commit until a
+   tagged release exists; upgrading means reinstalling with a newer commit's
+   SHA). When you work in a checkout of that repository, `uv run --project cli
+   plak ...` runs it without installing.
 2. **Look at the build.** Plak does not serve on the root of the host, so the
    build has to know the right base path: `/{group}/{site}/` for live,
    `/{group}/{site}/_preview/{ref}/` for a preview. See `docs/publishing.md`
