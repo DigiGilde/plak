@@ -67,6 +67,14 @@ purge-audit-log:
 verify-audit-log:
     cd backend && uv run python -m plak.audit.chain
 
+# Publiceer de kop van elke auditketen als logregel; vraagt PLAK_DB_URL
+publish-audit-head:
+    cd backend && uv run python -m plak.audit.checkpoint
+
+# Controleer de database tegen een eerder gepubliceerde kopregel (- voor stdin)
+verify-audit-head bestand:
+    cd backend && uv run python -m plak.audit.checkpoint --against {{bestand}}
+
 # Scan de afhankelijkheden zoals de CI-job `vulnerabilities` dat doet
 scan:
     #!/usr/bin/env bash

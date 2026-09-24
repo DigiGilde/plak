@@ -66,3 +66,61 @@ def test_only_trusted_hops_falls_back_to_the_peer() -> None:
 
 def test_without_a_peer_the_address_is_unknown() -> None:
     assert client_ip(_request(None, "203.0.113.9"), _ALL_PRIVATE) == UNKNOWN
+
+
+# --- Whether the derived address can be vouched for -----------------------------------
+
+
+def test_the_peer_itself_is_always_vouched_for() -> None:
+    assert client_ip(_request("198.51.100.5", "203.0.113.9"), _ALL_PRIVATE).vouched
+
+
+def test_the_rightmost_entry_is_vouched_for() -> None:
+    # Appended by the peer, and the peer is the one hop we saw connect.
+    assert client_ip(_request("10.128.0.5", "203.0.113.9, 198.51.100.5"), _ALL_PRIVATE).vouched
+
+
+def test_an_address_reached_over_a_skipped_hop_is_not_vouched_for() -> None:
+    """The client sits on a private address, so the address the router appended
+    is itself "trusted" and skipped, and what wins is what the client wrote."""
+    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ALL_PRIVATE)
+    assert derived == "203.0.113.9"
+    assert not derived.vouched
+
+
+def test_the_same_chain_is_vouched_for_when_only_the_routers_are_trusted() -> None:
+    """The flag is about the width of the list, not about the request: name the
+    routers' own range and the client's value no longer wins at all."""
+    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ROUTERS_ONLY)
+    assert derived == "10.42.0.7"
+    assert derived.vouched
+
+
+def test_a_private_address_from_the_rightmost_entry_is_vouched_for() -> None:
+    """Not "the value is private" but "we had to skip to reach it": a private
+    address the router itself appended is an observation like any other."""
+    derived = client_ip(_request("10.128.0.5", "10.42.0.7"), _ROUTERS_ONLY)
+    assert derived == "10.42.0.7"
+    assert derived.vouched
+
+
+def test_falling_back_to_the_peer_stays_vouched_for() -> None:
+    """Running out of untrusted hops is not the same as being unable to tell:
+    what we then record is the peer, which we saw ourselves."""
+    assert client_ip(_request("10.128.0.5", "10.0.0.2, 10.0.0.3"), _ALL_PRIVATE).vouched
+    assert client_ip(_request("10.128.0.5", "not-an-ip, 10.42.0.7"), _ALL_PRIVATE).vouched
+    assert client_ip(_request("10.128.0.5"), _ALL_PRIVATE).vouched
+
+
+def test_empty_entries_do_not_count_as_a_skipped_hop() -> None:
+    derived = client_ip(_request("10.128.0.5", " , 198.51.100.5"), _ALL_PRIVATE)
+    assert derived.vouched
+
+
+def test_the_derived_address_is_a_plain_string_everywhere_else() -> None:
+    # It is handed to truncation, encryption and the rate limit key as a str;
+    # a value that no longer behaves like one would break all three.
+    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ALL_PRIVATE)
+    assert isinstance(derived, str)
+    assert f"ip:{derived}" == "ip:203.0.113.9"
+    assert truncate_ip(derived) == "203.0.113.0/24"

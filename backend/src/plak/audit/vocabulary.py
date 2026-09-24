@@ -137,6 +137,11 @@ IDP_SESSION_REASONS: Final = frozenset(
 # refs["via"] on a deploy or preview teardown by a member through `plak login`.
 VIA_CLI: Final = "cli"
 
+# refs["ip_unvouched"], set to true on a row whose IP address was derived over
+# a skipped X-Forwarded-For entry (net.py, ClientAddress). Absent means the
+# address was observed, so a reader may never take the absence for "unknown".
+IP_UNVOUCHED: Final = "ip_unvouched"
+
 # Why a CI ID token was refused on a deploy or preview teardown.
 CI_ISSUER_UNKNOWN: Final = "CI_ISSUER_UNKNOWN"
 CI_TOKEN_INVALID: Final = "CI_TOKEN_INVALID"  # noqa: S105 - a reason code, not a secret

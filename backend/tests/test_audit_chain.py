@@ -19,7 +19,7 @@ import pytest_asyncio
 from helpers_audit import insert_aged_audit_row
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from plak.audit import chain
+from plak.audit import chain, checkpoint
 from plak.audit.log import SYSTEM, AuditLog
 from plak.db import make_session_factory
 
@@ -227,6 +227,79 @@ async def test_only_the_first_break_of_a_chain_is_reported(
 
     breaks = await chain.verify(migrated_dsn)
     assert [(one.shard, one.seq) for one in breaks] == [(shard, 2)]
+
+
+async def test_a_purged_front_is_not_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    """What the retention purge leaves behind on every environment older than
+    ninety days: a chain that no longer starts at position 1. Reporting that as
+    a break would make the check cry wolf as a matter of routine, and the first
+    real break would be read as "the purge again"."""
+    shard = await _fill_one_shard(connection, count=4)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq <= 2", shard
+    )
+
+    with caplog.at_level("INFO"):
+        assert await chain.verify(migrated_dsn) == []
+    # It is not silent about it either: the rows in front of position 3 cannot
+    # be judged from here at all, and a reader has to know that.
+    assert f"Keten {shard} begint op positie 3" in caplog.text
+
+
+async def test_a_gap_after_a_purged_front_is_still_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """The asymmetry the fix leans on: the purge only ever takes from the
+    oldest end, so it never leaves a hole between two surviving rows."""
+    shard = await _fill_one_shard(connection, count=5)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq <= 2", shard
+    )
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 4", shard
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 5, chain.SEQUENCE_GAP)]
+
+
+async def test_a_rewrite_after_a_purged_front_is_still_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """Only the oldest surviving row goes unjudged; everything after it is
+    checked as before."""
+    shard = await _fill_one_shard(connection, count=4)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq <= 2", shard
+    )
+    victim = await connection.fetchval(
+        "SELECT id FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 4", shard
+    )
+    await _without_guards(connection, "UPDATE audit_log_entries SET result = 'refused' WHERE id = $1", victim)
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 4, chain.HASH_MISMATCH)]
+
+
+async def test_only_a_published_line_sees_a_truncated_front_at_all(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """The price of the fix, stated: rows deleted from the oldest end leave
+    exactly what the purge leaves, and the walk has nothing left that pointed
+    at them. A line published before they went does see that the front moved
+    (`front_purged`); whether that was allowed follows from its date against
+    the retention period, not from the chain."""
+    shard = await _fill_one_shard(connection, count=3)
+    published = await checkpoint.collect(migrated_dsn)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 1", shard
+    )
+
+    assert await chain.verify(migrated_dsn) == []
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason) for one in findings] == [(shard, 1, checkpoint.FRONT_PURGED)]
 
 
 async def test_concurrent_writes_keep_the_chain_whole(

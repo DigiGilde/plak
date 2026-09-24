@@ -20,7 +20,7 @@ in step.
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
-| `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), and for a secret link the selector. Never an email address, the secret part of a link, a token or a query string |
+| `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string |
 | `ip_truncated` | IPv4 truncated to /24, IPv6 to /48 |
 | `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
@@ -332,17 +332,139 @@ every chain and reports the first break in each, on the same `PLAK_DB_URL`.
 It recomputes the hashes with the very same SQL function the trigger uses, so
 the check cannot drift away from the write.
 
+**A chain does not have to start at position 1.** The retention purge removes
+the oldest rows of a chain, so on any environment older than ninety days the
+chains begin somewhere above 1, and the row they begin at was hashed over a
+predecessor that is gone. That row is therefore the anchor: neither its
+position nor its hash can be held against anything, and the walk starts
+judging at the row after it. It says in the log which position each chain
+begins at, because that is a fact about the log a reader has to know.
+
+Reporting that as a break instead would have made `verify-audit-log` report a
+broken chain as a matter of routine, and the first real break after that would
+be read as "the purge again". The asymmetry that makes this safe: the purge
+only ever removes from the oldest end, so a gap *between* two surviving rows
+is never something it left, and that stays a break.
+
+**Which check catches what.** The two checks do not overlap, and neither is
+enough on its own:
+
+| | `verify-audit-log` (the walk) | `verify-audit-head` (a published line) |
+|---|---|---|
+| A row rewritten, triggers on | caught | caught if it is a published position |
+| A row rewritten, chain recomputed | not caught | caught |
+| A row removed from the middle | caught (gap) | caught if it is a published position |
+| Rows removed from the newest end | not caught | caught (`chain_shortened`) |
+| Rows removed from the oldest end | not caught | visible (`front_purged`); the retention period says whether it was allowed |
+| The whole table emptied | not caught (nothing left to walk) | caught |
+
+So running only the walk is not enough, and a nightly publication with a
+retained log is what makes the second column exist at all.
+
 **What it does not prove.** The account is still the owner of the schema. An
 attacker holding those credentials can disable the trigger, rewrite rows and
 recompute every hash afterwards, and `verify-audit-log` will say the chain is
-whole. The same goes for rows dropped off the end of a chain: nothing is left
-that pointed at them. What the chain buys is that tampering now has to be
+whole. The same goes for rows dropped off either end of a chain: nothing that
+is left points at them, at the front not even suspiciously, because that is
+where the purge takes from. What the chain buys is that tampering now has to be
 complete and deliberate to go unnoticed, and that a verifier outside this
 database, holding a chain hash from an earlier moment, can tell that the
 history was rewritten. Only shipping the log off-host, to an append-only WORM
 sink or a SIEM the runtime account cannot reach, makes the log authoritative
 against its own owner; that is an infrastructure decision, and it has not
-been taken.
+been taken. Getting a chain hash outside this database is cheaper than that,
+and is what the next section does.
+
+## Publishing the chain head
+
+`python -m plak.audit.checkpoint` (`just publish-audit-head`) writes one line
+to the application log with, per chain, the last position and its hash, plus
+the oldest position still present and its hash. The hash at the last position
+covers every row before it in that chain, so that one value is a commitment to
+the whole history up to that moment; the oldest position is there because the
+purge moves that end, and a line from before is the only thing that can say
+where it stood.
+
+Why the application log: a line that has been shipped cannot be retracted
+afterwards. Whoever holds the database can rewrite every row and recompute
+every hash, but not the copy that already left the machine. From that moment
+on the two disagree, and anyone who kept the older line can say so.
+
+The line looks like this, on one line:
+
+```
+INFO audit-chain-checkpoint {"format":"plak-audit-chain-checkpoint/2","taken_at":"2026-09-24T03:00:01.284915+00:00","entries_total":41027,"digest":"9f2c...","shards":[{"shard":0,"first":1904,"first_hash":"c70d...","seq":2571,"hash":"4ab1..."}, ...]}
+```
+
+`audit-chain-checkpoint` is the grep handle and everything after it is one JSON
+object, so the same line serves a person scrolling through the log and a script
+that reads it. What is in it and why:
+
+| Field | Why it is there |
+|---|---|
+| `format` | the line is meant to be compared with one from a year ago, so it says which version wrote it. A line in the older `/1`, which carried only the last position, still reads; it simply says nothing about the oldest end |
+| `taken_at` | the database's own clock, the same one that stamps `occurred_at`; without it two lines cannot be put in order |
+| `shards` | per chain the last position (`seq`) and its hash, and the oldest position still present (`first`) and its hash. This is the evidence: a hash is what a rewrite changes, the last position what a truncation lowers, the first position where the purge has got to |
+| `entries_total` | the sum of the positions, so the number of rows ever written. It may never go down, and it is the one number a reader can compare at a glance |
+| `digest` | one SHA-256 over all sixteen heads. Two lines with the same digest are the same history; a different one says to look at the shards |
+
+The hashes are not secret. They are a commitment, not a credential: they
+reveal nothing about the rows they cover, and they are worth exactly as much as
+the number of places that have seen them. A published head that gets redacted
+out of the log, or kept in a place nobody else can read, protects nothing and
+makes the check below impossible.
+
+**How often.** Nightly is enough, next to the purge; more often makes the
+window between two published heads smaller, which is the only thing frequency
+buys. The line is a few hundred bytes.
+
+**Checking a line against the database.** `just verify-audit-head <bestand>`
+(`python -m plak.audit.checkpoint --against -` reads standard input) takes a
+line as it stands in the log, timestamp and marker and all, and holds every
+published head against the database:
+
+| Report | What it means |
+|---|---|
+| `chain_shortened` | that chain has fewer rows than when the line was published. Appending cannot do that |
+| `hash_mismatch` | the row at that position is not the row that was published: the history was rewritten, and the chain was recomputed to match |
+| `row_missing` | the published last row is gone while the chain did grow past it: either that whole chain aged out of its retention, or somebody removed the row |
+| `front_purged` | the published oldest row is gone. This is what the purge does every night, so it is reported and does not make the check fail. What makes it a finding after all is its date: no row may go before its retention period has run, so a line younger than ninety days whose front has moved is wrong |
+
+Rows written after the publication change nothing: a head that is no longer the
+head still has to be where it was, with the hash it had.
+
+**What this proves.** That an outside observer holding an older line can tell
+that history was rewritten, including in the three cases `verify-audit-log`
+cannot see: the schema owner who switched the trigger off and recomputed every
+hash, rows removed from the newest end, and the oldest end having moved
+further than the retention period allows.
+**What it does not.** It prevents nothing, it notices nothing by itself, and it
+proves nothing at all if nobody kept an older line. Its whole value sits in the
+log retention and in the fact that the log leaves the machine. Shipping every
+row to a sink the runtime account cannot reach remains the heavier answer.
+
+## When the IP address is a claim
+
+`PLAK_TRUSTED_PROXIES` says which hops count as a proxy, and the derivation
+(`net.py`) walks `X-Forwarded-For` from the right, skipping those hops. The
+setting currently names all of RFC1918, which is wider than the routers really
+are. For a visitor whose own address is private as well (another pod, a VPN
+user, an internal NAT), the address the router appended is then skipped along
+with the rest, and what is left standing is the value the visitor wrote
+themselves.
+
+The row says so. `refs.ip_unvouched` is `true` on a row whose address was
+reached over at least one skipped entry; then `ip_truncated` and `ip_encrypted`
+are what the client claimed, not what we saw. The flag is absent on every other
+row, and that absence is the ordinary case: the direct peer is what the socket
+says, and the rightmost `X-Forwarded-For` entry was written by that peer. The
+address itself is stored unchanged either way, and nothing is refused over it:
+this is a note about the derivation, not a decision.
+
+The flag stops being a concern the day `PLAK_TRUSTED_PROXIES` names the real
+range of the router pods; that range can be read off in production from the
+direct peer address the app sees. Until then a `true` here means: usable as a
+lead, not as evidence.
 
 ## Access
 
@@ -436,7 +558,8 @@ rotation (`docs/security.md`) older rows stay readable as long as
 - `TRUNCATE` fires no row triggers. Plak runs with one account, and that is
   the owner of the table: the log can therefore be emptied in one command.
   `ALTER TABLE ... DISABLE TRIGGER` and `DROP TABLE` are open too. There is
-  no second layer that stops that (see "One database account").
+  no second layer that stops that (see "One database account"); a published
+  chain head makes it visible afterwards, it does not prevent it.
 - No alerting. Reading is possible, signalling not yet.
 - The 429 from the rate limiter and the 401 on a Bearer header outside the
   deploy endpoints do not reach the log; they bypass `ApiError`. The 429
