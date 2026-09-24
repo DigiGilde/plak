@@ -38,7 +38,7 @@ LIVE_EVENTS = frozenset({"push", "workflow_dispatch", "schedule"})
 # Claims copied into the audit record of a CI deploy. None of them is secret;
 # each is capped so a hostile issuer cannot bloat the log.
 AUDIT_CLAIMS = ("repository", "ref", "sha", "run_id", "workflow", "event_name")
-_MAX_CLAIM_LENGTH = 200
+MAX_CLAIM_LENGTH = 200
 
 
 def ci_actor_identifier(provider: CiProvider | str, host: str, repository: str | int) -> str:
@@ -58,7 +58,7 @@ def audit_refs(token: VerifiedCiToken) -> dict[str, str]:
     for name in AUDIT_CLAIMS:
         value = token.claim(name)
         if value is not None:
-            refs[name] = value[:_MAX_CLAIM_LENGTH]
+            refs[name] = value[:MAX_CLAIM_LENGTH]
     return refs
 
 

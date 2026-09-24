@@ -219,7 +219,10 @@ different one, linked to the site), `CI_BRANCH_NOT_ALLOWED` (a live deploy
 from an event other than `push`, `workflow_dispatch` or `schedule`, without
 `event_name`, or outside the configured `liveBranch`) and `CI_PROVIDER_UNREACHABLE` (the keys or, on Forgejo 15 without
 repository ids, the reconfirmation of the repository cannot be fetched).
-Furthermore `TOKEN_INVALID` for every unrecognised or missing Bearer scheme.
+Furthermore `TOKEN_INVALID` for every unrecognised or missing Bearer scheme,
+and `INTERNAL_ERROR` for a deploy that failed on the machine rather than on a
+refusal, a full disk for instance: the client gets the generic 500 and the
+exception itself goes to the application log.
 See `api/deploys.py`, `ci/tokens.py` and `ci/trust.py`; the full list is
 `CI_REASONS` in `audit/vocabulary.py`.
 

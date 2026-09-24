@@ -143,7 +143,10 @@ class CiTokenVerifier:
         try:
             header = _b64_json(header_segment)
             payload = _b64_json(payload_segment)
-        except ValueError as error:
+        # A deeply nested payload makes json.loads raise RecursionError rather
+        # than ValueError, and a few thousand brackets fit inside
+        # MAX_TOKEN_LENGTH.
+        except (ValueError, RecursionError) as error:
             raise _invalid("not_a_jwt") from error
         if not isinstance(header, dict) or not isinstance(payload, dict):
             raise _invalid("not_a_jwt")

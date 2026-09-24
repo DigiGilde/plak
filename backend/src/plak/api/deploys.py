@@ -23,6 +23,7 @@ from that file.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -71,6 +72,11 @@ from plak.models.publication import Site
 
 AUDIT_ACTION_DEPLOY = "deploy"
 AUDIT_ACTION_PREVIEW_TEARDOWN = "preview_teardown"
+# reason_code for a deploy that failed on something other than a refusal, for
+# instance a full disk. The client sees the generic 500; the log keeps the row.
+AUDIT_REASON_INTERNAL = "INTERNAL_ERROR"
+
+_logger = logging.getLogger(__name__)
 
 _DEPLOY_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/deploys$")
 _PREVIEW_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/previews/[^/]+$")
@@ -358,7 +364,10 @@ def _too_large(max_body: int) -> ApiError:
 
 
 def _invalid_multipart(error: Exception) -> ApiError:
-    return ApiError(422, "MULTIPART_INVALID", params={"error": error})
+    # The parser's own wording stays in the log: `detail` never carries
+    # internal details (api/errors.py).
+    _logger.info("multipart body refused: %s", error)
+    return ApiError(422, "MULTIPART_INVALID")
 
 
 async def _spool_upload(request: Request, store: ContentStore, max_body: int) -> _Upload:
@@ -439,6 +448,23 @@ async def _audit(
     log: AuditLog = request.app.state.audit_log
     ip = net.client_ip_from_request(request)
     await log.write(action, actor, result, reason_code=reason_code, refs=refs, ip=ip)
+
+
+async def _audit_best_effort(
+    request: Request,
+    actor: Actor,
+    action: str,
+    result: str,
+    reason_code: str | None,
+    refs: dict,
+) -> None:
+    """`_audit` for use inside an exception handler. AuditLog.write is
+    fail-open, but the steps around it are not, and a raise here would bury
+    the exception that is already on its way out."""
+    try:
+        await _audit(request, actor, action, result, reason_code, refs)
+    except Exception:
+        _logger.exception("audit row for the failed deploy could not be written")
 
 
 def _token_invalid() -> ApiError:
@@ -656,12 +682,14 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         upload = await _spool_upload(request, store, settings.ingest_max_body)
         preview = upload.fields.get(PREVIEW_FIELD)
         base_path = upload.fields.get(BASE_PATH_FIELD)
+        # Both fields are attacker-controlled up to MAX_FIELD_BYTES, so they
+        # are capped like a CI claim before they reach the log.
         if base_path is not None:
-            refs["base_path"] = base_path
+            refs["base_path"] = base_path[: trust.MAX_CLAIM_LENGTH]
         if preview is not None:
-            refs["preview"] = preview
             if not SLUG_RE.match(preview):
                 raise ApiError(422, "PREVIEW_REF_INVALID")
+            refs["preview"] = preview[: trust.MAX_CLAIM_LENGTH]
         elif auth.ci is not None and auth.ci.repository is not None:
             try:
                 trust.check_live_deploy(auth.ci.repository, auth.ci.token)
@@ -671,6 +699,12 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         if upload is not None:
             upload.spool.unlink(missing_ok=True)
         await _audit(request, actor, AUDIT_ACTION_DEPLOY, "refused", error.reason, refs)
+        raise
+    except Exception:
+        if upload is not None:
+            upload.spool.unlink(missing_ok=True)
+        _logger.exception("deploy failed before the ingest")
+        await _audit_best_effort(request, actor, AUDIT_ACTION_DEPLOY, "refused", AUDIT_REASON_INTERNAL, refs)
         raise
 
     service = IngestService(store, settings)
@@ -687,6 +721,10 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
                 )
     except (BundleError, IngestError) as error:
         await _audit(request, actor, AUDIT_ACTION_DEPLOY, "refused", error.reason, refs)
+        raise
+    except Exception:
+        _logger.exception("deploy failed during the ingest")
+        await _audit_best_effort(request, actor, AUDIT_ACTION_DEPLOY, "refused", AUDIT_REASON_INTERNAL, refs)
         raise
     finally:
         upload.spool.unlink(missing_ok=True)
