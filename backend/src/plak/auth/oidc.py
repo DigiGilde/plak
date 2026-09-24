@@ -137,6 +137,14 @@ def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _check_sub_exp_iat(claims: Mapping[str, Any]) -> None:
+    """authlib treats `exp` and `iat` as optional, so demand them ourselves."""
+    if not claims.get("sub"):
+        raise OidcError("id-token sub ontbreekt")
+    if "exp" not in claims or "iat" not in claims:
+        raise OidcError("id-token exp of iat ontbreekt")
+
+
 def _error_code(response: httpx.Response) -> str | None:
     """The OAuth error code of a refused token response; None when the body is
     not the JSON object RFC 6749 §5.2 prescribes."""
@@ -394,8 +402,7 @@ class OidcClient:
         """
         claims = await self._decode_with_kid_refresh(id_token)
         self._check_issuer_and_audience(claims)
-        if not claims.get("sub"):
-            raise OidcError("id-token sub ontbreekt")
+        _check_sub_exp_iat(claims)
         return dict(claims)
 
     async def validate_logout_token(self, logout_token: str) -> LogoutToken:
@@ -508,11 +515,7 @@ class OidcClient:
         self, claims: Mapping[str, Any], *, nonce: str, access_token: str | None
     ) -> None:
         self._check_issuer_and_audience(claims)
-
-        if not claims.get("sub"):
-            raise OidcError("id-token sub ontbreekt")
-        if "exp" not in claims or "iat" not in claims:
-            raise OidcError("id-token exp of iat ontbreekt")
+        _check_sub_exp_iat(claims)
 
         if not nonce or claims.get("nonce") != nonce:
             raise OidcError("id-token nonce onjuist")

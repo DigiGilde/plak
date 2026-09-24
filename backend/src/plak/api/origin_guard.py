@@ -77,8 +77,8 @@ def _refuse() -> ApiError:
     return ApiError(403, REASON_OTHER_ORIGIN)
 
 
-async def require_admin_origin(request: Request) -> None:
-    """FastAPI dependency for every beheer API route."""
+def admin_origin_ok(request: Request) -> bool:
+    """Whether this request comes from the beheer origin itself."""
     settings = request.app.state.settings
     target = admin_origin(settings)
 
@@ -86,22 +86,25 @@ async def require_admin_origin(request: Request) -> None:
     if origin_header is not None:
         origin = normalise_origin(origin_header)
         if origin is None:
-            raise _refuse()
+            return False
         if target is not None:
-            if origin != target:
-                raise _refuse()
-        elif origin != _request_origin(request) and not _is_local_origin(origin):
-            raise _refuse()
-        return
+            return origin == target
+        return origin == _request_origin(request) or _is_local_origin(origin)
 
     fetch_site = request.headers.get("Sec-Fetch-Site")
-    if fetch_site is not None and fetch_site.strip().lower() not in _ALLOWED_FETCH_SITES:
+    return fetch_site is None or fetch_site.strip().lower() in _ALLOWED_FETCH_SITES
+
+
+async def require_admin_origin(request: Request) -> None:
+    """FastAPI dependency for every beheer API route."""
+    if not admin_origin_ok(request):
         raise _refuse()
 
 
 __all__ = [
     "REASON_OTHER_ORIGIN",
     "admin_origin",
+    "admin_origin_ok",
     "normalise_origin",
     "require_admin_origin",
 ]

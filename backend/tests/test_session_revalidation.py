@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from helpers_audit import install_audit_recorder
 from helpers_oidc import (
+    OMIT,
     MockIdP,
     make_app,
     make_content_test_client,
@@ -200,6 +201,23 @@ async def test_a_sub_mismatch_drops_the_session() -> None:
 async def test_a_refreshed_id_token_from_another_issuer_drops_the_session() -> None:
     idp, app = _make()
     idp.refresh_claim_overrides = {"iss": "https://andere-idp.example"}
+    recorder = install_audit_recorder(app)
+    async with make_test_client(app) as client:
+        session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+        _age(app, session, seconds=RECHECK_S + 1)
+
+        await _visit(client)
+
+        assert app.state.session_store.get_session(session.id) is None
+        assert recorder.only().reason_code == vocabulary.IDP_TOKEN_INVALID
+
+
+@pytest.mark.parametrize("claim", ["exp", "iat"])
+async def test_a_refreshed_id_token_without_exp_or_iat_drops_the_session(claim: str) -> None:
+    """authlib treats both as optional; the refresh path demands them like the
+    login path does."""
+    idp, app = _make()
+    idp.refresh_claim_overrides = {claim: OMIT}
     recorder = install_audit_recorder(app)
     async with make_test_client(app) as client:
         session = set_session_cookie(client, app, refresh_token="ververstoken-1")

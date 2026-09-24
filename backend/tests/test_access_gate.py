@@ -206,6 +206,9 @@ def visitors(world: World) -> dict[str, Visitor]:
         ),
         "member_outside_group": Visitor(sub="lid-buiten", email="lid-buiten@example.org", email_verified=True),
         "invitee_sub": Visitor(sub="genodigde-sub"),
+        # The identifier is stored lowercased (check constraint on invitees);
+        # an SSO subject has to be matched the same way.
+        "invitee_sub_mixed_case": Visitor(sub="Genodigde-Sub"),
         "invitee_email": Visitor(sub="andere-sub", email="Genodigde@Example.org", email_verified=True),
         "invitee_email_unverified": Visitor(
             sub="andere-sub", email="genodigde@example.org", email_verified=False
@@ -226,6 +229,7 @@ VISITOR_NAMES = [
     "group_member_deactivated",
     "member_outside_group",
     "invitee_sub",
+    "invitee_sub_mixed_case",
     "invitee_email",
     "invitee_email_unverified",
     "key_query",
@@ -242,6 +246,7 @@ WITH_SESSION = {
     "group_member_deactivated",
     "member_outside_group",
     "invitee_sub",
+    "invitee_sub_mixed_case",
     "invitee_email",
     "invitee_email_unverified",
 }
@@ -252,7 +257,7 @@ INVALID_KEY = {
     "key_query_other_site",
     "key_cookie_revoked",
 }
-INVITED = {"invitee_sub", "invitee_email"}
+INVITED = {"invitee_sub", "invitee_sub_mixed_case", "invitee_email"}
 
 ALLOW = (DecisionKind.ALLOW, "OK")
 

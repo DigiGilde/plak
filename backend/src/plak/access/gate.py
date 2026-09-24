@@ -233,7 +233,10 @@ async def _belongs_to_site(db: AsyncSession, site: Site, sub: str) -> bool:
 async def _is_invitee(db: AsyncSession, site_id: uuid.UUID, visitor: Visitor) -> bool:
     identifiers: list[str] = []
     if visitor.sub is not None:
-        identifiers.append(visitor.sub)
+        # `invitees.identifier` carries a `lower(identifier)` check constraint,
+        # so an invitation on an SSO subject with an uppercase character could
+        # never match without lowercasing here too.
+        identifiers.append(visitor.sub.lower())
     # Email match only for an address the IdP has verified.
     if visitor.email and visitor.email_verified:
         identifiers.append(visitor.email.lower())

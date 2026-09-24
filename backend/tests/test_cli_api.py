@@ -51,6 +51,7 @@ def _settings(content_root, *, base_url: str | None = APP_BASE_URL) -> Settings:
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         base_url=base_url,
         content_base_url=APP_BASE_URL,
+        environment="dev",
     )
 
 
@@ -114,10 +115,23 @@ async def _make_member(factory, *, sub: str = "lid-1", status: MemberStatus = Me
         return member
 
 
-def login(client, app, *, sub: str = "lid-1", session_age: timedelta | None = None) -> dict[str, str]:
+def login(
+    client,
+    app,
+    *,
+    sub: str = "lid-1",
+    session_age: timedelta | None = None,
+    self_initiated: bool = True,
+) -> dict[str, str]:
     """Sets an admin session (and CSRF cookie), for `sub`. Optionally backdated."""
     store: SessionStore = app.state.session_store
-    session = store.create_session(sub=sub, email=f"{sub}@example.nl", email_verified=True, acr="urn:acr:hoog")
+    session = store.create_session(
+        sub=sub,
+        email=f"{sub}@example.nl",
+        email_verified=True,
+        acr="urn:acr:hoog",
+        self_initiated=self_initiated,
+    )
     if session_age is not None:
         session = dataclasses.replace(session, created_at=datetime.now(UTC) - session_age)
         store._sessions[session.id] = session
@@ -469,6 +483,19 @@ class TestApprovalGate:
         await _make_member(factory, sub="lid-oud")
         created = await _create_device_authorization(client)
         headers = login(client, app, sub="lid-oud", session_age=timedelta(minutes=20))
+        response = await client.post(
+            f"{BASE}/cli/device-authorizations/approve", json={"userCode": created["userCode"]}, headers=headers
+        )
+        assert response.status_code == 401
+        assert response.json()["code"] == "SESSION_NOT_FRESH"
+
+    async def test_a_login_started_by_another_site_is_not_fresh(self, client, app, factory):
+        """A phishing page can navigate the browser through the IdP, which
+        returns without a prompt on an existing SSO session; that must not
+        reset the freshness window."""
+        await _make_member(factory, sub="lid-extern")
+        created = await _create_device_authorization(client)
+        headers = login(client, app, sub="lid-extern", self_initiated=False)
         response = await client.post(
             f"{BASE}/cli/device-authorizations/approve", json={"userCode": created["userCode"]}, headers=headers
         )
