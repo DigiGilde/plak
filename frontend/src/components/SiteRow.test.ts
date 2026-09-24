@@ -12,6 +12,7 @@ const site: Site = {
   title: 'NLDD website',
   access: { base: 'public', keys: false, invitees: false },
   externalSources: false,
+  sandbox: true,
   liveVersionId: 'versie-1',
   createdBy: 'dev-beheerder',
   hasLiveVersion: true,

@@ -15,9 +15,9 @@ from starlette.responses import FileResponse, Response
 from plak.constants import AccessPolicy
 from plak.serving import mime
 
-# Both content policies come out of this one table, so the strict one and the
-# one with external sources cannot drift apart: the second is the first plus
-# the hosts in EXTERNAL_SOURCES, directive by directive, and nothing else.
+# Every content policy comes out of this one table, so the variants cannot
+# drift apart: each is this base plus the additions of the site switches that
+# are on, directive by directive, and nothing else.
 _CONTENT_DIRECTIVES: dict[str, tuple[str, ...]] = {
     "default-src": ("'self'",),
     "script-src": ("'self'", "'unsafe-inline'"),
@@ -48,23 +48,44 @@ EXTERNAL_SOURCES: dict[str, tuple[str, ...]] = {
 }
 
 
+# What the sandbox adds. All sites share one hostname, so without this a page
+# runs on the same origin as every other site's pages. Leaving out
+# allow-same-origin gives the document an opaque origin: it can read no other
+# document on this host, its own requests carry no cookies and it can write
+# none. Its stylesheets, scripts, images and fonts are ordinary subresource
+# loads and keep working; browser storage does not.
+SANDBOX: dict[str, tuple[str, ...]] = {
+    "sandbox": ("allow-scripts", "allow-forms", "allow-popups"),
+}
+
+
 def _serialise(directives: dict[str, tuple[str, ...]]) -> str:
     return "; ".join(f"{name} {' '.join(values)}" for name, values in directives.items())
 
 
-def _with_external_sources() -> dict[str, tuple[str, ...]]:
-    return {
-        name: (*values, *EXTERNAL_SOURCES.get(name, ()))
-        for name, values in _CONTENT_DIRECTIVES.items()
-    }
+def _with(*additions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    directives = dict(_CONTENT_DIRECTIVES)
+    for addition in additions:
+        for name, values in addition.items():
+            directives[name] = (*directives.get(name, ()), *values)
+    return directives
 
 
 CONTENT_CSP = _serialise(_CONTENT_DIRECTIVES)
-CONTENT_CSP_EXTERNAL = _serialise(_with_external_sources())
+CONTENT_CSP_EXTERNAL = _serialise(_with(EXTERNAL_SOURCES))
+CONTENT_CSP_SANDBOX = _serialise(_with(SANDBOX))
+CONTENT_CSP_EXTERNAL_SANDBOX = _serialise(_with(EXTERNAL_SOURCES, SANDBOX))
+
+_CONTENT_POLICIES: dict[tuple[bool, bool], str] = {
+    (False, False): CONTENT_CSP,
+    (True, False): CONTENT_CSP_EXTERNAL,
+    (False, True): CONTENT_CSP_SANDBOX,
+    (True, True): CONTENT_CSP_EXTERNAL_SANDBOX,
+}
 
 
-def content_csp(*, external_sources: bool) -> str:
-    return CONTENT_CSP_EXTERNAL if external_sources else CONTENT_CSP
+def content_csp(*, external_sources: bool, sandbox: bool) -> str:
+    return _CONTENT_POLICIES[(external_sources, sandbox)]
 
 NOINDEX = "noindex, nofollow"
 
@@ -77,7 +98,7 @@ def neutral_404_response() -> Response:
     (anti-enumeration).
 
     It keeps the strict CONTENT_CSP whatever a site allows: a policy that
-    followed the site's external_sources would say which site the refusal
+    followed the site's own switches would say which site the refusal
     belonged to, which is what this response exists to hide."""
     return Response(
         content=NEUTRAL_404_BODY,
@@ -133,13 +154,16 @@ def _base_headers(
     version_view: bool,
     noindex: bool,
     external_sources: bool,
+    sandbox: bool,
 ) -> dict[str, str]:
     headers = {
         "Content-Type": content_type,
         "Cache-Control": cache_control(content_type, access, version_view=version_view),
         "ETag": etag_for(version_id),
         "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": content_csp(external_sources=external_sources),
+        "Content-Security-Policy": content_csp(
+            external_sources=external_sources, sandbox=sandbox
+        ),
         # same-origin wherever a secret link can carry the visitor in: nothing
         # goes to another origin, and the page URL never holds the verifier
         # (a `?key=` is redeemed with a 302 that strips it). Not no-referrer,
@@ -182,6 +206,7 @@ def make_content_response(
     version_view: bool,
     noindex: bool,
     external_sources: bool = False,
+    sandbox: bool = False,
     status_code: int = 200,
 ) -> Response:
     content_type = mime.determine(rel_path)
@@ -192,5 +217,6 @@ def make_content_response(
         version_view=version_view,
         noindex=noindex,
         external_sources=external_sources,
+        sandbox=sandbox,
     )
     return FileResponse(file_path, status_code=status_code, headers=headers, media_type=content_type)

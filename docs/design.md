@@ -317,13 +317,30 @@ A site may allow **external sources**, which is on by default for a new site
 (`sites.external_sources`, server default true). That widens `script-src` and
 `style-src` with the three CDN hosts, `style-src` also with Google Fonts, and
 `font-src` with the Google Fonts file host. `connect-src` stays `'self'`: a page
-may load a library from those hosts, never send data to them. Both policies come
-out of one directive table, so the strict one and the widened one cannot drift
-apart. The neutral 404 always carries the strict one (§5.6).
+may load a library from those hosts, never send data to them.
+
+A site is also **shielded from the other sites**, which is on by default for a
+new site (`sites.sandbox`, server default true). That appends
+`sandbox allow-scripts allow-forms allow-popups`. `allow-same-origin` is
+deliberately absent: without it the document gets an opaque origin, so it is
+same-origin with nothing, can read no other site on the shared content
+hostname, sends no cookies and stores nothing. Its own stylesheets, scripts,
+images and fonts are ordinary subresource loads and keep working; browser
+storage does not, which is why the switch exists at all.
+
+The boundary this draws is per site and one-directional: it keeps the content
+of *this* site away from what a visitor may see on the others. A site with the
+shielding off is back on the shared origin, so the platform is not isolated by
+this, only defaulted safe.
+
+Every policy comes out of one directive table with one addition per switch, so
+the four combinations cannot drift apart. The neutral 404 always carries the
+plain policy, without either addition (§5.6).
 
 Code: `serving/response.py` (`_CONTENT_DIRECTIVES`, `EXTERNAL_SOURCES`,
-`content_csp`), `api/admin.py` (`PUT .../external-sources`). Guarded by:
-`test_serving.py`, `test_admin_api.py`.
+`SANDBOX`, `content_csp`), `api/admin.py` (`PUT .../external-sources`,
+`PUT .../sandbox`). Guarded by: `test_serving.py`, `test_security_headers.py`,
+`test_admin_api.py`.
 
 ### 5.8 The base path contract
 

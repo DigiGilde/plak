@@ -47,6 +47,12 @@ class Site(IDMixin, Base):
     external_sources: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=true(), default=True
     )
+    # Whether published content is served with the CSP sandbox that gives it an
+    # opaque origin (serving/response.py). Off means it shares an origin with
+    # every other site on the content hostname.
+    sandbox: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=true(), default=True
+    )
     # use_alter: breaks the circular dependency with versions (versions.site_id -> sites.id).
     live_version_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True),

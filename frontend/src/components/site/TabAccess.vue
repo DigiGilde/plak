@@ -58,6 +58,7 @@ const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const access = ref<Access | null>(null);
 const externalSources = ref(true);
+const sandbox = ref(true);
 
 const invitees = ref<Invitee[]>([]);
 const inviteeEmail = ref('');
@@ -104,6 +105,7 @@ async function load(): Promise<void> {
     }
     access.value = siteRow.access;
     externalSources.value = siteRow.externalSources;
+    sandbox.value = siteRow.sandbox;
     invitees.value = inviteeList;
     keys.value = keyList;
   } catch (f) {
@@ -197,6 +199,31 @@ async function chooseExternalSources(event: Event): Promise<void> {
     notices.value?.notify(
       'critical',
       t('publish.access.external.failed'),
+      errorText(f, t('publish.access.saveFailedDetail')),
+    );
+  }
+}
+
+async function chooseSandbox(event: Event): Promise<void> {
+  const next = switched(event);
+  if (next === sandbox.value) {
+    return;
+  }
+  const previous = sandbox.value;
+  sandbox.value = next;
+  try {
+    const updated = await plak.setSandbox(props.group, props.site, next);
+    sandbox.value = updated.sandbox;
+    notices.value?.notify(
+      'success',
+      t('publish.access.sandbox.saved'),
+      updated.sandbox ? t('publish.access.sandbox.on') : t('publish.access.sandbox.off'),
+    );
+  } catch (f) {
+    sandbox.value = previous;
+    notices.value?.notify(
+      'critical',
+      t('publish.access.sandbox.failed'),
       errorText(f, t('publish.access.saveFailedDetail')),
     );
   }
@@ -704,6 +731,21 @@ function keyActions(key: Key): RowAction[] {
             :checked="externalSources || undefined"
             data-testid="externe-bronnen"
             @change="chooseExternalSources"
+          ></nldd-switch-field>
+        </nldd-container>
+      </section>
+
+      <section aria-labelledby="kop-afscherming">
+        <nldd-container layout="stack" gap="8">
+          <nldd-title :size="4">
+            <h2 id="kop-afscherming">{{ t('publish.access.sandbox.heading') }}</h2>
+            <span slot="subtitle">{{ t('publish.access.sandbox.intro') }}</span>
+          </nldd-title>
+          <nldd-switch-field
+            :label="t('publish.access.sandbox.label')"
+            :checked="sandbox || undefined"
+            data-testid="afscherming"
+            @change="chooseSandbox"
           ></nldd-switch-field>
         </nldd-container>
       </section>

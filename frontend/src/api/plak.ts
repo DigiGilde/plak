@@ -134,6 +134,18 @@ export function setExternalSources(
   });
 }
 
+export function setSandbox(
+  groupSlug: string,
+  siteSlug: string,
+  sandbox: boolean,
+): Promise<Site> {
+  return request<Site>(`${sitePath(groupSlug, siteSlug)}/sandbox`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sandbox }),
+  });
+}
+
 // -- Invitees -----------------------------------------------------------------
 
 export function invitees(groupSlug: string, siteSlug: string): Promise<Invitee[]> {

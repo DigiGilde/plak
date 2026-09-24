@@ -115,6 +115,8 @@ export interface Site {
   access: Access;
   /** Whether the content may load scripts, styles and fonts from a fixed list of external hosts. On by default. */
   externalSources: boolean;
+  /** Whether the content is served with its own empty origin, so it can read no other site on the shared hostname. On by default. */
+  sandbox: boolean;
   liveVersionId: string | null;
   createdBy: string;
   /** true as soon as liveVersionId is set; an explicit field rather than derived in the UI. */

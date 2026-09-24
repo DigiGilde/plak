@@ -317,6 +317,82 @@ describe('TabAccess: external sources', () => {
   });
 });
 
+describe('TabAccess: shielding from other sites', () => {
+  it('is on by default, and names both what it costs and what it keeps', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const field = wrapper.find('[data-testid="afscherming"]');
+    expect(field.element.tagName.toLowerCase()).toBe('nldd-switch-field');
+    expect(field.attributes('label')).toBe('Afschermen van andere sites');
+    expect(field.attributes('checked')).toBeDefined();
+
+    const section = wrapper.find('section[aria-labelledby="kop-afscherming"]');
+    expect(section.text()).toContain('Staat aan, tenzij je het uitzet');
+    // The price has to be in the words a publisher recognises, not only in
+    // the API names: this is the switch that breaks a working site.
+    expect(section.text()).toContain('onthouden voorkeur');
+    expect(section.text()).toContain('localStorage');
+    expect(section.text()).toContain('cookie');
+    // And what keeps working, or turning it off looks like the only way to
+    // get a page with styling and scripts at all.
+    expect(section.text()).toContain('Eigen stijlen, scripts, afbeeldingen en lettertypen laden');
+  });
+
+  it('is off when the site has turned it off', async () => {
+    backend.data.sites[0]!.sandbox = false;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeUndefined();
+  });
+
+  it('saves turning it off', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+      checked: false,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.sandbox).toBe(false);
+    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('nldd-notification[text="Afscherming opgeslagen"]').exists()).toBe(true);
+  });
+
+  it('saves turning it back on', async () => {
+    backend.data.sites[0]!.sandbox = false;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.sandbox).toBe(true);
+    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeDefined();
+  });
+
+  it('rolls back the switch and reports it when saving fails', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', serverErrorFetch());
+    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+      checked: false,
+    });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeDefined();
+    const notice = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notice.attributes('text')).toBe('Afscherming niet opgeslagen');
+  });
+});
+
 describe('TabAccess: invitees', () => {
   it('sits as a table on the page itself, with a row menu and the form below', async () => {
     const wrapper = makeWrapper();

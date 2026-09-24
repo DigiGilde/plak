@@ -253,4 +253,14 @@ export const publishNl = {
   'publish.access.external.on': 'Externe bronnen staan aan.',
   'publish.access.external.off': 'Externe bronnen staan uit.',
   'publish.access.external.failed': 'Externe bronnen niet opgeslagen',
+
+  // -- Access tab: shielding from other sites ----------------------------------------
+  'publish.access.sandbox.heading': 'Afscherming van andere sites',
+  'publish.access.sandbox.intro':
+    'Staat aan, tenzij je het uitzet. Alle sites staan op hetzelfde webadres. Zolang de afscherming aanstaat, kan de code op jouw pagina\'s niets zien van de andere sites op dat adres, en kan diezelfde code ook niets bewaren in de browser van de bezoeker: een onthouden voorkeur, een half ingevuld formulier, alles wat via localStorage, sessionStorage of een cookie gaat, werkt dan niet. Eigen stijlen, scripts, afbeeldingen en lettertypen laden gewoon. Zet je de afscherming uit, dan kan jouw site weer bewaren in de browser, maar deelt hij het webadres ook weer met alle andere sites: de code op jouw pagina\'s kan dan bij alles wat de bezoeker daar mag zien. Doe dat alleen voor een site waarvan je de inhoud vertrouwt.',
+  'publish.access.sandbox.label': 'Afschermen van andere sites',
+  'publish.access.sandbox.saved': 'Afscherming opgeslagen',
+  'publish.access.sandbox.on': 'De afscherming staat aan.',
+  'publish.access.sandbox.off': 'De afscherming staat uit.',
+  'publish.access.sandbox.failed': 'Afscherming niet opgeslagen',
 } as const;

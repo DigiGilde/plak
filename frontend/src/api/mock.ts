@@ -303,6 +303,7 @@ function defaultData(): MockData {
         title: 'NLDD website',
         access: { base: 'public', keys: false, invitees: false },
         externalSources: true,
+        sandbox: true,
         liveVersionId: 'versie-1',
         createdBy: 'dev-beheerder',
         hasLiveVersion: true,
@@ -732,6 +733,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           title,
           access: { ...groupRow.defaultAccess },
           externalSources: true,
+          sandbox: true,
           liveVersionId: null,
           createdBy: 'dev-beheerder',
           hasLiveVersion: false,
@@ -925,6 +927,13 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         if (!siteRow) return siteNotFound();
         const body = readJson();
         siteRow.externalSources = Boolean(body.externalSources);
+        return json(200, siteDerived(data, siteRow));
+      }
+
+      if (method === 'PUT' && rest.length === 4 && rest[3] === 'sandbox') {
+        if (!siteRow) return siteNotFound();
+        const body = readJson();
+        siteRow.sandbox = Boolean(body.sandbox);
         return json(200, siteDerived(data, siteRow));
       }
 

@@ -43,8 +43,11 @@ from plak.security_headers import (
 from plak.serving.response import (
     CONTENT_CSP,
     CONTENT_CSP_EXTERNAL,
+    CONTENT_CSP_EXTERNAL_SANDBOX,
+    CONTENT_CSP_SANDBOX,
     EXTERNAL_SOURCES,
     NEUTRAL_404_BODY,
+    SANDBOX,
     content_csp,
 )
 
@@ -82,8 +85,33 @@ class TestContentCspComposition:
         assert external["base-uri"] == ["'self'"]
 
     def test_the_switch_picks_the_policy(self) -> None:
-        assert content_csp(external_sources=False) == CONTENT_CSP
-        assert content_csp(external_sources=True) == CONTENT_CSP_EXTERNAL
+        assert content_csp(external_sources=False, sandbox=False) == CONTENT_CSP
+        assert content_csp(external_sources=True, sandbox=False) == CONTENT_CSP_EXTERNAL
+        assert content_csp(external_sources=False, sandbox=True) == CONTENT_CSP_SANDBOX
+        assert content_csp(external_sources=True, sandbox=True) == CONTENT_CSP_EXTERNAL_SANDBOX
+
+    def test_the_sandbox_withholds_allow_same_origin(self) -> None:
+        """The whole point: with allow-same-origin the document would be back
+        on the origin it shares with every other site, and the directive would
+        buy nothing."""
+        tokens = _directives(CONTENT_CSP_SANDBOX)["sandbox"]
+        assert tokens == ["allow-scripts", "allow-forms", "allow-popups"]
+        assert "allow-same-origin" not in tokens
+
+    def test_the_sandbox_adds_only_its_own_directive(self) -> None:
+        strict = _directives(CONTENT_CSP)
+        sandboxed = _directives(CONTENT_CSP_SANDBOX)
+        assert set(sandboxed) - set(strict) == {"sandbox"}
+        for name, values in strict.items():
+            assert sandboxed[name] == values, name
+
+    def test_the_two_switches_are_independent(self) -> None:
+        """Both on is both additions and nothing more, so no combination can
+        quietly lose a directive the other one brought."""
+        both = _directives(CONTENT_CSP_EXTERNAL_SANDBOX)
+        assert both["sandbox"] == list(SANDBOX["sandbox"])
+        for name, values in _directives(CONTENT_CSP_EXTERNAL).items():
+            assert both[name] == values, name
 
 
 ADMIN = "https://beheer.plak.example"

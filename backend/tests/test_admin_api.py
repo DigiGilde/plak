@@ -823,6 +823,48 @@ class TestGroupsAndSites:
         )
         assert refused.status_code == 403
 
+    async def test_sandbox_default_on_and_switchable(self, client, app, data, factory):
+        """The safe value is what a site gets for free; the switch is what
+        gives it up, for a site that needs browser storage."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        group = await client.get(f"{BASE}/groups/team")
+        site_row = next(p for p in group.json()["sites"] if p["slug"] == "site")
+        assert site_row["sandbox"] is True
+
+        response = await client.put(
+            f"{BASE}/sites/team/site/sandbox", json={"sandbox": False}, headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json()["sandbox"] is False
+
+        async with factory() as db:
+            row = await db.scalar(
+                select(AuditLogEntry).where(AuditLogEntry.action == "site_sandbox")
+            )
+        assert row is not None
+        assert row.result == "allowed"
+        assert row.refs["site"] == "site"
+        assert row.refs["sandbox"] is False
+
+        back = await client.put(
+            f"{BASE}/sites/team/site/sandbox", json={"sandbox": True}, headers=headers
+        )
+        assert back.json()["sandbox"] is True
+
+    async def test_sandbox_needs_the_admin_role(self, client, app, data, factory):
+        await _join_group(factory, data.group, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+        refused = await client.put(
+            f"{BASE}/sites/team/site/sandbox", json={"sandbox": False}, headers=headers
+        )
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "INSUFFICIENT_ROLE"
+
+    async def test_sandbox_needs_csrf(self, client, app, data):
+        login(client, app, sub="lid-a", email="a@example.nl")
+        refused = await client.put(f"{BASE}/sites/team/site/sandbox", json={"sandbox": False})
+        assert refused.status_code == 403
+
     async def test_site_slug_duplicate_409(self, client, app, data):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.post(
