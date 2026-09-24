@@ -220,6 +220,18 @@ describe('Site: breadcrumb path', () => {
     expect(document.title).toBe('NLDD website - Versies - Plak');
   });
 
+  // The group slug is whatever the visitor's URL decoded to, and the trail is
+  // set without waiting for the API, so a 404 group gets a crumb too.
+  it.each(['//example.com', '/\\example.com', '/\\/example.com'])(
+    'leaves the group crumb of %s without an href',
+    async (slug) => {
+      const { router } = await makeWrapper(`/${encodeURIComponent(slug)}/website`);
+
+      const crumbs = breadcrumbsFor(router.currentRoute.value.path);
+      expect(crumbs[1]).toEqual({ text: slug, href: undefined });
+    },
+  );
+
   it('moves the breadcrumb path along to the path of the open tab', async () => {
     const { router } = await makeWrapper('/nldd/website');
 

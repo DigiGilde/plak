@@ -32,3 +32,13 @@ export function slugifyTyped(value: string): string {
 export function slugify(value: string): string {
   return slugifyTyped(value).replace(/^-+|-+$/g, '');
 }
+
+/**
+ * In-app path below a group, or undefined for a value that is not a slug. A
+ * slug out of `route.params` is whatever the visitor's URL decoded to, and
+ * `/` + `//evil.com` or `/` + `\evil.com` is a link off our own origin rather
+ * than a path within the app.
+ */
+export function groupPath(slug: string, suffix = ''): string | undefined {
+  return SLUG_RE.test(slug) ? `/${slug}${suffix}` : undefined;
+}

@@ -127,7 +127,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.cliPair.confirm.account': 'You are linking this program to {account}',
   'page.cliPair.confirm.accountHint':
     'After that the program can publish with all of your roles, until you unlink it.',
-  'page.cliPair.confirm.client': 'Program: {name}',
+  'page.cliPair.confirm.client': 'Program, as it calls itself: "{name}"',
   'page.cliPair.confirm.requested': 'Requested: {time}',
   'page.cliPair.confirm.network': 'From network {network}',
   'page.cliPair.confirm.otherNetwork.title':
