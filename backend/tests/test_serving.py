@@ -551,7 +551,8 @@ class TestKey:
         assert "Path=/aurora/geheim/" in set_cookie
         assert "HttpOnly" in set_cookie
         assert "Secure" in set_cookie
-        assert "SameSite=lax" in set_cookie
+        # SameSite=none: a sandboxed page is cross-site with its own site.
+        assert "SameSite=none" in set_cookie
 
         # The client took the cookie over: the follow-up request on the clean
         # URL yields the content with the private header set.
@@ -768,6 +769,64 @@ class TestSandbox:
         response = await client.get("/aurora/afgeschermd/bestaat-niet/")
         assert response.status_code == 404
         assert response.headers["content-security-policy"] == FULL_CSP
+
+
+class TestSandboxedOwnSubresource:
+    """The sandbox gives the document an opaque origin, which makes it
+    cross-site with its own site: its stylesheets, scripts and images arrive
+    without a Referer, without an Origin and as `Sec-Fetch-Site: cross-site`.
+    A non-public site has to serve them anyway, or it loses every asset it
+    has.
+    """
+
+    # What a browser sends for a subresource of a sandboxed page. Measured,
+    # not assumed: no Referer, and cross-site even though the URL is the
+    # page's own site.
+    OWN_SUBRESOURCE: ClassVar[dict[str, str]] = {
+        "Sec-Fetch-Site": "cross-site",
+        "Sec-Fetch-Mode": "no-cors",
+        "Sec-Fetch-Dest": "style",
+    }
+
+    @staticmethod
+    async def _sandbox_on(environment, slug: str) -> None:
+        async with environment.factory() as db:
+            site = (await db.scalars(select(Site).where(Site.slug == slug))).one()
+            site.sandbox = True
+            await db.commit()
+
+    async def test_a_member_gets_the_sites_own_asset(self, client, environment):
+        await self._sandbox_on(environment, "intern")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/intern/",))
+        response = await client.get("/aurora/intern/stijl.css", headers=self.OWN_SUBRESOURCE)
+        assert response.status_code == 200
+        assert response.headers["content-security-policy"] == SANDBOX_CSP
+
+    async def test_a_secret_link_site_gets_its_own_asset(self, client, environment):
+        await self._sandbox_on(environment, "geheim")
+        await client.get(f"/aurora/geheim/?key={environment.world.key_plain}")
+        response = await client.get("/aurora/geheim/stijl.css", headers=self.OWN_SUBRESOURCE)
+        assert response.status_code == 200
+
+    async def test_without_a_credential_it_is_still_refused(self, client, environment):
+        """The shape is not a credential of its own: an anonymous request in
+        exactly the same shape keeps the neutral 404."""
+        await self._sandbox_on(environment, "geheim")
+        response = await client.get("/aurora/geheim/stijl.css", headers=self.OWN_SUBRESOURCE)
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
+
+    async def test_the_cookies_it_needs_are_ones_a_browser_sends_cross_site(
+        self, client, environment
+    ):
+        """Whatever the serving layer hands a visitor of a non-public site has
+        to survive the trip from an opaque origin, so SameSite=none with
+        Secure. Under Lax the browser withholds it and the page loads without
+        a single one of its own assets."""
+        response = await client.get(f"/aurora/geheim/?key={environment.world.key_plain}")
+        set_cookie = response.headers["set-cookie"]
+        assert "SameSite=none" in set_cookie
+        assert "Secure" in set_cookie
 
 
 class TestNeutral404ByteIdentical:

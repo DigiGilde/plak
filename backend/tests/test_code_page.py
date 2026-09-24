@@ -437,6 +437,9 @@ class TestHandingInTheCode:
         assert "Path=/aurora/geheim/" in response.headers["set-cookie"]
         assert "HttpOnly" in response.headers["set-cookie"]
         assert "Secure" in response.headers["set-cookie"]
+        # SameSite=none like the redeemed link: a sandboxed page is cross-site
+        # with its own site and would otherwise get none of its assets.
+        assert "SameSite=none" in response.headers["set-cookie"]
 
     async def test_after_the_code_the_page_itself_follows(self, client, environment):
         await self._post(client, environment)

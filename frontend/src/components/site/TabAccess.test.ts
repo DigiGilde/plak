@@ -336,7 +336,11 @@ describe('TabAccess: shielding from other sites', () => {
     expect(section.text()).toContain('cookie');
     // And what keeps working, or turning it off looks like the only way to
     // get a page with styling and scripts at all.
-    expect(section.text()).toContain('Eigen stijlen, scripts, afbeeldingen en lettertypen laden');
+    expect(section.text()).toContain('Eigen stijlen, gewone scripts en afbeeldingen laden gewoon');
+    // Fonts and a script reading the site's own files do not survive the
+    // opaque origin. Claiming otherwise sends a publisher hunting elsewhere.
+    expect(section.text()).toContain('Weblettertypen laden niet');
+    expect(section.text()).toContain('bestand van je site ophaalt');
   });
 
   it('is off when the site has turned it off', async () => {

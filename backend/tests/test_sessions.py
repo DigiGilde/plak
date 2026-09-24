@@ -620,13 +620,17 @@ class TestContentLogin:
         header = _set_cookie_header(response, CONTENT_SESSION_COOKIE).lower()
         assert "httponly" in header
         assert "secure" in header
-        assert "samesite=lax" in header
+        # SameSite=none, because a sandboxed page has an opaque origin and is
+        # cross-site with its own site; Secure comes with it.
+        assert "samesite=none" in header
         # Scoped to the site the visitor was heading to, never wider.
         assert "path=/fin/rapport/" in header
         assert "domain=" not in header
         anchor = _set_cookie_header(response, CONTENT_ANCHOR_COOKIE).lower()
         assert "httponly" in anchor
         assert "secure" in anchor
+        # The anchor stays Lax: login, callback and logout are top-level
+        # navigations, and this is the cookie that mints site cookies.
         assert "samesite=lax" in anchor
         assert "path=/-/" in anchor
         # No admin session and no CSRF cookie: the content origin has no

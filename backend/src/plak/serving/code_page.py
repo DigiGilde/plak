@@ -388,7 +388,7 @@ async def submit_code(request: Request) -> Response:
         path=f"/{quote(group)}/{quote(site)}/",
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
     )
     return response
 

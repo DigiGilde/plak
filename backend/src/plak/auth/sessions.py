@@ -8,8 +8,8 @@ deliberately do not survive a restart.
 
 Two session kinds: the management session
 (`__Host-plak-session`, SameSite=Strict, with a CSRF cookie)
-on the management origin and the content session (SameSite=Lax, without
-management authority) on the content origin. One store holds both; the field
+on the management origin and the content session (without management
+authority) on the content origin. One store holds both; the field
 `kind` plus the separate cookie name keep them apart, also on a single shared
 host (dev). `session_from_request` returns management sessions only,
 `content_session_from_request` content sessions only.
@@ -25,10 +25,12 @@ its own JavaScript:
   itself, because a cookie path is matched against the requested URL and not
   against the page that asks (serving/router.py, `_foreign_subresource`, and
   the origin per site in serving/response.py). `__Secure-` and no longer
-  `__Host-`, because that prefix requires `Path=/`.
+  `__Host-`, because that prefix requires `Path=/`. SameSite=None, see below.
 - `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
   login, the callback and the logout can see it. Never sent to a content path,
-  so it grants nothing there.
+  so it grants nothing there. SameSite=Lax: the login, the callback and the
+  logout are top-level navigations, which Lax covers, and this is the cookie
+  that can mint a site cookie for the next site.
 - `__Host-plak-content-present`, `Path=/`: a flag, no session id and no
   authority. It only tells the serving layer that this browser has a content
   session somewhere, which is what lets a preview or a `_version` view send a
@@ -37,6 +39,20 @@ its own JavaScript:
 
 All three carry one server-side session: one lifetime, one `kind`, one
 revocation.
+
+SameSite=None on the site cookie (and on the secret-link cookie in
+serving/) is what keeps a sandboxed site able to load its own stylesheets,
+scripts and images. Published content is served with a CSP sandbox without
+`allow-same-origin` (serving/response.py), so the document has an opaque
+origin and is cross-site with everything, its own site included: it sends no
+Referer, no Origin and `Sec-Fetch-Site: cross-site`, which leaves no request
+signal that tells its subresource loads apart from a third party's. Under Lax
+the browser withholds the cookie there and every non-public site loses its
+assets. What None costs is written out in docs/security.md; the short version
+is that a third-party page can then have private assets loaded with the
+visitor's credentials, while the pages themselves stay unreadable to it (no
+CORS headers anywhere, `frame-ancestors 'none'`). The durable fix is an origin
+per site, which makes both the sandbox and this exception unnecessary.
 """
 
 from __future__ import annotations
@@ -482,7 +498,7 @@ def clear_content_session_cookies(response: Response, paths: Iterable[str] = ())
     )
     response.delete_cookie(CONTENT_PRESENCE_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     for path in paths:
-        response.delete_cookie(CONTENT_SESSION_COOKIE, path=path, secure=True, httponly=True, samesite="lax")
+        response.delete_cookie(CONTENT_SESSION_COOKIE, path=path, secure=True, httponly=True, samesite="none")
 
 
 def set_content_anchor_cookies(response: Response, session: Session, secret: str) -> None:
@@ -510,13 +526,16 @@ def set_content_anchor_cookies(response: Response, session: Session, secret: str
 def set_content_session_cookie(response: Response, session: Session, secret: str, *, path: str) -> None:
     """The session cookie for one site. `path` is a `/{group}/{site}/` prefix;
     anything wider would put this cookie on requests another site's page
-    makes."""
+    makes.
+
+    SameSite=None because a sandboxed site's own document has an opaque origin
+    and is therefore cross-site with itself; see the module docstring."""
     response.set_cookie(
         CONTENT_SESSION_COOKIE,
         sign(secret, session.id),
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         path=path,
     )
 

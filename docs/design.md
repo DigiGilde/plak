@@ -324,9 +324,19 @@ new site (`sites.sandbox`, server default true). That appends
 `sandbox allow-scripts allow-forms allow-popups`. `allow-same-origin` is
 deliberately absent: without it the document gets an opaque origin, so it is
 same-origin with nothing, can read no other site on the shared content
-hostname, sends no cookies and stores nothing. Its own stylesheets, scripts,
-images and fonts are ordinary subresource loads and keep working; browser
-storage does not, which is why the switch exists at all.
+hostname and stores nothing. Browser storage is what the switch costs, and why
+it is a switch at all.
+
+An opaque origin is cross-site with everything, its own site included, and
+that has two consequences for the page's own subresources. Its no-cors loads
+(stylesheets, classic scripts, images, media) do work, but only because the
+content session cookie and the secret-link cookie are `SameSite=None` (§7.6);
+under `SameSite=Lax` a non-public site serves its pages and none of its
+assets. What cannot work is what the browser fetches in CORS mode from such a
+document: web fonts, module scripts and `fetch`/XHR go out with `Origin: null`
+and no cookie, and Plak sets no CORS headers anywhere. A site that needs a web
+font of its own, ES modules or calls back to itself has to have this switch
+off.
 
 The boundary this draws is per site and one-directional: it keeps the content
 of *this* site away from what a visitor may see on the others. A site with the
@@ -382,8 +392,12 @@ the visitor has not opened in this browser has no cookie, and a request aimed at
 it is anonymous.
 
 **Published content has an origin of its own** (§5.7), which is the boundary a
-browser does enforce: an opaque-origin document is cross-site with everything,
-so the `SameSite=Lax` content cookie is attached to nothing it initiates.
+browser does enforce: an opaque-origin document can read no document and no
+storage of another site, whatever it asks for and whatever comes back. What it
+does not take away is the credential: a sandboxed page is cross-site with its
+own site as well, so the cookies it needs for its own assets are
+`SameSite=None` (§7.6) and therefore ride along on any page's request for that
+site. Reading the answer is what the origin stops.
 
 **Non-public content is served to a subresource request only when the request
 says it comes from the same site**: `Sec-Fetch-Site: same-origin` plus a
@@ -541,7 +555,7 @@ A secret link is `?key=selector.verifier`. The database keeps the selector and
 SHA-256 of the verifier, compared in constant time; the plaintext exists only at
 the moment of creation. A valid key is redeemed: the response is a 302 to the
 same URL without `key` with `Cache-Control: no-store`, setting a
-`__Secure-plak-key` cookie (HttpOnly, SameSite=Lax) on the path of exactly that
+`__Secure-plak-key` cookie (HttpOnly, SameSite=None) on the path of exactly that
 site or preview, so the key does not stay behind in the address bar, the history
 or a log. The cookie is a reference to the key record, not proof in itself, and
 is validated server-side on every request, so revoking or expiry breaks
@@ -588,10 +602,17 @@ field plus a separate cookie name: beheer routes accept the beheer session only,
 content serving the content session only. `returnTo` is validated strictly: own
 origin, paths only, and never carrying a `key` parameter.
 
-The beheer session cookie is SameSite=Strict, the content session cookie
-SameSite=Lax because a shared link to restricted content has to open after a
-cross-site navigation. Logging out on the beheer host is POST only and ends the
-content session too, through a redirect to `/-/logout` on the content host.
+The beheer session cookie is SameSite=Strict. On the content host the three
+cookies differ: the site cookie is SameSite=None, the anchor and the presence
+flag stay Lax. None is what a shared link to restricted content needs (it has
+to open after a cross-site navigation, which Lax already covers) plus what a
+sandboxed page needs to reach its own assets, since its opaque origin is
+cross-site with its own site (§5.7, §5.10). The anchor is the cookie that can
+mint a site cookie for the next site and is only ever read on a top-level
+navigation, so it keeps the narrower Lax. What None costs, and why the
+alternatives are worse, is in `docs/security.md`. Logging out on the beheer
+host is POST only and ends the content session too, through a redirect to
+`/-/logout` on the content host.
 
 The content session rides in three cookies, because all sites share one
 hostname (§5.10):
