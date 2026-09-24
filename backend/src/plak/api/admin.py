@@ -725,6 +725,10 @@ class PreviewOut(ApiModel):
 class InviteeOut(ApiModel):
     """Een adres op de genodigdenlijst van een site."""
 
+    id: str = Field(
+        description="Id van deze genodigde; hiermee haal je hem van de lijst.",
+        examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
+    )
     site_slug: str = Field(description="Slug van de site.", examples=["docs"])
     group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
     identifier: str = Field(
@@ -777,8 +781,12 @@ class GroupMemberOut(ApiModel):
     """Een lid van een groep, zoals de ledenlijst van die groep het toont."""
 
     group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
+    member_id: str = Field(
+        description="Id van het platformlid; hiermee haal je het uit de groep.",
+        examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
+    )
     identifier: str = Field(
-        description="Waarmee je dit lid aan de groep toevoegt of eruit haalt: het e-mailadres.",
+        description="Waarmee je dit lid aan de groep toevoegt of zijn rol wijzigt: het e-mailadres.",
         examples=["lid@example.nl"],
     )
     name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als die ontbreekt.")
@@ -794,8 +802,12 @@ class SiteMemberOut(ApiModel):
 
     group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
     site_slug: str = Field(description="Slug van de site.", examples=["docs"])
+    member_id: str = Field(
+        description="Id van het platformlid; hiermee haal je zijn siterol weg.",
+        examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
+    )
     identifier: str = Field(
-        description="Waarmee je de siterol van dit lid zet of weghaalt: het e-mailadres.",
+        description="Waarmee je de siterol van dit lid zet: het e-mailadres.",
         examples=["lid@example.nl"],
     )
     name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als die ontbreekt.")
@@ -1374,6 +1386,7 @@ def _preview_json(preview: Preview, group_slug: str, site_slug: str) -> PreviewO
 
 def _invitee_json(invitee: Invitee, group_slug: str, site_slug: str) -> InviteeOut:
     return InviteeOut(
+        id=str(invitee.id),
         site_slug=site_slug,
         group_slug=group_slug,
         identifier=invitee.identifier,
@@ -1397,6 +1410,7 @@ def _key_json(key: AccessKey, group_slug: str, site_slug: str) -> KeyOut:
 def _group_member_json(group_slug: str, member: Member, role: Role) -> GroupMemberOut:
     return GroupMemberOut(
         group_slug=group_slug,
+        member_id=str(member.id),
         identifier=member.email,
         name=member.name or "",
         email=member.email,
@@ -1419,6 +1433,7 @@ def _site_member_json(
     return SiteMemberOut(
         group_slug=group_slug,
         site_slug=site_slug,
+        member_id=str(member.id),
         identifier=member.email,
         name=member.name or "",
         email=member.email,
@@ -1680,18 +1695,6 @@ async def _group_members_json(db: AsyncSession, group: Group) -> list[GroupMembe
         .order_by(Member.email)
     )
     return [_group_member_json(group.slug, row.Member, row.role) for row in rows]
-
-
-async def _site_member_or_404(
-    db: AsyncSession, member: Member, group_slug: str, site_slug: str, identifier: str
-) -> tuple[Group, Site, Member]:
-    """The three lookups the two site-role mutations share, in the order that
-    keeps a refusal from telling an outsider what exists here."""
-    group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
-    target = await _find_member_or_409(db, identifier)
-    if target is None:
-        raise ApiError(404, "UNKNOWN_MEMBER")
-    return group, site, target
 
 
 async def _one_site_member(
@@ -2691,13 +2694,14 @@ def make_admin_router() -> APIRouter:
         return _invitee_json(invitee, group_slug, site_slug)
 
     @router.delete(
-        "/sites/{group_slug}/{site_slug}/invitees/{identifier}",
+        "/sites/{group_slug}/{site_slug}/invitees/{invitee_id}",
         status_code=204,
         tags=[TAG_INVITEES],
         summary="Genodigde verwijderen",
         description=(
-            "Haalt een adres van de genodigdenlijst. Wie er niet op staat, levert 404. De identifier in het "
-            "pad wordt op dezelfde manier genormaliseerd als bij toevoegen.\n\n"
+            "Haalt een adres van de genodigdenlijst. Een id dat niet bij deze site hoort, levert 404. In "
+            "het pad staat het `id` uit de genodigdenlijst, niet het adres zelf: een adres in een URL "
+            "belandt in de logregels van elke proxy ertussen.\n\n"
             "**Mag:** effectieve siterol `editor` of ruimer, met een geldige CSRF-header."
         ),
         responses=_deleted("De genodigde is van de lijst.")
@@ -2705,14 +2709,14 @@ def make_admin_router() -> APIRouter:
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             _ERROR_SITE,
-            {404: "Dit adres staat niet op de genodigdenlijst (`UNKNOWN_INVITEE`)."},
+            {404: "Deze genodigde staat niet op de lijst van deze site (`UNKNOWN_INVITEE`)."},
         ),
     )
     async def remove_invitee(
         request: Request,
         group_slug: str,
         site_slug: str,
-        identifier: str,
+        invitee_id: uuid.UUID,
         _csrf: Csrf,
         member: ActiveMember,
         db: Db,
@@ -2721,7 +2725,7 @@ def make_admin_router() -> APIRouter:
         result = await db.execute(
             delete(Invitee).where(
                 Invitee.site_id == site.id,
-                Invitee.identifier == identifier.strip().lower(),
+                Invitee.id == invitee_id,
             )
         )
         await db.commit()
@@ -3221,14 +3225,14 @@ def make_admin_router() -> APIRouter:
         return _group_member_json(group.slug, target, body.role)
 
     @router.delete(
-        "/groups/{group_slug}/members/{identifier}",
+        "/groups/{group_slug}/members/{member_id}",
         status_code=204,
         tags=[TAG_GROUP_MEMBERS],
         summary="Lid uit een groep halen",
         description=(
             "Haalt iemand uit de groep. Het platformlid zelf blijft bestaan, net als zijn eventuele andere "
-            "groepslidmaatschappen. De identifier in het pad is het e-mailadres, het SSO-subject, of de "
-            "volledige naam als die bij precies één actief lid hoort.\n\n"
+            "groepslidmaatschappen. In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: "
+            "een adres in een URL belandt in de logregels van elke proxy ertussen.\n\n"
             "Het laatste lid van een groep kan er niet uit: een groep zonder leden is niet meer te beheren, "
             "want iemand toevoegen mag alleen wie er zelf in zit. Om dezelfde reden kan de laatste "
             "`admin` er niet uit.\n\n"
@@ -3239,24 +3243,23 @@ def make_admin_router() -> APIRouter:
             _ERROR_CSRF,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
-            _ERROR_IDENTIFIER_AMBIGUOUS,
             {
                 409: (
                     "Dit is het laatste lid van de groep (`LAST_GROUP_MEMBER`), of de laatste beheerder "
                     "ervan (`LAST_GROUP_ADMIN`)."
                 ),
                 404: (
-                    "Er is geen lid met deze identifier (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
+                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
                     "(`NOT_GROUP_MEMBER`)."
                 )
             },
         ),
     )
     async def remove_group_member(
-        request: Request, group_slug: str, identifier: str, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request, group_slug: str, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN, platform_admin=True)
-        target = await _find_member_or_409(db, identifier)
+        target = await db.get(Member, member_id)
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER")
         # A group without members can no longer be managed: there is no route to
@@ -3278,7 +3281,7 @@ def make_admin_router() -> APIRouter:
         return Response(status_code=204)
 
     @router.put(
-        "/groups/{group_slug}/members/{identifier}/role",
+        "/groups/{group_slug}/members/{member_id}/role",
         tags=[TAG_GROUP_MEMBERS],
         summary="Groepsrol van een lid wijzigen",
         response_description="Het groepslid met zijn nieuwe rol.",
@@ -3290,16 +3293,17 @@ def make_admin_router() -> APIRouter:
             "De laatste `admin` van een groep kan niet gedegradeerd worden; een groep zonder beheerder is "
             "niet meer te beheren. Jezelf degraderen kan wel: zolang er een andere beheerder is, kan die je "
             "terugzetten.\n\n"
+            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
+            "belandt in de logregels van elke proxy ertussen.\n\n"
             "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
-            _ERROR_IDENTIFIER_AMBIGUOUS,
             {
                 404: (
-                    "Er is geen lid met deze identifier (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
+                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
                     "(`NOT_GROUP_MEMBER`)."
                 )
             },
@@ -3309,14 +3313,14 @@ def make_admin_router() -> APIRouter:
     async def set_group_member_role(
         request: Request,
         group_slug: str,
-        identifier: str,
+        member_id: uuid.UUID,
         body: GroupRoleUpdate,
         _csrf: Csrf,
         member: ActiveMember,
         db: Db,
     ) -> GroupMemberOut:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN, platform_admin=True)
-        target = await _find_member_or_409(db, identifier)
+        target = await db.get(Member, member_id)
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER")
         membership = await db.scalar(
@@ -3879,22 +3883,23 @@ def make_admin_router() -> APIRouter:
         return await _one_site_member(db, group, site, target)
 
     @router.put(
-        "/sites/{group_slug}/{site_slug}/members/{identifier}/role",
+        "/sites/{group_slug}/{site_slug}/members/{member_id}/role",
         tags=[TAG_SITE_MEMBERS],
         summary="Siterol van een lid wijzigen",
         response_description="Het lid met zijn nieuwe siterol.",
         description=(
             "Geeft een lid een andere rol op deze ene site. Werkt alleen op een siterol; wie hier staat "
             "omdat hij groepslid is, wijzig je bij de groep.\n\n"
+            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
+            "belandt in de logregels van elke proxy ertussen.\n\n"
             "**Mag:** effectieve siterol `beheerder`, met een geldige CSRF-header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE,
-            _ERROR_IDENTIFIER_AMBIGUOUS,
             {
                 404: (
-                    "Er is geen lid met deze identifier (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
+                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
                     "rol op deze site (`NOT_SITE_MEMBER`)."
                 )
             },
@@ -3904,13 +3909,18 @@ def make_admin_router() -> APIRouter:
         request: Request,
         group_slug: str,
         site_slug: str,
-        identifier: str,
+        member_id: uuid.UUID,
         body: SiteRoleUpdate,
         _csrf: Csrf,
         member: ActiveMember,
         db: Db,
     ) -> SiteMemberOut:
-        group, site, target = await _site_member_or_404(db, member, group_slug, site_slug, identifier)
+        # The site check first, so a refusal tells an outsider nothing about
+        # what exists here.
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        target = await db.get(Member, member_id)
+        if target is None:
+            raise ApiError(404, "UNKNOWN_MEMBER")
         row = await db.scalar(
             select(SiteMember).where(SiteMember.site_id == site.id, SiteMember.member_id == target.id)
         )
@@ -3927,13 +3937,15 @@ def make_admin_router() -> APIRouter:
         return await _one_site_member(db, group, site, target)
 
     @router.delete(
-        "/sites/{group_slug}/{site_slug}/members/{identifier}",
+        "/sites/{group_slug}/{site_slug}/members/{member_id}",
         status_code=204,
         tags=[TAG_SITE_MEMBERS],
         summary="Siterol van een lid weghalen",
         description=(
             "Haalt de rol weg die alleen op deze site gold. Een groepsrol blijft staan, dus wie via de "
             "groep bij deze site kan, kan dat daarna nog steeds.\n\n"
+            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
+            "belandt in de logregels van elke proxy ertussen.\n\n"
             "Er is hier geen laatste-beheerder-bescherming zoals bij een groep: de beheerders van de "
             "groep kunnen altijd bij deze site, dus een site zonder eigen beheerder is niet onbeheerbaar."
             "\n\n**Mag:** effectieve siterol `beheerder`, met een geldige CSRF-header."
@@ -3942,10 +3954,9 @@ def make_admin_router() -> APIRouter:
         | _errors(
             _ERROR_CSRF,
             _ERROR_SITE,
-            _ERROR_IDENTIFIER_AMBIGUOUS,
             {
                 404: (
-                    "Er is geen lid met deze identifier (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
+                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
                     "rol op deze site (`NOT_SITE_MEMBER`)."
                 )
             },
@@ -3955,12 +3966,17 @@ def make_admin_router() -> APIRouter:
         request: Request,
         group_slug: str,
         site_slug: str,
-        identifier: str,
+        member_id: uuid.UUID,
         _csrf: Csrf,
         member: ActiveMember,
         db: Db,
     ) -> Response:
-        _, site, target = await _site_member_or_404(db, member, group_slug, site_slug, identifier)
+        # The site check first, so a refusal tells an outsider nothing about
+        # what exists here.
+        _, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        target = await db.get(Member, member_id)
+        if target is None:
+            raise ApiError(404, "UNKNOWN_MEMBER")
         result = await db.execute(
             delete(SiteMember).where(SiteMember.site_id == site.id, SiteMember.member_id == target.id)
         )

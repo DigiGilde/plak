@@ -303,12 +303,9 @@ PATH_PARAMETERS = {
     "group_slug": "Slug van de groep; het eerste padsegment van elke site-URL.",
     "site_slug": "Slug van de site binnen die groep.",
     "ref": "Naam van de preview, meestal het pull-requestnummer als slug.",
-    "identifier": (
-        "E-mailadres of SSO-subject van de persoon; bij groeps- en site-ledenendpoints ook diens "
-        "volledige naam, mits die bij precies één actief lid hoort."
-    ),
     "selector": "Het niet-geheime eerste deel van een sleutelwaarde, voor de punt.",
     "session_id": "Id van de CLI-sessie, uit `GET /me/cli-sessions`.",
+    "invitee_id": "Id van de genodigde, uit de genodigdenlijst van de site.",
     "member_id": "Id van het platformlid.",
     "version_id": "Id van de versie.",
 }

@@ -150,6 +150,7 @@ export interface Preview {
 }
 
 export interface Invitee {
+  id: string;
   siteSlug: string;
   groupSlug: string;
   identifier: string;
@@ -235,6 +236,7 @@ export interface CliSession {
 
 export interface GroupMember {
   groupSlug: string;
+  memberId: string;
   identifier: string;
   name: string;
   email: string;
@@ -270,6 +272,7 @@ export type Role = 'reader' | 'editor' | 'admin';
 export interface SiteMember {
   groupSlug: string;
   siteSlug: string;
+  memberId: string;
   identifier: string;
   name: string;
   email: string;

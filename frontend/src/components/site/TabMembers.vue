@@ -49,12 +49,12 @@ function add(identifier: string, role: Role): Promise<SiteMember> {
   return plak.addSiteMember(props.group, props.site, identifier, role);
 }
 
-function remove(identifier: string): Promise<void> {
-  return plak.removeSiteMember(props.group, props.site, identifier);
+function remove(memberId: string): Promise<void> {
+  return plak.removeSiteMember(props.group, props.site, memberId);
 }
 
-function setRole(identifier: string, role: Role): Promise<SiteMember> {
-  return plak.setSiteRole(props.group, props.site, identifier, role);
+function setRole(memberId: string, role: Role): Promise<SiteMember> {
+  return plak.setSiteRole(props.group, props.site, memberId, role);
 }
 
 function search(query: string): Promise<MemberSuggestion[]> {

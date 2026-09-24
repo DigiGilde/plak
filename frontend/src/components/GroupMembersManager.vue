@@ -22,8 +22,8 @@ import { t } from '@/i18n';
 const props = defineProps<{
   members: GroupMember[];
   add: (identifier: string, role: Role) => Promise<GroupMember>;
-  remove: (identifier: string) => Promise<void>;
-  setRole: (identifier: string, role: Role) => Promise<GroupMember>;
+  remove: (memberId: string) => Promise<void>;
+  setRole: (memberId: string, role: Role) => Promise<GroupMember>;
   search: (query: string) => Promise<MemberSuggestion[]>;
 }>();
 
@@ -45,6 +45,8 @@ const COLUMNS = 'minmax(12rem, 1fr) 9rem 3rem';
 const COLUMNS_SM = 'minmax(0, 1fr) 3rem';
 
 interface Row {
+  /** Empty on a provisional row: the member id only exists once the add lands. */
+  memberId: string;
   identifier: string;
   name: string;
   email: string;
@@ -130,6 +132,7 @@ const rows = computed<Row[]>(() => [
     // Without a name from the IdP the identifier carries the row, just as for
     // a member added a moment ago; otherwise the row changes on confirmation.
     .map((member) => ({
+      memberId: member.memberId,
       identifier: member.identifier,
       name: member.name || member.identifier,
       email: member.email,
@@ -166,7 +169,7 @@ async function onAdd(): Promise<void> {
   if (newRow) {
     provisional.value = [
       ...provisional.value,
-      { identifier, name: identifier, email: identifier, role: newRole.value },
+      { memberId: '', identifier, name: identifier, email: identifier, role: newRole.value },
     ];
   }
   try {
@@ -208,7 +211,7 @@ function actionsFor(row: Row): RowAction[] {
 
 async function onRole(row: Row, role: Role): Promise<void> {
   try {
-    emit('roleChanged', await props.setRole(row.identifier, role));
+    emit('roleChanged', await props.setRole(row.memberId, role));
   } catch (error) {
     // The backend refuses a change that would leave the group without a
     // beheerder; its message says so.
@@ -219,7 +222,7 @@ async function onRole(row: Row, role: Role): Promise<void> {
 async function onRemove(row: Row): Promise<void> {
   hidden.value = [...hidden.value, row.identifier];
   try {
-    await props.remove(row.identifier);
+    await props.remove(row.memberId);
     emit('removed', row.identifier);
   } catch (error) {
     notify(t('group.members.removeFailed', { name: row.name }), error);

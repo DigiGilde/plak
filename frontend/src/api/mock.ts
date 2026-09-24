@@ -254,6 +254,7 @@ function defaultData(): MockData {
     groupMembers: [
       {
         groupSlug: 'nldd',
+        memberId: 'lid-1',
         identifier: 'dev-beheerder',
         name: 'Bea Heerder',
         email: 'beheerder@voorbeeld.nl',
@@ -263,6 +264,7 @@ function defaultData(): MockData {
       // column is for.
       {
         groupSlug: 'nldd',
+        memberId: 'lid-3',
         identifier: 'ada@voorbeeld.nl',
         name: 'Ada Vermeer',
         email: 'ada@voorbeeld.nl',
@@ -270,6 +272,7 @@ function defaultData(): MockData {
       },
       {
         groupSlug: 'nldd',
+        memberId: 'lid-4',
         identifier: 'zoe@voorbeeld.nl',
         name: 'Zoë de Wit',
         email: 'zoe@voorbeeld.nl',
@@ -362,6 +365,7 @@ function defaultData(): MockData {
     ],
     invitees: [
       {
+        id: 'genodigde-1',
         siteSlug: 'website',
         groupSlug: 'nldd',
         identifier: 'reviewer@voorbeeld.nl',
@@ -478,6 +482,7 @@ function siteMemberRows(data: MockData, groupSlug: string, siteSlug: string): Si
       return {
         groupSlug,
         siteSlug,
+        memberId: groupRow?.memberId ?? account?.id ?? '',
         identifier,
         name: groupRow?.name ?? account?.name ?? identifier,
         email: groupRow?.email ?? account?.email ?? identifier,
@@ -663,6 +668,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       if (creator) {
         data.groupMembers.push({
           groupSlug: slug,
+          memberId: creator.id,
           identifier: creator.email,
           name: creator.name,
           email: creator.email,
@@ -750,6 +756,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           }
           const member: GroupMember = {
             groupSlug,
+            memberId: data.members.find((l) => l.email === identifier)?.id ?? identifier,
             identifier,
             name: identifier,
             email: identifier,
@@ -773,20 +780,20 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       }
       if (rest.length === 5 && rest[2] === 'members' && rest[4] === 'role' && method === 'PUT') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
-        const identifier = decodeURIComponent(rest[3]!);
+        const memberId = decodeURIComponent(rest[3]!);
         const member = data.groupMembers.find(
-          (l) => l.groupSlug === groupSlug && l.identifier === identifier,
+          (l) => l.groupSlug === groupSlug && l.memberId === memberId,
         );
-        if (!member) return problem(404, 'Onbekend lid', `Geen lid "${identifier}" in deze groep.`);
+        if (!member) return problem(404, 'Onbekend lid', 'Dit lid zit niet in deze groep.');
         const body = readJson();
         member.role = body.role as Role;
         return json(200, member);
       }
       if (rest.length === 4 && rest[2] === 'members' && method === 'DELETE') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
-        const identifier = rest[3]!;
+        const memberId = rest[3]!;
         data.groupMembers = data.groupMembers.filter(
-          (l) => !(l.groupSlug === groupSlug && l.identifier === identifier),
+          (l) => !(l.groupSlug === groupSlug && l.memberId === memberId),
         );
         return empty(204);
       }
@@ -980,7 +987,10 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       }
       if (rest.length === 6 && rest[3] === 'members' && rest[5] === 'role' && method === 'PUT') {
         if (!siteRow) return siteNotFound();
-        const identifier = rest[4]!;
+        const memberId = rest[4]!;
+        const identifier = siteMemberRows(data, groupSlug, siteSlug).find(
+          (l) => l.memberId === memberId,
+        )?.identifier;
         const row = data.siteRoles.find(
           (r) =>
             r.groupSlug === groupSlug && r.siteSlug === siteSlug && r.identifier === identifier,
@@ -990,13 +1000,16 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         }
         row.role = readJson().role as Role;
         const changed = siteMemberRows(data, groupSlug, siteSlug).find(
-          (l) => l.identifier === identifier,
+          (l) => l.memberId === memberId,
         );
         return json(200, changed);
       }
       if (rest.length === 5 && rest[3] === 'members' && method === 'DELETE') {
         if (!siteRow) return siteNotFound();
-        const identifier = rest[4]!;
+        const memberId = rest[4]!;
+        const identifier = siteMemberRows(data, groupSlug, siteSlug).find(
+          (l) => l.memberId === memberId,
+        )?.identifier;
         const before = data.siteRoles.length;
         data.siteRoles = data.siteRoles.filter(
           (r) =>
@@ -1024,6 +1037,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             return problem(409, 'Al genodigd', `"${identifier}" staat al op de genodigdenlijst.`);
           }
           const invitee: Invitee = {
+            id: `genodigde-${data.invitees.length + 1}`,
             siteSlug,
             groupSlug,
             identifier,
@@ -1036,9 +1050,9 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       }
       if (rest.length === 5 && rest[3] === 'invitees' && method === 'DELETE') {
         if (!siteRow) return siteNotFound();
-        const identifier = rest[4]!.toLowerCase();
+        const inviteeId = rest[4]!;
         data.invitees = data.invitees.filter(
-          (g) => !(g.groupSlug === groupSlug && g.siteSlug === siteSlug && g.identifier === identifier),
+          (g) => !(g.groupSlug === groupSlug && g.siteSlug === siteSlug && g.id === inviteeId),
         );
         return empty(204);
       }
