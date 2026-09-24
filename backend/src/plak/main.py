@@ -47,7 +47,12 @@ from plak.api.origin_guard import normalise_origin, require_admin_origin
 from plak.audit.log import AuditLog
 from plak.auth.oidc import OidcClient
 from plak.auth.revalidation import revalidate_sessions, revalidation_status
-from plak.auth.sessions import SessionStore, content_session_from_request, session_from_request
+from plak.auth.sessions import (
+    SessionStore,
+    content_anchor_session_from_request,
+    content_session_from_request,
+    session_from_request,
+)
 from plak.ci.providers import ProviderClient
 from plak.ci.tokens import CiTokenVerifier
 from plak.config import Settings, load_settings
@@ -106,7 +111,11 @@ async def _session_key(request: Request) -> str | None:
     """Rate-limit key for authenticated requests: per session sub, not per IP.
     Management and content session both count: a logged-in viewer on the
     content host has only the content cookie."""
-    session = session_from_request(request) or content_session_from_request(request)
+    session = (
+        session_from_request(request)
+        or content_session_from_request(request)
+        or content_anchor_session_from_request(request)
+    )
     return session.sub if session is not None else None
 
 

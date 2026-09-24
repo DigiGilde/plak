@@ -8,11 +8,35 @@ deliberately do not survive a restart.
 
 Two session kinds: the management session
 (`__Host-plak-session`, SameSite=Strict, with a CSRF cookie)
-on the management origin and the content session (`__Host-plak-content`,
-SameSite=Lax, without management authority) on the content origin. One store
-holds both; the field `kind` plus the separate cookie name keep them apart,
-also on a single shared host (dev). `session_from_request` returns management
-sessions only, `content_session_from_request` content sessions only.
+on the management origin and the content session (SameSite=Lax, without
+management authority) on the content origin. One store holds both; the field
+`kind` plus the separate cookie name keep them apart, also on a single shared
+host (dev). `session_from_request` returns management sessions only,
+`content_session_from_request` content sessions only.
+
+The content session rides in three cookies, because every site of every group
+is served from one hostname under a path prefix and uploaded content may run
+its own JavaScript:
+
+- `__Secure-plak-content`, `Path=/{group}/{site}/`: the session id for content
+  requests, the same scoping the secret-link cookie already has. It narrows
+  what one session reaches: a site this browser has not opened carries no
+  cookie, so a request aimed at it is anonymous. It is not the site boundary
+  itself, because a cookie path is matched against the requested URL and not
+  against the page that asks (serving/router.py, `_foreign_subresource`, and
+  the origin per site in serving/response.py). `__Secure-` and no longer
+  `__Host-`, because that prefix requires `Path=/`.
+- `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
+  login, the callback and the logout can see it. Never sent to a content path,
+  so it grants nothing there.
+- `__Host-plak-content-present`, `Path=/`: a flag, no session id and no
+  authority. It only tells the serving layer that this browser has a content
+  session somewhere, which is what lets a preview or a `_version` view send a
+  member to the login instead of the neutral 404 they would otherwise get on
+  the first request to a site.
+
+All three carry one server-side session: one lifetime, one `kind`, one
+revocation.
 """
 
 from __future__ import annotations
@@ -22,9 +46,12 @@ import enum
 import hashlib
 import hmac
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+
+from plak.constants import PLATFORM_PREFIX, PLATFORM_SEGMENT, RESERVED_SLUGS
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
@@ -32,10 +59,17 @@ if TYPE_CHECKING:
 SESSION_COOKIE = "__Host-plak-session"
 CSRF_COOKIE = "__Host-plak-csrf"
 LOGIN_COOKIE = "__Host-plak-login"
-CONTENT_SESSION_COOKIE = "__Host-plak-content"
+CONTENT_SESSION_COOKIE = "__Secure-plak-content"
+CONTENT_ANCHOR_COOKIE = "__Secure-plak-content-anchor"
+CONTENT_PRESENCE_COOKIE = "__Host-plak-content-present"
 CONTENT_LOGIN_COOKIE = "__Host-plak-content-login"
 KEY_COOKIE = "__Secure-plak-key"
 CSRF_HEADER = "X-CSRF-Token"
+
+# Where the anchor cookie lives: the platform namespace, which per SLUG_RE can
+# never be a group, so this path never overlaps a site.
+CONTENT_ANCHOR_PATH = f"{PLATFORM_PREFIX}/"
+CONTENT_PRESENT = "1"
 
 MAX_SESSION_AGE = timedelta(hours=12)
 MAX_LOGIN_ATTEMPT_AGE = timedelta(minutes=10)
@@ -57,6 +91,11 @@ class SessionKind(enum.StrEnum):
 # forever, because get_session()/take_attempt() only clean up what is actually
 # looked up.
 _CLEANUP_INTERVAL = 128
+
+# Ceiling on the site prefixes one content session remembers. Past it the
+# cookie stays in the browser until it closes, and is useless from the moment
+# the session is gone: the gate finds no session behind the id.
+_MAX_CONTENT_SITES = 32
 
 
 @dataclass(frozen=True)
@@ -94,6 +133,10 @@ class Session:
     checked_at: datetime | None = None
     # Backoff after a soft failure: no new check before this moment.
     recheck_not_before: datetime | None = None
+    # The `/{group}/{site}/` prefixes this content session has handed out a
+    # cookie for, so the logout can clear every one of them: a browser only
+    # deletes a cookie when the path matches.
+    content_sites: frozenset[str] = frozenset()
     # Whether the login that made this session was started from the beheer
     # origin itself. A login a third-party page navigated the browser into is
     # still a valid session, but does not count as fresh where freshness is
@@ -153,6 +196,13 @@ class SessionStore:
         )
         self._sessions[session.id] = session
         return session
+
+    def note_content_site(self, session_id: str, prefix: str) -> None:
+        """Records a site prefix this content session got a cookie for."""
+        session = self._sessions.get(session_id)
+        if session is None or prefix in session.content_sites or len(session.content_sites) >= _MAX_CONTENT_SITES:
+            return
+        self._sessions[session_id] = replace(session, content_sites=session.content_sites | {prefix})
 
     def mark_checked(self, session_id: str, *, refresh_token: str | None, at: datetime) -> Session | None:
         """Records that the IdP confirmed this session, with the rotated
@@ -318,8 +368,54 @@ def session_from_request(request: Request) -> Session | None:
 
 
 def content_session_from_request(request: Request) -> Session | None:
-    """Content session from `__Host-plak-content`; a management session never counts here."""
+    """Content session from the site-scoped cookie; a management session never
+    counts here. A request aimed at a site this browser has not opened yet
+    carries no such cookie, which is an anonymous visitor as far as the gate
+    is concerned."""
     return _session_from_cookie(request, CONTENT_SESSION_COOKIE, SessionKind.CONTENT)
+
+
+def content_anchor_session_from_request(request: Request) -> Session | None:
+    """Content session from the anchor cookie, which only the paths under
+    `/-/` receive. This is what lets the login hand out a cookie for the next
+    site without a round trip to the IdP."""
+    return _session_from_cookie(request, CONTENT_ANCHOR_COOKIE, SessionKind.CONTENT)
+
+
+def content_presence(request: Request) -> bool:
+    """Whether this browser says it has a content session somewhere. A flag,
+    not a credential: it carries no session id and grants nothing."""
+    return request.cookies.get(CONTENT_PRESENCE_COOKIE) == CONTENT_PRESENT
+
+
+def top_level_navigation(request: Request) -> bool:
+    """Whether the browser calls this request a top-level navigation.
+
+    `Sec-Fetch-Dest` is a forbidden header name: page script cannot set or
+    change it, so unlike `Referer` this is nothing an attacking page can
+    shape. A request without the header does not count as a navigation, which
+    costs a browser that sends no fetch metadata a round trip to the IdP per
+    site and nothing else.
+    """
+    return request.headers.get("Sec-Fetch-Dest", "").strip().lower() == "document"
+
+
+def content_site_prefix(path: str) -> str | None:
+    """The `/{group}/{site}/` a content path belongs to, or None.
+
+    Percent-encoding is left exactly as it came in: a browser matches a cookie
+    path against the encoded request path, so decoding here would hand out a
+    cookie the browser never sends back, and the login redirect would loop.
+    """
+    segments = path.split("?", 1)[0].split("/")
+    if len(segments) < 3:
+        return None
+    group, site = segments[1], segments[2]
+    if not group or not site:
+        return None
+    if group in RESERVED_SLUGS or group == PLATFORM_SEGMENT:
+        return None
+    return f"/{group}/{site}/"
 
 
 def _key_id_from_cookie(request: Request) -> str | None:
@@ -376,21 +472,52 @@ def clear_session_cookies(response: Response) -> None:
     response.delete_cookie(CSRF_COOKIE, path="/", secure=True, samesite="strict")
 
 
-def clear_content_session_cookie(response: Response) -> None:
-    response.delete_cookie(CONTENT_SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
+def clear_content_session_cookies(response: Response, paths: Iterable[str] = ()) -> None:
+    """Clears the anchor, the presence flag and the site cookie at every path
+    this session handed one out for. A site cookie past that list, or one from
+    a session the store lost, survives in the browser until it closes and
+    opens nothing: revocation is server-side."""
+    response.delete_cookie(
+        CONTENT_ANCHOR_COOKIE, path=CONTENT_ANCHOR_PATH, secure=True, httponly=True, samesite="lax"
+    )
+    response.delete_cookie(CONTENT_PRESENCE_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
+    for path in paths:
+        response.delete_cookie(CONTENT_SESSION_COOKIE, path=path, secure=True, httponly=True, samesite="lax")
 
 
-def set_content_session_cookie(response: Response, session: Session, secret: str) -> None:
+def set_content_anchor_cookies(response: Response, session: Session, secret: str) -> None:
     # SameSite=Lax: a shared link to restricted content has to open
     # straight away on an existing content session, also from mail or chat.
     # No CSRF cookie: the content origin has no session-borne mutations.
+    response.set_cookie(
+        CONTENT_ANCHOR_COOKIE,
+        sign(secret, session.id),
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path=CONTENT_ANCHOR_PATH,
+    )
+    response.set_cookie(
+        CONTENT_PRESENCE_COOKIE,
+        CONTENT_PRESENT,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
+def set_content_session_cookie(response: Response, session: Session, secret: str, *, path: str) -> None:
+    """The session cookie for one site. `path` is a `/{group}/{site}/` prefix;
+    anything wider would put this cookie on requests another site's page
+    makes."""
     response.set_cookie(
         CONTENT_SESSION_COOKIE,
         sign(secret, session.id),
         httponly=True,
         secure=True,
         samesite="lax",
-        path="/",
+        path=path,
     )
 
 
@@ -404,7 +531,11 @@ def csrf_valid(request: Request, session: Session) -> bool:
 
 
 __all__ = [
+    "CONTENT_ANCHOR_COOKIE",
+    "CONTENT_ANCHOR_PATH",
     "CONTENT_LOGIN_COOKIE",
+    "CONTENT_PRESENCE_COOKIE",
+    "CONTENT_PRESENT",
     "CONTENT_SESSION_COOKIE",
     "CSRF_COOKIE",
     "CSRF_HEADER",
@@ -421,15 +552,20 @@ __all__ = [
     "SessionStore",
     "Visitor",
     "check_signature",
-    "clear_content_session_cookie",
+    "clear_content_session_cookies",
     "clear_session_cookies",
+    "content_anchor_session_from_request",
+    "content_presence",
     "content_session_from_request",
+    "content_site_prefix",
     "csrf_valid",
     "session_from_request",
+    "set_content_anchor_cookies",
     "set_content_session_cookie",
     "set_session_cookies",
     "sign",
     "sign_key_cookie",
+    "top_level_navigation",
     "valid_return_to",
     "visitor_from_request",
 ]

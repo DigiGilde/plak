@@ -199,8 +199,8 @@ and content stand on separate origins:
 - **content host** (`<domain>`, `PLAK_CONTENT_BASE_URL`): published sites,
   previews and version views, the public front page, and of the platform
   namespace exactly four paths: content login, its callback, content logout and
-  `/-/code`. Restricted content gets a content session
-  (`__Host-plak-content`, SameSite=Lax) without any beheer authority.
+  `/-/code`. Restricted content gets a content session (SameSite=Lax) without
+  any beheer authority, in a cookie scoped to the site it is for (§5.10).
 
 The separation is enforced by the application itself, as middleware that reads
 the `Host` header: on the content host only the paths above exist, on the beheer
@@ -366,22 +366,40 @@ Code: `serving/router.py`, `platform/spa.py` (`spa_headers`),
 
 ### 5.10 Subresources of another site
 
-Every site of every group is served from one hostname under a path prefix, the
-content session cookie has `Path=/` and uploaded content may run its own
-JavaScript. So a page of site A can `fetch()` site B and the browser attaches
-the visitor's credentials; the gate then decides correctly on a visitor who
-does have access. The durable answer is an origin per site. Until then non-public
-content is served to a subresource request only when the request says it comes
-from the same site: `Sec-Fetch-Site: same-origin` plus a `Sec-Fetch-Dest` other
-than `document`, `iframe` or `frame` needs a `Referer` whose path lies inside
-`/{group}/{site}/`. Live, preview and `_version` of one site are one publishing
-team and therefore one boundary.
+Every site of every group is served from one hostname under a path prefix and
+uploaded content may run its own JavaScript. So a page of site A can `fetch()`
+site B, and the gate then decides on whatever credentials the browser attached.
+Three things stand in the way of that, and it is worth being exact about what
+each one does and does not do.
 
-Two things deliberately fall outside it. A top-level navigation is something
-the visitor does and sees, also from one site to another. And a request without
-`Sec-Fetch-Site` at all (curl, a link checker, an older browser) is served: it
-carries no ambient credentials, the same reasoning as the origin check on
-`/-/code` (§7.4).
+**The content session cookie is scoped to one site**, `Path=/{group}/{site}/`
+(§7.6), the same shape the secret-link cookie has. A cookie path is matched
+against the **requested** URL, not against the page that asked for it, so this
+does not keep a session out of a fetch aimed at a site the visitor has already
+opened: their cookie for site B goes along whoever asks for site B. What it does
+take away is the ambient reach of one session over every site at once. A site
+the visitor has not opened in this browser has no cookie, and a request aimed at
+it is anonymous.
+
+**Published content has an origin of its own** (§5.7), which is the boundary a
+browser does enforce: an opaque-origin document is cross-site with everything,
+so the `SameSite=Lax` content cookie is attached to nothing it initiates.
+
+**Non-public content is served to a subresource request only when the request
+says it comes from the same site**: `Sec-Fetch-Site: same-origin` plus a
+`Sec-Fetch-Dest` other than `document`, `iframe` or `frame` needs a `Referer`
+whose path lies inside `/{group}/{site}/`. This reasons about headers, one of
+which an attacking page can partly shape, and it is the layer that catches a
+request that does carry a credential of its own. Live, preview and `_version` of
+one site are one publishing team and therefore one boundary.
+
+Two things deliberately fall outside the last one. A top-level navigation is
+something the visitor does and sees, also from one site to another; a
+`window.open()` to another site is therefore served, and the opened document is
+same-origin with its opener unless the sandbox of §5.7 separates them. And a
+request without `Sec-Fetch-Site` at all (curl, a link checker, an older browser)
+is served: it carries no ambient credentials, the same reasoning as the origin
+check on `/-/code` (§7.4).
 
 This leans on the site's own pages supplying a `Referer`, which is why
 `Referrer-Policy` on a site with secret links is `same-origin` and no longer
@@ -574,6 +592,41 @@ The beheer session cookie is SameSite=Strict, the content session cookie
 SameSite=Lax because a shared link to restricted content has to open after a
 cross-site navigation. Logging out on the beheer host is POST only and ends the
 content session too, through a redirect to `/-/logout` on the content host.
+
+The content session rides in three cookies, because all sites share one
+hostname (§5.10):
+
+- `__Secure-plak-content`, `Path=/{group}/{site}/`: the session id for content
+  requests. `__Secure-` rather than `__Host-`, because the `__Host-` prefix
+  requires `Path=/`. What that prefix also forbids is a `Domain` attribute, and
+  giving that up is what makes this cookie shadowable from a sibling host on the
+  same registrable domain; the value is signed and the session has to exist in
+  the store, so the worst a shadow achieves is pushing a visitor into a session
+  of the shadower's own, on an origin that has no session-borne mutations. The
+  beheer cookie keeps its `__Host-` prefix and with it the guarantee that
+  nothing on the content host can write it.
+- `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
+  login, the callback and the logout can read it, and nowhere else.
+- `__Host-plak-content-present`, `Path=/`: a flag with no session id and no
+  authority, which tells the serving layer that this browser has a content
+  session somewhere.
+
+One server-side session behind all three: one 12-hour lifetime, one `kind`, one
+revocation. Opening a site the visitor has not opened before arrives without a
+site cookie, so the gate sees an anonymous visitor and answers with the login
+redirect; `/-/login` then hands out the cookie for that site off the anchor
+session and sends the visitor on, without a round trip to the IdP. It does that
+only for a top-level navigation (`Sec-Fetch-Dest: document`, a header page
+script cannot set), because otherwise a page could walk another site's request
+through the login and collect a session for it on the way back. A preview or a
+`_version` view never answers an anonymous visitor with a login redirect of its
+own, so there the presence flag is what turns that first request into one; for a
+browser without the flag the answer stays the byte-identical neutral 404.
+
+The logout clears the anchor, the flag and the site cookie at every path the
+session handed one out for (the session remembers up to 32 of them). Past that
+ceiling a site cookie survives in the browser until it closes, and opens
+nothing: the session behind the id is gone.
 
 Code: `auth/sessions.py`, `platform/pages.py`. Guarded by: `test_sessions.py`.
 

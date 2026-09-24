@@ -12,6 +12,7 @@ import base64
 import hashlib
 import json
 import time
+from collections.abc import Sequence
 from urllib.parse import parse_qs
 
 import httpx
@@ -20,7 +21,17 @@ from fastapi import FastAPI
 
 from plak.api.errors import register_error_handlers
 from plak.auth.oidc import OidcClient
-from plak.auth.sessions import CONTENT_SESSION_COOKIE, SESSION_COOKIE, SessionKind, SessionStore, sign
+from plak.auth.sessions import (
+    CONTENT_ANCHOR_COOKIE,
+    CONTENT_ANCHOR_PATH,
+    CONTENT_PRESENCE_COOKIE,
+    CONTENT_PRESENT,
+    CONTENT_SESSION_COOKIE,
+    SESSION_COOKIE,
+    SessionKind,
+    SessionStore,
+    sign,
+)
 from plak.config import Settings
 from plak.main import SessionRecheckMiddleware
 from plak.platform import backchannel, pages
@@ -303,8 +314,13 @@ def set_content_session_cookie(
     acr: str = "urn:acr:hoog",
     refresh_token: str | None = None,
     sid: str | None = None,
+    sites: Sequence[str] = (),
 ):
-    """Creates a server-side content session (viewer) directly and sets the cookie."""
+    """Creates a server-side content session (viewer) directly and sets its
+    cookies: the anchor and the presence flag, plus the site cookie for every
+    `/{group}/{site}/` in `sites`. Like a browser, the client sends a site
+    cookie only to the site it belongs to, so a test that leaves `sites` empty
+    is a visitor who has not opened that site yet."""
     store: SessionStore = app.state.session_store
     session = store.create_session(
         sub=sub,
@@ -316,8 +332,12 @@ def set_content_session_cookie(
         sid=sid,
     )
     token = sign(app.state.settings.session_secret, session.id)
-    client.cookies.set(CONTENT_SESSION_COOKIE, token, domain="plak.example", path="/")
-    return session
+    client.cookies.set(CONTENT_ANCHOR_COOKIE, token, domain="plak.example", path=CONTENT_ANCHOR_PATH)
+    client.cookies.set(CONTENT_PRESENCE_COOKIE, CONTENT_PRESENT, domain="plak.example", path="/")
+    for prefix in sites:
+        store.note_content_site(session.id, prefix)
+        client.cookies.set(CONTENT_SESSION_COOKIE, token, domain="plak.example", path=prefix)
+    return store.get_session(session.id) or session
 
 
 async def start_login(

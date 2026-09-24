@@ -50,13 +50,16 @@ from plak.auth.sessions import (
     SessionKind,
     SessionStore,
     check_signature,
-    clear_content_session_cookie,
+    clear_content_session_cookies,
     clear_session_cookies,
-    content_session_from_request,
+    content_anchor_session_from_request,
+    content_site_prefix,
     session_from_request,
+    set_content_anchor_cookies,
     set_content_session_cookie,
     set_session_cookies,
     sign,
+    top_level_navigation,
     valid_return_to,
 )
 from plak.constants import (
@@ -565,12 +568,45 @@ async def _audit_auth(
     )
 
 
+def _cookie_for_next_site(request: Request, target: str) -> RedirectResponse | None:
+    """The content session cookie for the site the visitor is heading to, or
+    None when this request gets no shortcut and has to go to the IdP.
+
+    The content cookie is scoped to one `/{group}/{site}/`, so the first
+    request to a second site arrives without one and the gate sees an
+    anonymous visitor. With the anchor session still valid that costs no login
+    and no round trip to the IdP: the same session, one cookie more.
+
+    Only for a top-level navigation. A mint plus the redirect back would
+    otherwise be a two-hop way for a page on one site to have the browser
+    attach a session to a request aimed at another, which is the very thing
+    the scoped cookie takes away.
+    """
+    if not top_level_navigation(request):
+        return None
+    session = content_anchor_session_from_request(request)
+    if session is None:
+        return None
+    prefix = content_site_prefix(target)
+    if prefix is None:
+        return None
+    store: SessionStore = request.app.state.session_store
+    store.note_content_site(session.id, prefix)
+    response = RedirectResponse(target, status_code=303, headers={"Cache-Control": "no-store"})
+    set_content_session_cookie(response, session, request.app.state.settings.session_secret, path=prefix)
+    return response
+
+
 async def _start_login(request: Request, return_to: str | None, profile: _LoginProfile) -> RedirectResponse:
     settings = request.app.state.settings
     oidc: OidcClient = request.app.state.oidc_client
     store: SessionStore = request.app.state.session_store
 
     target = valid_return_to(return_to, profile.default_return_to)
+    if profile.kind is SessionKind.CONTENT:
+        shortcut = _cookie_for_next_site(request, target)
+        if shortcut is not None:
+            return shortcut
     try:
         start = await oidc.start_login(_redirect_uri(request, profile))
     except OidcError as error:
@@ -644,7 +680,7 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
     # Session id rotation: an existing session of the same kind is dropped on
     # login.
     if profile.kind is SessionKind.CONTENT:
-        old_session = content_session_from_request(request)
+        old_session = content_anchor_session_from_request(request)
     else:
         old_session = session_from_request(request)
     if old_session is not None:
@@ -680,9 +716,16 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
         except Exception:
             _logger.exception("Bijwerken van content_viewers overgeslagen (fail-open)")
 
-    response = RedirectResponse(valid_return_to(attempt.return_to, profile.default_return_to), status_code=303)
+    target = valid_return_to(attempt.return_to, profile.default_return_to)
+    response = RedirectResponse(target, status_code=303)
     if profile.kind is SessionKind.CONTENT:
-        set_content_session_cookie(response, session, settings.session_secret)
+        set_content_anchor_cookies(response, session, settings.session_secret)
+        prefix = content_site_prefix(target)
+        if prefix is not None:
+            # The site the visitor was heading to, so the login lands them on
+            # the page itself rather than on a second redirect.
+            store.note_content_site(session.id, prefix)
+            set_content_session_cookie(response, session, settings.session_secret, path=prefix)
     else:
         set_session_cookies(response, session, settings.session_secret)
     response.delete_cookie(profile.login_cookie, path="/", secure=True, httponly=True, samesite="lax")
@@ -760,7 +803,7 @@ async def content_logout(request: Request) -> Response:
 async def _content_logout(request: Request) -> Response:
     settings = request.app.state.settings
     store: SessionStore = request.app.state.session_store
-    session = content_session_from_request(request)
+    session = content_anchor_session_from_request(request)
     if session is not None:
         store.delete_session(session.id)
         await _audit_auth(
@@ -769,7 +812,7 @@ async def _content_logout(request: Request) -> Response:
     came_from_admin = request.query_params.get("from") == _FROM_BEHEER and settings.base_url
     target = f"{settings.base_url.rstrip('/')}/" if came_from_admin else DEFAULT_CONTENT_RETURN_TO
     response = RedirectResponse(target, status_code=303)
-    clear_content_session_cookie(response)
+    clear_content_session_cookies(response, session.content_sites if session is not None else ())
     return response
 
 
