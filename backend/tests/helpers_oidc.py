@@ -18,6 +18,7 @@ import httpx
 from authlib.jose import JsonWebToken, RSAKey
 from fastapi import FastAPI
 
+from plak.api.errors import register_error_handlers
 from plak.auth.oidc import OidcClient
 from plak.auth.sessions import CONTENT_SESSION_COOKIE, SESSION_COOKIE, SessionKind, SessionStore, sign
 from plak.config import Settings
@@ -226,6 +227,7 @@ def make_settings(idp: MockIdP, **overrides) -> Settings:
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        "environment": "dev",
         "content_base_url": CONTENT_BASE_URL,
     }
     if overrides.get("oidc_client_auth", "private_key_jwt") != "private_key_jwt":
@@ -245,6 +247,7 @@ def make_app(settings: Settings, idp: MockIdP) -> FastAPI:
     app.state.settings = settings
     app.state.session_store = SessionStore()
     app.state.oidc_client = make_oidc_client(settings, idp)
+    register_error_handlers(app)
     app.include_router(pages.router)
     app.include_router(backchannel.router)
     app.add_middleware(SessionRecheckMiddleware)
@@ -323,10 +326,11 @@ async def start_login(
     *,
     return_to: str | None = None,
     path_login: str = "/-/login",
+    headers: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """GET on the login route; returns the query parameters of the authorization URL."""
     params = {"returnTo": return_to} if return_to is not None else None
-    response = await client.get(path_login, params=params)
+    response = await client.get(path_login, params=params, headers=headers)
     assert response.status_code == 302, response.text
     authorization_url = httpx.URL(response.headers["location"])
     assert str(authorization_url).startswith(idp.issuer + "/authorize?")
@@ -344,9 +348,10 @@ async def complete_login(
     iss_value: str | None = None,
     path_login: str = "/-/login",
     path_callback: str = "/-/oauth2/callback",
+    headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     """Full login flow through the mock IdP; returns the callback response."""
-    q = await start_login(client, idp, return_to=return_to, path_login=path_login)
+    q = await start_login(client, idp, return_to=return_to, path_login=path_login, headers=headers)
     callback_params = {"code": "code-123", "state": q["state"]}
     if send_iss:
         callback_params["iss"] = iss_value if iss_value is not None else idp.issuer

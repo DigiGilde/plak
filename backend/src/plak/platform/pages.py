@@ -36,6 +36,8 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from starlette.responses import Response
 
 from plak import i18n, net
+from plak.api.errors import ApiError
+from plak.api.origin_guard import REASON_OTHER_ORIGIN, admin_origin_ok
 from plak.audit import vocabulary
 from plak.audit.log import ANONYMOUS, Actor, AuditLog
 from plak.auth.content_viewers import upsert_content_viewer
@@ -583,6 +585,7 @@ async def _start_login(request: Request, return_to: str | None, profile: _LoginP
         code_verifier=start.code_verifier,
         return_to=target,
         kind=profile.kind,
+        self_initiated=profile.kind is not SessionKind.ADMIN or admin_origin_ok(request),
     )
     response = RedirectResponse(start.authorization_url, status_code=302)
     response.set_cookie(
@@ -659,6 +662,7 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
         # the server.
         refresh_token=tokens.get("refresh_token"),
         sid=claims.get("sid"),
+        self_initiated=attempt.self_initiated,
     )
     await _audit_auth(
         request, vocabulary.LOGIN, Actor(ActorKind.MEMBER, session.sub), vocabulary.ALLOWED, kind=profile.kind
@@ -715,6 +719,13 @@ async def logout(request: Request) -> Response:
     """
     if on_content_host(request):
         return await _content_logout(request)
+
+    # The SPA submits a real form from the beheer origin, so it passes; a form
+    # on the content host does not. POST alone is no guard here: the content
+    # origin is same-site with the beheer origin, so SameSite=Strict still
+    # sends the session cookie along.
+    if not admin_origin_ok(request):
+        raise ApiError(403, REASON_OTHER_ORIGIN)
 
     settings = request.app.state.settings
     store: SessionStore = request.app.state.session_store

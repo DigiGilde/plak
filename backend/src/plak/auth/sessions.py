@@ -94,6 +94,11 @@ class Session:
     checked_at: datetime | None = None
     # Backoff after a soft failure: no new check before this moment.
     recheck_not_before: datetime | None = None
+    # Whether the login that made this session was started from the beheer
+    # origin itself. A login a third-party page navigated the browser into is
+    # still a valid session, but does not count as fresh where freshness is
+    # meant to prove deliberate intent (CLI device approval).
+    self_initiated: bool = True
 
     @property
     def last_confirmed_at(self) -> datetime:
@@ -109,6 +114,7 @@ class LoginAttempt:
     return_to: str
     created_at: datetime
     kind: SessionKind = SessionKind.ADMIN
+    self_initiated: bool = True
 
 
 @dataclass
@@ -128,6 +134,7 @@ class SessionStore:
         id_token: str | None = None,
         refresh_token: str | None = None,
         sid: str | None = None,
+        self_initiated: bool = True,
     ) -> Session:
         self._tick()
         session = Session(
@@ -142,6 +149,7 @@ class SessionStore:
             id_token=id_token,
             refresh_token=refresh_token,
             sid=sid,
+            self_initiated=self_initiated,
         )
         self._sessions[session.id] = session
         return session
@@ -199,6 +207,7 @@ class SessionStore:
         code_verifier: str,
         return_to: str,
         kind: SessionKind = SessionKind.ADMIN,
+        self_initiated: bool = True,
     ) -> LoginAttempt:
         self._tick()
         attempt = LoginAttempt(
@@ -209,6 +218,7 @@ class SessionStore:
             return_to=return_to,
             created_at=datetime.now(UTC),
             kind=kind,
+            self_initiated=self_initiated,
         )
         self._attempts[attempt.id] = attempt
         return attempt

@@ -2197,6 +2197,11 @@ async def _require_fresh_approval(request: Request, member: Member) -> None:
     session = sessions.session_from_request(request)
     if session is None:  # pragma: no cover - require_active_member has already refused this
         raise ApiError(401, KEY_NO_SESSION)
+    # A login another site navigated the browser into does not count as fresh:
+    # the IdP returns without a prompt on an existing SSO session, so a
+    # phishing page could otherwise re-arm this window itself.
+    if not session.self_initiated:
+        raise ApiError(401, "SESSION_NOT_FRESH")
     if (datetime.now(UTC) - session.created_at).total_seconds() > CLI_APPROVAL_MAX_SESSION_AGE_S:
         raise ApiError(401, "SESSION_NOT_FRESH")
     counter = getattr(request.app.state, "cli_approval_counter", None)

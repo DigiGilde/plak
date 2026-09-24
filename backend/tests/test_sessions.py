@@ -12,6 +12,7 @@ import pytest
 import pytest_asyncio
 from helpers_audit import install_audit_recorder
 from helpers_oidc import (
+    APP_BASE_URL,
     CONTENT_BASE_URL,
     MockIdP,
     complete_login,
@@ -261,6 +262,38 @@ class TestCallbackIssEnforcement:
             assert response.status_code == 400
 
 
+class TestLoginOrigin:
+    """A login another site navigated the browser into is a valid session, but
+    not a deliberate one: it must not re-arm the freshness window that guards
+    CLI device approval."""
+
+    @pytest.mark.parametrize(
+        ("headers", "expected"),
+        [
+            ({}, True),
+            ({"Sec-Fetch-Site": "none"}, True),
+            ({"Sec-Fetch-Site": "same-origin"}, True),
+            ({"Origin": APP_BASE_URL, "Sec-Fetch-Site": "same-origin"}, True),
+            ({"Sec-Fetch-Site": "same-site"}, False),
+            ({"Sec-Fetch-Site": "cross-site"}, False),
+            ({"Origin": CONTENT_BASE_URL}, False),
+        ],
+    )
+    async def test_the_session_records_where_the_login_was_started(self, client, app, idp, headers, expected):
+        response = await complete_login(client, idp, headers=headers)
+        assert response.status_code == 303
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+        assert app.state.session_store.get_session(session_id).self_initiated is expected
+
+    async def test_a_cross_site_login_still_yields_a_usable_session(self, client, app, idp):
+        """Only freshness is affected: the login itself works as before, so a
+        link from an e-mail or another site logs someone in as usual."""
+        response = await complete_login(client, idp, headers={"Sec-Fetch-Site": "cross-site"})
+        assert response.status_code == 303
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+        assert app.state.session_store.get_session(session_id) is not None
+
+
 CONTENT_LOGOUT_LEG = f"{CONTENT_BASE_URL}/-/logout?from=beheer"
 
 
@@ -294,6 +327,30 @@ class TestLogout:
     async def test_logout_without_session_is_harmless(self, client):
         response = await client.post("/-/logout")
         assert response.status_code == 303
+
+    async def test_the_spa_form_from_the_beheer_origin_logs_out(self, client, app, idp):
+        """What the browser really sends for the hidden form in App.vue."""
+        await complete_login(client, idp)
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+
+        response = await client.post(
+            "/-/logout", headers={"Origin": APP_BASE_URL, "Sec-Fetch-Site": "same-origin"}
+        )
+        assert response.status_code == 303
+        assert app.state.session_store.get_session(session_id) is None
+
+    async def test_a_form_on_the_content_host_cannot_end_the_beheer_session(self, client, app, idp):
+        """The content origin is same-site with the beheer origin, so
+        SameSite=Strict sends the session cookie along and POST alone is no
+        guard."""
+        await complete_login(client, idp)
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+
+        response = await client.post(
+            "/-/logout", headers={"Origin": CONTENT_BASE_URL, "Sec-Fetch-Site": "same-site"}
+        )
+        assert response.status_code == 403
+        assert app.state.session_store.get_session(session_id) is not None
 
 
 class TestContentLogout:
