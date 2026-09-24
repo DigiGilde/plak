@@ -15,8 +15,13 @@ hash. Only an outside verifier that kept an earlier chain hash of its own can
 catch that; against the schema owner this chain raises the cost of tampering
 and nothing more.
 
-Rows dropped from the end of a chain are invisible here for the same reason a
-missing last page is: there is nothing left that pointed at them.
+Rows dropped from either end of a chain are invisible here for the same reason
+a missing first or last page is: nothing that is left points at them. At the
+front that is not even suspicious, because the retention purge removes the
+oldest rows of a chain as a matter of routine, so a chain that starts above
+position 1 is the normal state of a system that has been running for ninety
+days. Only a head published before those rows went (audit/checkpoint.py) can
+tell a purge from a truncation.
 """
 
 from __future__ import annotations
@@ -84,8 +89,23 @@ class ChainBreak:
 
 
 def _break_reason(row) -> str | None:
-    """None when the row follows from its predecessor."""
-    expected_seq = 1 if row.previous_seq is None else row.previous_seq + 1
+    """None when the row follows from its predecessor.
+
+    The oldest surviving row of a chain is the exception: the purge removes
+    from that end, so a chain may legitimately start above position 1, and the
+    row it starts at was hashed over a predecessor that is no longer there.
+    Neither its position nor its hash can be held against anything, so it
+    counts as the anchor and the walk starts judging at the row after it. A gap
+    between two surviving rows stays a break: the purge never leaves one, it
+    only ever takes from the front.
+    """
+    if row.previous_seq is None:
+        if row.chain_seq > 1:
+            return None
+        # Position 1 is checkable after all: it was hashed over no predecessor,
+        # which is exactly what the recomputation assumed here.
+        return HASH_MISMATCH if bytes(row.chain_hash) != bytes(row.expected_hash) else None
+    expected_seq = row.previous_seq + 1
     if row.chain_seq != expected_seq:
         return SEQUENCE_GAP
     if bytes(row.chain_hash) != bytes(row.expected_hash):
@@ -97,7 +117,9 @@ def _break_reason(row) -> str | None:
 
 async def verify(dsn: str) -> list[ChainBreak]:
     """Returns the first break in each chain, in chain order; an empty list
-    means every row still follows from the one before it."""
+    means every surviving row still follows from the one before it. A chain
+    that no longer starts at position 1 is reported as a note, not as a break:
+    what stood in front of it cannot be judged from here at all."""
     engine = create_async_engine(dsn, hide_parameters=True)
     factory = make_session_factory(engine)
     breaks: list[ChainBreak] = []
@@ -108,6 +130,13 @@ async def verify(dsn: str) -> list[ChainBreak]:
             async for row in result:
                 if row.chain_shard in broken_shards:
                     continue
+                if row.previous_seq is None and row.chain_seq > 1:
+                    _logger.info(
+                        "Keten %d begint op positie %d: wat daarvoor stond is weg. Dat is wat de opruiming doet; "
+                        "alleen een eerder gepubliceerde ketenkop kan opruimen van afkappen onderscheiden.",
+                        row.chain_shard,
+                        row.chain_seq,
+                    )
                 reason = _break_reason(row)
                 if reason is None:
                     continue

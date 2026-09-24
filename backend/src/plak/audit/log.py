@@ -21,11 +21,24 @@ from dataclasses import dataclass
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from plak.audit import vocabulary
 from plak.audit.ip_crypto import encrypt_ip
 from plak.audit.pseudonymisation import pseudonymise, truncate_ip
 from plak.models.audit import ActorKind, AuditLogEntry
 
 _logger = logging.getLogger(__name__)
+
+
+def _with_ip_provenance(refs: dict | None, ip: str | None) -> dict | None:
+    """Marks a row whose IP address we could not vouch for.
+
+    The flag travels on the address itself (`net.ClientAddress`), so a caller
+    that hands over a plain string says nothing about provenance and gets no
+    flag. It is a boolean about the derivation, never about the person.
+    """
+    if ip is None or getattr(ip, "vouched", True):
+        return refs
+    return {**(refs or {}), vocabulary.IP_UNVOUCHED: True}
 
 
 class LookupLimitReachedError(Exception):
@@ -105,6 +118,7 @@ class AuditLog:
         when the audit row does not land."""
         actor_pseudonym = pseudonymise(self._pepper, actor.identifier) if actor.identifier else None
         ip_truncated = truncate_ip(ip) if ip else None
+        refs = _with_ip_provenance(refs, ip)
         # Generated up front (not left to IDMixin's default) because the
         # encryption below binds its ciphertext to this exact id.
         entry_id = uuid.uuid4()
@@ -152,6 +166,7 @@ class AuditLog:
             raise ValueError("write_strict_limited vereist een actor met identifier")
         actor_pseudonym = pseudonymise(self._pepper, actor.identifier)
         ip_truncated = truncate_ip(ip) if ip else None
+        refs = _with_ip_provenance(refs, ip)
         entry_id = uuid.uuid4()
         ip_encrypted = encrypt_ip(self._ip_key, entry_id, ip) if ip else None
         async with self._session_factory() as session, session.begin():

@@ -23,6 +23,7 @@ from plak.audit.pseudonymisation import pseudonymise, truncate_ip
 from plak.audit.retention import purge
 from plak.db import make_session_factory
 from plak.models.audit import ActorKind
+from plak.net import ClientAddress
 
 # asyncio_mode = "auto" (pyproject.toml) picks up async def tests by itself; this
 # file deliberately mixes sync and async tests, so no module-wide asyncio marker.
@@ -153,6 +154,70 @@ async def test_write_system_actor(audit_log: AuditLog, db_connection: asyncpg.Co
     row = await _read_audit_row(db_connection, action)
     assert row is not None
     assert row["actor_kind"] == "system"
+
+
+async def test_an_unvouched_ip_is_marked_in_the_refs(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    """The address stays exactly what was derived; the row only says that we
+    could not tell whether the client wrote it itself."""
+    action = f"test_actie_{uuid.uuid4().hex}"
+    await audit_log.write(
+        action,
+        ANONYMOUS,
+        "allowed",
+        refs={"group_slug": "nldd"},
+        ip=ClientAddress("203.0.113.42", vouched=False),
+    )
+
+    row = await _read_audit_row(db_connection, action)
+    assert row is not None
+    assert json.loads(row["refs"]) == {"group_slug": "nldd", vocabulary.IP_UNVOUCHED: True}
+    assert row["ip_truncated"] == "203.0.113.0/24"
+    assert decrypt_ip(_IP_KEY_A, row["id"], row["ip_encrypted"]) == "203.0.113.42"
+
+
+async def test_an_unvouched_ip_gets_refs_of_its_own_when_there_are_none(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    action = f"test_actie_{uuid.uuid4().hex}"
+    await audit_log.write(action, ANONYMOUS, "allowed", ip=ClientAddress("203.0.113.42", vouched=False))
+
+    row = await _read_audit_row(db_connection, action)
+    assert row is not None
+    assert json.loads(row["refs"]) == {vocabulary.IP_UNVOUCHED: True}
+
+
+async def test_a_vouched_ip_leaves_the_refs_alone(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    """Absence is the normal case, so the flag may never be written as false:
+    a reader filtering on it would otherwise see every row."""
+    action = f"test_actie_{uuid.uuid4().hex}"
+    await audit_log.write(action, ANONYMOUS, "allowed", ip=ClientAddress("203.0.113.42", vouched=True))
+    plain = f"test_actie_{uuid.uuid4().hex}"
+    await audit_log.write(plain, ANONYMOUS, "allowed", refs={"group_slug": "nldd"}, ip="203.0.113.42")
+
+    assert json.loads((await _read_audit_row(db_connection, action))["refs"]) is None
+    assert json.loads((await _read_audit_row(db_connection, plain))["refs"]) == {"group_slug": "nldd"}
+
+
+async def test_an_unvouched_ip_is_marked_on_the_limited_write_too(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    action = f"test_actie_{uuid.uuid4().hex}"
+    await audit_log.write_strict_limited(
+        action,
+        Actor(kind=ActorKind.MEMBER, identifier="sub-abc"),
+        "allowed",
+        refs={"reason": "zaak-1"},
+        ip=ClientAddress("203.0.113.42", vouched=False),
+        limit=5,
+        counted_actions=(action,),
+    )
+
+    row = await _read_audit_row(db_connection, action)
+    assert json.loads(row["refs"]) == {"reason": "zaak-1", vocabulary.IP_UNVOUCHED: True}
 
 
 async def test_write_fails_not_on_broken_db(caplog: pytest.LogCaptureFixture) -> None:

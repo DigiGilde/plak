@@ -133,6 +133,29 @@ every visitor of the page, and their code runs in the page. For confidential
 pages the switch therefore stays off; anyone who wants certainty bundles the
 library into the dist.
 
+#### Accepted risk: the switch stays on by default
+
+This is a decision, not an oversight. The publisher decides what their own page
+loads, and a default of off would break the content people actually deliver
+without them being able to see why. So a published site may load scripts and
+styles from the allowed CDNs until its publisher turns that off.
+
+What is accepted with it: every site runs on one origin. A compromise of one of
+those CDNs therefore does not stay with one site. The code runs in the page of
+every site whose visitor loads it, on the content origin, with whatever that
+page can reach.
+
+The per-site sandbox reduces that substantially: a sandboxed document has no
+cookies and cannot reach another site's content, so a compromised script is
+limited to the page it ran in. It is not the whole answer. It does not stop the
+CDN seeing every visitor of every site that loads from it, it does not stop the
+script doing whatever that one page does, and it holds only for the documents
+that are sandboxed.
+
+Whoever cannot accept that turns the switch off per site and bundles the
+library into the dist; for confidential pages that is the advice, in those
+words, in the interface.
+
 ## Ingest and storage
 
 | Item | Status |
@@ -172,6 +195,8 @@ library into the dist.
 | Platform administrator check as a FastAPI dependency on the audit log endpoints | implemented: runs before the body is validated, so a non-administrator always gets a 403 (and is audited), never a 422 that leaves the refusal unaudited; `api/admin.py` (`require_platform_admin`), `backend/tests/test_audit_api.py` |
 | Full IP address encrypted separately (`ip_encrypted`), own key, bound to the row | implemented: AES-256-GCM under `PLAK_AUDIT_IP_KEY` (32 bytes, separate from `PLAK_AUDIT_PEPPER` and `PLAK_SESSION_SECRET`); the AAD contains the row id, so a ciphertext copied to another row does not decrypt there; decryptable only via `POST /platform/audit/entries/{id}/ip`, never via `GET /platform/audit`, and that disclosure itself also counts towards the daily limit; `audit/ip_crypto.py`, `backend/tests/test_ip_crypto.py`, `backend/tests/test_audit.py`, `backend/tests/test_audit_ip.py` |
 | Key rotation for `PLAK_AUDIT_IP_KEY` | implemented: every encrypted value carries a key id (derived from the key, not a secret); `PLAK_AUDIT_IP_KEY_PREVIOUS` keeps the previous key around as long as older rows still have to be disclosable. Without that variable, rows from before the rotation become unreadable, while `ip_truncated` and the row itself are preserved; `config.py`, `audit/ip_crypto.py`, `backend/tests/test_audit_ip.py` |
+| Chain head published outside the database | implemented: `just publish-audit-head` (`audit/checkpoint.py`) writes the last position and hash of every chain to the application log, `just verify-audit-head <bestand>` holds a line published earlier against the database. A shipped line cannot be retracted, so what the walk itself cannot catch - a rewrite with the chain recomputed, rows removed from the newest end, an oldest end that moved further than the retention period allows - shows up against it. Which check catches what is tabled in the audit log doc; the walk alone is not enough. It prevents nothing and proves nothing if nobody kept a line; `backend/tests/test_audit_checkpoint.py`, `docs/audit-log.md` |
+| An IP address we cannot vouch for is marked as such | implemented: `refs.ip_unvouched` is `true` on a row whose address was derived over a skipped `X-Forwarded-For` entry, which with `PLAK_TRUSTED_PROXIES` as wide as all of RFC1918 is a value a privately addressed client can write itself. The address is stored unchanged and nothing is refused over it; `net.py` (`ClientAddress`), `audit/log.py`, `backend/tests/test_net.py`, `backend/tests/test_audit.py`. Disappears as a concern once the setting names the routers' own range |
 | Database errors do not log bind parameters | implemented: `hide_parameters=True` on the SQLAlchemy engine of the app and of the purge job, so that a failed statement never puts a sub, email address or `reason` in the log; `db.py`, `audit/retention.py` |
 
 ## Database
@@ -364,7 +389,12 @@ Other points:
 - `PLAK_TRUSTED_PROXIES` has to contain the CIDR of the HAProxy router pods on
   ZAD (the router adds `X-Forwarded-For` in append mode; the app
   takes the last untrusted hop), otherwise the
-  client IP derivation ends up on the router IP.
+  client IP derivation ends up on the router IP. The range can be read off in
+  production from the direct peer address the app sees. As long as the setting
+  is wider than that (today: all of RFC1918), a privately addressed client can
+  write its own address into the header and have it stick; such a row is marked
+  with `refs.ip_unvouched` (`docs/audit-log.md`), and naming the real range
+  makes that concern go away.
 - `/healthz` exists only internally (spec §4a/§11): on both public hosts
   `host_separation.py` gives the path a neutral 404, and a probe with a
   different `Host` already strands on `TrustedHostMiddleware` before that. The
