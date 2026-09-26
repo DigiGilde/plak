@@ -3,8 +3,12 @@ import '@nldd/design-system';
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
-import type { Site } from '../api/types';
+import type { AccessBase, Site } from '../api/types';
+import { en } from '../i18n/en';
+import { nl } from '../i18n/nl';
 import SiteRow from './SiteRow.vue';
+
+const ACCESS_BASES: AccessBase[] = ['public', 'sso', 'site_team', 'nobody'];
 
 const site: Site = {
   groupSlug: 'nldd',
@@ -116,6 +120,41 @@ describe('SiteRow', () => {
     ]);
 
     wrapper.unmount();
+  });
+
+  it.each(ACCESS_BASES)('puts the base alone in the badge for %s, extras and all', async (base) => {
+    const access = { base, keys: true, invitees: true };
+    const wrapper = mount(SiteRow, {
+      props: { site: { ...site, access } },
+      attachTo: document.body,
+    });
+    await flushPromises();
+
+    // A badge neither wraps nor shrinks, so the column can only hold the base.
+    const cell = wrapper.element.children[2] as HTMLElement;
+    const badge = cell.querySelector('nldd-badge');
+    expect(badge?.getAttribute('text')).toBe(nl[`access.short.${base}`]);
+    // Nothing is lost: the extras stay reachable on the cell and for a screen
+    // reader, and the site's own page carries the whole sentence.
+    const full = base === 'public' ? 'Publiek' : expect.stringContaining('geheime links');
+    expect(cell.getAttribute('title')).toEqual(full);
+    expect(cell.querySelector('.alleen-schermlezer')?.textContent).toEqual(full);
+    // Said once: the badge repeating the base would be heard before it.
+    expect(badge?.hasAttribute('decorative')).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it('keeps the access badge labels short enough for their column', () => {
+    // The access column is 9.25rem, 148 px at a root font of 16 px, and a badge
+    // adds 2x6 px of padding of its own. Measured in Chromium: the widest label
+    // today is "Link of uitnodiging" at 122.14 px for 19 characters, so a
+    // character costs about 5.8 px and 20 characters still clear the column.
+    // The ratio holds at 200% text, where both the column and the label double.
+    for (const base of ACCESS_BASES) {
+      expect(nl[`access.short.${base}`].length).toBeLessThanOrEqual(20);
+      expect(en[`access.short.${base}`].length).toBeLessThanOrEqual(20);
+    }
   });
 
   it('shows no action buttons at row level', async () => {
