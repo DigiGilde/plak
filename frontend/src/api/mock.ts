@@ -532,13 +532,16 @@ const SEARCH_LIMIT = 10;
 /**
  * The member search behind both toevoegvelden: active accounts whose name or
  * e-mail contains the query, by name and then e-mail, capped. `taken` holds
- * the identifiers and addresses that already have a role in this group or on
- * this site, which marks them in the list instead of leaving them out.
+ * the identifiers and addresses that already have a role of their own here,
+ * which marks them in the list instead of leaving them out. `viaGroup` is what
+ * the site search adds: the role someone already reaches the site with through
+ * the group, per identifier and per address.
  */
 function memberSuggestions(
   data: MockData,
   query: string,
   taken: Set<string>,
+  viaGroup: Map<string, Role> = new Map(),
 ): MemberSuggestion[] {
   const needle = query.toLowerCase();
   return data.members
@@ -553,6 +556,7 @@ function memberSuggestions(
       name: l.name,
       email: l.email,
       alreadyMember: taken.has(l.email) || taken.has(l.ssoSubject),
+      groupRole: viaGroup.get(l.email) ?? viaGroup.get(l.ssoSubject) ?? null,
     }));
 }
 
@@ -989,10 +993,21 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         if (!siteRow) return siteNotFound();
         const query = (url.searchParams.get('q') ?? '').trim();
         if (query.length < SEARCH_MIN_LENGTH) return searchTooShort();
+        const rows = siteMemberRows(data, groupSlug, siteSlug);
         const taken = new Set(
-          siteMemberRows(data, groupSlug, siteSlug).flatMap((l) => [l.identifier, l.email]),
+          rows.filter((l) => l.siteRole !== null).flatMap((l) => [l.identifier, l.email]),
         );
-        return json(200, memberSuggestions(data, query, taken));
+        const viaGroup = new Map<string, Role>(
+          rows.flatMap((l) =>
+            l.groupRole === null
+              ? []
+              : ([
+                  [l.identifier, l.groupRole],
+                  [l.email, l.groupRole],
+                ] as [string, Role][]),
+          ),
+        );
+        return json(200, memberSuggestions(data, query, taken, viaGroup));
       }
       if (rest.length === 6 && rest[3] === 'members' && rest[5] === 'role' && method === 'PUT') {
         if (!siteRow) return siteNotFound();

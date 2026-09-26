@@ -27,6 +27,7 @@ function suggestionOf(overrides: Partial<MemberSuggestion> = {}): MemberSuggesti
     name: 'Ada Vermeer',
     email: 'ada@voorbeeld.nl',
     alreadyMember: false,
+    groupRole: null,
     ...overrides,
   };
 }
@@ -567,7 +568,7 @@ describe('GroupMembersManager (what the field reaches)', () => {
       .text();
 
     expect(help).toContain('Vanaf twee letters');
-    expect(help).toContain('Wie al lid is staat er wel bij, maar is niet te kiezen.');
+    expect(help).toContain('Wie al lid is, staat er met die vermelding bij.');
   });
 });
 
@@ -641,7 +642,7 @@ describe('GroupMembersManager (suggestions)', () => {
     expect(menu()).toBe('Niemand gevonden');
   });
 
-  it('marks whoever is already a member and does not let them be chosen', async () => {
+  it('marks whoever is already a member, and still lets them be chosen', async () => {
     const search = vi.fn().mockResolvedValue([
       suggestionOf({ alreadyMember: true }),
       suggestionOf({
@@ -662,7 +663,9 @@ describe('GroupMembersManager (suggestions)', () => {
       'Ada Vermeer (al lid)',
       'Sanne Vermeulen',
     ]);
-    expect(items[0]!.attributes('disabled')).toBeDefined();
+    // No greying out: acting on it answers with what the server says about it,
+    // which a row that cannot be clicked never gets to say.
+    expect(items[0]!.attributes('disabled')).toBeUndefined();
     expect(items[1]!.attributes('disabled')).toBeUndefined();
     // The address is always shown, otherwise two namesakes cannot be told
     // apart.

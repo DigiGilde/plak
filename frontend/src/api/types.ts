@@ -248,14 +248,17 @@ export interface GroupMember {
 /**
  * Hit of the member search under a group or one site: someone who could be
  * given a role there. `identifier` is what the add call wants, and
- * `alreadyMember` says whether this person already has a role in that same
- * group or on that same site.
+ * `alreadyMember` says whether this person already has a role of their own at
+ * that level: in that group, or on that one site. `groupRole` only comes from
+ * the site search and holds the role this person already reaches the site with
+ * through the group, which a site role widens but never narrows.
  */
 export interface MemberSuggestion {
   identifier: string;
   name: string;
   email: string;
   alreadyMember: boolean;
+  groupRole: Role | null;
 }
 
 /**

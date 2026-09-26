@@ -361,6 +361,16 @@ describe('searching members', () => {
     const outsider = await plak.searchSiteMembers('nldd', 'website', 'bakker');
     expect(outsider.map((hit) => hit.identifier)).toEqual(['iris@voorbeeld.nl']);
     expect(outsider[0]!.alreadyMember).toBe(false);
+    expect(outsider[0]!.groupRole).toBeNull();
+  });
+
+  it('offers a group member on a site, with the role the group gives them', async () => {
+    const hits = await plak.searchSiteMembers('nldd', 'website', 'ada');
+
+    // Ada is redacteur in the group and has no role of her own on this site:
+    // a site role would still widen what she may here.
+    expect(hits.map((hit) => hit.alreadyMember)).toEqual([false]);
+    expect(hits.map((hit) => hit.groupRole)).toEqual(['editor']);
   });
 });
 

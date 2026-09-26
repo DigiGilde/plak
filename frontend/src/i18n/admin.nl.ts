@@ -80,7 +80,8 @@ export const adminNl = {
   'admin.siteMembers.addFailed': '{name} een rol op deze site geven is niet gelukt',
   'admin.siteMembers.roleFailed': 'De siterol van {name} wijzigen is niet gelukt',
   'admin.siteMembers.removeFailed': 'De siterol van {name} weghalen is niet gelukt',
-  'admin.siteMembers.suggestion.alreadyMember': '{name} (al lid)',
+  'admin.siteMembers.suggestion.alreadyMember': '{name} (heeft al een siterol)',
+  'admin.siteMembers.suggestion.viaGroup': '{name} ({role} via de groep)',
   'admin.siteMembers.form.heading': 'Iemand een rol op deze site geven',
   'admin.siteMembers.form.hint':
     'Een siterol verbreedt alleen: wie via de groep al meer mag, houdt dat. Toegang weghalen doe je bij de groep. Iemand moet eerst zelf op het beheer ingelogd hebben; Plak maakt hier geen account aan.',

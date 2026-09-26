@@ -1627,6 +1627,7 @@ class TestMemberSearch:
                 "name": "Joke Jansen",
                 "email": "jj@example.nl",
                 "alreadyMember": False,
+                "groupRole": None,
             }
         ]
 
@@ -1721,20 +1722,48 @@ class TestMemberSearch:
         assert hits["b@example.nl"] is False
         assert hits["buiten@example.nl"] is False
 
-    async def test_on_a_site_a_group_role_counts_as_already_there(self, client, app, data, factory):
-        """De site's ledenlijst shows the groepsleden too, so the flag follows it."""
+    async def test_on_a_site_only_an_own_site_role_counts_as_already_there(
+        self, client, app, data, factory
+    ):
+        """A groepslid can still be given a siterol, because a siterol only
+        widens. Only an eigen siterol rules someone out."""
         await _new_member(factory, sub="lid-buiten", email="buiten@example.nl", name="Bea Buiten")
         await _join_site(factory, data.site, data.member_b, Role.EDITOR)
         login(client, app, sub="lid-a", email="a@example.nl")
 
         hits = {
-            hit["identifier"]: hit["alreadyMember"]
+            hit["identifier"]: hit
             for hit in (await client.get(self.SITE, params={"q": "@example.nl"})).json()
         }
 
-        assert hits["a@example.nl"] is True
-        assert hits["b@example.nl"] is True
-        assert hits["buiten@example.nl"] is False
+        assert hits["a@example.nl"]["alreadyMember"] is False
+        assert hits["b@example.nl"]["alreadyMember"] is True
+        assert hits["buiten@example.nl"]["alreadyMember"] is False
+
+    async def test_on_a_site_the_group_role_comes_along(self, client, app, data, factory):
+        """What someone reaches this site with through the groep says whether a
+        siterol adds anything, so it is in the answer."""
+        await _new_member(factory, sub="lid-buiten", email="buiten@example.nl", name="Bea Buiten")
+        await _join_group(factory, data.group, data.member_b, Role.READER)
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        hits = {
+            hit["identifier"]: hit["groupRole"]
+            for hit in (await client.get(self.SITE, params={"q": "@example.nl"})).json()
+        }
+
+        assert hits["a@example.nl"] == "admin"
+        assert hits["b@example.nl"] == "reader"
+        assert hits["buiten@example.nl"] is None
+
+    async def test_on_a_group_the_group_role_stays_out(self, client, app, data):
+        """`groupRole` belongs to the sitezoekveld; on the groep it says nothing
+        that `alreadyMember` does not already say."""
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        hits = (await client.get(self.GROUP, params={"q": "a@example.nl"})).json()
+
+        assert [hit["groupRole"] for hit in hits] == [None]
 
     @pytest.mark.parametrize("role", [Role.READER, Role.EDITOR])
     async def test_a_role_under_admin_may_not_search(self, client, app, data, factory, role):
