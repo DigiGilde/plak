@@ -29,6 +29,8 @@ const shared = {
     'This is the last active platform administrator. Appoint someone else first.',
   'error.code.SELF_NOT_ALLOWED': 'You cannot do this to your own account.',
   'error.code.UNKNOWN_MEMBER': 'Unknown member; they have to sign in to the admin once first.',
+  'error.guidance.ALREADY_GROUP_MEMBER': 'You change their role from the menu behind their row.',
+  'error.guidance.ALREADY_SITE_MEMBER': 'You change that role from the menu behind their row.',
 
   'beta.bar': 'Beta - Plak is under development and may contain errors',
 

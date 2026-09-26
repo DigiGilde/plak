@@ -785,10 +785,45 @@ describe('GroupMembersManager (error)', () => {
     expect(notice.attributes('variant')).toBe('critical');
     expect(notice.attributes('text')).toBe('Groepslid onbekend@voorbeeld.nl toevoegen is niet gelukt');
     expect(notice.attributes('supporting-text')).toBe('Verwacht een e-mailadres.');
-    expect(notice.find('nldd-button[slot="actions"]').attributes('text')).toBe(
-      'Opnieuw proberen',
-    );
+    // A 422 reads the request and refuses what is in it, so the same address
+    // gets the same answer.
+    expect(notice.find('nldd-button[slot="actions"]').exists()).toBe(false);
     expect(wrapper.emitted('added')).toBeUndefined();
+  });
+
+  it.each([
+    { status: 409, detail: 'Dit lid zit al in de groep.', again: false },
+    { status: 404, detail: 'Deze groep bestaat niet.', again: false },
+    { status: 429, detail: 'Het ratelimit-budget is op.', again: true },
+    { status: 500, detail: 'Er ging iets mis.', again: true },
+    { status: 503, detail: 'Even niet bereikbaar.', again: true },
+  ])('offers another go on a $status only where it could land differently', async (refusal) => {
+    const add = vi.fn().mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Fout',
+        status: refusal.status,
+        detail: refusal.detail,
+      }),
+    );
+    const wrapper = mountComponent({ add });
+
+    await fillInAndSubmit(wrapper, 'lid@voorbeeld.nl');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification nldd-button[slot="actions"]').exists()).toBe(
+      refusal.again,
+    );
+  });
+
+  it('offers another go when there was no answer at all', async () => {
+    const add = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const wrapper = mountComponent({ add });
+
+    await fillInAndSubmit(wrapper, 'lid@voorbeeld.nl');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification nldd-button[slot="actions"]').exists()).toBe(true);
   });
 
   it('puts the address back in the field with "Opnieuw proberen" and clears the notice', async () => {
@@ -818,6 +853,26 @@ describe('GroupMembersManager (error)', () => {
       'Groepslid lid@voorbeeld.nl verwijderen is niet gelukt',
     );
     expect(wrapper.emitted('removed')).toBeUndefined();
+  });
+
+  it('adds where the role is changed to a refusal that only says what happened', async () => {
+    const add = vi.fn().mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Conflict',
+        status: 409,
+        detail: 'Dit lid zit al in de groep.',
+        code: 'ALREADY_GROUP_MEMBER',
+      }),
+    );
+    const wrapper = mountComponent({ add });
+
+    await fillInAndSubmit(wrapper, 'lid@voorbeeld.nl');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
+      'Dit lid zit al in de groep. De rol wijzig je in het menu achter de regel van dit lid.',
+    );
   });
 });
 
@@ -999,5 +1054,23 @@ describe('GroupMembersManager (suggestions)', () => {
     // The debounce outlives the component otherwise, and fires at a form that
     // is no longer on screen.
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it('names whoever was picked, not the address they were picked by', async () => {
+    const search = vi.fn().mockResolvedValue([suggestionOf()]);
+    const add = vi
+      .fn()
+      .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
+    const wrapper = mountComponent({ search, add });
+
+    await typeIn(wrapper, 'ada');
+    await afterDebounce();
+    await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
+    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification').attributes('text')).toBe(
+      'Groepslid Ada Vermeer toevoegen is niet gelukt',
+    );
   });
 });

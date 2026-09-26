@@ -96,14 +96,8 @@ NL: Final[dict[str, str]] = {
     "NOT_GROUP_MEMBER": "Dit lid zit niet in de groep.",
     "NOT_GROUP_MEMBER.you": "Je bent geen lid van deze groep.",
     "NOT_SITE_MEMBER": "Dit lid heeft geen rol op deze site.",
-    "ALREADY_GROUP_MEMBER": (
-        "Dit lid zit al in de groep. De rol wijzig je in het menu achter de regel "
-        "van dit lid."
-    ),
-    "ALREADY_SITE_MEMBER": (
-        "Dit lid heeft al een eigen rol op deze site. Die rol wijzig je in het menu "
-        "achter de regel van dit lid."
-    ),
+    "ALREADY_GROUP_MEMBER": "Dit lid zit al in de groep.",
+    "ALREADY_SITE_MEMBER": "Dit lid heeft al een eigen rol op deze site.",
     "GROUP_NOT_EMPTY": "Alleen een lege groep kan worden verwijderd.",
     "SLUG_EXISTS.group": "Er bestaat al een groep met slug {slug!r}.",
     "SLUG_EXISTS.site": "Er bestaat al een site met slug {slug!r} in deze groep.",
@@ -349,14 +343,8 @@ EN: Final[dict[str, str]] = {
     "NOT_GROUP_MEMBER": "This member is not in the group.",
     "NOT_GROUP_MEMBER.you": "You are not a member of this group.",
     "NOT_SITE_MEMBER": "This member has no role on this site.",
-    "ALREADY_GROUP_MEMBER": (
-        "This member is already in the group. Their role is changed from the menu "
-        "behind their row."
-    ),
-    "ALREADY_SITE_MEMBER": (
-        "This member already has a role of their own on this site. That role is "
-        "changed from the menu behind their row."
-    ),
+    "ALREADY_GROUP_MEMBER": "This member is already in the group.",
+    "ALREADY_SITE_MEMBER": "This member already has a role of their own on this site.",
     "GROUP_NOT_EMPTY": "Only an empty group can be deleted.",
     "SLUG_EXISTS.group": "A group with slug {slug!r} already exists.",
     "SLUG_EXISTS.site": "A site with slug {slug!r} already exists in this group.",

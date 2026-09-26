@@ -102,7 +102,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.confirm.remove.confirm': 'Remove from the group',
   'group.members.confirm.remove.confirmWithSiteRoles':
     'Remove from the group and remove the site roles',
-  'group.members.addFailed': 'Could not add group member {identifier}',
+  'group.members.addFailed': 'Could not add group member {name}',
   'group.members.roleChangeFailed': 'Could not change the role of {name}',
   'group.members.removeFailed': 'Could not remove group member {name}',
   'group.members.retry': 'Try again',

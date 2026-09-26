@@ -36,6 +36,12 @@ const shared = {
     'Dit is de laatste actieve platformbeheerder. Wijs eerst iemand anders aan.',
   'error.code.SELF_NOT_ALLOWED': 'Dit kun je niet bij jezelf doen.',
   'error.code.UNKNOWN_MEMBER': 'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
+  // What this interface can add to a refusal that holds for every client of
+  // the API: where, on this screen, the thing it names is changed.
+  'error.guidance.ALREADY_GROUP_MEMBER':
+    'De rol wijzig je in het menu achter de regel van dit lid.',
+  'error.guidance.ALREADY_SITE_MEMBER':
+    'Die rol wijzig je in het menu achter de regel van dit lid.',
 
   // -- The development notice, on both hosts --------------------------------
   // One line: nldd-status-bar shows one and cuts the rest off with an
