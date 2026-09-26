@@ -826,7 +826,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         const before = data.cliSessions.length;
         data.cliSessions = data.cliSessions.filter((s) => s.id !== id);
         if (data.cliSessions.length === before) {
-          return problem(404, 'Onbekend apparaat', `Geen gekoppeld apparaat met id "${id}".`, 'CLI_SESSION_UNKNOWN');
+          return problem(404, 'Onbekende CLI-sessie', `Geen gekoppelde sessie met id "${id}".`, 'CLI_SESSION_UNKNOWN');
         }
         return empty(204);
       }

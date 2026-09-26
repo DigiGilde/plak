@@ -92,7 +92,7 @@ const EXEMPT_FILES = [
 
 /** Literal strings that are not visible text, with their reason. */
 const ALLOWED = [
-  // Route paths and slugs are addresses, not text: /cli-link, /-/devices,
+  // Route paths and slugs are addresses, not text: /cli-link, /-/sessions,
   // /-/profile.
   /^\/[a-z0-9/-]*$/,
   // data-testid values, the ids an aria-labelledby or an nldd-validation-item

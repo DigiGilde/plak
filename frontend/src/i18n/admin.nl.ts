@@ -1,5 +1,5 @@
 /**
- * Dutch catalogue section: platform administration, linked devices and the components several screens share (error banner, confirmation, row menu, notifications).
+ * Dutch catalogue section: platform administration, linked sessions and the components several screens share (error banner, confirmation, row menu, notifications).
  *
  * A section per area rather than one file of many hundreds of keys: this is
  * the unit a reviewer can hold in their head, and the unit a screen change
@@ -43,24 +43,24 @@ export const adminNl = {
   'admin.members.activateFailed': '{name} activeren is niet gelukt',
   'admin.members.deactivateFailed': '{name} deactiveren is niet gelukt',
 
-  // -- Linked devices -------------------------------------------------------
-  'admin.devices.subtitle': 'Elk apparaat dat via {command} toegang kreeg tot je account.',
-  'admin.devices.loading': 'Apparaten laden',
-  'admin.devices.empty': 'Nog geen gekoppelde apparaten',
-  'admin.devices.empty.detail':
+  // -- Linked sessions ------------------------------------------------------
+  'admin.sessions.subtitle': 'Elke aanmelding met {command} die nog toegang heeft tot je account.',
+  'admin.sessions.loading': 'Sessies laden',
+  'admin.sessions.empty': 'Nog geen gekoppelde sessies',
+  'admin.sessions.empty.detail':
     'Voer plak login uit op je computer om de Plak-CLI te koppelen aan je account.',
-  'admin.devices.unknownClient': 'Onbekend programma',
-  'admin.devices.neverUsed': 'nog niet',
-  'admin.devices.times': 'Gekoppeld {linked} - laatst gebruikt {lastUsed} - verloopt {expires}',
-  'admin.devices.unlink': 'Ontkoppelen',
-  'admin.devices.unlink.label': '{name} ontkoppelen',
-  'admin.devices.confirm.title': '{name} ontkoppelen?',
-  'admin.devices.confirm.text':
-    'Dit apparaat verliest meteen toegang tot je account en moet opnieuw plak login uitvoeren om weer te koppelen.',
-  'admin.devices.confirm.keep': 'Behoud koppeling',
-  'admin.devices.confirm.confirm': 'Ontkoppel apparaat',
-  'admin.devices.unlinkFailed': '{name} niet ontkoppeld',
-  'admin.devices.unlinkFailed.detail': 'Ontkoppelen is niet gelukt.',
+  'admin.sessions.unknownClient': 'Onbekend programma',
+  'admin.sessions.neverUsed': 'nog niet',
+  'admin.sessions.times': 'Gekoppeld {linked} - laatst gebruikt {lastUsed} - verloopt {expires}',
+  'admin.sessions.revoke': 'Intrekken',
+  'admin.sessions.revoke.label': 'Sessie van {name} intrekken',
+  'admin.sessions.confirm.title': 'Sessie van {name} intrekken?',
+  'admin.sessions.confirm.text':
+    'Deze sessie verliest meteen toegang tot je account; opnieuw koppelen gaat met plak login.',
+  'admin.sessions.confirm.keep': 'Behoud sessie',
+  'admin.sessions.confirm.confirm': 'Sessie intrekken',
+  'admin.sessions.revokeFailed': 'Sessie van {name} niet ingetrokken',
+  'admin.sessions.revokeFailed.detail': 'Intrekken is niet gelukt.',
 
   // -- Site members: the Leden tab of a site --------------------------------
   'admin.siteMembers.inherited.summary.one': '{count} lid via de groep {group}',

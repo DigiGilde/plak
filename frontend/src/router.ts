@@ -50,10 +50,10 @@ export const routes = [
     meta: { titleKey: 'profile.title' },
   },
   {
-    path: '/-/devices',
-    name: 'devices',
-    component: () => import('./pages/Apparaten.vue'),
-    meta: { titleKey: 'nav.devices' },
+    path: '/-/sessions',
+    name: 'sessions',
+    component: () => import('./pages/Sessions.vue'),
+    meta: { titleKey: 'nav.sessions' },
   },
   // Above '/:group': the CLI's device flow opens this path directly (not
   // under '/-/'), so it has to be matched before the group route below.

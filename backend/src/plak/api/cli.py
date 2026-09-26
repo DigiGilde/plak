@@ -4,7 +4,7 @@ that Plak brokers on top of its own beheer SSO login.
 The CLI side lives here and needs no session: asking for a device code,
 polling the token endpoint, and logging out or asking who it is with its
 access token. The member side (looking up, approving and denying a user code,
-and the list of linked devices) needs a fresh beheer session with CSRF and
+and the list of linked sessions) needs a fresh beheer session with CSRF and
 lives in api/admin.py.
 
 The token endpoint answers RFC 8628's error codes as problem+json 400 with
@@ -61,7 +61,7 @@ class DeviceAuthorizationRequest(ApiModel):
         default=None,
         max_length=cli.CLIENT_NAME_MAX_LENGTH,
         description=(
-            "Hoe de CLI zichzelf noemt; staat op het goedkeuringsscherm en in de lijst gekoppelde apparaten. "
+            "Hoe de CLI zichzelf noemt; staat op het goedkeuringsscherm en in de lijst gekoppelde sessies. "
             f"Hoogstens {cli.CLIENT_NAME_MAX_LENGTH} tekens; stuur- en opmaaktekens worden eruit gehaald."
         ),
         examples=["plak-cli 1.2 on macOS"],
@@ -345,8 +345,8 @@ class LogoutRequest(ApiModel):
     openapi_extra={"security": [{SECURITY_BEARER: []}, {}]},
     summary="Uitloggen met de CLI",
     description=(
-        "Trekt de CLI-sessie in (`plak logout`), met al haar tokens; het apparaat verdwijnt uit de lijst "
-        "gekoppelde apparaten. Noem de sessie op een van twee manieren:\n\n"
+        "Trekt de CLI-sessie in (`plak logout`), met al haar tokens; ze verdwijnt uit de lijst "
+        "gekoppelde sessies. Noem de sessie op een van twee manieren:\n\n"
         "* `Authorization: Bearer plakcli_...`: het toegangstoken, ook als het al verlopen is, zolang het "
         "echt is en de sessie nog bestaat;\n"
         "* een JSON-lichaam `{\"refreshToken\": \"plakclr_...\"}` (zoals RFC 7009), het huidige of een al "

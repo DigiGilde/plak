@@ -292,7 +292,7 @@ describe('App', () => {
       'Groepen',
       'Platformbeheer',
       'Profiel',
-      'Gekoppelde apparaten',
+      'Gekoppelde sessies',
       'Uitloggen',
     ]);
     // Navigation items are real links, so middle click and "copy link" work;
@@ -304,7 +304,7 @@ describe('App', () => {
       '/-/groups',
       '/-/members',
       '/-/profile',
-      '/-/devices',
+      '/-/sessions',
       '',
     ]);
 
@@ -312,7 +312,7 @@ describe('App', () => {
     // with the account actions.
     const group = menu.find('nldd-menu-group');
     expect(property<string>(group.element, 'text')).toBe('Account');
-    expect(texts(group, 'nldd-menu-item')).toEqual(['Profiel', 'Gekoppelde apparaten', 'Uitloggen']);
+    expect(texts(group, 'nldd-menu-item')).toEqual(['Profiel', 'Gekoppelde sessies', 'Uitloggen']);
 
     // Who you are sits inside that group, no longer above the list or on the
     // button itself.
@@ -346,7 +346,7 @@ describe('App', () => {
       'Overzicht',
       'Groepen',
       'Profiel',
-      'Gekoppelde apparaten',
+      'Gekoppelde sessies',
       'Uitloggen',
     ]);
   });
@@ -417,7 +417,7 @@ describe('App', () => {
     const item = app.findAll('nldd-toolbar-item[slot="end"]')[0];
     expect(
       texts(item, '[slot="overflow"] nldd-menu-item, nldd-menu-item[slot="overflow"]'),
-    ).toEqual(['Overzicht', 'Groepen', 'Profiel', 'Gekoppelde apparaten', 'Uitloggen']);
+    ).toEqual(['Overzicht', 'Groepen', 'Profiel', 'Gekoppelde sessies', 'Uitloggen']);
   });
 
   it('logs out via the item that the toolbar clones into its overflow menu', async () => {

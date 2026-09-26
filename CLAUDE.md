@@ -42,7 +42,7 @@ shell scripts in `dev/` and the step names in the workflows under
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
 everything under `docs/`, and the route paths of the beheer SPA
-(`/-/devices`, `/-/profile`, `/cli-link`). A path is an address, not
+(`/-/sessions`, `/-/profile`, `/cli-link`). A path is an address, not
 interface text, and the SPA answers in two languages under one.
 
 The beheer SPA is the exception: it is bilingual, Dutch and English.

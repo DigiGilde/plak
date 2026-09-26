@@ -42,24 +42,24 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.members.activateFailed': 'Activating {name} did not work',
   'admin.members.deactivateFailed': 'Deactivating {name} did not work',
 
-  // -- Linked devices -------------------------------------------------------
-  'admin.devices.subtitle': 'Every device that got access to your account through {command}.',
-  'admin.devices.loading': 'Loading devices',
-  'admin.devices.empty': 'No linked devices yet',
-  'admin.devices.empty.detail':
+  // -- Linked sessions ------------------------------------------------------
+  'admin.sessions.subtitle': 'Every sign-in through {command} that still has access to your account.',
+  'admin.sessions.loading': 'Loading sessions',
+  'admin.sessions.empty': 'No linked sessions yet',
+  'admin.sessions.empty.detail':
     'Run plak login on your computer to link the Plak CLI to your account.',
-  'admin.devices.unknownClient': 'Unknown program',
-  'admin.devices.neverUsed': 'not yet',
-  'admin.devices.times': 'Linked {linked} - last used {lastUsed} - expires {expires}',
-  'admin.devices.unlink': 'Unlink',
-  'admin.devices.unlink.label': 'Unlink {name}',
-  'admin.devices.confirm.title': 'Unlink {name}?',
-  'admin.devices.confirm.text':
-    'This device loses access to your account straight away and has to run plak login again to link up once more.',
-  'admin.devices.confirm.keep': 'Keep the link',
-  'admin.devices.confirm.confirm': 'Unlink device',
-  'admin.devices.unlinkFailed': '{name} not unlinked',
-  'admin.devices.unlinkFailed.detail': 'Unlinking did not work.',
+  'admin.sessions.unknownClient': 'Unknown program',
+  'admin.sessions.neverUsed': 'not yet',
+  'admin.sessions.times': 'Linked {linked} - last used {lastUsed} - expires {expires}',
+  'admin.sessions.revoke': 'Revoke',
+  'admin.sessions.revoke.label': 'Revoke the session of {name}',
+  'admin.sessions.confirm.title': 'Revoke the session of {name}?',
+  'admin.sessions.confirm.text':
+    'This session loses access to your account straight away; linking up again takes another plak login.',
+  'admin.sessions.confirm.keep': 'Keep the session',
+  'admin.sessions.confirm.confirm': 'Revoke session',
+  'admin.sessions.revokeFailed': 'The session of {name} was not revoked',
+  'admin.sessions.revokeFailed.detail': 'Revoking did not work.',
 
   // -- Site members: the members tab of a site ------------------------------
   'admin.siteMembers.inherited.summary.one': '{count} member via the group {group}',

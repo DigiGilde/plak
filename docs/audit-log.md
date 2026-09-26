@@ -185,7 +185,7 @@ pseudonym as an ordinary login.
 | `cli_token_issued` | `allowed` | the CLI exchanged its device code after approval: the tokens have left Plak and the CLI session exists. Actor is the member who approved, `refs.via` is `cli`, `refs.cli_session` the id of the new session. Refreshing writes no row |
 | `cli_logout` | `allowed` | a CLI session was revoked by `plak logout`, with the access token (an expired one too) or a refresh token. `refs.via` is `cli`, `refs.cli_session` the session id |
 | `cli_logout` | `refused` | a logout attempt with an unknown or already revoked token; the answer is 204 anyway, so that the endpoint does not give away which tokens exist. Actor is `anonymous`, `reason_code` is `TOKEN_INVALID` |
-| `cli_session_revoke` | `allowed` | a member unlinked a linked device via "Gekoppelde apparaten". Same `refs` as with `cli_logout` |
+| `cli_session_revoke` | `allowed` | a member revoked a linked session via "Gekoppelde sessies". Same `refs` as with `cli_logout` |
 | `cli_refresh_reuse` | `refused` | an already used refresh token was presented again, later than ten seconds after the replacement or not the most recently replaced token; the whole CLI session has been revoked. The just-replaced token within those ten seconds (two refreshes at once) gets only `INVALID_GRANT` and writes no row. Actor is the member behind that session, or `anonymous` if the token could no longer be traced. `refs.via` is `cli`, `reason_code` is `INVALID_GRANT` |
 
 ### My own account

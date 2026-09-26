@@ -3,8 +3,8 @@
  * The member's own account page: who Plak thinks you are, and the one setting
  * that is yours alone, the interface language.
  *
- * Route: /-/profile. The linked devices keep a page of their own
- * (/-/devices): the CLI's own documentation points at that address, it is a
+ * Route: /-/profile. The linked sessions keep a page of their own
+ * (/-/sessions): the CLI's own documentation points at that address, it is a
  * list with a destructive action per row, and folding it in here would bury
  * the one choice this page exists for. This page links to it instead.
  *
@@ -189,18 +189,18 @@ onMounted(() => {
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-apparaten">
+      <section aria-labelledby="kop-sessies">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-apparaten">{{ t('profile.devices.heading') }}</h2>
-            <span slot="subtitle">{{ t('profile.devices.body') }}</span>
+            <h2 id="kop-sessies">{{ t('profile.sessions.heading') }}</h2>
+            <span slot="subtitle">{{ t('profile.sessions.body') }}</span>
           </nldd-title>
           <nldd-button
             variant="secondary"
             start-icon="link"
-            :text="t('profile.devices.link')"
-            href="/-/devices"
-            data-testid="profiel-apparaten"
+            :text="t('profile.sessions.link')"
+            href="/-/sessions"
+            data-testid="profiel-sessies"
           ></nldd-button>
         </nldd-container>
       </section>

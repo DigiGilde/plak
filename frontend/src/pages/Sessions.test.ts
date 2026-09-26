@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { makeMockBackend, type MockBackend } from '@/api/mock';
 import { serverErrorFetch, untilIdle } from '@/components/site/testHelpers';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
-import Apparaten from './Apparaten.vue';
+import Sessions from './Sessions.vue';
 
 let backend: MockBackend;
 let router: Router;
@@ -16,7 +16,7 @@ beforeEach(() => {
   _resetBreadcrumbs();
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/-/devices', component: Apparaten }],
+    routes: [{ path: '/-/sessions', component: Sessions }],
   });
 });
 
@@ -25,17 +25,17 @@ afterEach(() => {
 });
 
 async function makeWrapper() {
-  await router.push('/-/devices');
+  await router.push('/-/sessions');
   await router.isReady();
-  return mount(Apparaten, { global: { plugins: [router], stubs: { teleport: true } } });
+  return mount(Sessions, { global: { plugins: [router], stubs: { teleport: true } } });
 }
 
-describe('Apparaten: overview', () => {
-  it('shows the seeded device with the three times', async () => {
+describe('Sessions: overview', () => {
+  it('shows the seeded session with the three times', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    const row = wrapper.find('[data-testid="apparaat-cli-sessie-1"]');
+    const row = wrapper.find('[data-testid="sessie-cli-sessie-1"]');
     expect(row.exists()).toBe(true);
     expect(row.html()).toContain('plak-cli');
     expect(row.html()).toContain('Gekoppeld');
@@ -49,7 +49,7 @@ describe('Apparaten: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="apparaat-cli-sessie-1"]').html()).toContain('nog niet');
+    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').html()).toContain('nog niet');
   });
 
   it('shows "Onbekend programma" without clientName', async () => {
@@ -58,7 +58,7 @@ describe('Apparaten: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="apparaat-cli-sessie-1"]').html()).toContain(
+    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').html()).toContain(
       'Onbekend programma',
     );
   });
@@ -72,7 +72,7 @@ describe('Apparaten: overview', () => {
     // The text goes in the component's own supporting-text rather than a
     // slotted paragraph: the slot sits outside the layout that centres the
     // icon and the heading, which left the sentence hanging beside them.
-    const empty = wrapper.find('[data-testid="apparaten-leeg"]');
+    const empty = wrapper.find('[data-testid="sessies-leeg"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('supporting-text')).toContain('plak login');
     expect(empty.attributes('supporting-text')).toContain(
@@ -84,9 +84,9 @@ describe('Apparaten: overview', () => {
     await makeWrapper();
     await untilIdle();
 
-    expect(breadcrumbsFor('/-/devices')).toEqual([
+    expect(breadcrumbsFor('/-/sessions')).toEqual([
       { text: 'Overzicht', href: '/' },
-      { text: 'Gekoppelde apparaten' },
+      { text: 'Gekoppelde sessies' },
     ]);
   });
 
@@ -100,12 +100,12 @@ describe('Apparaten: overview', () => {
   });
 });
 
-describe('Apparaten: disconnecting', () => {
-  it('asks for confirmation and only then removes the device', async () => {
+describe('Sessions: revoking', () => {
+  it('asks for confirmation and only then revokes the session', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="apparaat-ontkoppelen-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.cliSessions).toHaveLength(1);
@@ -114,19 +114,19 @@ describe('Apparaten: disconnecting', () => {
     await untilIdle();
 
     expect(backend.data.cliSessions).toHaveLength(0);
-    expect(wrapper.find('[data-testid="apparaat-cli-sessie-1"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(false);
   });
 
-  it('reports it when disconnecting fails and keeps the row', async () => {
+  it('reports it when revoking fails and keeps the row', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="apparaat-ontkoppelen-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
     await untilIdle();
 
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="apparaat-cli-sessie-1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(true);
   });
 });
