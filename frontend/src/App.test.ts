@@ -177,10 +177,7 @@ describe('App', () => {
 
     const skipLink = app.find('nldd-skip-link');
     expect(property<string>(skipLink.element, 'href')).toBe('#hoofdinhoud');
-    // The text determines the width (nowrap, no max-width in the
-    // component). Longer than this pushes every page at 320px and 200%
-    // text into a horizontal scroll; see the explanation in App.vue.
-    expect(property<string>(skipLink.element, 'text')).toBe('Naar de inhoud');
+    expect(property<string>(skipLink.element, 'text')).toBe('Direct naar de inhoud');
     const target = app.find('#hoofdinhoud');
     expect(target.exists()).toBe(true);
     // A div is not focusable, so without tabindex the skip link only moves the

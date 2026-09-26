@@ -110,11 +110,6 @@ function logout(): void {
 </script>
 
 <template>
-  <!-- Short on purpose: the control inside nldd-skip-link is white-space:
-       nowrap with no max-width, so the label decides the width. "Direct naar
-       de inhoud" measures 352 px at 200 percent text and pushes every page
-       into a horizontal scroll at a 320 px viewport (WCAG 1.4.10); this one
-       measures 260 px. -->
   <nldd-skip-link href="#hoofdinhoud" :text="t('shell.skip')"></nldd-skip-link>
   <nldd-app-view>
     <nldd-page>
