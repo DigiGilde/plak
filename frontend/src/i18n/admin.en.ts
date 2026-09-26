@@ -74,22 +74,22 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.viaGroup': 'via the group',
   'admin.siteMembers.keepsViaGroup': 'Stays {role} via the group',
   'admin.siteMembers.action.setRole': 'Make {role}',
-  'admin.siteMembers.action.remove': 'Remove role',
+  'admin.siteMembers.action.remove': 'Remove site role',
   'admin.siteMembers.confirm.remove.title': 'Remove the site role of {name}?',
   'admin.siteMembers.confirm.remove.keepsViaGroup':
-    '{name} keeps access to this site as {role} through the group.',
+    '{name} keeps access to this site as {role} via the group.',
   'admin.siteMembers.confirm.remove.noAccess':
-    '{name} loses access to this site: there is no role through the group to fall back on.',
+    '{name} loses access to this site: there is no role via the group to fall back on.',
   'admin.siteMembers.confirm.remove.keep': 'Keep the site role',
   'admin.siteMembers.confirm.remove.confirm': 'Remove site role',
   'admin.siteMembers.addFailed': 'Giving {name} a role on this site did not work',
   'admin.siteMembers.roleFailed': 'Changing the site role of {name} did not work',
   'admin.siteMembers.removeFailed': 'Removing the site role of {name} did not work',
   'admin.siteMembers.suggestion.alreadyMember': 'already has a site role',
-  'admin.siteMembers.suggestion.viaGroup': '{role} through the group',
+  'admin.siteMembers.suggestion.viaGroup': '{role} via the group',
   'admin.siteMembers.form.heading': 'Give someone a role on this site',
   'admin.siteMembers.form.hint':
-    'A site role only widens: whoever may already do more through the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first; Plak does not create an account here.',
+    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first; Plak does not create an account here.',
   'admin.siteMembers.form.identifier': 'Name or email address',
   'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
   'admin.siteMembers.form.identifier.help':
@@ -102,6 +102,6 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.form.noSuggestions': 'Nobody found',
   'admin.siteMembers.form.role': 'Role',
   'admin.siteMembers.form.role.noEffect':
-    'This changes nothing about what this person may do here: through the group that is already {role}.',
+    'This changes nothing about what this person may do here: via the group they are already {role}.',
   'admin.siteMembers.form.submit': 'Give role',
 };

@@ -850,7 +850,7 @@ describe('GroupMembersManager (error)', () => {
 
     expect(pageRows(wrapper)).toHaveLength(1);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(
-      'Groepslid lid@voorbeeld.nl verwijderen is niet gelukt',
+      'lid@voorbeeld.nl uit de groep halen is niet gelukt',
     );
     expect(wrapper.emitted('removed')).toBeUndefined();
   });

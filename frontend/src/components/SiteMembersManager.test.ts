@@ -286,7 +286,7 @@ describe('SiteMembersManager (row menu)', () => {
     expect(actionTexts(wrapper, 'buiten@voorbeeld.nl')).toEqual([
       'Maak redacteur',
       'Maak beheerder',
-      'Rol weghalen',
+      'Siterol weghalen',
     ]);
     // An icon per role, so the short label can still be told apart.
     expect(
