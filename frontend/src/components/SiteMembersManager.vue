@@ -27,6 +27,7 @@ import { useNotices, type Notice } from '@/composables/notices';
 import { groupPath } from '@/composables/slug';
 import {
   keepEverySuggestion,
+  NOTE_SEPARATOR,
   useMenuEmptyState,
   useStartingList,
 } from '@/composables/suggestionField';
@@ -129,33 +130,33 @@ const emptyText = computed(() => {
 const identifierField = ref<HTMLElement | null>(null);
 
 /**
- * Someone with a site role of their own is marked, not held back: what that
- * role is and where it is changed is what the refusal says, which beats a row
- * that cannot be clicked and does not say why. A groepslid is offered like
- * anyone else, with the role it already reaches this site with, since a site
- * role only widens.
+ * One row, as a row of facts: the name, the address it is known by, and what
+ * this person already reaches this site with. Separated rather than welded
+ * together, so the name is the first fact and carries nothing of its own.
+ * Someone with a site role of their own is marked rather than held back,
+ * because the refusal then says what is the matter, which beats a row that
+ * cannot be clicked and does not say why. A groepslid is offered like anyone
+ * else, with the role they already reach this site with, since a site role
+ * only widens.
+ *
+ * A member whose SSO profile carries no name is known by the address alone,
+ * and that one stands where the name would be, once.
+ *
+ * All of it in `text`, with `details` left empty; see GroupMembersManager for
+ * what that cell does to a row on a screen of 320 px.
  */
 function suggestionText(person: MemberSuggestion): string {
-  const label = person.name || person.email;
+  const facts = person.name ? [person.name, person.email] : [person.email];
   if (person.alreadyMember) {
-    return t('admin.siteMembers.suggestion.alreadyMember', { name: label });
+    facts.push(t('admin.siteMembers.suggestion.alreadyMember'));
+  } else if (person.groupRole !== null) {
+    facts.push(
+      t('admin.siteMembers.suggestion.viaGroup', {
+        role: roleLabel(person.groupRole).toLowerCase(),
+      }),
+    );
   }
-  if (person.groupRole !== null) {
-    return t('admin.siteMembers.suggestion.viaGroup', {
-      name: label,
-      role: roleLabel(person.groupRole).toLowerCase(),
-    });
-  }
-  return label;
-}
-
-/**
- * The address on the right of the row, next to the name. A member whose SSO
- * profile carries no name is known by the address alone, and that one already
- * stands where the name would be.
- */
-function suggestionDetails(person: MemberSuggestion): string | undefined {
-  return person.name ? person.email : undefined;
+  return facts.join(NOTE_SEPARATOR);
 }
 
 function onIdentifierInput(event: CustomEvent<{ value?: string }>): void {
@@ -567,7 +568,6 @@ async function onRemove(row: Row): Promise<void> {
                     :key="person.identifier"
                     :text="suggestionText(person)"
                     :value="person.identifier"
-                    :details="suggestionDetails(person)"
                     :data-testid="`siterol-suggestie-${person.identifier}`"
                   ></nldd-menu-item>
                 </nldd-menu>

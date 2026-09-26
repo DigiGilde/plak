@@ -17,7 +17,11 @@ import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import type { GroupMember, GroupSiteRole, MemberSuggestion, Role } from '@/api/types';
 import { SEARCH_MIN_LENGTH, useMemberSearch } from '@/composables/memberSearch';
 import { useNotices, type Notice } from '@/composables/notices';
-import { keepEverySuggestion, useMenuEmptyState } from '@/composables/suggestionField';
+import {
+  keepEverySuggestion,
+  NOTE_SEPARATOR,
+  useMenuEmptyState,
+} from '@/composables/suggestionField';
 import { roleHint, roleLabel, ROLES, ROLE_ICONS } from '@/format';
 import { t } from '@/i18n';
 
@@ -108,24 +112,27 @@ const identifierField = ref<HTMLElement | null>(null);
 useMenuEmptyState(identifierField, () => suggestions.value);
 
 /**
- * Someone already in the group is marked, not held back: the refusal says
- * that they are in it and where their role is changed, which beats a row that
- * cannot be clicked and does not say why.
+ * One row, as a row of facts: the name, the address it is known by, and
+ * whether this person is already in the group. Separated rather than welded
+ * together, so the name is the first fact and carries nothing of its own. A
+ * member already in the group is marked rather than held back, because the
+ * refusal then says what is the matter, which beats a row that cannot be
+ * clicked and does not say why.
+ *
+ * A member whose SSO profile carries no name is known by the address alone,
+ * and that one stands where the name would be, once.
+ *
+ * All of it in `text`, with `details` left empty. `nldd-menu-item` renders
+ * `details` in a cell of `width: fit-content`, which neither shrinks nor
+ * truncates; on 320 px it keeps its full width and leaves the name too little
+ * to break a word in, which reflows into one character per line. The text
+ * cell wraps like prose. Measured on 320 px with three rows: 548 px for the
+ * tallest row with the address in `details`, 188 px with all of it here.
  */
 function suggestionText(person: MemberSuggestion): string {
-  const label = person.name || person.email;
-  return person.alreadyMember
-    ? t('group.members.suggestion.alreadyMember', { name: label })
-    : label;
-}
-
-/**
- * The address on the right of the row, next to the name. A member whose SSO
- * profile carries no name is known by the address alone, and that one already
- * stands where the name would be.
- */
-function suggestionDetails(person: MemberSuggestion): string | undefined {
-  return person.name ? person.email : undefined;
+  const facts = person.name ? [person.name, person.email] : [person.email];
+  if (person.alreadyMember) facts.push(t('group.members.suggestion.alreadyMember'));
+  return facts.join(NOTE_SEPARATOR);
 }
 
 function onIdentifierInput(event: CustomEvent<{ value?: string }>): void {
@@ -446,7 +453,6 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
                 :key="person.identifier"
                 :text="suggestionText(person)"
                 :value="person.identifier"
-                :details="suggestionDetails(person)"
                 :data-testid="`lid-suggestie-${person.identifier}`"
               ></nldd-menu-item>
             </nldd-menu>
