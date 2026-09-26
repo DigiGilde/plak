@@ -83,9 +83,14 @@ function widest(groupRole: Role | null, siteRole: Role): Role {
     : siteRole;
 }
 
-/** Whether this site role would change anything, or the group role stays wider. */
-function widens(row: Row, role: Role): boolean {
-  return row.groupRole === null || ROLES.indexOf(role) > ROLES.indexOf(row.groupRole);
+/**
+ * Whether this site role would change anything, or the group role stays wider.
+ * The mirror of `widest(group_role, site_role)` in the backend's
+ * access/roles.py: anything not wider than the group role leaves what someone
+ * may do here exactly as it was.
+ */
+function widens(groupRole: Role | null, role: Role): boolean {
+  return groupRole === null || ROLES.indexOf(role) > ROLES.indexOf(groupRole);
 }
 
 /** What someone keeps when their site role goes or gets narrower. */
@@ -261,6 +266,26 @@ const shownSuggestions = computed<MemberSuggestion[]>(() =>
  */
 const startingList = computed(() => newLabel.value.trim().length < SEARCH_MIN_LENGTH);
 
+/** The group role of whoever stands in the field, as far as a list knows it. */
+const pickedGroupRole = computed<Role | null>(() => {
+  const identifier = newIdentifier.value.trim();
+  if (identifier === '') return null;
+  const listed =
+    suggestions.value.find((person) => person.identifier === identifier) ??
+    groupSuggestions.value.find((person) => person.identifier === identifier);
+  if (listed) return listed.groupRole;
+  return rows.value.find((row) => row.identifier === identifier)?.groupRole ?? null;
+});
+
+/**
+ * What a site role narrower than the group role comes to, which is nothing.
+ * The form accepts it, because the role stands on its own once the group role
+ * goes, but it should not be discovered afterwards that nothing happened.
+ */
+const roleChangesNothing = computed(
+  () => pickedGroupRole.value !== null && !widens(pickedGroupRole.value, newRole.value),
+);
+
 // An empty menu opening on arrival would only read as a broken dropdown.
 useStartingList(identifierField, () => shownSuggestions.value.length > 0);
 
@@ -352,7 +377,7 @@ function actionsFor(row: Row): RowAction[] {
     ...ROLES.filter((role) => role !== row.siteRole).map((role) => ({
       text: t('admin.siteMembers.action.setRole', { role: roleLabel(role).toLowerCase() }),
       icon: ROLE_ICONS[role],
-      details: widens(row, role) ? undefined : keepsViaGroup(row.groupRole!),
+      details: widens(row.groupRole, role) ? undefined : keepsViaGroup(row.groupRole!),
       testid: `siterol-${row.identifier}-${role}`,
       run: () => void onRole(row, role),
     })),
@@ -593,7 +618,16 @@ async function onRemove(row: Row): Promise<void> {
                   </option>
                 </select>
               </nldd-dropdown>
-              <nldd-form-field-help-text>{{ siteRoleHint(newRole) }}</nldd-form-field-help-text>
+              <nldd-form-field-help-text>
+                {{ siteRoleHint(newRole) }}
+                <template v-if="roleChangesNothing">
+                  <span data-testid="siterol-geen-effect">{{
+                    t('admin.siteMembers.form.role.noEffect', {
+                      role: roleLabel(pickedGroupRole!).toLowerCase(),
+                    })
+                  }}</span>
+                </template>
+              </nldd-form-field-help-text>
             </nldd-form-field>
 
             <nldd-form-actions>
