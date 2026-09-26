@@ -81,7 +81,7 @@ export const groupNl = {
   'group.members.column.actions': 'Acties',
   'group.members.empty': 'Nog geen groepsleden',
   'group.members.empty.supportingText': 'Voeg het eerste groepslid hieronder toe.',
-  'group.members.suggestion.alreadyMember': '{name} (al lid)',
+  'group.members.suggestion.alreadyMember': 'al lid',
   'group.members.action.setRole': 'Maak {role}',
   'group.members.action.remove': 'Uit de groep halen',
   'group.members.confirm.remove.title': '{name} uit de groep halen?',

@@ -661,8 +661,10 @@ describe('SiteMembersManager (the list before anything is typed)', () => {
     // changes, so only Ada is left to offer.
     const items = suggestionItems(wrapper);
     expect(items.map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer (redacteur via de groep)',
+      'Ada Vermeer, ada@voorbeeld.nl, redacteur via de groep',
     ]);
+    // Nothing in `details`: that cell does not shrink and wrecks a 320 px row.
+    expect(items[0]!.attributes('details')).toBeUndefined();
     expect(items[0]!.attributes('value')).toBe('ada@voorbeeld.nl');
     expect(items[0]!.attributes('disabled')).toBeUndefined();
   });
@@ -680,7 +682,7 @@ describe('SiteMembersManager (the list before anything is typed)', () => {
     });
 
     const item = suggestionItems(wrapper)[0]!;
-    expect(item.attributes('text')).toBe('kaal@voorbeeld.nl (lezer via de groep)');
+    expect(item.attributes('text')).toBe('kaal@voorbeeld.nl, lezer via de groep');
     expect(item.attributes('details')).toBeUndefined();
   });
 
@@ -755,7 +757,7 @@ describe('SiteMembersManager (suggestions)', () => {
     expect(search).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledWith('ada');
     expect(suggestionItems(wrapper).map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer',
+      'Ada Vermeer, ada@voorbeeld.nl',
     ]);
   });
 
@@ -805,18 +807,17 @@ describe('SiteMembersManager (suggestions)', () => {
     await afterDebounce();
 
     const items = suggestionItems(wrapper);
+    // Name, address and note as three separated facts, so the name is a name.
     expect(items.map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer (heeft al een siterol)',
-      'Sanne Vermeulen',
+      'Ada Vermeer, ada@voorbeeld.nl, heeft al een siterol',
+      'Sanne Vermeulen, sanne@voorbeeld.nl',
     ]);
     // No greying out: acting on it answers with what the server says about it,
     // which a row that cannot be clicked never gets to say.
     expect(items[0]!.attributes('disabled')).toBeUndefined();
     expect(items[1]!.attributes('disabled')).toBeUndefined();
-    expect(items.map((item) => item.attributes('details'))).toEqual([
-      'ada@voorbeeld.nl',
-      'sanne@voorbeeld.nl',
-    ]);
+    // Nothing in `details`: that cell does not shrink and wrecks a 320 px row.
+    expect(items.map((item) => item.attributes('details'))).toEqual([undefined, undefined]);
   });
 
   it('offers a groepslid, with the role it already reaches this site with', async () => {
@@ -836,8 +837,8 @@ describe('SiteMembersManager (suggestions)', () => {
 
     const items = suggestionItems(wrapper);
     expect(items.map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer (lezer via de groep)',
-      'Sanne Vermeulen (beheerder via de groep)',
+      'Ada Vermeer, ada@voorbeeld.nl, lezer via de groep',
+      'Sanne Vermeulen, sanne@voorbeeld.nl, beheerder via de groep',
     ]);
     expect(items[0]!.attributes('disabled')).toBeUndefined();
     expect(items[1]!.attributes('disabled')).toBeUndefined();

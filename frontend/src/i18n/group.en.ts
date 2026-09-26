@@ -80,7 +80,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.column.actions': 'Actions',
   'group.members.empty': 'No group members yet',
   'group.members.empty.supportingText': 'Add the first group member below.',
-  'group.members.suggestion.alreadyMember': '{name} (already a member)',
+  'group.members.suggestion.alreadyMember': 'already a member',
   'group.members.action.setRole': 'Make {role}',
   'group.members.action.remove': 'Remove from the group',
   'group.members.confirm.remove.title': 'Remove {name} from the group?',

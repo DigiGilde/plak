@@ -919,7 +919,7 @@ describe('GroupMembersManager (suggestions)', () => {
     expect(search).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledWith('ada');
     expect(suggestionItems(wrapper).map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer',
+      'Ada Vermeer, ada@voorbeeld.nl',
     ]);
   });
 
@@ -975,8 +975,9 @@ describe('GroupMembersManager (suggestions)', () => {
     // Whoever is already a member stays in the list: saying so beats leaving
     // the row out and looking broken.
     expect(items.map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer (al lid)',
-      'Sanne Vermeulen',
+      // Name, address and note as three separated facts, so the name is a name.
+      'Ada Vermeer, ada@voorbeeld.nl, al lid',
+      'Sanne Vermeulen, sanne@voorbeeld.nl',
     ]);
     // No greying out: acting on it answers with what the server says about it,
     // which a row that cannot be clicked never gets to say.
@@ -984,10 +985,8 @@ describe('GroupMembersManager (suggestions)', () => {
     expect(items[1]!.attributes('disabled')).toBeUndefined();
     // The address is always shown, otherwise two namesakes cannot be told
     // apart.
-    expect(items.map((item) => item.attributes('details'))).toEqual([
-      'ada@voorbeeld.nl',
-      'sanne@voorbeeld.nl',
-    ]);
+    // Nothing in `details`: that cell does not shrink and wrecks a 320 px row.
+    expect(items.map((item) => item.attributes('details'))).toEqual([undefined, undefined]);
   });
 
   it('refuses a typed address that appears in no suggestion', async () => {

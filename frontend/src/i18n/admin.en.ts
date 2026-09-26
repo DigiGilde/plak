@@ -85,8 +85,8 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.addFailed': 'Giving {name} a role on this site did not work',
   'admin.siteMembers.roleFailed': 'Changing the site role of {name} did not work',
   'admin.siteMembers.removeFailed': 'Removing the site role of {name} did not work',
-  'admin.siteMembers.suggestion.alreadyMember': '{name} (already has a site role)',
-  'admin.siteMembers.suggestion.viaGroup': '{name} ({role} through the group)',
+  'admin.siteMembers.suggestion.alreadyMember': 'already has a site role',
+  'admin.siteMembers.suggestion.viaGroup': '{role} through the group',
   'admin.siteMembers.form.heading': 'Give someone a role on this site',
   'admin.siteMembers.form.hint':
     'A site role only widens: whoever may already do more through the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first; Plak does not create an account here.',

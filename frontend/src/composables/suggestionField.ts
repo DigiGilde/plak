@@ -23,6 +23,15 @@ import { onScopeDispose, watch, type Ref } from 'vue';
 /** What `nldd-menu` offers here; the element's own type is not exported. */
 type SuggestionMenu = HTMLElement & { filter: (query: string) => void };
 
+/**
+ * Between the facts of a suggestion row. They share one text cell, so this
+ * string is also the menu item's accessible name: a comma, which every screen
+ * reader pauses on, rather than the middle dot the NLDD guidelines name for a
+ * visual separator, which is announced or swallowed per the reader's own
+ * punctuation setting.
+ */
+export const NOTE_SEPARATOR = ', ';
+
 /** The menu's `filter-fn`: what is in the list is what the server returned. */
 export function keepEverySuggestion(): boolean {
   return true;
