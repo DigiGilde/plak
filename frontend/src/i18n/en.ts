@@ -8,6 +8,7 @@
  * translating a proper noun only makes it unfindable.
  */
 import { adminEn } from './admin.en';
+import { designSystemEn } from './designSystem.en';
 import { groupEn } from './group.en';
 import { pagesEn } from './pages.en';
 import { publishEn } from './publish.en';
@@ -134,4 +135,5 @@ export const en: Catalogue = {
   ...adminEn,
   ...siteEn,
   ...publishEn,
+  ...designSystemEn,
 };

@@ -6,6 +6,7 @@ import { VueQueryPlugin } from '@tanstack/vue-query';
 import { createApp } from 'vue';
 
 import App from './App.vue';
+import { useDesignSystemText } from './i18n/designSystem';
 import router from './router';
 
 async function start(): Promise<void> {
@@ -13,6 +14,9 @@ async function start(): Promise<void> {
     const { installMock } = await import('./api/mock');
     installMock();
   }
+
+  // Before the first mount, so no component is ever rendered in Dutch first.
+  useDesignSystemText();
 
   const app = createApp(App);
   app.use(router);

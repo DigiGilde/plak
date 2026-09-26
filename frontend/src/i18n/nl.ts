@@ -10,6 +10,7 @@
  * that is how you find them again when a screen changes.
  */
 import { adminNl } from './admin.nl';
+import { designSystemNl } from './designSystem.nl';
 import { groupNl } from './group.nl';
 import { pagesNl } from './pages.nl';
 import { publishNl } from './publish.nl';
@@ -156,6 +157,7 @@ export const nl = {
   ...adminNl,
   ...siteNl,
   ...publishNl,
+  ...designSystemNl,
 } as const;
 
 /** Every key the interface may ask for. */
