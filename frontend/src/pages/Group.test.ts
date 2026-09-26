@@ -424,9 +424,10 @@ describe('Group: group members', () => {
 
     expect(sheetLabels(wrapper)).toEqual(['Zet een site online']);
 
-    fireDetailEvent(wrapper.find('nldd-combo-box[name="identifier"]').element, 'input', {
-      value: 'nieuw@voorbeeld.nl',
-    });
+    const field = wrapper.find('nldd-combo-box[name="identifier"]').element;
+    fireDetailEvent(field, 'input', { value: 'nieuw@voorbeeld.nl' });
+    // Only a pick is an identifier: the combo box reports one as a `change`.
+    fireDetailEvent(field, 'change', { value: 'nieuw@voorbeeld.nl' });
     await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
     await untilIdle();
 
