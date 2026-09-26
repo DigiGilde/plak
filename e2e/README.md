@@ -45,7 +45,7 @@ and on the usual Linux setups).
   `Sec-Fetch-Site: same-origin`); bearer deploys through the Node side
   without an Origin header, the path that CI and the CLI both use.
 - `helpers/cli.ts`: `plak login` (device flow): a request on the Node
-  side, approving it in the real SPA on `/cli-koppelen` with the
+  side, approving it in the real SPA on `/cli-link` with the
   already logged-in admin page, and the token exchange on the Node side
   again; yields the CLI token that the bearer deploys use.
 - `helpers/tar.ts`: builds the multi-file dist fixtures (html + css +

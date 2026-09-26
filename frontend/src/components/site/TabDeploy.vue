@@ -709,7 +709,7 @@ plak logout
           </p>
           <p>
             {{ cliLogin[0] }}<code>plak login</code>{{ cliLogin[1]
-            }}<nldd-link href="/cli-koppelen" data-testid="cli-koppelen-link">/cli-koppelen</nldd-link
+            }}<nldd-link href="/cli-link" data-testid="cli-link-link">/cli-link</nldd-link
             >{{ cliLogin[2] }}<code>plak publish</code>{{ cliLogin[3] }}
           </p>
           <nldd-code-viewer language="bash" data-testid="cli-snippet">{{ cliSnippet }}</nldd-code-viewer>

@@ -544,15 +544,15 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     expect(snippet).not.toContain(MOCK_CONTENT_BASE);
   });
 
-  it('links to the plak repo for the cli and to /cli-koppelen', async () => {
+  it('links to the plak repo for the cli and to /cli-link', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
     const cliLink = wrapper.find('[data-testid="plak-cli-repo-link"]');
     expect(cliLink.attributes('href')).toBe('https://github.com/minbzk/plak');
 
-    const linkCliLink = wrapper.find('[data-testid="cli-koppelen-link"]');
-    expect(linkCliLink.attributes('href')).toBe('/cli-koppelen');
+    const linkCliLink = wrapper.find('[data-testid="cli-link-link"]');
+    expect(linkCliLink.attributes('href')).toBe('/cli-link');
     expect(wrapper.html()).toContain('plak login');
   });
 

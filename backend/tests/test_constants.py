@@ -39,7 +39,7 @@ def test_reserved_slugs_holds_the_web_locations_and_the_root_spa_pages():
     # `admin` and `beheer` are deliberately not in here any more: the SPA
     # moved to the root of the admin host, so on the content host those two
     # are ordinary content and may be somebody's group.
-    assert set(RESERVED_SLUGS) == {"robots.txt", "favicon.ico", ".well-known", "cli-koppelen"}
+    assert set(RESERVED_SLUGS) == {"robots.txt", "favicon.ico", ".well-known", "cli-link"}
 
 
 def test_reserved_slugs_mirrors_the_standard_locations_and_root_spa_pages():

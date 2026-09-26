@@ -92,8 +92,8 @@ const EXEMPT_FILES = [
 
 /** Literal strings that are not visible text, with their reason. */
 const ALLOWED = [
-  // Route paths and slugs mirror the Dutch interface and are addresses, not
-  // text: /cli-koppelen, /-/apparaten, /-/profiel.
+  // Route paths and slugs are addresses, not text: /cli-link, /-/devices,
+  // /-/profile.
   /^\/[a-z0-9/-]*$/,
   // data-testid values, the ids an aria-labelledby or an nldd-validation-item
   // points at, and class names: one lowercase word chain, no spaces. Those

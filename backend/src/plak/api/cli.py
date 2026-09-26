@@ -39,7 +39,7 @@ from plak.ratelimit import InMemoryCounter
 
 router = APIRouter(prefix="/-/api/v1")
 
-VERIFICATION_PATH = "/cli-koppelen"
+VERIFICATION_PATH = "/cli-link"
 
 # Creating a device authorization costs a row and a code someone might phish
 # with, so it gets a budget of its own on top of the general API rate limit:
@@ -83,11 +83,11 @@ class DeviceAuthorizationOut(ApiModel):
     )
     verification_uri: str = Field(
         description="Pagina in het beheer waar het lid de code invoert.",
-        examples=["https://beheer.plak.example/cli-koppelen"],
+        examples=["https://beheer.plak.example/cli-link"],
     )
     verification_uri_complete: str = Field(
         description="Dezelfde pagina met de code al ingevuld; om in de browser te openen.",
-        examples=["https://beheer.plak.example/cli-koppelen?code=WDJB-MJHT"],
+        examples=["https://beheer.plak.example/cli-link?code=WDJB-MJHT"],
     )
     expires_in: int = Field(description="Seconden tot de codes verlopen.", examples=[600])
     interval: int = Field(description="Seconden die de CLI minstens tussen twee pogingen wacht.", examples=[5])

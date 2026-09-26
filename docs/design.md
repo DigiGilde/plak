@@ -164,8 +164,8 @@ The slug is the stable identifier, in the API too; renaming is out of scope.
 | `/-/api/v1/...` | JSON and deploy API (beheer host only) |
 | `/-/api/docs` | API documentation, self-hosted UI, publicly readable |
 | `/-/oidc/backchannel-logout` | back-channel logout from the OP (beheer host only) |
-| `/-/groups`, `/-/members`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/apparaten` | SPA pages inside the platform namespace |
-| `/cli-koppelen` | SPA page the CLI device flow opens by URL |
+| `/-/groups`, `/-/members`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/devices` | SPA pages inside the platform namespace |
+| `/cli-link` | SPA page the CLI device flow opens by URL |
 | `/` on the beheer host | the SPA |
 | `/` on the content host | public front page |
 | `/robots.txt`, `/favicon.ico`, `/.well-known/...` | the locations the web pins down, on both hosts |

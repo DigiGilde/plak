@@ -5,7 +5,7 @@
  * query string; a human confirms the code matches before approving, so a
  * phished link or a shared code cannot silently grant access.
  *
- * Route: /cli-koppelen (NOT under /-/: the CLI opens this path directly, see
+ * Route: /cli-link (NOT under /-/: the CLI opens this path directly, see
  * router.ts). Public (meta.public), because the session state decides what to
  * show, the same split Landing.vue and Start.vue use.
  */
@@ -47,7 +47,7 @@ function normalizeCode(raw: string): string {
 
 function redirectToLogin(rawCode: string | null): void {
   const query = rawCode ? `?code=${encodeURIComponent(rawCode)}` : '';
-  window.location.href = `/-/login?returnTo=${encodeURIComponent(`/cli-koppelen${query}`)}`;
+  window.location.href = `/-/login?returnTo=${encodeURIComponent(`/cli-link${query}`)}`;
 }
 
 function codeFromQuery(): string | null {

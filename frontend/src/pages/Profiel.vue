@@ -3,8 +3,8 @@
  * The member's own account page: who Plak thinks you are, and the one setting
  * that is yours alone, the interface language.
  *
- * Route: /-/profiel. The linked devices keep a page of their own
- * (/-/apparaten): the CLI's own documentation points at that address, it is a
+ * Route: /-/profile. The linked devices keep a page of their own
+ * (/-/devices): the CLI's own documentation points at that address, it is a
  * list with a destructive action per row, and folding it in here would bury
  * the one choice this page exists for. This page links to it instead.
  *
@@ -199,7 +199,7 @@ onMounted(() => {
             variant="secondary"
             start-icon="link"
             :text="t('profile.devices.link')"
-            href="/-/apparaten"
+            href="/-/devices"
             data-testid="profiel-apparaten"
           ></nldd-button>
         </nldd-container>

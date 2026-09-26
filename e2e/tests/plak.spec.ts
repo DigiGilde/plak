@@ -313,7 +313,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     expect(access.status).toBe(200);
 
     // `plak login`: device authorization, approval in the real SPA at
-    // /cli-koppelen, and the token exchange, all Node-side plus the
+    // /cli-link, and the token exchange, all Node-side plus the
     // already-logged-in admin page, the way a human and the CLI do it together.
     cliToken = await cliLoginToken(adminApi, adminPage, ADMIN_URL, ADMIN_SUB, { email: ADMIN_EMAIL });
     expect(cliToken).toMatch(/^plakcli_/);
@@ -497,7 +497,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
   // the same negotiation a browser abroad would get, and the rest of the
   // suite never reads an interface label, only content it uploaded itself.
   test('the interface language follows the browser, and the account overrules it', async () => {
-    await adminPage.goto(`${ADMIN_URL}/-/profiel`);
+    await adminPage.goto(`${ADMIN_URL}/-/profile`);
     await expect(adminPage.locator('h1')).toHaveText('Profile');
     await expect(adminPage.locator('html')).toHaveAttribute('lang', 'en');
 
@@ -506,7 +506,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
 
     // A fresh load, so this proves the choice comes back from the account and
     // not from anything this page kept in memory.
-    await adminPage.goto(`${ADMIN_URL}/-/profiel`);
+    await adminPage.goto(`${ADMIN_URL}/-/profile`);
     await expect(adminPage.locator('h1')).toHaveText('Profiel');
     await expect(adminPage.locator('html')).toHaveAttribute('lang', 'nl');
 
@@ -517,7 +517,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     const meRequest = adminPage.waitForRequest((request) =>
       request.url().endsWith(`${API}/me`),
     );
-    await adminPage.goto(`${ADMIN_URL}/-/profiel`);
+    await adminPage.goto(`${ADMIN_URL}/-/profile`);
     expect((await meRequest).headers()['accept-language']).toBe('nl');
 
     const cleared = await adminFetch(adminPage, 'PUT', `${API}/me/language`, { language: null });

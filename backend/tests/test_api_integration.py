@@ -330,7 +330,7 @@ async def test_the_cli_login_runs_through_the_full_stack(app: FastAPI, client: h
 
     started = await client.post(f"{BASE}/cli/device-authorizations", json={"clientName": "plak-cli"})
     assert started.status_code == 200
-    assert started.json()["verificationUri"] == f"{APP_BASE_URL}/cli-koppelen"
+    assert started.json()["verificationUri"] == f"{APP_BASE_URL}/cli-link"
 
     logout = await client.delete(f"{BASE}/cli/session", headers={"Authorization": f"Bearer {token}"})
     assert logout.status_code == 204

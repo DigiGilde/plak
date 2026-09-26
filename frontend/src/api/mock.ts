@@ -44,7 +44,7 @@ const MOCK_CI_AUDIENCE = 'https://plak.test';
 // Mirrors constants.py, so the mock rejects exactly what the real
 // backend rejects.
 const SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-const RESERVED_SLUGS = new Set(['admin', 'robots.txt', 'favicon.ico', '.well-known', 'cli-koppelen']);
+const RESERVED_SLUGS = new Set(['admin', 'robots.txt', 'favicon.ico', '.well-known', 'cli-link']);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Mirrors backend/src/plak/expiry.py, so the mock rejects and defaults

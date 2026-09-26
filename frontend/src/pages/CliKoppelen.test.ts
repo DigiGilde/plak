@@ -28,7 +28,7 @@ afterEach(() => {
 async function makeWrapper(path: string): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/cli-koppelen', name: 'cli-koppelen', component: CliKoppelen }],
+    routes: [{ path: '/cli-link', name: 'cli-link', component: CliKoppelen }],
   });
   await router.push(path);
   await router.isReady();
@@ -41,19 +41,19 @@ describe('CliKoppelen: session', () => {
   it('redirects an anonymous visitor to login, with the code in returnTo', async () => {
     backend.data.loggedInMemberId = null;
 
-    await makeWrapper('/cli-koppelen?code=abcd-efgh');
+    await makeWrapper('/cli-link?code=abcd-efgh');
 
     expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-koppelen?code=abcd-efgh'),
+      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=abcd-efgh'),
     );
   });
 
   it('redirects to login even without a code', async () => {
     backend.data.loggedInMemberId = null;
 
-    await makeWrapper('/cli-koppelen');
+    await makeWrapper('/cli-link');
 
-    expect(window.location.href).toBe('/-/login?returnTo=' + encodeURIComponent('/cli-koppelen'));
+    expect(window.location.href).toBe('/-/login?returnTo=' + encodeURIComponent('/cli-link'));
   });
 
   it('shows the revoked-access treatment for a deactivated member', async () => {
@@ -75,7 +75,7 @@ describe('CliKoppelen: session', () => {
       ),
     );
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=abcd-efgh');
+    const { wrapper } = await makeWrapper('/cli-link?code=abcd-efgh');
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
   });
@@ -96,7 +96,7 @@ describe('CliKoppelen: session', () => {
       ),
     );
 
-    const { wrapper } = await makeWrapper('/cli-koppelen');
+    const { wrapper } = await makeWrapper('/cli-link');
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
 
     // The account gets released while the tab stays open: the retry inside
@@ -111,7 +111,7 @@ describe('CliKoppelen: session', () => {
   it('shows a generic error message when /me itself fails unexpectedly', async () => {
     vi.stubGlobal('fetch', serverErrorFetch());
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=abcd-efgh');
+    const { wrapper } = await makeWrapper('/cli-link?code=abcd-efgh');
 
     expect(wrapper.html()).toContain('Serverfout');
   });
@@ -119,14 +119,14 @@ describe('CliKoppelen: session', () => {
 
 describe('CliKoppelen: entering a code', () => {
   it('asks for a code when none is in the url', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen');
+    const { wrapper } = await makeWrapper('/cli-link');
 
     expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
   });
 
   it('normalizes and looks up the manually entered code', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen');
+    const { wrapper } = await makeWrapper('/cli-link');
 
     const input = wrapper.find('[data-testid="code-invoer"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
@@ -137,7 +137,7 @@ describe('CliKoppelen: entering a code', () => {
   });
 
   it('shows USER_CODE_UNKNOWN and stays on the input form', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen');
+    const { wrapper } = await makeWrapper('/cli-link');
 
     const input = wrapper.find('[data-testid="code-invoer"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'ZZZZ-ZZZZ' } }));
@@ -151,7 +151,7 @@ describe('CliKoppelen: entering a code', () => {
 
 describe('CliKoppelen: looking up the code via the url', () => {
   it('looks up the code from the query and shows the data for confirmation', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
     expect(wrapper.find('[data-testid="code-programma"]').text()).toContain('plak-cli');
@@ -161,7 +161,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
   });
 
   it('names the account being linked', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     const member = backend.data.members.find((m) => m.id === backend.data.loggedInMemberId)!;
     const account = wrapper.find('[data-testid="code-account"]');
@@ -174,7 +174,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
     const member = backend.data.members.find((m) => m.id === backend.data.loggedInMemberId)!;
     member.name = '';
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.find('[data-testid="code-account"]').attributes('text')).toBe(
       `Je koppelt dit programma aan ${member.email}`,
@@ -184,7 +184,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
   it('warns when the request comes from a different network', async () => {
     backend.data.deviceAuthorizations[0]!.sameNetwork = false;
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.find('[data-testid="code-ander-netwerk"]').exists()).toBe(true);
   });
@@ -192,13 +192,13 @@ describe('CliKoppelen: looking up the code via the url', () => {
   it("doesn't warn about the network when it's unknown", async () => {
     backend.data.deviceAuthorizations[0]!.sameNetwork = null;
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.find('[data-testid="code-ander-netwerk"]').exists()).toBe(false);
   });
 
   it("doesn't repeat the warning in heading and supporting text", async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     const warning = wrapper.find('[data-testid="code-waarschuwing"]');
     const heading = warning.attributes('text')!;
@@ -210,13 +210,13 @@ describe('CliKoppelen: looking up the code via the url', () => {
   it('shows "Onbekend programma" without clientName', async () => {
     backend.data.deviceAuthorizations[0]!.clientName = null;
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.find('[data-testid="code-programma"]').text()).toContain('Onbekend programma');
   });
 
   it('links after Koppelen and shows the success message', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
     await untilIdle();
@@ -227,7 +227,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
   });
 
   it('refuses after Weigeren and grants no access', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     await wrapper.find('[data-testid="code-weigeren"]').trigger('click');
     await untilIdle();
@@ -237,7 +237,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
   });
 
   it('redirects to login on SESSION_NOT_FRESH during Koppelen', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
@@ -262,12 +262,12 @@ describe('CliKoppelen: looking up the code via the url', () => {
     await untilIdle();
 
     expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-koppelen?code=ABCD-EFGH'),
+      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=ABCD-EFGH'),
     );
   });
 
   it('goes back to the input form when the code has meanwhile been used', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
@@ -296,7 +296,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
   });
 
   it('shows a generic error when approving fails unexpectedly', async () => {
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
@@ -332,10 +332,10 @@ describe('CliKoppelen: looking up the code via the url', () => {
       );
     });
 
-    await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-koppelen?code=ABCD-EFGH'),
+      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=ABCD-EFGH'),
     );
   });
 
@@ -359,7 +359,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
       );
     });
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.html()).toContain('Wacht even en probeer het opnieuw.');
   });
@@ -373,7 +373,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
       return serverErrorFetch()(input, init);
     });
 
-    const { wrapper } = await makeWrapper('/cli-koppelen?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
     expect(wrapper.html()).toContain('Serverfout');
   });

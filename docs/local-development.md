@@ -110,7 +110,7 @@ What ends up there:
 The secret link of `kerncijfers` is shown once, at the bottom of the
 output, and cannot be reconstructed afterwards. Instead of a deploy
 token the seed prints how to log in with `plak login` to publish from
-your own machine (device flow, linking on `/cli-koppelen`).
+your own machine (device flow, linking on `/cli-link`).
 
 Checking that it is there, without a browser:
 

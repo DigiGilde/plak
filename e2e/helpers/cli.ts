@@ -2,7 +2,7 @@
  * CLI login helper (`plak login`, OAuth 2.0 device authorization grant).
  * Drives the real flow: a Node-side request starts the device
  * authorization, the already-logged-in admin page approves it at
- * /cli-koppelen (the SPA, exactly like a human would), and a Node-side poll
+ * /cli-link (the SPA, exactly like a human would), and a Node-side poll
  * exchanges the device code for a CLI access token, rather than a deploy
  * token minted directly.
  */

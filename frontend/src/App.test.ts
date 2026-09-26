@@ -303,8 +303,8 @@ describe('App', () => {
       '/',
       '/-/groups',
       '/-/members',
-      '/-/profiel',
-      '/-/apparaten',
+      '/-/profile',
+      '/-/devices',
       '',
     ]);
 

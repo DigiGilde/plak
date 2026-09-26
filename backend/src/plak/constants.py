@@ -30,10 +30,10 @@ INTERNAL_ONLY_PATHS = frozenset({"/healthz"})
 
 
 # SPA pages at the root of the beheer host rather than under /-/, because a
-# client opens them by URL (the CLI's device flow opens /cli-koppelen). The
+# client opens them by URL (the CLI's device flow opens /cli-link). The
 # Vue router matches them before /:group, so a group of that name would be
 # unreachable in the SPA. frontend/src/router.ts holds the same list.
-SPA_ROOT_PAGES = frozenset({"cli-koppelen"})
+SPA_ROOT_PAGES = frozenset({"cli-link"})
 
 # Group slugs the application refuses, and the source of a CHECK constraint on
 # `groups.slug` (models/identity.py, migration 0001). The locations the web
