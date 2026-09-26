@@ -93,7 +93,7 @@ const shared = {
 
   // -- The language choice itself -------------------------------------------
   // -- The app shell: toolbar, menu, footer ---------------------------------
-  'shell.skip': 'Naar de inhoud',
+  'shell.skip': 'Direct naar de inhoud',
   'shell.brand.label': 'Plak, naar het overzicht',
   'shell.menu': 'Menu',
   'page.cliPair.title': 'Apparaat koppelen',

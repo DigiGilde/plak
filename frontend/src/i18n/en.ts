@@ -76,7 +76,7 @@ const shared = {
   'access.summary.extra.invitees': 'invitees from the list, after signing in with SSO Rijk',
   'access.summary.extra.both': '{first}, and {second}',
 
-  'shell.skip': 'To the content',
+  'shell.skip': 'Skip to main content',
   'shell.brand.label': 'Plak, to the overview',
   'shell.menu': 'Menu',
   'page.cliPair.title': 'Link a device',
