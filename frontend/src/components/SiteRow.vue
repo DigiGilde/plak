@@ -28,13 +28,22 @@ export const SITE_COLUMNS_SM = 'auto minmax(0, 1fr)';
 import { computed } from 'vue';
 
 import type { Site } from '../api/types';
-import { accessLabel, formatTimestamp } from '../format';
+import { accessBaseShort, accessLabel, formatTimestamp } from '../format';
 import { t } from '@/i18n';
 
 const props = defineProps<{
   site: Site;
 }>();
 
+/**
+ * The badge shows the base alone. A badge can neither wrap nor shrink, so
+ * whatever stands in it claims its full width whatever the column allows: the
+ * base plus both extras measured 266.55 px (nl) in a column of 148 px and lay
+ * across the publication date. The four base labels are bounded and were cut
+ * to this column, the widest measuring 122.14 px (nl) and 111.35 px (en).
+ */
+const accessShort = computed(() => accessBaseShort(props.site.access.base));
+/** Base plus extras, for whoever hovers the cell or has it read out. */
 const accessText = computed(() => accessLabel(props.site.access));
 
 const lastPublishedLabel = computed(() => {
@@ -60,8 +69,12 @@ const siteHref = computed(
     <nldd-title-cell :supporting-text="site.slug">
       <nldd-link :href="siteHref" size="inherit">{{ site.title }}</nldd-link>
     </nldd-title-cell>
-    <nldd-cell hide-below="md">
-      <nldd-badge color="neutral" :text="accessText"></nldd-badge>
+    <!-- The badge is marked decorative and the full label stands beside it for
+         a screen reader, so the extras are heard once rather than the base
+         twice. -->
+    <nldd-cell hide-below="md" :title="accessText">
+      <nldd-badge color="neutral" :text="accessShort" decorative></nldd-badge>
+      <span class="alleen-schermlezer">{{ accessText }}</span>
     </nldd-cell>
     <nldd-text-cell
       size="sm"
