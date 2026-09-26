@@ -19,6 +19,7 @@
  */
 import { computed, ref } from 'vue';
 
+import ConfirmModal from '@/components/ConfirmModal.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import type { MemberSuggestion, Role, SiteMember } from '@/api/types';
 import { SEARCH_MIN_LENGTH, useMemberSearch } from '@/composables/memberSearch';
@@ -329,6 +330,10 @@ async function onAdd(): Promise<void> {
   }
 }
 
+/** The row whose site role is up for removal, once the menu asked for it. */
+const removing = ref<Row | null>(null);
+const removeBusy = ref(false);
+
 /**
  * Every site role this member does not have, plus taking the site role away.
  * A role that is not wider than the group role changes nothing, so the menu
@@ -351,13 +356,41 @@ function actionsFor(row: Row): RowAction[] {
       text: t('admin.siteMembers.action.remove'),
       icon: 'trash',
       destructive: true,
-      details: row.groupRole
-        ? keepsViaGroup(row.groupRole)
-        : t('admin.siteMembers.action.remove.noAccess'),
       testid: `siterol-weghalen-${row.identifier}`,
-      run: () => void onRemove(row),
+      run: () => {
+        removing.value = row;
+      },
     },
   ];
+}
+
+/**
+ * What removing costs this one person, which is the whole reason to ask: a
+ * group role catches them at its own level, and without one there is nothing
+ * left to reach this site with.
+ */
+const removeText = computed(() => {
+  const row = removing.value;
+  if (row === null) return '';
+  return row.groupRole === null
+    ? t('admin.siteMembers.confirm.remove.noAccess', { name: row.name })
+    : t('admin.siteMembers.confirm.remove.keepsViaGroup', {
+        name: row.name,
+        role: roleLabel(row.groupRole).toLowerCase(),
+      });
+});
+
+async function confirmRemove(): Promise<void> {
+  const row = removing.value;
+  /* v8 ignore next -- the modal only confirms while it is open, so there is a row. */
+  if (row === null) return;
+  removeBusy.value = true;
+  try {
+    await onRemove(row);
+  } finally {
+    removeBusy.value = false;
+    removing.value = null;
+  }
 }
 
 async function onRole(row: Row, role: Role): Promise<void> {
@@ -573,6 +606,17 @@ async function onRemove(row: Row): Promise<void> {
     </nldd-box>
     </nldd-container>
   </nldd-container>
+
+  <ConfirmModal
+    :open="removing !== null"
+    :title="t('admin.siteMembers.confirm.remove.title', { name: removing?.name ?? '' })"
+    :text="removeText"
+    :keep-label="t('admin.siteMembers.confirm.remove.keep')"
+    :confirm-label="t('admin.siteMembers.confirm.remove.confirm')"
+    :busy="removeBusy"
+    @confirm="confirmRemove"
+    @close="removing = null"
+  />
 
   <nldd-notification
     v-for="notice in notices"

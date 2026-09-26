@@ -87,6 +87,12 @@ function resolveExpiry(requested: string | null): ExpiryResolution {
  */
 export const MOCK_CONTENT_BASE = 'https://sites.plak.test';
 
+/**
+ * A group member as `group_members` holds it: the site roles on the wire row
+ * are derived from `siteRoles` below, exactly as the backend joins them in.
+ */
+type MockGroupMember = Omit<GroupMember, 'siteRoles'>;
+
 /** A role on one site, as `site_members` holds it in the backend. */
 interface MockSiteRole {
   groupSlug: string;
@@ -100,7 +106,7 @@ interface MockData {
   loggedInMemberId: string | null;
   members: Member[];
   groups: Group[];
-  groupMembers: GroupMember[];
+  groupMembers: MockGroupMember[];
   /** Roles that hold on one site; the members list of a site is derived from these plus the group roles. */
   siteRoles: MockSiteRole[];
   sites: Site[];
@@ -459,6 +465,33 @@ function widestRole(first: Role | null, second: Role | null): Role {
 }
 
 /**
+ * One group member as the wire shows them, with the roles they hold of their
+ * own on sites in THIS group. Roles in another group stay out, as they do in
+ * the backend query.
+ */
+function withSiteRoles(data: MockData, row: MockGroupMember): GroupMember {
+  return {
+    ...row,
+    siteRoles: data.siteRoles
+      .filter((r) => r.groupSlug === row.groupSlug && r.identifier === row.identifier)
+      .map((r) => ({
+        siteSlug: r.siteSlug,
+        siteTitle:
+          data.sites.find((p) => p.groupSlug === r.groupSlug && p.slug === r.siteSlug)?.title ??
+          r.siteSlug,
+        role: r.role,
+      }))
+      .sort((a, b) => a.siteSlug.localeCompare(b.siteSlug)),
+  };
+}
+
+function groupMemberRows(data: MockData, groupSlug: string): GroupMember[] {
+  return data.groupMembers
+    .filter((l) => l.groupSlug === groupSlug)
+    .map((row) => withSiteRoles(data, row));
+}
+
+/**
  * Everyone who can reach one site, like the backend builds it: the group
  * members plus whoever has a role on this site, widest effective role first
  * and alphabetically by e-mail within a role.
@@ -697,7 +730,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           sites: data.sites
             .filter((p) => p.groupSlug === groupSlug)
             .map((p) => siteDerived(data, p)),
-          members: data.groupMembers.filter((l) => l.groupSlug === groupSlug),
+          members: groupMemberRows(data, groupSlug),
         };
         return json(200, detail);
       }
@@ -752,7 +785,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       if (rest.length === 3 && rest[2] === 'members') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
         if (method === 'GET') {
-          return json(200, data.groupMembers.filter((l) => l.groupSlug === groupSlug));
+          return json(200, groupMemberRows(data, groupSlug));
         }
         if (method === 'POST') {
           const body = readJson();
@@ -760,7 +793,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           if (!EMAIL_RE.test(identifier)) {
             return problem(422, 'Ongeldige identifier', 'Verwacht een e-mailadres.');
           }
-          const member: GroupMember = {
+          const member: MockGroupMember = {
             groupSlug,
             memberId: data.members.find((l) => l.email === identifier)?.id ?? identifier,
             identifier,
@@ -769,7 +802,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             role: (body.role as Role) ?? 'reader',
           };
           data.groupMembers.push(member);
-          return json(201, member);
+          return json(201, withSiteRoles(data, member));
         }
       }
       // GET /groups/{group}/members/search
@@ -793,11 +826,20 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         if (!member) return problem(404, 'Onbekend lid', 'Dit lid zit niet in deze groep.');
         const body = readJson();
         member.role = body.role as Role;
-        return json(200, member);
+        return json(200, withSiteRoles(data, member));
       }
       if (rest.length === 4 && rest[2] === 'members' && method === 'DELETE') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
         const memberId = rest[3]!;
+        const leaving = data.groupMembers.find(
+          (l) => l.groupSlug === groupSlug && l.memberId === memberId,
+        );
+        if (leaving && url.searchParams.get('siteRoles') === 'remove') {
+          // Only sites in this group, like the backend.
+          data.siteRoles = data.siteRoles.filter(
+            (r) => !(r.groupSlug === groupSlug && r.identifier === leaving.identifier),
+          );
+        }
         data.groupMembers = data.groupMembers.filter(
           (l) => !(l.groupSlug === groupSlug && l.memberId === memberId),
         );

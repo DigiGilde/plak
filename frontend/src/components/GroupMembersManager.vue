@@ -12,8 +12,9 @@
  */
 import { computed, ref } from 'vue';
 
+import ConfirmModal from '@/components/ConfirmModal.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
-import type { GroupMember, MemberSuggestion, Role } from '@/api/types';
+import type { GroupMember, GroupSiteRole, MemberSuggestion, Role } from '@/api/types';
 import { SEARCH_MIN_LENGTH, useMemberSearch } from '@/composables/memberSearch';
 import { useNotices, type Notice } from '@/composables/notices';
 import { keepEverySuggestion, useMenuEmptyState } from '@/composables/suggestionField';
@@ -23,7 +24,7 @@ import { t } from '@/i18n';
 const props = defineProps<{
   members: GroupMember[];
   add: (identifier: string, role: Role) => Promise<GroupMember>;
-  remove: (memberId: string) => Promise<void>;
+  remove: (memberId: string, siteRoles: 'keep' | 'remove') => Promise<void>;
   setRole: (memberId: string, role: Role) => Promise<GroupMember>;
   search: (query: string) => Promise<MemberSuggestion[]>;
 }>();
@@ -45,6 +46,14 @@ const COLUMNS = 'minmax(12rem, 1fr) 9rem 3rem';
 /** Below 640 px the role drops out; name and menu remain. */
 const COLUMNS_SM = 'minmax(0, 1fr) 3rem';
 
+/**
+ * How many sites the confirmation names before it counts the rest. A list of
+ * three reads; a list of thirty pushes the buttons off a phone screen and
+ * turns the question into a scroll. Five names is enough to recognise what
+ * this is about, and the tail is a number.
+ */
+const SITES_NAMED = 5;
+
 interface Row {
   /** Empty on a provisional row: the member id only exists once the add lands. */
   memberId: string;
@@ -52,6 +61,8 @@ interface Row {
   name: string;
   email: string;
   role: Role;
+  /** Only sites in this group; the API scopes it and so does this screen. */
+  siteRoles: GroupSiteRole[];
 }
 
 /** What gets submitted: an e-mail address, typed or picked from the list. */
@@ -161,6 +172,7 @@ const rows = computed<Row[]>(() => [
       name: member.name || member.identifier,
       email: member.email,
       role: member.role,
+      siteRoles: member.siteRoles,
     })),
   ...provisional.value,
 ]);
@@ -188,7 +200,14 @@ async function onAdd(): Promise<void> {
   if (newRow) {
     provisional.value = [
       ...provisional.value,
-      { memberId: '', identifier, name: identifier, email: identifier, role: newRole.value },
+      {
+        memberId: '',
+        identifier,
+        name: identifier,
+        email: identifier,
+        role: newRole.value,
+        siteRoles: [],
+      },
     ];
   }
   try {
@@ -223,9 +242,92 @@ function actionsFor(row: Row): RowAction[] {
       icon: 'trash',
       destructive: true,
       testid: `lid-verwijderen-${row.identifier}`,
-      run: () => void onRemove(row),
+      run: () => askRemove(row),
     },
   ];
+}
+
+/** The row whose group membership is up for removal, once the menu asked. */
+const removing = ref<Row | null>(null);
+const removeBusy = ref(false);
+/**
+ * Whether the site roles go along. Off on opening, every time: taking more
+ * than was asked is a destructive step and has to be chosen, not inherited
+ * from the last person who was removed.
+ */
+const alsoSiteRoles = ref(false);
+
+function askRemove(row: Row): void {
+  alsoSiteRoles.value = false;
+  removing.value = row;
+}
+
+/** The site roles this person holds in this group, the named ones first. */
+const removeSiteRoles = computed<GroupSiteRole[]>(() => removing.value?.siteRoles ?? []);
+const namedSites = computed(() => removeSiteRoles.value.slice(0, SITES_NAMED));
+const unnamedSites = computed(() => removeSiteRoles.value.length - namedSites.value.length);
+
+const unnamedText = computed(() =>
+  t(
+    unnamedSites.value === 1
+      ? 'group.members.confirm.remove.siteRoles.more.one'
+      : 'group.members.confirm.remove.siteRoles.more.many',
+    { count: unnamedSites.value },
+  ),
+);
+
+/**
+ * What it costs, which is the whole reason to ask: a group role reaches every
+ * site in the group at once. The second sentence states what is true of this
+ * person, since the row now carries the site roles they hold here.
+ */
+const removeText = computed(() => {
+  const row = removing.value;
+  if (row === null) return '';
+  const first = t('group.members.confirm.remove.text', {
+    name: row.name,
+    role: roleLabel(row.role).toLowerCase(),
+  });
+  const count = row.siteRoles.length;
+  if (count === 0) {
+    return `${first} ${t('group.members.confirm.remove.noSiteRoles', { name: row.name })}`;
+  }
+  const key =
+    count === 1
+      ? 'group.members.confirm.remove.siteRoles.one'
+      : 'group.members.confirm.remove.siteRoles.many';
+  return `${first} ${t(key, { name: row.name, count })}`;
+});
+
+// The button names what will happen, which is not the same thing twice: with
+// the box ticked more goes than the menu item asked for.
+const removeConfirmLabel = computed(() =>
+  t(
+    alsoSiteRoles.value
+      ? 'group.members.confirm.remove.confirmWithSiteRoles'
+      : 'group.members.confirm.remove.confirm',
+  ),
+);
+
+function toggleSiteRoles(event: CustomEvent<{ checked?: boolean }>): void {
+  // Same double event as on the combo box above: the inner control's own
+  // change bubbles out here too, without a detail, and would read as unticked.
+  const checked = event.detail?.checked;
+  if (typeof checked !== 'boolean') return;
+  alsoSiteRoles.value = checked;
+}
+
+async function confirmRemove(): Promise<void> {
+  const row = removing.value;
+  /* v8 ignore next -- the modal only confirms while it is open, so there is a row. */
+  if (row === null) return;
+  removeBusy.value = true;
+  try {
+    await onRemove(row, alsoSiteRoles.value ? 'remove' : 'keep');
+  } finally {
+    removeBusy.value = false;
+    removing.value = null;
+  }
 }
 
 async function onRole(row: Row, role: Role): Promise<void> {
@@ -238,10 +340,10 @@ async function onRole(row: Row, role: Role): Promise<void> {
   }
 }
 
-async function onRemove(row: Row): Promise<void> {
+async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
   hidden.value = [...hidden.value, row.identifier];
   try {
-    await props.remove(row.memberId);
+    await props.remove(row.memberId, siteRoles);
     emit('removed', row.identifier);
   } catch (error) {
     notify(t('group.members.removeFailed', { name: row.name }), error);
@@ -385,6 +487,54 @@ async function onRemove(row: Row): Promise<void> {
       </nldd-container>
     </nldd-box>
   </nldd-container>
+
+  <ConfirmModal
+    :open="removing !== null"
+    :title="t('group.members.confirm.remove.title', { name: removing?.name ?? '' })"
+    :text="removeText"
+    :keep-label="t('group.members.confirm.remove.keep')"
+    :confirm-label="removeConfirmLabel"
+    :busy="removeBusy"
+    @confirm="confirmRemove"
+    @close="removing = null"
+  >
+    <nldd-container v-if="removeSiteRoles.length > 0" layout="stack" gap="16">
+      <!-- type="form": rows that are not actions but facts, so the list does
+           not promise a keyboard to walk through. -->
+      <nldd-list
+        type="form"
+        dividers="never"
+        :accessible-label="t('group.members.confirm.remove.siteRoles.list')"
+        data-testid="siterollen-lijst"
+      >
+        <nldd-list-item v-for="site in namedSites" :key="site.siteSlug">
+          <nldd-text-cell
+            :text="site.siteTitle"
+            :supporting-text="roleLabel(site.role)"
+          ></nldd-text-cell>
+        </nldd-list-item>
+        <nldd-list-item v-if="unnamedSites > 0" data-testid="siterollen-rest">
+          <nldd-text-cell size="sm" color="secondary" :text="unnamedText"></nldd-text-cell>
+        </nldd-list-item>
+      </nldd-list>
+
+      <!-- Off on opening, and the sentence under it says what that leaves
+           standing, so the safe choice is not the unexplained one. -->
+      <nldd-checkbox-field
+        :label="t('group.members.confirm.remove.siteRoles.also')"
+        :checked="alsoSiteRoles || undefined"
+        data-testid="siterollen-meenemen"
+        @change="toggleSiteRoles"
+      ></nldd-checkbox-field>
+      <nldd-rich-text>
+        <p>
+          {{
+            t('group.members.confirm.remove.siteRoles.keeps', { name: removing?.name ?? '' })
+          }}
+        </p>
+      </nldd-rich-text>
+    </nldd-container>
+  </ConfirmModal>
 
   <nldd-notification
     v-for="notice in notices"

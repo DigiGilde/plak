@@ -75,7 +75,13 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.keepsViaGroup': 'Stays {role} via the group',
   'admin.siteMembers.action.setRole': 'Make {role}',
   'admin.siteMembers.action.remove': 'Remove role',
-  'admin.siteMembers.action.remove.noAccess': 'Cannot reach this site afterwards',
+  'admin.siteMembers.confirm.remove.title': 'Remove the site role of {name}?',
+  'admin.siteMembers.confirm.remove.keepsViaGroup':
+    '{name} keeps access to this site as {role} through the group.',
+  'admin.siteMembers.confirm.remove.noAccess':
+    '{name} loses access to this site: there is no role through the group to fall back on.',
+  'admin.siteMembers.confirm.remove.keep': 'Keep the site role',
+  'admin.siteMembers.confirm.remove.confirm': 'Remove site role',
   'admin.siteMembers.addFailed': 'Giving {name} a role on this site did not work',
   'admin.siteMembers.roleFailed': 'Changing the site role of {name} did not work',
   'admin.siteMembers.removeFailed': 'Removing the site role of {name} did not work',

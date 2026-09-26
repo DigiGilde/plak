@@ -17,7 +17,10 @@ afterEach(() => {
 });
 
 function makeWrapper() {
-  return mount(TabMembers, { props: { group: 'nldd', site: 'website' } });
+  return mount(TabMembers, {
+    props: { group: 'nldd', site: 'website' },
+    global: { stubs: { teleport: true } },
+  });
 }
 
 type Wrapper = ReturnType<typeof makeWrapper>;
@@ -92,6 +95,8 @@ describe('TabMembers', () => {
     await untilIdle();
 
     await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
 
     expect(siteRowTexts(wrapper)).toEqual([['Wim Weg', 'Redacteur']]);
     expect(inheritedNames(wrapper)).toContain('Zoë de Wit');

@@ -68,6 +68,9 @@ function confirm(): void {
       :accessible-label="title"
       @close="emit('close')"
     >
+      <!-- Between the sentence and the buttons: whatever a confirmation needs
+           beyond a sentence, such as the choice to take more along. -->
+      <slot></slot>
       <!-- Behoud sits at the top and is primary: the autopilot click should
            be the safe way out, not the irreversible action. -->
       <nldd-button

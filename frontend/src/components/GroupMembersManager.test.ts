@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 
 import { ApiError } from '@/api/client';
-import type { GroupMember, MemberSuggestion, Role } from '@/api/types';
+import type { GroupMember, GroupSiteRole, MemberSuggestion, Role } from '@/api/types';
 import { SEARCH_DEBOUNCE_MS } from '@/composables/memberSearch';
 
 import GroupMembersManager from './GroupMembersManager.vue';
@@ -15,7 +15,12 @@ const member: GroupMember = {
   name: 'lid@voorbeeld.nl',
   email: 'lid@voorbeeld.nl',
   role: 'reader',
+  siteRoles: [],
 };
+
+function siteRole(slug: string, title: string, role: Role = 'editor'): GroupSiteRole {
+  return { siteSlug: slug, siteTitle: title, role };
+}
 
 function memberWith(overrides: Partial<GroupMember>): GroupMember {
   return { ...member, ...overrides };
@@ -35,7 +40,7 @@ function suggestionOf(overrides: Partial<MemberSuggestion> = {}): MemberSuggesti
 function mountComponent(props: {
   members?: GroupMember[];
   add?: (identifier: string, role: Role) => Promise<GroupMember>;
-  remove?: (memberId: string) => Promise<void>;
+  remove?: (memberId: string, siteRoles: 'keep' | 'remove') => Promise<void>;
   setRole?: (identifier: string, role: Role) => Promise<GroupMember>;
   search?: (query: string) => Promise<MemberSuggestion[]>;
 }) {
@@ -94,6 +99,26 @@ async function runAction(wrapper: Wrapper, identifier: string, testid: string): 
   expect(item.exists(), `action "${testid}" missing for ${identifier}`).toBe(true);
   item.element.dispatchEvent(new CustomEvent('select'));
   await flushPromises();
+}
+
+/** The confirmation the remove action opens; teleport is stubbed away. */
+function confirmation(wrapper: Wrapper) {
+  return wrapper.find('nldd-modal-dialog');
+}
+
+/** Asking to remove someone from the group and going through with it. */
+async function removeMember(wrapper: Wrapper, identifier: string): Promise<void> {
+  await runAction(wrapper, identifier, `lid-verwijderen-${identifier}`);
+  await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+  await flushPromises();
+}
+
+/** Tick the box that takes the site roles along. */
+async function tickSiteRoles(wrapper: Wrapper, checked = true): Promise<void> {
+  wrapper
+    .find('[data-testid="siterollen-meenemen"]')
+    .element.dispatchEvent(new CustomEvent('change', { detail: { checked } }));
+  await nextTick();
 }
 
 async function pickRole(wrapper: Wrapper, role: Role): Promise<void> {
@@ -255,16 +280,251 @@ describe('GroupMembersManager (filled)', () => {
     );
     const wrapper = mountComponent({ members: [member], remove });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await removeMember(wrapper, 'lid@voorbeeld.nl');
 
     expect(pageRows(wrapper)).toHaveLength(0);
-    expect(remove).toHaveBeenCalledWith('lid-7');
+    expect(remove).toHaveBeenCalledWith('lid-7', 'keep');
     expect(wrapper.emitted('removed')).toBeUndefined();
 
     confirm();
     await flushPromises();
 
     expect(wrapper.emitted('removed')?.[0]).toEqual(['lid@voorbeeld.nl']);
+  });
+});
+
+describe('GroupMembersManager (confirming a removal)', () => {
+  it('asks first and takes nobody out until the answer is yes', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({ members: [member], remove });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    expect(pageRows(wrapper)).toHaveLength(1);
+    expect(remove).not.toHaveBeenCalled();
+
+    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(pageRows(wrapper)).toHaveLength(1);
+  });
+
+  it('names the role and says it reaches every site in the group', async () => {
+    const wrapper = mountComponent({
+      members: [memberWith({ name: 'Lid Voorbeeld', role: 'editor' })],
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    expect(confirmation(wrapper).attributes('text')).toBe('Lid Voorbeeld uit de groep halen?');
+    expect(confirmation(wrapper).attributes('supporting-text')).toBe(
+      'Lid Voorbeeld is dan geen redacteur meer in deze groep en verliest die rol op elke ' +
+        'site erin. Lid Voorbeeld heeft in deze groep geen eigen siterol, dus verder ' +
+        'verandert er niets.',
+    );
+    expect(wrapper.find('[data-testid="siterollen-meenemen"]').exists()).toBe(false);
+  });
+
+  it('puts the way out at the top and gives the removal the destructive variant', async () => {
+    const wrapper = mountComponent({ members: [member] });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    const buttons = confirmation(wrapper).findAll('nldd-button');
+    expect(buttons.map((button) => button.attributes('text'))).toEqual([
+      'Behoud het lidmaatschap',
+      'Uit de groep halen',
+    ]);
+    expect(buttons[0]!.attributes('variant')).toBe('primary');
+    expect(buttons[1]!.attributes('variant')).toBe('destructive');
+  });
+
+  it('marks the removal busy while the API has not answered', async () => {
+    let settle!: () => void;
+    const remove = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const wrapper = mountComponent({ members: [member], remove });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeDefined();
+
+    settle();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeUndefined();
+    expect(wrapper.emitted('removed')?.[0]).toEqual(['lid@voorbeeld.nl']);
+  });
+});
+
+describe('GroupMembersManager (site roles in the confirmation)', () => {
+  it('names the sites this person holds a role on in this group', async () => {
+    const wrapper = mountComponent({
+      members: [
+        memberWith({
+          name: 'Lid Voorbeeld',
+          siteRoles: [
+            siteRole('jaarverslag', 'Jaarverslag 2025', 'admin'),
+            siteRole('kerncijfers', 'Kerncijfers'),
+          ],
+        }),
+      ],
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    expect(confirmation(wrapper).attributes('supporting-text')).toBe(
+      'Lid Voorbeeld is dan geen lezer meer in deze groep en verliest die rol op elke site ' +
+        'erin. Op 2 sites in deze groep heeft Lid Voorbeeld daarnaast een eigen siterol:',
+    );
+    const rows = wrapper.find('[data-testid="siterollen-lijst"]').findAll('nldd-text-cell');
+    expect(rows.map((row) => row.attributes('text'))).toEqual(['Jaarverslag 2025', 'Kerncijfers']);
+    expect(rows.map((row) => row.attributes('supporting-text'))).toEqual(['Beheerder', 'Redacteur']);
+  });
+
+  it('leaves the site roles alone unless the box is ticked', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({
+      members: [memberWith({ siteRoles: [siteRole('jaarverslag', 'Jaarverslag 2025')] })],
+      remove,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    expect(
+      wrapper.find('[data-testid="siterollen-meenemen"]').attributes('checked'),
+    ).toBeUndefined();
+    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('text')).toBe(
+      'Uit de groep halen',
+    );
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).toHaveBeenCalledWith('lid-7', 'keep');
+  });
+
+  it('takes the site roles along once the box is ticked, and says so on the button', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({
+      members: [memberWith({ siteRoles: [siteRole('jaarverslag', 'Jaarverslag 2025')] })],
+      remove,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await tickSiteRoles(wrapper);
+
+    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('text')).toBe(
+      'Uit de groep halen en siterollen weghalen',
+    );
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).toHaveBeenCalledWith('lid-7', 'remove');
+  });
+
+  it('untick puts the choice back to keeping them', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({
+      members: [memberWith({ siteRoles: [siteRole('jaarverslag', 'Jaarverslag 2025')] })],
+      remove,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await tickSiteRoles(wrapper);
+    await tickSiteRoles(wrapper, false);
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).toHaveBeenCalledWith('lid-7', 'keep');
+  });
+
+  it('names five sites and counts the rest, so a long list cannot grow the modal', async () => {
+    const many = Array.from({ length: 8 }, (_, index) =>
+      siteRole(`site-${index}`, `Site ${index}`),
+    );
+    const wrapper = mountComponent({ members: [memberWith({ siteRoles: many })] });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    const rows = wrapper.find('[data-testid="siterollen-lijst"]').findAll('nldd-list-item');
+    expect(rows).toHaveLength(6);
+    expect(
+      wrapper.find('[data-testid="siterollen-rest"]').find('nldd-text-cell').attributes('text'),
+    ).toBe('En nog 3 sites');
+  });
+
+  it('counts a single unnamed site in the singular', async () => {
+    const many = Array.from({ length: 6 }, (_, index) =>
+      siteRole(`site-${index}`, `Site ${index}`),
+    );
+    const wrapper = mountComponent({ members: [memberWith({ siteRoles: many })] });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+
+    expect(
+      wrapper.find('[data-testid="siterollen-rest"]').find('nldd-text-cell').attributes('text'),
+    ).toBe('En nog 1 site');
+  });
+
+  it('ignores a change without a detail, which is the same tick reaching here twice', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({
+      members: [memberWith({ siteRoles: [siteRole('jaarverslag', 'Jaarverslag 2025')] })],
+      remove,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await tickSiteRoles(wrapper);
+    wrapper.find('[data-testid="siterollen-meenemen"]').element.dispatchEvent(new Event('change'));
+    await nextTick();
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).toHaveBeenCalledWith('lid-7', 'remove');
+  });
+
+  it('starts the box off again for the next person', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({
+      members: [
+        memberWith({ siteRoles: [siteRole('jaarverslag', 'Jaarverslag 2025')] }),
+        memberWith({
+          memberId: 'lid-8',
+          identifier: 'tweede@voorbeeld.nl',
+          name: 'tweede@voorbeeld.nl',
+          email: 'tweede@voorbeeld.nl',
+          siteRoles: [siteRole('kerncijfers', 'Kerncijfers')],
+        }),
+      ],
+      remove,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await tickSiteRoles(wrapper);
+    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await flushPromises();
+
+    await runAction(wrapper, 'tweede@voorbeeld.nl', 'lid-verwijderen-tweede@voorbeeld.nl');
+
+    expect(
+      wrapper.find('[data-testid="siterollen-meenemen"]').attributes('checked'),
+    ).toBeUndefined();
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).toHaveBeenCalledWith('lid-8', 'keep');
   });
 });
 
@@ -551,7 +811,7 @@ describe('GroupMembersManager (error)', () => {
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
     const wrapper = mountComponent({ members: [member], remove });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await removeMember(wrapper, 'lid@voorbeeld.nl');
 
     expect(pageRows(wrapper)).toHaveLength(1);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(

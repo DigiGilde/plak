@@ -187,6 +187,21 @@ SearchTerm = Annotated[
         examples=["jansen"],
     ),
 ]
+SiteRolesOnRemoval = Annotated[
+    Literal["keep", "remove"],
+    Query(
+        alias="siteRoles",
+        description=(
+            "Wat er gebeurt met de eigen siterollen die dit lid heeft op sites in deze groep. "
+            "`keep` laat ze staan, zodat diegene bij die sites blijft kunnen; `remove` haalt ze in "
+            "dezelfde handeling weg. Weggelaten betekent `keep`: meer weghalen dan gevraagd is een "
+            "bewuste keuze.\n\n"
+            "Alleen sites in deze groep. Een siterol in een andere groep blijft buiten beeld en "
+            "buiten schot."
+        ),
+        examples=["remove"],
+    ),
+]
 
 
 # -- Error contract per route -----------------------------------------------
@@ -801,6 +816,17 @@ class KeyCreated(ApiModel):
     )
 
 
+class GroupSiteRole(ApiModel):
+    """Een eigen rol op één site, altijd een site in de groep waar je naar kijkt."""
+
+    site_slug: str = Field(description="Slug van de site binnen deze groep.", examples=["jaarverslag"])
+    site_title: str = Field(description="Titel van de site, zoals die in het beheer staat.")
+    role: Role = Field(
+        description=f"Rol die alleen op deze site geldt: {ROLE_HINT}",
+        examples=["editor"],
+    )
+
+
 class GroupMemberOut(ApiModel):
     """Een lid van een groep, zoals de ledenlijst van die groep het toont."""
 
@@ -818,6 +844,14 @@ class GroupMemberOut(ApiModel):
     role: Role = Field(
         description=f"Rol van dit lid in deze groep: {ROLE_HINT}",
         examples=["reader"],
+    )
+    site_roles: list[GroupSiteRole] = Field(
+        description=(
+            "De sites in déze groep waarop dit lid een eigen rol heeft, op slug gesorteerd. Zo'n rol "
+            "staat los van de groepsrol en blijft gelden als het lid uit de groep gaat, tenzij je hem "
+            "meeneemt (`siteRoles=remove` bij het verwijderen).\n\n"
+            "Wat dit lid in een andere groep heeft staat er niet bij: dat hoort bij die groep."
+        ),
     )
 
 
@@ -1442,7 +1476,9 @@ def _key_json(key: AccessKey, group_slug: str, site_slug: str) -> KeyOut:
     )
 
 
-def _group_member_json(group_slug: str, member: Member, role: Role) -> GroupMemberOut:
+def _group_member_json(
+    group_slug: str, member: Member, role: Role, site_roles: list[GroupSiteRole]
+) -> GroupMemberOut:
     return GroupMemberOut(
         group_slug=group_slug,
         member_id=str(member.id),
@@ -1450,6 +1486,7 @@ def _group_member_json(group_slug: str, member: Member, role: Role) -> GroupMemb
         name=member.name or "",
         email=member.email,
         role=role,
+        site_roles=site_roles,
     )
 
 
@@ -1722,6 +1759,32 @@ async def _group_sites(db: AsyncSession, group: Group) -> list[Site]:
     )
 
 
+async def _group_site_roles(
+    db: AsyncSession, group: Group, member_id: uuid.UUID | None = None
+) -> dict[uuid.UUID, list[GroupSiteRole]]:
+    """Per member, the sites in this group they hold a role of their own on.
+
+    `Site.group_id == group.id` is the whole point of this query and not an
+    optimisation: a site role in another group would say where else in the
+    organisation this person works, and an admin of this group has no business
+    reading that here.
+    """
+    query = (
+        select(SiteMember.member_id, Site.slug, Site.title, SiteMember.role)
+        .join(Site, Site.id == SiteMember.site_id)
+        .where(Site.group_id == group.id)
+        .order_by(Site.slug)
+    )
+    if member_id is not None:
+        query = query.where(SiteMember.member_id == member_id)
+    per_member: dict[uuid.UUID, list[GroupSiteRole]] = {}
+    for row_member_id, site_slug, site_title, role in await db.execute(query):
+        per_member.setdefault(row_member_id, []).append(
+            GroupSiteRole(site_slug=site_slug, site_title=site_title, role=role)
+        )
+    return per_member
+
+
 async def _group_members_json(db: AsyncSession, group: Group) -> list[GroupMemberOut]:
     rows = await db.execute(
         select(Member, GroupMember.role)
@@ -1729,7 +1792,51 @@ async def _group_members_json(db: AsyncSession, group: Group) -> list[GroupMembe
         .where(GroupMember.group_id == group.id)
         .order_by(Member.email)
     )
-    return [_group_member_json(group.slug, row.Member, row.role) for row in rows]
+    site_roles = await _group_site_roles(db, group)
+    return [
+        _group_member_json(group.slug, row.Member, row.role, site_roles.get(row.Member.id, []))
+        for row in rows
+    ]
+
+
+async def _remove_site_roles_in_group(db: AsyncSession, group: Group, target: Member) -> list[str]:
+    """Take away every site role this member holds on a site in this group, and
+    report the slugs of the sites it really came off.
+
+    Part of the caller's transaction and committed by the caller, so the group
+    role and the site roles go together or not at all.
+
+    `Site.group_id == group.id` is the boundary: a site role in another group is
+    neither read nor written here.
+    """
+    in_group = dict(
+        (
+            await db.execute(
+                select(SiteMember.site_id, Site.slug)
+                .join(Site, Site.id == SiteMember.site_id)
+                .where(Site.group_id == group.id, SiteMember.member_id == target.id)
+            )
+        ).all()
+    )
+    if not in_group:
+        return []
+    gone = await db.execute(
+        delete(SiteMember)
+        .where(SiteMember.member_id == target.id, SiteMember.site_id.in_(in_group))
+        .returning(SiteMember.site_id)
+    )
+    # RETURNING rather than the list read above: a role somebody else took away
+    # in the meantime is not ours to write an audit row about.
+    return sorted(in_group[site_id] for site_id in gone.scalars())
+
+
+async def _one_group_member(
+    db: AsyncSession, group: Group, target: Member, role: Role
+) -> GroupMemberOut:
+    """The row for one member, built the same way the listing builds it, so an
+    answer after a change can never disagree with the list."""
+    site_roles = await _group_site_roles(db, group, target.id)
+    return _group_member_json(group.slug, target, role, site_roles.get(target.id, []))
 
 
 async def _one_site_member(
@@ -3306,7 +3413,7 @@ def make_admin_router() -> APIRouter:
             "group_member_add",
             {"group": group_slug, "member_id": str(target.id), "role": body.role.value},
         )
-        return _group_member_json(group.slug, target, body.role)
+        return await _one_group_member(db, group, target, body.role)
 
     @router.delete(
         "/groups/{group_slug}/members/{member_id}",
@@ -3317,10 +3424,16 @@ def make_admin_router() -> APIRouter:
             "Haalt iemand uit de groep. Het platformlid zelf blijft bestaan, net als zijn eventuele andere "
             "groepslidmaatschappen. In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: "
             "een adres in een URL belandt in de logregels van elke proxy ertussen.\n\n"
+            "Een eigen rol op een losse site staat los van de groep en blijft standaard gelden. Met "
+            "`siteRoles=remove` haal je die rollen in dezelfde handeling weg, maar alleen op sites in "
+            "deze groep; wat dit lid elders heeft blijft onaangeroerd. Alles gebeurt in één transactie, "
+            "dus het is allemaal weg of er verandert niets. Elke weggehaalde siterol levert dezelfde "
+            "auditregel op als weghalen vanaf het sitescherm (`site_member_remove`).\n\n"
             "Het laatste lid van een groep kan er niet uit: een groep zonder leden is niet meer te beheren, "
             "want iemand toevoegen mag alleen wie er zelf in zit. Om dezelfde reden kan de laatste "
             "`admin` er niet uit.\n\n"
-            "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header."
+            "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header. Wie de "
+            "groep mag beheren, mag elke siterol erin al weghalen bij de site zelf."
         ),
         responses=_deleted("Het lid zit niet meer in de groep.")
         | _errors(
@@ -3340,28 +3453,52 @@ def make_admin_router() -> APIRouter:
         ),
     )
     async def remove_group_member(
-        request: Request, group_slug: str, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request,
+        group_slug: str,
+        member_id: uuid.UUID,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+        site_roles: SiteRolesOnRemoval = "keep",
     ) -> Response:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN, platform_admin=True)
         target = await db.get(Member, member_id)
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER")
+        # Read before anything is deleted: the two deletes share one
+        # transaction, so a rowcount afterwards can no longer be the thing that
+        # decides whether this member was in the group at all.
+        membership = await db.scalar(
+            select(GroupMember).where(
+                GroupMember.group_id == group.id, GroupMember.member_id == target.id
+            )
+        )
+        if membership is None:
+            raise ApiError(404, "NOT_GROUP_MEMBER")
         # A group without members can no longer be managed: there is no route to
         # add someone who is not a member themselves. The database trigger
         # ck_groups_keep_one_admin guards the neighbouring case, a group left
         # without an admin.
         if await _is_last_group_member(db, group.id, target.id):
             raise ApiError(409, "LAST_GROUP_MEMBER")
+        removed_sites: list[str] = []
         async with _group_keeps_an_admin(db):
-            result = await db.execute(
+            if site_roles == "remove":
+                removed_sites = await _remove_site_roles_in_group(db, group, target)
+            await db.execute(
                 delete(GroupMember).where(GroupMember.group_id == group.id, GroupMember.member_id == target.id)
             )
             await db.commit()
-        if result.rowcount == 0:
-            raise ApiError(404, "NOT_GROUP_MEMBER")
         await _audit(
             request, member, "group_member_remove", {"group": group_slug, "member_id": str(target.id)}
         )
+        for site_slug in removed_sites:
+            await _audit(
+                request,
+                member,
+                "site_member_remove",
+                {"group": group_slug, "site": site_slug, "member_id": str(target.id)},
+            )
         return Response(status_code=204)
 
     @router.put(
@@ -3423,7 +3560,7 @@ def make_admin_router() -> APIRouter:
             "group_member_role",
             {"group": group_slug, "member_id": str(target.id), "role": body.role.value},
         )
-        return _group_member_json(group.slug, target, body.role)
+        return await _one_group_member(db, group, target, body.role)
 
     # -- Platform members --
 

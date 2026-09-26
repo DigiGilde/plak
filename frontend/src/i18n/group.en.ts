@@ -83,6 +83,25 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.suggestion.alreadyMember': '{name} (already a member)',
   'group.members.action.setRole': 'Make {role}',
   'group.members.action.remove': 'Remove from the group',
+  'group.members.confirm.remove.title': 'Remove {name} from the group?',
+  'group.members.confirm.remove.text':
+    '{name} is then no longer {role} in this group and loses that role on every site in it.',
+  'group.members.confirm.remove.noSiteRoles':
+    '{name} holds no site role of their own in this group, so nothing else changes.',
+  'group.members.confirm.remove.siteRoles.one':
+    'On 1 site in this group {name} also holds a site role of their own:',
+  'group.members.confirm.remove.siteRoles.many':
+    'On {count} sites in this group {name} also holds a site role of their own:',
+  'group.members.confirm.remove.siteRoles.list': 'Sites in this group with a site role of their own',
+  'group.members.confirm.remove.siteRoles.more.one': 'And 1 more site',
+  'group.members.confirm.remove.siteRoles.more.many': 'And {count} more sites',
+  'group.members.confirm.remove.siteRoles.also': 'Remove these site roles as well',
+  'group.members.confirm.remove.siteRoles.keeps':
+    'Leave this off and {name} keeps those site roles, and can still reach those sites.',
+  'group.members.confirm.remove.keep': 'Keep the membership',
+  'group.members.confirm.remove.confirm': 'Remove from the group',
+  'group.members.confirm.remove.confirmWithSiteRoles':
+    'Remove from the group and remove the site roles',
   'group.members.addFailed': 'Could not add group member {identifier}',
   'group.members.roleChangeFailed': 'Could not change the role of {name}',
   'group.members.removeFailed': 'Could not remove group member {name}',
