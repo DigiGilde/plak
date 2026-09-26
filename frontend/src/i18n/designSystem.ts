@@ -13,7 +13,7 @@
  * that object on all sixty-odd elements in the templates, where the next one
  * added would quietly be the one nobody remembers, this walks the document:
  * every `nldd-*` element we have words for gets them when it appears, and all
- * of them again when the language changes under `/-/profiel`.
+ * of them again when the language changes under `/-/profile`.
  *
  * Dutch stays the fallback, because it is the component's own default and this
  * interface's first language. `designSystem.nl.ts` repeats those defaults

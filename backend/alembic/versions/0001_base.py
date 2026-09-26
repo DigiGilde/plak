@@ -23,7 +23,7 @@ depends_on = None
 # included: in SQL that order is the sort order of the type.
 _ACCESS_BASE_VALUES = ("public", "sso", "site_team", "nobody")
 _ROLE_VALUES = ("reader", "editor", "admin")
-_RESERVED_SLUGS_SQL = "'.well-known', 'cli-koppelen', 'favicon.ico', 'robots.txt'"
+_RESERVED_SLUGS_SQL = "'.well-known', 'cli-link', 'favicon.ico', 'robots.txt'"
 _ACTOR_KIND_VALUES = ("member", "ci", "system", "anonymous")
 _CI_PROVIDER_VALUES = ("github", "forgejo")
 _CLI_DEVICE_STATUS_VALUES = ("pending", "approved", "denied")

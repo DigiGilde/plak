@@ -44,22 +44,22 @@ export const routes = [
     meta: { public: true, titleKey: 'footer.about' },
   },
   {
-    path: '/-/profiel',
-    name: 'profiel',
+    path: '/-/profile',
+    name: 'profile',
     component: () => import('./pages/Profiel.vue'),
     meta: { titleKey: 'profile.title' },
   },
   {
-    path: '/-/apparaten',
-    name: 'apparaten',
+    path: '/-/devices',
+    name: 'devices',
     component: () => import('./pages/Apparaten.vue'),
     meta: { titleKey: 'nav.devices' },
   },
   // Above '/:group': the CLI's device flow opens this path directly (not
   // under '/-/'), so it has to be matched before the group route below.
   {
-    path: '/cli-koppelen',
-    name: 'cli-koppelen',
+    path: '/cli-link',
+    name: 'cli-link',
     component: () => import('./pages/CliKoppelen.vue'),
     meta: { public: true, titleKey: 'page.cliPair.title' },
   },

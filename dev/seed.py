@@ -486,7 +486,7 @@ def _report(settings: Settings, result: SeedResult) -> str:
         "",
         "Publiceren vanaf je eigen machine, met de plak-CLI:",
         f"  plak login   (beheer-URL {admin_base})",
-        f"  en keur de code in je terminal goed op {admin_base}/cli-koppelen",
+        f"  en keur de code in je terminal goed op {admin_base}/cli-link",
         "",
     ]
     return "\n".join(lines)

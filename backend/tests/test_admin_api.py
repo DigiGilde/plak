@@ -270,7 +270,7 @@ class TestAuthorization:
     async def test_a_root_level_spa_page_is_no_group_slug(self, client, app, data):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         response = await client.post(
-            f"{BASE}/groups", json={"name": "Koppelen", "slug": "cli-koppelen"}, headers=headers
+            f"{BASE}/groups", json={"name": "Koppelen", "slug": "cli-link"}, headers=headers
         )
         assert response.status_code == 422
         assert response.json()["code"] == "SLUG_INVALID"

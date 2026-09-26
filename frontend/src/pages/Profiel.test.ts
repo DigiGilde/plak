@@ -19,7 +19,7 @@ beforeEach(() => {
   _resetCurrentMemberCache();
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/-/profiel', component: Profiel }],
+    routes: [{ path: '/-/profile', component: Profiel }],
   });
 });
 
@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 async function makeWrapper() {
-  await router.push('/-/profiel');
+  await router.push('/-/profile');
   await router.isReady();
   const wrapper = mount(Profiel, { global: { plugins: [router], stubs: { teleport: true } } });
   await untilIdle();
@@ -69,7 +69,7 @@ describe('Profiel: who you are', () => {
   it('supplies the breadcrumb path to the app shell', async () => {
     await makeWrapper();
 
-    expect(breadcrumbsFor('/-/profiel')).toEqual([
+    expect(breadcrumbsFor('/-/profile')).toEqual([
       { text: 'Overzicht', href: '/' },
       { text: 'Profiel' },
     ]);
@@ -79,7 +79,7 @@ describe('Profiel: who you are', () => {
     const wrapper = await makeWrapper();
 
     expect(wrapper.find('[data-testid="profiel-apparaten"]').attributes('href')).toBe(
-      '/-/apparaten',
+      '/-/devices',
     );
   });
 });

@@ -50,8 +50,8 @@ const navigation = computed<MenuChoice[]>(() => [
  * page that changes it is reached from.
  */
 const account = computed<MenuChoice[]>(() => [
-  { text: t('nav.profile'), icon: 'person', path: '/-/profiel' },
-  { text: t('nav.devices'), icon: 'link', path: '/-/apparaten' },
+  { text: t('nav.profile'), icon: 'person', path: '/-/profile' },
+  { text: t('nav.devices'), icon: 'link', path: '/-/devices' },
   { text: t('nav.logout'), icon: 'logout' },
 ]);
 

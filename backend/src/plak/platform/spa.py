@@ -53,7 +53,7 @@ from plak.serving import mime
 # cannot drift apart.
 SPA_PAGE_PATHS = tuple(
     f"{PLATFORM_PREFIX}/{page}"
-    for page in ("about", "accessibility", "apparaten", "groups", "members", "privacy", "profiel")
+    for page in ("about", "accessibility", "devices", "groups", "members", "privacy", "profile")
 )
 
 

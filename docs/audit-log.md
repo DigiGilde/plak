@@ -180,7 +180,7 @@ pseudonym as an ordinary login.
 
 | Action | Result | When |
 |---|---|---|
-| `cli_login` | `allowed` | a member approved a pending device code on `/cli-koppelen`. `refs.via` is `cli`, `refs.device_authorization` the id of the request |
+| `cli_login` | `allowed` | a member approved a pending device code on `/cli-link`. `refs.via` is `cli`, `refs.device_authorization` the id of the request |
 | `cli_login_denied` | `allowed` | a member refused a pending device code. Same `refs` as above |
 | `cli_token_issued` | `allowed` | the CLI exchanged its device code after approval: the tokens have left Plak and the CLI session exists. Actor is the member who approved, `refs.via` is `cli`, `refs.cli_session` the id of the new session. Refreshing writes no row |
 | `cli_logout` | `allowed` | a CLI session was revoked by `plak logout`, with the access token (an expired one too) or a refresh token. `refs.via` is `cli`, `refs.cli_session` the session id |

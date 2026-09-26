@@ -261,5 +261,5 @@ class TestReport:
         result = await seed_module.seed(settings)
         report = seed_module._report(settings, result)
         assert "plak login" in report
-        assert "/cli-koppelen" in report
+        assert "/cli-link" in report
         assert "plak_" not in report.replace("plak login", "")

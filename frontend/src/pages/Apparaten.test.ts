@@ -16,7 +16,7 @@ beforeEach(() => {
   _resetBreadcrumbs();
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/-/apparaten', component: Apparaten }],
+    routes: [{ path: '/-/devices', component: Apparaten }],
   });
 });
 
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 async function makeWrapper() {
-  await router.push('/-/apparaten');
+  await router.push('/-/devices');
   await router.isReady();
   return mount(Apparaten, { global: { plugins: [router], stubs: { teleport: true } } });
 }
@@ -84,7 +84,7 @@ describe('Apparaten: overview', () => {
     await makeWrapper();
     await untilIdle();
 
-    expect(breadcrumbsFor('/-/apparaten')).toEqual([
+    expect(breadcrumbsFor('/-/devices')).toEqual([
       { text: 'Overzicht', href: '/' },
       { text: 'Gekoppelde apparaten' },
     ]);

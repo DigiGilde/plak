@@ -35,21 +35,22 @@ an open task with a name, not background noise.
 ## Language
 
 Dutch for everything a person sees: UI texts, error messages, OpenAPI
-descriptions, the path names that mirror the UI (`/cli-koppelen`,
-`/-/apparaten`, `/admin/-/toegankelijkheid`, `/admin/-/over`), the
-`just --list` recipe descriptions, the output of the shell scripts in
-`dev/` and the step names in the workflows under `.github/workflows/`.
+descriptions, the `just --list` recipe descriptions, the output of the
+shell scripts in `dev/` and the step names in the workflows under
+`.github/workflows/`.
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
-everything under `docs/`.
+everything under `docs/`, and the route paths of the beheer SPA
+(`/-/devices`, `/-/profile`, `/cli-link`). A path is an address, not
+interface text, and the SPA answers in two languages under one.
 
 The beheer SPA is the exception: it is bilingual, Dutch and English.
 Every string it shows lives in `frontend/src/i18n/`, in a shared
 catalogue plus one section per area, always in both languages; a key in
 one and not the other is a compile error. Which language a member gets
 follows their own choice on their account (`members.language`, set on
-`/-/profiel`), then their browser, then English. So a Dutch literal in a
+`/-/profile`), then their browser, then English. So a Dutch literal in a
 component is a bug, and `frontend/tests/dutch-literals.test.ts` says so.
 
 The `title` and `detail` of a problem+json answer have both languages

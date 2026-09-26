@@ -2,7 +2,7 @@
 /**
  * Linked devices for the CLI login (`plak login`): every browser-approved
  * device-flow session for the current member, with a way to revoke one.
- * Route: /-/apparaten (see router.ts; the backend keeps its own hard-coded
+ * Route: /-/devices (see router.ts; the backend keeps its own hard-coded
  * list of SPA pages under /-/, so this route's name has to match there too).
  */
 import { computed, onMounted, ref } from 'vue';

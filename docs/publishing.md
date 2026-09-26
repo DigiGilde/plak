@@ -683,7 +683,7 @@ anything:
 below.
 
 The CLI shows a code (`ABCD-EFGH`) and an address in the admin
-(`/cli-koppelen`); open that address (the CLI tries this automatically), check
+(`/cli-link`); open that address (the CLI tries this automatically), check
 that the code matches what your terminal shows and that the account at the top
 is yours, and click "Koppelen" (link). If the request comes from a network
 other than the one your browser is on now, the page warns about that
@@ -715,7 +715,7 @@ plak preview-remove pr-42 \
 ```
 
 Your linked devices are in the admin under the account menu,
-"Gekoppelde apparaten" (linked devices, `/-/apparaten`): name, when linked,
+"Gekoppelde apparaten" (linked devices, `/-/devices`): name, when linked,
 last used and when the session expires, with a button to unlink a device.
 Unlinking takes effect immediately and retroactively: that device
 has to do `plak login` again afterwards. You reach the same from the device

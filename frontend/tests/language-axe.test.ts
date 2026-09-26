@@ -98,7 +98,7 @@ const GROUP_ROUTES = [
   },
 ];
 
-const PROFILE_ROUTES = [{ path: '/-/profiel', component: Profiel as Component }];
+const PROFILE_ROUTES = [{ path: '/-/profile', component: Profiel as Component }];
 
 async function expectNoViolations(element: Element): Promise<void> {
   const result = await axe.run({ include: [element], exclude: OUT_OF_SCOPE }, AXE_OPTIONS);
@@ -122,7 +122,7 @@ describe('axe: the admin in English', () => {
 
   it.each(['nl', 'en'] as const)('the profile in %s has no violations', async (locale) => {
     backend.data.myLanguage = locale;
-    const wrapper = await mountPage('/-/profiel', PROFILE_ROUTES);
+    const wrapper = await mountPage('/-/profile', PROFILE_ROUTES);
 
     expect(currentLocale.value).toBe(locale);
     expect(document.documentElement.lang).toBe(locale);
@@ -133,7 +133,7 @@ describe('axe: the admin in English', () => {
   it('keeps lang in step the moment the member switches language', async () => {
     // The whole point of the switch: a screen reader already reading the page
     // has to be told, and only `lang` tells it.
-    const wrapper = await mountPage('/-/profiel', PROFILE_ROUTES);
+    const wrapper = await mountPage('/-/profile', PROFILE_ROUTES);
     expect(document.documentElement.lang).toBe('nl');
 
     await wrapper.find('[data-testid="taal-en"]').trigger('change');
