@@ -99,7 +99,7 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.members.loading': 'Loading members',
   'site.members.heading': 'Members',
   'site.members.intro':
-    'Someone can reach this site through the group or through a role on this site alone. The wider of the two decides what they may do here: a site role widens, and never takes anything away.',
+    'Someone can reach this site via the group or via a role on this site alone. The wider of the two decides what they may do here: a site role widens, and never takes anything away.',
 
   // -- Secret link: the two ways to share one key ---------------------------
   'site.secretLink.withCode': 'Link with code',

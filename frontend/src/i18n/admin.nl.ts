@@ -75,7 +75,7 @@ export const adminNl = {
   'admin.siteMembers.viaGroup': 'via de groep',
   'admin.siteMembers.keepsViaGroup': 'Blijft {role} via de groep',
   'admin.siteMembers.action.setRole': 'Maak {role}',
-  'admin.siteMembers.action.remove': 'Rol weghalen',
+  'admin.siteMembers.action.remove': 'Siterol weghalen',
   'admin.siteMembers.confirm.remove.title': 'Siterol van {name} weghalen?',
   'admin.siteMembers.confirm.remove.keepsViaGroup':
     '{name} houdt toegang tot deze site als {role} via de groep.',
