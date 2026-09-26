@@ -101,5 +101,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.form.searching': 'Searching...',
   'admin.siteMembers.form.noSuggestions': 'Nobody found',
   'admin.siteMembers.form.role': 'Role',
+  'admin.siteMembers.form.role.noEffect':
+    'This changes nothing about what this person may do here: through the group that is already {role}.',
   'admin.siteMembers.form.submit': 'Give role',
 };

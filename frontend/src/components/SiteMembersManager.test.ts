@@ -443,6 +443,65 @@ describe('SiteMembersManager (what the starting list says about itself)', () => 
   });
 });
 
+describe('SiteMembersManager (a site role that would change nothing)', () => {
+  /** Narrowest first, so index order is rank order, as ROLES is. */
+  const RANKS: Role[] = ['reader', 'editor', 'admin'];
+
+  /** Every group role against every site role, straight from widest(). */
+  const COMBINATIONS = RANKS.flatMap((groupRole) =>
+    RANKS.map((siteRole) => ({
+      groupRole,
+      siteRole,
+      widens: RANKS.indexOf(siteRole) > RANKS.indexOf(groupRole),
+    })),
+  );
+
+  it.each(COMBINATIONS)(
+    'says a $siteRole role changes nothing for a $groupRole of the group: $widens',
+    async ({ groupRole, siteRole, widens }) => {
+      const wrapper = mountComponent({
+        members: [memberWith({ identifier: 'zoe@voorbeeld.nl', groupRole, siteRole: null })],
+      });
+
+      await pickSuggestion(wrapper, 'zoe@voorbeeld.nl');
+      await wrapper.find('[data-testid="siterol-nieuw"]').setValue(siteRole);
+
+      expect(wrapper.find('[data-testid="siterol-geen-effect"]').exists()).toBe(!widens);
+    },
+  );
+
+  it('finds the group role on the row when neither list holds the person', async () => {
+    // Someone with a site role of their own is in no starting list, and after a
+    // failed add the search answers are cleared, so the rows are what is left.
+    const wrapper = mountComponent({ members: [both] });
+
+    await pickSuggestion(wrapper, 'zoe@voorbeeld.nl');
+    await wrapper.find('[data-testid="siterol-nieuw"]').setValue('reader');
+
+    expect(wrapper.find('[data-testid="siterol-geen-effect"]').text()).toContain('lezer');
+  });
+
+  it('says nothing about a role for someone the group does not know', async () => {
+    const wrapper = mountComponent({
+      search: vi.fn().mockResolvedValue([
+        {
+          identifier: 'buiten@voorbeeld.nl',
+          name: 'Bo Buiten',
+          email: 'buiten@voorbeeld.nl',
+          alreadyMember: false,
+          groupRole: null,
+        },
+      ]),
+    });
+
+    await typeIn(wrapper, 'buiten');
+    await vi.waitFor(() => expect(suggestionItems(wrapper)).toHaveLength(1));
+    await pickSuggestion(wrapper, 'buiten@voorbeeld.nl');
+
+    expect(wrapper.find('[data-testid="siterol-geen-effect"]').exists()).toBe(false);
+  });
+});
+
 describe('SiteMembersManager (granting a role)', () => {
   it('puts the address field before the role: first who, then what they may do', () => {
     const wrapper = mountComponent({});

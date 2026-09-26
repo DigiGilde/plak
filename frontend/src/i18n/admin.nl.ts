@@ -102,5 +102,7 @@ export const adminNl = {
   'admin.siteMembers.form.searching': 'Zoeken...',
   'admin.siteMembers.form.noSuggestions': 'Niemand gevonden',
   'admin.siteMembers.form.role': 'Rol',
+  'admin.siteMembers.form.role.noEffect':
+    'Dit verandert niets aan wat deze persoon hier mag: via de groep is dat al {role}.',
   'admin.siteMembers.form.submit': 'Rol geven',
 } as const;
