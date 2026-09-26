@@ -86,10 +86,12 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.form.identifier': 'Name or email address',
   'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
   'admin.siteMembers.form.identifier.help':
-    'From two letters onwards we search the names and addresses of everyone who has logged in before.',
-  'admin.siteMembers.form.identifier.required': 'A name from the list or an email address',
-  'admin.siteMembers.form.identifier.invalid':
-    'Choose someone from the list, or fill in an email address',
+    'The list starts with the members of this group, with the role they already have there. From two letters onwards we search the names and addresses of everyone who has logged in before, inside the group and outside it.',
+  'admin.siteMembers.form.identifier.required': 'Someone from the list',
+  'admin.siteMembers.form.searchFurther':
+    'Type two letters to search further, outside this group as well.',
+  'admin.siteMembers.form.tooShort': 'Type two letters to search',
+  'admin.siteMembers.form.searching': 'Searching...',
   'admin.siteMembers.form.noSuggestions': 'Nobody found',
   'admin.siteMembers.form.role': 'Role',
   'admin.siteMembers.form.submit': 'Give role',

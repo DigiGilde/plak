@@ -138,8 +138,16 @@ async function afterDebounce(): Promise<void> {
   await flushPromises();
 }
 
+/** Typing and submitting without ever picking: what the form now refuses. */
+async function typeAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
+  await typeIn(wrapper, value);
+  await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+}
+
+/** The whole way in: type, pick the person the list answered with, submit. */
 async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
+  await pickSuggestion(wrapper, value);
   await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
 }
 
@@ -317,14 +325,13 @@ describe('GroupMembersManager (adding)', () => {
     const field = wrapper.find('nldd-form-field[label="Naam of e-mailadres"] > nldd-combo-box');
     expect(field.exists()).toBe(true);
     expect(field.attributes('required')).toBeDefined();
-    // With allow-custom: the list holds only whoever has logged in already,
-    // and an address that is not in it still has to be submittable.
-    expect(field.attributes('allow-custom')).toBeDefined();
+    // Without allow-custom: only someone the list answered with goes through.
+    expect(field.attributes('allow-custom')).toBeUndefined();
     const requirement = wrapper.find(
       'nldd-form-field > nldd-validation-list > nldd-validation-item#lid-toevoegen-vereist',
     );
     expect(requirement.attributes('required')).toBeDefined();
-    expect(requirement.text()).toBe('Een naam uit de lijst of een e-mailadres');
+    expect(requirement.text()).toBe('Iemand uit de lijst');
   });
 
   it('puts the address field before the role: first who, then what they may do', () => {
@@ -445,30 +452,42 @@ describe('GroupMembersManager (adding)', () => {
   });
 });
 
-describe('GroupMembersManager (name without a choice)', () => {
-  it('refuses a typed name without a chosen suggestion, without calling the callback', async () => {
+describe('GroupMembersManager (nothing picked)', () => {
+  it('refuses what was only typed, name or address, without calling the callback', async () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
 
-    await fillInAndSubmit(wrapper, 'Cato Jansen');
+    await typeAndSubmit(wrapper, 'Cato Jansen');
+    await flushPromises();
+    await typeAndSubmit(wrapper, 'nieuw@voorbeeld.nl');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
     expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
-    // Named on the control, not set on the item directly: the real
-    // nldd-validation-list reads `unmet` off its control and reflects it onto
-    // the matching item itself.
-    expect(comboBox(wrapper).attributes('unmet')).toBe('lid-toevoegen-geen-email');
   });
 
   it('clears the notice as soon as typing resumes', async () => {
     const wrapper = mountComponent({});
 
-    await fillInAndSubmit(wrapper, 'Cato Jansen');
+    await typeAndSubmit(wrapper, 'Cato Jansen');
     expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
 
     await typeIn(wrapper, 'Cato Jansen c');
     expect(comboBox(wrapper).attributes('invalid')).toBeUndefined();
+  });
+
+  it('takes an earlier pick back once typing goes on', async () => {
+    const search = vi.fn().mockResolvedValue([suggestionOf()]);
+    const add = vi.fn();
+    const wrapper = mountComponent({ search, add });
+
+    await typeIn(wrapper, 'ada');
+    await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
+    await typeAndSubmit(wrapper, 'ada@voorbeeld.n');
+    await flushPromises();
+
+    expect(add).not.toHaveBeenCalled();
+    expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
   });
 
   it('still submits a chosen suggestion', async () => {
@@ -482,16 +501,6 @@ describe('GroupMembersManager (name without a choice)', () => {
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
-  });
-
-  it('submits a typed email address that appears in no suggestion', async () => {
-    const add = vi.fn().mockResolvedValue(member);
-    const wrapper = mountComponent({ add });
-
-    await fillInAndSubmit(wrapper, 'nieuw@voorbeeld.nl');
-    await flushPromises();
-
-    expect(add).toHaveBeenCalledWith('nieuw@voorbeeld.nl', 'reader');
   });
 });
 
@@ -507,8 +516,6 @@ describe('GroupMembersManager (error)', () => {
     );
     const wrapper = mountComponent({ add });
 
-    // A typed address, not a name: names are blocked client-side before the
-    // request ever fires (see "GroupMembersManager (name without a choice)").
     await fillInAndSubmit(wrapper, 'onbekend@voorbeeld.nl');
     await flushPromises();
 
@@ -550,6 +557,17 @@ describe('GroupMembersManager (error)', () => {
       'Groepslid lid@voorbeeld.nl verwijderen is niet gelukt',
     );
     expect(wrapper.emitted('removed')).toBeUndefined();
+  });
+});
+
+describe('GroupMembersManager (what the field reaches)', () => {
+  it('says that typing searches the platform and that a member is not choosable', () => {
+    const help = mountComponent({})
+      .find('nldd-form-field[label="Naam of e-mailadres"] > nldd-form-field-help-text')
+      .text();
+
+    expect(help).toContain('Vanaf twee letters');
+    expect(help).toContain('Wie al lid is staat er wel bij, maar is niet te kiezen.');
   });
 });
 
@@ -609,6 +627,20 @@ describe('GroupMembersManager (suggestions)', () => {
     expect(comboBox(wrapper).attributes('value')).toBe('');
   });
 
+  it('says which of the three empty lists it is looking at', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const wrapper = mountComponent({ search });
+    const menu = () => wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text');
+
+    expect(menu()).toBe('Typ twee letters om te zoeken');
+
+    await typeIn(wrapper, 'ad');
+    expect(menu()).toBe('Zoeken...');
+
+    await afterDebounce();
+    expect(menu()).toBe('Niemand gevonden');
+  });
+
   it('marks whoever is already a member and does not let them be chosen', async () => {
     const search = vi.fn().mockResolvedValue([
       suggestionOf({ alreadyMember: true }),
@@ -640,9 +672,9 @@ describe('GroupMembersManager (suggestions)', () => {
     ]);
   });
 
-  it('submits a typed address that appears in no suggestion', async () => {
-    const search = vi.fn().mockResolvedValue([suggestionOf()]);
-    const add = vi.fn().mockResolvedValue(member);
+  it('refuses a typed address that appears in no suggestion', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const add = vi.fn();
     const wrapper = mountComponent({ search, add });
 
     await typeIn(wrapper, 'nieuw@voorbeeld.nl');
@@ -650,28 +682,23 @@ describe('GroupMembersManager (suggestions)', () => {
     await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
     await flushPromises();
 
-    expect(add).toHaveBeenCalledWith('nieuw@voorbeeld.nl', 'reader');
+    expect(add).not.toHaveBeenCalled();
   });
 
-  it('keeps the form usable when the search fails', async () => {
+  it('ends a failed search in an empty list, not in a message of its own', async () => {
     const search = vi
       .fn()
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
-    const add = vi.fn().mockResolvedValue(member);
-    const wrapper = mountComponent({ search, add });
+    const wrapper = mountComponent({ search });
 
     await typeIn(wrapper, 'ada@voorbeeld.nl');
     await afterDebounce();
 
-    // Suggestions are help, never the route itself: a failed search ends in an
-    // empty list, not in a message over the head of whoever is typing.
     expect(suggestionItems(wrapper)).toHaveLength(0);
+    expect(wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text')).toBe(
+      'Niemand gevonden',
+    );
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
-
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
-    await flushPromises();
-
-    expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
   });
 
   it('shows someone without a name in their profile by their address', async () => {

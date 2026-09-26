@@ -94,9 +94,10 @@ export const groupNl = {
   'group.members.add.identifier.label': 'Naam of e-mailadres',
   'group.members.add.identifier.placeholder': 'Typ een naam of e-mailadres',
   'group.members.add.identifier.help':
-    'Vanaf twee letters zoeken we mee in de namen en adressen van wie al eens ingelogd heeft.',
-  'group.members.add.identifier.required': 'Een naam uit de lijst of een e-mailadres',
-  'group.members.add.identifier.notAnEmail': 'Kies iemand uit de lijst, of vul een e-mailadres in',
+    'Vanaf twee letters zoeken we mee in de namen en adressen van iedereen die al eens ingelogd heeft. Wie al lid is staat er wel bij, maar is niet te kiezen.',
+  'group.members.add.identifier.required': 'Iemand uit de lijst',
+  'group.members.add.suggestions.tooShort': 'Typ twee letters om te zoeken',
+  'group.members.add.suggestions.searching': 'Zoeken...',
   'group.members.add.suggestions.empty': 'Niemand gevonden',
   'group.members.add.role.label': 'Rol',
   'group.members.add.submit': 'Lid toevoegen',

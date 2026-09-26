@@ -50,6 +50,8 @@ async function runAction(wrapper: Wrapper, identifier: string, testid: string): 
 async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   const field = wrapper.find('nldd-combo-box[name="identifier"]').element;
   field.dispatchEvent(new CustomEvent('input', { detail: { value } }));
+  // Only a pick is an identifier: the combo box reports one as a `change`.
+  field.dispatchEvent(new CustomEvent('change', { detail: { value } }));
   await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
   await untilIdle();
 }

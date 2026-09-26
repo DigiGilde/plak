@@ -87,9 +87,12 @@ export const adminNl = {
   'admin.siteMembers.form.identifier': 'Naam of e-mailadres',
   'admin.siteMembers.form.identifier.placeholder': 'Typ een naam of e-mailadres',
   'admin.siteMembers.form.identifier.help':
-    'Vanaf twee letters zoeken we mee in de namen en adressen van wie al eens ingelogd heeft.',
-  'admin.siteMembers.form.identifier.required': 'Een naam uit de lijst of een e-mailadres',
-  'admin.siteMembers.form.identifier.invalid': 'Kies iemand uit de lijst, of vul een e-mailadres in',
+    'De lijst begint met de leden van deze groep, met de rol die ze daar al hebben. Vanaf twee letters zoeken we mee in de namen en adressen van iedereen die al eens ingelogd heeft, ook buiten de groep.',
+  'admin.siteMembers.form.identifier.required': 'Iemand uit de lijst',
+  'admin.siteMembers.form.searchFurther':
+    'Typ twee letters om verder te zoeken, ook buiten deze groep.',
+  'admin.siteMembers.form.tooShort': 'Typ twee letters om te zoeken',
+  'admin.siteMembers.form.searching': 'Zoeken...',
   'admin.siteMembers.form.noSuggestions': 'Niemand gevonden',
   'admin.siteMembers.form.role': 'Rol',
   'admin.siteMembers.form.submit': 'Rol geven',

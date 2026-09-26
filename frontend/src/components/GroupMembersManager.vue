@@ -14,8 +14,9 @@ import { computed, ref } from 'vue';
 
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import type { GroupMember, MemberSuggestion, Role } from '@/api/types';
-import { looksLikeEmail, useMemberSearch } from '@/composables/memberSearch';
+import { SEARCH_MIN_LENGTH, useMemberSearch } from '@/composables/memberSearch';
 import { useNotices, type Notice } from '@/composables/notices';
+import { keepEverySuggestion, useMenuEmptyState } from '@/composables/suggestionField';
 import { roleHint, roleLabel, ROLES, ROLE_ICONS } from '@/format';
 import { t } from '@/i18n';
 
@@ -68,18 +69,32 @@ const newLabel = ref('');
  */
 const newRole = ref<Role>('reader');
 const emptyField = ref(false);
-/**
- * Set on submit when the field holds neither a picked suggestion nor a typed
- * e-mail address: a typed name that was never picked cannot be resolved on
- * this side, and sending it would only come back as a 404. Picking a
- * suggestion always puts an e-mail address in the field (`identifier` on a
- * `MemberSuggestion` is the person's e-mail), so this never fires for a pick.
- */
-const notAnEmail = ref(false);
 
-const { suggestions, query: searchFor, clear: clearSuggestions } = useMemberSearch((text) =>
-  props.search(text),
-);
+const {
+  suggestions,
+  searching,
+  query: searchFor,
+  clear: clearSuggestions,
+} = useMemberSearch((text) => props.search(text));
+
+/**
+ * The menu opens on the first keystroke, long before an answer is in, so its
+ * empty state has to tell three situations apart rather than call all three
+ * "niemand gevonden".
+ */
+const emptyText = computed(() => {
+  if (newLabel.value.trim().length < SEARCH_MIN_LENGTH) {
+    return t('group.members.add.suggestions.tooShort');
+  }
+  return searching.value
+    ? t('group.members.add.suggestions.searching')
+    : t('group.members.add.suggestions.empty');
+});
+
+const identifierField = ref<HTMLElement | null>(null);
+
+// The rows arrive after the menu has already decided that it is empty.
+useMenuEmptyState(identifierField, () => suggestions.value);
 
 /** Someone who is already in the group stays in the list, marked and inert. */
 function suggestionText(person: MemberSuggestion): string {
@@ -99,26 +114,31 @@ function suggestionDetails(person: MemberSuggestion): string | undefined {
 }
 
 function onIdentifierInput(event: CustomEvent<{ value?: string }>): void {
-  const typed = event.detail?.value ?? (event.target as HTMLInputElement).value;
-  newIdentifier.value = typed;
+  // The component reports what stands in the input as `detail.value`. The
+  // native input event of its own inner field is composed and bubbles out
+  // here as well, carrying no detail; that one is the same keystroke twice.
+  const typed = event.detail?.value;
+  if (typeof typed !== 'string') return;
+  // Only a pick is an identifier: typing on takes back the one before it.
+  newIdentifier.value = '';
   newLabel.value = typed;
   emptyField.value = false;
-  notAnEmail.value = false;
   searchFor(typed);
 }
 
 /**
  * A suggestion carries the name as its label and the address as its value, so
- * picking one submits the address while the field keeps showing the name. On a
- * typed address that no suggestion matches, both are that address.
+ * picking one submits the address while the field keeps showing the name.
  */
 function onIdentifierChange(event: CustomEvent<{ value?: string }>): void {
-  const identifier = event.detail?.value ?? '';
+  // Same double event as on input: the inner field's own change bubbles out
+  // here too, without a detail, and would wipe the pick it follows.
+  const identifier = event.detail?.value;
+  if (typeof identifier !== 'string') return;
   newIdentifier.value = identifier;
   newLabel.value =
     suggestions.value.find((person) => person.identifier === identifier)?.name || identifier;
   emptyField.value = false;
-  notAnEmail.value = false;
 }
 
 // Optimistic overlay on props.members: what has been added but not confirmed
@@ -147,7 +167,6 @@ function reopen(notice: Notice): void {
   newIdentifier.value = notice.retry;
   newLabel.value = notice.retry;
   emptyField.value = false;
-  notAnEmail.value = false;
   dismissNotice(notice.id);
 }
 
@@ -155,10 +174,6 @@ async function onAdd(): Promise<void> {
   const identifier = newIdentifier.value.trim();
   emptyField.value = identifier === '';
   if (emptyField.value) return;
-  // A picked suggestion always leaves an e-mail address in the field; a typed
-  // name that was never picked would only come back from the server as a 404.
-  notAnEmail.value = !looksLikeEmail(identifier);
-  if (notAnEmail.value) return;
 
   newIdentifier.value = '';
   newLabel.value = '';
@@ -296,25 +311,25 @@ async function onRemove(row: Row): Promise<void> {
         >
           <!-- Who comes first, what they may second: the role only makes
                sense once you know whom it is for. -->
-          <!-- A combo box with allow-custom, not a picker: typing a name is the
-               short road, but the list only holds people who have logged in on
-               the beheer, and an address that is not in it still has to be
-               submittable. -->
+          <!-- A combo box without allow-custom: typing searches, but only a
+               name from the list can be submitted. An address that is not in
+               it belongs to nobody who has ever logged in on the beheer, and
+               the server would refuse it. -->
         <nldd-form-field :label="t('group.members.add.identifier.label')">
           <nldd-combo-box
+            ref="identifierField"
             name="identifier"
-            allow-custom
             :placeholder="t('group.members.add.identifier.placeholder')"
             required
             :value="newIdentifier"
             :text="newLabel"
-            :invalid="emptyField || notAnEmail || undefined"
-            :unmet="notAnEmail ? 'lid-toevoegen-geen-email' : undefined"
+            :invalid="emptyField || undefined"
             @input="onIdentifierInput"
             @change="onIdentifierChange"
           >
             <nldd-menu
-              :empty-text="t('group.members.add.suggestions.empty')"
+              :empty-text="emptyText"
+              :filterFn.prop="keepEverySuggestion"
               data-testid="lid-suggesties"
             >
               <nldd-menu-item
@@ -331,16 +346,12 @@ async function onRemove(row: Row): Promise<void> {
           <nldd-form-field-help-text>
             {{ t('group.members.add.identifier.help') }}
           </nldd-form-field-help-text>
-          <nldd-validation-list>
+          <!-- The value to check, handed over rather than read off the
+               control: the list re-checks on the control's `input` event, and
+               picking from the menu is a `change` without one. -->
+          <nldd-validation-list :value="newIdentifier">
             <nldd-validation-item id="lid-toevoegen-vereist" required>
               {{ t('group.members.add.identifier.required') }}
-            </nldd-validation-item>
-            <!-- No rule of its own: named in the combo box's `unmet` attribute
-                 instead, since it depends on whether the typed text is a pick
-                 or a plain e-mail address, not on a pattern the field can
-                 check by itself. -->
-            <nldd-validation-item id="lid-toevoegen-geen-email">
-              {{ t('group.members.add.identifier.notAnEmail') }}
             </nldd-validation-item>
           </nldd-validation-list>
         </nldd-form-field>

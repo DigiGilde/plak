@@ -160,14 +160,38 @@ function suggestionItems(wrapper: Wrapper) {
   return wrapper.find('[data-testid="siterol-suggesties"]').findAll('nldd-menu-item');
 }
 
+/**
+ * Clicking into the field, with a stand-in for the Popover API that jsdom
+ * lacks. Answers whether the menu was asked to open.
+ */
+async function clickField(wrapper: Wrapper) {
+  // The listeners go on once the template ref is filled, a tick after mount.
+  await nextTick();
+  const menu = wrapper.find('[data-testid="siterol-suggesties"]').element as HTMLElement & {
+    showPopover?: () => void;
+  };
+  const opened = vi.fn();
+  menu.showPopover = opened;
+  comboBox(wrapper).element.dispatchEvent(new MouseEvent('click', { composed: true }));
+  return opened;
+}
+
 /** Waits out the debounce and lets the answer land. */
 async function afterDebounce(): Promise<void> {
   vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
   await flushPromises();
 }
 
+/** Typing and submitting without ever picking: what the form now refuses. */
+async function typeAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
+  await typeIn(wrapper, value);
+  await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+}
+
+/** The whole way in: type, pick the person the list answered with, submit. */
 async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
+  await pickSuggestion(wrapper, value);
   await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
 }
 
@@ -351,6 +375,27 @@ describe('SiteMembersManager (row menu)', () => {
   });
 });
 
+describe('SiteMembersManager (what the starting list says about itself)', () => {
+  it('says in the list itself that typing searches beyond the group', () => {
+    const wrapper = mountComponent({});
+
+    const note = wrapper.find('[data-testid="siterol-verder-zoeken"]');
+    expect(note.text()).toBe('Typ twee letters om verder te zoeken, ook buiten deze groep.');
+    // Outside role="menu" and holding no control: not an option, not a tab stop.
+    expect(note.element.closest('nldd-menu-item')).toBeNull();
+    expect(note.element.closest('[slot="footer"]')).not.toBeNull();
+    expect(note.findAll('nldd-button, a, input, button')).toHaveLength(0);
+  });
+
+  it('drops the note once the typing has taken over from the group', async () => {
+    const wrapper = mountComponent({ search: vi.fn().mockResolvedValue([]) });
+
+    await typeIn(wrapper, 'wi');
+
+    expect(wrapper.find('[data-testid="siterol-verder-zoeken"]').exists()).toBe(false);
+  });
+});
+
 describe('SiteMembersManager (granting a role)', () => {
   it('puts the address field before the role: first who, then what they may do', () => {
     const wrapper = mountComponent({});
@@ -380,6 +425,15 @@ describe('SiteMembersManager (granting a role)', () => {
     const section = wrapper.find('nldd-form-section');
     expect(section.attributes('supporting-text')).toContain('verbreedt alleen');
     expect(section.attributes('supporting-text')).toContain('bij de groep');
+  });
+
+  it('says in the hint what the list holds and what typing adds to it', () => {
+    const help = mountComponent({})
+      .find('nldd-form-field[label="Naam of e-mailadres"] > nldd-form-field-help-text')
+      .text();
+
+    expect(help).toContain('begint met de leden van deze groep');
+    expect(help).toContain('ook buiten de groep');
   });
 
   it('grants a role of reader without a choice and gets ahead of the row', async () => {
@@ -426,20 +480,22 @@ describe('SiteMembersManager (granting a role)', () => {
   });
 });
 
-describe('SiteMembersManager (name without a choice)', () => {
-  it('refuses a typed name without a chosen suggestion, without calling the callback', async () => {
+describe('SiteMembersManager (nothing picked)', () => {
+  it('refuses what was only typed, name or address, without calling the callback', async () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
 
-    await fillInAndSubmit(wrapper, 'Cato Jansen');
+    await typeAndSubmit(wrapper, 'Cato Jansen');
+    await flushPromises();
+    await typeAndSubmit(wrapper, 'nieuw@voorbeeld.nl');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
     expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
-    // Named on the control, not set on the item directly: the real
-    // nldd-validation-list reads `unmet` off its control and reflects it onto
-    // the matching item itself.
-    expect(comboBox(wrapper).attributes('unmet')).toBe('siterol-toevoegen-geen-email');
+
+    // A refused submit leaves the search it triggered standing; unmounting is
+    // what disposes that timer, and a stray one fires into a later test.
+    wrapper.unmount();
   });
 
   it('still submits a chosen suggestion', async () => {
@@ -455,14 +511,20 @@ describe('SiteMembersManager (name without a choice)', () => {
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
   });
 
-  it('submits a typed email address that appears in no suggestion', async () => {
-    const add = vi.fn().mockResolvedValue(siteOnly);
-    const wrapper = mountComponent({ add });
+  it('takes an earlier pick back once typing goes on', async () => {
+    const search = vi.fn().mockResolvedValue([suggestionOf()]);
+    const add = vi.fn();
+    const wrapper = mountComponent({ search, add });
 
-    await fillInAndSubmit(wrapper, 'nieuw@voorbeeld.nl');
+    await typeIn(wrapper, 'ada');
+    await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
+    await typeAndSubmit(wrapper, 'ada@voorbeeld.n');
     await flushPromises();
 
-    expect(add).toHaveBeenCalledWith('nieuw@voorbeeld.nl', 'reader');
+    expect(add).not.toHaveBeenCalled();
+    expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
+
+    wrapper.unmount();
   });
 });
 
@@ -524,6 +586,78 @@ describe('SiteMembersManager (error)', () => {
   });
 });
 
+describe('SiteMembersManager (the list before anything is typed)', () => {
+  it('starts with the members of this group, each with the role they have there', () => {
+    const wrapper = mountComponent({ members: [viaGroup, both, siteOnly] });
+
+    // Zoë and Bo have a site role of their own: this form is not where that
+    // changes, so only Ada is left to offer.
+    const items = suggestionItems(wrapper);
+    expect(items.map((item) => item.attributes('text'))).toEqual([
+      'Ada Vermeer (redacteur via de groep)',
+    ]);
+    expect(items[0]!.attributes('value')).toBe('ada@voorbeeld.nl');
+    expect(items[0]!.attributes('disabled')).toBeUndefined();
+  });
+
+  it('shows a group member without a name in their profile by their address', () => {
+    const wrapper = mountComponent({
+      members: [
+        memberWith({
+          identifier: 'kaal@voorbeeld.nl',
+          name: '',
+          email: 'kaal@voorbeeld.nl',
+          groupRole: 'reader',
+        }),
+      ],
+    });
+
+    const item = suggestionItems(wrapper)[0]!;
+    expect(item.attributes('text')).toBe('kaal@voorbeeld.nl (lezer via de groep)');
+    expect(item.attributes('details')).toBeUndefined();
+  });
+
+  it('offers nothing where the group has no one left to offer', () => {
+    expect(suggestionItems(mountComponent({ members: [siteOnly] }))).toHaveLength(0);
+    expect(suggestionItems(mountComponent({}))).toHaveLength(0);
+  });
+
+  it('opens the list on arrival, and leaves it shut when there is nothing in it', async () => {
+    expect(await clickField(mountComponent({ members: [viaGroup] }))).toHaveBeenCalledTimes(1);
+
+    // An empty menu opening on its own would only read as a broken dropdown.
+    expect(await clickField(mountComponent({ members: [siteOnly] }))).not.toHaveBeenCalled();
+  });
+
+  it('submits the address of a group member picked from the starting list', async () => {
+    const add = vi.fn().mockResolvedValue({ ...viaGroup, siteRole: 'reader' });
+    const wrapper = mountComponent({ members: [viaGroup], add });
+
+    await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
+
+    expect(comboBox(wrapper).attributes('text')).toBe('Ada Vermeer');
+    expect(comboBox(wrapper).attributes('value')).toBe('ada@voorbeeld.nl');
+
+    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await flushPromises();
+
+    expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
+  });
+
+  it('says which of the three empty lists it is looking at', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const wrapper = mountComponent({ search });
+    const menu = () => wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text');
+
+    expect(menu()).toBe('Typ twee letters om te zoeken');
+
+    await typeIn(wrapper, 'ad');
+    expect(menu()).toBe('Zoeken...');
+
+    wrapper.unmount();
+  });
+});
+
 describe('SiteMembersManager (suggestions)', () => {
   // Only the timers of the debounce: flushPromises rides on setImmediate, and
   // faking that too would make every await in these tests hang.
@@ -577,6 +711,18 @@ describe('SiteMembersManager (suggestions)', () => {
     expect(comboBox(wrapper).attributes('value')).toBe('');
   });
 
+  it('says nobody was found only once the answer is in', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const wrapper = mountComponent({ search });
+    const menu = () => wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text');
+
+    await typeIn(wrapper, 'ad');
+    expect(menu()).toBe('Zoeken...');
+
+    await afterDebounce();
+    expect(menu()).toBe('Niemand gevonden');
+  });
+
   it('marks whoever already has a role here and does not let them be chosen', async () => {
     const search = vi.fn().mockResolvedValue([
       suggestionOf({ alreadyMember: true }),
@@ -604,9 +750,9 @@ describe('SiteMembersManager (suggestions)', () => {
     ]);
   });
 
-  it('submits a typed address that appears in no suggestion', async () => {
-    const search = vi.fn().mockResolvedValue([suggestionOf()]);
-    const add = vi.fn().mockResolvedValue(siteOnly);
+  it('refuses a typed address that appears in no suggestion', async () => {
+    const search = vi.fn().mockResolvedValue([]);
+    const add = vi.fn();
     const wrapper = mountComponent({ search, add });
 
     await typeIn(wrapper, 'buiten@voorbeeld.nl');
@@ -614,26 +760,23 @@ describe('SiteMembersManager (suggestions)', () => {
     await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
     await flushPromises();
 
-    expect(add).toHaveBeenCalledWith('buiten@voorbeeld.nl', 'reader');
+    expect(add).not.toHaveBeenCalled();
   });
 
-  it('keeps the form usable when the search fails', async () => {
+  it('ends a failed search in an empty list, not in a message of its own', async () => {
     const search = vi
       .fn()
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
-    const add = vi.fn().mockResolvedValue(siteOnly);
-    const wrapper = mountComponent({ search, add });
+    const wrapper = mountComponent({ search });
 
     await typeIn(wrapper, 'buiten@voorbeeld.nl');
     await afterDebounce();
 
     expect(suggestionItems(wrapper)).toHaveLength(0);
+    expect(wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text')).toBe(
+      'Niemand gevonden',
+    );
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
-
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
-    await flushPromises();
-
-    expect(add).toHaveBeenCalledWith('buiten@voorbeeld.nl', 'reader');
   });
 
   it('shows someone without a name in their profile by their address', async () => {
