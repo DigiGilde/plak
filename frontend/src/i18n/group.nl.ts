@@ -102,7 +102,7 @@ export const groupNl = {
   'group.members.confirm.remove.keep': 'Behoud het lidmaatschap',
   'group.members.confirm.remove.confirm': 'Uit de groep halen',
   'group.members.confirm.remove.confirmWithSiteRoles': 'Uit de groep halen en siterollen weghalen',
-  'group.members.addFailed': 'Groepslid {identifier} toevoegen is niet gelukt',
+  'group.members.addFailed': 'Groepslid {name} toevoegen is niet gelukt',
   'group.members.roleChangeFailed': 'De rol van {name} wijzigen is niet gelukt',
   'group.members.removeFailed': 'Groepslid {name} verwijderen is niet gelukt',
   'group.members.retry': 'Opnieuw proberen',

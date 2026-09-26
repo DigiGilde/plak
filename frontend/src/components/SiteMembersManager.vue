@@ -296,6 +296,9 @@ async function onAdd(): Promise<void> {
   const identifier = newIdentifier.value.trim();
   emptyField.value = identifier === '';
   if (emptyField.value) return;
+  // The field only submits what was picked, so the label beside the address is
+  // the name of whoever was picked. Read before the field is emptied.
+  const name = newLabel.value.trim() || identifier;
 
   newIdentifier.value = '';
   newLabel.value = '';
@@ -322,7 +325,7 @@ async function onAdd(): Promise<void> {
     const member = await props.add(identifier, newRole.value);
     emit('added', member);
   } catch (error) {
-    notify(t('admin.siteMembers.addFailed', { name: identifier }), error, identifier);
+    notify(t('admin.siteMembers.addFailed', { name }), error, identifier);
   } finally {
     if (newRow) {
       provisional.value = provisional.value.filter((row) => row.identifier !== identifier);

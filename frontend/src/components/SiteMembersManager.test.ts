@@ -631,6 +631,26 @@ describe('SiteMembersManager (error)', () => {
     );
     expect(wrapper.emitted('removed')).toBeUndefined();
   });
+
+  it('adds where the role is changed to a refusal that only says what happened', async () => {
+    const add = vi.fn().mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Conflict',
+        status: 409,
+        detail: 'Dit lid heeft al een eigen rol op deze site.',
+        code: 'ALREADY_SITE_MEMBER',
+      }),
+    );
+    const wrapper = mountComponent({ add });
+
+    await fillInAndSubmit(wrapper, 'lid@voorbeeld.nl');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
+      'Dit lid heeft al een eigen rol op deze site. Die rol wijzig je in het menu achter de regel van dit lid.',
+    );
+  });
 });
 
 describe('SiteMembersManager (the list before anything is typed)', () => {
@@ -887,5 +907,23 @@ describe('SiteMembersManager (suggestions)', () => {
     // The debounce outlives the component otherwise, and fires at a form that
     // is no longer on screen.
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it('names whoever was picked, not the address they were picked by', async () => {
+    const search = vi.fn().mockResolvedValue([suggestionOf()]);
+    const add = vi
+      .fn()
+      .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
+    const wrapper = mountComponent({ search, add });
+
+    await typeIn(wrapper, 'ada');
+    await afterDebounce();
+    await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
+    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-notification').attributes('text')).toBe(
+      'Ada Vermeer een rol op deze site geven is niet gelukt',
+    );
   });
 });
