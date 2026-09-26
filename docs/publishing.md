@@ -714,13 +714,15 @@ plak preview-remove pr-42 \
     --site nldd/website
 ```
 
-Your linked devices are in the admin under the account menu,
-"Gekoppelde apparaten" (linked devices, `/-/devices`): name, when linked,
-last used and when the session expires, with a button to unlink a device.
-Unlinking takes effect immediately and retroactively: that device
-has to do `plak login` again afterwards. You reach the same from the device
-itself with `plak logout`. That also works when the access token has already
-expired: the CLI then sends the (expired) access token or the refresh token
+Your linked sessions are in the admin under the account menu,
+"Gekoppelde sessies" (linked sessions, `/-/sessions`): name, when linked,
+last used and when the session expires, with a button to revoke one. One
+machine can hold several, and the name in a row is the one the client
+program gave itself. Revoking takes effect immediately and retroactively:
+whoever used that session has to do `plak login` again afterwards. You reach
+the same from the machine itself with `plak logout`. That also works when the
+access token has already expired: the CLI then sends the (expired) access
+token or the refresh token
 along (`DELETE /-/api/v1/cli/session`, with
 `Authorization: Bearer plakcli_...` or a body
 `{"refreshToken": "plakclr_..."}`). The response is always `204`, also for
@@ -731,4 +733,4 @@ time, the second one may offer a refresh token that was just replaced. Within
 ten seconds that only gives `INVALID_GRANT` and the session stays; if an old
 refresh token turns up again later, Plak revokes the whole session,
 because then somebody else has it. If a platform administrator deactivates
-you, all your linked devices disappear; after reactivation you link again.
+you, all your linked sessions disappear; after reactivation you link again.

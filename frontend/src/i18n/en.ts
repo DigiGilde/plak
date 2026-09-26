@@ -87,7 +87,7 @@ const shared = {
   'nav.platform': 'Platform administration',
   'nav.account': 'Account',
   'nav.profile': 'Profile',
-  'nav.devices': 'Linked devices',
+  'nav.sessions': 'Linked sessions',
   'nav.logout': 'Sign out',
   'footer.about': 'About Plak',
   'footer.accessibility': 'Accessibility',
@@ -118,10 +118,10 @@ const shared = {
   'profile.language.saved.detail.auto': 'The admin now follows your browser.',
   'profile.language.failed': 'Language not saved',
   'profile.language.failed.detail': 'Saving did not work.',
-  'profile.devices.heading': 'Linked devices',
-  'profile.devices.body':
-    'Every device that gained access to your account through plak login, with a way to unlink it.',
-  'profile.devices.link': 'View linked devices',
+  'profile.sessions.heading': 'Linked sessions',
+  'profile.sessions.body':
+    'Every sign-in through plak login that still has access to your account, with a way to revoke it.',
+  'profile.sessions.link': 'View linked sessions',
 
   'language.label': 'Language',
   'language.nl': 'Dutch',

@@ -75,11 +75,11 @@ describe('Profiel: who you are', () => {
     ]);
   });
 
-  it('links to the linked devices rather than listing them here', async () => {
+  it('links to the linked sessions rather than listing them here', async () => {
     const wrapper = await makeWrapper();
 
-    expect(wrapper.find('[data-testid="profiel-apparaten"]').attributes('href')).toBe(
-      '/-/devices',
+    expect(wrapper.find('[data-testid="profiel-sessies"]').attributes('href')).toBe(
+      '/-/sessions',
     );
   });
 });

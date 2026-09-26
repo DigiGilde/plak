@@ -104,7 +104,7 @@ const shared = {
   'nav.platform': 'Platformbeheer',
   'nav.account': 'Account',
   'nav.profile': 'Profiel',
-  'nav.devices': 'Gekoppelde apparaten',
+  'nav.sessions': 'Gekoppelde sessies',
   'nav.logout': 'Uitloggen',
   'footer.about': 'Over Plak',
   'footer.accessibility': 'Toegankelijkheid',
@@ -136,10 +136,10 @@ const shared = {
   'profile.language.saved.detail.auto': 'Het beheer volgt nu je browser.',
   'profile.language.failed': 'Taal niet opgeslagen',
   'profile.language.failed.detail': 'Opslaan is niet gelukt.',
-  'profile.devices.heading': 'Gekoppelde apparaten',
-  'profile.devices.body':
-    'Elk apparaat dat via plak login toegang kreeg tot je account, met de mogelijkheid het te ontkoppelen.',
-  'profile.devices.link': 'Bekijk gekoppelde apparaten',
+  'profile.sessions.heading': 'Gekoppelde sessies',
+  'profile.sessions.body':
+    'Elke aanmelding met plak login die nog toegang heeft tot je account, met de mogelijkheid die in te trekken.',
+  'profile.sessions.link': 'Bekijk gekoppelde sessies',
 
   'language.label': 'Taal',
   'language.nl': 'Nederlands',

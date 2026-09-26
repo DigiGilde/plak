@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
- * Linked devices for the CLI login (`plak login`): every browser-approved
- * device-flow session for the current member, with a way to revoke one.
- * Route: /-/devices (see router.ts; the backend keeps its own hard-coded
+ * Linked sessions of the CLI login (`plak login`): every browser-approved
+ * device-flow session of the current member, with a way to revoke one. One
+ * machine can hold several; what a row names is the client program, not a
+ * device.
+ * Route: /-/sessions (see router.ts; the backend keeps its own hard-coded
  * list of SPA pages under /-/, so this route's name has to match there too).
  */
 import { computed, onMounted, ref } from 'vue';
@@ -24,7 +26,7 @@ const route = useRoute();
  * The sentence around `plak login`, split on the placeholder so the command
  * keeps its own <code> while the rest of the sentence stays one message.
  */
-const subtitle = computed(() => t('admin.devices.subtitle').split('{command}'));
+const subtitle = computed(() => t('admin.sessions.subtitle').split('{command}'));
 
 const loading = ref(true);
 const error = ref<unknown>(null);
@@ -47,7 +49,7 @@ async function load(): Promise<void> {
 }
 
 onMounted(() => {
-  setBreadcrumbs(route.path, [{ text: t('nav.overview'), href: '/' }, { text: t('nav.devices') }]);
+  setBreadcrumbs(route.path, [{ text: t('nav.overview'), href: '/' }, { text: t('nav.sessions') }]);
   void load();
 });
 
@@ -56,15 +58,15 @@ function errorText(f: unknown, fallback: string): string {
 }
 
 function lastUsedLabel(session: CliSession): string {
-  return session.lastUsedAt ? formatTimestamp(session.lastUsedAt) : t('admin.devices.neverUsed');
+  return session.lastUsedAt ? formatTimestamp(session.lastUsedAt) : t('admin.sessions.neverUsed');
 }
 
 function clientName(session: CliSession | null | undefined): string {
-  return session?.clientName || t('admin.devices.unknownClient');
+  return session?.clientName || t('admin.sessions.unknownClient');
 }
 
 function supportingText(session: CliSession): string {
-  return t('admin.devices.times', {
+  return t('admin.sessions.times', {
     linked: formatTimestamp(session.createdAt),
     lastUsed: lastUsedLabel(session),
     expires: formatTimestamp(session.expiresAt),
@@ -85,8 +87,8 @@ async function confirmRevoke(): Promise<void> {
     revoking.value = null;
     notices.value?.notify(
       'critical',
-      t('admin.devices.unlinkFailed', { name: clientName(session) }),
-      errorText(f, t('admin.devices.unlinkFailed.detail')),
+      t('admin.sessions.revokeFailed', { name: clientName(session) }),
+      errorText(f, t('admin.sessions.revokeFailed.detail')),
     );
   } finally {
     revokeBusy.value = false;
@@ -99,7 +101,7 @@ async function confirmRevoke(): Promise<void> {
     <Notices ref="notices" />
 
     <nldd-title :size="1">
-      <h1>{{ t('nav.devices') }}</h1>
+      <h1>{{ t('nav.sessions') }}</h1>
       <span slot="subtitle">{{ subtitle[0] }}<code>plak login</code>{{ subtitle[1] }}</span>
     </nldd-title>
 
@@ -107,25 +109,25 @@ async function confirmRevoke(): Promise<void> {
 
     <nldd-activity-indicator
       v-if="loading"
-      :text="t('admin.devices.loading')"
+      :text="t('admin.sessions.loading')"
     ></nldd-activity-indicator>
 
     <ErrorBanner v-else-if="error" :error="error" />
 
-    <nldd-list v-else variant="box-tinted" :accessible-label="t('nav.devices')">
+    <nldd-list v-else variant="box-tinted" :accessible-label="t('nav.sessions')">
       <nldd-inline-dialog
         v-if="sessions.length === 0"
         slot="empty"
         icon="link"
-        :text="t('admin.devices.empty')"
-        :supporting-text="t('admin.devices.empty.detail')"
-        data-testid="apparaten-leeg"
+        :text="t('admin.sessions.empty')"
+        :supporting-text="t('admin.sessions.empty.detail')"
+        data-testid="sessies-leeg"
       ></nldd-inline-dialog>
       <nldd-list-item
         v-for="session in sessions"
         :key="session.id"
         size="md"
-        :data-testid="`apparaat-${session.id}`"
+        :data-testid="`sessie-${session.id}`"
       >
         <nldd-text-cell
           :text="clientName(session)"
@@ -133,12 +135,12 @@ async function confirmRevoke(): Promise<void> {
         ></nldd-text-cell>
         <nldd-list-item-segment
           button
-          :accessible-label="t('admin.devices.unlink.label', { name: clientName(session) })"
-          :data-testid="`apparaat-ontkoppelen-${session.id}`"
+          :accessible-label="t('admin.sessions.revoke.label', { name: clientName(session) })"
+          :data-testid="`sessie-intrekken-${session.id}`"
           @click="revoking = session"
         >
           <nldd-text-cell
-            :text="t('admin.devices.unlink')"
+            :text="t('admin.sessions.revoke')"
             color="critical"
             width="fit-content"
           ></nldd-text-cell>
@@ -148,10 +150,10 @@ async function confirmRevoke(): Promise<void> {
 
     <ConfirmModal
       :open="revoking !== null"
-      :title="t('admin.devices.confirm.title', { name: clientName(revoking) })"
-      :text="t('admin.devices.confirm.text')"
-      :keep-label="t('admin.devices.confirm.keep')"
-      :confirm-label="t('admin.devices.confirm.confirm')"
+      :title="t('admin.sessions.confirm.title', { name: clientName(revoking) })"
+      :text="t('admin.sessions.confirm.text')"
+      :keep-label="t('admin.sessions.confirm.keep')"
+      :confirm-label="t('admin.sessions.confirm.confirm')"
       :busy="revokeBusy"
       @confirm="confirmRevoke"
       @close="revoking = null"

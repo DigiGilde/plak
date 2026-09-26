@@ -253,7 +253,7 @@ describe('cli device linking', () => {
     expect(error.problem.code).toBe('USER_CODE_UNKNOWN');
   });
 
-  it('approves a code and adds a linked device', async () => {
+  it('approves a code and adds a linked session', async () => {
     const before = await plak.cliSessions();
     await plak.approveDeviceAuthorization('ABCD-EFGH');
     const after = await plak.cliSessions();
@@ -270,7 +270,7 @@ describe('cli device linking', () => {
   });
 });
 
-describe('linked devices', () => {
+describe('linked sessions', () => {
   it('returns the seeded session and revokes it again', async () => {
     const before = await plak.cliSessions();
     expect(before.map((s) => s.id)).toContain('cli-sessie-1');

@@ -51,7 +51,7 @@ const navigation = computed<MenuChoice[]>(() => [
  */
 const account = computed<MenuChoice[]>(() => [
   { text: t('nav.profile'), icon: 'person', path: '/-/profile' },
-  { text: t('nav.devices'), icon: 'link', path: '/-/devices' },
+  { text: t('nav.sessions'), icon: 'link', path: '/-/sessions' },
   { text: t('nav.logout'), icon: 'logout' },
 ]);
 

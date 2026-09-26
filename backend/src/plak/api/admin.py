@@ -1027,9 +1027,9 @@ class DeviceAuthorizationPendingOut(ApiModel):
 
 
 class CliSessionOut(ApiModel):
-    """Een gekoppeld apparaat: een CLI-sessie van het ingelogde lid."""
+    """Een gekoppelde sessie: een goedgekeurde `plak login` van het ingelogde lid."""
 
-    id: uuid.UUID = Field(description="Id van de CLI-sessie; hiermee ontkoppel je hem.")
+    id: uuid.UUID = Field(description="Id van de CLI-sessie; hiermee trek je hem in.")
     client_name: str | None = Field(
         default=None, description="Hoe de CLI zichzelf noemde bij het koppelen.", examples=["plak-cli 1.2 on macOS"]
     )
@@ -3175,7 +3175,7 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/me/cli-sessions",
         tags=[TAG_CLI],
-        summary="Mijn gekoppelde apparaten",
+        summary="Mijn gekoppelde sessies",
         response_description="De CLI-sessies van het ingelogde lid, nieuwste eerst.",
         description=(
             "Elke `plak login` die nog loopt, nieuwste eerst. Verlopen sessies staan er niet meer bij.\n\n"
@@ -3199,9 +3199,9 @@ def make_admin_router() -> APIRouter:
         "/me/cli-sessions/{session_id}",
         status_code=204,
         tags=[TAG_CLI],
-        summary="Apparaat ontkoppelen",
+        summary="Gekoppelde sessie intrekken",
         description=(
-            "Trekt een CLI-sessie in; de CLI op dat apparaat moet daarna opnieuw `plak login` doen.\n\n"
+            "Trekt een CLI-sessie in; wie hem gebruikte moet daarna opnieuw `plak login` doen.\n\n"
             "**Mag:** elk actief lid, voor zijn eigen sessies, met een geldige CSRF-header."
         ),
         responses=_deleted("De CLI-sessie is ingetrokken.")

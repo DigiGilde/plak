@@ -269,7 +269,7 @@ export function denyDeviceAuthorization(userCode: string): Promise<void> {
   });
 }
 
-// -- Linked devices (CLI sessions) ------------------------------------------
+// -- Linked sessions (CLI sessions) -----------------------------------------
 
 export function cliSessions(): Promise<CliSession[]> {
   return request<CliSession[]>(`${BASE}/me/cli-sessions`);
