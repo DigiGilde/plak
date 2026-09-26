@@ -301,6 +301,31 @@ describe('group members and platform members', () => {
     expect(members.map((l) => l.identifier)).not.toContain('collega@voorbeeld.nl');
   });
 
+  it('reports the site roles a group member holds in this group', async () => {
+    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    expect(zoe.siteRoles).toEqual([
+      { siteSlug: 'website', siteTitle: 'NLDD website', role: 'admin' },
+    ]);
+  });
+
+  it('leaves the site roles standing unless the removal asks for them', async () => {
+    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    await plak.removeGroupMember('nldd', zoe.memberId);
+
+    const site = await plak.siteMembers('nldd', 'website');
+    expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')?.siteRole).toBe('admin');
+  });
+
+  it('takes the site roles along when the removal asks for them', async () => {
+    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    await plak.removeGroupMember('nldd', zoe.memberId, 'remove');
+
+    const site = await plak.siteMembers('nldd', 'website');
+    expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')).toBeUndefined();
+  });
+
   it('changes the role of a group member', async () => {
     const ada = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'ada@voorbeeld.nl')!;
     const changed = await plak.setGroupRole('nldd', ada.memberId, 'admin');

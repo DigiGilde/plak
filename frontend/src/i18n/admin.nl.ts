@@ -76,7 +76,13 @@ export const adminNl = {
   'admin.siteMembers.keepsViaGroup': 'Blijft {role} via de groep',
   'admin.siteMembers.action.setRole': 'Maak {role}',
   'admin.siteMembers.action.remove': 'Rol weghalen',
-  'admin.siteMembers.action.remove.noAccess': 'Kan daarna niet meer bij deze site',
+  'admin.siteMembers.confirm.remove.title': 'Siterol van {name} weghalen?',
+  'admin.siteMembers.confirm.remove.keepsViaGroup':
+    '{name} houdt toegang tot deze site als {role} via de groep.',
+  'admin.siteMembers.confirm.remove.noAccess':
+    '{name} verliest de toegang tot deze site: er is geen rol via de groep die dat opvangt.',
+  'admin.siteMembers.confirm.remove.keep': 'Behoud siterol',
+  'admin.siteMembers.confirm.remove.confirm': 'Siterol weghalen',
   'admin.siteMembers.addFailed': '{name} een rol op deze site geven is niet gelukt',
   'admin.siteMembers.roleFailed': 'De siterol van {name} wijzigen is niet gelukt',
   'admin.siteMembers.removeFailed': 'De siterol van {name} weghalen is niet gelukt',

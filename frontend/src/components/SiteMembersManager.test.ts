@@ -136,6 +136,18 @@ async function runAction(wrapper: Wrapper, identifier: string, testid: string): 
   await flushPromises();
 }
 
+/** The confirmation the remove action opens; teleport is stubbed away. */
+function confirmation(wrapper: Wrapper) {
+  return wrapper.find('nldd-modal-dialog');
+}
+
+/** Asking to remove a site role and going through with it. */
+async function removeRole(wrapper: Wrapper, identifier: string): Promise<void> {
+  await runAction(wrapper, identifier, `siterol-weghalen-${identifier}`);
+  await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+  await flushPromises();
+}
+
 function comboBox(wrapper: Wrapper) {
   return wrapper.find('nldd-combo-box[name="identifier"]');
 }
@@ -305,19 +317,14 @@ describe('SiteMembersManager (row menu)', () => {
     ).toBeUndefined();
   });
 
-  it('says on removal whether someone can still reach this site afterwards', () => {
+  it('leaves the consequence of removal out of the menu item', () => {
     const wrapper = mountComponent({ members: [siteOnly, both] });
 
-    expect(
-      actionOf(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl').attributes(
-        'details',
-      ),
-    ).toBe('Kan daarna niet meer bij deze site');
-    expect(
-      actionOf(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl').attributes(
-        'details',
-      ),
-    ).toBe('Blijft lezer via de groep');
+    for (const identifier of ['buiten@voorbeeld.nl', 'zoe@voorbeeld.nl']) {
+      expect(
+        actionOf(wrapper, identifier, `siterol-weghalen-${identifier}`).attributes('details'),
+      ).toBeUndefined();
+    }
   });
 
   it('changes the site role from the row menu and reports the confirmed member', async () => {
@@ -341,7 +348,7 @@ describe('SiteMembersManager (row menu)', () => {
     );
     const wrapper = mountComponent({ members: [both], remove });
 
-    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl');
+    await removeRole(wrapper, 'zoe@voorbeeld.nl');
 
     expect(siteRows(wrapper)).toHaveLength(0);
     expect(cellTexts(inheritedRows(wrapper)[0]!)).toEqual(['Zoë de Wit', 'Lezer']);
@@ -363,7 +370,7 @@ describe('SiteMembersManager (row menu)', () => {
     );
     const wrapper = mountComponent({ members: [siteOnly], remove });
 
-    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+    await removeRole(wrapper, 'buiten@voorbeeld.nl');
 
     // No group role to fall back on: the row does not come back anywhere.
     expect(siteRows(wrapper)).toHaveLength(0);
@@ -373,6 +380,45 @@ describe('SiteMembersManager (row menu)', () => {
     await flushPromises();
 
     expect(wrapper.emitted('removed')?.[0]).toEqual(['buiten@voorbeeld.nl']);
+  });
+});
+
+describe('SiteMembersManager (confirming a removal)', () => {
+  it('asks first and takes nothing away until the answer is yes', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const wrapper = mountComponent({ members: [siteOnly], remove });
+
+    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+
+    expect(siteRows(wrapper)).toHaveLength(1);
+    expect(remove).not.toHaveBeenCalled();
+
+    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await flushPromises();
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(siteRows(wrapper)).toHaveLength(1);
+  });
+
+  it('names the role someone keeps through the group', async () => {
+    const wrapper = mountComponent({ members: [both] });
+
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl');
+
+    expect(confirmation(wrapper).attributes('text')).toBe('Siterol van Zoë de Wit weghalen?');
+    expect(confirmation(wrapper).attributes('supporting-text')).toBe(
+      'Zoë de Wit houdt toegang tot deze site als lezer via de groep.',
+    );
+  });
+
+  it('says outright that someone without a group role loses this site', async () => {
+    const wrapper = mountComponent({ members: [siteOnly] });
+
+    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+
+    expect(confirmation(wrapper).attributes('supporting-text')).toBe(
+      'Bo Buiten verliest de toegang tot deze site: er is geen rol via de groep die dat opvangt.',
+    );
   });
 });
 
@@ -577,7 +623,7 @@ describe('SiteMembersManager (error)', () => {
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
     const wrapper = mountComponent({ members: [siteOnly], remove });
 
-    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+    await removeRole(wrapper, 'buiten@voorbeeld.nl');
 
     expect(siteRows(wrapper)).toHaveLength(1);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(

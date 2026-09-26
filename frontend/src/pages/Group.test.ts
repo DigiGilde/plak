@@ -441,6 +441,8 @@ describe('Group: group members', () => {
     const { wrapper, router } = await makeWrapper('/nldd/-/members');
 
     await runRowAction(wrapper, 'lid-verwijderen-dev-beheerder');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
 
     expect(backend.data.groupMembers.map((l) => l.identifier)).not.toContain('dev-beheerder');
     expect(wrapper.find('[data-testid="lid-verwijderen-dev-beheerder"]').exists()).toBe(false);

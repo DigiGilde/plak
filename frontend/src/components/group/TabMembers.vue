@@ -29,8 +29,8 @@ function add(identifier: string, role: Role): Promise<GroupMember> {
   return api.addGroupMember(props.group, identifier, role);
 }
 
-function remove(memberId: string): Promise<void> {
-  return api.removeGroupMember(props.group, memberId);
+function remove(memberId: string, siteRoles: 'keep' | 'remove'): Promise<void> {
+  return api.removeGroupMember(props.group, memberId, siteRoles);
 }
 
 function setRole(memberId: string, role: Role): Promise<GroupMember> {

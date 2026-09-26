@@ -145,6 +145,13 @@ exception has been removed and the preview follows the site again. The
 action names themselves stay: `audit_log_entries` is append-only, and a
 rename would leave an environment with two vocabularies behind.
 
+`site_member_remove` also comes from the group screen: removing someone from
+a group can take the roles they held on sites in that group along, and each
+of those gets a row of its own with the same action and the same `refs`
+(group, site, `member_id`) as a removal from the site screen. The removal is
+one transaction, so either the row for the group and the rows for the sites
+all describe a change that happened, or none of them is written.
+
 `member_deactivate` carries, besides `refs.member_id`, also
 `refs.cli_sessions_revoked`: the number of CLI sessions (`plak login`) of
 that member revoked on deactivation. Reactivating does not bring them back.

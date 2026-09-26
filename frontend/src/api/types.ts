@@ -236,6 +236,13 @@ export interface CliSession {
   expiresAt: Timestamp;
 }
 
+/** A role of someone's own on one site, always a site in the group being read. */
+export interface GroupSiteRole {
+  siteSlug: string;
+  siteTitle: string;
+  role: Role;
+}
+
 export interface GroupMember {
   groupSlug: string;
   memberId: string;
@@ -243,6 +250,12 @@ export interface GroupMember {
   name: string;
   email: string;
   role: Role;
+  /**
+   * The sites in this group this member holds a role of their own on. Only
+   * this group: what someone holds elsewhere belongs to that group, and would
+   * say where else in the organisation they work.
+   */
+  siteRoles: GroupSiteRole[];
 }
 
 /**

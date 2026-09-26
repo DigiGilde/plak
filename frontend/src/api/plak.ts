@@ -328,10 +328,20 @@ export function searchGroupMembers(
   );
 }
 
-export function removeGroupMember(groupSlug: string, memberId: string): Promise<void> {
-  return request<void>(`${groupPath(groupSlug)}/members/${encodeURIComponent(memberId)}`, {
-    method: 'DELETE',
-  });
+/**
+ * Take someone out of the group. `siteRoles` says what happens to the roles
+ * they hold on sites in this group: keeping them is the default here as it is
+ * at the API, so taking more than was asked stays a deliberate choice.
+ */
+export function removeGroupMember(
+  groupSlug: string,
+  memberId: string,
+  siteRoles: 'keep' | 'remove' = 'keep',
+): Promise<void> {
+  return request<void>(
+    `${groupPath(groupSlug)}/members/${encodeURIComponent(memberId)}?siteRoles=${siteRoles}`,
+    { method: 'DELETE' },
+  );
 }
 
 // -- Site members --------------------------------------------------------------

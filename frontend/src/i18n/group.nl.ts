@@ -84,6 +84,24 @@ export const groupNl = {
   'group.members.suggestion.alreadyMember': '{name} (al lid)',
   'group.members.action.setRole': 'Maak {role}',
   'group.members.action.remove': 'Uit de groep halen',
+  'group.members.confirm.remove.title': '{name} uit de groep halen?',
+  'group.members.confirm.remove.text':
+    '{name} is dan geen {role} meer in deze groep en verliest die rol op elke site erin.',
+  'group.members.confirm.remove.noSiteRoles':
+    '{name} heeft in deze groep geen eigen siterol, dus verder verandert er niets.',
+  'group.members.confirm.remove.siteRoles.one':
+    'Op 1 site in deze groep heeft {name} daarnaast een eigen siterol:',
+  'group.members.confirm.remove.siteRoles.many':
+    'Op {count} sites in deze groep heeft {name} daarnaast een eigen siterol:',
+  'group.members.confirm.remove.siteRoles.list': 'Sites in deze groep met een eigen siterol',
+  'group.members.confirm.remove.siteRoles.more.one': 'En nog 1 site',
+  'group.members.confirm.remove.siteRoles.more.many': 'En nog {count} sites',
+  'group.members.confirm.remove.siteRoles.also': 'Haal deze siterollen ook weg',
+  'group.members.confirm.remove.siteRoles.keeps':
+    'Laat je dit uit staan, dan houdt {name} die siterollen en blijft daarmee bij die sites kunnen.',
+  'group.members.confirm.remove.keep': 'Behoud het lidmaatschap',
+  'group.members.confirm.remove.confirm': 'Uit de groep halen',
+  'group.members.confirm.remove.confirmWithSiteRoles': 'Uit de groep halen en siterollen weghalen',
   'group.members.addFailed': 'Groepslid {identifier} toevoegen is niet gelukt',
   'group.members.roleChangeFailed': 'De rol van {name} wijzigen is niet gelukt',
   'group.members.removeFailed': 'Groepslid {name} verwijderen is niet gelukt',

@@ -1208,6 +1208,264 @@ class TestGroupMembers:
         assert response.json()["role"] == "reader"
 
 
+class TestGroupMemberSiteRoles:
+    """The site roles a group member holds inside this group: what the members
+    list reports, and what the removal can take along.
+
+    The boundary being tested throughout is the group in the path. A role on a
+    site in another group says where else in the organisation this person
+    works, and an admin of this group may neither read nor touch it here.
+    """
+
+    @pytest_asyncio.fixture
+    async def elsewhere(self, factory, data) -> SimpleNamespace:
+        """A second group with a site of its own, where member_a holds a site
+        role that has nothing to do with groep 'team'."""
+        async with factory() as db:
+            group = Group(slug="ander", name="Ander", default_access_base=AccessBase.SITE_TEAM)
+            db.add(group)
+            await db.flush()
+            site = Site(
+                group_id=group.id,
+                slug="elders",
+                title="Elders",
+                access_base=AccessBase.SITE_TEAM,
+                created_by=data.member_a.id,
+            )
+            db.add(site)
+            await db.flush()
+            db.add(SiteMember(site_id=site.id, member_id=data.member_a.id, role=Role.ADMIN))
+            await db.commit()
+            return SimpleNamespace(group=group, site=site)
+
+    async def test_the_members_list_carries_the_site_roles_in_this_group(
+        self, client, app, data, factory
+    ):
+        await _join_site(factory, data.site, data.member_a, Role.EDITOR)
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        members = (await client.get(f"{BASE}/groups/team/members")).json()
+
+        assert members[0]["siteRoles"] == [
+            {"siteSlug": "site", "siteTitle": "Site", "role": "editor"}
+        ]
+
+    async def test_without_a_site_role_the_list_says_so_with_an_empty_list(
+        self, client, app, data
+    ):
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        members = (await client.get(f"{BASE}/groups/team/members")).json()
+
+        assert members[0]["siteRoles"] == []
+
+    async def test_a_site_role_in_another_group_stays_out_of_this_list(
+        self, client, app, data, elsewhere
+    ):
+        """The whole point: an admin of groep 'team' may not learn from this
+        screen that this person also works somewhere else."""
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        members = (await client.get(f"{BASE}/groups/team/members")).json()
+
+        assert members[0]["siteRoles"] == []
+
+    async def test_adding_and_a_role_change_report_the_same_site_roles(
+        self, client, app, data, factory
+    ):
+        """One row out of the add and the role change, built the same way the
+        listing builds it, so the answer cannot disagree with the list."""
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        added = await client.post(
+            f"{BASE}/groups/team/members", json={"identifier": "b@example.nl"}, headers=headers
+        )
+        assert added.json()["siteRoles"] == [
+            {"siteSlug": "site", "siteTitle": "Site", "role": "editor"}
+        ]
+
+        changed = await client.put(
+            f"{BASE}/groups/team/members/{data.member_b.id}/role",
+            json={"role": "editor"},
+            headers=headers,
+        )
+        assert changed.json()["siteRoles"] == [
+            {"siteSlug": "site", "siteTitle": "Site", "role": "editor"}
+        ]
+
+    async def test_removal_keeps_the_site_roles_by_default(self, client, app, data, factory):
+        """Taking more than was asked has to be asked for: no parameter means
+        the site role stands, and this person can still reach that site."""
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}", headers=headers
+        )
+
+        assert response.status_code == 204
+        assert await _count(factory, SiteMember, member_id=data.member_b.id) == 1
+
+    async def test_removal_takes_the_site_roles_along_when_asked(
+        self, client, app, data, factory
+    ):
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 204
+        assert await _count(factory, SiteMember, member_id=data.member_b.id) == 0
+        assert await _count(factory, GroupMember, member_id=data.member_b.id) == 0
+
+    async def test_a_site_role_in_another_group_is_not_touched(
+        self, client, app, data, factory, elsewhere
+    ):
+        """The other half of the boundary: `siteRoles=remove` reaches only the
+        sites of the group in the path."""
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        await _join_site(factory, elsewhere.site, data.member_b, Role.EDITOR)
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 204
+        async with factory() as db:
+            remaining = list(
+                await db.scalars(
+                    select(SiteMember.site_id).where(SiteMember.member_id == data.member_b.id)
+                )
+            )
+        assert remaining == [elsewhere.site.id]
+
+    async def test_every_removed_site_role_writes_the_audit_row_of_the_site_screen(
+        self, client, app, data, factory
+    ):
+        """Same action and the same refs as `DELETE /sites/{groep}/{site}/members`:
+        one vocabulary, whichever screen the removal came from."""
+        async with factory() as db:
+            second = Site(
+                group_id=data.group.id,
+                slug="tweede",
+                title="Tweede",
+                access_base=AccessBase.SITE_TEAM,
+                created_by=data.member_a.id,
+            )
+            db.add(second)
+            await db.commit()
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        await _join_site(factory, second, data.member_b, Role.READER)
+        recorder = install_audit_recorder(app)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=remove", headers=headers
+        )
+
+        assert [(record.action, record.refs) for record in recorder.records] == [
+            ("group_member_remove", {"group": "team", "member_id": str(data.member_b.id)}),
+            (
+                "site_member_remove",
+                {"group": "team", "site": "site", "member_id": str(data.member_b.id)},
+            ),
+            (
+                "site_member_remove",
+                {"group": "team", "site": "tweede", "member_id": str(data.member_b.id)},
+            ),
+        ]
+
+    async def test_keeping_them_writes_no_site_audit_rows(self, client, app, data, factory):
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        recorder = install_audit_recorder(app)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        await client.delete(f"{BASE}/groups/team/members/{data.member_b.id}", headers=headers)
+
+        assert [record.action for record in recorder.records] == ["group_member_remove"]
+
+    async def test_the_last_admin_refusal_leaves_the_site_roles_standing(
+        self, client, app, data, factory
+    ):
+        """The one way this can half-happen, and it does not: the trigger fires
+        inside the same transaction as the site roles, so a refusal takes the
+        whole thing back."""
+        await _join_group(factory, data.group, data.member_b, Role.READER)
+        await _join_site(factory, data.site, data.member_a, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_a.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "LAST_GROUP_ADMIN"
+        assert await _count(factory, SiteMember, member_id=data.member_a.id) == 1
+        assert await _count(factory, GroupMember, member_id=data.member_a.id) == 1
+
+    async def test_the_last_member_refusal_leaves_the_site_roles_standing(
+        self, client, app, data, factory
+    ):
+        await _join_site(factory, data.site, data.member_a, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_a.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "LAST_GROUP_MEMBER"
+        assert await _count(factory, SiteMember, member_id=data.member_a.id) == 1
+
+    async def test_someone_who_is_no_group_member_keeps_their_site_role(
+        self, client, app, data, factory
+    ):
+        """A 404 is not a licence to take the site role: the membership is
+        checked before anything is deleted."""
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "NOT_GROUP_MEMBER"
+        assert await _count(factory, SiteMember, member_id=data.member_b.id) == 1
+
+    async def test_asking_for_them_when_there_are_none_is_an_ordinary_removal(
+        self, client, app, data, factory
+    ):
+        await _join_group(factory, data.group, data.member_b, Role.ADMIN)
+        recorder = install_audit_recorder(app)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=remove", headers=headers
+        )
+
+        assert response.status_code == 204
+        assert [record.action for record in recorder.records] == ["group_member_remove"]
+
+    async def test_an_unknown_value_for_the_parameter_is_refused(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.delete(
+            f"{BASE}/groups/team/members/{data.member_b.id}?siteRoles=misschien", headers=headers
+        )
+
+        assert response.status_code == 422
+
+
 # -- Roles per endpoint -----------------------------------------------------
 
 
