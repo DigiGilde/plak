@@ -24,7 +24,7 @@ import hmac
 import time
 import unicodedata
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -869,11 +869,21 @@ class MemberSearchOut(ApiModel):
     email: str = Field(description="E-mailadres uit het SSO-profiel.", examples=["lid@example.nl"])
     already_member: bool = Field(
         description=(
-            "Of dit lid hier al bij kan. Bij een groep betekent dat een groepsrol; bij een site "
-            "iedereen die op de ledenlijst van die site staat, dus ook wie er via de groep bij komt. "
-            "Toevoegen heeft dan geen zin, of geeft hooguit een ruimere rol op deze ene site."
+            "Of dit lid hier al een eigen rol heeft: een groepsrol bij het zoekveld van een groep, "
+            "een siterol bij dat van een site. Toevoegen doe je dan niet meer; de rol wijzig je in "
+            "de ledenlijst."
         ),
         examples=[False],
+    )
+    group_role: Role | None = Field(
+        default=None,
+        description=(
+            "Alleen bij het zoekveld van een site: de rol waarmee dit lid deze site nu al via de "
+            f"groep bereikt, of `null` als het geen groepslid is: {ROLE_HINT} Een siterol verruimt "
+            "alleen, dus een even smalle of smallere siterol verandert hier niets aan. Bij het "
+            "zoekveld van een groep is dit veld altijd `null`."
+        ),
+        examples=["reader"],
     )
 
 
@@ -2075,7 +2085,10 @@ SEARCH_LIMIT = 10
 
 
 async def _search_members(
-    db: AsyncSession, term: str, already: set[uuid.UUID]
+    db: AsyncSession,
+    term: str,
+    already: set[uuid.UUID],
+    group_roles: Mapping[uuid.UUID, Role] | None = None,
 ) -> list[MemberSearchOut]:
     """Active members whose name or e-mail contains `term`, as a shortlist.
 
@@ -2083,6 +2096,12 @@ async def _search_members(
     directory, and the cap keeps the answer a shortlist instead of an export.
     Whoever already has a role here stays in the answer: saying so beats
     leaving the row out, which reads as if the search were broken.
+
+    `already` holds whoever has a role at this very level, and is the only
+    thing that rules someone out. `group_roles` is what the site search adds
+    on top: the role a member already reaches this site with through the
+    group, which narrows or widens nothing but tells the admin whether a site
+    role would add anything.
     """
     normalised = term.strip()
     if len(normalised) < SEARCH_MINIMUM:
@@ -2105,6 +2124,7 @@ async def _search_members(
             name=row.name or "",
             email=row.email,
             already_member=row.id in already,
+            group_role=(group_roles or {}).get(row.id),
         )
         for row in rows
     ]
@@ -3880,8 +3900,10 @@ def make_admin_router() -> APIRouter:
             "precies wat `POST /sites/{group_slug}/{site_slug}/members` verwacht.\n\n"
             "Alleen actieve leden komen terug: wie buitengesloten is, voeg je "
             "niet toe. Het antwoord is een shortlist van hoogstens tien namen, geen uitdraai van de "
-            "hele organisatie; wie hier al bij kan staat er wel bij, met `alreadyMember` op `true`. "
-            "Dat geldt ook voor groepsleden, want die staan op de ledenlijst van deze site.\n\n"
+            "hele organisatie; wie hier al een eigen siterol heeft staat er wel bij, met "
+            "`alreadyMember` op `true`.\n\n"
+            "Groepsleden kun je hier gewoon kiezen: een siterol verruimt wat zij via de groep al "
+            "mogen. Wat dat is staat in `groupRole`, zodat je ziet of een siterol iets toevoegt.\n\n"
             "Zoeken mag precies wie ook mag toevoegen, en Plak maakt hier net zomin een account aan: "
             "iemand verschijnt pas zodra hij zelf op het beheer heeft ingelogd.\n\n"
             "**Mag:** effectieve siterol `beheerder`."
@@ -3893,9 +3915,13 @@ def make_admin_router() -> APIRouter:
     ) -> list[MemberSearchOut]:
         group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
         already = set(
-            await db.scalars(select(GroupMember.member_id).where(GroupMember.group_id == group.id))
-        ) | set(await db.scalars(select(SiteMember.member_id).where(SiteMember.site_id == site.id)))
-        return await _search_members(db, q, already)
+            await db.scalars(select(SiteMember.member_id).where(SiteMember.site_id == site.id))
+        )
+        group_rows = await db.execute(
+            select(GroupMember.member_id, GroupMember.role).where(GroupMember.group_id == group.id)
+        )
+        group_roles = dict(group_rows.all())
+        return await _search_members(db, q, already, group_roles)
 
     @router.post(
         "/sites/{group_slug}/{site_slug}/members",

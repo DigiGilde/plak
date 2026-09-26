@@ -96,7 +96,11 @@ const identifierField = ref<HTMLElement | null>(null);
 // The rows arrive after the menu has already decided that it is empty.
 useMenuEmptyState(identifierField, () => suggestions.value);
 
-/** Someone who is already in the group stays in the list, marked and inert. */
+/**
+ * Someone already in the group is marked, not held back: the refusal says
+ * that they are in it and where their role is changed, which beats a row that
+ * cannot be clicked and does not say why.
+ */
 function suggestionText(person: MemberSuggestion): string {
   const label = person.name || person.email;
   return person.alreadyMember
@@ -338,7 +342,6 @@ async function onRemove(row: Row): Promise<void> {
                 :text="suggestionText(person)"
                 :value="person.identifier"
                 :details="suggestionDetails(person)"
-                :disabled="person.alreadyMember || undefined"
                 :data-testid="`lid-suggestie-${person.identifier}`"
               ></nldd-menu-item>
             </nldd-menu>

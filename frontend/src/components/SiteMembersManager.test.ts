@@ -60,6 +60,7 @@ function suggestionOf(overrides: Partial<MemberSuggestion> = {}): MemberSuggesti
     name: 'Ada Vermeer',
     email: 'ada@voorbeeld.nl',
     alreadyMember: false,
+    groupRole: null,
     ...overrides,
   };
 }
@@ -723,7 +724,7 @@ describe('SiteMembersManager (suggestions)', () => {
     expect(menu()).toBe('Niemand gevonden');
   });
 
-  it('marks whoever already has a role here and does not let them be chosen', async () => {
+  it('marks whoever already has a site role, and still lets them be chosen', async () => {
     const search = vi.fn().mockResolvedValue([
       suggestionOf({ alreadyMember: true }),
       suggestionOf({
@@ -739,15 +740,41 @@ describe('SiteMembersManager (suggestions)', () => {
 
     const items = suggestionItems(wrapper);
     expect(items.map((item) => item.attributes('text'))).toEqual([
-      'Ada Vermeer (al lid)',
+      'Ada Vermeer (heeft al een siterol)',
       'Sanne Vermeulen',
     ]);
-    expect(items[0]!.attributes('disabled')).toBeDefined();
+    // No greying out: acting on it answers with what the server says about it,
+    // which a row that cannot be clicked never gets to say.
+    expect(items[0]!.attributes('disabled')).toBeUndefined();
     expect(items[1]!.attributes('disabled')).toBeUndefined();
     expect(items.map((item) => item.attributes('details'))).toEqual([
       'ada@voorbeeld.nl',
       'sanne@voorbeeld.nl',
     ]);
+  });
+
+  it('offers a groepslid, with the role it already reaches this site with', async () => {
+    const search = vi.fn().mockResolvedValue([
+      suggestionOf({ groupRole: 'reader' }),
+      suggestionOf({
+        identifier: 'sanne@voorbeeld.nl',
+        name: 'Sanne Vermeulen',
+        email: 'sanne@voorbeeld.nl',
+        groupRole: 'admin',
+      }),
+    ]);
+    const wrapper = mountComponent({ search });
+
+    await typeIn(wrapper, 'ver');
+    await afterDebounce();
+
+    const items = suggestionItems(wrapper);
+    expect(items.map((item) => item.attributes('text'))).toEqual([
+      'Ada Vermeer (lezer via de groep)',
+      'Sanne Vermeulen (beheerder via de groep)',
+    ]);
+    expect(items[0]!.attributes('disabled')).toBeUndefined();
+    expect(items[1]!.attributes('disabled')).toBeUndefined();
   });
 
   it('refuses a typed address that appears in no suggestion', async () => {

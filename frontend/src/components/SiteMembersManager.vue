@@ -127,12 +127,25 @@ const emptyText = computed(() => {
 
 const identifierField = ref<HTMLElement | null>(null);
 
-/** Someone who already has a role here stays in the list, marked and inert. */
+/**
+ * Someone with a site role of their own is marked, not held back: what that
+ * role is and where it is changed is what the refusal says, which beats a row
+ * that cannot be clicked and does not say why. A groepslid is offered like
+ * anyone else, with the role it already reaches this site with, since a site
+ * role only widens.
+ */
 function suggestionText(person: MemberSuggestion): string {
   const label = person.name || person.email;
-  return person.alreadyMember
-    ? t('admin.siteMembers.suggestion.alreadyMember', { name: label })
-    : label;
+  if (person.alreadyMember) {
+    return t('admin.siteMembers.suggestion.alreadyMember', { name: label });
+  }
+  if (person.groupRole !== null) {
+    return t('admin.siteMembers.suggestion.viaGroup', {
+      name: label,
+      role: roleLabel(person.groupRole).toLowerCase(),
+    });
+  }
+  return label;
 }
 
 /**
@@ -519,7 +532,6 @@ async function onRemove(row: Row): Promise<void> {
                     :text="suggestionText(person)"
                     :value="person.identifier"
                     :details="suggestionDetails(person)"
-                    :disabled="person.alreadyMember || undefined"
                     :data-testid="`siterol-suggestie-${person.identifier}`"
                   ></nldd-menu-item>
                 </nldd-menu>

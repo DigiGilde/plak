@@ -93,7 +93,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.add.identifier.label': 'Name or email address',
   'group.members.add.identifier.placeholder': 'Type a name or email address',
   'group.members.add.identifier.help':
-    'From two letters on we search the names and addresses of everyone who has signed in before. People who are already members are listed, but cannot be chosen.',
+    'From two letters on we search the names and addresses of everyone who has signed in before. People who are already members are listed as such.',
   'group.members.add.identifier.required': 'Someone from the list',
   'group.members.add.suggestions.tooShort': 'Type two letters to search',
   'group.members.add.suggestions.searching': 'Searching...',
