@@ -689,7 +689,8 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
     session = store.create_session(
         sub=claims["sub"],
         email=claims.get("email"),
-        email_verified=bool(claims.get("email_verified")),
+        # Strict: bool("false") is True, and only a JSON true verifies.
+        email_verified=claims.get("email_verified") is True,
         acr=claims["acr"],
         kind=profile.kind,
         id_token=tokens["id_token"],

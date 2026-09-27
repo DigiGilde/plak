@@ -15,6 +15,7 @@ from helpers_audit import install_audit_recorder
 from helpers_oidc import (
     APP_BASE_URL,
     CONTENT_BASE_URL,
+    OMIT,
     MockIdP,
     complete_login,
     make_app,
@@ -167,6 +168,15 @@ class TestLoginFlow:
         assert session.email == "gebruiker@example.nl"
         assert session.email_verified is True
         assert session.acr == "urn:acr:hoog"
+
+    @pytest.mark.parametrize(
+        "claim", ["false", "true", 1, None, OMIT], ids=["string-false", "string-true", "one", "null", "missing"]
+    )
+    async def test_only_a_boolean_true_email_verified_counts(self, client, app, idp, claim):
+        idp.token_claim_overrides = {"email_verified": claim}
+        await complete_login(client, idp)
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+        assert app.state.session_store.get_session(session_id).email_verified is False
 
     async def test_session_id_rotates_on_new_login(self, client, app, idp):
         await complete_login(client, idp)
@@ -648,6 +658,14 @@ class TestContentLogin:
         assert session.kind is SessionKind.CONTENT
         assert session.sub == "gebruiker-1"
         assert session.email_verified is True
+
+    @pytest.mark.parametrize("claim", ["false", "true", OMIT], ids=["string-false", "string-true", "missing"])
+    async def test_only_a_boolean_true_email_verified_counts(self, content_client, app, idp, claim):
+        idp.token_claim_overrides = {"email_verified": claim}
+        await _complete_content_login(content_client, idp)
+        token = content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
+        session_id = check_signature(app.state.settings.session_secret, token)
+        assert app.state.session_store.get_session(session_id).email_verified is False
 
     async def test_returnto_invalid_falls_back_to_root(self, content_client, idp):
         response = await _complete_content_login(content_client, idp, return_to="//evil.example")
