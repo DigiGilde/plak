@@ -21,8 +21,15 @@ That script (`e2e/run.sh`):
 4. tears the stack down again, volumes included.
 
 Knobs: `PLAK_E2E_PORT`, `PLAK_E2E_OIDC_PORT`, `PLAK_E2E_KEEP_UP=1`
-(leave the stack up to debug it). Extra arguments are passed through to
-Playwright: `just e2e --grep sleutel`.
+(leave the stack up to debug it), `PLAK_E2E_ENGINE` (container engine,
+podman by default). Extra arguments are passed through to Playwright:
+`just e2e --grep sleutel`.
+
+The job `e2e` in `.github/workflows/ci.yml` runs this same script on
+every pull request, with `PLAK_E2E_ENGINE=docker` because the GitHub
+runner has no podman. It builds the SPA first (`frontend/dist` is
+mounted into the app) and uploads `test-results/` when the suite fails:
+the config keeps a trace and a screenshot per failed scenario.
 
 No `/etc/hosts` lines are needed: the browser pins `*.localhost` to
 `127.0.0.1` through `--host-resolver-rules`, and requests on the Node

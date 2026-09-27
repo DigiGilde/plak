@@ -46,7 +46,7 @@ class TestTheCheckGate:
         # These are also the names branch protection should be set to
         # later: `ci / backend`, `ci / cli`, `ci / frontend`,
         # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`,
-        # `ci / containers`.
+        # `ci / containers`, `ci / e2e`.
         assert set(ci["jobs"]) == {
             "backend",
             "cli",
@@ -55,6 +55,7 @@ class TestTheCheckGate:
             "pre-commit",
             "secret-scan",
             "containers",
+            "e2e",
         }
 
 

@@ -18,6 +18,10 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     baseURL: ADMIN_URL,
+    // A failure in CI is otherwise a stack trace and nothing to look at.
+    // Both land in test-results/, which the CI job uploads as an artefact.
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     // All browser traffic goes through the mini forward proxy
     // (helpers/proxy.ts): it sends the internal mock OIDC origin to the
     // published port and pins *.localhost on 127.0.0.1 (macOS otherwise

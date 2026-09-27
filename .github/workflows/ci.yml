@@ -120,6 +120,81 @@ jobs:
         working-directory: frontend
         run: npx vitest run tests/build-output.test.ts
 
+  # The whole product against a real stack: nginx, the app, PostgreSQL and
+  # the mock OIDC, driven through a browser. The unit suites cannot see
+  # what breaks here, because cookies, two origins, a shadow DOM and a real
+  # database only exist once it all runs together.
+  #
+  # It runs on every pull request, dependency bumps included: a bump to a
+  # frontend dependency is exactly the kind of change that passes the unit
+  # suites and breaks the running application. The job is on its own
+  # runner, so it costs wall clock only where it is the slowest job.
+  #
+  # The stack comes up through e2e/run.sh, the same script `just e2e`
+  # calls; PLAK_E2E_ENGINE points it at docker, because the runner has no
+  # podman.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # run.sh generates dev/.secrets/ with a Python one-liner, and the CLI
+      # scenario runs the real CLI through `uv run --project cli`.
+      - name: uv installeren
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            backend/uv.lock
+            cli/uv.lock
+
+      # Same reasoning as in the backend job: fail loudly rather than run
+      # a suite that quietly has nothing to talk to.
+      - name: Containerruntime controleren
+        run: |
+          if [ ! -S /var/run/docker.sock ]; then
+            echo "Geen containerruntime op deze runner: de e2e-stack kan niet starten." >&2
+            exit 1
+          fi
+
+      # dev/compose.yml mounts frontend/dist read-only into the app; without
+      # it /admin answers 503 and half the scenarios fail on that.
+      - name: SPA bouwen
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Playwright installeren
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: E2E-suite draaien
+        env:
+          PLAK_E2E_ENGINE: docker
+        run: ./e2e/run.sh
+
+      # A trace and a screenshot per failed scenario; without them an e2e
+      # failure in CI is a stack trace and nothing to look at.
+      - name: Playwright-artefacten bewaren
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: e2e-test-results-${{ github.run_id }}
+          path: e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Runs .pre-commit-config.yaml over the whole tree, so a commit made
   # without the local hook installed is still caught. The gitleaks hook in
   # that config scans the staged diff and is therefore a no-op here; the

@@ -425,18 +425,33 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     expect(page.url()).toBe(targetUrl);
     await expect(page.locator('h1')).toHaveText('Subpagina versie 2');
 
-    // The content session is a __Host cookie of its own on the content host
+    // The content session rides in cookies of its own on the content host
     // and carries no admin authority: the admin API does not exist on the
     // content host, and on the admin host the invitee holds no cookie at all
-    // (the content login set nothing there).
+    // (the content login set nothing there). The session id itself is
+    // path-scoped to this site (auth/sessions.py), so it only shows up for a
+    // URL under the site; on the root of the host there is the presence flag
+    // and nothing that grants anything.
+    const siteCookies = await inviteeContext.cookies(`${CONTENT_URL}${SITE_PATH}/`);
+    expect(siteCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(true);
     const contentCookies = await inviteeContext.cookies(CONTENT_URL);
-    expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-content')).toBe(true);
+    expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-content-present')).toBe(true);
+    expect(contentCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(false);
     expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-session')).toBe(false);
+    // From inside the page the call does not even leave the browser: the
+    // sandbox gives the document an opaque origin, so connect-src 'self'
+    // no longer matches its own host (serving/response.py). From outside
+    // the sandbox the API really is absent on the content host.
     const apiOnContent = await page.evaluate(async () => {
-      const response = await fetch('/-/api/v1/me');
-      return response.status;
+      try {
+        return String((await fetch('/-/api/v1/me')).status);
+      } catch {
+        return 'blocked';
+      }
     });
-    expect(apiOnContent).toBe(404);
+    expect(apiOnContent).toBe('blocked');
+    const apiFromNode = await contentApi.get('/-/api/v1/me');
+    expect(apiFromNode.status()).toBe(404);
     const adminCookies = await inviteeContext.cookies(ADMIN_URL);
     expect(adminCookies.filter((cookie) => cookie.name === '__Host-plak-session')).toHaveLength(0);
     await page.close();

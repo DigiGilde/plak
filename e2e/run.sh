@@ -7,20 +7,23 @@
 #   PLAK_E2E_PORT        host port for nginx (default 18888)
 #   PLAK_E2E_OIDC_PORT   host port for the mock OIDC (default 18889)
 #   PLAK_E2E_KEEP_UP=1   keep the stack running afterwards (debugging)
+#   PLAK_E2E_ENGINE      container engine (default podman; the GitHub
+#                        runner has only docker, so the CI job sets it)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="plak-e2e"
 export PLAK_E2E_PORT="${PLAK_E2E_PORT:-18888}"
 export PLAK_E2E_OIDC_PORT="${PLAK_E2E_OIDC_PORT:-18889}"
+ENGINE="${PLAK_E2E_ENGINE:-podman}"
 
-COMPOSE=(podman compose -p "${PROJECT}" -f dev/compose.yml -f e2e/compose.e2e.yml)
+COMPOSE=("${ENGINE}" compose -p "${PROJECT}" -f dev/compose.yml -f e2e/compose.e2e.yml)
 
-if ! command -v podman >/dev/null 2>&1; then
-    echo "podman niet gevonden op PATH." >&2
+if ! command -v "${ENGINE}" >/dev/null 2>&1; then
+    echo "${ENGINE} niet gevonden op PATH." >&2
     exit 1
 fi
-if podman machine list --format '{{.Name}}' >/dev/null 2>&1; then
+if [[ "${ENGINE}" == "podman" ]] && podman machine list --format '{{.Name}}' >/dev/null 2>&1; then
     running="$(podman machine list --format '{{.Running}}' 2>/dev/null | head -n1)"
     if [[ "${running}" != "true" ]]; then
         echo "Podman-machine draait niet; start 'm met 'podman machine start'." >&2
