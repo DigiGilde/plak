@@ -789,8 +789,15 @@ async def delete_preview(request: Request, group_slug: str, site_slug: str, ref:
         raise
 
     service = IngestService(request.app.state.content_store, settings)
-    async with factory() as db:
-        await service.delete_preview(db, site, ref)
+    try:
+        async with factory() as db:
+            await service.delete_preview(db, site, ref)
+    except Exception:
+        _logger.exception("preview teardown failed")
+        await _audit_best_effort(
+            request, actor, AUDIT_ACTION_PREVIEW_TEARDOWN, "refused", AUDIT_REASON_INTERNAL, refs
+        )
+        raise
 
     await _audit(request, actor, AUDIT_ACTION_PREVIEW_TEARDOWN, "allowed", None, refs)
     return Response(status_code=204)

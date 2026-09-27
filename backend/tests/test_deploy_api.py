@@ -1017,6 +1017,25 @@ async def test_teardown_idempotent_204(environment: Environment) -> None:
     assert not (environment.settings.content_root / storage_ref).exists()
 
 
+async def test_failed_teardown_still_writes_a_refused_audit_row(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(IngestService, "delete_preview", _no_space)
+    async with environment.client() as client:
+        with pytest.raises(OSError, match="No space left"):
+            await client.delete("/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token))
+
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(
+                select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_PREVIEW_TEARDOWN)
+            )
+        ).scalar_one()
+    assert row.result == "refused"
+    assert row.reason_code == deploys.AUDIT_REASON_INTERNAL
+    assert row.refs["preview"] == "pr-7"
+
+
 async def test_teardown_invalid_ref_422(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.delete(
