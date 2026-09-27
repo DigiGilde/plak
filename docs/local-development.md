@@ -382,7 +382,20 @@ just seed        # vult de draaiende dev-stack met voorbeeldinhoud
 just test        # draait de backend- en CLI-testsuites (testcontainers, zie hieronder)
 just test-cli    # draait alleen de CLI-tests (cli/tests)
 just lint        # ruff check op backend/src, backend/tests en cli/
+just coverage    # de drie suites met dekking
 ```
+
+`just coverage` measures branch coverage and fails below the floor each
+project carries: 97% in `backend/pyproject.toml`, 99% in
+`cli/pyproject.toml` and per metric in `frontend/vite.config.ts`. The
+floors are where the suites measure today, so coverage can rise and not
+drop; CI enforces them inside the existing test jobs rather than running
+the suites a second time.
+
+On the backend the measurement needs `concurrency = ["thread",
+"greenlet"]`: SQLAlchemy's async adapter runs most of an async route body
+inside a greenlet, and without that setting coverage.py does not see it
+(`api/admin.py` measured 58% against 82% on the same tests).
 
 `just dev` runs the app without nginx in front of it on `localhost:8000`.
 Without `PLAK_CONTENT_BASE_URL` there is one host with both worlds (the app

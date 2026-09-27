@@ -95,10 +95,21 @@ for (const proto of [Element.prototype, Document.prototype] as const) {
  * other language sets it for itself, and setting it back afterwards is that
  * test's own job.
  */
-import { beforeEach } from 'vitest';
+import { enableAutoUnmount } from '@vue/test-utils';
+import { afterEach, beforeEach } from 'vitest';
 
 import { _setLocaleForTest } from '../src/i18n';
 
 beforeEach(() => {
   _setLocaleForTest('nl');
 });
+
+/**
+ * Unmount whatever a test mounted, so component scopes are disposed of.
+ *
+ * Without this the debounce timer of memberSearch outlives its test and
+ * fires after the environment is torn down, with a mock that no longer
+ * returns a promise. That is an unhandled error which fails the whole run,
+ * and only sometimes, which is the worst kind of red.
+ */
+enableAutoUnmount(afterEach);

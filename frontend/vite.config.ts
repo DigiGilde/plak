@@ -34,5 +34,16 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
+    coverage: {
+      // A ratchet, not an ambition: the floor is what the suite measures
+      // today, so coverage cannot quietly drop. Raise it when the
+      // measurement rises.
+      thresholds: {
+        statements: 97,
+        branches: 91,
+        functions: 90,
+        lines: 97,
+      },
+    },
   },
 });

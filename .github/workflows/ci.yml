@@ -58,13 +58,17 @@ jobs:
             exit 1
           fi
 
-      - name: Backend-tests (testcontainers)
+      # Coverage runs inside this job rather than in one of its own: the
+      # suite takes minutes and running it twice for a number is a cost
+      # with nothing behind it. The floor lives in backend/pyproject.toml
+      # (fail_under), so pytest fails the job when coverage drops.
+      - name: Backend-tests met dekking (testcontainers)
         working-directory: backend
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
         # -rs shows the reason for every skipped test, so a silently
         # skipped container test stays visible in the log.
-        run: uv run python -m pytest -q -rs
+        run: uv run python -m pytest -q -rs --cov=src/plak --cov-report=term-missing:skip-covered
 
   # cli/ is its own uv project (the `plak` command), separate from the
   # backend. Its lint runs in the backend job, on the ruff pinned there.
@@ -79,9 +83,9 @@ jobs:
           enable-cache: true
           cache-dependency-glob: cli/uv.lock
 
-      - name: CLI-tests
+      - name: CLI-tests met dekking
         working-directory: cli
-        run: uv run pytest tests -q
+        run: uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
 
   frontend:
     runs-on: ubuntu-latest
@@ -107,9 +111,12 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Frontend-tests
+      # With coverage, on the same run: the thresholds in vite.config.ts
+      # fail this step when coverage drops, and a second pass purely for a
+      # number would cost the suite twice.
+      - name: Frontend-tests met dekking
         working-directory: frontend
-        run: npm test
+        run: npm run coverage
 
       # Deliberately runs once more, separate from the suite above, so the
       # CI log names this gate explicitly: the built index.html may not

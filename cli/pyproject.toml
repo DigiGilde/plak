@@ -25,3 +25,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["plak_cli"]
+
+# Branch coverage, and a floor at what the suite measures today so it
+# cannot quietly drop. No greenlet here: the CLI is synchronous.
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+fail_under = 99
