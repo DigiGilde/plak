@@ -1,10 +1,7 @@
 # Privacy (AVG)
 
 **Status: draft starting point, not a legal determination.** This document
-carries forward the privacy work of the predecessor project
-(`moza-publiceer-rapportages`, see `docs/privacy.md` and
-`docs/privacy/dpia-aanzet.md` there) into Plak's own design. It is written to
-give the privacy officer (FG, "Functionaris Gegevensbescherming") and the
+gives the privacy officer (FG, "Functionaris Gegevensbescherming") and the
 controller ("verwerkingsverantwoordelijke") a factual starting point for a
 full DPIA (Model DPIA Rijksdienst), not a substitute for one. Nothing here
 constitutes legal advice or a completed assessment; `docs/security.md` lists
@@ -58,8 +55,7 @@ guarantee.
 
 ## Proposed legal basis (AVG art. 6)
 
-Carried forward from the predecessor's proposal, to be confirmed by the
-controller:
+A proposal, to be confirmed by the controller:
 
 - **Primary: art. 6(1)(e)**, a task carried out in the public interest / in
   the exercise of official authority.
@@ -81,11 +77,9 @@ who uploads or deploys a site is responsible for what it contains; Plak's
 role is limited to storing and serving what it is given, subject to the
 access controls the publisher configures.
 
-The predecessor required that published content stay on infrastructure
-within the EEA: never in GitHub.com repositories, and never baked into
-container images pushed to GHCR (`docs/privacy.md` and
-`docs/privacy/dpia-aanzet.md` in `moza-publiceer-rapportages`, requirement
-HE-PRIV-4). Verified against Plak's own build and deploy design:
+Published content should stay on infrastructure within the EEA: never in
+GitHub.com repositories, and never baked into container images pushed to
+GHCR. Verified against Plak's own build and deploy design:
 
 - The container image (`containers/plak/Containerfile`) copies in only the
   backend source and the built admin SPA (`frontend/dist`); it contains no
@@ -121,13 +115,11 @@ What Plak does today:
   automatically.
 - Sessions live in process memory only and do not survive a restart.
 
-**Open gap, carried over from the predecessor.** The predecessor flagged
-that database backups carry personal data (there: allowlist emails, audit
-IPs, password hashes; here: members, invitees, content viewers, audit rows
-including encrypted IPs) and need an explicit, bounded backup retention term,
-encryption at rest, and a deletion process that actually covers backups, not
-only the live tables (`docs/privacy.md`, HE-PRIV-3, in
-`moza-publiceer-rapportages`). This gap is **not resolved in Plak**: Plak
+**Open gap: database backups.** Backups carry personal data (members,
+invitees, content viewers, audit rows including encrypted IPs) and need an
+explicit, bounded backup retention term, encryption at rest, and a deletion
+process that actually covers backups, not only the live tables. This gap is
+**not resolved**: Plak
 runs on ZAD's shared PostgreSQL service, and this repository's documentation
 (`docs/deploying-on-zad.md`) does not describe a backup retention or deletion
 policy for that service. Whether backups are made, for how long, and whether
@@ -137,9 +129,9 @@ unverified and belongs with the platform team.
 This is also where the tension between the AVG's deletion obligation and the
 Archiefwet's retention/preservation duty applies: a purged audit row or a
 removed member is not necessarily allowed to disappear from an archival
-perspective, and vice versa. The predecessor recommended documenting the
-outcome of that trade-off explicitly rather than defaulting either way; Plak
-has not done so yet.
+perspective, and vice versa. The outcome of that trade-off should be
+documented explicitly rather than defaulting either way; that has not been
+done yet.
 
 ## Rights of data subjects
 
@@ -169,7 +161,7 @@ as the code supports it:
 
 A documented, FG-approved process for handling an access/rectification/
 erasure request (who receives it, identity verification, response term) is
-an open item, as it was for the predecessor.
+an open item.
 
 ## Processors and registration (art. 28, art. 13)
 
@@ -190,8 +182,8 @@ Open items, to be completed by the controller before go-live:
 
 ## Risks
 
-Adapted from the predecessor's risk table (`docs/privacy/dpia-aanzet.md`,
-Deel C) to Plak's actual, single-origin design.
+Following the risk section (Deel C) of the Model DPIA Rijksdienst, applied
+to Plak's actual design.
 
 | # | Risk | Mitigation in Plak today | Open |
 |---|---|---|---|
@@ -227,5 +219,4 @@ Deel C) to Plak's actual, single-origin design.
 9. Confirm, with the ZAD platform team, that the region/tenant Plak runs in
    guarantees storage within the EEA.
 10. Decide whether publishers need a content-classification step (personal
-    data / special categories) before publishing, as the predecessor
-    recommended.
+    data / special categories) before publishing.
