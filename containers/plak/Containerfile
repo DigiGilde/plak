@@ -29,7 +29,7 @@ COPY backend/src ./src
 RUN uv sync --frozen --no-dev
 
 # docker.io/library/python:3.12-slim-bookworm
-FROM docker.io/library/python@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS runtime
+FROM docker.io/library/python@sha256:be8ccd085666c34273c9dc5607c9842f8b2e3116128aae45148ce164c07ce09d AS runtime
 
 RUN groupadd --system --gid 1000 plak \
     && useradd --system --uid 1000 --gid plak --no-create-home plak \
