@@ -345,7 +345,7 @@ unnecessary at once.
 | Lockfiles (uv.lock, package-lock.json) | implemented |
 | Vulnerability scan on dependencies | done: the CI job `vulnerabilities` runs pip-audit on the exported lockfile and npm audit on the frontend, locally via `just scan`. Accepted findings sit in `.trivyignore.yaml` with a date and a motivation and come back by themselves on that date |
 | SBOM per image | done: `deploy.yml` generates a CycloneDX SBOM with trivy and keeps it 90 days as an artefact |
-| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry; `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public |
+| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `herkomst`, not in `bouw`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public |
 | Updating dependencies | done: `.github/dependabot.yml` follows github-actions, uv, npm (frontend and e2e) and docker (both Containerfiles), weekly and grouped. A dependabot PR gets no preview environment but does go through the test gate |
 | Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `productie` hangs on `needs: [ci, bouw]`. Open: branch protection with the checks `ci / backend`, `ci / frontend` and `ci / vulnerabilities` as soon as the repo has a remote |
 | Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `bouw`, so nothing gets deployed |
@@ -389,13 +389,38 @@ So: build it when something trusts this repository, not before. Until then the
 permission would exist for a proof about a chain nobody uses. When it is built,
 it belongs in a workflow of its own, manual and scheduled rather than a gate
 (a fork or a Dependabot run gets no OIDC token, so it could only ever go red
-after a merge), and that file must be the only place `id-token: write` appears.
-Not the `e2e` job: that one runs `npm ci` twice and a `uv sync`, which would put
-the token within reach of the whole dependency tree.
+after a merge), in a job of its own that runs no project code. Not the `e2e`
+job: that one runs `npm ci` twice and a `uv sync`, which would put the token
+within reach of the whole dependency tree. The rule that follows from this is
+in the next section.
 
 The negative cases stay where they are, in `backend/tests/test_deploy_api.py`:
 GitHub will not issue a token for a repository you do not own, so a wrong
 repository, a wrong audience or a wrong event cannot be produced for real.
+
+### Where `id-token: write` may sit
+
+The rule: a job that holds `id-token: write` runs no code of this project and
+no code of its dependencies. The permission is not scoped to one audience, so
+a job that has it can mint a token for any audience it names, and that token
+carries this repository's numeric id. Whoever gets to run in such a job can
+therefore speak as this repository to anything that trusts it, this project's
+own CI trust rules included.
+
+Today `deploy.yml` is the only file with the permission, in the job `herkomst`,
+which does four things: log in to ghcr, download the SBOM artefact, and run
+`actions/attest` twice. `bouw` builds the image, so it executes the
+Containerfile and with it `npm ci` and `uv sync`; it keeps `contents: read` and
+`packages: write` and nothing more. The digest passes from `bouw` to `herkomst`
+as a job output, so the split cannot make the two disagree about which image
+was attested. `backend/tests/test_workflows.py` holds both halves of that in
+place.
+
+What this is worth today is a fair question: the repository is private, nothing
+deploys to production and no Plak installation trusts it, so the blast radius
+is empty. It is separated now because it is cheap now (one job, one artefact
+that was already being uploaded) and because the alternative is remembering to
+do it on the day the radius stops being empty.
 
 ### As soon as the repo has a GitHub remote
 

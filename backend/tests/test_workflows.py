@@ -86,22 +86,63 @@ class TestTheScans:
 
     def test_the_image_carries_provenance_and_sbom_attestations(self, deploy) -> None:
         """Both attest the digest that was pushed, never a tag, which can move."""
-        bouw = deploy["jobs"]["bouw"]
+        herkomst = deploy["jobs"]["herkomst"]
         for permission in ("id-token", "attestations", "artifact-metadata"):
-            assert bouw["permissions"][permission] == "write"
+            assert herkomst["permissions"][permission] == "write"
+        # push-to-registry writes the attestation next to the image.
+        assert herkomst["permissions"]["packages"] == "write"
 
-        steps = bouw["steps"]
-        attests = [s for s in steps if str(s.get("uses", "")).startswith("actions/attest@")]
+        attests = [
+            s for s in herkomst["steps"] if str(s.get("uses", "")).startswith("actions/attest@")
+        ]
         assert len(attests) == 2
         for step in attests:
-            assert step["with"]["subject-name"] == "${{ steps.tag.outputs.naam }}"
-            assert step["with"]["subject-digest"] == "${{ steps.push.outputs.digest }}"
+            assert step["with"]["subject-name"] == "${{ needs.bouw.outputs.naam }}"
+            assert step["with"]["subject-digest"] == "${{ needs.bouw.outputs.digest }}"
             assert step["with"]["push-to-registry"] is True
         assert [s["with"].get("sbom-path") for s in attests] == [None, "sbom.cdx.json"]
 
-        # The SBOM has to exist before it can be attested.
-        sbom = next(i for i, s in enumerate(steps) if s.get("with", {}).get("output") == "sbom.cdx.json")
-        assert sbom < steps.index(attests[1])
+    def test_the_attestation_job_runs_no_project_code(self, deploy) -> None:
+        """A job with `id-token: write` can mint a token for any audience it
+        names, and that token carries this repository's identity. So it may
+        not be the job that executes the Containerfile, which runs `npm ci`
+        and `uv sync`."""
+        assert deploy["jobs"]["bouw"]["permissions"] == {
+            "contents": "read",
+            "packages": "write",
+        }
+
+        # No checkout, no build, no scan: login, download, attest twice.
+        steps = deploy["jobs"]["herkomst"]["steps"]
+        assert [s["uses"].split("@")[0] for s in steps] == [
+            "docker/login-action",
+            "actions/download-artifact",
+            "actions/attest",
+            "actions/attest",
+        ]
+
+    def test_only_a_pushed_image_gets_attested(self, deploy) -> None:
+        """No `if:` of its own: a skipped or failed `bouw` skips this job as
+        well, so nothing gets attested that was not built and pushed. The
+        digest is handed over rather than re-resolved, so the two jobs
+        cannot disagree about which image that was."""
+        herkomst = deploy["jobs"]["herkomst"]
+        assert herkomst["needs"] == "bouw"
+        assert "if" not in herkomst
+        assert deploy["jobs"]["bouw"]["outputs"]["digest"] == "${{ steps.push.outputs.digest }}"
+
+        # The SBOM reaches the attestation as an artefact, under one name.
+        upload = next(
+            s
+            for s in deploy["jobs"]["bouw"]["steps"]
+            if str(s.get("uses", "")).startswith("actions/upload-artifact@")
+        )
+        download = next(
+            s
+            for s in herkomst["steps"]
+            if str(s.get("uses", "")).startswith("actions/download-artifact@")
+        )
+        assert upload["with"]["name"] == download["with"]["name"] == "sbom-${{ github.sha }}"
 
     def test_a_pull_request_is_gated_on_every_base_image(self, ci) -> None:
         """Without this the first trivy finding on a base image arrives at
