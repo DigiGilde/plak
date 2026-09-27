@@ -132,7 +132,7 @@ class MockCi:
         *,
         alg: str = "RS256",
         key=None,
-        kid: str | None | object = None,
+        kid: str | object | None = None,
         **overrides,
     ) -> str:
         """A signed ID token; `overrides` replace claims, OMIT drops one."""

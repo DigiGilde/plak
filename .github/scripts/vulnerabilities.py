@@ -36,8 +36,12 @@ def read_ignore_list(path: Path) -> list[dict[str, Any]]:
     for entry in entries:
         if not ADVISORY_ID.match(str(entry.get("id", ""))):
             raise ValueError(f"{path.name}: {entry.get('id')!r} is not an advisory id")
+        # ValueError, not TypeError: all three checks report the same thing,
+        # a line in the ignore file that cannot be used.
         if not isinstance(entry.get("expired_at"), date):
-            raise ValueError(f"{path.name}: {entry['id']} has no date in expired_at")
+            raise ValueError(  # noqa: TRY004
+                f"{path.name}: {entry['id']} has no date in expired_at"
+            )
         if not str(entry.get("statement", "")).strip():
             raise ValueError(f"{path.name}: {entry['id']} has no statement")
     return entries

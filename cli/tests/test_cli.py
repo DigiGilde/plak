@@ -23,12 +23,12 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
-import yaml
 
 # The package installed in this project's environment, the same code the
 # `plak` command runs.
 import plak_cli as cli
+import pytest
+import yaml
 
 
 def _parse_multipart(content_type: str, body: bytes) -> dict[str, dict[str, Any]]:

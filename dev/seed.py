@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fills the dev database and the content volume with example content.
 
 Run it with `just seed`, which pipes this file into the running app
@@ -35,9 +34,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from plak.access import keys as access_keys
 from plak.config import Settings, load_settings
 from plak.constants import AccessBase, Role
@@ -53,6 +49,8 @@ from plak.models.identity import (
     SiteMember,
 )
 from plak.models.publication import Invitee, Preview, Site, Version
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 # The sub the mock OIDC server hands out for every dev login
 # (dev/mock-oidc-config.json), and the sub dev/compose.yml bootstraps into a
@@ -475,8 +473,10 @@ def _report(settings: Settings, result: SeedResult) -> str:
     lines = [
         "",
         "Dev-inhoud gezaaid.",
-        f"  {result.members} leden, {result.groups} groepen, {result.sites} sites, "
-        f"{result.versions} versies, {result.previews} previews",
+        (
+            f"  {result.members} leden, {result.groups} groepen, {result.sites} sites, "
+            f"{result.versions} versies, {result.previews} previews"
+        ),
         "",
         "Inloggen en rondkijken:",
         f"  beheer     {admin_base}/",
