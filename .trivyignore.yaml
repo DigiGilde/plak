@@ -17,3 +17,11 @@ vulnerabilities:
       @vitest/mocker, alleen devDependencies. De fix vraagt een major van
       vitest en dat is een eigen upgrade. Zit niet in de SPA-bundel:
       npm audit --omit=dev meldt hem niet.
+  - id: CVE-2026-93990
+    expired_at: 2026-11-01
+    statement: >-
+      libexpat in het nginx-image van de ontwikkelomgeving. Er is nog geen
+      image dat hem oplost: 1.30-alpine en 1.31-alpine dragen hem allebei.
+      Deze proxy draait alleen in dev/compose.yml en wordt nooit uitgerold.
+      Korte termijn, want een nieuw basisimage kan hem elke week verhelpen;
+      daarna komt hij vanzelf terug en kan de pin mee omhoog.

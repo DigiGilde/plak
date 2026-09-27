@@ -103,16 +103,16 @@ class TestTheScans:
         sbom = next(i for i, s in enumerate(steps) if s.get("with", {}).get("output") == "sbom.cdx.json")
         assert sbom < steps.index(attests[1])
 
-    def test_a_pull_request_is_gated_on_the_base_image_that_ships(self, ci) -> None:
+    def test_a_pull_request_is_gated_on_every_base_image(self, ci) -> None:
         """Without this the first trivy finding on a base image arrives at
-        deploy time. The dev nginx image is reported, not gated: it never
-        leaves dev/compose.yml."""
+        deploy time. The dev nginx image is gated too: it never leaves
+        dev/compose.yml, but it runs on every developer's machine, and what
+        it still carries is written down in .trivyignore.yaml with a date."""
         steps = ci["jobs"]["containers"]["steps"]
         scans = [s for s in steps if "trivy-action" in str(s.get("uses", ""))]
 
-        gate = [s for s in scans if s.get("with", {}).get("exit-code") == "1"]
-        assert len(gate) == 2
-        assert {s["with"].get("scan-type", "image") for s in gate} == {"config", "image"}
+        assert [s["with"]["exit-code"] for s in scans] == ["1"] * len(scans)
+        assert {s["with"].get("scan-type", "image") for s in scans} == {"config", "image"}
         for step in scans:
             assert step["with"]["severity"] == "CRITICAL,HIGH"
             assert step["with"]["trivyignores"] == ".trivyignore.yaml"

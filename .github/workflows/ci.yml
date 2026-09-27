@@ -337,19 +337,20 @@ jobs:
           exit-code: "1"
           version: v0.74.0
 
-      # Report, no gate: this image runs only in dev/compose.yml and never
-      # reaches a deploy, and the pin it carries is far enough behind that
-      # gating on it would paint every pull request red over something a
-      # publisher is never exposed to. The findings stay in the log, and
-      # Dependabot offers the digest bump that clears them.
-      - name: Nginx-basisimage scannen, alleen rapport (trivy)
+      # Gated like the image that ships. This one only runs in
+      # dev/compose.yml, but it runs on every developer's machine, and the
+      # bump from an end-of-life tag to 1.30-alpine took it from 38 findings
+      # to 1. What is left is carried in .trivyignore.yaml with a date on
+      # which it comes back, so the gate stays honest instead of standing
+      # open.
+      - name: Nginx-basisimage scannen (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.bases.outputs.nginx }}
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: "0"
+          exit-code: "1"
           version: v0.74.0
 
   vulnerabilities:
