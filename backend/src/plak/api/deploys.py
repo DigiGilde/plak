@@ -485,10 +485,14 @@ async def cli_member(request: Request, db: AsyncSession, plaintext: str) -> tupl
     member = await db.get(Member, session.member_id)
     if member is None or member.status != MemberStatus.ACTIVE:
         raise ApiError(403, "MEMBER_NOT_ACTIVE")
+    # A session of its own: a failure here must leave `db` and the instances
+    # it loaded untouched, since a rollback would expire them.
+    factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     try:
-        await cli.mark_used(db, session.id)
-    except Exception:  # pragma: no cover - best-effort bookkeeping, never blocks the deploy
-        await db.rollback()
+        async with factory() as bookkeeping_db:
+            await cli.mark_used(bookkeeping_db, session.id)
+    except Exception:
+        _logger.warning("last use of CLI session could not be recorded", exc_info=True)
     return session, member
 
 

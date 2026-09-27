@@ -637,6 +637,25 @@ class TestWhoami:
         assert response.status_code == 403
         assert response.json()["code"] == "MEMBER_NOT_ACTIVE"
 
+    async def test_failing_last_used_bookkeeping_does_not_fail_whoami(self, client, app, factory, monkeypatch):
+        await _make_member(factory, sub="lid-boekhouding")
+        created = await _create_device_authorization(client)
+        headers = login(client, app, sub="lid-boekhouding")
+        await client.post(f"{BASE}/cli/device-authorizations/approve", json={"userCode": created["userCode"]},
+                          headers=headers)
+        exchange = await client.post(
+            f"{BASE}/cli/tokens", json={"grantType": "device_code", "deviceCode": created["deviceCode"]}
+        )
+        access_token = exchange.json()["accessToken"]
+
+        async def unavailable(*_args, **_kwargs):
+            raise RuntimeError("database unavailable")
+
+        monkeypatch.setattr(cli, "mark_used", unavailable)
+        response = await client.get(f"{BASE}/cli/whoami", headers={"Authorization": f"Bearer {access_token}"})
+        assert response.status_code == 200
+        assert response.json()["member"]["email"] == "lid-boekhouding@example.nl"
+
     async def test_malformed_token_is_401(self, client):
         response = await client.get(f"{BASE}/cli/whoami", headers={"Authorization": "Bearer garbage"})
         assert response.status_code == 401

@@ -529,6 +529,29 @@ async def test_cli_token_deploys_as_its_member(environment: Environment) -> None
     assert environment.cli_token not in str(row.refs)
 
 
+async def test_failing_last_used_bookkeeping_does_not_fail_the_deploy(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(cli, "mark_used", unavailable)
+    with caplog.at_level(logging.WARNING, logger=deploys.__name__):
+        async with environment.client() as client:
+            resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
+
+    assert resp.status_code == 201
+    async with environment.session_factory() as db:
+        version = (await db.execute(select(Version))).scalar_one()
+        row = (await db.execute(select(AuditLogEntry))).scalar_one()
+        session = (await db.execute(select(CliSession))).scalar_one()
+    assert version.member_id == environment.member.id
+    assert row.result == "allowed"
+    assert row.actor_pseudonym == pseudonymise(environment.settings.audit_pepper, "sub-actief")
+    assert session.last_used_at is None
+    assert "database unavailable" in caplog.text
+
+
 async def test_cli_token_of_a_member_without_role_403(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.post(
