@@ -1,5 +1,23 @@
 # Dependabot en niet Renovate: Renovate vraagt een app-installatie of een eigen
 # token, en met de standaard GITHUB_TOKEN draaien zijn PR's de CI niet.
+#
+# Twee dingen houden het aantal pull requests beheersbaar.
+#
+# Een groep per ecosysteem voor minor en patch, plus een tweede groep over
+# dezelfde patterns voor major. Een dependency komt in de eerste groep die hij
+# matcht; een major matcht de minor-en-patch-groep niet en valt zonder die
+# tweede groep dus in een eigen pull request per pakket. Dat brak het paar
+# vitest en @vitest/coverage-v8, die elkaar exact vastpinnen: twee losse pull
+# requests waarvan geen van beide alleen groen kan worden.
+#
+# En een cooldown: een nieuwe versie telt pas mee als hij een week oud is,
+# majors pas na een maand. Zo komt kapotte upstream eerst bij een ander boven
+# water en vallen opeenvolgende patches in dezelfde pull request. Security
+# updates kennen geen cooldown, dus een gat wacht nergens op.
+#
+# De ecosystemen staan verspreid over de week, want ze kwamen allemaal maandag
+# om 06:00 binnen en pull requests die dezelfde lockfile raken dwingen elkaar
+# tot rebasen.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -12,6 +30,9 @@ updates:
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    # github-actions kent alleen default-days, geen semver-varianten.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     groups:
@@ -23,10 +44,13 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
-      day: monday
+      day: tuesday
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     groups:
       backend:
         patterns:
@@ -34,15 +58,23 @@ updates:
         update-types:
           - minor
           - patch
+      backend-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: uv
     directory: /cli
     schedule:
       interval: weekly
-      day: monday
+      day: wednesday
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     groups:
       cli:
         patterns:
@@ -50,6 +82,11 @@ updates:
         update-types:
           - minor
           - patch
+      cli-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: npm
     directories:
@@ -57,10 +94,13 @@ updates:
       - /e2e
     schedule:
       interval: weekly
-      day: monday
+      day: thursday
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     groups:
       frontend:
         patterns:
@@ -68,15 +108,23 @@ updates:
         update-types:
           - minor
           - patch
+      frontend-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
 
   - package-ecosystem: pre-commit
     directory: /
     schedule:
       interval: weekly
-      day: monday
+      day: friday
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    # pre-commit kent alleen default-days, geen semver-varianten.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     groups:
@@ -90,7 +138,10 @@ updates:
       - /containers/nginx-dev
     schedule:
       interval: weekly
-      day: monday
+      day: friday
       time: "06:00"
       timezone: Europe/Amsterdam
     open-pull-requests-limit: 5
+    # docker kent alleen default-days, geen semver-varianten.
+    cooldown:
+      default-days: 7
