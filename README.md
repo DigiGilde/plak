@@ -50,11 +50,6 @@ offered separately from that environment; everything environment
 specific is configurable, though, so another OIDC provider or another
 platform is not ruled out.
 
-Plak is the successor to `moza-publiceer-rapportages` (Java/Spring
-Boot, never in production). That project proved the domain model and
-the security design; Plak is a rebuild, greenfield, in the house
-standard stack, without any migration or compatibility burden.
-
 ## Core concepts
 
 - **Group**: a collaboration unit (for example `nldd`, `fin`). Holds

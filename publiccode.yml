@@ -40,9 +40,8 @@ description:
       Plak is een platform waarmee overheidsorganisaties statische
       sites eenvoudig publiceren en delen: publiek, achter SSO Rijk, met
       genodigden op e-mailadres, of via een geheime link. Elke pull
-      request kan een eigen preview krijgen. Plak is de opvolger van
-      moza-publiceer-rapportages en herbouwt hetzelfde beveiligingsontwerp
-      in de huisstandaard-stack (FastAPI, Vue, PostgreSQL), met een
+      request kan een eigen preview krijgen. Plak is gebouwd in de
+      huisstandaard-stack (FastAPI, Vue, PostgreSQL), met een
       herbruikbare publicatie-action voor CI.
     features:
       - Publiceren van statische sites op een eigen groep/site-pad
