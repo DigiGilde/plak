@@ -50,6 +50,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     outputs:
       image: ${{ steps.tag.outputs.image }}
     steps:
@@ -60,6 +63,7 @@ jobs:
         run: |
           naam="${REGISTRY}/${IMAGE_NAME}"
           naam="$(echo "${naam}" | tr '[:upper:]' '[:lower:]')"
+          echo "naam=${naam}" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "image=${naam}:pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
           else
@@ -82,6 +86,7 @@ jobs:
       # SPA from frontend/ alongside the backend (see
       # containers/plak/Containerfile).
       - name: Image bouwen en pushen
+        id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -91,6 +96,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Attestations on a private repository need GitHub Enterprise Cloud;
+      # on the Free plan they only work once the repository is public.
+      - name: Herkomst vastleggen (SLSA build provenance)
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.tag.outputs.naam }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
       - name: SBOM genereren (CycloneDX)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -98,6 +112,14 @@ jobs:
           format: cyclonedx
           output: sbom.cdx.json
           version: v0.74.0
+
+      - name: SBOM vastleggen als attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.tag.outputs.naam }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom.cdx.json
+          push-to-registry: true
 
       - name: SBOM bewaren
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

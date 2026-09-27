@@ -84,6 +84,25 @@ class TestTheScans:
         assert gate[0]["with"]["severity"] == "CRITICAL,HIGH"
         assert gate[0]["with"]["trivyignores"] == ".trivyignore.yaml"
 
+    def test_the_image_carries_provenance_and_sbom_attestations(self, deploy) -> None:
+        """Both attest the digest that was pushed, never a tag, which can move."""
+        bouw = deploy["jobs"]["bouw"]
+        for permission in ("id-token", "attestations", "artifact-metadata"):
+            assert bouw["permissions"][permission] == "write"
+
+        steps = bouw["steps"]
+        attests = [s for s in steps if str(s.get("uses", "")).startswith("actions/attest@")]
+        assert len(attests) == 2
+        for step in attests:
+            assert step["with"]["subject-name"] == "${{ steps.tag.outputs.naam }}"
+            assert step["with"]["subject-digest"] == "${{ steps.push.outputs.digest }}"
+            assert step["with"]["push-to-registry"] is True
+        assert [s["with"].get("sbom-path") for s in attests] == [None, "sbom.cdx.json"]
+
+        # The SBOM has to exist before it can be attested.
+        sbom = next(i for i, s in enumerate(steps) if s.get("with", {}).get("output") == "sbom.cdx.json")
+        assert sbom < steps.index(attests[1])
+
     def test_a_pull_request_is_gated_on_the_base_image_that_ships(self, ci) -> None:
         """Without this the first trivy finding on a base image arrives at
         deploy time. The dev nginx image is reported, not gated: it never
