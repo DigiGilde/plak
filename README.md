@@ -127,6 +127,9 @@ OIDC server logs you in automatically as a preconfigured dev
 administrator. `http://localhost:8080` does not work: an unknown host
 gets a 400.
 
+Install the commit hooks once per clone with `uvx pre-commit install`;
+the CI job `pre-commit` runs the same set over the whole tree.
+
 See `docs/local-development.md` for prerequisites, the compose
 topology, justfile recipes and the Testcontainers/Podman socket
 pattern.

@@ -45,8 +45,15 @@ class TestTheCheckGate:
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
         # These are also the names branch protection should be set to
         # later: `ci / backend`, `ci / cli`, `ci / frontend`,
-        # `ci / vulnerabilities`.
-        assert set(ci["jobs"]) == {"backend", "cli", "frontend", "vulnerabilities"}
+        # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`.
+        assert set(ci["jobs"]) == {
+            "backend",
+            "cli",
+            "frontend",
+            "vulnerabilities",
+            "pre-commit",
+            "secret-scan",
+        }
 
 
 class TestTheScans:

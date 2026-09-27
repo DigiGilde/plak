@@ -1,0 +1,70 @@
+# Local commit gate. Install once with `pre-commit install`; the CI job
+# `pre-commit` in .github/workflows/ci.yml runs the same set over the whole
+# tree.
+#
+# Every hook repository is pinned to a commit SHA; the tag after it is the
+# readable label, not the reference. Dependabot keeps the pins current
+# (.github/dependabot.yml, ecosystem `pre-commit`).
+#
+# The vendored Swagger UI assets under backend/src/plak/static/docs/ are
+# excluded per hook where it matters: they are fetched verbatim by
+# `just refresh-swagger-ui` and must stay byte-identical to what the CDN
+# serves.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^backend/src/plak/static/docs/
+      - id: end-of-file-fixer
+        exclude: ^(backend/src/plak/static/docs/|frontend/public/touch-icon\.png$)
+      - id: check-yaml
+        exclude: ^e2e/compose\.e2e\.yml$
+      # e2e/compose.e2e.yml uses the Compose merge tag `!override`, which a
+      # safe load cannot construct; --unsafe keeps the syntax check on it.
+      - id: check-yaml
+        alias: check-yaml-compose
+        name: check yaml (compose merge tags)
+        args: [--unsafe]
+        files: ^e2e/compose\.e2e\.yml$
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  # Same ruff as `just lint` and the CI lint steps: the version pinned in
+  # backend/uv.lock. Config resolution is per file, so backend/ uses
+  # backend/pyproject.toml and cli/ the ruff defaults, exactly as the
+  # justfile arranges it. No formatter hook: reformatting whole files is a
+  # deliberate no.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 2700fd5671c633760d912769c041bfcde2b9a01b # v0.15.22
+    hooks:
+      - id: ruff-check
+
+  # Scans the staged diff, so this is a local gate: under
+  # `pre-commit run --all-files` nothing is staged and the hook is a no-op.
+  # The CI job `secret-scan` covers that side. Rules and allowlist come
+  # from .gitleaks.toml.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      # House rule from CLAUDE.md: no em dashes and no en dashes, not in
+      # code and not in docs. The only file in the tree that carries any is
+      # the vendored swagger-ui-bundle.js, excluded above and here.
+      #
+      # pygrep matches against raw bytes, so the two characters are spelled
+      # as their UTF-8 sequences: a character class would match the
+      # individual bytes and catch every other non-ASCII character too.
+      # Spelling them out also keeps this file itself free of them.
+      - id: no-em-en-dash
+        name: no em dash or en dash
+        language: pygrep
+        entry: '\xe2\x80\x93|\xe2\x80\x94'
+        types: [text]
+        exclude: ^backend/src/plak/static/docs/

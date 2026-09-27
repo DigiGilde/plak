@@ -889,4 +889,3 @@ def main(argv: list[str] | None = None) -> int:
         code = error.code if isinstance(error.code, int) else 2
         return code
     return args.func(args)
-

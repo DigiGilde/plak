@@ -69,6 +69,21 @@ updates:
           - minor
           - patch
 
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      pre-commit:
+        patterns:
+          - "*"
+
   - package-ecosystem: docker
     directories:
       - /containers/plak

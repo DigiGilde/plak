@@ -24,6 +24,32 @@ This document describes how to run and test Plak locally.
   which the compose stack mounts read-only into the app container. Without
   that directory `/admin` answers with a 503 and a clear message.
 
+## Commit hooks
+
+`.pre-commit-config.yaml` holds the gate that the CI job `pre-commit`
+also runs. Install it once per clone:
+
+```bash
+uvx pre-commit install
+```
+
+From then on every `git commit` runs ruff, the whitespace and
+end-of-file fixers, the YAML/JSON/TOML checks, a gitleaks scan of the
+staged diff and the em dash/en dash check.
+`uvx pre-commit run --all-files` runs the whole set over the tree, which
+is what CI does. The gitleaks hook is the one that only works locally:
+it reads the staged diff, so with `--all-files` there is nothing for it
+to see. CI covers secrets in its own job (`secret-scan`), which scans
+the working tree and the commits a pull request adds, because
+`git commit --no-verify` walks past the local hook.
+
+Both use `.gitleaks.toml`: the default rule set plus an allowlist for
+`dev/.secrets/` and `frontend/dist/`, the two gitignored directories a
+working-tree scan would otherwise trip over.
+
+Building the gitleaks hook needs a Go toolchain on the first run. Every
+hook revision is pinned to a commit SHA; Dependabot bumps them.
+
 ## Starting the dev stack
 
 ```bash

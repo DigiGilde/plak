@@ -1,0 +1,23 @@
+# Gitleaks configuration, picked up by the pre-commit hook and by the CI
+# job `secrets` alike (gitleaks reads (target path)/.gitleaks.toml).
+#
+# The default rule set is kept in full; only two paths are allowlisted,
+# and neither is code that could carry a real secret of ours.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Two directories that only ever exist on a developer machine and are
+gitignored, so nothing in them can reach a commit: dev/.secrets/ holds the
+real credentials of the local compose stack, frontend/dist/ is Vite build
+output. Only `gitleaks dir` sees them, because it reads the working tree
+rather than the index; without this a clean checkout scans green and a
+working clone does not.
+"""
+targets = ["path"]
+paths = [
+  '''^dev/\.secrets/''',
+  '''^frontend/dist/''',
+]

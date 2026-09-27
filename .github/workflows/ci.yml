@@ -120,6 +120,69 @@ jobs:
         working-directory: frontend
         run: npx vitest run tests/build-output.test.ts
 
+  # Runs .pre-commit-config.yaml over the whole tree, so a commit made
+  # without the local hook installed is still caught. The gitleaks hook in
+  # that config scans the staged diff and is therefore a no-op here; the
+  # job `secret-scan` below is what covers secrets in CI.
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: uv installeren
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      # Building the gitleaks hook from source takes longer than the rest
+      # of the job together; the cache key follows the pinned revisions.
+      - name: Hookomgevingen uit de cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Pre-commit-hooks draaien
+        run: uvx pre-commit@4.5.1 run --all-files --show-diff-on-failure
+
+  # `git commit --no-verify` walks past the local gitleaks hook, so the
+  # same scan runs here as well. Two scans, because the modes see
+  # different things:
+  #
+  #   - `gitleaks dir` reads the working tree as checked out, so it sees
+  #     the state that gets merged;
+  #   - `gitleaks git --log-opts` reads the commits the pull request adds,
+  #     so it also sees a secret that was added in one commit and taken
+  #     out again in the next. That one stays in the history after a
+  #     merge, and a working-tree scan is blind to it.
+  #
+  # gitleaks-action is not used on purpose: it asks an organization
+  # account for a paid licence key, which is exactly the dependency this
+  # repository is getting rid of. `go install` at an exact tag is verified
+  # against the Go checksum database; the module path is still the old
+  # zricethezav one, which is what the go.mod of gitleaks declares.
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # The commit range needs both of its ends in the checkout, and
+          # the default single-commit fetch has neither. A pull request has
+          # no bound on its length, so full history it is; this repository
+          # is a few hundred commits, a second of fetching.
+          fetch-depth: 0
+
+      - name: Gitleaks installeren
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+
+      - name: Werkboom scannen op geheimen
+        run: gitleaks dir . --redact --no-banner
+
+      - name: Commits van deze pull request scannen
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: gitleaks git . --redact --no-banner --log-opts="$BASE..$HEAD"
+
   vulnerabilities:
     runs-on: ubuntu-latest
     steps:
