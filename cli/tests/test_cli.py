@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 import pytest
+import yaml
 
 # The package installed in this project's environment, the same code the
 # `plak` command runs.
@@ -1126,6 +1127,396 @@ def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
     output_content = github_output.read_text()
     assert output_content.strip() == "version-id=00000000-0000-0000-0000-000000000000"
     assert "super-secret-oidc-jwt" not in output_content
+
+
+# --- action.yml: the composite action's steps, driven against the stub -----
+#
+# No workflow in this repository uses the action, so nothing else ever runs
+# what a publisher's workflow runs. These tests take the shell steps out of
+# action.yml, fill in the ${{ }} expressions the way a runner would, and
+# execute them against the stub server, so the control flow (which step runs
+# for which input combination, which arguments the CLI is handed, which exit
+# code comes out) is exercised rather than read.
+
+REPO_ROOT = ACTION_YML_PATH.resolve().parents[2]
+
+_EXPRESSION = re.compile(r"\$\{\{\s*(.+?)\s*\}\}")
+_COMPARISON = re.compile(r"^(\S+)\s*(==|!=)\s*'([^']*)'$")
+
+
+def _action_definition() -> dict:
+    return yaml.safe_load(ACTION_YML_PATH.read_text(encoding="utf-8"))
+
+
+def _expression_values(inputs: dict[str, str]) -> dict[str, str]:
+    declared = _action_definition()["inputs"]
+    unknown = set(inputs) - set(declared)
+    assert not unknown, f"not an input of the action: {sorted(unknown)}"
+    values = {
+        f"inputs.{name}": inputs.get(name, str(spec.get("default", "")))
+        for name, spec in declared.items()
+    }
+    values["github.action_path"] = str(ACTION_YML_PATH.parent)
+    return values
+
+
+def _render(text: str, values: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        reference = match.group(1)
+        assert reference in values, f"unhandled expression in action.yml: {reference}"
+        return values[reference]
+
+    return _EXPRESSION.sub(replace, text)
+
+
+def _step_runs(condition: str, values: dict[str, str]) -> bool:
+    expression = _EXPRESSION.fullmatch(condition.strip())
+    assert expression, f"unhandled if: in action.yml: {condition}"
+    comparison = _COMPARISON.match(expression.group(1))
+    assert comparison, f"unhandled if: in action.yml: {condition}"
+    left, operator, right = comparison.groups()
+    assert left in values, f"unhandled expression in action.yml: {left}"
+    return (values[left] == right) if operator == "==" else (values[left] != right)
+
+
+class _ActionRun:
+    def __init__(self) -> None:
+        self.returncode = 0
+        self.failed_step: str | None = None
+        self.steps: list[str] = []
+        self.stdout = ""
+        self.stderr = ""
+
+
+def _run_action(inputs: dict[str, str], *, env: dict[str, str], cwd: Path) -> _ActionRun:
+    """Runs the shell steps of action.yml the way a runner would: the ${{ }}
+    expressions filled in, each step's own env applied, the `if:` conditions
+    honoured, and the run stopping at the first step that fails."""
+    values = _expression_values(inputs)
+    run = _ActionRun()
+    for step in _action_definition()["runs"]["steps"]:
+        if "run" not in step:
+            # A `uses:` step (setup-uv); installing uv is the runner's job and
+            # test_action_yml_pins_every_nested_action_to_a_commit_sha covers it.
+            continue
+        if "if" in step and not _step_runs(step["if"], values):
+            continue
+        step_env = dict(os.environ)
+        step_env.pop("PLAK_ACCESS_TOKEN", None)
+        step_env.update({k: _render(str(v), values) for k, v in step.get("env", {}).items()})
+        step_env.update(env)
+        result = subprocess.run(
+            ["bash", "-c", _render(step["run"], values)],
+            env=step_env,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        run.steps.append(step["name"])
+        run.stdout += result.stdout
+        run.stderr += result.stderr
+        if result.returncode != 0:
+            run.returncode = result.returncode
+            run.failed_step = step["name"]
+            break
+    return run
+
+
+@pytest.fixture
+def action_env(host, isolated_cwd) -> dict[str, str]:
+    """A runner with `id-token: write`: the CLI mints its own token per run."""
+    output_path = isolated_cwd / "github_output.txt"
+    output_path.write_text("")
+    return {
+        "ACTIONS_ID_TOKEN_REQUEST_URL": f"{host}/oidc-token",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "runner-bearer",
+        "GITHUB_OUTPUT": str(output_path),
+    }
+
+
+def _action_responder(stub_server, *, deploy=None, remove=None) -> None:
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/nldd/website/deploys": [
+                deploy or _json_step(201, {"versionId": "11111111-2222-3333-4444-555555555555"})
+            ],
+            "/-/api/v1/sites/nldd/website/previews/pr-42": [
+                remove or (lambda _record: (204, None, "text/plain"))
+            ],
+        }
+    )
+
+
+def _deploy_requests(stub_server) -> list[dict]:
+    return [
+        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/nldd/website/deploys"
+    ]
+
+
+def test_action_publishes_live_and_reports_the_version_id(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert run.steps == ["Check OIDC access", "Publish"]
+
+    deploys = _deploy_requests(stub_server)
+    assert len(deploys) == 1
+    assert deploys[0]["method"] == "POST"
+    assert deploys[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
+
+    fields = _parse_multipart(deploys[0]["headers"]["Content-Type"], deploys[0]["body"])
+    assert sorted(fields) == ["file"]
+    with tarfile.open(fileobj=io.BytesIO(fields["file"]["content"]), mode="r:gz") as tar:
+        assert "index.html" in tar.getnames()
+
+    output_path = Path(action_env["GITHUB_OUTPUT"])
+    assert output_path.read_text().strip() == "version-id=11111111-2222-3333-4444-555555555555"
+    assert "oidc-jwt-token" not in output_path.read_text()
+    assert "::add-mask::oidc-jwt-token" in run.stdout
+
+
+def test_action_passes_preview_ref_and_base_path_on_to_the_server(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    """The preview and base-path inputs are optional flags the step only adds
+    when they are filled, so their presence in the request is the proof."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "nldd/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "base-path": "assets",
+        },
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    fields = _parse_multipart(
+        _deploy_requests(stub_server)[0]["headers"]["Content-Type"],
+        _deploy_requests(stub_server)[0]["body"],
+    )
+    assert fields["preview"]["content"] == b"pr-42"
+    assert fields["basePath"]["content"] == b"assets"
+
+
+def test_action_teardown_removes_the_preview_and_publishes_nothing(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    """teardown 'true' switches steps: the Publish step is skipped even with a
+    dist-path filled in, so a closed pull request never deploys once more."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "nldd/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "teardown": "true",
+        },
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert run.steps == ["Check OIDC access", "Remove preview"]
+    assert _deploy_requests(stub_server) == []
+
+    removals = [r for r in stub_server.requests if "/previews/" in r["path"]]
+    assert len(removals) == 1
+    assert removals[0]["method"] == "DELETE"
+    assert removals[0]["path"] == "/-/api/v1/sites/nldd/website/previews/pr-42"
+    assert removals[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
+    assert Path(action_env["GITHUB_OUTPUT"]).read_text() == ""
+
+
+def test_action_refuses_a_teardown_without_a_preview_ref(
+    stub_server, host, isolated_cwd, action_env
+):
+    """The description promises preview-ref becomes required with teardown;
+    without the guard the step would remove nothing and go green."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website", "teardown": "true"},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Remove preview"
+    assert "preview-ref is required when teardown is 'true'" in run.stderr
+    assert stub_server.requests == []
+
+
+def test_action_refuses_a_publish_without_a_dist_path(
+    stub_server, host, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website"}, env=action_env, cwd=isolated_cwd
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Publish"
+    assert "dist-path is required unless teardown is 'true'" in run.stderr
+    assert stub_server.requests == []
+
+
+def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
+    stub_server, host, dist_folder, isolated_cwd
+):
+    """Without `permissions: id-token: write` the two request variables are
+    not in the environment at all. The step has to name that itself: the CLI
+    would otherwise fall through to 'log in with plak login', which is no
+    advice on a runner."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        env={"GITHUB_OUTPUT": str(isolated_cwd / "github_output.txt")},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Check OIDC access"
+    assert run.steps == ["Check OIDC access"]
+    assert "no OIDC token available" in run.stderr
+    assert "id-token: write" in run.stderr
+    assert "enable-openid-connect: true" in run.stderr
+    assert stub_server.requests == []
+
+
+def test_action_fails_the_step_when_the_server_refuses_the_deploy(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    """A refusal from Plak (no trust relation, quota, a broken bundle) has to
+    come out as a failed step. `set -e` plus a non-zero CLI is what carries
+    that; a silent pass would let a workflow report a deploy that never was."""
+    _action_responder(
+        stub_server,
+        deploy=_json_step(
+            403, {"title": "Geen toegang", "detail": "This repository may not publish here."}
+        ),
+    )
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode != 0
+    assert run.failed_step == "Publish"
+    assert "This repository may not publish here." in run.stderr
+    assert Path(action_env["GITHUB_OUTPUT"]).read_text() == ""
+
+
+def test_action_fails_the_teardown_step_when_the_server_refuses_it(
+    stub_server, host, isolated_cwd, action_env
+):
+    _action_responder(
+        stub_server,
+        remove=_json_step(403, {"title": "Geen toegang", "detail": "Not your preview."}),
+    )
+
+    run = _run_action(
+        {"host": host, "site": "nldd/website", "preview-ref": "pr-42", "teardown": "true"},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode != 0
+    assert run.failed_step == "Remove preview"
+    assert "Not your preview." in run.stderr
+
+
+# --- action.yml: one repository reference, in every place that names it ----
+
+
+def _repository_reference() -> str:
+    """publiccode.yml is where this repository declares its own address, and
+    it is the one place kept current for the Standard for Public Code."""
+    url = yaml.safe_load((REPO_ROOT / "publiccode.yml").read_text(encoding="utf-8"))["url"]
+    prefix = "https://github.com/"
+    assert url.startswith(prefix), url
+    return url[len(prefix) :].rstrip("/")
+
+
+# Everything that tells a publisher where the action lives. The generated
+# snippet in the Deploy tab referenced an organization that never existed for
+# months, because nothing read these four files together.
+_REPOSITORY_MENTION = re.compile(
+    r"(?:github\.com/|uses:\s*|marketplace add\s+|['\"])([A-Za-z0-9][\w.-]*/plak)(?=[/@\s'\"`#])"
+)
+
+ACTION_REFERENCE_FILES = (
+    "frontend/src/components/site/TabDeploy.vue",
+    "frontend/src/components/site/TabDeploy.test.ts",
+    "docs/publishing.md",
+    "plugin/skills/plak-publiceren/SKILL.md",
+    "README.md",
+)
+
+
+def test_every_place_that_names_the_action_names_the_same_repository():
+    reference = _repository_reference()
+    found = {}
+    for name in ACTION_REFERENCE_FILES:
+        content = (REPO_ROOT / name).read_text(encoding="utf-8")
+        owners = set(re.findall(_REPOSITORY_MENTION, content))
+        assert owners, f"{name} names the plak repository nowhere any more"
+        found[name] = owners
+    for name, owners in found.items():
+        assert owners == {reference}, f"{name} points at {sorted(owners)}, not {reference}"
+
+
+def test_the_deploy_tab_snippet_and_the_docs_point_at_the_action_path():
+    """github.com/<owner>/<repo>/<path>@<ref>: the action sits in a
+    subdirectory, so the path has to be part of the reference."""
+    reference = _repository_reference()
+    for name in ("frontend/src/components/site/TabDeploy.vue", "docs/publishing.md"):
+        content = (REPO_ROOT / name).read_text(encoding="utf-8")
+        uses = re.findall(r"uses:\s*(\S*/plak/\S+)", content)
+        assert uses, f"{name} has no `uses:` for the action"
+        for value in uses:
+            assert value.startswith(
+                (f"{reference}/actions/publiceer@", f"https://github.com/{reference}/actions/publiceer@")
+            ), f"{name}: {value}"
+
+
+def test_the_generated_snippet_only_uses_inputs_the_action_declares():
+    """A `with:` key the action does not know is silently ignored by the
+    runner, so a renamed input shows up as a deploy that quietly does
+    something else."""
+    declared = set(_action_definition()["inputs"])
+    snippet = (REPO_ROOT / "frontend/src/components/site/TabDeploy.vue").read_text(
+        encoding="utf-8"
+    )
+    blocks = re.findall(
+        r"uses: \S*/plak/actions/publiceer@\S+\n {8}with:\n((?: {10}[\w-]+:.*\n)+)", snippet
+    )
+    assert len(blocks) == 6, "two snippets, three action steps each"
+    for block in blocks:
+        keys = set(re.findall(r"^\s+([\w-]+):", block, re.MULTILINE))
+        assert keys <= declared, sorted(keys - declared)
+        assert {"host", "site"} <= keys
 
 
 # --- plak login: only same-origin URLs, server strings cleaned -------------

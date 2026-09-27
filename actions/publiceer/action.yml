@@ -64,7 +64,10 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+        # ${...:-}: without id-token permission the two variables are not
+        # set at all, and 'set -u' would abort on the bare reference before
+        # the guidance below is ever printed.
+        if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
           exit 0
         fi
         cat >&2 <<'EOF'

@@ -17,6 +17,7 @@ plak = "plak_cli:main"
 dev = [
     "pytest>=8,<9",
     "pytest-cov>=6,<8",
+    "pyyaml>=6,<7",
 ]
 
 [build-system]
