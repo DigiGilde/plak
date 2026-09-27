@@ -6,10 +6,10 @@
   "author": {
     "name": "Plak team",
     "email": "digigilde@rijksoverheid.nl",
-    "url": "https://github.com/minbzk/plak"
+    "url": "https://github.com/DigiGilde/plak"
   },
-  "homepage": "https://github.com/minbzk/plak/blob/main/docs/skill.md",
-  "repository": "https://github.com/minbzk/plak",
+  "homepage": "https://github.com/DigiGilde/plak/blob/beta/docs/skill.md",
+  "repository": "https://github.com/DigiGilde/plak",
   "license": "EUPL-1.2",
   "keywords": ["plak", "publishing", "static-site", "preview", "deploy"]
 }

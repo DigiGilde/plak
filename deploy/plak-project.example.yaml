@@ -181,7 +181,7 @@ deployments:
     components:
       - reference: beheer
         # CI overwrites this on every deploy (upsert-deployment).
-        image: "ghcr.io/minbzk/plak:latest"
+        image: "ghcr.io/digigilde/plak:latest"
         env-vars:
           PLAK_ENVIRONMENT: "productie"
           PLAK_CONTENT_ROOT: "/content"

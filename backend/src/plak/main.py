@@ -176,7 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=API_VERSION,
         contact={
             "name": "Plak",
-            "url": "https://github.com/minbzk/plak/issues",
+            "url": "https://github.com/DigiGilde/plak/issues",
             "email": "digigilde@rijksoverheid.nl",
         },
         servers=[{"url": "/-/api/v1"}],

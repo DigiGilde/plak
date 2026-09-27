@@ -168,7 +168,7 @@ jobs:
 
       - name: Publiceer live
         if: github.event_name == 'push'
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -176,7 +176,7 @@ jobs:
 
       - name: Publiceer preview
         if: github.event_name == 'pull_request'
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ruim preview op
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -253,7 +253,7 @@ jobs:
 
       - name: Publiceer live
         if: github.event_name == 'push'
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -261,7 +261,7 @@ jobs:
 
       - name: Publiceer preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -274,7 +274,7 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Ruim preview op
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -286,7 +286,7 @@ jobs:
 `permissions: id-token: write`. Always pin the action to a commit SHA, not
 to a tag or branch (supply chain requirement, see `docs/security.md`); on
 Forgejo Actions you use the full URL,
-`https://github.com/minbzk/plak/actions/publiceer@<commit-sha>`, because
+`https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>`, because
 Forgejo resolves a short `uses:` against its own `DEFAULT_ACTIONS_URL`, which
 is `https://data.forgejo.org`, not GitHub.
 
@@ -294,7 +294,7 @@ is `https://data.forgejo.org`, not GitHub.
 
 The GitHub form is documented and supported. GitHub's workflow syntax
 documents an action in a subdirectory of a repository as
-`{owner}/{repo}/{path}@{ref}`, so `minbzk/plak/actions/publiceer@<commit-sha>`
+`{owner}/{repo}/{path}@{ref}`, so `DigiGilde/plak/actions/publiceer@<commit-sha>`
 is the ordinary spelling and needs nothing special.
 
 The Forgejo form is **not proven yet**. Forgejo's Actions documentation shows
@@ -302,7 +302,7 @@ a `uses:` with a full URL, and it shows a path inside a repository for
 *reusable workflows*
 (`some-org/some-repo/.forgejo/workflows/reusable.yml@main`), but it does not
 document a subdirectory path for an *action*. Whether
-`https://github.com/minbzk/plak/actions/publiceer@<commit-sha>` resolves is
+`https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>` resolves is
 therefore a question for a real Forgejo runner, not for this document.
 
 One smoke test settles it. On a Forgejo instance with a runner and OIDC
@@ -321,7 +321,7 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Ruim een niet-bestaande preview op
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: nldd/website
@@ -339,7 +339,7 @@ problem (OIDC, linking) and says nothing about the path.
 If it does not work, the fallback is to publish the action as its own small
 repository again, with `action.yml` in its root and a copy of `cli/`, generated from
 this repository so the two cannot drift, and to point Forgejo users at
-`https://github.com/minbzk/plak-actions@<commit-sha>`. The GitHub form in this
+`https://github.com/DigiGilde/plak-actions@<commit-sha>`. The GitHub form in this
 document stays as it is either way.
 
 Some Forgejo instances (for example code.overheid.nl, version 15) send
@@ -669,15 +669,15 @@ the OAuth 2.0 Device Authorization Grant (RFC 8628), without you ever
 entering a password or client secret yourself:
 
 ```bash
-uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"
+uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
 plak login --host https://beheer.plak.example.org
 ```
 
-`<commit-sha>` is a placeholder: fill in a real commit, an unpinned install
-tracks `main` and is not how you should install this. See `README.md` for why
-and for what to pin it to until a tagged release exists; a newer version then
-means reinstalling with a newer commit's SHA, not `uv tool upgrade plak`. From
-a checkout of this repository the same command runs without installing
+`beta` is the default branch, so this installs the latest and
+`uv tool upgrade plak` follows it. Pin to a version tag instead once one
+exists; `README.md` carries both forms, plus the note that the repository
+is private for now and the install needs read access to it. From a
+checkout of this repository the same command runs without installing
 anything:
 `uv run --project cli plak login --host ...`, and so for every command
 below.

@@ -337,7 +337,7 @@ jobs:
 
       - name: Publiceer live
         if: github.event_name == 'push'
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -345,7 +345,7 @@ jobs:
 
       - name: Publiceer preview
         if: github.event_name == 'pull_request'
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -357,7 +357,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ruim preview op
-        uses: minbzk/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -394,7 +394,7 @@ jobs:
 
       - name: Publiceer live
         if: github.event_name == 'push'
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -402,7 +402,7 @@ jobs:
 
       - name: Publiceer preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -415,7 +415,7 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Ruim preview op
-        uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -700,10 +700,10 @@ plak logout
         <nldd-rich-text>
           <p>
             {{ cliInstall[0]
-            }}<nldd-link href="https://github.com/minbzk/plak" data-testid="plak-cli-repo-link"
-              >github.com/minbzk/plak</nldd-link
+            }}<nldd-link href="https://github.com/DigiGilde/plak" data-testid="plak-cli-repo-link"
+              >github.com/DigiGilde/plak</nldd-link
             >{{ cliInstall[1] }}<code>cli/</code>{{ cliInstall[2]
-            }}<code>uv tool install "git+https://github.com/minbzk/plak#subdirectory=cli"</code
+            }}<code>uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"</code
             >{{ cliInstall[3] }}<code>uv tool upgrade plak</code>{{ cliInstall[4]
             }}<code>uv run --project cli plak ...</code>{{ cliInstall[5] }}
           </p>

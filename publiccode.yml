@@ -1,7 +1,7 @@
 publiccodeYmlVersion: "0.4"
 
 name: Plak
-url: https://github.com/minbzk/plak
+url: https://github.com/DigiGilde/plak
 softwareType: standalone/web
 platforms:
   - web

@@ -140,17 +140,22 @@ The CLI lives in `cli/`, a uv project of its own. Install it as a tool
 and the `plak` command is on your `PATH`:
 
 ```bash
-uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"
+uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
 ```
 
-Pin `<commit-sha>` to a real commit; the bare `#subdirectory=cli` form without a
-ref tracks `main`, so a single commit landing there would run on every machine
-that installs or upgrades afterwards. `<commit-sha>` is a placeholder: this
-repository has no remote and no tagged release yet, so there is no fixed ref to
-put here today. Replace it with a version tag once one exists (see
-`cli/uv.lock` for the exact dependencies a given ref installs). To move to a
-newer commit once pinned, reinstall with that commit's SHA; `uv tool upgrade
-plak` re-resolves against the same pinned ref and finds nothing newer.
+That is the latest: `beta` is the default branch, so `uv tool upgrade plak`
+picks up whatever has landed on it. Once a version tag exists, pin instead:
+
+```bash
+uv tool install "git+https://github.com/DigiGilde/plak@<tag>#subdirectory=cli"
+```
+
+There is no tag yet, so `<tag>` is the one thing to fill in. What a branch
+gives up is the guarantee that tomorrow installs what you tested today.
+
+The repository is private for now, so either form needs read access to it
+(`gh auth login`, or an SSH key on your account); without it the install
+fails on the clone, not on the package.
 
 Then log in once per instance and publish:
 

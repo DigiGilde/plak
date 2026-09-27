@@ -507,7 +507,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('host: https://plak.test');
     expect(snippet).toContain('site: nldd/website');
-    expect(snippet).toContain('minbzk/plak/actions/publiceer@<commit-sha>');
+    expect(snippet).toContain('DigiGilde/plak/actions/publiceer@<commit-sha>');
     expect(snippet).toContain('id-token: write');
     expect(snippet).toContain('branches: [main]');
     expect(snippet).toContain('preview-ref: pr-${{ github.event.pull_request.number }}');
@@ -525,7 +525,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('enable-openid-connect: true');
-    expect(snippet).toContain('uses: https://github.com/minbzk/plak/actions/publiceer@<commit-sha>');
+    expect(snippet).toContain('uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>');
     expect(snippet).toContain('runs-on: docker');
     expect(snippet).not.toContain('secrets.');
   });
@@ -549,7 +549,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     await untilIdle();
 
     const cliLink = wrapper.find('[data-testid="plak-cli-repo-link"]');
-    expect(cliLink.attributes('href')).toBe('https://github.com/minbzk/plak');
+    expect(cliLink.attributes('href')).toBe('https://github.com/DigiGilde/plak');
 
     const linkCliLink = wrapper.find('[data-testid="cli-link-link"]');
     expect(linkCliLink.attributes('href')).toBe('/cli-link');

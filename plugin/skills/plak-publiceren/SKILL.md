@@ -147,11 +147,11 @@ Then do not go on until the terminal shows "Logged in as ...".
    `http://beheer.plak.localhost:8080` too), `127.0.0.0/8` and `[::1]`. Any
    other host without https is refused before anything is sent. If `plak` is
    not there yet, install it with
-   `uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"`
-   (`<commit-sha>` is a placeholder to fill in; an unpinned install tracks
-   `main` and is not how you should install this. Pinned to a commit until a
-   tagged release exists; upgrading means reinstalling with a newer commit's
-   SHA). When you work in a checkout of that repository, `uv run --project cli
+   `uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"`
+   (`beta` is the default branch, so that installs the latest; pin to a
+   version tag instead once one exists. The repository is private for now,
+   so the install needs read access to it and otherwise fails on the
+   clone). When you work in a checkout of that repository, `uv run --project cli
    plak ...` runs it without installing.
 2. **Look at the build.** Plak does not serve on the root of the host, so the
    build has to know the right base path: `/{group}/{site}/` for live,
@@ -303,10 +303,10 @@ Do not copy the API out here; point at it and read it when it matters.
 
 ## Installing this skill
 
-The skill ships as the `plak` plugin of the `minbzk/plak` repository:
+The skill ships as the `plak` plugin of the `DigiGilde/plak` repository:
 
 ```
-/plugin marketplace add minbzk/plak
+/plugin marketplace add DigiGilde/plak
 /plugin install plak@plak
 ```
 

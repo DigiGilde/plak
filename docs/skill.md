@@ -19,7 +19,7 @@ plugin/
 In Claude Code:
 
 ```text
-/plugin marketplace add minbzk/plak
+/plugin marketplace add DigiGilde/plak
 /plugin install plak@plak
 ```
 
@@ -32,12 +32,12 @@ the site you publish, not for this repository.
 The skill needs the `plak` CLI on your PATH:
 
 ```bash
-uv tool install "git+https://github.com/minbzk/plak@<commit-sha>#subdirectory=cli"
+uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
 ```
 
-`<commit-sha>` is a placeholder to fill in yourself; a bare install without a
-ref tracks `main` and is not how you should install this. See `README.md` for
-why, and for what to pin it to until a tagged release exists.
+`beta` is the default branch, so this installs the latest. Pin to a version
+tag instead once one exists; `README.md` has both forms and the note that
+the repository is private for now.
 
 ## What the skill does
 

@@ -376,8 +376,8 @@ the day it is there.
 - [ ] **Turn on private vulnerability reporting** (Settings, Security). Without
   that, `/security/advisories/new` gives a 404.
 - [ ] **Complete `security.txt`** in `backend/src/plak/platform/security_txt.py`:
-  `Contact: https://github.com/minbzk/plak/security/advisories/new` as the
-  *first* `Contact`, plus `Policy: https://github.com/minbzk/plak/blob/main/SECURITY.md`.
+  `Contact: https://github.com/DigiGilde/plak/security/advisories/new` as the
+  *first* `Contact`, plus `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`.
   After that, remove the block about the missing advisory line in `SECURITY.md`.
 - [ ] **Branch protection on `main`** with the required checks `ci / backend`,
   `ci / frontend` and `ci / vulnerabilities`. Only then is the test gate in
