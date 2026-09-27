@@ -35,6 +35,11 @@ def codeql() -> dict:
     return _load("codeql.yml")
 
 
+@pytest.fixture(scope="module")
+def plugin() -> dict:
+    return _load("plugin.yml")
+
+
 class TestTheCheckGate:
     def test_production_waits_for_the_checks(self, deploy) -> None:
         """BIO2 8.31.02: significant changes are tested before they go to
@@ -182,6 +187,17 @@ class TestTheScans:
                     ref = uses.split("@")[1]
                     assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), uses
 
+    def test_every_push_trigger_names_the_default_branch(self) -> None:
+        """A push trigger on a branch that does not exist is a workflow that
+        never fires, and nothing reports that: the run list simply stays
+        empty. `main` is the branch that does not exist yet, so every push
+        trigger has to name `beta` as well, whatever else it lists."""
+        for path in sorted(WORKFLOWS.glob("*.yml")):
+            push = _load(path.name)[True].get("push")
+            if push is None:
+                continue
+            assert "beta" in push["branches"], path.name
+
 
 class TestCodeQL:
     def test_it_is_its_own_workflow_with_a_weekly_run(self, codeql) -> None:
@@ -238,3 +254,25 @@ class TestCodeQL:
             if str(s.get("uses", "")).startswith("github/codeql-action/")
         }
         assert len(refs) == 1
+
+
+class TestThePluginManifests:
+    def test_it_runs_on_pull_requests_and_on_the_default_branch(self, plugin) -> None:
+        """Validating `plugin/` has nothing to do with the production branch,
+        so the push half follows the default branch, as codeql.yml does. It
+        stood at `main` and therefore never fired; the pull request half has
+        been running all along."""
+        triggers = plugin[True]
+        assert set(triggers) == {"pull_request", "push", "workflow_dispatch"}
+        assert triggers["push"]["branches"] == ["beta"]
+
+    def test_both_halves_watch_the_same_paths(self, plugin) -> None:
+        """A path filter that differs per event makes a push and its own pull
+        request disagree about whether the check applies."""
+        triggers = plugin[True]
+        assert triggers["pull_request"]["paths"] == triggers["push"]["paths"]
+        assert set(triggers["push"]["paths"]) == {
+            "plugin/**",
+            ".claude-plugin/**",
+            ".github/workflows/plugin.yml",
+        }

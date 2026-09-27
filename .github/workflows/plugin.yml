@@ -16,8 +16,11 @@ on:
       - "plugin/**"
       - ".claude-plugin/**"
       - ".github/workflows/plugin.yml"
+  # The default branch, as in codeql.yml. This said `main` for a while, a
+  # branch that does not exist, so the push half never fired. Validating a
+  # manifest has nothing to do with the production branch.
   push:
-    branches: [main]
+    branches: [beta]
     paths:
       - "plugin/**"
       - ".claude-plugin/**"
