@@ -252,8 +252,13 @@ jobs:
           # is a few hundred commits, a second of fetching.
           fetch-depth: 0
 
+      # go install lands the binary in GOPATH/bin, which is not on PATH in
+      # the next step. Adding it there beats calling gitleaks by full path
+      # in every scan below.
       - name: Gitleaks installeren
-        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Werkboom scannen op geheimen
         run: gitleaks dir . --redact --no-banner
