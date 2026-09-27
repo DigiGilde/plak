@@ -3,7 +3,7 @@
 # context is the repo root (dev/compose.yml: context ".."), because the
 # image bundles the built admin SPA from frontend/ alongside the backend.
 # docker.io/library/node:22-bookworm-slim
-FROM docker.io/library/node@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS spa
+FROM docker.io/library/node@sha256:a723b54c35a76e947095a20a67d39585bb09c862e6b1adeb8a9f518f95e34fb0 AS spa
 
 WORKDIR /spa
 
