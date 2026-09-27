@@ -35,6 +35,19 @@ class TestTheCheckGate:
         to production, tested or not."""
         assert deploy["jobs"]["productie"]["needs"] == ["ci", "bouw"]
 
+    def test_a_push_to_beta_builds_an_image_without_deploying(self, deploy) -> None:
+        """There is no production environment yet and no main branch, so a
+        push to the default branch exists to produce a container package to
+        roll out by hand. The checks run with it, because deploy.yml calls
+        them; production stays bound to main and does not fire."""
+        assert deploy[True]["push"]["branches"] == ["main", "beta"]
+        assert deploy["jobs"]["productie"]["if"] == (
+            "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+        )
+        assert deploy["jobs"]["preview"]["if"].startswith(
+            "github.event_name == 'pull_request'"
+        )
+
     def test_the_checks_are_called_rather_than_triggered(self, ci, deploy) -> None:
         """You cannot pass a standalone workflow as `needs`. Calling it is
         the only form in which the gate is technically enforceable, and it
