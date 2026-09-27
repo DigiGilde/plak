@@ -355,7 +355,7 @@ unnecessary at once.
 
 | Item | Status |
 |---|---|
-| DPIA | planned, prerequisite for production go-live |
+| DPIA | planned, prerequisite for production go-live; `docs/privacy.md` is the draft starting point |
 | Pentest | planned, prerequisite for production go-live |
 
 ### Account separation can come back on a database of our own

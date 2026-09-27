@@ -216,6 +216,8 @@ remote yet, so those are preparatory.
 - `docs/skill.md`: the Claude Code plugin in `plugin/`: installing it,
   what the skill does, and running its evals.
 - `docs/security.md`: the living security checklist.
+- `docs/privacy.md`: draft starting point for the DPIA, personal data
+  processed and open privacy items.
 - `docs/local-development.md`: dev stack, justfile, Testcontainers.
 - `docs/deploying-on-zad.md`: the step-by-step guide for the rollout on
   ZAD.
