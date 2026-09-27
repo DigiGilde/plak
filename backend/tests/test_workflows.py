@@ -28,6 +28,11 @@ def deploy() -> dict:
     return _load("deploy.yml")
 
 
+@pytest.fixture(scope="module")
+def codeql() -> dict:
+    return _load("codeql.yml")
+
+
 class TestTheCheckGate:
     def test_production_waits_for_the_checks(self, deploy) -> None:
         """BIO2 8.31.02: significant changes are tested before they go to
@@ -158,9 +163,15 @@ class TestTheScans:
             assert step["with"]["severity"] == "CRITICAL,HIGH"
             assert step["with"]["trivyignores"] == ".trivyignore.yaml"
 
-    def test_every_third_party_action_is_pinned_to_a_sha(self, ci, deploy) -> None:
-        """A tag can be moved, a commit cannot."""
-        for workflow in (ci, deploy):
+    def test_every_third_party_action_is_pinned_to_a_sha(self) -> None:
+        """A tag can be moved, a commit cannot. Over every workflow in the
+        directory rather than a hand-kept list, so a new one is covered the
+        moment it lands."""
+        paths = sorted(WORKFLOWS.glob("*.yml"))
+        assert [p.name for p in paths] == ["ci.yml", "codeql.yml", "deploy.yml", "plugin.yml"]
+
+        for path in paths:
+            workflow = _load(path.name)
             for job in workflow["jobs"].values():
                 for step in job.get("steps", []):
                     uses = step.get("uses")
@@ -168,3 +179,60 @@ class TestTheScans:
                         continue
                     ref = uses.split("@")[1]
                     assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), uses
+
+
+class TestCodeQL:
+    def test_it_is_its_own_workflow_with_a_weekly_run(self, codeql) -> None:
+        """ci.yml is `workflow_call` only, and a called workflow carries no
+        schedule of its own. CodeQL needs one: the queries and the
+        advisories move while the code stands still."""
+        triggers = codeql[True]
+        assert set(triggers) == {"pull_request", "push", "schedule"}
+        assert triggers["push"]["branches"] == ["beta"]
+        assert len(triggers["schedule"]) == 1
+        assert triggers["schedule"][0]["cron"].endswith(" * * 0")
+
+    def test_the_write_permission_sits_on_the_job(self, codeql) -> None:
+        """Same split as `herkomst` in deploy.yml: the permission to write
+        into the security tab is not handed to the whole file."""
+        assert codeql["permissions"] == {"contents": "read"}
+        assert codeql["jobs"]["analyse"]["permissions"] == {
+            "contents": "read",
+            "security-events": "write",
+        }
+
+    def test_all_three_languages_are_analysed_without_a_build(self, codeql) -> None:
+        """The languages GitHub detects here, none of them compiled. A
+        build step would mean running project code, and `build-mode: none`
+        is what keeps this job away from it.
+
+        These add three checks for branch protection: `CodeQL / Analyse
+        (actions)`, `CodeQL / Analyse (javascript-typescript)` and
+        `CodeQL / Analyse (python)`.
+        """
+        job = codeql["jobs"]["analyse"]
+        assert job["strategy"]["matrix"]["language"] == [
+            "actions",
+            "javascript-typescript",
+            "python",
+        ]
+        assert job["strategy"]["fail-fast"] is False
+
+        init = next(s for s in job["steps"] if "codeql-action/init" in str(s.get("uses", "")))
+        assert init["with"]["build-mode"] == "none"
+        assert init["with"]["languages"] == "${{ matrix.language }}"
+
+        analyze = next(
+            s for s in job["steps"] if "codeql-action/analyze" in str(s.get("uses", ""))
+        )
+        assert analyze["with"]["category"] == "/language:${{ matrix.language }}"
+
+    def test_init_and_analyze_are_the_same_version(self, codeql) -> None:
+        """Two halves of one action; a mixed pair is a support matrix
+        nobody tests."""
+        refs = {
+            s["uses"].split("@")[1]
+            for s in codeql["jobs"]["analyse"]["steps"]
+            if str(s.get("uses", "")).startswith("github/codeql-action/")
+        }
+        assert len(refs) == 1

@@ -1,0 +1,74 @@
+# GitHub's own static analysis, on the three languages CodeQL finds in
+# this repository: the Python of backend/ and cli/, the TypeScript and
+# JavaScript of frontend/ and e2e/, and the workflows in this directory.
+# None of them is compiled, so all three run with `build-mode: none`: the
+# database is built from the sources and nothing here executes project
+# code or its dependencies.
+#
+# Not a job in ci.yml, on purpose. ci.yml has no trigger but
+# `workflow_call` and is called by deploy.yml, and a called workflow
+# cannot carry a `schedule` of its own. A weekly run is the whole point
+# of CodeQL next to the other gates: the queries and the advisories move
+# while the code stands still, so a commit that was clean in March is not
+# clean by definition in September. Putting it in ci.yml would also make
+# every deploy wait on it.
+#
+# The query set is the default one. Widening it (security-extended) or
+# narrowing it is a decision to take on findings, not in advance.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [beta]
+  schedule:
+    # Sunday 04:17 UTC. Off the hour, because the whole world schedules
+    # on it and the runner queue shows it.
+    - cron: "17 4 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    name: Analyse (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # `security-events: write` sits here rather than at the top of the
+    # file: it is the permission to write into this repository's security
+    # tab, and only this job uploads results. Same split as `herkomst` in
+    # deploy.yml, see "Where `id-token: write` may sit" in
+    # docs/security.md.
+    #
+    # `actions: read` and `packages: read` from GitHub's template are
+    # deliberately absent: the first is only needed on a private
+    # repository, the second only for CodeQL packs from a private
+    # registry, and this repository uses neither.
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: CodeQL initialiseren
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: CodeQL-analyse draaien
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:${{ matrix.language }}
