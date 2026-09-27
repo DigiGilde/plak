@@ -369,10 +369,38 @@ point, not a prerequisite.
 
 ## Pre-production / open points
 
+### Proving trusted publishing end to end, deliberately postponed
+
+Everything about CI trusted publishing is verified by reading the code and by
+tests with tokens we mint ourselves. A workflow could prove the real chain:
+bring up the e2e stack, seed a `site_repositories` row for this repository,
+request a genuine GitHub OIDC token with that stack's base URL as the audience,
+run `actions/publiceer`, and fetch the published page back.
+
+Decided on 2026-09-27 not to build it yet, and the reason is the permission
+rather than the work. A job with `id-token: write` can request a token for any
+audience it likes, not only the throwaway stack. That token carries this
+repository's real numeric id, so any Plak installation holding a
+`site_repositories` row for this repository would accept it. Today that is no
+installation, so the blast radius is empty. It stops being empty the day Plak
+publishes its own site or docs through Plak, which is the obvious first use.
+
+So: build it when something trusts this repository, not before. Until then the
+permission would exist for a proof about a chain nobody uses. When it is built,
+it belongs in a workflow of its own, manual and scheduled rather than a gate
+(a fork or a Dependabot run gets no OIDC token, so it could only ever go red
+after a merge), and that file must be the only place `id-token: write` appears.
+Not the `e2e` job: that one runs `npm ci` twice and a `uv sync`, which would put
+the token within reach of the whole dependency tree.
+
+The negative cases stay where they are, in `backend/tests/test_deploy_api.py`:
+GitHub will not issue a token for a repository you do not own, so a wrong
+repository, a wrong audience or a wrong event cannot be produced for real.
+
 ### As soon as the repo has a GitHub remote
 
-The repo has no remote yet. This is ready but waits on that; work through it on
-the day it is there.
+The remote is `https://github.com/DigiGilde/plak`, private, default branch
+`beta`, first pushed on 2026-09-27. Work through what is left.
 
 - [ ] **Turn on private vulnerability reporting** (Settings, Security). Without
   that, `/security/advisories/new` gives a 404.
