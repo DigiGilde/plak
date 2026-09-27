@@ -345,12 +345,12 @@ unnecessary at once.
 | Lockfiles (uv.lock, package-lock.json) | implemented |
 | Vulnerability scan on dependencies | done: the CI job `vulnerabilities` runs pip-audit on the exported lockfile and npm audit on the frontend, locally via `just scan`. Accepted findings sit in `.trivyignore.yaml` with a date and a motivation and come back by themselves on that date |
 | SBOM per image | done: `deploy.yml` generates a CycloneDX SBOM with trivy and keeps it 90 days as an artefact |
-| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `herkomst`, not in `bouw`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public |
+| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `herkomst`, not in `bouw`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public, which it is since 2026-09-27; going private again would take it away |
 | Updating dependencies | done: `.github/dependabot.yml` follows github-actions, uv, npm (frontend and e2e) and docker (both Containerfiles), weekly and grouped. A dependabot PR gets no preview environment but does go through the test gate |
-| Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `productie` hangs on `needs: [ci, bouw]`. Open: branch protection with the checks `ci / backend`, `ci / frontend` and `ci / vulnerabilities` as soon as the repo has a remote |
+| Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `productie` hangs on `needs: [ci, bouw]`. Open: branch protection on `beta` with the eight `ci /` checks and the three `CodeQL /` checks as required, see the checklist below |
 | Static analysis in CI | done: `codeql.yml` runs CodeQL over `actions`, `javascript-typescript` and `python`, each with `build-mode: none`, on every pull request, on a push to `beta` and weekly. Its own workflow and not a job in `ci.yml`, because a called workflow carries no schedule; `security-events: write` sits on the analyse job alone. Findings land in the security tab; the analyse job itself only goes red on an analysis that breaks. What can go red on a pull request is the separate `Code scanning results / CodeQL` check GitHub adds, on newly introduced alerts above the threshold in Settings |
 | Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `bouw`, so nothing gets deployed |
-| `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. Open: the GitHub advisory as the first `Contact` as soon as the repo has a remote |
+| `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. Open: the GitHub advisory as the first `Contact`, now that private vulnerability reporting is on; see the checklist below |
 
 ## Production prerequisites (organisational)
 
@@ -417,32 +417,57 @@ as a job output, so the split cannot make the two disagree about which image
 was attested. `backend/tests/test_workflows.py` holds both halves of that in
 place.
 
-What this is worth today is a fair question: the repository is private, nothing
-deploys to production and no Plak installation trusts it, so the blast radius
-is empty. It is separated now because it is cheap now (one job, one artefact
-that was already being uploaded) and because the alternative is remembering to
-do it on the day the radius stops being empty.
+What this is worth today is a fair question: nothing deploys to production and
+no Plak installation trusts this repository, so the blast radius is empty. It
+is separated now because it is cheap now (one job, one artefact that was
+already being uploaded) and because the alternative is remembering to do it on
+the day the radius stops being empty.
 
-### As soon as the repo has a GitHub remote
+### Now the repo is on GitHub
 
-The remote is `https://github.com/DigiGilde/plak`, private, default branch
-`beta`, first pushed on 2026-09-27. Work through what is left.
+The remote is `https://github.com/DigiGilde/plak`, first pushed on 2026-09-27
+and public since the same day, default branch `beta`. Work through what is
+left. Everything still unticked below is a repository setting, so it is a click
+in Settings and not a change in this repository.
 
-- [ ] **Turn on private vulnerability reporting** (Settings, Security). Without
-  that, `/security/advisories/new` gives a 404.
+- [x] **The first run of `ci.yml` and `deploy.yml`.** `ci.yml` is green on
+  `beta` with all eight jobs (`backend`, `cli`, `frontend`, `e2e`,
+  `pre-commit`, `secret-scan`, `containers`, `vulnerabilities`). `deploy.yml`
+  builds and pushes the image, but has never completed a deploy: `productie`
+  hangs on a push to `main` and there is no environment to deploy to yet.
+- [x] **Dependabot has delivered its first round** for every ecosystem
+  (github-actions, uv for `backend` and `cli`, npm for `frontend` and `e2e`,
+  pre-commit, docker), and a dependabot pull request gets the test gate but no
+  preview environment, as intended.
+- [x] **Secret scanning and push protection.** GitHub switched both on itself
+  when the repository became public.
+- [x] **Private vulnerability reporting** is on, so
+  `/security/advisories/new` no longer answers a 404.
+- [ ] **Go through the first CodeQL run.** A local run of the same three
+  analyses on 2026-09-27 reported eleven Python and four TypeScript findings,
+  none in `actions`. They are triage, not a gate; the query set stays the
+  default one, and a finding is answered or dismissed with a reason, never
+  made quiet by narrowing the queries.
+- [ ] **Turn on Dependabot security updates**
+  (`dependabot_security_updates`, Settings, Code security). Dependabot opens
+  version updates today; without this it does not open a pull request for an
+  advisory out of the weekly rhythm.
+- [ ] **Turn on the two extra secret-scanning options**
+  (`secret_scanning_non_provider_patterns` and
+  `secret_scanning_validity_checks`, Settings, Code security). The first
+  catches keys of providers GitHub has no partner pattern for, the second says
+  whether a leaked token is still live.
+- [ ] **Branch protection on `beta`**, which is the default branch, with the
+  required checks `ci / backend`, `ci / cli`, `ci / frontend`, `ci / e2e`,
+  `ci / pre-commit`, `ci / secret-scan`, `ci / containers`,
+  `ci / vulnerabilities` and `CodeQL / Analyse (actions)`,
+  `CodeQL / Analyse (javascript-typescript)`, `CodeQL / Analyse (python)`.
+  Only then is the test gate in `deploy.yml` also closed for a direct push.
+  The rule moves along to `main` on the day production exists.
 - [ ] **Complete `security.txt`** in `backend/src/plak/platform/security_txt.py`:
   `Contact: https://github.com/DigiGilde/plak/security/advisories/new` as the
   *first* `Contact`, plus `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`.
   After that, remove the block about the missing advisory line in `SECURITY.md`.
-- [ ] **Branch protection on `main`** with the required checks `ci / backend`,
-  `ci / frontend` and `ci / vulnerabilities`. Only then is the test gate in
-  `deploy.yml` also closed for a direct push.
-- [ ] **Go through the first run of `ci.yml` and `deploy.yml`.** They have never
-  run; `actionlint` and `test_workflows.py` check the wiring, not the
-  execution.
-- [ ] **Check dependabot**: the first round of PRs has to come in for all four
-  ecosystems (actions, uv, npm, docker), and a dependabot PR should not get a
-  preview environment.
 
 What still has to be filled in or built cluster-specifically before this can go
 to production. The deploy itself is a declarative ZAD project file plus

@@ -1,7 +1,9 @@
-"""The gates in .github/workflows, pinned down because they have never run.
+"""The gates in .github/workflows, pinned down here rather than on GitHub.
 
-The repo has no remote, so GitHub has never seen these files. Until that
-changes, this is the only place where the wiring gets checked.
+They run there now, but a green run says the wiring held for that event;
+it says nothing about the events that did not fire. Which job gates what,
+which permission sits where and that every action is on a commit SHA is
+checked here, on every commit.
 """
 
 from __future__ import annotations
