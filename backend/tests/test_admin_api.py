@@ -1058,6 +1058,30 @@ class TestGroupMembers:
         )
         assert response.status_code == 409
 
+    async def test_an_unverified_email_does_not_resolve_to_a_member(self, client, app, data, factory):
+        """Someone whose IdP profile carries an unverified alice@ visits beheer
+        before Alice does: adding "alice@" must not pick that person."""
+        set_session_cookie(client, app, sub="aanvaller", email="alice@example.nl", email_verified=False)
+        assert (await client.get(f"{BASE}/me")).status_code == 200
+
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.post(
+            f"{BASE}/groups/team/members", json={"identifier": "alice@example.nl"}, headers=headers
+        )
+        assert response.status_code == 404
+        assert response.json()["code"] == "UNKNOWN_MEMBER"
+
+        set_session_cookie(client, app, sub="alice", email="alice@example.nl", email_verified=True)
+        assert (await client.get(f"{BASE}/me")).status_code == 200
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.post(
+            f"{BASE}/groups/team/members", json={"identifier": "alice@example.nl"}, headers=headers
+        )
+        assert response.status_code == 201
+        async with factory() as db:
+            added = await db.get(Member, uuid.UUID(response.json()["memberId"]))
+        assert added.sso_subject == "alice"
+
     async def test_removal_by_id_is_404_for_an_unknown_id_and_a_non_member(
         self, client, app, data
     ):

@@ -39,6 +39,10 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
     (idempotent promotion).
     """
     is_bootstrap = bool(bootstrap_sub) and session.sub == bootstrap_sub
+    # Only an address the IdP vouched for is stored: adding a member with a
+    # role resolves an email to a member (api/admin.py), and an unverified
+    # claim is whatever someone typed into their IdP profile.
+    verified_email = (session.email or "").lower() if session.email_verified else ""
 
     result = await db.execute(select(Member).where(Member.sso_subject == session.sub))
     member = result.scalar_one_or_none()
@@ -46,7 +50,7 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
     if member is None:
         member = Member(
             sso_subject=session.sub,
-            email=(session.email or "").lower(),
+            email=verified_email,
             platform_role=PlatformRole.ADMIN if is_bootstrap else PlatformRole.MEMBER,
             status=MemberStatus.ACTIVE,
             last_login_at=datetime.now(UTC),
@@ -65,6 +69,8 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
     if is_bootstrap and (member.platform_role != PlatformRole.ADMIN or member.status != MemberStatus.ACTIVE):
         member.platform_role = PlatformRole.ADMIN
         member.status = MemberStatus.ACTIVE
+    if not member.email and verified_email:
+        member.email = verified_email
     member.last_login_at = datetime.now(UTC)
     await db.commit()
     return member

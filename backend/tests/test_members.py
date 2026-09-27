@@ -161,6 +161,40 @@ class TestRequireActiveMember:
         assert members[0].email == "gebruiker@example.nl"
 
 
+    async def test_an_unverified_email_is_not_stored(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app, email="alice@example.nl", email_verified=False)
+            assert (await client.get("/admin")).status_code == 200
+        members = await _members(factory)
+        assert members[0].email == ""
+
+    async def test_a_later_verified_email_fills_the_gap(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app, email="alice@example.nl", email_verified=False)
+            await client.get("/admin")
+            set_session_cookie(client, app, email="Gebruiker@Example.NL", email_verified=True)
+            await client.get("/admin")
+        members = await _members(factory)
+        assert [member.email for member in members] == ["gebruiker@example.nl"]
+
+    async def test_a_stored_email_is_not_replaced_by_a_later_login(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app, email="gebruiker@example.nl", email_verified=True)
+            await client.get("/admin")
+            set_session_cookie(client, app, email="ander@example.nl", email_verified=True)
+            await client.get("/admin")
+            set_session_cookie(client, app, email="alice@example.nl", email_verified=False)
+            await client.get("/admin")
+        members = await _members(factory)
+        assert [member.email for member in members] == ["gebruiker@example.nl"]
+
+
 class TestBootstrap:
     async def test_bootstrap_sub_becomes_direct_admin_and_active(self, idp, db_environment):
         _, factory = db_environment
