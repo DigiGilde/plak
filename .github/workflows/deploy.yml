@@ -1,6 +1,9 @@
-# Preparatory: the repo has no remote yet, so this workflow has never run.
-# It records how Plak will end up on ZAD: build and push the image, then
-# deploy with zad-actions.
+# How Plak ends up on ZAD: build and push the image, then deploy with
+# zad-actions. Only the first half runs today. A push to `beta` builds and
+# pushes an image; no deploy has ever completed, because `productie` hangs
+# on `main`, which does not exist, and there is no environment to deploy
+# to. So the second half is still written for a situation that has to be
+# created, not one that has been observed.
 #
 # Needed in advance, outside this file:
 #   - repository secret ZAD_API_KEY (to create in the ZAD portal);
@@ -155,7 +158,9 @@ jobs:
   # rather than in front of them; a deploy does not wait on it.
   #
   # Attestations on a private repository need GitHub Enterprise Cloud; on
-  # the Free plan they only work once the repository is public.
+  # the Free plan they work only while the repository is public, which it
+  # is since 2026-09-27. Available, not yet exercised: every run so far
+  # skipped this job with `bouw`, so no attestation exists to verify.
   herkomst:
     needs: bouw
     runs-on: ubuntu-latest

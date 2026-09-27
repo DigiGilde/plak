@@ -28,10 +28,11 @@ Read this before you use anything here.
   brokers to SSO Rijk. Everything environment specific is
   configurable, but no other platform and no other OIDC provider has
   been tried. If you run it elsewhere, you are the first.
-- **Reporting.** Security issues go to `digigilde@rijksoverheid.nl`,
-  privately, never through a public issue; `SECURITY.md` has the
-  procedure. Everything else belongs in the issue tracker of this
-  repository, as soon as it is public.
+- **Reporting.** Security issues go through
+  [a private security advisory](https://github.com/DigiGilde/plak/security/advisories/new)
+  or to `digigilde@rijksoverheid.nl`, never through a public issue;
+  `SECURITY.md` has the procedure. Everything else belongs in the issue
+  tracker of this repository.
 - **Licence.** EUPL-1.2 (see `LICENSE` and `publiccode.yml`). That
   licence grants the software as is, without warranty of any kind and
   without liability, to the extent the law allows.
@@ -148,9 +149,7 @@ uv tool install "git+https://github.com/DigiGilde/plak@<tag>#subdirectory=cli"
 There is no tag yet, so `<tag>` is the one thing to fill in. What a branch
 gives up is the guarantee that tomorrow installs what you tested today.
 
-The repository is private for now, so either form needs read access to it
-(`gh auth login`, or an SSH key on your account); without it the install
-fails on the clone, not on the package.
+The repository is public, so either form clones without credentials.
 
 Then log in once per instance and publish:
 
@@ -199,8 +198,9 @@ serves content, the admin SPA and the host separation itself.
 `deploy/plak-project.example.yaml` is the project file with comments,
 `docs/deploying-on-zad.md` the step-by-step guide from nothing to
 running plus the open questions for the platform team.
-`.github/workflows/` holds the CI and deploy workflows; the repo has no
-remote yet, so those are preparatory.
+`.github/workflows/` holds the CI and deploy workflows. The checks run on
+every commit; the rollout half is still preparatory, because there is no
+ZAD environment to deploy to yet.
 
 ## Documentation
 

@@ -1,7 +1,7 @@
-# Preparatory: the repo has no remote yet, so this workflow has never run.
-# It describes the gates that `just lint`, `just test` and the frontend
-# build already enforce locally, so they run along once the repo is on a
-# GitHub remote.
+# The gates that `just lint`, `just test` and the frontend build already
+# enforce locally, run again on the server. Written before the repo had a
+# remote, which is why it follows the local commands rather than the other
+# way round; it is green on `beta` with all eight jobs.
 #
 # This workflow has no trigger of its own: deploy.yml calls it, so a
 # deploy cannot bypass the gate and the checks run once per commit

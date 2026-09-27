@@ -675,8 +675,8 @@ plak login --host https://beheer.plak.example.org
 
 `beta` is the default branch, so this installs the latest and
 `uv tool upgrade plak` follows it. Pin to a version tag instead once one
-exists; `README.md` carries both forms, plus the note that the repository
-is private for now and the install needs read access to it. From a
+exists; `README.md` carries both forms. The repository is public, so the
+install needs no credentials. From a
 checkout of this repository the same command runs without installing
 anything:
 `uv run --project cli plak login --host ...`, and so for every command

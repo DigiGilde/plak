@@ -149,9 +149,8 @@ Then do not go on until the terminal shows "Logged in as ...".
    not there yet, install it with
    `uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"`
    (`beta` is the default branch, so that installs the latest; pin to a
-   version tag instead once one exists. The repository is private for now,
-   so the install needs read access to it and otherwise fails on the
-   clone). When you work in a checkout of that repository, `uv run --project cli
+   version tag instead once one exists. The repository is public, so the
+   install needs no credentials). When you work in a checkout of that repository, `uv run --project cli
    plak ...` runs it without installing.
 2. **Look at the build.** Plak does not serve on the root of the host, so the
    build has to know the right base path: `/{group}/{site}/` for live,

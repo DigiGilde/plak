@@ -350,7 +350,7 @@ unnecessary at once.
 | Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `productie` hangs on `needs: [ci, bouw]`. Open: branch protection on `beta` with the eight `ci /` checks and the three `CodeQL /` checks as required, see the checklist below |
 | Static analysis in CI | done: `codeql.yml` runs CodeQL over `actions`, `javascript-typescript` and `python`, each with `build-mode: none`, on every pull request, on a push to `beta` and weekly. Its own workflow and not a job in `ci.yml`, because a called workflow carries no schedule; `security-events: write` sits on the analyse job alone. Findings land in the security tab; the analyse job itself only goes red on an analysis that breaks. What can go red on a pull request is the separate `Code scanning results / CodeQL` check GitHub adds, on newly introduced alerts above the threshold in Settings |
 | Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `bouw`, so nothing gets deployed |
-| `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. Open: the GitHub advisory as the first `Contact`, now that private vulnerability reporting is on; see the checklist below |
+| `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. The GitHub advisory form is the first `Contact` and `SECURITY.md` the first `Policy`, both reachable since the repository went public with private vulnerability reporting on |
 
 ## Production prerequisites (organisational)
 
@@ -464,10 +464,12 @@ in Settings and not a change in this repository.
   `CodeQL / Analyse (javascript-typescript)`, `CodeQL / Analyse (python)`.
   Only then is the test gate in `deploy.yml` also closed for a direct push.
   The rule moves along to `main` on the day production exists.
-- [ ] **Complete `security.txt`** in `backend/src/plak/platform/security_txt.py`:
-  `Contact: https://github.com/DigiGilde/plak/security/advisories/new` as the
-  *first* `Contact`, plus `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`.
-  After that, remove the block about the missing advisory line in `SECURITY.md`.
+- [x] **`security.txt` is complete.**
+  `Contact: https://github.com/DigiGilde/plak/security/advisories/new` leads the
+  `Contact` lines and `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`
+  the `Policy` lines, in `backend/src/plak/platform/security_txt.py`;
+  `SECURITY.md` names the same two routes. Going private again would make both
+  answer a 404, so they move along with the visibility.
 
 What still has to be filled in or built cluster-specifically before this can go
 to production. The deploy itself is a declarative ZAD project file plus

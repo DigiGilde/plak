@@ -36,8 +36,8 @@ uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
 ```
 
 `beta` is the default branch, so this installs the latest. Pin to a version
-tag instead once one exists; `README.md` has both forms and the note that
-the repository is private for now.
+tag instead once one exists; `README.md` has both forms. The repository is
+public, so the install needs no credentials.
 
 ## What the skill does
 

@@ -114,7 +114,15 @@ class TestContent:
         # MUST NOT appear more than once.
         assert len(_fields(body, "Expires")) == 1
         assert _fields(body, "Contact")
-        assert _fields(body, "Contact")[0] == "mailto:digigilde@rijksoverheid.nl"
+        # Section 2.5.4: the order is the order of preference, and the private
+        # advisory is the route a reporter should see first.
+        assert _fields(body, "Contact")[0] == (
+            "https://github.com/DigiGilde/plak/security/advisories/new"
+        )
+        assert "mailto:digigilde@rijksoverheid.nl" in _fields(body, "Contact")
+        assert _fields(body, "Policy")[0] == (
+            "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
+        )
 
     def test_the_canonical_lines_cover_both_retrieval_urls(self, tmp_path: Path) -> None:
         """A file whose retrieval URI appears in none of its Canonical fields

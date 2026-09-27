@@ -7,8 +7,12 @@ Plak is still under development and is not running in production yet
 security vulnerability anyway, report it responsibly:
 
 - Report vulnerabilities privately, not through a public GitHub issue.
-- Get in touch through `digigilde@rijksoverheid.nl` (see
-  `publiccode.yml`, `maintenance.contacts`).
+- Preferably through
+  [a private security advisory](https://github.com/DigiGilde/plak/security/advisories/new):
+  private vulnerability reporting is on, so the report stays between you
+  and the maintainers until there is a fix.
+- By email it goes to `digigilde@rijksoverheid.nl` (see `publiccode.yml`,
+  `maintenance.contacts`).
 - Give us reasonable time to investigate and fix the problem before you
   publish details.
 - Do not take any action beyond what is needed to demonstrate the
@@ -28,13 +32,14 @@ day, so that it never expires without anyone doing anything.
 
 Three things to know:
 
+- The GitHub advisory form is the first `Contact`, and this file the
+  first `Policy`. Both only became reachable when the repository went
+  public on 2026-09-27 with private vulnerability reporting switched on;
+  before that they would have answered a 404, which is worse than one
+  route fewer.
 - `digigilde@rijksoverheid.nl` is the same address as in
-  `publiccode.yml`. The CVD routes of NCSC-NL follow it as the second
-  through fourth `Contact`, so a reporter ends up somewhere either way.
-- A `Contact` line to a GitHub advisory is missing on purpose: this repo
-  has no remote yet, and a contact route that 404s is worse than one
-  route fewer. As soon as the repo is public that line belongs there
-  first, just like a `Policy` pointing at this file.
+  `publiccode.yml`. The CVD routes of NCSC-NL follow behind it, so a
+  reporter ends up somewhere either way.
 - We do not sign the file with PGP. `sectxt` recommends it, but signing
   asks for key management and rotation that this repo has nowhere else,
   and a signature that expires is more harmful than no signature. This is

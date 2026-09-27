@@ -43,15 +43,18 @@ PREAMBLE = (
 )
 
 POLICY = (
+    "Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md",
     "Policy: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "Policy: https://www.ncsc.nl/en/cvd-report-form",
 )
 
 # In order of preference (RFC 9116 section 2.5.4). The GitHub advisory route
-# the sister applications list is missing on purpose: this repository has no
-# remote yet, so that URL would answer 404. It goes in first once it exists;
-# docs/security.md, "As soon as the repo has a GitHub remote".
+# leads: it keeps the report private until there is a fix and asks nothing of
+# the reporter beyond an account. It exists only because the repository is
+# public with private vulnerability reporting on; while it was private that
+# URL answered a 404. See docs/security.md, "Now the repo is on GitHub".
 CONTACT = (
+    "Contact: https://github.com/DigiGilde/plak/security/advisories/new",
     "Contact: mailto:digigilde@rijksoverheid.nl",
     "Contact: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "Contact: https://www.ncsc.nl/en/cvd-report-form",
