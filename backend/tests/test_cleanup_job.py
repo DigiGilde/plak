@@ -8,6 +8,7 @@ session factory of their own), just like test_ingest_service.py.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import uuid
@@ -16,12 +17,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.util import await_only
 
 from plak.api.docs import _ASSETS, _DOCS_HTML, DOCS_CSP, STATIC_DOCS_DIR
 from plak.cli import service as cli
+from plak.config import Settings
 from plak.constants import AccessBase
+from plak.ingest.service import Deployer, IngestService
 from plak.ingest.store import ContentStore
 from plak.models.cli import CliDeviceAuthorization, CliSession
 from plak.models.identity import Group, Member, MemberStatus
@@ -114,6 +118,39 @@ async def _all_previews(environment: Environment) -> list[Preview]:
         return list((await session.execute(select(Preview))).scalars())
 
 
+def _settings(content_root: Path) -> Settings:
+    return Settings(
+        db_url="postgresql+asyncpg://ongebruikt/ongebruikt",
+        content_root=content_root,
+        oidc_issuer="https://idp.example",
+        oidc_client_id="plak",
+        oidc_client_private_jwk="{}",
+        oidc_required_acr="urn:acr",
+        session_secret="s" * 32,
+        audit_pepper="p" * 32,
+        audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+        content_base_url="https://plak.example",
+        environment="dev",
+    )
+
+
+async def _wait_for_a_lock_wait(environment: Environment) -> None:
+    """Returns once another backend is blocked on a row lock."""
+    async with environment.session_factory() as session:
+        for _ in range(200):
+            waiting = await session.scalar(
+                text(
+                    "SELECT count(*) FROM pg_stat_activity"
+                    " WHERE wait_event_type = 'Lock' AND datname = current_database()"
+                )
+            )
+            await session.rollback()
+            if waiting:
+                return
+            await asyncio.sleep(0.05)
+    raise AssertionError("the sweep never waited on the renewed row")
+
+
 class TestExpiredPreviews:
     async def test_expired_preview_deletes_row_version_and_files(self, environment: Environment):
         now_ = datetime.now(tz=UTC)
@@ -151,6 +188,58 @@ class TestExpiredPreviews:
 
         assert result.expired_previews == 0
         assert len(await _all_previews(environment)) == 1
+
+
+    async def test_a_preview_renewed_while_the_sweep_runs_survives(self, environment: Environment, tmp_path: Path):
+        """A same-ref deploy renews the expired row (new version, later expiry)
+        and commits while the sweep is already under way: the sweep must not
+        delete the renewed preview, nor, as an orphan, its new version."""
+        now_ = datetime.now(tz=UTC)
+        old_version_id, old_storage_ref = await _make_preview_version(
+            environment, expires_at=now_ - timedelta(days=1), ref="pr-renewed"
+        )
+        service = IngestService(environment.store, _settings(environment.content_root))
+        source = tmp_path / "upload.html"
+        source.write_bytes(b"<h1>renewed</h1>")
+        commit_gate = asyncio.Event()
+        renewal_ready = asyncio.Event()
+
+        async def renew() -> uuid.UUID:
+            async with environment.session_factory() as db:
+                # Holds the renewed row locked, uncommitted, until released.
+                def hold_before_commit(_session: object) -> None:
+                    renewal_ready.set()
+                    await_only(commit_gate.wait())
+
+                event.listen(db.sync_session, "before_commit", hold_before_commit)
+                return await service.preview_deploy(
+                    db,
+                    environment.group,
+                    environment.site,
+                    "pr-renewed",
+                    "index.html",
+                    source,
+                    Deployer(member_id=environment.member.id),
+                )
+
+        renewal = asyncio.create_task(renew())
+        await asyncio.wait_for(renewal_ready.wait(), timeout=10)
+        sweep = asyncio.create_task(delete_expired(environment.session_factory, environment.store, now_))
+        await _wait_for_a_lock_wait(environment)
+        commit_gate.set()
+        new_version_id = await renewal
+        result = await sweep
+
+        assert result.expired_previews == 0
+        assert result.orphan_versions == 0
+        previews = await _all_previews(environment)
+        assert [preview.version_id for preview in previews] == [new_version_id]
+        assert previews[0].expires_at > now_
+        versions = await _all_versions(environment)
+        assert [version.id for version in versions] == [new_version_id]
+        assert (environment.content_root / versions[0].storage_ref).exists()
+        assert all(version.id != old_version_id for version in versions)
+        assert not (environment.content_root / old_storage_ref).exists()
 
 
 class TestOrphanPreviewVersions:

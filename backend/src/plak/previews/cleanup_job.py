@@ -44,22 +44,28 @@ async def _cleanup_expired_previews(
 ) -> int:
     async with factory() as db:
         async with db.begin():
-            rows = (
-                await db.execute(
-                    select(Preview.id, Preview.version_id, Version.storage_ref)
-                    .join(Version, Version.id == Preview.version_id)
+            # One statement that decides and deletes: a concurrent same-ref
+            # deploy may renew a row (new version, later expiry) after any
+            # separate SELECT, and Postgres re-checks this predicate against
+            # the renewed row. RETURNING gives the version each deleted row
+            # pointed at when it was deleted.
+            version_ids = (
+                await db.scalars(
+                    delete(Preview)
                     .where(Preview.expires_at.is_not(None), Preview.expires_at < now)
+                    .returning(Preview.version_id)
                 )
             ).all()
-            for row in rows:
-                # Delete the preview row first and only then the version: the
-                # FK previews.version_id otherwise refuses deleting the version
-                # row first.
-                await db.execute(delete(Preview).where(Preview.id == row.id))
-                await db.execute(delete(Version).where(Version.id == row.version_id))
-        for row in rows:
-            store.delete_version(row.storage_ref)
-        return len(rows)
+            storage_refs = []
+            if version_ids:
+                storage_refs = (
+                    await db.scalars(
+                        delete(Version).where(Version.id.in_(version_ids)).returning(Version.storage_ref)
+                    )
+                ).all()
+        for storage_ref in storage_refs:
+            store.delete_version(storage_ref)
+        return len(version_ids)
 
 
 async def _cleanup_orphan_preview_versions(
