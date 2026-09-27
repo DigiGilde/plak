@@ -45,7 +45,8 @@ class TestTheCheckGate:
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
         # These are also the names branch protection should be set to
         # later: `ci / backend`, `ci / cli`, `ci / frontend`,
-        # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`.
+        # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`,
+        # `ci / containers`.
         assert set(ci["jobs"]) == {
             "backend",
             "cli",
@@ -53,6 +54,7 @@ class TestTheCheckGate:
             "vulnerabilities",
             "pre-commit",
             "secret-scan",
+            "containers",
         }
 
 
@@ -67,6 +69,20 @@ class TestTheScans:
         assert len(gate) == 1
         assert gate[0]["with"]["severity"] == "CRITICAL,HIGH"
         assert gate[0]["with"]["trivyignores"] == ".trivyignore.yaml"
+
+    def test_a_pull_request_is_gated_on_the_base_image_that_ships(self, ci) -> None:
+        """Without this the first trivy finding on a base image arrives at
+        deploy time. The dev nginx image is reported, not gated: it never
+        leaves dev/compose.yml."""
+        steps = ci["jobs"]["containers"]["steps"]
+        scans = [s for s in steps if "trivy-action" in str(s.get("uses", ""))]
+
+        gate = [s for s in scans if s.get("with", {}).get("exit-code") == "1"]
+        assert len(gate) == 2
+        assert {s["with"].get("scan-type", "image") for s in gate} == {"config", "image"}
+        for step in scans:
+            assert step["with"]["severity"] == "CRITICAL,HIGH"
+            assert step["with"]["trivyignores"] == ".trivyignore.yaml"
 
     def test_every_third_party_action_is_pinned_to_a_sha(self, ci, deploy) -> None:
         """A tag can be moved, a commit cannot."""

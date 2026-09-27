@@ -183,6 +183,88 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: gitleaks git . --redact --no-banner --log-opts="$BASE..$HEAD"
 
+  # Trivy on a pull request, so a base image with a known hole is caught
+  # before anything is deployed with it. deploy.yml scans the built image
+  # and that stays: this job is the earlier, cheaper half, not a copy.
+  #
+  # What it scans and why:
+  #
+  #   - the Containerfiles as configuration. Nothing else in the pipeline
+  #     looks at them, and it costs seconds.
+  #   - the base images that actually ship. containers/plak/Containerfile
+  #     is multi-stage: the node and uv stages build the SPA and the venv
+  #     and then stay behind, so only the python runtime base ends up in
+  #     the image. The nginx base is the dev stack's and does not deploy,
+  #     but it is cheap and it is ours to keep current, so it is reported
+  #     rather than gated.
+  #
+  # Not scanned here: the built image, because building it means npm ci,
+  # a vite build and a uv sync on every pull request, minutes of work that
+  # `bouw` in deploy.yml already does. What a full image scan would add on
+  # top of the base image is the Python and npm dependency tree, and the
+  # `vulnerabilities` job below reads those from the lockfiles already.
+  #
+  # The gate is the same line the deploy draws (CRITICAL and HIGH, only
+  # what has a fix), so a pull request cannot pass a gate that the deploy
+  # would then fail on. Suppressions come from the same .trivyignore.yaml.
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      # Read the digests out of the Containerfiles rather than repeating
+      # them here: Dependabot bumps the Containerfiles, and a second copy
+      # would quietly keep scanning yesterday's image.
+      - name: Basisimages uit de Containerfiles lezen
+        id: bases
+        run: |
+          set -euo pipefail
+          runtime="$(grep -oE '^FROM docker\.io/library/python@sha256:[0-9a-f]{64}' \
+            containers/plak/Containerfile | tail -1 | cut -d' ' -f2)"
+          nginx="$(grep -oE '^FROM docker\.io/nginxinc/nginx-unprivileged@sha256:[0-9a-f]{64}' \
+            containers/nginx-dev/Containerfile | tail -1 | cut -d' ' -f2)"
+          if [ -z "$runtime" ] || [ -z "$nginx" ]; then
+            echo "Basisimage niet gevonden: staat de FROM-regel er nog zoals verwacht?" >&2
+            exit 1
+          fi
+          echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
+          echo "nginx=$nginx" >> "$GITHUB_OUTPUT"
+
+      - name: Containerfiles scannen (trivy config)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: containers
+          trivyignores: .trivyignore.yaml
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          version: v0.74.0
+
+      - name: Runtime-basisimage scannen (trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.bases.outputs.runtime }}
+          trivyignores: .trivyignore.yaml
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          version: v0.74.0
+
+      # Report, no gate: this image runs only in dev/compose.yml and never
+      # reaches a deploy, and the pin it carries is far enough behind that
+      # gating on it would paint every pull request red over something a
+      # publisher is never exposed to. The findings stay in the log, and
+      # Dependabot offers the digest bump that clears them.
+      - name: Nginx-basisimage scannen, alleen rapport (trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.bases.outputs.nginx }}
+          trivyignores: .trivyignore.yaml
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+          version: v0.74.0
+
   vulnerabilities:
     runs-on: ubuntu-latest
     steps:
