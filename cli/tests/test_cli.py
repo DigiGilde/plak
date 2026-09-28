@@ -1803,7 +1803,9 @@ def test_logout_with_a_mismatched_host_sends_nothing(stub_server, host, isolated
     assert stub_server.requests == []
     out = capsys.readouterr()
     assert "not revoking it at the server" in out.err
-    assert host in out.err
+    assert "https://evil.example" in out.err
+    # The stored host comes from the file that holds the tokens; it is not echoed.
+    assert host not in out.err
     assert "Logged out." in out.out
     data = cli._read_env_file()
     assert "PLAK_ACCESS_TOKEN" not in data
