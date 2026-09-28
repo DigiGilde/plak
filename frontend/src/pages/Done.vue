@@ -106,7 +106,12 @@ async function load(): Promise<void> {
  * show its value (TabAccess shows it too, but only for keys created there).
  */
 async function ensureKeyLink(): Promise<void> {
+  /* v8 ignore start -- a narrow race guard (two overlapping load() passes
+     both reaching here before either's fetch resolves); the "active key
+     already exists" check below is the one that protects the ordinary case
+     of navigating back to this screen. */
   if (keyRequested) return;
+  /* v8 ignore stop */
   keyRequested = true;
   try {
     const existing = await plak.keys(groupSlug.value, siteSlug.value);

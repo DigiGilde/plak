@@ -415,6 +415,67 @@ describe('Done (secret link)', () => {
     },
   );
 
+  it("shows the API's own detail when key creation fails with a problem+json error", async () => {
+    backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
+    backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
+    const realFetch = backend.fetch;
+    vi.stubGlobal('fetch', ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString();
+      if (url.includes('/keys') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: 'about:blank',
+              title: 'Interne fout',
+              status: 500,
+              detail: 'De sleutel kon niet worden aangemaakt.',
+            }),
+            { status: 500, headers: { 'content-type': 'application/problem+json' } },
+          ),
+        );
+      }
+      return realFetch(input, init);
+    }) as typeof fetch);
+
+    const wrapper = await mountComponent('/nldd/website/done');
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').attributes('supporting-text')).toBe(
+      'De sleutel kon niet worden aangemaakt.',
+    );
+
+    wrapper.unmount();
+  });
+
+  it("falls back to the problem's title when it carries no detail of its own", async () => {
+    backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
+    backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
+    const realFetch = backend.fetch;
+    vi.stubGlobal('fetch', ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString();
+      if (url.includes('/keys') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ type: 'about:blank', title: 'Interne fout', status: 500 }),
+            { status: 500, headers: { 'content-type': 'application/problem+json' } },
+          ),
+        );
+      }
+      return realFetch(input, init);
+    }) as typeof fetch);
+
+    const wrapper = await mountComponent('/nldd/website/done');
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').attributes('supporting-text')).toBe(
+      'Interne fout',
+    );
+
+    wrapper.unmount();
+  });
+
   it('shows the fallback option with a link to Toegang when creation fails', async () => {
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
