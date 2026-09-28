@@ -427,7 +427,7 @@ class TestLiveServing:
         response = await client.get("/aurora/site/stijl.css")
         assert response.status_code == 200
         assert response.headers["cache-control"] == "max-age=31536000, immutable"
-        assert response.headers["content-type"] == "text/css"
+        assert response.headers["content-type"] == "text/css; charset=utf-8"
 
     async def test_private_asset_is_not_immutable(self, client, environment):
         # The URL is not content-addressed and survives a redeploy, so
@@ -440,7 +440,7 @@ class TestLiveServing:
     async def test_mjs_gets_text_javascript(self, client):
         response = await client.get("/aurora/site/app.mjs")
         assert response.status_code == 200
-        assert response.headers["content-type"] == "text/javascript"
+        assert response.headers["content-type"] == "text/javascript; charset=utf-8"
 
     async def test_directory_301_after_allow(self, client):
         response = await client.get("/aurora/site/docs")
