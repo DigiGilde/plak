@@ -208,6 +208,23 @@ async def test_a_hard_failure_logs_out_and_audits() -> None:
         assert record.refs == {"kind": "admin"}
 
 
+async def test_a_hard_failure_without_an_audit_log_still_drops_the_session() -> None:
+    """The apps in this module have no DB and thus no app.state.audit_log
+    unless a test installs one; audit_session_ended must tolerate that instead
+    of raising, since the session drop itself must not depend on auditing."""
+    idp, app = _make()
+    idp.refresh_error = "invalid_grant"
+    idp.refresh_status = 400
+    assert getattr(app.state, "audit_log", None) is None
+    async with make_test_client(app) as client:
+        session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+        _age(app, session, seconds=RECHECK_S + 1)
+
+        await _visit(client)
+
+        assert app.state.session_store.get_session(session.id) is None
+
+
 async def test_a_dropped_session_answers_as_not_logged_in() -> None:
     idp, app = _make()
     idp.refresh_error = "invalid_grant"
@@ -491,6 +508,36 @@ class TestBrokenCoupling:
         assert app.state.session_store.get_session(session.id) is not None
         assert self._errors(caplog) == []
         assert revalidation_status(app) is None
+
+    async def test_a_second_refusal_within_the_window_does_not_log_again(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The backoff on the session (RECHECK_BACKOFF) would normally itself
+        keep a second request from reaching the token endpoint at all; here the
+        session's own backoff is cleared early so the check runs again while
+        the fault's own log window is still open, to isolate IdpRevalidationFault
+        .record's own dedup from the session recheck backoff."""
+        idp, app = _make()
+        idp.refresh_error = "invalid_client"
+        idp.refresh_status = 401
+        install_audit_recorder(app)
+        async with make_test_client(app) as client:
+            session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+            _age(app, session, seconds=RECHECK_S + 1)
+
+            with caplog.at_level(logging.DEBUG):
+                await _visit(client)
+
+                store: SessionStore = app.state.session_store
+                # Only the per-session backoff is lifted; the fault's own
+                # log_again_at is left untouched, so record() should refuse to
+                # log a second time.
+                store.defer_check(session.id, until=datetime.now(UTC) - RECHECK_BACKOFF)
+                await _visit(client)
+
+        assert app.state.session_store.get_session(session.id) is not None
+        errors = self._errors(caplog)
+        assert len(errors) == 1, errors
 
     async def test_invalid_grant_still_drops_the_session(self) -> None:
         idp, app = _make()

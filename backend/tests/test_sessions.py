@@ -34,8 +34,11 @@ from plak.auth.sessions import (
     CONTENT_ANCHOR_COOKIE,
     CONTENT_LOGIN_COOKIE,
     CONTENT_PRESENCE_COOKIE,
+    CONTENT_PRESENT,
     CONTENT_SESSION_COOKIE,
     CSRF_COOKIE,
+    CSRF_HEADER,
+    KEY_COOKIE,
     LOGIN_COOKIE,
     MAX_LOGIN_ATTEMPT_AGE,
     MAX_SESSION_AGE,
@@ -43,13 +46,17 @@ from plak.auth.sessions import (
     SessionKind,
     SessionStore,
     check_signature,
+    content_presence,
     content_session_from_request,
     content_site_prefix,
+    csrf_valid,
     parse_site_path,
     session_from_request,
     sign,
+    sign_key_cookie,
     site_prefix,
     valid_return_to,
+    visitor_from_request,
 )
 from plak.constants import PATH_CONTENT_LOGIN, PATH_CONTENT_OAUTH2_PREFIX
 from plak.models.audit import ActorKind
@@ -1002,3 +1009,170 @@ class TestCleanup:
 
         store.create_attempt(state="s", nonce="n", code_verifier="v", return_to="/admin")
         assert session.id not in store._sessions  # cleanup was triggered automatically
+
+
+class TestSessionStoreEdgeCases:
+    """The store methods on a lookup that misses: a gone or never-existing id
+    must be a no-op or a plain None, never an exception."""
+
+    def _store_with_session(self) -> tuple[SessionStore, object]:
+        store = SessionStore()
+        session = store.create_session(sub="s", email=None, email_verified=False, acr="acr")
+        return store, session
+
+    def test_note_content_site_on_an_unknown_session_is_a_no_op(self):
+        store = SessionStore()
+        store.note_content_site("onbestaande-sessie", "/fin/rapport/")
+        assert store._sessions == {}
+
+    def test_note_content_site_does_not_duplicate_an_already_recorded_prefix(self):
+        store, session = self._store_with_session()
+        store.note_content_site(session.id, "/fin/rapport/")
+        store.note_content_site(session.id, "/fin/rapport/")
+        assert store.get_session(session.id).content_sites == frozenset({"/fin/rapport/"})
+
+    def test_note_content_site_stops_at_the_ceiling(self):
+        """Past _MAX_CONTENT_SITES a further site is not recorded: its cookie
+        would only outlive the session, useless from the moment it is gone."""
+        store, session = self._store_with_session()
+        for i in range(sessions_mod._MAX_CONTENT_SITES):
+            store.note_content_site(session.id, f"/groep{i}/site/")
+        store.note_content_site(session.id, "/een-teveel/site/")
+        recorded = store.get_session(session.id).content_sites
+        assert len(recorded) == sessions_mod._MAX_CONTENT_SITES
+        assert "/een-teveel/site/" not in recorded
+
+    def test_mark_checked_on_an_unknown_session_returns_none(self):
+        store = SessionStore()
+        assert store.mark_checked("onbestaande-sessie", refresh_token=None, at=datetime.now(UTC)) is None
+
+    def test_defer_check_on_an_unknown_session_is_a_no_op(self):
+        store = SessionStore()
+        store.defer_check("onbestaande-sessie", until=datetime.now(UTC))
+        assert store._sessions == {}
+
+    def test_sessions_for_logout_without_sid_or_sub_finds_nothing(self):
+        """Neither claim on the logout token: nothing to match on, so no
+        session is dropped by mistake."""
+        store, _ = self._store_with_session()
+        assert store.sessions_for_logout(sid=None, sub=None) == []
+
+    def test_get_session_past_max_age_is_gone_and_swept_away(self):
+        store, session = self._store_with_session()
+        store._sessions[session.id] = dataclasses.replace(
+            session, created_at=datetime.now(UTC) - MAX_SESSION_AGE - timedelta(seconds=1)
+        )
+        assert store.get_session(session.id) is None
+        assert session.id not in store._sessions
+
+    def test_take_attempt_unknown_id_returns_none(self):
+        store = SessionStore()
+        assert store.take_attempt("onbestaande-poging") is None
+
+    def test_take_attempt_past_max_age_returns_none_and_stays_spent(self):
+        store = SessionStore()
+        attempt = store.create_attempt(state="s", nonce="n", code_verifier="v", return_to="/admin")
+        store._attempts[attempt.id] = dataclasses.replace(
+            attempt, created_at=datetime.now(UTC) - MAX_LOGIN_ATTEMPT_AGE - timedelta(seconds=1)
+        )
+        assert store.take_attempt(attempt.id) is None
+        assert attempt.id not in store._attempts
+
+
+def _request_with_headers(app, headers: dict[str, str], cookie_header: str = ""):
+    from starlette.requests import Request
+
+    all_headers = dict(headers)
+    if cookie_header:
+        all_headers["cookie"] = cookie_header
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(k.lower().encode(), v.encode()) for k, v in all_headers.items()],
+            "app": app,
+            "query_string": b"",
+        }
+    )
+
+
+class TestSignKeyCookie:
+    def test_roundtrips_with_the_purpose_prefix(self):
+        token = sign_key_cookie(SECRET, "sleutel-1")
+        # Purpose-tagged, so this signature cannot be replayed as a session
+        # or CSRF cookie value even though it uses the same secret.
+        assert check_signature(SECRET, token) == "key:sleutel-1"
+
+
+class TestContentPresence:
+    async def test_true_when_the_flag_cookie_is_set(self, app):
+        request = _request_with_cookies(app, f"{CONTENT_PRESENCE_COOKIE}={CONTENT_PRESENT}")
+        assert content_presence(request) is True
+
+    async def test_false_without_the_cookie(self, app):
+        request = _request_with_cookies(app, "")
+        assert content_presence(request) is False
+
+
+class TestVisitorFromRequest:
+    """The key cookie half of the visitor: content_session_from_request is
+    covered elsewhere, this is about _key_id_from_cookie's three outcomes."""
+
+    async def test_no_key_cookie_reports_no_key(self, app):
+        visitor = visitor_from_request(_request_with_cookies(app, ""))
+        assert visitor.key_cookie is None
+        assert visitor.sub is None
+
+    async def test_a_validly_signed_key_cookie_reports_the_key_id(self, app):
+        secret = app.state.settings.session_secret
+        token = sign_key_cookie(secret, "sleutel-1")
+        visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={token}"))
+        assert visitor.key_cookie == "sleutel-1"
+
+    async def test_a_forged_key_cookie_is_reported_invalid_not_absent(self, app):
+        """"" (KEY_INVALID) and None (no key at all) are different refusals for
+        the gate; a tampered signature must not be read as "no key"."""
+        secret = app.state.settings.session_secret
+        token = sign_key_cookie(secret, "sleutel-1")
+        tampered = token[:-2] + "xx"
+        visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={tampered}"))
+        assert visitor.key_cookie == ""
+
+    async def test_a_validly_signed_value_from_another_purpose_is_reported_invalid(self, app):
+        """A session cookie value, replayed as the key cookie: the signature
+        checks out, but the purpose prefix does not match."""
+        secret = app.state.settings.session_secret
+        foreign = sign(secret, "een-sessie-id")
+        visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={foreign}"))
+        assert visitor.key_cookie == ""
+
+
+class TestCsrfValid:
+    def _session(self):
+        store = SessionStore()
+        return store.create_session(sub="s", email=None, email_verified=False, acr="acr")
+
+    async def test_missing_header_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(app, {}, cookie_header=f"{CSRF_COOKIE}={session.csrf_token}")
+        assert csrf_valid(request, session) is False
+
+    async def test_missing_cookie_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(app, {CSRF_HEADER: session.csrf_token})
+        assert csrf_valid(request, session) is False
+
+    async def test_header_and_cookie_disagreeing_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}=een-ander-token"
+        )
+        assert csrf_valid(request, session) is False
+
+    async def test_matching_header_and_cookie_are_accepted(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}={session.csrf_token}"
+        )
+        assert csrf_valid(request, session) is True
