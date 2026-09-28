@@ -25,6 +25,7 @@ import SiteRow, { SITE_COLUMNS, SITE_COLUMNS_SM } from '../components/SiteRow.vu
 import PublishSheet from '../components/PublishSheet.vue';
 import { fetchCurrentMember } from '../composables/currentMember';
 import { resolveDroppedFile, useDropState, useWindowDropGuard } from '../composables/fileDrop';
+import { goToDone } from '../composables/publishedMark';
 import { mayCreateSiteIn } from '../composables/roles';
 import { t } from '@/i18n';
 
@@ -92,7 +93,7 @@ function onGroupCreated(group: Group): void {
 }
 
 function onPublished(site: Site): void {
-  void router.push(`/${site.groupSlug}/${site.slug}/done`);
+  void goToDone(router, site.groupSlug, site.slug);
 }
 
 // -- Dropping a file straight onto the page --------------------------------

@@ -10,6 +10,7 @@ import type { Group, Overview as OverviewData, Site } from '../api/types';
 import NewGroupSheet from '../components/NewGroupSheet.vue';
 import PublishSheet from '../components/PublishSheet.vue';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
+import { takePublishedMark } from '../composables/publishedMark';
 import Overview from './Overview.vue';
 
 /**
@@ -486,6 +487,8 @@ describe('Overview', () => {
       expect(plakApi.upload).toHaveBeenCalledWith('nldd', 'handboek', file, 'handboek.zip');
       expect(titles()).toEqual(['NLDD website', 'Handboek']);
       expect(router!.currentRoute.value.fullPath).toBe('/nldd/handboek/done');
+      // Marked as the publish flow, so the result screen may make a secret link.
+      expect(takePublishedMark(router!)).toBe(true);
     });
 
     it('creates a group in the same flow when there are no groups', async () => {
@@ -512,6 +515,8 @@ describe('Overview', () => {
       expect(listLabels()).toEqual(['Sites in Team']);
       expect(titles()).toEqual(['Handboek']);
       expect(router!.currentRoute.value.fullPath).toBe('/team/handboek/done');
+      // Marked as the publish flow, so the result screen may make a secret link.
+      expect(takePublishedMark(router!)).toBe(true);
     });
 
     it('asks for a group as soon as the user has more than one', async () => {

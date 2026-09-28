@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { makeMockBackend, type MockBackend } from '@/api/mock';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
+import { goToDone } from '@/composables/publishedMark';
 import { routes } from '@/router';
 
 import Done from './Done.vue';
@@ -21,6 +22,20 @@ async function mountComponent(path: string) {
     ],
   });
   await router.push(path);
+  await router.isReady();
+  return mount(Done, { global: { plugins: [router] } });
+}
+
+/** The result screen as the publish flow reaches it, mark and all. */
+async function mountFromPublish(group: string, site: string) {
+  router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/:group/:site/done', component: Done },
+      { path: '/:group/:site', component: { template: '<div />' } },
+    ],
+  });
+  await goToDone(router, group, site);
   await router.isReady();
   return mount(Done, { global: { plugins: [router] } });
 }
@@ -317,13 +332,35 @@ describe('Done (secret link)', () => {
     }).length;
   }
 
-  it('creates exactly one key for secret-link visibility and shows the link once', async () => {
+  it('creates no key on a visit that does not come from publishing', async () => {
+    // A link from anywhere, another site included, can open this route; with
+    // secret links on and no active key (an admin just revoked it), such a
+    // visit must not quietly mint a new one.
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
     const spy = vi.fn(backend.fetch);
     vi.stubGlobal('fetch', spy);
 
     const wrapper = await mountComponent('/nldd/website/done');
+    await flushPromises();
+    await flushPromises();
+
+    expect(keyPostCalls(spy)).toBe(0);
+    expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').exists()).toBe(false);
+    // The rest of the screen is there as usual.
+    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it('creates exactly one key for secret-link visibility and shows the link once', async () => {
+    backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
+    backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -343,7 +380,7 @@ describe('Done (secret link)', () => {
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
     const write = writeClipboard();
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -359,7 +396,7 @@ describe('Done (secret link)', () => {
   it('shows the link without the code and the code itself next to the full link', async () => {
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -379,7 +416,7 @@ describe('Done (secret link)', () => {
     const spy = vi.fn(backend.fetch);
     vi.stubGlobal('fetch', spy);
 
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -404,7 +441,7 @@ describe('Done (secret link)', () => {
       const spy = vi.fn(backend.fetch);
       vi.stubGlobal('fetch', spy);
 
-      const wrapper = await mountComponent('/nldd/website/done');
+      const wrapper = await mountFromPublish('nldd', 'website');
       await flushPromises();
       await flushPromises();
 
@@ -437,7 +474,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -465,7 +502,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -488,7 +525,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountFromPublish('nldd', 'website');
     await flushPromises();
     await flushPromises();
 
