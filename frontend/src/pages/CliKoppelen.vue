@@ -9,45 +9,58 @@
  * router.ts). Public (meta.public), because the session state decides what to
  * show, the same split Landing.vue and Start.vue use.
  */
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { approveDeviceAuthorization, denyDeviceAuthorization, lookupDeviceAuthorization } from '@/api/plak';
 import { ApiError } from '@/api/client';
-import type { DeviceAuthorization, Member } from '@/api/types';
+import type { DeviceAuthorization } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Landing from './Landing.vue';
-import { fetchSession, type Session, type SessionState } from '@/composables/currentMember';
+import { fetchSession, type Session } from '@/composables/currentMember';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 
-type Stage = 'loading' | 'blocked' | 'error' | 'code-entry' | 'lookup' | 'approved' | 'denied';
+/**
+ * What the page shows. The lookup stage carries the authorization it shows,
+ * so the template never meets a lookup without one.
+ */
+type View =
+  | { stage: 'loading' }
+  | { stage: 'blocked'; reason: string }
+  | { stage: 'error'; error: unknown }
+  | { stage: 'login' }
+  | { stage: 'code-entry' }
+  | { stage: 'lookup'; authorization: DeviceAuthorization }
+  | { stage: 'approved' }
+  | { stage: 'denied' };
 
 const route = useRoute();
 
-const stage = ref<Stage>('loading');
-const sessionState = ref<SessionState>('no-session');
-const sessionReason = ref('');
-const member = ref<Member | null>(null);
-const genericError = ref<unknown>(null);
+const view = ref<View>({ stage: 'loading' });
+const accountLabel = ref('');
 
 const manualCode = ref('');
 const manualTouched = ref(false);
 const lookupError = ref<string | null>(null);
 const lookupBusy = ref(false);
 
-const authorization = ref<DeviceAuthorization | null>(null);
 const actionBusy = ref<'approve' | 'deny' | null>(null);
+
+/**
+ * Never a script navigation to the login: the backend cannot tell one apart
+ * from a login the member started, so a link that lands here could otherwise
+ * walk the browser through a silent SSO round trip into a fresh session. The
+ * member follows the login link themselves, and the code is not carried
+ * through it: afterwards they type the one their own terminal shows.
+ * tests/login-navigation.test.ts keeps it that way.
+ */
+const loginHref = `/-/login?returnTo=${encodeURIComponent('/cli-link')}`;
 
 /** Uppercase, no spaces or hyphens; the backend accepts either form, this UI too. */
 function normalizeCode(raw: string): string {
   const stripped = raw.toUpperCase().replace(/[\s-]/g, '');
   return stripped.length > 4 ? `${stripped.slice(0, 4)}-${stripped.slice(4, 8)}` : stripped;
-}
-
-function redirectToLogin(rawCode: string | null): void {
-  const query = rawCode ? `?code=${encodeURIComponent(rawCode)}` : '';
-  window.location.href = `/-/login?returnTo=${encodeURIComponent(`/cli-link${query}`)}`;
 }
 
 function codeFromQuery(): string | null {
@@ -60,25 +73,23 @@ async function doLookup(raw: string): Promise<void> {
   lookupError.value = null;
   lookupBusy.value = true;
   try {
-    authorization.value = await lookupDeviceAuthorization(normalized);
-    stage.value = 'lookup';
+    view.value = { stage: 'lookup', authorization: await lookupDeviceAuthorization(normalized) };
   } catch (f) {
     if (f instanceof ApiError && f.problem.code === 'SESSION_NOT_FRESH') {
-      redirectToLogin(normalized);
+      view.value = { stage: 'login' };
       return;
     }
     if (f instanceof ApiError && f.problem.code === 'USER_CODE_UNKNOWN') {
       lookupError.value = t('page.cliPair.error.unknownCode');
-      stage.value = 'code-entry';
+      view.value = { stage: 'code-entry' };
       return;
     }
     if (f instanceof ApiError && f.problem.status === 429) {
       lookupError.value = f.problem.detail ?? t('page.cliPair.error.tooManyAttempts');
-      stage.value = 'code-entry';
+      view.value = { stage: 'code-entry' };
       return;
     }
-    genericError.value = f;
-    stage.value = 'error';
+    view.value = { stage: 'error', error: f };
   } finally {
     lookupBusy.value = false;
   }
@@ -90,119 +101,107 @@ function submitManualCode(): void {
   void doLookup(manualCode.value);
 }
 
-async function respond(action: 'approve' | 'deny'): Promise<void> {
-  const code = authorization.value?.userCode;
-  /* v8 ignore start -- the approve/deny buttons only render while
-     `authorization` (with its userCode) is set, so there is always a code. */
-  if (!code) return;
-  /* v8 ignore stop */
+async function respond(action: 'approve' | 'deny', code: string): Promise<void> {
   actionBusy.value = action;
   try {
     if (action === 'approve') {
       await approveDeviceAuthorization(code);
-      stage.value = 'approved';
+      view.value = { stage: 'approved' };
     } else {
       await denyDeviceAuthorization(code);
-      stage.value = 'denied';
+      view.value = { stage: 'denied' };
     }
   } catch (f) {
     if (f instanceof ApiError && f.problem.code === 'SESSION_NOT_FRESH') {
-      redirectToLogin(code);
+      view.value = { stage: 'login' };
       return;
     }
     if (f instanceof ApiError && f.problem.code === 'USER_CODE_UNKNOWN') {
       lookupError.value = t('page.cliPair.error.unknownCode');
-      authorization.value = null;
-      stage.value = 'code-entry';
+      view.value = { stage: 'code-entry' };
       return;
     }
     if (f instanceof ApiError && f.problem.status === 429) {
       lookupError.value = f.problem.detail ?? t('page.cliPair.error.tooManyAttempts');
-      stage.value = 'code-entry';
+      view.value = { stage: 'code-entry' };
       return;
     }
-    genericError.value = f;
-    stage.value = 'error';
+    view.value = { stage: 'error', error: f };
   } finally {
     actionBusy.value = null;
   }
 }
 
-function onSessionRefreshed(session: Session): void {
-  member.value = session.member;
-  sessionState.value = session.state;
-  sessionReason.value = session.reason;
-  if (session.state === 'active') {
-    void afterLogin();
+/** A member on the session means the account is active; see fetchSession. */
+async function applySession(session: Session): Promise<void> {
+  const current = session.member;
+  if (current) {
+    accountLabel.value = current.name ? `${current.name} (${current.email})` : current.email;
+    const queryCode = codeFromQuery();
+    if (queryCode) {
+      await doLookup(queryCode);
+    } else {
+      view.value = { stage: 'code-entry' };
+    }
+    return;
   }
-}
-
-async function afterLogin(): Promise<void> {
-  const queryCode = codeFromQuery();
-  if (queryCode) {
-    await doLookup(queryCode);
-  } else {
-    stage.value = 'code-entry';
-  }
+  view.value =
+    session.state === 'awaiting-activation'
+      ? { stage: 'blocked', reason: session.reason }
+      : { stage: 'login' };
 }
 
 onMounted(async () => {
   try {
-    const session = await fetchSession();
-    member.value = session.member;
-    sessionState.value = session.state;
-    sessionReason.value = session.reason;
-    if (session.state === 'no-session') {
-      redirectToLogin(codeFromQuery());
-      return;
-    }
-    if (session.state === 'awaiting-activation') {
-      stage.value = 'blocked';
-      return;
-    }
-    await afterLogin();
+    await applySession(await fetchSession());
   } catch (f) {
-    genericError.value = f;
-    stage.value = 'error';
+    view.value = { stage: 'error', error: f };
   }
 });
 
 // The name comes from the device-flow client itself, so the line says so and
 // quotes it: unattributed, it reads as a sentence of ours above the approve
 // button.
-const clientLine = computed(() => {
-  const claimed = authorization.value?.clientName;
+function clientLine(authorization: DeviceAuthorization): string {
+  const claimed = authorization.clientName;
   return claimed
     ? t('page.cliPair.confirm.client', { name: claimed })
     : t('page.cliPair.unknownClient');
-});
-const accountLabel = computed(() => {
-  const current = member.value;
-  /* v8 ignore start -- the 'lookup' stage that reads this only exists once
-     the session state is 'active', which always carries a member. */
-  if (!current) return '';
-  /* v8 ignore stop */
-  return current.name ? `${current.name} (${current.email})` : current.email;
-});
+}
 </script>
 
 <template>
   <nldd-simple-section>
     <nldd-activity-indicator
-      v-if="stage === 'loading'"
+      v-if="view.stage === 'loading'"
       :text="t('page.cliPair.loading')"
     ></nldd-activity-indicator>
 
     <Landing
-      v-else-if="stage === 'blocked'"
-      :state="sessionState"
-      :reason="sessionReason"
-      @refreshed="onSessionRefreshed"
+      v-else-if="view.stage === 'blocked'"
+      state="awaiting-activation"
+      :reason="view.reason"
+      @refreshed="applySession"
     />
 
-    <ErrorBanner v-else-if="stage === 'error'" :error="genericError" />
+    <ErrorBanner v-else-if="view.stage === 'error'" :error="view.error" />
 
-    <template v-else-if="stage === 'code-entry'">
+    <template v-else-if="view.stage === 'login'">
+      <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
+      <nldd-rich-text>
+        <p>{{ t('page.cliPair.login.intro') }}</p>
+        <p>{{ t('page.cliPair.login.afterwards') }}</p>
+      </nldd-rich-text>
+      <nldd-spacer size="24"></nldd-spacer>
+      <nldd-button
+        variant="primary"
+        :href="loginHref"
+        :text="t('page.cliPair.login.action')"
+        data-testid="code-inloggen"
+      ></nldd-button>
+    </template>
+
+    <template v-else-if="view.stage === 'code-entry'">
       <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
       <nldd-rich-text>
         <p>{{ t('page.cliPair.codeEntry.intro') }}</p>
@@ -244,18 +243,17 @@ const accountLabel = computed(() => {
       </nldd-form>
     </template>
 
-    <template v-else-if="stage === 'lookup' && authorization">
+    <template v-else-if="view.stage === 'lookup'">
       <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
       <nldd-rich-text>
         <p>{{ t('page.cliPair.confirm.question') }}</p>
       </nldd-rich-text>
       <nldd-spacer size="8"></nldd-spacer>
       <nldd-code-viewer variant="simple" no-copy data-testid="code-weergave">{{
-        authorization.userCode
+        view.authorization.userCode
       }}</nldd-code-viewer>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-banner
-        v-if="accountLabel"
         variant="accent"
         :text="t('page.cliPair.confirm.account', { account: accountLabel })"
         :supporting-text="t('page.cliPair.confirm.accountHint')"
@@ -263,16 +261,16 @@ const accountLabel = computed(() => {
       ></nldd-banner>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-rich-text>
-        <p data-testid="code-programma">{{ clientLine }}</p>
+        <p data-testid="code-programma">{{ clientLine(view.authorization) }}</p>
         <p data-testid="code-tijdstip">
-          {{ t('page.cliPair.confirm.requested', { time: formatTimestamp(authorization.createdAt) }) }}
+          {{ t('page.cliPair.confirm.requested', { time: formatTimestamp(view.authorization.createdAt) }) }}
         </p>
-        <p v-if="authorization.ipTruncated" data-testid="code-netwerk">
-          {{ t('page.cliPair.confirm.network', { network: authorization.ipTruncated }) }}
+        <p v-if="view.authorization.ipTruncated" data-testid="code-netwerk">
+          {{ t('page.cliPair.confirm.network', { network: view.authorization.ipTruncated }) }}
         </p>
       </nldd-rich-text>
       <nldd-spacer size="16"></nldd-spacer>
-      <template v-if="authorization.sameNetwork === false">
+      <template v-if="view.authorization.sameNetwork === false">
         <nldd-banner
           variant="critical"
           :text="t('page.cliPair.confirm.otherNetwork.title')"
@@ -295,7 +293,7 @@ const accountLabel = computed(() => {
           :loading="actionBusy === 'approve' || undefined"
           :disabled="actionBusy === 'deny' || undefined"
           data-testid="code-koppelen"
-          @click="respond('approve')"
+          @click="respond('approve', view.authorization.userCode)"
         ></nldd-button>
         <nldd-button
           variant="secondary"
@@ -303,12 +301,12 @@ const accountLabel = computed(() => {
           :loading="actionBusy === 'deny' || undefined"
           :disabled="actionBusy === 'approve' || undefined"
           data-testid="code-weigeren"
-          @click="respond('deny')"
+          @click="respond('deny', view.authorization.userCode)"
         ></nldd-button>
       </nldd-button-group>
     </template>
 
-    <template v-else-if="stage === 'approved'">
+    <template v-else-if="view.stage === 'approved'">
       <nldd-banner
         variant="success"
         :text="t('page.cliPair.approved.title')"
@@ -317,7 +315,8 @@ const accountLabel = computed(() => {
       ></nldd-banner>
     </template>
 
-    <template v-else-if="stage === 'denied'">
+    <!-- The one stage left: denied. -->
+    <template v-else>
       <nldd-banner
         variant="neutral"
         :text="t('page.cliPair.denied.title')"

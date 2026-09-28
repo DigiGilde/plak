@@ -119,6 +119,10 @@ export const pagesNl = {
     'Deze code is onbekend, verlopen of al gebruikt. Start plak login opnieuw.',
   'page.cliPair.error.tooManyAttempts': 'Te veel pogingen. Probeer het zo nog eens.',
   'page.cliPair.unknownClient': 'Onbekend programma',
+  'page.cliPair.login.intro': 'Een apparaat koppelen kan alleen kort nadat je zelf bent ingelogd.',
+  'page.cliPair.login.afterwards':
+    'Log in en vul daarna de code over die plak login in je terminal toont.',
+  'page.cliPair.login.action': 'Inloggen',
   'page.cliPair.codeEntry.intro':
     'Vul de code over die je terminal toont om plak login te koppelen aan je account.',
   'page.cliPair.codeEntry.label': 'Code uit je terminal',

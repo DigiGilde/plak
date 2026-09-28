@@ -380,6 +380,19 @@ class TestLoginOrigin:
         session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
         assert app.state.session_store.get_session(session_id).self_initiated is expected
 
+    async def test_a_same_origin_navigation_without_user_activation_still_counts(self, client, app, idp):
+        """What Chromium and Firefox send for `location.href = '/-/login'` from
+        a beheer page, and what Safari sends even for a real click: no
+        Sec-Fetch-User. Requiring it would lock every Safari member out of
+        CLI approval (WebKit bug 247697), so this counts as self-initiated and
+        the SPA never navigates to the login by script instead
+        (frontend/tests/login-navigation.test.ts)."""
+        headers = {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+        response = await complete_login(client, idp, headers=headers)
+        assert response.status_code == 303
+        session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
+        assert app.state.session_store.get_session(session_id).self_initiated is True
+
     async def test_a_cross_site_login_still_yields_a_usable_session(self, client, app, idp):
         """Only freshness is affected: the login itself works as before, so a
         link from an e-mail or another site logs someone in as usual."""
