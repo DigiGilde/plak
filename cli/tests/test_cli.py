@@ -657,6 +657,21 @@ def test_http_is_not_allowed_to_the_network(host):
         cli._require_https(host)
 
 
+@pytest.mark.parametrize(
+    "host",
+    [
+        "https://user:token@beheer.example.nl",
+        "https://user@beheer.example.nl",
+        "http://user:token@beheer.plak.localhost:8080",
+    ],
+)
+def test_credentials_in_the_host_are_refused(host):
+    """httpx would send them, and every message that names the host puts them
+    in a terminal or a CI log afterwards."""
+    with pytest.raises(cli.UsageError):
+        cli._require_https(host)
+
+
 def test_publish_token_via_environment_variable(
     stub_server, host, dist_folder, monkeypatch, capsys
 ):
@@ -2459,3 +2474,39 @@ def test_logout_with_an_unreachable_server_still_clears_locally(
     assert "PLAK_ACCESS_TOKEN" not in data
     assert "PLAK_REFRESH_TOKEN" not in data
     assert data["PLAK_HOST"] == host
+
+
+def test_a_token_with_a_line_break_is_not_stored(tmp_path, monkeypatch):
+    """.env.plak is one key per line, so a newline in a value writes a line of
+    its own. A server that chooses the token could set PLAK_HOST that way and
+    steer every later call somewhere else."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(cli.UsageError):
+        cli._write_env_file({"PLAK_ACCESS_TOKEN": "geldig\nPLAK_HOST=https://kwaad.example"})
+    with pytest.raises(cli.UsageError):
+        cli._write_env_file({"PLAK_REFRESH_TOKEN": "geldig\rPLAK_HOST=https://kwaad.example"})
+
+
+def test_the_mask_is_skipped_when_stdout_is_a_file(tmp_path, capfd):
+    """Redirected to a file (`> log.txt`) the runner never reads the workflow
+    command, so printing it would only write the token into that file."""
+    import os as _os
+    import sys as _sys
+
+    target = tmp_path / "log.txt"
+    saved = _os.dup(1)
+    try:
+        with target.open("w") as handle:
+            _os.dup2(handle.fileno(), 1)
+            stdout, _sys.stdout = _sys.stdout, _os.fdopen(_os.dup(1), "w")
+            try:
+                cli._mask_in_ci_log("super-geheim-token")
+                _sys.stdout.flush()
+            finally:
+                _sys.stdout.close()
+                _sys.stdout = stdout
+    finally:
+        _os.dup2(saved, 1)
+        _os.close(saved)
+    assert "super-geheim-token" not in target.read_text()

@@ -130,6 +130,11 @@ _LOOPBACK_RE = re.compile(
 
 
 def _require_https(host: str) -> None:
+    # Credentials in the host itself: httpx sends them, and every message that
+    # names the host afterwards puts them in a terminal or a CI log. The check
+    # comes first, so an https:// URL carrying them is refused too.
+    if urllib.parse.urlsplit(host).username is not None:
+        raise UsageError("Do not put a username or password in --host")
     if host.startswith("https://"):
         return
     if _LOOPBACK_RE.match(host):
@@ -186,6 +191,12 @@ def _read_env_file() -> dict[str, str]:
 
 def _write_env_file(updates: dict[str, str | None]) -> Path:
     """Sets or removes keys in .env.plak, the rest stays. Mode 0600."""
+    for key, value in updates.items():
+        # One key per line, so a newline in a value writes a line of its own:
+        # a token the server chose could set PLAK_HOST and steer every later
+        # call somewhere else.
+        if value is not None and ("\n" in value or "\r" in value):
+            raise UsageError(f"Refusing to store a {key} containing a line break")
     path = _env_path()
     lines = path.read_text().splitlines() if path.exists() else []
     remaining = dict(updates)
@@ -371,10 +382,31 @@ def _fetch_oidc_token(host: str) -> str | None:
     token = data.get("value")
     if not isinstance(token, str) or not token:
         raise UsageError("Unexpected answer while fetching the OIDC token")
-    # GitHub Actions and Forgejo Actions both read these workflow commands
-    # from stdout: this masks the token in the rest of the log.
-    print(f"::add-mask::{token}")
+    _mask_in_ci_log(token)
     return token
+
+
+def _mask_in_ci_log(secret: str) -> None:
+    """Asks the runner to mask `secret` in the rest of its log.
+
+    GitHub Actions and Forgejo Actions read these workflow commands from
+    stdout, so there is no way to send this anywhere else. That makes the
+    command only worth writing when stdout really is the runner's log: a
+    regular file means someone redirected it (`> log.txt`), the runner never
+    sees the command, and printing it would write the token into that file for
+    nothing. A pipe is indistinguishable from the runner's own pipe, so
+    `$(...)` and `| tee` still capture it; see docs/publishing.md.
+    """
+    try:
+        redirected = stat.S_ISREG(os.fstat(sys.stdout.fileno()).st_mode)
+    except (OSError, ValueError, AttributeError):
+        # No real file descriptor to judge by. Keep the mask: a runner that
+        # does read this is the case worth protecting, and nothing else in
+        # this CLI puts the token on stdout.
+        redirected = False
+    if redirected:
+        return
+    print(f"::add-mask::{secret}")
 
 
 def _get_bearer_token(host: str) -> str:

@@ -392,6 +392,16 @@ with `--base-path dist` (action input `base-path`). Without that flag Plak
 refuses the deploy and the CLI prints the `index.html` paths it found, with
 the flag that resolves it; see §4 under "Payload".
 
+**Do not capture the CLI's stdout in CI.** In CI the CLI writes an
+`::add-mask::` workflow command there, which is how the runner learns to hide
+the ID token in the rest of the log. A runner only reads that command from
+its own stdout, so `token=$(plak publish ...)`, `| tee` or a wrapper script
+takes the line away: the token is then not masked, and it sits in whatever
+captured it. The CLI skips the line when stdout is a plain file (`> log.txt`),
+because the runner would not have read it there anyway, but a pipe is
+indistinguishable from the runner's own. Read the version id with
+`--output-file` instead, which is what the action does.
+
 ## 4. Curl fallback (bare HTTP contract)
 
 The action and the CLI are a convenience, not a requirement. The underlying
