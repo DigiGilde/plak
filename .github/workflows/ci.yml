@@ -22,6 +22,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Dependabot updates `uses:` references, not this input: bump it by hand,
+  # together with the same variable in deploy.yml.
+  TRIVY_VERSION: v0.74.0
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -223,7 +228,7 @@ jobs:
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Pre-commit-hooks draaien
-        run: uvx pre-commit@4.5.1 run --all-files --show-diff-on-failure
+        run: uv run --project backend --only-group tools pre-commit run --all-files --show-diff-on-failure
 
   # `git commit --no-verify` walks past the local gitleaks hook, so the
   # same scan runs here as well. Two scans, because the modes see
@@ -325,7 +330,7 @@ jobs:
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           exit-code: "1"
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
       - name: Runtime-basisimage scannen (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -335,7 +340,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
       # Gated like the image that ships. This one only runs in
       # dev/compose.yml, but it runs on every developer's machine, and the
@@ -351,7 +356,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
   vulnerabilities:
     runs-on: ubuntu-latest
@@ -385,7 +390,7 @@ jobs:
               flags+=(--ignore-vuln "$id")
             fi
           done < <(uv run --script .github/scripts/vulnerabilities.py ids)
-          uvx pip-audit@2.10.1 --requirement "$REQUIREMENTS" --disable-pip \
+          uv run --project backend --only-group tools pip-audit --requirement "$REQUIREMENTS" --disable-pip \
             --progress-spinner off ${flags[@]+"${flags[@]}"}
 
       # cli/ is the one component users install on their own machines
@@ -403,7 +408,7 @@ jobs:
               flags+=(--ignore-vuln "$id")
             fi
           done < <(uv run --script .github/scripts/vulnerabilities.py ids)
-          uvx pip-audit@2.10.1 --requirement "$REQUIREMENTS" --disable-pip \
+          uv run --project backend --only-group tools pip-audit --requirement "$REQUIREMENTS" --disable-pip \
             --progress-spinner off ${flags[@]+"${flags[@]}"}
 
       # npm audit reads the lockfile and does not need node_modules; the

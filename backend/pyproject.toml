@@ -32,6 +32,12 @@ dev = [
     # project_v2.json when that schema is available on disk.
     "jsonschema>=4,<5",
 ]
+# What CI runs as a tool rather than imports. Listed here so Dependabot bumps
+# it with the lockfile; a version inside a workflow `run:` it never sees.
+tools = [
+    "pip-audit>=2.10,<3",
+    "pre-commit>=4.5,<5",
+]
 
 [tool.ruff]
 target-version = "py312"
