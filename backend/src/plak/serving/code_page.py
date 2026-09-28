@@ -28,12 +28,15 @@ code_attempts (an `InMemoryCounter` for the limit per selector).
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncGenerator
 from functools import partial
 from html import escape
 from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Request
 from sqlalchemy import select
+from starlette.datastructures import FormData
+from starlette.formparsers import FormParser
 from starlette.responses import RedirectResponse, Response
 
 from plak import i18n, net
@@ -315,6 +318,26 @@ async def _over_the_limit(request: Request, selector: str) -> bool:
     return result.count > limit.max
 
 
+class _BodyTooLargeError(Exception):
+    """Raised mid-stream once the body read so far exceeds MAX_BODY_BYTES,
+    for a chunked request that carries no Content-Length to check upfront."""
+
+
+async def _bounded_form(request: Request) -> FormData:
+    total = 0
+
+    async def bounded_stream() -> AsyncGenerator[bytes, None]:
+        nonlocal total
+        async for chunk in request.stream():
+            total += len(chunk)
+            if total > MAX_BODY_BYTES:
+                raise _BodyTooLargeError
+            yield chunk
+
+    parser = FormParser(request.headers, bounded_stream())
+    return await parser.parse()
+
+
 @router.post(PATH_CONTENT_CODE, include_in_schema=False)
 async def submit_code(request: Request) -> Response:
     """Hands in the code of a secret link. Everything that is not this form
@@ -331,7 +354,10 @@ async def submit_code(request: Request) -> Response:
     if not request.headers.get("content-type", "").startswith(FORM_CONTENT_TYPE):
         return neutral_404_response()
 
-    form = await request.form()
+    try:
+        form = await _bounded_form(request)
+    except _BodyTooLargeError:
+        return neutral_404_response()
     selector = str(form.get("selector") or "")[: keys.SELECTOR_LENGTH]
     code = str(form.get("code") or "")
     target = valid_target(str(form.get("path") or ""))

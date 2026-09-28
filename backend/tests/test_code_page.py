@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 import pytest
@@ -569,6 +570,26 @@ class TestHandingInTheCode:
             headers=FORM_HEADERS,
         )
         assert _is_neutral_404(response)
+
+    async def test_an_oversized_chunked_body_is_the_neutral_404(self, client, environment):
+        # No Content-Length: httpx sends a generator body chunked, the same
+        # shape a client that skips the header would use to dodge the check
+        # that only looks at Content-Length.
+        async def body() -> AsyncIterator[bytes]:
+            yield f"selector={environment.world.key_selector}&code=".encode()
+            yield b"x" * 5000
+            yield b"&path=%2Faurora%2Fgeheim%2F"
+
+        response = await client.post(PATH_CONTENT_CODE, content=body(), headers=FORM_HEADERS)
+        assert _is_neutral_404(response)
+
+    async def test_a_small_chunked_body_still_works(self, client, environment):
+        async def body() -> AsyncIterator[bytes]:
+            yield urlencode(self._body(environment)).encode()
+
+        response = await client.post(PATH_CONTENT_CODE, content=body(), headers=FORM_HEADERS)
+        assert response.status_code == 303
+        assert KEY_COOKIE in response.cookies
 
     async def test_the_admin_host_has_no_code_endpoint(self, environment):
         async with httpx.AsyncClient(
