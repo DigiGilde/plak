@@ -425,8 +425,10 @@ def top_level_navigation(request: Request) -> bool:
     return request.headers.get("Sec-Fetch-Dest", "").strip().lower() == "document"
 
 
-def content_site_prefix(path: str) -> str | None:
-    """The `/{group}/{site}/` a content path belongs to, or None.
+def parse_site_path(path: str) -> tuple[str, str] | None:
+    """The (group, site) a content path addresses, or None when the path is
+    not a content path of a site: fewer than two segments, an empty group or
+    site, or a group reserved for the platform namespace.
 
     Percent-encoding is left exactly as it came in: a browser matches a cookie
     path against the encoded request path, so decoding here would hand out a
@@ -440,7 +442,20 @@ def content_site_prefix(path: str) -> str | None:
         return None
     if group in RESERVED_SLUGS or group == PLATFORM_SEGMENT:
         return None
+    return group, site
+
+
+def site_prefix(group: str, site: str) -> str:
+    """The canonical `/{group}/{site}/` prefix for an already-known site."""
     return f"/{group}/{site}/"
+
+
+def content_site_prefix(path: str) -> str | None:
+    """The `/{group}/{site}/` a content path belongs to, or None."""
+    site_path = parse_site_path(path)
+    if site_path is None:
+        return None
+    return site_prefix(*site_path)
 
 
 def _key_id_from_cookie(request: Request) -> str | None:
@@ -587,12 +602,14 @@ __all__ = [
     "content_session_from_request",
     "content_site_prefix",
     "csrf_valid",
+    "parse_site_path",
     "session_from_request",
     "set_content_anchor_cookies",
     "set_content_session_cookie",
     "set_session_cookies",
     "sign",
     "sign_key_cookie",
+    "site_prefix",
     "top_level_navigation",
     "valid_return_to",
     "visitor_from_request",

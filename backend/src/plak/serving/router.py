@@ -122,13 +122,7 @@ def _fetch_token(request: Request, header: str) -> str | None:
     return value.strip().lower()[:_FETCH_TOKEN_MAX]
 
 
-def _site_prefix(request: Request) -> str:
-    # From the raw path, so the comparison with a Referer is done in the same
-    # percent-encoding the browser used.
-    return "/".join(request.url.path.split("/", 3)[:3]) + "/"
-
-
-def _referer_within_site(request: Request) -> bool:
+def _referer_within_site(request: Request, group: str, site: str) -> bool:
     referer = request.headers.get("Referer")
     if not referer:
         return False
@@ -138,10 +132,10 @@ def _referer_within_site(request: Request) -> bool:
         return False
     if parts.hostname is not None and parts.hostname != request.url.hostname:
         return False
-    return parts.path.startswith(_site_prefix(request))
+    return parts.path.startswith(sessions.site_prefix(group, site))
 
 
-def _foreign_subresource(request: Request) -> bool:
+def _foreign_subresource(request: Request, group: str, site: str) -> bool:
     """Whether this is a subresource request made by another site's page.
 
     Every site of every group is served from one hostname under a path prefix,
@@ -162,7 +156,7 @@ def _foreign_subresource(request: Request) -> bool:
         return False
     if _fetch_token(request, "Sec-Fetch-Dest") in _NAVIGATION_DESTS:
         return False
-    return not _referer_within_site(request)
+    return not _referer_within_site(request, group, site)
 
 
 async def _audit(
@@ -309,7 +303,7 @@ async def _serve(
         decision.kind is not DecisionKind.NEUTRAL_404
         and decided_access is not None
         and (version_view or not decided_access.is_public)
-        and _foreign_subresource(request)
+        and _foreign_subresource(request, group, site)
     ):
         await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
         return response.neutral_404_response()
