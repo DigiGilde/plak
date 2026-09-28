@@ -278,6 +278,9 @@ function askRemove(row: Row): void {
 
 /** The site roles this person holds in this group, the named ones first. */
 const removeSiteRoles = computed<GroupSiteRole[]>(() => removing.value?.siteRoles ?? []);
+// Only read where removeSiteRoles.length > 0, which is only true while
+// removing is set, so the row is guaranteed to be there.
+const removingName = computed(() => removing.value!.name);
 const namedSites = computed(() => removeSiteRoles.value.slice(0, SITES_NAMED));
 const unnamedSites = computed(() => removeSiteRoles.value.length - namedSites.value.length);
 
@@ -543,7 +546,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
       <nldd-rich-text>
         <p>
           {{
-            t('group.members.confirm.remove.siteRoles.keeps', { name: removing?.name ?? '' })
+            t('group.members.confirm.remove.siteRoles.keeps', { name: removingName })
           }}
         </p>
       </nldd-rich-text>
