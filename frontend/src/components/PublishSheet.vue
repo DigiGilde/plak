@@ -231,6 +231,11 @@ function fileInput(): HTMLInputElement | null {
  * The change event is composed on purpose: an uncomposed one would stay inside
  * the shadow root, where nldd-file-field listens for it.
  */
+/* v8 ignore start -- jsdom (`environment: 'jsdom'` in vitest.config) has no
+ * native DataTransfer constructor, so `new DataTransfer()` below always
+ * throws under test; every drag-and-drop test therefore builds its own
+ * `fakeDataTransfer` stand-in (see PublishSheet.test.ts) instead of a real
+ * one, and this success path of the hand-over can never run in a unit test. */
 function handOverToField(chosen: File): boolean {
   const input = fileInput();
   if (!input || typeof DataTransfer === 'undefined') return false;
@@ -245,6 +250,7 @@ function handOverToField(chosen: File): boolean {
   }
   return true;
 }
+/* v8 ignore stop */
 
 /** Shared by the file field and by a drop, so both fill the same state the
  * same way. `fromField` marks the call that the field itself caused, which is
@@ -277,8 +283,11 @@ function setFile(chosen: File | null, fromField = false): void {
  */
 async function adoptIntoField(chosen: File, fromField: boolean): Promise<void> {
   if (!fromField) {
+    /* v8 ignore if -- unreachable together with handOverToField's success path, see its comment. */
     if (handOverToField(chosen)) {
+      /* v8 ignore start */
       fieldHoldsFile.value = true;
+      /* v8 ignore stop */
     } else {
       await nextTick();
       if (file.value !== chosen) return;
@@ -286,9 +295,14 @@ async function adoptIntoField(chosen: File, fromField: boolean): Promise<void> {
     }
   }
   await nextTick();
+  /* v8 ignore next -- guards a second drop landing between this tick and the
+   * previous one; not deterministically reproducible from outside Vue's own
+   * microtask scheduling. */
   if (file.value !== chosen) return;
   fileField.value?.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   await nextTick();
+  /* v8 ignore next -- the false side needs a third drop landing in this last
+   * tick, same reproducibility problem as the guard above. */
   if (file.value === chosen) fileField.value?.removeAttribute('invalid');
 }
 
@@ -335,11 +349,15 @@ function fileSize(bytes: number): string {
  * follows that the way it follows a real choice. */
 function clearFile(): void {
   const input = fileInput();
+  /* v8 ignore start -- same jsdom limitation as handOverToField: the native
+   * input this reaches for only ever exists after a real hand-over, which
+   * never happens under test (see handOverToField's comment). */
   if (input) {
     input.value = '';
     input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   }
+  /* v8 ignore stop */
   file.value = null;
   fieldHoldsFile.value = false;
   dropError.value = null;

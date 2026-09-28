@@ -36,6 +36,17 @@ describe('ConfirmModal (teleport)', () => {
     expect(wrapper.emitted('confirm')).toHaveLength(1);
   });
 
+  it('emits close when the dialog closes itself, such as on Escape', async () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true },
+      global: { stubs: { teleport: true } },
+    });
+
+    await wrapper.find('nldd-modal-dialog').trigger('close');
+
+    expect(wrapper.emitted('close')).toHaveLength(1);
+  });
+
   it('puts the safe way out on top as the primary button and disables nothing', async () => {
     const wrapper = mount(ConfirmModal, {
       props: { ...props, open: true, keepLabel: 'Behoud site', busy: true },

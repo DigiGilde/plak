@@ -199,7 +199,11 @@ async function onAdd(): Promise<void> {
   if (emptyField.value) return;
   // The field only submits what was picked, so the label beside the address is
   // the name of whoever was picked. Read before the field is emptied.
+  /* v8 ignore start -- newLabel is always set together with newIdentifier (by
+   * onIdentifierChange or reopen()), to the picked name or the identifier
+   * itself, so it is never blank once emptyField has let this line run. */
   const name = newLabel.value.trim() || identifier;
+  /* v8 ignore stop */
 
   newIdentifier.value = '';
   newLabel.value = '';
@@ -329,8 +333,9 @@ function toggleSiteRoles(event: CustomEvent<{ checked?: boolean }>): void {
 
 async function confirmRemove(): Promise<void> {
   const row = removing.value;
-  /* v8 ignore next -- the modal only confirms while it is open, so there is a row. */
+  /* v8 ignore start -- the modal only confirms while it is open, so there is a row. */
   if (row === null) return;
+  /* v8 ignore stop */
   removeBusy.value = true;
   try {
     await onRemove(row, alsoSiteRoles.value ? 'remove' : 'keep');
