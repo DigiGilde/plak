@@ -39,6 +39,44 @@ def test_no_catalogue_entry_is_empty() -> None:
             assert text.strip(), key
 
 
+class TestCheckCatalogues:
+    """_check_catalogues() runs once at import time, against catalogues that
+    are consistent by construction, so its failure branches never fire in a
+    normal run. Monkeypatching the module-level dicts it reads lets each
+    invariant be broken in turn and the exact refusal checked."""
+
+    def test_a_key_missing_from_one_catalogue_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(messages, "NL", {"ONLY_IN_NL": "tekst"})
+        monkeypatch.setattr(messages, "EN", {})
+        with pytest.raises(RuntimeError, match=r"catalogues disagree on: \['ONLY_IN_NL'\]"):
+            messages._check_catalogues()
+
+    def test_a_key_that_is_neither_a_code_nor_a_fragment_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        bad = {"not-a-usable-key!": "tekst"}
+        monkeypatch.setattr(messages, "NL", bad)
+        monkeypatch.setattr(messages, "EN", bad)
+        with pytest.raises(RuntimeError, match="not a usable message key: not-a-usable-key!"):
+            messages._check_catalogues()
+
+    def test_catalogues_that_interpolate_different_values_are_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(messages, "NL", {"SOME_KEY": "tekst met {waarde}"})
+        monkeypatch.setattr(messages, "EN", {"SOME_KEY": "text with {value}"})
+        with pytest.raises(RuntimeError, match="catalogues interpolate different values in: SOME_KEY"):
+            messages._check_catalogues()
+
+    def test_title_tables_that_disagree_on_status_codes_are_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(messages, "TITLES_NL", {400: "Ongeldig verzoek"})
+        monkeypatch.setattr(messages, "TITLES_EN", {404: "Not found"})
+        with pytest.raises(RuntimeError, match="title tables disagree on the status codes they cover"):
+            messages._check_catalogues()
+
+
 def test_a_code_key_carries_its_code_and_a_variant_does_not_change_it() -> None:
     assert messages.code_of("UNKNOWN_SITE") == "UNKNOWN_SITE"
     assert messages.code_of("MULTIPART_INVALID.incomplete") == "MULTIPART_INVALID"
