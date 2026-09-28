@@ -7,6 +7,7 @@ section 2.6, and what happens to the sessions it points at.
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from authlib.jose import RSAKey
@@ -17,6 +18,7 @@ from plak.audit import vocabulary
 from plak.auth.sessions import SessionStore
 from plak.constants import PATH_BACKCHANNEL_LOGOUT
 from plak.host_separation import belongs_to_content
+from plak.platform.backchannel import ReplayCache
 
 pytestmark = pytest.mark.asyncio
 
@@ -211,6 +213,18 @@ async def test_a_token_without_jti_is_not_replay_checked() -> None:
     async with make_test_client(app) as client:
         assert (await _post(client, token)).status_code == 200
         assert (await _post(client, token)).status_code == 200
+
+
+async def test_an_expired_entry_is_pruned_on_the_next_access() -> None:
+    """The prune loop in seen_before() only ever deletes an entry that has
+    already expired by the time some other jti is checked."""
+    cache = ReplayCache()
+    start = datetime.now(UTC)
+    assert cache.seen_before("verlopen", now=start) is False
+
+    later = start + timedelta(hours=1)
+    assert cache.seen_before("een-andere", now=later) is False
+    assert "verlopen" not in cache._seen
 
 
 async def test_the_endpoint_does_not_exist_on_the_content_host() -> None:
