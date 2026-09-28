@@ -114,7 +114,7 @@ const sortedMembers = computed<Member[]>(() => {
     const rank = (member: Member): number => (member.platformRole === 'admin' ? 1 : 0);
     return rows.sort(
       (a, b) =>
-        sign * (rank(b) - rank(a)) ||
+        sign * (rank(a) - rank(b)) ||
         (a.name || a.email).localeCompare(b.name || b.email, 'nl'),
     );
   }

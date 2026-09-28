@@ -272,34 +272,7 @@ describe('Platform management (filled)', () => {
   });
 
   // BUG (found while writing this test, not fixed here): the comment on
-  // sortedMembers in Members.vue says "Beheerders first when descending",
-  // and the role column's own `initial` is 'descending' to match, but the
-  // comparator sorts on `rank(b) - rank(a)` (operands reversed relative to
-  // the name/date comparators' `a`-then-`b`), which inverts it: admins
-  // actually land last on the first (descending) click and first only on
-  // the second (ascending) click. This test pins the actual behavior for
-  // coverage; see the skipped test below for the behavior the comment
-  // promises.
-  it('sorts by role: admins land last on the first (descending) click, not first', async () => {
-    await mountComponent();
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
-    expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('admin');
-
-    await sortOn('Rol');
-    expect(ariaSortOf('Rol')).toBe('descending');
-    expect(renderedNames().slice(-2)).toEqual(['Ada Vermeer', 'Bea Heerder']);
-
-    await sortOn('Rol');
-    expect(ariaSortOf('Rol')).toBe('ascending');
-    const names = renderedNames();
-    expect(names.slice(0, 2)).toEqual(['Ada Vermeer', 'Bea Heerder']);
-    expect(names.slice(2)).toEqual([...names.slice(2)].sort((a, b) => a.localeCompare(b, 'nl')));
-  });
-
-  // See the BUG note above: this is the behavior the code comment and the
-  // column's 'descending' initial promise. Skipped until the comparator is
-  // fixed (swap to `rank(a) - rank(b)`, matching the other comparators).
-  it.skip('sorts by role, admins first when descending and last when ascending', async () => {
+  it('sorts by role, admins first when descending and last when ascending', async () => {
     await mountComponent();
     await runAction('Ada Vermeer', 'lid-rol-lid-3');
 
