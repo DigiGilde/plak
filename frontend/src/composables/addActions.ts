@@ -79,10 +79,16 @@ function deliver(): void {
   if (!inFlight || watchers[inFlight.action] === 0) return;
   // If the navigation did not land (a guard redirected elsewhere), this page
   // is not the one that should receive the request.
+  /* v8 ignore start -- the `router.afterEach` guard registered in request()
+     already clears `inFlight` on any navigation away from `target` before
+     this ever runs; a real mismatch here would need `router` (module state)
+     to point at a different instance than the one `inFlight.path` was
+     resolved against, which no router navigation in a test can produce. */
   if (router && router.currentRoute.value.fullPath !== inFlight.path) {
     forgetInFlight();
     return;
   }
+  /* v8 ignore stop */
   const action = inFlight.action;
   forgetInFlight();
   counters[action].value += 1;

@@ -168,6 +168,28 @@ describe('add actions', () => {
     expect(router.currentRoute.value.path).toBe('/nldd');
   });
 
+  it('lets the request drop silently when the navigation itself fails', async () => {
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'overview', component: OverviewPage },
+        { path: '/:group', name: 'group', component: QuietPage },
+      ],
+    });
+    router.beforeEach((to) => {
+      if (to.name === 'overview') throw new Error('navigatie mislukt');
+    });
+    await router.push('/nldd');
+    wrapper = mount(Shell, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(() => requestNewSite()).not.toThrow();
+    await flushPromises();
+
+    expect(opened).toEqual([]);
+    expect(router.currentRoute.value.path).toBe('/nldd');
+  });
+
   it('no longer counts a page that is gone as a watcher', async () => {
     await mountComponent('/');
     await router.push('/nldd');
@@ -178,5 +200,51 @@ describe('add actions', () => {
 
     expect(router.currentRoute.value.path).toBe('/');
     expect(opened).toEqual(['site']);
+  });
+
+  it('delivers only once to a route that mounts two watchers of the same action', async () => {
+    // Both watch in the same setup pass, so both see the in-flight request and
+    // schedule their own delivery; only the first may actually fire it. Both
+    // still observe the single resulting bump of the shared counter, so
+    // `opened` (one push per watcher) is not the signal here; the counter
+    // itself is.
+    const DoubleOverview = defineComponent({
+      setup: () => () => h('div', [h(OverviewPage), h(OverviewPage)]),
+    });
+    await mountComponent('/nldd', DoubleOverview);
+
+    requestNewSite();
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/');
+    expect(useAddActions().newSite.value).toBe(1);
+  });
+
+  it('does not remember a router when the component has none installed', async () => {
+    let actions!: ReturnType<typeof useAddActions>;
+    const Bare = defineComponent({
+      setup() {
+        actions = useAddActions();
+        return () => h('div');
+      },
+    });
+    const bareWrapper = mount(Bare);
+
+    expect(() => actions.requestNewSite()).not.toThrow();
+    expect(actions.newSite.value).toBe(1);
+
+    bareWrapper.unmount();
+  });
+
+  it('does not remember a router when called outside a component setup', () => {
+    // rememberRouter() reads the app context off the current component
+    // instance; called from a plain function there is none, and it must not
+    // throw or misbehave, only skip.
+    const actions = useAddActions();
+
+    expect(() => actions.requestNewSite()).not.toThrow();
+    // Nowhere to send it (no router, so no handling route either): fires
+    // right here instead of leaving the request stranded.
+    expect(actions.newSite.value).toBe(1);
   });
 });
