@@ -75,7 +75,9 @@ function supportingText(session: CliSession): string {
 
 async function confirmRevoke(): Promise<void> {
   const session = revoking.value;
+  /* v8 ignore start -- the modal only confirms while it is open, so there is a session. */
   if (!session) return;
+  /* v8 ignore stop */
   revokeBusy.value = true;
   try {
     await revokeCliSession(session.id);
