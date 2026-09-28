@@ -24,7 +24,7 @@ from plak.auth.oidc import OidcClient
 from plak.auth.sessions import SessionStore
 from plak.config import Settings
 from plak.ingest.store import ContentStore
-from plak.main import create_app
+from plak.main import ApiVersionHeaderMiddleware, SessionRecheckMiddleware, create_app
 from plak.serving.response import NEUTRAL_404_BODY
 
 BASE_URL = "https://plak.example"
@@ -282,6 +282,48 @@ async def test_trustedhost_middleware_allows_both_own_hosts(tmp_path: Path) -> N
 
     assert on_content.status_code == 200
     assert on_admin.status_code == 200
+
+
+async def test_api_version_header_middleware_passes_a_non_http_scope_through() -> None:
+    """A websocket (or lifespan) scope carries no response to stamp the
+    header onto; the middleware must step aside rather than wrap `send`."""
+    calls: list[dict] = []
+
+    async def inner(scope, receive, send) -> None:
+        calls.append(scope)
+
+    middleware = ApiVersionHeaderMiddleware(inner)
+    scope = {"type": "websocket", "path": "/ws"}
+
+    async def receive() -> None:
+        raise AssertionError("receive should not be called")
+
+    async def send(message) -> None:
+        raise AssertionError("send should not be called")
+
+    await middleware(scope, receive, send)
+    assert calls == [scope]
+
+
+async def test_session_recheck_middleware_skips_revalidation_on_a_non_http_scope() -> None:
+    """Only an http scope carries cookies to revalidate; a websocket scope
+    must reach the app untouched, without a Request built around it."""
+    calls: list[dict] = []
+
+    async def inner(scope, receive, send) -> None:
+        calls.append(scope)
+
+    middleware = SessionRecheckMiddleware(inner)
+    scope = {"type": "websocket", "path": "/ws"}
+
+    async def receive() -> None:
+        raise AssertionError("receive should not be called")
+
+    async def send(message) -> None:
+        raise AssertionError("send should not be called")
+
+    await middleware(scope, receive, send)
+    assert calls == [scope]
 
 
 async def test_no_trustedhost_middleware_without_base_url(tmp_path: Path) -> None:

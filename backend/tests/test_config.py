@@ -261,6 +261,13 @@ def test_without_content_base_url_refused_in_dev_too(monkeypatch):
     assert "CONTENT_BASE_URL" in str(excinfo.value)
 
 
+def test_unknown_environment_value_refused(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_ENVIRONMENT="staging")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_ENVIRONMENT" in str(excinfo.value)
+
+
 @pytest.mark.parametrize("value", ["", "plak.example", "/sites", "https://"])
 def test_content_base_url_without_hostname_refused(monkeypatch, value):
     # The app derives the content host from this URL; without a hostname

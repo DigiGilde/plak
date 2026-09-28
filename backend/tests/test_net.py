@@ -10,7 +10,7 @@ from __future__ import annotations
 from starlette.requests import Request
 
 from plak.audit.pseudonymisation import truncate_ip
-from plak.net import UNKNOWN, client_ip, parse_trusted_proxies
+from plak.net import UNKNOWN, client_ip, client_ip_from_request, parse_trusted_proxies
 
 # What production carries today: every RFC1918 range counts as a proxy.
 _ALL_PRIVATE = parse_trusted_proxies("10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
@@ -115,6 +115,17 @@ def test_falling_back_to_the_peer_stays_vouched_for() -> None:
 def test_empty_entries_do_not_count_as_a_skipped_hop() -> None:
     derived = client_ip(_request("10.128.0.5", " , 198.51.100.5"), _ALL_PRIVATE)
     assert derived.vouched
+
+
+# --- client_ip_from_request: the audit-call-site convenience -------------------------
+
+
+def test_client_ip_from_request_without_a_connected_peer_is_none() -> None:
+    # No socket peer at all (e.g. a request built for a unit test): returning
+    # None here avoids reading request.app.state.settings, which such a
+    # request never carries either.
+    request = _request(None)
+    assert client_ip_from_request(request) is None
 
 
 def test_the_derived_address_is_a_plain_string_everywhere_else() -> None:

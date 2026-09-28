@@ -360,6 +360,27 @@ class TestFullApp:
             assert response.headers["strict-transport-security"] == HSTS
             assert "cross-origin-opener-policy" not in response.headers
 
+    async def test_non_http_scope_is_passed_through_untouched(self) -> None:
+        """A websocket (or lifespan) scope carries no response to add headers
+        to; the middleware must step aside rather than read a host or touch
+        `send`."""
+        calls: list[Scope] = []
+
+        async def inner(scope: Scope, receive: Receive, send: Send) -> None:
+            calls.append(scope)
+
+        middleware = SecurityHeadersMiddleware(inner, hsts=True, content_host=CONTENT_HOST)
+        scope: Scope = {"type": "websocket", "path": "/ws"}
+
+        async def receive() -> None:
+            raise AssertionError("receive should not be called")
+
+        async def send(message) -> None:
+            raise AssertionError("send should not be called")
+
+        await middleware(scope, receive, send)
+        assert calls == [scope]
+
     async def test_no_hsts_with_http_base_url(self, tmp_path: Path) -> None:
         app = create_app(
             _settings(

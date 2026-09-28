@@ -16,9 +16,10 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import MockIdP, make_client_jwk, make_oidc_client
+from starlette.types import Receive, Scope, Send
 
 from plak.config import Settings
-from plak.host_separation import belongs_to_admin, belongs_to_content
+from plak.host_separation import HostSeparationMiddleware, belongs_to_admin, belongs_to_content
 from plak.main import create_app
 from plak.serving.response import NEUTRAL_404_BODY
 
@@ -83,6 +84,27 @@ class TestClassification:
         # Spec §4a/§11: internal only, the probe hits the pod directly.
         assert not belongs_to_admin("/healthz")
         assert not belongs_to_content("/healthz")
+
+    async def test_non_http_scope_is_passed_through_untouched(self) -> None:
+        """A websocket (or lifespan) scope carries no host-worthy path
+        classification; the middleware must step aside rather than read the
+        host or answer the neutral 404 for it."""
+        calls: list[Scope] = []
+
+        async def inner(scope: Scope, receive: Receive, send: Send) -> None:
+            calls.append(scope)
+
+        middleware = HostSeparationMiddleware(inner, content_host="plak.example")
+        scope: Scope = {"type": "websocket", "path": "/-/onbekend"}
+
+        async def receive() -> None:
+            raise AssertionError("receive should not be called")
+
+        async def send(message) -> None:
+            raise AssertionError("send should not be called")
+
+        await middleware(scope, receive, send)
+        assert calls == [scope]
 
 
 def _settings(tmp_path: Path, **overrides: object) -> Settings:
