@@ -166,6 +166,23 @@ describe('Groups', () => {
     wrapper.unmount();
   });
 
+  it('counts more than one live site in the plural, distinct from the total', async () => {
+    vi.mocked(plakApi.overview).mockResolvedValue({
+      groups: [
+        {
+          group: { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          sites: [site('website', true), site('handboek', true), site('intranet', false)],
+        },
+      ],
+    });
+
+    const wrapper = await mountComponent();
+
+    expect(cellTexts(wrapper, 'nldd-text-cell')).toEqual(['3 sites', '2 sites online']);
+
+    wrapper.unmount();
+  });
+
   it('links each row to the group page', async () => {
     vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
 
