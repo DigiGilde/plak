@@ -28,6 +28,24 @@ function makeWrapper() {
   });
 }
 
+/**
+ * Wraps the mock backend's fetch, patching fields onto the `/me` response
+ * only, for scenarios the mock's fixed data does not otherwise reach (no
+ * session, no configured Forgejo host, no CI audience).
+ */
+function withMeOverride(overrides: Record<string, unknown>): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    const response = await backend.fetch(input, init);
+    if (!url.endsWith('/me') || !response.ok) return response;
+    const body = (await response.json()) as Record<string, unknown>;
+    return new Response(JSON.stringify({ ...body, ...overrides }), {
+      status: response.status,
+      headers: response.headers,
+    });
+  };
+}
+
 describe('TabDeploy: linked repository', () => {
   it('shows the linked repository with host, live branch and who linked it', async () => {
     const wrapper = makeWrapper();
@@ -617,5 +635,249 @@ describe('TabDeploy: why this is safe', () => {
     expect(block.text()).toContain('never touch the live site');
 
     _setLocaleForTest('nl');
+  });
+});
+
+describe('TabDeploy: admin status', () => {
+  it('shows the read-only view without admin controls when no one is logged in', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain('GitHub - nldd/website');
+    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(false);
+  });
+
+  it('grants admin controls through an effective site role, not only platform or group admin', async () => {
+    // lid-4 (Zoë de Wit) is a group reader in nldd, but holds an explicit
+    // "admin" site role on nldd/website, so her effective role there is admin.
+    backend.data.loggedInMemberId = 'lid-4';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(true);
+  });
+});
+
+describe('TabDeploy: owner/repo input without a detail payload', () => {
+  it('falls back to the input element value when the field fires a plain input event', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    const field = wrapper.find('[data-testid="repository-eigenaar-repo"]').element as HTMLInputElement;
+    field.value = 'minbzk/website';
+    field.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories[0]).toMatchObject({ owner: 'minbzk', repo: 'website' });
+  });
+
+  it('falls back to an empty value when neither a detail payload nor the element carries one', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    wrapper.find('[data-testid="repository-eigenaar-repo"]').element.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories).toHaveLength(0);
+    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeDefined();
+  });
+});
+
+describe('TabDeploy: repository reference edge cases', () => {
+  it('shows a configured Forgejo host verbatim when it is not a parseable URL', async () => {
+    backend.data.repositories = [];
+    vi.stubGlobal('fetch', withMeOverride({ ciForgejoHosts: ['not a valid url'] }));
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+      value: 'https://gitlab.com/minbzk/website',
+    });
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories).toHaveLength(0);
+    expect(wrapper.html()).toContain('not a valid url');
+  });
+
+  it('refuses a pasted URL with no owner and repository in its path', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+      value: 'https://github.com/onlyowner',
+    });
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories).toHaveLength(0);
+    expect(wrapper.html()).toContain('De URL bevat geen eigenaar en repository.');
+  });
+
+  it('refuses an unparsable pasted URL', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+      value: 'https://[',
+    });
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories).toHaveLength(0);
+    expect(wrapper.html()).toContain('Dit is geen geldige URL.');
+  });
+});
+
+describe('TabDeploy: Forgejo host selection while editing', () => {
+  it('prefills the configured host when editing an existing Forgejo link, and sends it along again', async () => {
+    backend.data.repositories[0]!.provider = 'forgejo';
+    backend.data.repositories[0]!.host = 'https://code.overheid.nl';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+
+    expect(
+      (wrapper.find('[data-testid="repository-host"]').element as HTMLSelectElement).value,
+    ).toBe('https://code.overheid.nl');
+
+    await wrapper.find('[data-testid="repository-host"]').setValue('https://code.overheid.nl');
+    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.repositories[0]).toMatchObject({
+      provider: 'forgejo',
+      host: 'https://code.overheid.nl',
+    });
+  });
+
+  it('leaves the host blank when editing a GitHub link and no Forgejo host is configured', async () => {
+    vi.stubGlobal('fetch', withMeOverride({ ciForgejoHosts: [] }));
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+
+    const providerSelect = wrapper.find('[data-testid="repository-provider"]');
+    await providerSelect.setValue('forgejo');
+    await untilIdle();
+
+    const hostSelect = wrapper.find('[data-testid="repository-host"]');
+    expect(hostSelect.exists()).toBe(true);
+    expect(hostSelect.findAll('option')).toHaveLength(0);
+  });
+
+  it('opens the link form with no host to pick when no Forgejo host is configured', async () => {
+    backend.data.repositories = [];
+    vi.stubGlobal('fetch', withMeOverride({ ciForgejoHosts: [] }));
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+
+    const providerSelect = wrapper.find('[data-testid="repository-provider"]');
+    await providerSelect.setValue('forgejo');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-host"]').findAll('option')).toHaveLength(0);
+  });
+
+  it('leaves the live branch field empty when editing a repository without a live branch restriction', async () => {
+    backend.data.repositories[0]!.liveBranch = null;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+
+    expect(
+      (wrapper.find('[data-testid="repository-livebranch-invoer"]').element as HTMLInputElement).getAttribute(
+        'value',
+      ),
+    ).toBe('');
+  });
+});
+
+describe('TabDeploy: unlinking and configuration fallbacks', () => {
+  it('keeps the repository linked when the unlink confirmation is cancelled', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await untilIdle();
+    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await untilIdle();
+
+    expect(backend.data.repositories).toHaveLength(1);
+    expect(wrapper.find('[data-testid="repository-naam"]').exists()).toBe(true);
+  });
+
+  it('reports unlinking failure with the generic message for a non-ApiError failure', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await untilIdle();
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    const notification = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notification.exists()).toBe(true);
+    expect(notification.attributes('supporting-text')).toBe('Ontkoppelen is niet gelukt.');
+  });
+
+  it('falls back to window.location.origin in the snippets when no CI audience is configured', async () => {
+    vi.stubGlobal('fetch', withMeOverride({ ciAudience: null }));
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const snippet = wrapper.find('[data-testid="cli-snippet"]').text();
+    expect(snippet).toContain(`plak login --host ${window.location.origin}`);
+  });
+
+  it('shows "onbekend" as who linked it when the repository has no recorded creator', async () => {
+    backend.data.repositories[0]!.createdBy = '';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.html()).toContain('Gekoppeld door onbekend');
   });
 });

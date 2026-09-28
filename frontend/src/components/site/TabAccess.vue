@@ -72,9 +72,14 @@ const keyError = ref<string | null>(null);
 /** The plaintext of a key just made; it exists only on this screen. */
 const newKeyValue = ref<string | null>(null);
 const siteAddress = computed(() => siteUrl(props.contentBase, props.group, props.site));
+// The template only ever reads this behind `newKeyValue && newKeyLink`, so the
+// falsy branch never runs: the `&&` short-circuits before this computed's
+// getter is invoked.
+/* v8 ignore start -- unreachable: see comment above */
 const newKeyLink = computed(() =>
   newKeyValue.value ? `${siteAddress.value}?key=${newKeyValue.value}` : null,
 );
+/* v8 ignore stop */
 
 const summary = computed(() => (access.value ? accessSummary(access.value) : ''));
 /**
