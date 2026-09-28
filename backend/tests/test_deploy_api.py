@@ -30,6 +30,7 @@ from fastapi import FastAPI
 from helpers_ci import AUDIENCE, FORGEJO_HOST, OMIT, MockCi
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.requests import Request
 
 from plak.api import deploys
 from plak.api.deploys import BearerOutsideDeploysMiddleware
@@ -510,6 +511,16 @@ async def test_unknown_bearer_format_401(environment: Environment) -> None:
     assert resp.headers["www-authenticate"].startswith("Bearer")
 
 
+async def test_a_non_bearer_authorization_scheme_is_ignored(environment: Environment) -> None:
+    """`Authorization: Basic ...` is not a Bearer token: it falls through to
+    the session-auth path, and without a session that is 401, not a 500 from
+    treating the whole header as a token."""
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers={"Authorization": "Basic dXNlcjpwYXNz"})
+    content = _assert_problem(resp, 401)
+    assert content["code"] == "NO_AUTHENTICATION"
+
+
 async def test_cli_token_deploys_as_its_member(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.cli_token))
@@ -822,6 +833,30 @@ async def test_failed_upload_still_writes_a_refused_audit_row(
     assert row.reason_code == deploys.AUDIT_REASON_INTERNAL
 
 
+async def test_an_unexpected_error_before_the_ingest_cleans_up_the_spool(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An error that is neither `ApiError` nor `IngestError`, raised after the
+    upload was already spooled (here: during the live-branch check), still
+    has to remove the spool file it made."""
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("onverwachte fout")
+
+    monkeypatch.setattr(trust, "check_live_deploy", _boom)
+    async with environment.client() as client:
+        with pytest.raises(RuntimeError, match="onverwachte fout"):
+            await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY))
+        ).scalar_one()
+    assert row.result == "refused"
+    assert row.reason_code == deploys.AUDIT_REASON_INTERNAL
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
 async def test_failed_ingest_still_writes_a_refused_audit_row(
     environment: Environment, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -894,6 +929,36 @@ async def test_bearer_outside_deploy_endpoints_401(environment: Environment) -> 
         # Without bearer the same endpoint stays reachable as usual.
         resp = await client.get("/-/api/v1/groups")
         assert resp.status_code == 200
+
+
+async def test_bearer_outside_deploys_middleware_passes_non_http_scopes_through() -> None:
+    """The middleware only inspects `http` scopes; a `lifespan` (or
+    `websocket`) scope must reach the inner app unchanged, bearer header or
+    not."""
+    calls: list[dict] = []
+
+    async def inner_app(scope, receive, send) -> None:
+        calls.append(scope)
+
+    middleware = BearerOutsideDeploysMiddleware(inner_app)
+
+    async def receive():
+        return {"type": "lifespan.startup"}
+
+    async def send(_message) -> None:
+        pass
+
+    scope = {"type": "lifespan", "headers": [(b"authorization", b"Bearer plakcli_abc")]}
+    await middleware(scope, receive, send)
+
+    assert calls == [scope]
+
+
+def test_auth_refs_of_no_established_auth_is_empty() -> None:
+    """`_auth_refs` is only ever called after `_authenticate` has returned or
+    raised, so `auth` is never actually `None` at either call site; this
+    pins the fallback its type hint promises."""
+    assert deploys._auth_refs(None) == {}
 
 
 async def test_revoked_cli_token_401_with_www_authenticate(environment: Environment) -> None:
@@ -978,6 +1043,22 @@ async def test_refused_deploy_is_audited_once(environment: Environment) -> None:
     async with environment.session_factory() as db:
         rows = (await db.execute(select(AuditLogEntry))).scalars().all()
     assert [row.action for row in rows] == ["deploy"]
+
+
+async def test_session_of_a_deactivated_member_403(environment: Environment) -> None:
+    """The session-auth path checks membership status itself (the CLI-token
+    path has its own equivalent check, in cli_member)."""
+    cookies, headers = environment.session_for("sub-actief")
+    async with environment.session_factory() as db:
+        await db.execute(
+            update(Member).where(Member.id == environment.member.id).values(status=MemberStatus.DEACTIVATED)
+        )
+        await db.commit()
+    async with environment.client() as client:
+        client.cookies.update(cookies)
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=headers)
+    content = _assert_problem(resp, 403)
+    assert content["code"] == "MEMBER_NOT_ACTIVE"
 
 
 async def test_teardown_idempotent_204(environment: Environment) -> None:
@@ -1158,6 +1239,136 @@ async def test_second_file_field_422(environment: Environment) -> None:
         )
     _assert_problem(resp, 422)
     assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_two_parts_both_named_file_is_422(environment: Environment) -> None:
+    """Unlike `test_second_file_field_422` (a second file under another field
+    name), this is the same field name twice: `unexpected_file_field` never
+    fires, only `more_than_one_file` does."""
+    body = (
+        _part_header("file", "een.zip")
+        + _zip_bytes()
+        + b"\r\n"
+        + _part_header("file", "twee.zip")
+        + _zip_bytes()
+        + f"\r\n--{BOUNDARY}--\r\n".encode()
+    )
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=body, headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    _assert_problem(resp, 422)
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_a_field_without_a_name_is_422(environment: Environment) -> None:
+    body = (
+        f"--{BOUNDARY}\r\nContent-Disposition: form-data\r\n\r\nwaarde\r\n".encode()
+        + _part_header("file", "site.zip")
+        + _zip_bytes()
+        + f"\r\n--{BOUNDARY}--\r\n".encode()
+    )
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=body, headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    _assert_problem(resp, 422)
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_more_than_the_maximum_number_of_fields_is_422(environment: Environment) -> None:
+    fields = {f"veld{i}": "x" for i in range(deploys.MAX_FIELDS + 1)}
+    parts_ = _multipart_parts("site.zip", [_zip_bytes()], fields=fields)
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            content=b"".join(parts_),
+            headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS},
+        )
+    _assert_problem(resp, 422)
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_a_field_value_over_the_byte_cap_is_422(environment: Environment) -> None:
+    parts_ = _multipart_parts(
+        "site.zip", [_zip_bytes()], fields={"comment": "a" * (deploys.MAX_FIELD_BYTES + 1)}
+    )
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH,
+            content=b"".join(parts_),
+            headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS},
+        )
+    _assert_problem(resp, 422)
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_a_non_utf8_field_value_falls_back_to_latin1(environment: Environment) -> None:
+    """A form field is raw bytes, not text: a byte sequence that is invalid
+    utf-8 but valid latin-1 must not crash the parser."""
+    body = (
+        _part_header("comment")
+        + b"caf\xe9"
+        + b"\r\n"
+        + _part_header("file", "site.zip")
+        + _zip_bytes()
+        + f"\r\n--{BOUNDARY}--\r\n".encode()
+    )
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=body, headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    assert resp.status_code == 201, resp.text
+
+
+async def test_a_boundary_over_the_parsers_own_limit_is_422(environment: Environment) -> None:
+    """The parser itself refuses construction (FormParserError) for a
+    boundary longer than it accepts, before any body is read."""
+    huge_boundary = "x" * 300
+    headers = {**_bearer(environment.ci_token), "Content-Type": f"multipart/form-data; boundary={huge_boundary}"}
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, content=b"rommel", headers=headers)
+    content = _assert_problem(resp, 422)
+    assert content["code"] == "MULTIPART_INVALID"
+
+
+async def test_a_missing_closing_boundary_is_incomplete_422(environment: Environment) -> None:
+    """Unlike `test_truncated_multipart_422_without_version` (cut off inside
+    the file data, so the file is never marked complete), this body's file
+    part finishes cleanly but the final `--boundary--` never arrives: a bare
+    `--boundary` reads as the start of a new part instead."""
+    body = _part_header("file", "site.zip") + _zip_bytes() + f"\r\n--{BOUNDARY}\r\n".encode()
+    async with environment.client() as client:
+        resp = await client.post(
+            DEPLOY_PATH, content=body, headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS}
+        )
+    _assert_problem(resp, 422)
+    async with environment.session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(Version)) == 0
+    assert list(_tmp_dir(environment).iterdir()) == []
+
+
+async def test_a_client_disconnect_during_the_upload_is_a_400(tmp_path: Path) -> None:
+    """`_spool_upload` reads the body from `request.stream()`, which raises
+    `ClientDisconnect` once the client is gone; that must not surface as a
+    raw exception. Exercised directly against a bare `Request`, since httpx's
+    `ASGITransport` has no way to simulate a mid-stream disconnect."""
+    store = ContentStore(tmp_path)
+
+    async def receive() -> dict:
+        return {"type": "http.disconnect"}
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"content-type", f"multipart/form-data; boundary={BOUNDARY}".encode())],
+    }
+    request = Request(scope, receive)
+
+    with pytest.raises(ApiError) as excinfo:
+        await deploys._spool_upload(request, store, 10 * 1024 * 1024)
+    assert excinfo.value.status == 400
+    assert excinfo.value.reason == "CLIENT_ABORTED"
 
 
 async def test_preview_field_for_the_file_works_also(environment: Environment) -> None:
