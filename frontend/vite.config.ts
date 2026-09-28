@@ -38,11 +38,17 @@ export default defineConfig({
       // A ratchet, not an ambition: the floor is what the suite measures
       // today, so coverage cannot quietly drop. Raise it when the
       // measurement rises.
+      //
+      // The floor dropped from 97/91/90/97 on the move to vitest 4, which
+      // measures the same suite differently: coverage-v8 now always remaps
+      // through the AST instead of the source map, so a statement is a
+      // statement and no longer a v8 byte range (10494 counted statements
+      // became 3373). No test changed; only the denominator did.
       thresholds: {
-        statements: 97,
-        branches: 91,
-        functions: 90,
-        lines: 97,
+        statements: 93,
+        branches: 87,
+        functions: 92,
+        lines: 95,
       },
     },
   },

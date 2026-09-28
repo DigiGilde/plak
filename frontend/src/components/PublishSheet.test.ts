@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import type { Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/api/client';
@@ -46,11 +47,14 @@ const site: Site = {
 
 type Wrapper = ReturnType<typeof mount>;
 
+// `Mock` and not `ReturnType<typeof vi.fn>`: since vitest 4 that ReturnType
+// resolves the generic to its constraint `Procedure | Constructable`, which no
+// longer satisfies a plain call signature, so the props would not typecheck.
 interface Flow {
-  createGroup: ReturnType<typeof vi.fn>;
-  createSite: ReturnType<typeof vi.fn>;
-  setAccess: ReturnType<typeof vi.fn>;
-  publish: ReturnType<typeof vi.fn>;
+  createGroup: Mock;
+  createSite: Mock;
+  setAccess: Mock;
+  publish: Mock;
 }
 
 function flow(override: Partial<Flow> = {}): Flow {

@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import type { Mock } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/api/client';
@@ -13,7 +14,10 @@ function typeInText(wrapper: ReturnType<typeof mount>, selector: string, value: 
 
 const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false } };
 
-function mountComponent(create: ReturnType<typeof vi.fn>): ReturnType<typeof mount> {
+// `Mock` and not `ReturnType<typeof vi.fn>`: since vitest 4 that ReturnType
+// resolves the generic to its constraint `Procedure | Constructable`, which no
+// longer satisfies a plain call signature, so the prop would not typecheck.
+function mountComponent(create: Mock): ReturnType<typeof mount> {
   return mount(NewGroupSheet, {
     props: { open: true, create },
     global: { stubs: { teleport: true } },
