@@ -461,7 +461,11 @@ const ROLE_ORDER: Role[] = ['reader', 'editor', 'admin'];
 function widestRole(first: Role | null, second: Role | null): Role {
   return ROLE_ORDER.indexOf(first ?? 'reader') >= ROLE_ORDER.indexOf(second ?? 'reader')
     ? (first ?? second)!
-    : (second ?? first)!;
+    : /* v8 ignore start -- this side only runs when first's index is strictly
+      below second's, so second can never be nullish here: the `?? first`
+      fallback is unreachable. */
+      (second ?? first)!;
+  /* v8 ignore stop */
 }
 
 /**

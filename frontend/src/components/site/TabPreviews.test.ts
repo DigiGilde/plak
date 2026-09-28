@@ -164,6 +164,29 @@ describe('TabPreviews: actions', () => {
     );
   });
 
+  it('leaves other previews untouched when one override is set', async () => {
+    backend.data.previews.push({
+      ...backend.data.previews[0]!,
+      ref: 'pr-43',
+      accessOverride: { base: 'sso', keys: false, invitees: false },
+    });
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await runAction(wrapper, 'override-pr-42-public');
+
+    expect(backend.data.previews[0]!.accessOverride).toEqual({
+      base: 'public',
+      keys: false,
+      invitees: false,
+    });
+    expect(backend.data.previews[1]!.accessOverride).toEqual({
+      base: 'sso',
+      keys: false,
+      invitees: false,
+    });
+  });
+
   it('removes a preview including its version', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
