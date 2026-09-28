@@ -4,7 +4,7 @@
 [project]
 name = "plak"
 version = "0.1.0"
-description = "Plak CLI - statische sites publiceren en previews opruimen"
+description = "Plak CLI - publish static sites and clean up previews"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28,<0.29",
