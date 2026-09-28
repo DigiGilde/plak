@@ -749,7 +749,26 @@ class TestValidateLogoutToken:
         with pytest.raises(OidcError):
             await oidc.validate_logout_token(token)
 
-    async def test_non_string_jti_becomes_none(self, oidc, idp):
+    async def test_missing_exp_refused(self, oidc, idp):
+        """Section 2.4: exp is REQUIRED. authlib only checks it when present."""
+        token = idp.make_logout_token(sid=idp.sid, exp=OMIT)
+        with pytest.raises(OidcError, match="exp"):
+            await oidc.validate_logout_token(token)
+
+    async def test_expired_token_refused(self, oidc, idp):
+        now_ = int(time.time())
+        token = idp.make_logout_token(sid=idp.sid, iat=now_ - 200, exp=now_ - 100)
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    @pytest.mark.parametrize("jti", [OMIT, ""])
+    async def test_missing_jti_refused(self, oidc, idp, jti):
+        """Section 2.4: jti is REQUIRED, and it is what the replay check keys on."""
+        token = idp.make_logout_token(sid=idp.sid, jti=jti)
+        with pytest.raises(OidcError, match="jti"):
+            await oidc.validate_logout_token(token)
+
+    async def test_non_string_jti_refused(self, oidc, idp):
         # make_logout_token's own jti param only ever sets a string claim, so
         # this token is built by hand to get a non-string jti past the IdP.
         now_ = int(time.time())
@@ -757,11 +776,12 @@ class TestValidateLogoutToken:
             "iss": idp.issuer,
             "aud": idp.client_id,
             "iat": now_,
+            "exp": now_ + 120,
             "sid": idp.sid,
             "jti": 12345,
             "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
         }
         header = {"alg": "RS256", "kid": idp.kid}
         token = JsonWebToken(["RS256"]).encode(header, claims, idp.private_key).decode("ascii")
-        result = await oidc.validate_logout_token(token)
-        assert result.jti is None
+        with pytest.raises(OidcError, match="jti"):
+            await oidc.validate_logout_token(token)

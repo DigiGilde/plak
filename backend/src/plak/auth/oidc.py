@@ -130,7 +130,7 @@ class LogoutToken:
 
     sub: str | None
     sid: str | None
-    jti: str | None
+    jti: str
 
 
 def _b64url(data: bytes) -> str:
@@ -423,13 +423,22 @@ class OidcClient:
 
     async def validate_logout_token(self, logout_token: str) -> LogoutToken:
         """OIDC Back-Channel Logout 1.0 §2.6: signature, iss, aud, a recent
-        iat, the backchannel-logout event, sub or sid, and no nonce."""
+        iat, an exp, a jti, the backchannel-logout event, sub or sid, and no
+        nonce."""
         claims = await self._decode_with_kid_refresh(logout_token)
         self._check_issuer_and_audience(claims)
 
         iat = claims.get("iat")
         if not isinstance(iat, int) or abs(time.time() - iat) > LOGOUT_TOKEN_MAX_AGE_S:
             raise OidcError("logout-token heeft geen recente iat")
+
+        # §2.4 makes both REQUIRED. authlib checks exp only when it is there,
+        # and the replay check in platform/backchannel.py keys on the jti.
+        if "exp" not in claims:
+            raise OidcError("logout-token mist exp")
+        jti = claims.get("jti")
+        if not isinstance(jti, str) or not jti:
+            raise OidcError("logout-token mist een jti")
 
         events = claims.get("events")
         if not isinstance(events, dict) or not isinstance(events.get(BACKCHANNEL_LOGOUT_EVENT), dict):
@@ -444,8 +453,7 @@ class OidcClient:
         sid = claims.get("sid") or None
         if not sub and not sid:
             raise OidcError("logout-token bevat sub noch sid")
-        jti = claims.get("jti")
-        return LogoutToken(sub=sub, sid=sid, jti=jti if isinstance(jti, str) else None)
+        return LogoutToken(sub=sub, sid=sid, jti=jti)
 
     async def validate_id_token(
         self, id_token: str, *, nonce: str, access_token: str | None
