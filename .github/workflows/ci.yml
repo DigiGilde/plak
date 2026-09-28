@@ -34,13 +34,13 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
-      - name: Lint (ruff)
+      - name: Linten (ruff)
         working-directory: backend
         run: uv run ruff check src tests
 
       # From the repo root, so ruff uses its defaults for cli/ instead of
       # backend/pyproject.toml; --project only picks the pinned ruff.
-      - name: Lint CLI (ruff)
+      - name: CLI linten (ruff)
         run: uv run --project backend ruff check cli/plak_cli cli/tests
 
       # The DB tests run PostgreSQL 16 via testcontainers. The
@@ -102,12 +102,12 @@ jobs:
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Typecheck
+      - name: Typen controleren
         working-directory: frontend
         run: npm run typecheck
 
       # Must be before the tests: the CSP gate reads frontend/dist/index.html.
-      - name: Build
+      - name: Bouwen
         working-directory: frontend
         run: npm run build
 
