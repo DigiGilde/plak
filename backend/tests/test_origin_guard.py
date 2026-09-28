@@ -13,7 +13,7 @@ import pytest_asyncio
 from fastapi import APIRouter, Depends, FastAPI
 
 from plak.api.errors import register_error_handlers
-from plak.api.origin_guard import normalise_origin, require_admin_origin
+from plak.api.origin_guard import _is_local_origin, normalise_origin, require_admin_origin
 from plak.config import Settings
 
 ADMIN_ORIGIN = "https://beheer.plak.example"
@@ -103,6 +103,14 @@ class TestNormaliseOrigin:
     )
     def test_unusable_values(self, input_):
         assert normalise_origin(input_) is None
+
+
+class TestIsLocalOrigin:
+    def test_malformed_origin_is_not_local(self):
+        # urlsplit itself raises ValueError on a malformed IPv6 host; the
+        # guard must treat that as "not local", not let the exception
+        # propagate into the request handling.
+        assert _is_local_origin("http://[::1") is False
 
 
 class TestWithOriginHeader:
