@@ -313,6 +313,71 @@ describe('Group: put a site online', () => {
       await untilIdle();
       expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(false);
     });
+
+    it('prevents the browser default while dragging over the target', async () => {
+      const { wrapper } = await makeWrapper('/nldd');
+
+      const section = wrapper.find('nldd-simple-section').element;
+      const event = dragEvent('dragover', fakeDataTransfer([droppableFile()]));
+      section.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('does not intercept dragover for someone without an editor or admin role', async () => {
+      backend.data.loggedInMemberId = 'lid-4';
+      const { wrapper } = await makeWrapper('/nldd');
+
+      const section = wrapper.find('nldd-simple-section').element;
+      const event = dragEvent('dragover', fakeDataTransfer([droppableFile()]));
+      section.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('does not intercept dragleave for someone without an editor or admin role', async () => {
+      backend.data.loggedInMemberId = 'lid-4';
+      const { wrapper } = await makeWrapper('/nldd');
+
+      const section = wrapper.find('nldd-simple-section').element;
+      section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
+      section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
+      await untilIdle();
+
+      expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(false);
+    });
+
+    it('shows a dismissible error for a dropped file of an unsupported type', async () => {
+      const { wrapper } = await makeWrapper('/nldd');
+      const badFile = new File(['hoi'], 'site.pdf', { type: 'application/pdf' });
+
+      wrapper
+        .find('nldd-simple-section')
+        .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
+      await untilIdle();
+
+      const banner = wrapper.find('[data-testid="groep-sleep-fout"]');
+      expect(banner.exists()).toBe(true);
+      expect(banner.attributes('text')).toContain('Sleep één bestand');
+      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
+
+      banner.element.dispatchEvent(new CustomEvent('dismiss'));
+      await untilIdle();
+
+      expect(wrapper.find('[data-testid="groep-sleep-fout"]').exists()).toBe(false);
+    });
+
+    it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
+      const { wrapper } = await makeWrapper('/nldd');
+
+      wrapper
+        .find('nldd-simple-section')
+        .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
+      await untilIdle();
+
+      expect(wrapper.find('[data-testid="groep-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
+    });
   });
 
   it('puts a site online from the sheet and takes the user to the result', async () => {
@@ -380,6 +445,24 @@ describe('Group: put a site online', () => {
     expect(wrapper.find('[data-testid="publiceer-adres"]').text()).not.toContain('https://');
 
     wrapper.unmount();
+  });
+
+  it('loads the group even when the session itself fails unexpectedly', async () => {
+    const realFetch = backend.fetch;
+    vi.stubGlobal('fetch', ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL | Request).toString();
+      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
+        return Promise.reject(new TypeError('netwerkfout'));
+      }
+      return realFetch(input, init);
+    }) as typeof fetch);
+
+    const { wrapper } = await makeWrapper('/nldd');
+
+    // The group loaded regardless: only the content host in the address
+    // dropped out, not the whole page.
+    expect(wrapper.find('h1').text()).toBe('NLDD');
+    expect(wrapper.find('[data-testid="groep-publiceren"]').exists()).toBe(true);
   });
 
   it('handles the request from the toolbar here, on every tab', async () => {
