@@ -40,6 +40,26 @@ describe('me (session)', () => {
   });
 });
 
+describe('interface language on the account', () => {
+  it('records a chosen language', async () => {
+    await plak.setMyLanguage('en');
+    expect(backend.data.myLanguage).toBe('en');
+  });
+
+  it('hands the choice back to the browser default with null', async () => {
+    await plak.setMyLanguage('en');
+    await plak.setMyLanguage(null);
+    expect(backend.data.myLanguage).toBeNull();
+  });
+
+  it('refuses a language code that is neither nl nor en', async () => {
+    const error = await refusedWith(
+      plak.setMyLanguage('de' as unknown as import('@/api/types').MemberLanguage),
+    );
+    expect(error.problem.status).toBe(422);
+  });
+});
+
 describe('overview (filled and empty)', () => {
   it('returns the seeded groups with their sites', async () => {
     const result = await plak.overview();
@@ -120,6 +140,25 @@ describe('groups', () => {
     const error = await refusedWith(plak.createGroup('Hoofdletters', 'Niet-Geldig'));
     expect(error.problem.status).toBe(422);
   });
+
+  it('deletes an empty group', async () => {
+    await plak.createGroup('Lege groep', 'leeg');
+
+    await plak.deleteGroup('leeg');
+
+    const error = await refusedWith(plak.group('leeg'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses to delete a group that still has sites, with 409', async () => {
+    const error = await refusedWith(plak.deleteGroup('nldd'));
+    expect(error.problem.status).toBe(409);
+  });
+
+  it('returns 404 for deleting an unknown group', async () => {
+    const error = await refusedWith(plak.deleteGroup('onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
 });
 
 describe('sites', () => {
@@ -152,6 +191,16 @@ describe('sites', () => {
       invitees: false,
     });
     expect(site.access).toEqual({ base: 'sso', keys: false, invitees: false });
+  });
+
+  it('refuses an invalid slug with 422', async () => {
+    const error = await refusedWith(plak.createSite('nldd', 'Hoofdletters', 'Niet-Geldig'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('refuses a duplicate slug within the same group with 409', async () => {
+    const error = await refusedWith(plak.createSite('nldd', 'Website nogmaals', 'website'));
+    expect(error.problem.status).toBe(409);
   });
 });
 
@@ -193,6 +242,20 @@ describe('keys (shown once)', () => {
     const found = list.find((s) => s.selector === created.key.selector);
     expect(found).toBeDefined();
     expect((found as unknown as { value?: string }).value).toBeUndefined();
+  });
+
+  it('refuses an expiry date that already lies in the past', async () => {
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const error = await refusedWith(plak.createKey('nldd', 'website', 'Verlopen', past));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('EXPIRY_IN_PAST');
+  });
+
+  it('refuses an expiry date too far in the future', async () => {
+    const farFuture = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString();
+    const error = await refusedWith(plak.createKey('nldd', 'website', 'Te ver', farFuture));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('EXPIRY_TOO_FAR');
   });
 
   it('revokes a key', async () => {
@@ -237,6 +300,32 @@ describe('site repository (trusted publishing)', () => {
     await plak.deleteSiteRepository('nldd', 'website');
     const error = await refusedWith(plak.deleteSiteRepository('nldd', 'website'));
     expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
+  });
+
+  it('refuses to link a repository without an owner or a repo name', async () => {
+    const error = await refusedWith(
+      plak.setSiteRepository('nldd', 'website', {
+        provider: 'github',
+        host: 'https://github.com',
+        owner: '',
+        repo: '',
+        liveBranch: null,
+      }),
+    );
+    expect(error.problem.code).toBe('REPOSITORY_INVALID');
+  });
+
+  it('refuses a Forgejo host that is not on the allowlist', async () => {
+    const error = await refusedWith(
+      plak.setSiteRepository('nldd', 'website', {
+        provider: 'forgejo',
+        host: 'https://onbekende-forge.example',
+        owner: 'nldd',
+        repo: 'website',
+        liveBranch: null,
+      }),
+    );
+    expect(error.problem.code).toBe('HOST_NOT_ALLOWED');
   });
 });
 
@@ -301,11 +390,30 @@ describe('group members and platform members', () => {
     expect(members.map((l) => l.identifier)).not.toContain('collega@voorbeeld.nl');
   });
 
+  it('refuses to add a group member with an invalid identifier', async () => {
+    const error = await refusedWith(plak.addGroupMember('nldd', 'niet-een-email'));
+    expect(error.problem.status).toBe(422);
+  });
+
   it('reports the site roles a group member holds in this group', async () => {
     const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
     expect(zoe.siteRoles).toEqual([
       { siteSlug: 'website', siteTitle: 'NLDD website', role: 'admin' },
     ]);
+  });
+
+  it('sorts several site roles for the same member by site slug', async () => {
+    await plak.createSite('nldd', 'Alpha', 'alpha');
+    backend.data.siteRoles.push({
+      groupSlug: 'nldd',
+      siteSlug: 'alpha',
+      identifier: 'zoe@voorbeeld.nl',
+      role: 'reader',
+    });
+
+    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    expect(zoe.siteRoles.map((r) => r.siteSlug)).toEqual(['alpha', 'website']);
   });
 
   it('leaves the site roles standing unless the removal asks for them', async () => {
@@ -341,6 +449,33 @@ describe('group members and platform members', () => {
 
     const deactivated = await plak.deactivatePlatformMember('lid-2');
     expect(deactivated.status).toBe('deactivated');
+  });
+});
+
+describe('site members', () => {
+  it('refuses an invalid identifier with 422', async () => {
+    const error = await refusedWith(plak.addSiteMember('nldd', 'website', 'niet-een-email', 'reader'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('refuses a member who already has a role on the site, with 409', async () => {
+    await plak.addSiteMember('nldd', 'website', 'ada@voorbeeld.nl', 'reader');
+    const error = await refusedWith(
+      plak.addSiteMember('nldd', 'website', 'ada@voorbeeld.nl', 'editor'),
+    );
+    expect(error.problem.status).toBe(409);
+  });
+
+  it('refuses to change the role of a member who has none on the site, with 404', async () => {
+    const error = await refusedWith(
+      plak.setSiteRole('nldd', 'website', 'onbekend-lid-id', 'editor'),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses to remove a member who has no role on the site, with 404', async () => {
+    const error = await refusedWith(plak.removeSiteMember('nldd', 'website', 'onbekend-lid-id'));
+    expect(error.problem.status).toBe(404);
   });
 });
 
@@ -417,6 +552,16 @@ describe('versions and rollback', () => {
     const error = await refusedWith(plak.setVersionLive('nldd', 'website', 'versie-preview-42'));
     expect(error.problem.status).toBe(422);
   });
+
+  it('returns 404 for setting an unknown version live', async () => {
+    const error = await refusedWith(plak.setVersionLive('nldd', 'website', 'onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for setting a version live on an unknown site', async () => {
+    const error = await refusedWith(plak.setVersionLive('nldd', 'onbekend', 'versie-0'));
+    expect(error.problem.status).toBe(404);
+  });
 });
 
 describe('previews and override', () => {
@@ -432,12 +577,46 @@ describe('previews and override', () => {
     expect(back.accessOverride).toBeNull();
   });
 
+  it('defaults the base to public when the override leaves it out', async () => {
+    const updated = await plak.setPreviewAccess(
+      'nldd',
+      'website',
+      'pr-42',
+      { keys: true, invitees: false } as unknown as import('@/api/types').Access,
+    );
+    expect(updated.accessOverride?.base).toBe('public');
+  });
+
+  it('returns 404 for listing previews of an unknown site', async () => {
+    const error = await refusedWith(plak.previews('nldd', 'onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for overriding preview access on an unknown site', async () => {
+    const error = await refusedWith(
+      plak.setPreviewAccess('nldd', 'onbekend', 'pr-42', { base: 'public', keys: false, invitees: false }),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for overriding access on an unknown preview', async () => {
+    const error = await refusedWith(
+      plak.setPreviewAccess('nldd', 'website', 'onbekend-ref', { base: 'public', keys: false, invitees: false }),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
   it('deletes a preview idempotently (204 twice)', async () => {
     await plak.deletePreview('nldd', 'website', 'pr-42');
     await expect(plak.deletePreview('nldd', 'website', 'pr-42')).resolves.toBeUndefined();
 
     const list = await plak.previews('nldd', 'website');
     expect(list).toEqual([]);
+  });
+
+  it('returns 404 for deleting a preview on an unknown site', async () => {
+    const error = await refusedWith(plak.deletePreview('nldd', 'onbekend', 'pr-42'));
+    expect(error.problem.status).toBe(404);
   });
 });
 
@@ -473,5 +652,31 @@ describe('upload', () => {
     const previews = await plak.previews('nldd', 'website');
     const preview = previews.find((p) => p.ref === 'pr-42');
     expect(preview?.versionId).toBe(second.versionId);
+  });
+
+  // The mock mirrors the real backend's defensive checks on the raw request,
+  // which plak.upload() itself can never trigger (it always builds a proper
+  // FormData with a "file" field); this reaches them directly, the way a
+  // malformed request from outside the SPA would.
+  it('returns 404 for a deploy to an unknown site', async () => {
+    const file = new Blob(['<html></html>'], { type: 'text/html' });
+    const error = await refusedWith(plak.upload('nldd', 'onbekend', file, 'index.html'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses a deploy whose body is not multipart/form-data', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/nldd/website/deploys', {
+      method: 'POST',
+      body: JSON.stringify({ not: 'a form' }),
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it('refuses a deploy whose form carries no file field', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/nldd/website/deploys', {
+      method: 'POST',
+      body: new FormData(),
+    });
+    expect(response.status).toBe(422);
   });
 });
