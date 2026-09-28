@@ -659,6 +659,34 @@ class TestGroupsAndSites:
             )
             assert response.status_code == 422, slug
 
+    @pytest.mark.parametrize(
+        "bad_text",
+        [
+            "Team\x00stil",
+            "Team\nnieuw",
+            "Team\tinsprong",
+            "Team ‮gedraaid",
+        ],
+    )
+    async def test_group_name_and_site_title_refuse_control_characters(
+        self, client, app, data, bad_text
+    ):
+        """A name is shown back in lists and in the confirmation modals of
+        remove actions. A U+202E reverses the reading order of everything
+        after it, so the name under a "remove X?" can read as another."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        group = await client.post(
+            f"{BASE}/groups", json={"name": bad_text, "slug": "stuurteken"}, headers=headers
+        )
+        assert group.status_code == 422
+        assert group.json()["code"] == "FIELD_CONTROL_CHARACTERS"
+
+        site = await client.post(
+            f"{BASE}/groups/team/sites", json={"title": bad_text, "slug": "stuurteken"}, headers=headers
+        )
+        assert site.status_code == 422
+        assert site.json()["code"] == "FIELD_CONTROL_CHARACTERS"
+
     async def test_group_slug_duplicate_409(self, client, app, data):
         headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
         response = await client.post(
@@ -2223,6 +2251,15 @@ class TestKeys:
         assert len(items) == 1
         assert "value" not in items[0]
         assert items[0]["status"] == "active"
+
+    async def test_create_refuses_a_label_with_control_characters(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.post(
+            f"{BASE}/sites/team/site/keys",
+            json={"label": "reviewers ‮txt.exe", "expiresAt": None},
+            headers=headers,
+        )
+        assert response.status_code == 422
 
     async def test_create_without_label_gets_dutch_date_default(self, client, app, data):
         headers = login(client, app, sub="lid-a", email="a@example.nl")

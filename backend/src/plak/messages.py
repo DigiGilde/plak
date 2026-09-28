@@ -103,6 +103,7 @@ NL: Final[dict[str, str]] = {
     "SLUG_EXISTS.site": "Er bestaat al een site met slug {slug!r} in deze groep.",
     "SLUG_INVALID": "Slug is ongeldig of gereserveerd: {slug!r}.",
     "FIELD_EMPTY": "Veld {field!r} mag niet leeg zijn.",
+    "FIELD_CONTROL_CHARACTERS": "Veld {field!r} mag geen stuur- of opmaaktekens bevatten.",
     "INVITEE_EXISTS": "{identifier!r} staat al op de genodigdenlijst.",
     "SELF_NOT_ALLOWED.deactivate": (
         "Je kunt jezelf niet deactiveren. Laat een andere platformbeheerder dat doen."
@@ -350,6 +351,7 @@ EN: Final[dict[str, str]] = {
     "SLUG_EXISTS.site": "A site with slug {slug!r} already exists in this group.",
     "SLUG_INVALID": "Slug is invalid or reserved: {slug!r}.",
     "FIELD_EMPTY": "Field {field!r} must not be empty.",
+    "FIELD_CONTROL_CHARACTERS": "Field {field!r} must not contain control or formatting characters.",
     "INVITEE_EXISTS": "{identifier!r} is already on the invitee list.",
     "SELF_NOT_ALLOWED.deactivate": (
         "You cannot deactivate yourself. Have another platform administrator do that."

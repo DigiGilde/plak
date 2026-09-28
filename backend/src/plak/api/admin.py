@@ -111,6 +111,16 @@ KEY_NOT_GROUP_MEMBER = "NOT_GROUP_MEMBER.you"
 # PostgreSQL code for a PL/pgSQL `RAISE EXCEPTION` without a code of its own.
 _SQLSTATE_RAISE_EXCEPTION = "P0001"
 
+# Unicode categories no text a member types may contain: Cc (control, e.g.
+# NUL, tab, newline) and Cf (format, e.g. U+202E right-to-left override, which
+# reverses the reading order of everything after it) - a plain ASCII space is
+# category Zs, not Cc/Cf, so ordinary spacing is unaffected.
+_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf"})
+
+
+def _has_forbidden_characters(value: str) -> bool:
+    return any(unicodedata.category(char) in _FORBIDDEN_CATEGORIES for char in value)
+
 ACCESS_BASE_HINT = (
     "`public` (iedereen), `sso` (elke gebruiker die inlogt met SSO Rijk), `site_team` (wie een rol "
     "heeft op de site of op haar groep) of `nobody` (niemand standaard: alleen via de "
@@ -468,6 +478,13 @@ class KeyCreate(ApiModel):
         ),
         json_schema_extra=_timestamp_schema(),
     )
+
+    @field_validator("label")
+    @classmethod
+    def _plain_label(cls, value: str | None) -> str | None:
+        if value is not None and _has_forbidden_characters(value):
+            raise ValueError("label mag geen stuur- of opmaaktekens bevatten")
+        return value
 
     @field_validator("expires_at")
     @classmethod
@@ -1208,12 +1225,6 @@ class AuditPage(ApiModel):
     )
 
 
-# Unicode categories a reason may not contain: Cc (control, e.g. NUL, tab,
-# newline) and Cf (format, e.g. U+202E right-to-left override) - a plain
-# ASCII space is category Zs, not Cc/Cf, so ordinary spacing is unaffected.
-_REASON_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf"})
-
-
 class ReasonField(ApiModel):
     """Verplichte motivatie bij het herleiden van een pseudoniem of IP-adres (spec §12): komt ongewijzigd
     in de auditrij van die herleiding te staan (zichtbaar voor elke platformbeheerder die het auditlog
@@ -1236,7 +1247,7 @@ class ReasonField(ApiModel):
             raise ValueError(
                 f"reason moet, na spaties strippen, {REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens zijn"
             )
-        if any(unicodedata.category(char) in _REASON_FORBIDDEN_CATEGORIES for char in normalised):
+        if _has_forbidden_characters(normalised):
             raise ValueError("reason mag geen stuur- of opmaaktekens bevatten")
         if "@" in normalised:
             raise ValueError("noem een zaak- of ticketnummer in reason, geen e-mailadres")
@@ -1680,6 +1691,8 @@ def _validate_text(value: str, field: str) -> str:
     normalised = value.strip()
     if not normalised:
         raise ApiError(422, "FIELD_EMPTY", params={"field": field})
+    if _has_forbidden_characters(normalised):
+        raise ApiError(422, "FIELD_CONTROL_CHARACTERS", params={"field": field})
     return normalised
 
 
