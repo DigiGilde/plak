@@ -115,5 +115,9 @@ refresh-swagger-ui:
     for file in swagger-ui-bundle.js swagger-ui.css; do
       curl -sfL --max-time 60 -o "$target/$file" \
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@$version/$file"
-      echo "$file $(shasum -a 256 "$target/$file" | cut -c1-16)"
     done
+    # The download is trusted by nobody: it has to match SHA256SUMS, which is
+    # in git and reviewed. After a version bump those sums are stale on
+    # purpose; regenerate them only once you have checked the new bytes
+    # against the npm registry, never just because this line went red.
+    cd "$target" && shasum -a 256 -c SHA256SUMS

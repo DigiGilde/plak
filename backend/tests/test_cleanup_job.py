@@ -315,7 +315,11 @@ class TestDocsNoExternalOrigins:
 
     def test_all_served_assets_exist_and_stand_on_the_allowlist(self):
         on_disk = {file.name for file in STATIC_DOCS_DIR.iterdir() if file.is_file()}
-        assert on_disk == set(_ASSETS)
+        # SHA256SUMS records which bytes the vendored files are; it is a
+        # reviewed manifest, not an asset, and may never become servable.
+        assert "SHA256SUMS" in on_disk
+        assert "SHA256SUMS" not in _ASSETS
+        assert on_disk - {"SHA256SUMS"} == set(_ASSETS)
 
     def test_the_theme_script_is_for_the_bundle_and_without_defer(self):
         # Swagger UI's dark theme hangs off `html.dark-mode` and knows no

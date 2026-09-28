@@ -11,6 +11,7 @@ connecting, so `app.openapi()` works without a container.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -19,9 +20,11 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from plak.api.docs import (
+    _ASSETS,
     PATH_PARAMETERS,
     SECURITY_BEARER,
     SECURITY_SESSION,
+    STATIC_DOCS_DIR,
     _describe_path_parameters,
     _fix_validation_errors,
     _restore_examples,
@@ -501,3 +504,36 @@ class TestAssetOnAllowlistButMissing:
             await docs_asset("docs.css")
         assert error.value.status == 404
         assert error.value.reason == "UNKNOWN_ASSET"
+
+
+class TestVendoredAssets:
+    """The Swagger UI files are downloaded bytes that nobody reads: 1.5 MB of
+    minified JavaScript, served from the beheer origin under `script-src
+    'self'`, so fully trusted script beside the session cookie. SHA256SUMS is
+    the reviewed record of which bytes those are; this test is what makes a
+    change to them visible without a network call.
+
+    It already caught one: a repo-wide rename of `project` to `site` had
+    silently edited a URI-scheme list inside the minified bundle.
+    """
+
+    def test_every_vendored_file_matches_the_pinned_sum(self):
+        sums = (STATIC_DOCS_DIR / "SHA256SUMS").read_text().splitlines()
+        assert sums, "SHA256SUMS is empty"
+        for line in sums:
+            expected, name = line.split(maxsplit=1)
+            path = STATIC_DOCS_DIR / name.strip()
+            assert path.is_file(), f"{name} is pinned but missing"
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+            assert actual == expected, f"{name} does not match SHA256SUMS"
+
+    def test_every_served_asset_is_pinned(self):
+        """A new asset may not slip past the pinning by simply not being in
+        the file."""
+        pinned = {
+            line.split(maxsplit=1)[1].strip()
+            for line in (STATIC_DOCS_DIR / "SHA256SUMS").read_text().splitlines()
+        }
+        served = {name for name in _ASSETS if not (STATIC_DOCS_DIR / name).is_symlink()}
+        vendored = {name for name in served if name.startswith("swagger-ui")}
+        assert vendored <= pinned, f"not pinned: {vendored - pinned}"
