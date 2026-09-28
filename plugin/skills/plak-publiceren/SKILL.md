@@ -221,9 +221,9 @@ Errors come back as `application/problem+json`: `{type, title, status,
 detail}` plus a field `code` with a stable reason code. The CLI prints
 `Error: <detail>` on stderr and exits 1 (error from the server) or 2 (wrong
 usage: a missing argument, an unknown path, an unknown file type, or no
-session). The CLI speaks English, the `detail` comes from Plak and is Dutch:
-so you see an English line with a Dutch error sentence in it. Read the `code`,
-not the text: the text is for humans and may change.
+session). The CLI sends no `Accept-Language`, so the `detail` comes back in
+English. Read the `code`, not the text: the text is for humans and may
+change.
 
 **No `index.html` in the root (`NO_INDEX`, 422).** This is the case where Plak
 hands you the answer. A plain Finder zip of a directory no longer ends up
@@ -235,17 +235,17 @@ and `detail` names the directory you probably meant. The CLI prints those
 candidates, with the flag that resolves it:
 
 ```
-Error: geen index.html in de wortel van de bundel; de dichtstbijzijnde staat op
-'mijn-site/index.html'. Publiceer de map 'mijn-site' zelf, of stuur het veld
-basispad mee met de waarde 'mijn-site'
+Error: No index.html in the root of the bundle; the nearest one sits at
+'mijn-site/index.html'. Publish the directory 'mijn-site' itself, or send
+along the base path field with the value 'mijn-site'
 Found index.html in the bundle:
   mijn-site/index.html
 Publish again with: --base-path mijn-site (in the action: base-path: mijn-site)
 ```
 
-The multipart field is called `basePath`; the Dutch error copy from the server
-still calls it "basispad". Follow the line the CLI prints itself, not the
-spelling from the `detail` text.
+The multipart field is called `basePath`; the `detail` text calls it "the
+base path field". Follow the line the CLI prints itself (`--base-path`), not
+the spelling from the `detail` text.
 
 Use that suggestion, literally, and try again exactly once:
 
