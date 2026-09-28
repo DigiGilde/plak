@@ -9,6 +9,7 @@ session factory of their own), just like test_ingest_service.py.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import uuid
@@ -30,7 +31,13 @@ from plak.ingest.store import ContentStore
 from plak.models.cli import CliDeviceAuthorization, CliSession
 from plak.models.identity import Group, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
-from plak.previews.cleanup_job import delete_expired
+from plak.previews.cleanup_job import (
+    TIMESTAMP_DEFAULT,
+    TMP_OLDER_THAN_DEFAULT,
+    CleanupResult,
+    _run_daily,
+    delete_expired,
+)
 
 
 @pytest_asyncio.fixture
@@ -284,6 +291,76 @@ class TestTmpSweeper:
         assert result.tmp_swept == 1
         assert not stale_map.exists()
         assert fresh_dir.exists()
+
+
+class TestRunDaily:
+    """`_run_daily` must survive a sweep that raises, and its stop event must
+    still end the loop without running another sweep."""
+
+    async def test_a_failing_sweep_is_logged_and_the_next_tick_still_runs(
+        self, environment: Environment, monkeypatch, caplog
+    ):
+        calls: list[datetime] = []
+        second_call = asyncio.Event()
+
+        async def fake_delete_expired(factory, store, now, *, tmp_older_than):
+            calls.append(now)
+            if len(calls) == 1:
+                raise RuntimeError("tijdelijke databankstoring")
+            second_call.set()
+            return CleanupResult(expired_previews=0, orphan_versions=0, tmp_swept=0)
+
+        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        # No real day-long wait between ticks: each iteration is due at once.
+        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
+
+        stop = asyncio.Event()
+        with caplog.at_level(logging.ERROR):
+            task = asyncio.create_task(
+                _run_daily(
+                    environment.session_factory,
+                    environment.store,
+                    occurred_at=TIMESTAMP_DEFAULT,
+                    tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                    stop=stop,
+                )
+            )
+            await asyncio.wait_for(second_call.wait(), timeout=5)
+            stop.set()
+            await asyncio.wait_for(task, timeout=5)
+
+        assert len(calls) >= 2
+        assert any("opschoning" in record.getMessage().lower() for record in caplog.records)
+        assert any(record.levelno == logging.ERROR for record in caplog.records)
+
+    async def test_stopping_while_waiting_runs_no_sweep_and_ends_the_task(
+        self, environment: Environment, monkeypatch
+    ):
+        called = False
+
+        async def fake_delete_expired(*args, **kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        # A long wait, so the task is still blocked on stop.wait() when stop is set.
+        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 3600.0)
+
+        stop = asyncio.Event()
+        task = asyncio.create_task(
+            _run_daily(
+                environment.session_factory,
+                environment.store,
+                occurred_at=TIMESTAMP_DEFAULT,
+                tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                stop=stop,
+            )
+        )
+        await asyncio.sleep(0)  # lets the task start waiting on stop.wait()
+        stop.set()
+        await asyncio.wait_for(task, timeout=5)
+
+        assert called is False
 
 
 _EXTERN_ORIGIN_RE = re.compile(r"""(?:src|href)\s*=\s*["']https?://""", re.IGNORECASE)
