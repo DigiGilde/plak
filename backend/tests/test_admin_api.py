@@ -22,14 +22,15 @@ from helpers_audit import install_audit_recorder
 from helpers_ci import FORGEJO_HOST, MockCi
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_test_client, set_session_cookie
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from plak.access import keys as access_keys
 from plak.api import deploys
 from plak.api.admin import make_admin_router
 from plak.api.errors import register_error_handlers
-from plak.audit.log import AuditLog
+from plak.audit.log import ANONYMOUS, AuditLog
 from plak.audit.pseudonymisation import pseudonymise
 from plak.auth.sessions import CSRF_COOKIE, CSRF_HEADER, SessionStore
 from plak.ci.providers import ProviderClient
@@ -38,7 +39,7 @@ from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_session_factory
 from plak.ingest.store import ContentStore
-from plak.models.audit import AuditLogEntry
+from plak.models.audit import AuditLogEntry, ContentViewer
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.cli import CliSession
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
@@ -505,6 +506,28 @@ class TestAuthorization:
         )
         assert response.status_code == 403
 
+    async def test_an_unknown_member_id_is_404_on_activate_deactivate_and_role(
+        self, client, app, data
+    ):
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        unknown = uuid.uuid4()
+
+        activate = await client.post(f"{BASE}/platform/members/{unknown}/_activate", headers=headers)
+        assert activate.status_code == 404
+        assert activate.json()["code"] == "UNKNOWN_MEMBER"
+
+        deactivate = await client.post(f"{BASE}/platform/members/{unknown}/_deactivate", headers=headers)
+        assert deactivate.status_code == 404
+        assert deactivate.json()["code"] == "UNKNOWN_MEMBER"
+
+        role = await client.put(
+            f"{BASE}/platform/members/{unknown}/platform-role",
+            json={"platformRole": "admin"},
+            headers=headers,
+        )
+        assert role.status_code == 404
+        assert role.json()["code"] == "UNKNOWN_MEMBER"
+
 
 # -- My own account ---------------------------------------------------------
 
@@ -687,6 +710,20 @@ class TestGroupsAndSites:
         assert site.status_code == 422
         assert site.json()["code"] == "FIELD_CONTROL_CHARACTERS"
 
+    async def test_group_name_and_site_title_refuse_blank_text(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        group = await client.post(
+            f"{BASE}/groups", json={"name": "   ", "slug": "leeg"}, headers=headers
+        )
+        assert group.status_code == 422
+        assert group.json()["code"] == "FIELD_EMPTY"
+
+        site = await client.post(
+            f"{BASE}/groups/team/sites", json={"title": "  ", "slug": "leeg"}, headers=headers
+        )
+        assert site.status_code == 422
+        assert site.json()["code"] == "FIELD_EMPTY"
+
     async def test_group_slug_duplicate_409(self, client, app, data):
         headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
         response = await client.post(
@@ -724,6 +761,31 @@ class TestGroupsAndSites:
         login(client, app, sub="beheer-sub", email="beheer@example.nl")
         overview = (await client.get(f"{BASE}/overview")).json()
         assert [group["group"]["slug"] for group in overview["groups"]] == ["team"]
+
+    async def test_admin_sees_a_group_without_any_sites(self, client, app, data, factory):
+        async with factory() as db:
+            db.add(Group(slug="leeg", name="Leeg", default_access_base=AccessBase.SITE_TEAM))
+            await db.commit()
+        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        overview = (await client.get(f"{BASE}/overview")).json()
+
+        empty_group = next(group for group in overview["groups"] if group["group"]["slug"] == "leeg")
+        assert empty_group["sites"] == []
+
+    async def test_a_group_role_covers_a_site_a_site_role_also_names(
+        self, client, app, data, factory
+    ):
+        """member_a already sees the whole groep through its group role; a
+        siterol on a site already inside that groep adds nothing and must not
+        list the site twice."""
+        await _join_site(factory, data.site, data.member_a, Role.EDITOR)
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        overview = (await client.get(f"{BASE}/overview")).json()
+
+        assert [group["group"]["slug"] for group in overview["groups"]] == ["team"]
+        assert [site["slug"] for site in overview["groups"][0]["sites"]] == ["site"]
 
     async def test_group_detail_contains_members_and_sites(self, client, app, data):
         login(client, app, sub="lid-a", email="a@example.nl")
@@ -1243,6 +1305,38 @@ class TestGroupMembers:
         )
         assert response.status_code == 409
         assert response.json()["code"] == "LAST_GROUP_ADMIN"
+
+    async def test_a_different_database_error_during_a_role_change_is_not_swallowed(
+        self, client, app, data, monkeypatch
+    ):
+        """`_group_keeps_an_admin` only turns the ck_groups_keep_one_admin
+        trigger's own sqlstate into LAST_GROUP_ADMIN; anything else has to
+        keep propagating rather than being read as the same refusal."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        class _FakeOrigError(Exception):
+            sqlstate = "40001"
+
+        original_commit = AsyncSession.commit
+        calls = {"n": 0}
+
+        async def _boom(self, *args, **kwargs):
+            calls["n"] += 1
+            # The first commit on this request is require_active_member's own
+            # login bookkeeping (auth/members.py), not the role change under
+            # test: only the second, inside `_group_keeps_an_admin`, fails.
+            if calls["n"] == 1:
+                return await original_commit(self, *args, **kwargs)
+            raise DBAPIError("UPDATE", {}, _FakeOrigError())
+
+        monkeypatch.setattr(AsyncSession, "commit", _boom)
+
+        with pytest.raises(DBAPIError):
+            await client.put(
+                f"{BASE}/groups/team/members/{data.member_a.id}/role",
+                json={"role": "reader"},
+                headers=headers,
+            )
 
     async def test_demoting_yourself_may_as_long_as_there_a_other_admin_is(
         self, client, app, data, factory
@@ -2781,3 +2875,214 @@ class TestAudit:
         response = await client.get(f"{BASE}/sites/team/site/versions", headers=headers)
         assert response.status_code == 404
         assert await _refusal_rows(factory) == []
+
+    async def test_a_missing_audit_log_does_not_block_an_ordinary_action(self, client, app, data):
+        """`_audit` (the fire-and-forget variant used for ordinary admin
+        actions) is a no-op without a configured log: the action itself must
+        not fail because there is nowhere to record it."""
+        app.state.audit_log = None
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.post(
+            f"{BASE}/groups/team/sites", json={"title": "Zonder log", "slug": "zonder-log"}, headers=headers
+        )
+        assert response.status_code == 201
+
+    async def test_a_missing_audit_log_gives_503_on_the_audit_read(self, client, app, data):
+        """Unlike `_audit`, `_audit_strict` fails closed: reading the log is
+        itself a disclosure, so a missing log must not let the page through."""
+        app.state.audit_log = None
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        response = await client.get(f"{BASE}/platform/audit", headers=headers)
+        assert response.status_code == 503
+        assert response.json()["code"] == "AUDIT_UNAVAILABLE"
+
+    async def test_a_missing_audit_log_gives_503_on_a_deanonymisation_lookup(
+        self, client, app, data
+    ):
+        """Same fail-closed shape as the audit read, for `_audit_strict_limited`
+        (actor-pseudonym, actor-identity, the IP reveal)."""
+        app.state.audit_log = None
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        response = await client.post(
+            f"{BASE}/platform/audit/actor-pseudonym",
+            json={"identifier": "a@example.nl", "reason": "onderzoek naar een melding"},
+            headers=headers,
+        )
+        assert response.status_code == 503
+        assert response.json()["code"] == "AUDIT_UNAVAILABLE"
+
+
+class TestAuditFilters:
+    """Each query filter on GET /platform/audit narrows the page: proven by a
+    second row that a filter leaves out, not only by one that stays in."""
+
+    async def test_since_and_until_bound_the_window(self, client, app, data):
+        """Also proves `_require_aware`: a naive `since`/`until` (no
+        timezone) is read as UTC rather than compared against an aware
+        `occurred_at` and failing outright."""
+        await app.state.audit_log.write("test_sinds", ANONYMOUS, "allowed")
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        before = (datetime.now(UTC) - timedelta(hours=1)).replace(tzinfo=None).isoformat()
+        after = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+
+        since_before = await client.get(f"{BASE}/platform/audit", params={"since": before}, headers=headers)
+        since_after = await client.get(f"{BASE}/platform/audit", params={"since": after}, headers=headers)
+        assert any(entry["action"] == "test_sinds" for entry in since_before.json()["entries"])
+        assert not any(entry["action"] == "test_sinds" for entry in since_after.json()["entries"])
+
+        until_after = await client.get(f"{BASE}/platform/audit", params={"until": after}, headers=headers)
+        until_before = await client.get(f"{BASE}/platform/audit", params={"until": before}, headers=headers)
+        assert any(entry["action"] == "test_sinds" for entry in until_after.json()["entries"])
+        assert not any(entry["action"] == "test_sinds" for entry in until_before.json()["entries"])
+
+    async def test_reason_code_filters_to_that_refusal(self, client, app, data):
+        await app.state.audit_log.write("test_a", ANONYMOUS, "refused", reason_code="CODE_A")
+        await app.state.audit_log.write("test_b", ANONYMOUS, "refused", reason_code="CODE_B")
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        response = await client.get(f"{BASE}/platform/audit", params={"reasonCode": "CODE_A"}, headers=headers)
+
+        actions = {entry["action"] for entry in response.json()["entries"]}
+        assert "test_a" in actions
+        assert "test_b" not in actions
+
+    async def test_group_filters_to_that_groups_rows(self, client, app, data):
+        await app.state.audit_log.write(
+            "test_groep", ANONYMOUS, "allowed", refs={"group": "team", "site": "site"}
+        )
+        await app.state.audit_log.write(
+            "test_ander", ANONYMOUS, "allowed", refs={"group": "ander", "site": "site"}
+        )
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        response = await client.get(f"{BASE}/platform/audit", params={"group": "team"}, headers=headers)
+
+        actions = {entry["action"] for entry in response.json()["entries"]}
+        assert "test_groep" in actions
+        assert "test_ander" not in actions
+
+
+class TestActorLookupBranches:
+    """The loop-shaped paths in the pseudonym lookups, and the exact
+    sso_subject match that the forward lookup only reaches by name."""
+
+    async def test_an_exact_sso_subject_resolves_to_the_member_directly(self, client, app, data):
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+
+        response = await client.post(
+            f"{BASE}/platform/audit/actor-pseudonym",
+            json={"identifier": data.member_a.sso_subject, "reason": "onderzoek naar een melding"},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["resolvedAs"] == "member"
+        assert response.json()["actorPseudonym"] == pseudonymise(
+            app.state.settings.audit_pepper, data.member_a.sso_subject
+        )
+
+    async def test_a_content_viewer_pseudonym_is_found_past_one_that_does_not_match(
+        self, client, app, factory, data
+    ):
+        async with factory() as db:
+            db.add_all(
+                [
+                    ContentViewer(sso_subject="kijker-een", email="een@example.nl"),
+                    ContentViewer(sso_subject="kijker-twee", email="twee@example.nl"),
+                ]
+            )
+            await db.commit()
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        pseudonym = pseudonymise(app.state.settings.audit_pepper, "kijker-twee")
+
+        response = await client.post(
+            f"{BASE}/platform/audit/actor-identity",
+            json={"actorPseudonym": pseudonym, "reason": "onderzoek naar een melding"},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["kind"] == "content_viewer"
+        assert body["email"] == "twee@example.nl"
+
+    async def test_a_ci_pseudonym_is_found_past_a_repository_that_does_not_match(
+        self, client, app, factory, data
+    ):
+        async with factory() as db:
+            second_site = Site(
+                group_id=data.group.id, slug="tweede", title="Tweede", access_base=AccessBase.SITE_TEAM
+            )
+            db.add(second_site)
+            await db.flush()
+            db.add_all(
+                [
+                    SiteRepository(
+                        site_id=data.site.id,
+                        provider=CiProvider.GITHUB,
+                        host="https://github.com",
+                        owner="minbzk",
+                        repo="een",
+                        repository_id=1,
+                        owner_id=2,
+                        live_branch="main",
+                    ),
+                    SiteRepository(
+                        site_id=second_site.id,
+                        provider=CiProvider.GITHUB,
+                        host="https://github.com",
+                        owner="minbzk",
+                        repo="twee",
+                        repository_id=2,
+                        owner_id=2,
+                        live_branch="main",
+                    ),
+                ]
+            )
+            await db.commit()
+        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        pseudonym = pseudonymise(app.state.settings.audit_pepper, "github:https://github.com:2")
+
+        response = await client.post(
+            f"{BASE}/platform/audit/actor-identity",
+            json={"actorPseudonym": pseudonym, "reason": "onderzoek naar een melding"},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["kind"] == "ci"
+        assert body["repository"] == "minbzk/twee"
+
+
+class TestIpRevealDecryptFailure:
+    async def test_a_key_that_matches_neither_current_nor_previous_is_404(
+        self, client, app, factory, data
+    ):
+        """decrypt_ip raising IpDecryptError (the pepper rotated further than
+        the single previous key covers) is indistinguishable from no
+        encrypted IP at all to the caller."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        await client.post(
+            f"{BASE}/groups/team/sites", json={"title": "X", "slug": "x"}, headers=headers
+        )
+        async with factory() as db:
+            entry = await db.scalar(select(AuditLogEntry).where(AuditLogEntry.action == "site_create"))
+        assert entry.ip_encrypted is not None
+
+        app.state.settings.audit_ip_key = "bm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm4="
+        app.state.audit_log._ip_key = app.state.settings.audit_ip_key_bytes
+
+        admin_headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        response = await client.post(
+            f"{BASE}/platform/audit/entries/{entry.id}/ip",
+            json={"reason": "onderzoek naar een melding"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "AUDIT_IP_UNKNOWN"

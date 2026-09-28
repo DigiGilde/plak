@@ -1648,7 +1648,9 @@ async def _refuse_last_admin(db: AsyncSession, target: Member) -> None:
             Member.id != target.id,
         )
     )
-    if not remaining:
+    # _refuse_self already blocks target == caller, and the caller is always a
+    # distinct active admin, so remaining never reaches zero over the API.
+    if not remaining:  # pragma: no cover - unreachable, see above
         raise ApiError(409, "LAST_PLATFORM_ADMIN")
 
 
@@ -1887,7 +1889,9 @@ async def _site_members_json(db: AsyncSession, group: Group, site: Site) -> list
         ).all()
     )
     identifiers = set(group_roles) | set(site_roles)
-    if not identifiers:
+    # Both callers only reach here through require_site_role, which already
+    # demands the caller be one of these identifiers.
+    if not identifiers:  # pragma: no cover - unreachable, see above
         return []
     members = await db.scalars(select(Member).where(Member.id.in_(identifiers)))
     rows = [
