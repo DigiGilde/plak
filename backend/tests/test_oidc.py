@@ -16,7 +16,7 @@ from authlib.jose import JsonWebKey, JsonWebToken, RSAKey
 from helpers_oidc import CLIENT_SECRET, OMIT, MockIdP, make_oidc_client, make_settings
 
 from plak.audit import vocabulary
-from plak.auth.oidc import CLIENT_ASSERTION_TYPE, OidcClient, OidcError
+from plak.auth.oidc import CLIENT_ASSERTION_TYPE, IdpUnavailableError, OidcClient, OidcError
 from plak.config import ConfigurationError
 
 
@@ -357,6 +357,45 @@ class TestPrivateKeyJwt:
         assert q["scope"] == "openid profile email"
         assert q["nonce"] == start.nonce
         assert q["state"] == start.state
+
+
+class TestTokenResponseNotJson:
+    """A 200 whose body is not the JSON object RFC 6749 prescribes (a proxy's
+    maintenance page, for instance) must never reach `.json()` unguarded."""
+
+    async def test_exchange_code_refuses_a_non_json_200(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            return httpx.Response(200, text="<html>onderhoud</html>")
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+
+    async def test_exchange_code_refuses_a_200_json_array(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            return httpx.Response(200, json=["niet-een-object"])
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+
+    async def test_refresh_tokens_treats_a_non_json_200_as_idp_unavailable(self, idp):
+        idp.refresh_response_override = httpx.Response(200, text="<html>onderhoud</html>")
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_refresh_tokens_treats_a_200_json_array_as_idp_unavailable(self, idp):
+        idp.refresh_response_override = httpx.Response(200, json=["niet-een-object"])
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
 
 
 class TestJwksRefreshOnUnknownKid:
