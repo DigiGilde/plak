@@ -177,7 +177,7 @@ def _env_path() -> Path:
 
 def _read_env_file() -> dict[str, str]:
     path = _env_path()
-    if not path.exists():
+    if not path.exists():  # pragma: no cover - every caller stats the file first; only a delete in between lands here
         return {}
     values: dict[str, str] = {}
     for line in path.read_text().splitlines():
@@ -768,7 +768,18 @@ def cmd_logout(args: argparse.Namespace) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 2
 
-    data = _read_env_file()
+    # Stored tokens only travel to the host they were issued for, same trust
+    # check as _stored_token: otherwise PLAK_HOST=<other host> could send this
+    # host's session to wherever it points.
+    stored_host = _trusted_stored_host()
+    host_matches_stored = stored_host is not None and stored_host.rstrip("/") == host
+    if stored_host is not None and not host_matches_stored:
+        print(
+            f"Warning: the stored session belongs to {stored_host}, not {host}; "
+            "not revoking it at the server.",
+            file=sys.stderr,
+        )
+    data = _read_env_file() if host_matches_stored else {}
     access_token = os.environ.get("PLAK_ACCESS_TOKEN") or data.get("PLAK_ACCESS_TOKEN")
     refresh_token = data.get("PLAK_REFRESH_TOKEN")
     revoked = True

@@ -1785,6 +1785,47 @@ def test_logout_reports_a_failed_server_revoke_but_still_clears_locally(
     assert "PLAK_REFRESH_TOKEN" not in data
 
 
+def test_logout_with_a_mismatched_host_sends_nothing(stub_server, host, isolated_cwd, capsys):
+    """PLAK_HOST=<other host> must not make logout send this host's stored
+    tokens to that other host."""
+    cli._write_env_file(
+        {
+            "PLAK_HOST": host,
+            "PLAK_ACCESS_TOKEN": "access-1",
+            "PLAK_REFRESH_TOKEN": "refresh-1",
+            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
+        }
+    )
+
+    code = cli.main(["logout", "--host", "https://evil.example"])
+
+    assert code == 0
+    assert stub_server.requests == []
+    out = capsys.readouterr()
+    assert "not revoking it at the server" in out.err
+    assert host in out.err
+    assert "Logged out." in out.out
+    data = cli._read_env_file()
+    assert "PLAK_ACCESS_TOKEN" not in data
+    assert "PLAK_REFRESH_TOKEN" not in data
+
+
+def test_logout_with_an_untrusted_stored_host_sends_nothing(
+    stub_server, host, isolated_cwd, capsys
+):
+    env_path = isolated_cwd / cli.ENV_FILENAME
+    env_path.write_text(
+        f"PLAK_HOST={host}\nPLAK_ACCESS_TOKEN=access-1\nPLAK_REFRESH_TOKEN=refresh-1\n"
+    )
+    env_path.chmod(0o644)
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert stub_server.requests == []
+    assert "not trusted" in capsys.readouterr().err
+
+
 # --- error paths: network failures, odd server answers, refusals ------------
 
 
@@ -2387,9 +2428,11 @@ def test_env_file_comments_and_odd_lines_survive_a_logout(stub_server, host, iso
         "# sessie van plak\n"
         "\n"
         "regel-zonder-gelijkteken\n"
+        f"PLAK_HOST={host}\n"
         "PLAK_ACCESS_TOKEN = 'access-1'\n"
         "PLAK_REFRESH_TOKEN=\"refresh-1\"\n"
     )
+    env_path.chmod(0o600)
     stub_server.responder = _empty_responder(204)
 
     code = cli.main(["logout", "--host", host])
@@ -2398,7 +2441,9 @@ def test_env_file_comments_and_odd_lines_survive_a_logout(stub_server, host, iso
     record = stub_server.requests[0]
     assert record["headers"]["Authorization"] == "Bearer access-1"
     assert json.loads(record["body"]) == {"refreshToken": "refresh-1"}
-    assert env_path.read_text() == "# sessie van plak\n\nregel-zonder-gelijkteken\n"
+    assert env_path.read_text() == (
+        f"# sessie van plak\n\nregel-zonder-gelijkteken\nPLAK_HOST={host}\n"
+    )
 
 
 def test_env_file_write_failure_leaves_the_old_file_and_no_temp_file(
