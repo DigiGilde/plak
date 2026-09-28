@@ -16,7 +16,15 @@ from authlib.jose import JsonWebKey, JsonWebToken, RSAKey
 from helpers_oidc import CLIENT_SECRET, OMIT, MockIdP, make_oidc_client, make_settings
 
 from plak.audit import vocabulary
-from plak.auth.oidc import CLIENT_ASSERTION_TYPE, IdpUnavailableError, OidcClient, OidcError
+from plak.auth.oidc import (
+    BACKCHANNEL_LOGOUT_EVENT,
+    CLIENT_ASSERTION_TYPE,
+    ClientRejectedError,
+    IdpUnavailableError,
+    OidcClient,
+    OidcError,
+    RefreshRejectedError,
+)
 from plak.config import ConfigurationError
 
 
@@ -131,6 +139,38 @@ class TestIdTokenValidation:
         claims = await validate(oidc, idp, token)
         assert "at_hash" in claims
 
+    async def test_at_hash_present_without_access_token_refused(self, oidc, idp):
+        # validate() defaults a missing access_token to idp.access_token, so
+        # this calls validate_id_token directly to pass a genuine None.
+        token = idp.make_id_token(nonce="nonce-1", with_at_hash=True)
+        with pytest.raises(OidcError):
+            await oidc.validate_id_token(token, nonce="nonce-1", access_token=None)
+
+    async def test_missing_sub_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce="nonce-1", sub=OMIT)
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
+    async def test_missing_exp_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce="nonce-1", exp=OMIT)
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
+    async def test_missing_iat_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce="nonce-1", iat=OMIT)
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
+    async def test_aud_as_list_with_correct_azp_accepted(self, oidc, idp):
+        token = idp.make_id_token(nonce="nonce-1", aud=[idp.client_id, "andere-audience"], azp=idp.client_id)
+        claims = await validate(oidc, idp, token)
+        assert claims["aud"] == [idp.client_id, "andere-audience"]
+
+    async def test_aud_as_list_with_wrong_azp_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce="nonce-1", aud=[idp.client_id, "andere-audience"], azp="verkeerde-azp")
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
 
 class TestCallbackIss:
     """RFC 9207: the iss check on the callback query parameters."""
@@ -182,11 +222,24 @@ class TestClientConfiguration:
         with pytest.raises(ConfigurationError):
             make_oidc_client(make_settings(idp, oidc_client_private_jwk=jwk), idp)
 
+    def test_unparsable_jwk_refused(self, idp):
+        with pytest.raises(ConfigurationError):
+            make_oidc_client(make_settings(idp, oidc_client_private_jwk="dit-is-geen-json"), idp)
+
     async def test_metadata_issuer_mismatch_refused(self, idp):
         settings = make_settings(idp, oidc_issuer=idp.issuer)
         idp.issuer = "https://andere-issuer.example"  # metadata now deviates
         # the discovery URL stays the configured issuer; the handler matches on path
         oidc = make_oidc_client(settings, idp)
+        with pytest.raises(OidcError):
+            await oidc.metadata()
+
+    async def test_metadata_fetch_network_error_refused(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("boom")
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
         with pytest.raises(OidcError):
             await oidc.metadata()
 
@@ -434,3 +487,281 @@ class TestJwksRefreshOnUnknownKid:
         with pytest.raises(OidcError):
             await validate(oidc, idp, token)
         assert idp.jwks_requests == after_first_attempt  # cooldown: no second fetch
+
+    async def test_no_kid_with_multiple_keys_in_jwks_refused(self, idp):
+        second_key = RSAKey.generate_key(2048, is_private=True)
+        second_public = second_key.as_dict(is_private=False)
+        second_public["kid"] = "idp-sleutel-2"
+        idp.jwks = {"keys": [*idp.jwks["keys"], second_public]}
+        oidc = make_oidc_client(make_settings(idp), idp)
+
+        now_ = int(time.time())
+        claims = {
+            "iss": idp.issuer,
+            "sub": "gebruiker-1",
+            "aud": idp.client_id,
+            "exp": now_ + 600,
+            "iat": now_,
+            "acr": "urn:acr:hoog",
+            "nonce": "nonce-1",
+        }
+        # No "kid" in the header: with a single key in the JWKS that key is
+        # used regardless, but with two keys the token is ambiguous.
+        token = JsonWebToken(["RS256"]).encode({"alg": "RS256"}, claims, idp.private_key).decode("ascii")
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
+
+class TestEndSessionUrl:
+    """RP-initiated logout (OIDC RP-Initiated Logout 1.0 section 2)."""
+
+    REDIRECT = "https://plak.example/"
+
+    async def test_no_end_session_endpoint_returns_none(self, oidc):
+        url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
+        assert url is None
+
+    async def test_endpoint_present_without_id_token(self, idp):
+        idp.end_session_supported = True
+        oidc = make_oidc_client(make_settings(idp), idp)
+        url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
+        assert url.startswith(idp.issuer + "/endsession?")
+        assert "id_token_hint" not in url
+
+    async def test_endpoint_present_with_id_token_hint(self, idp):
+        idp.end_session_supported = True
+        oidc = make_oidc_client(make_settings(idp), idp)
+        url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token="een-id-token")
+        assert "id_token_hint=een-id-token" in url
+
+    async def test_metadata_failure_returns_none(self, idp):
+        settings = make_settings(idp, oidc_issuer=idp.issuer)
+        idp.issuer = "https://andere-issuer.example"  # metadata now deviates
+        oidc = make_oidc_client(settings, idp)
+        url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
+        assert url is None
+
+    async def test_separator_is_ampersand_when_endpoint_already_has_a_query(self, oidc):
+        await oidc.metadata()
+        oidc._metadata["end_session_endpoint"] = "https://idp.example/endsession?foo=bar"
+        url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
+        assert url.startswith("https://idp.example/endsession?foo=bar&")
+
+
+class TestJwksFetchFailure:
+    async def test_jwks_endpoint_failure_is_oidc_error(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            if request.url.path == "/jwks":
+                return httpx.Response(500)
+            return httpx.Response(404)
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc._fetch_keyset()
+
+
+class TestClientAssertionGuard:
+    def test_missing_private_jwk_refused(self, idp):
+        # Reachable only defensively: __init__ already refuses a
+        # private_key_jwt client with no valid JWK, so this calls the
+        # private method directly on a client_secret_post client, which
+        # never receives a private_jwk.
+        oidc = make_oidc_client(make_settings(idp, oidc_client_auth="client_secret_post"), idp)
+        with pytest.raises(OidcError):
+            oidc._make_client_assertion("https://idp.example/token")
+
+    async def test_assertion_header_omits_kid_when_jwk_has_none(self, idp):
+        key = RSAKey.generate_key(2048, is_private=True)
+        jwk = key.as_dict(is_private=True)
+        jwk.pop("kid", None)  # as_dict adds a thumbprint kid; this test wants none
+        settings = make_settings(idp, oidc_client_private_jwk=json.dumps(jwk))
+        oidc = make_oidc_client(settings, idp)
+        idp.next_nonce = "nonce-1"
+
+        await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+
+        assertion = idp.token_requests[0]["client_assertion"][0]
+        header_b64 = assertion.split(".")[0]
+        header_b64 += "=" * (-len(header_b64) % 4)
+        header = json.loads(base64.urlsafe_b64decode(header_b64))
+        assert "kid" not in header
+
+
+class TestExchangeCodeFailures:
+    CALLBACK = "https://plak.example/-/oauth2/callback"
+
+    async def test_network_error_is_oidc_error(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            raise httpx.ConnectError("boom")
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc.exchange_code("code-123", self.CALLBACK, "verifier")
+
+    async def test_non_200_status_is_refused(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            return httpx.Response(400, json={"error": "invalid_grant"})
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc.exchange_code("code-123", self.CALLBACK, "verifier")
+
+    async def test_missing_id_token_is_refused(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            return httpx.Response(200, json={"access_token": "x"})
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(OidcError):
+            await oidc.exchange_code("code-123", self.CALLBACK, "verifier")
+
+
+class TestRefreshTokens:
+    async def test_successful_refresh_returns_tokens(self, oidc, idp):
+        tokens = await oidc.refresh_tokens("ververstoken-1")
+        assert tokens["access_token"] == idp.access_token
+        assert "id_token" in tokens
+
+
+class TestRefreshTokensFailures:
+    async def test_metadata_failure_is_idp_unavailable(self, idp):
+        settings = make_settings(idp, oidc_issuer=idp.issuer)
+        idp.issuer = "https://andere-issuer.example"  # metadata now deviates
+        oidc = make_oidc_client(settings, idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_network_error_is_idp_unavailable(self, idp):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                return httpx.Response(200, json=idp.metadata)
+            raise httpx.ConnectError("boom")
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        oidc = OidcClient(make_settings(idp), http)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_invalid_grant_is_hard_failure(self, idp):
+        idp.refresh_error = "invalid_grant"
+        idp.refresh_status = 400
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(RefreshRejectedError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_client_fault_error_is_client_rejected(self, idp):
+        idp.refresh_error = "invalid_client"
+        idp.refresh_status = 401
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(ClientRejectedError) as excinfo:
+            await oidc.refresh_tokens("ververstoken-1")
+        assert excinfo.value.code == "invalid_client"
+
+    async def test_unknown_error_is_idp_unavailable(self, idp):
+        idp.refresh_error = "server_error"
+        idp.refresh_status = 500
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_non_json_error_body_is_idp_unavailable(self, idp):
+        # response.json() raises inside _error_code; that must not propagate
+        # unguarded either.
+        idp.refresh_response_override = httpx.Response(500, text="<html>onderhoud</html>")
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+    async def test_error_body_without_error_field_is_idp_unavailable(self, idp):
+        idp.refresh_response_override = httpx.Response(400, json={"foo": "bar"})
+        oidc = make_oidc_client(make_settings(idp), idp)
+        with pytest.raises(IdpUnavailableError):
+            await oidc.refresh_tokens("ververstoken-1")
+
+
+class TestValidateRefreshedIdToken:
+    """No nonce, no acr check: only signature, issuer, audience and sub."""
+
+    async def test_valid_token_accepted(self, oidc, idp):
+        token = idp.make_id_token(nonce=None, with_at_hash=False)
+        claims = await oidc.validate_refreshed_id_token(token)
+        assert claims["sub"] == "gebruiker-1"
+
+    async def test_wrong_issuer_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce=None, with_at_hash=False, iss="https://kwaadaardig.example")
+        with pytest.raises(OidcError):
+            await oidc.validate_refreshed_id_token(token)
+
+    async def test_missing_sub_refused(self, oidc, idp):
+        token = idp.make_id_token(nonce=None, with_at_hash=False, sub=OMIT)
+        with pytest.raises(OidcError):
+            await oidc.validate_refreshed_id_token(token)
+
+
+class TestValidateLogoutToken:
+    """OIDC Back-Channel Logout 1.0 section 2.6."""
+
+    async def test_valid_token_with_sid_accepted(self, oidc, idp):
+        token = idp.make_logout_token(sid=idp.sid)
+        result = await oidc.validate_logout_token(token)
+        assert result.sid == idp.sid
+        assert result.jti == "logout-token-1"
+
+    async def test_valid_token_with_sub_only_accepted(self, oidc, idp):
+        token = idp.make_logout_token(sub="gebruiker-1")
+        result = await oidc.validate_logout_token(token)
+        assert result.sub == "gebruiker-1"
+        assert result.sid is None
+
+    async def test_stale_iat_refused(self, oidc, idp):
+        token = idp.make_logout_token(sid=idp.sid, iat=int(time.time()) - 999)
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    async def test_missing_iat_refused(self, oidc, idp):
+        token = idp.make_logout_token(sid=idp.sid, iat=OMIT)
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    async def test_missing_event_refused(self, oidc, idp):
+        token = idp.make_logout_token(sid=idp.sid, with_event=False)
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    async def test_nonce_present_refused(self, oidc, idp):
+        token = idp.make_logout_token(sid=idp.sid, nonce="hoort-hier-niet")
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    async def test_missing_sub_and_sid_refused(self, oidc, idp):
+        token = idp.make_logout_token()
+        with pytest.raises(OidcError):
+            await oidc.validate_logout_token(token)
+
+    async def test_non_string_jti_becomes_none(self, oidc, idp):
+        # make_logout_token's own jti param only ever sets a string claim, so
+        # this token is built by hand to get a non-string jti past the IdP.
+        now_ = int(time.time())
+        claims = {
+            "iss": idp.issuer,
+            "aud": idp.client_id,
+            "iat": now_,
+            "sid": idp.sid,
+            "jti": 12345,
+            "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
+        }
+        header = {"alg": "RS256", "kid": idp.kid}
+        token = JsonWebToken(["RS256"]).encode(header, claims, idp.private_key).decode("ascii")
+        result = await oidc.validate_logout_token(token)
+        assert result.jti is None
