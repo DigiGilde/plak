@@ -305,14 +305,18 @@ The guarantee therefore rests entirely on the triggers from migration
   has not yet reached its retention period.
 - `content_viewer_delete_after_retention` does the same for
   `content_viewers` at 90 days.
+- `audit_log_entries_no_truncate`, `audit_log_chain_heads_no_truncate` and
+  `content_viewers_no_truncate` refuse `TRUNCATE` on those tables. It fires
+  no row trigger, so without these it would get past every guard above in
+  one command.
 
 These triggers apply to everyone who logs in with this account, so to the
 app itself as well. That the purge job may delete an expired row is exactly
 the intended path: the trigger, not the account, decides what may go.
 
 What we lose by it: the account is also the owner of the schema. An owner
-can disable the trigger, rewrite the function, `TRUNCATE` the table or drop
-it. An attacker who gets hold of the runtime credentials can therefore do so
+can disable the triggers, rewrite the functions, and then `TRUNCATE` the table,
+or drop it. An attacker who gets hold of the runtime credentials can therefore do so
 too. The triggers stop mistakes and off-hand commands, not an owner who
 deliberately wants to wipe the log.
 
@@ -604,9 +608,9 @@ rotation (`docs/security.md`) older rows stay readable as long as
 
 ## Known gaps
 
-- `TRUNCATE` fires no row triggers. Plak runs with one account, and that is
-  the owner of the table: the log can therefore be emptied in one command.
-  `ALTER TABLE ... DISABLE TRIGGER` and `DROP TABLE` are open too. There is
+- Plak runs with one account, and that is the owner of the tables: `ALTER
+  TABLE ... DISABLE TRIGGER` is open to it, and with the `TRUNCATE` guard off
+  the log can be emptied in one command; `DROP TABLE` is open too. There is
   no second layer that stops that (see "One database account"); a published
   chain head makes it visible afterwards, it does not prevent it.
 - No alerting. Reading is possible, signalling not yet.

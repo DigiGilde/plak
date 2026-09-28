@@ -64,6 +64,16 @@ async def _without_guards(connection: asyncpg.Connection, statement: str, *args)
         )
 
 
+async def _truncate_as_owner(connection: asyncpg.Connection, *tables: str) -> None:
+    """TRUNCATE the way only the schema owner can: with the guard off."""
+    async with connection.transaction():
+        for table in tables:
+            await connection.execute(f"ALTER TABLE {table} DISABLE TRIGGER {table}_no_truncate")
+        await connection.execute(f"TRUNCATE {', '.join(tables)}")
+        for table in tables:
+            await connection.execute(f"ALTER TABLE {table} ENABLE TRIGGER {table}_no_truncate")
+
+
 async def _rewrite_and_recompute(connection: asyncpg.Connection, entry_id: uuid.UUID) -> None:
     """What the verifier cannot catch: the row is changed and its hash is
     recomputed with the database's own function, so the chain still adds up."""
@@ -359,12 +369,13 @@ async def test_a_head_that_aged_out_is_not_an_accusation(
 async def test_an_emptied_table_shows_up_against_the_publication(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """Emptied in one command, the chain has nothing left to say. The heads
-    stay behind, so every published head row is missing before its deadline."""
+    """Emptied in one command by the owner, the chain has nothing left to say.
+    The heads stay behind, so every published head row is missing before its
+    deadline."""
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
-    await connection.execute("TRUNCATE audit_log_entries")
+    await _truncate_as_owner(connection, "audit_log_entries")
 
     assert await chain.verify(migrated_dsn) == []
     findings = await checkpoint.compare(migrated_dsn, published)
@@ -379,7 +390,7 @@ async def test_emptied_heads_show_up_as_a_shortened_chain(
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
-    await connection.execute("TRUNCATE audit_log_entries, audit_log_chain_heads")
+    await _truncate_as_owner(connection, "audit_log_entries", "audit_log_chain_heads")
 
     findings = await checkpoint.compare(migrated_dsn, published)
     shortened = [one for one in findings if one.reason == checkpoint.CHAIN_SHORTENED]

@@ -297,6 +297,30 @@ async def test_a_chain_head_only_moves_one_position_on(db_connection: asyncpg.Co
         )
 
 
+@pytest.mark.parametrize("table", ["audit_log_entries", "audit_log_chain_heads", "content_viewers"])
+async def test_truncate_is_refused(db_connection: asyncpg.Connection, table: str) -> None:
+    """TRUNCATE fires no row trigger, so without a statement trigger of its own
+    it would empty a guarded table in one command. The test connection is a
+    superuser, so this holds for the app's own account a fortiori."""
+    await db_connection.execute(_INSERT_AUDIT_ROW, uuid.uuid4())
+    await db_connection.execute(
+        "INSERT INTO content_viewers (id, sso_subject) VALUES ($1, $2)", uuid.uuid4(), f"sub-{uuid.uuid4().hex}"
+    )
+
+    refusal = await _refusal(db_connection, f"TRUNCATE {table}")
+    assert f"{table}: TRUNCATE niet toegestaan" in refusal
+    assert await db_connection.fetchval(f"SELECT count(*) FROM {table}") == 1  # noqa: S608 - table is a literal
+
+
+async def test_truncate_cascading_from_elsewhere_is_refused(db_connection: asyncpg.Connection) -> None:
+    await db_connection.execute(_INSERT_AUDIT_ROW, uuid.uuid4())
+
+    assert "TRUNCATE niet toegestaan" in await _refusal(
+        db_connection, "TRUNCATE members, audit_log_entries RESTART IDENTITY CASCADE"
+    )
+    assert await db_connection.fetchval("SELECT count(*) FROM audit_log_entries") == 1
+
+
 async def test_content_viewers_deletable_only_after_ninety_days(db_connection: asyncpg.Connection) -> None:
     """The BEFORE DELETE trigger on content_viewers bounds the retention job,
     not the WHERE clause in audit/retention.py: a row that is still within its
