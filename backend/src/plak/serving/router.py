@@ -281,7 +281,7 @@ async def _serve(
                         select(Site.external_sources, Site.sandbox).where(Site.id == version.site_id)
                     )
                 ).one_or_none()
-                if row is not None:
+                if row is not None:  # pragma: no cover - version.site_id is FK-bound to a Site row
                     external_sources, sandbox = bool(row.external_sources), bool(row.sandbox)
             key_cookie = await _key_cookie_value(request, db, group, site, decision, visitor)
 
