@@ -14,6 +14,7 @@ from starlette.types import Receive, Scope, Send
 
 from plak.config import Settings
 from plak.ratelimit import (
+    _CLEANUP_INTERVAL,
     InMemoryCounter,
     RateLimitClass,
     RateLimitMiddleware,
@@ -174,6 +175,20 @@ async def test_counter_evicts_oldest_window_not_first_seen_key() -> None:
 
     assert (await counter.increment("a", 10, now_=22.0)).count == 2
     assert (await counter.increment("b", 10, now_=22.0)).count == 1
+
+
+async def test_increment_runs_periodic_cleanup_at_the_interval() -> None:
+    """Every `_CLEANUP_INTERVAL`-th call sweeps expired buckets, so a key that
+    never comes back again (e.g. a one-off IP) does not linger in memory
+    forever without an external cleanup call."""
+    counter = InMemoryCounter()
+    await counter.increment("stale", 1, now_=0.0)  # call 1; a 1s window, long expired by now_=100
+    for _ in range(_CLEANUP_INTERVAL - 2):  # calls 2 .. _CLEANUP_INTERVAL - 1
+        await counter.increment("fresh", 1000, now_=100.0)
+    assert len(counter) == 2  # cleanup not due yet: the stale bucket is still there
+
+    await counter.increment("fresh", 1000, now_=100.0)  # call _CLEANUP_INTERVAL: cleanup fires
+    assert len(counter) == 1  # "stale" swept, "fresh" (inside its window) kept
 
 
 # --- Middleware: window behaviour, reset, backstop, 429 + Retry-After -------------------
@@ -453,6 +468,47 @@ async def test_normal_click_behaviour_stays_under_content_limit() -> None:
         for i in range(30):
             resp = await client.get(f"/nldd/website/assets/bestand-{i}.js")
             assert resp.status_code == 200
+
+
+async def test_non_http_scope_is_passed_through_untouched() -> None:
+    """A websocket (or lifespan) scope has no path to classify and no budget
+    to spend; the middleware must step aside rather than build a Request
+    around it."""
+    settings = _make_settings()
+    calls: list[Scope] = []
+
+    async def inner(scope: Scope, receive: Receive, send: Send) -> None:
+        calls.append(scope)
+
+    middleware = RateLimitMiddleware(app=inner, settings=settings)
+    scope: Scope = {"type": "websocket", "path": "/ws"}
+
+    async def receive() -> None:
+        raise AssertionError("receive should not be called")
+
+    async def send(message) -> None:
+        raise AssertionError("send should not be called")
+
+    await middleware(scope, receive, send)
+    assert calls == [scope]
+
+
+async def test_a_broken_counter_fails_closed_with_429() -> None:
+    """A counter that cannot be trusted must never silently let a request
+    through: refusing beats admitting an unmeasured request."""
+
+    class _BrokenCounter:
+        async def increment(self, key: str, window_s: int, now_: float):
+            raise RuntimeError("teller kapot")
+
+    settings = _make_settings(ratelimit_login_max=1000, ratelimit_login_window_s=10)
+    async with _make_client(settings, counter=_BrokenCounter()) as client:
+        resp = await client.get("/-/login")
+
+    assert resp.status_code == 429
+    assert resp.headers["retry-after"] == "10"
+    assert resp.headers["content-type"] == "application/problem+json"
+    assert resp.json()["code"] == "TOO_MANY_REQUESTS"
 
 
 async def test_make_ratelimit_middleware_factory_yields_class__and_kwargs() -> None:
