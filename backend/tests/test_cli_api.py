@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -231,6 +232,54 @@ class TestCreateDeviceAuthorization:
         await client.post(f"{BASE}/cli/device-authorizations")
         rows = await _audit_rows(factory)
         assert rows == []
+
+
+class _FakeRequest:
+    """Enough of `Request` for `_within_creation_budget`: it reads only
+    `request.app.state`."""
+
+    def __init__(self, app: FastAPI) -> None:
+        self.app = app
+
+
+class TestCreationBudget:
+    """`_within_creation_budget` directly: the per-IP budget and the shared
+    global backstop must be charged independently of each other."""
+
+    async def test_an_ip_over_its_own_budget_does_not_spend_the_backstop(self, app) -> None:
+        request = _FakeRequest(app)
+        for _ in range(cli_api.DEVICE_CREATE_MAX_PER_IP):
+            assert await cli_api._within_creation_budget(request, "203.0.113.1") is True
+        for _ in range(5):
+            assert await cli_api._within_creation_budget(request, "203.0.113.1") is False
+
+        # A second IP, still under its own budget, gets through: the five
+        # refusals above did not eat into the shared backstop.
+        assert await cli_api._within_creation_budget(request, "203.0.113.2") is True
+
+        # The backstop only ever counted the six real successes (ten for the
+        # first IP plus one for the second) plus this probe increment.
+        counter = cli_api._creation_counter(request)
+        probe = await counter.increment("global", cli_api.DEVICE_CREATE_WINDOW_S, time.monotonic())
+        assert probe.count == cli_api.DEVICE_CREATE_MAX_PER_IP + 1 + 1
+
+    async def test_another_ip_still_gets_through_while_the_first_is_over_budget(self, app) -> None:
+        request = _FakeRequest(app)
+        for _ in range(cli_api.DEVICE_CREATE_MAX_PER_IP + 3):
+            await cli_api._within_creation_budget(request, "203.0.113.1")
+
+        assert await cli_api._within_creation_budget(request, "198.51.100.7") is True
+
+    async def test_the_global_backstop_still_refuses_once_reached_by_many_ips(self, app) -> None:
+        request = _FakeRequest(app)
+        counter = cli_api._creation_counter(request)
+        now = time.monotonic()
+        for _ in range(cli_api.DEVICE_CREATE_MAX_GLOBAL):
+            await counter.increment("global", cli_api.DEVICE_CREATE_WINDOW_S, now)
+
+        # A fresh IP, nowhere near its own budget, is still refused: the
+        # backstop protects every IP, not only the one that filled it.
+        assert await cli_api._within_creation_budget(request, "198.51.100.99") is False
 
 
 # -- Full happy path ----------------------------------------------------------
