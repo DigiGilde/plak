@@ -50,20 +50,11 @@ function sourceFiles(directory: string): string[] {
   return found;
 }
 
-/** The source without comments, so prose about the login is no finding.
- * Repeated until nothing changes: one pass can splice a new comment opener
- * together out of the remains of two. */
+/** The source without script comments, so prose about the login is no
+ * finding. HTML comments stay in: stripping them is what CodeQL reads as
+ * incomplete sanitisation, and keeping them only makes the guard stricter. */
 function withoutComments(source: string): string {
-  let previous: string;
-  let code = source;
-  do {
-    previous = code;
-    code = code
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-  } while (code !== previous);
-  return code;
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
 /** The sinks in a file that also names the login route; empty when it is fine. */
