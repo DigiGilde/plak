@@ -30,7 +30,7 @@ rendered per request (`backend/src/plak/platform/security_txt.py`);
 `Expires` lies 90 days ahead, counted from the start of the current UTC
 day, so that it never expires without anyone doing anything.
 
-Three things to know:
+Four things to know:
 
 - The GitHub advisory form is the first `Contact`, and this file the
   first `Policy`. Both only became reachable when the repository went
@@ -40,6 +40,10 @@ Three things to know:
 - `digigilde@rijksoverheid.nl` is the same address as in
   `publiccode.yml`. The CVD routes of NCSC-NL follow behind it, so a
   reporter ends up somewhere either way.
+- There is no `Encryption` field. RFC 9116 cannot tie a key to one
+  `Contact`, and the first contacts are the Plak team, which has no key of
+  its own; NCSC-NL's key there would read as ours. The advisory form needs
+  no key. `sectxt` recommends the field; leaving it out is deliberate.
 - We do not sign the file with PGP. `sectxt` recommends it, but signing
   asks for key management and rotation that this repo has nowhere else,
   and a signature that expires is more harmful than no signature. This is

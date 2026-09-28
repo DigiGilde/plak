@@ -61,10 +61,9 @@ CONTACT = (
     "Contact: mailto:security@ncsc.nl",
 )
 
-CLOSING = (
-    "Encryption: https://www.ncsc.nl/pgp.txt",
-    "Preferred-Languages: nl, en",
-)
+# No Encryption field: RFC 9116 cannot tie a key to one Contact, so a reporter
+# would take it for the key of the first contacts, the Plak team, who have none.
+CLOSING = ("Preferred-Languages: nl, en",)
 
 
 def expires_at(now: datetime) -> datetime:

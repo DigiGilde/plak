@@ -124,6 +124,17 @@ class TestContent:
             "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
         )
 
+    def test_no_encryption_key_is_offered(self, tmp_path: Path) -> None:
+        """An Encryption field names the key researchers should use (RFC 9116
+        section 2.5.4), tied to no Contact in particular, so NCSC's key would
+        read as the key for the Plak team's address. The NCSC routes stay as
+        contacts; they publish their own key."""
+        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+
+        assert _fields(body, "Encryption") == []
+        assert "mailto:security@ncsc.nl" in _fields(body, "Contact")
+        assert _fields(body, "Preferred-Languages") == ["nl, en"]
+
     def test_the_canonical_lines_cover_both_retrieval_urls(self, tmp_path: Path) -> None:
         """A file whose retrieval URI appears in none of its Canonical fields
         should not be trusted (RFC 9116 section 2.5.2), and Plak answers on two
@@ -180,8 +191,8 @@ class TestContent:
 class TestAgainstTheParser:
     def test_the_document_passes_the_dtc_parser(self, tmp_path: Path) -> None:
         """sectxt is the parser behind the Digital Trust Center's own check.
-        Signing is the one thing it asks for that we deliberately leave out;
-        see SECURITY.md."""
+        Signing and an Encryption key are the two things it recommends that we
+        deliberately leave out; see SECURITY.md."""
         sectxt = pytest.importorskip("sectxt")
 
         body = security_txt(_settings(tmp_path), datetime.now(UTC))
@@ -189,4 +200,4 @@ class TestAgainstTheParser:
 
         assert parser.errors == []
         assert parser.is_valid()
-        assert [item["code"] for item in parser.recommendations] == ["not_signed"]
+        assert sorted(item["code"] for item in parser.recommendations) == ["no_encryption", "not_signed"]
