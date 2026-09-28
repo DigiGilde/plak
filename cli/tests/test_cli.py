@@ -1907,6 +1907,31 @@ def test_publish_writes_the_version_id_to_the_output_file_instead_of_stdout(
     )
 
 
+def test_publish_reports_an_unwritable_output_file_after_a_successful_publish(
+    stub_server, host, dist_folder, token_env, tmp_path, capsys
+):
+    """The version already exists on the server by the time the write fails:
+    losing it silently, or a raw traceback with an undocumented exit code, is
+    worse than a clear exit 1 naming the version."""
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "nldd/website",
+            "--output-file",
+            str(tmp_path / "geen" / "zo'n-map" / "output.txt"),
+        ]
+    )
+
+    assert code == 1
+    error_output = capsys.readouterr().err
+    assert "00000000-0000-0000-0000-000000000000" in error_output
+    assert "publish succeeded" in error_output
+
+
 def test_publish_non_json_error_body_is_shown_as_the_detail(
     stub_server, host, dist_folder, token_env, capsys
 ):
