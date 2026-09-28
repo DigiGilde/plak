@@ -26,6 +26,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Dependabot updates `uses:` references, not this input: bump it by hand,
+  # together with the same variable in ci.yml.
+  TRIVY_VERSION: v0.74.0
 
 permissions:
   contents: read
@@ -107,7 +110,7 @@ jobs:
           image-ref: ${{ steps.tag.outputs.image }}
           format: cyclonedx
           output: sbom.cdx.json
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
       # Also the transport to `herkomst`, which attests it.
       - name: SBOM bewaren
@@ -127,7 +130,7 @@ jobs:
           trivyignores: .trivyignore.yaml
           format: table
           exit-code: "0"
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
       # A red scan fails `bouw` and thereby also `preview` and `productie`;
       # the tag stays in the registry, but nothing deploys with it.
@@ -139,7 +142,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-          version: v0.74.0
+          version: ${{ env.TRIVY_VERSION }}
 
   # A job holding `id-token: write` can mint an OIDC token for any audience
   # it names, and that token carries this repository's identity. So it does
