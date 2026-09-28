@@ -363,6 +363,24 @@ describe('App', () => {
     expect(router.currentRoute.value.fullPath).toBe('/-/groups');
   });
 
+  it('keeps navigation inside the SPA for the account items too', async () => {
+    const app = await mountApp();
+
+    const profile = withText(app, 'nldd-menu-group nldd-menu-item', 'Profiel')!;
+    profile.element.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe('/-/profile');
+
+    const sessions = withText(app, 'nldd-menu-group nldd-menu-item', 'Gekoppelde sessies')!;
+    sessions.element.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe('/-/sessions');
+  });
+
   it('lets a click with a modifier key keep the native link behavior', async () => {
     const app = await mountApp();
 
@@ -459,6 +477,59 @@ describe('App', () => {
 
     expect(submit).not.toHaveBeenCalled();
     expect(router.currentRoute.value.fullPath).toBe('/');
+  });
+
+  it('falls back to the e-mail address when the IdP supplies no name', async () => {
+    backend.data.members.find((l) => l.id === 'lid-1')!.name = '';
+    const app = await mountApp();
+
+    const identity = app.find('nldd-menu-group nldd-identity');
+    expect(property<string>(identity.element, 'text')).toBe('beheerder@voorbeeld.nl');
+    // Name and supporting text would otherwise say the e-mail address twice.
+    expect(property<string | undefined>(identity.element, 'supportingText')).toBeFalsy();
+  });
+
+  it('shows an empty name rather than crash when the IdP supplies neither', async () => {
+    const lid = backend.data.members.find((l) => l.id === 'lid-1')!;
+    lid.name = '';
+    lid.email = '';
+    const app = await mountApp();
+
+    const identity = app.find('nldd-menu-group nldd-identity');
+    expect(property<string>(identity.element, 'text')).toBe('');
+  });
+
+  it('does not navigate on a click of the logout item, which only acts on select', async () => {
+    const app = await mountApp();
+
+    const logout = withText(app, 'nldd-menu-group nldd-menu-item', 'Uitloggen')!;
+    logout.element.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }),
+    );
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe('/');
+  });
+
+  it('leaves a select on an account link alone, since that only acts for logout', async () => {
+    const app = await mountApp();
+
+    const form = app.find('form').element as HTMLFormElement;
+    const submit = vi.fn();
+    form.submit = submit;
+
+    const profile = withText(app, 'nldd-menu-group nldd-menu-item', 'Profiel')!;
+    profile.element.dispatchEvent(new CustomEvent('select'));
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('does not crash the shell when the session cannot be fetched at all', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
+
+    const app = await mountApp();
+
+    expect(app.find('nldd-toolbar-title').exists()).toBe(true);
   });
 
   it('does not show the menu button without a session', async () => {
