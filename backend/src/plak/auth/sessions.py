@@ -353,10 +353,19 @@ def check_signature(secret: str, token: str) -> str | None:
 
 
 def valid_return_to(value: str | None, default: str = DEFAULT_RETURN_TO) -> str:
-    """Paths within our own origin only; everything else falls back to `default`."""
+    """Paths within our own origin only; everything else falls back to `default`.
+
+    The result has to hold up wherever it lands, not only in a `Location`
+    header that the response layer happens to percent-encode. Hence the whole
+    ASCII control range (C0 plus DEL) and not just CR/LF/NUL: a query
+    parameter arrives percent-decoded, and a URL parser drops TAB, CR and LF
+    before it works out the origin, so `/<TAB>/evil.example` would otherwise
+    read as `//evil.example`. Nothing above DEL is refused: a path may carry
+    non-ASCII.
+    """
     if not value:
         return default
-    if any(char in value for char in ("\\", "\r", "\n", "\x00")):
+    if "\\" in value or any(char <= "\x1f" or char == "\x7f" for char in value):
         return default
     if not value.startswith("/") or value.startswith("//"):
         return default

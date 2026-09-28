@@ -89,6 +89,14 @@ class TestReturnTo:
             "",
             None,
             "/pad\r\nSet-Cookie: x=y",
+            # A URL parser strips TAB, CR and LF before it works out the
+            # origin, so this one reads as //evil.example wherever the result
+            # is used unencoded.
+            "/\t/evil.example",
+            # The rest of the control range has no business in a path either,
+            # up to and including DEL.
+            "/pad\x0b",
+            "/pad\x7f",
         ],
     )
     def test_invalid_falls_back_to_the_root(self, value):
@@ -96,7 +104,10 @@ class TestReturnTo:
         # does not pass validation lands there, never on a foreign origin.
         assert valid_return_to(value) == "/"
 
-    @pytest.mark.parametrize("value", ["/fin/rapport/", "/aurora", "/", "/fin/rapport/index.html?x=1"])
+    @pytest.mark.parametrize(
+        "value",
+        ["/fin/rapport/", "/aurora", "/", "/fin/rapport/index.html?x=1", "/fin/café.html"],
+    )
     def test_valid_path_stays(self, value):
         assert valid_return_to(value) == value
 
