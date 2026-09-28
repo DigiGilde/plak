@@ -97,6 +97,31 @@ async def test_validation_error_outside_the_api_keeps_fastapis_own_shape() -> No
     assert "detail" in response.json()
 
 
+async def test_http_exception_outside_the_api_keeps_fastapis_own_shape() -> None:
+    # Same split as the validation error above, but for a plain
+    # StarletteHTTPException (here: an unmatched route, a 404 FastAPI raises
+    # on its own) instead of a validation failure.
+    response = await _fetch("/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == {"detail": "Not Found"}
+
+
+async def test_http_exception_inside_the_api_becomes_problem_json() -> None:
+    # A plain StarletteHTTPException that never went through ApiError (here:
+    # an unmatched route under /-/api/) still gets the problem+json shape,
+    # not FastAPI's own {"detail": ...} body.
+    response = await _fetch("/-/api/v1/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith(PROBLEM_CONTENT_TYPE)
+    body = response.json()
+    assert body["status"] == 404
+    assert body["title"]
+    assert body["detail"]
+
+
 # -- Audited refusals (api/errors.py::_audit_refusal) ------------------------
 #
 # A mini app of its own, because no real route reaches every branch: a 401/403
