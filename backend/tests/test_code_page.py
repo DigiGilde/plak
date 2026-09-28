@@ -503,6 +503,17 @@ class TestHandingInTheCode:
         response = await self._post(client, environment, path=path)
         assert _is_neutral_404(response)
 
+    async def test_a_malformed_origin_is_the_neutral_404(self, client, environment):
+        # An IPv6 host with no closing bracket: urlsplit's own .hostname
+        # raises ValueError here, not only its parser, so the origin guard
+        # has to catch that too and refuse rather than crash.
+        response = await client.post(
+            PATH_CONTENT_CODE,
+            data=self._body(environment),
+            headers={**FORM_HEADERS, "origin": "http://[bad"},
+        )
+        assert _is_neutral_404(response)
+
     async def test_another_origin_is_the_neutral_404(self, client, environment):
         response = await client.post(
             PATH_CONTENT_CODE,

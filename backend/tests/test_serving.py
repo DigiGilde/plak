@@ -23,11 +23,12 @@ from helpers_oidc import set_content_session_cookie, set_session_cookie
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from plak.access import keys
+from plak.access import gate, keys
+from plak.access.decision import allow
 from plak.audit.log import AuditLog
 from plak.auth.sessions import KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
 from plak.config import Settings
-from plak.constants import AccessBase, Role
+from plak.constants import AccessBase, AccessPolicy, Role
 from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
@@ -453,6 +454,11 @@ class TestLiveServing:
         assert followed.status_code == 200
         assert followed.content == b"<h1>docs</h1>"
 
+    async def test_directory_301_keeps_the_query_string(self, client):
+        response = await client.get("/aurora/site/docs?x=1")
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/site/docs/?x=1"
+
     async def test_directory_301_not_for_refused_visitor(self, client):
         # geheim/map/index.html exists, but for an anonymous visitor without a
         # key the answer is the neutral 404, not a redirect (existence does not
@@ -493,6 +499,43 @@ class TestPathValidation:
         assert status == 404
 
 
+class TestInconsistentDecision:
+    """The gate always hands back a version_id that a live version, a preview
+    or a _version lookup really found, so an ALLOW with a version or a site
+    reference that resolves to nothing does not occur through the gate
+    itself. These tests force it anyway (by replacing gate.decide with a
+    fabricated decision) to pin the defensive behaviour: no crash, and the
+    answer is the same neutral 404 as every other refusal, not a 500."""
+
+    async def test_a_version_id_the_store_does_not_know_is_the_neutral_404(
+        self, client, environment, monkeypatch
+    ):
+        async def fake_decide(db, group_slug, site_slug, visitor):
+            return allow(uuid.uuid4(), AccessPolicy(AccessBase.PUBLIC))
+
+        monkeypatch.setattr(gate, "decide", fake_decide)
+        response = await client.get("/aurora/site/")
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
+        rows = await _audit_rows(environment)
+        assert rows[-1].reason_code == "UNKNOWN_STORAGE"
+
+    async def test_a_key_selector_for_a_site_that_does_not_exist_sets_no_cookie(
+        self, client, environment, monkeypatch
+    ):
+        # decision.key_selector set and a ?key= query present, but the group
+        # and site the request names have no row of their own: the second,
+        # independent site_id lookup inside _key_cookie_value finds nothing.
+        async def fake_decide(db, group_slug, site_slug, visitor):
+            return allow(uuid.uuid4(), AccessPolicy(AccessBase.PUBLIC), key_selector="AbCdEfGh")
+
+        monkeypatch.setattr(gate, "decide", fake_decide)
+        response = await client.get("/aurora/nietbestaand/?key=AbCdEfGh.dummy")
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
+        assert "set-cookie" not in response.headers
+
+
 class TestEtag304:
     async def test_if_none_match_gives_304(self, client, environment):
         etag = f'"{environment.world.site_live_id}"'
@@ -518,6 +561,11 @@ class TestEtag304:
         response = await client.get("/aurora/site/docs", headers={"If-None-Match": "*"})
         assert response.status_code == 301
         assert response.headers["location"] == "/aurora/site/docs/"
+
+    async def test_if_none_match_star_matches_any_existing_file(self, client, environment):
+        response = await client.get("/aurora/site/", headers={"If-None-Match": "*"})
+        assert response.status_code == 304
+        assert response.content == b""
 
     async def test_weak_etag_matches_also(self, client, environment):
         response = await client.get(
@@ -594,6 +642,17 @@ class TestKey:
         assert response.status_code == 200
         assert response.content == SECRET_INDEX
         # No fresh Set-Cookie without ?key=.
+        assert "set-cookie" not in response.headers
+
+    async def test_an_unverifiable_key_query_alongside_a_valid_cookie_sets_no_new_cookie(
+        self, client, environment
+    ):
+        # Access already came in on the cookie; a garbage ?key= alongside it
+        # must not crash and must not trigger a fresh Set-Cookie.
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        response = await client.get("/aurora/geheim/?key=onbruikbaar.waarde")
+        assert response.status_code == 200
+        assert response.content == SECRET_INDEX
         assert "set-cookie" not in response.headers
 
     async def test_bare_key_id_as_cookie_is_neutral_404(self, client, environment):
@@ -1097,6 +1156,18 @@ class TestForeignSubresource:
             headers={**self.SUBRESOURCE, "Referer": "https://kwaad.example/aurora/intern/"},
         )
         assert response.status_code == 404
+
+    async def test_a_malformed_referer_does_not_count_either(self, client, environment):
+        # An IPv6 host with no closing bracket: urlsplit itself raises on
+        # .hostname, not only on parsing, so the guard has to catch that too
+        # and refuse rather than crash.
+        self._viewer(client, environment)
+        response = await client.get(
+            "/aurora/intern/",
+            headers={**self.SUBRESOURCE, "Referer": "http://[bad/aurora/intern/"},
+        )
+        assert response.status_code == 404
+        assert response.content == b"Niet gevonden\n"
 
     async def test_a_referer_that_only_starts_the_same_does_not_count(self, client, environment):
         self._viewer(client, environment)
