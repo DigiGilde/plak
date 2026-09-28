@@ -102,9 +102,11 @@ function logout(): void {
   // a 303 to the landing page. A real form navigates along and resets the
   // whole SPA state; a fetch would swallow that redirect inside the app.
   // Without a CSRF token: a form cannot set the X-CSRF-Token header and the
-  // route does not demand one (the session cookie is SameSite=Strict, so a
-  // cross-site POST does not carry it). Should the route ever require CSRF,
-  // this has to become a fetch with that header.
+  // route does not demand one. What guards it is the backend's origin check
+  // (admin_origin_ok in platform/pages.py), which only lets a POST from the
+  // beheer origin itself through; SameSite=Strict does not, because the
+  // content origin is same-site. Should the route ever require CSRF, this has
+  // to become a fetch with that header.
   logoutForm.value?.submit();
 }
 </script>
