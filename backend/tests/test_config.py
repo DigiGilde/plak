@@ -228,6 +228,25 @@ def test_production_without_base_url_refused(monkeypatch):
     assert "BASE_URL" in str(excinfo.value)
 
 
+@pytest.mark.parametrize("value", ["beheer.plak.example", "/sites", "https://", "ftp://beheer.plak.example"])
+def test_base_url_without_usable_origin_refused(monkeypatch, value):
+    # origin_guard.normalise_origin needs a http(s) scheme and a hostname to
+    # turn this into an origin; anything else must not pass validation and
+    # fall through to the dev same-origin/localhost fallback unnoticed.
+    _set_required_env(monkeypatch, PLAK_BASE_URL=value)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "BASE_URL" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "value", ["https://beheer.plak.example", "http://beheer.plak.localhost:8080"]
+)
+def test_base_url_with_usable_origin_accepted(monkeypatch, value):
+    _set_required_env(monkeypatch, PLAK_BASE_URL=value)
+    assert load_settings().base_url == value
+
+
 def test_without_content_base_url_refused_in_dev_too(monkeypatch):
     """The content host is required everywhere, not only in production.
 

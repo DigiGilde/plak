@@ -237,6 +237,19 @@ class Settings(BaseSettings):
     def audit_ip_key_previous_bytes(self) -> bytes | None:
         return base64.b64decode(self.audit_ip_key_previous) if self.audit_ip_key_previous else None
 
+    @field_validator("base_url")
+    @classmethod
+    def _base_url_valid(cls, value: str | None) -> str | None:
+        """Same condition origin_guard.normalise_origin needs to turn this
+        into an origin (http(s) scheme, a hostname); a value it cannot use
+        must not pass validation silently and fall into the dev fallback."""
+        if value is None:
+            return None
+        parts = urlsplit(value.strip())
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError(f"PLAK_BASE_URL: {value.strip()!r} is geen http(s)-URL met hostnaam")
+        return value
+
     @field_validator("content_base_url")
     @classmethod
     def _content_base_url_with_host(cls, value: str) -> str:
