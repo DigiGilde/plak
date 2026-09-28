@@ -66,6 +66,14 @@ describe('Profiel: who you are', () => {
     expect(wrapper.find('[data-testid="profiel-naam"]').html()).toContain('Onbekend');
   });
 
+  it('does not crash the page when the session cannot be refreshed on mount', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
+
+    const wrapper = await makeWrapper();
+
+    expect(wrapper.find('h1').text()).toBe('Profiel');
+  });
+
   it('supplies the breadcrumb path to the app shell', async () => {
     await makeWrapper();
 
@@ -186,5 +194,18 @@ describe('Profiel: the language choice', () => {
     expect(currentLocale.value).toBe('nl');
     expect(checked(wrapper, 'taal-auto')).toBe(true);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe('Taal niet opgeslagen');
+  });
+
+  it('shows a generic detail when the change fails with an error that is not from the API', async () => {
+    const wrapper = await makeWrapper();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
+
+    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await untilIdle();
+
+    expect(currentLocale.value).toBe('nl');
+    expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
+      'Opslaan is niet gelukt.',
+    );
   });
 });

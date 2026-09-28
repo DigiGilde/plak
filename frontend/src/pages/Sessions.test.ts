@@ -117,6 +117,20 @@ describe('Sessions: revoking', () => {
     expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(false);
   });
 
+  it('keeps the session when the confirmation is cancelled', async () => {
+    const wrapper = await makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    await untilIdle();
+
+    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await untilIdle();
+
+    expect(backend.data.cliSessions).toHaveLength(1);
+    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(true);
+  });
+
   it('reports it when revoking fails and keeps the row', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
@@ -128,5 +142,19 @@ describe('Sessions: revoking', () => {
 
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(true);
+  });
+
+  it('reports a generic detail when revoking fails with an error that is not from the API', async () => {
+    const wrapper = await makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    const notice = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notice.exists()).toBe(true);
+    expect(notice.attributes('supporting-text')).toBe('Intrekken is niet gelukt.');
   });
 });
