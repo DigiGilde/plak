@@ -71,10 +71,10 @@ asyncio_mode = "auto"
 branch = true
 concurrency = ["thread", "greenlet"]
 
-# A ratchet, not an ambition: the floor is what the suite measures today,
-# so coverage cannot quietly drop. Raise it when the measurement rises.
+# Every line and branch is tested or carries a `pragma: no cover` with its
+# reason (CLAUDE.md); anything below 100 fails the run.
 [tool.coverage.report]
-fail_under = 97
+fail_under = 100
 
 [build-system]
 requires = ["hatchling"]

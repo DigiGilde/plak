@@ -385,12 +385,13 @@ just lint        # ruff check op backend/src, backend/tests en cli/
 just coverage    # de drie suites met dekking
 ```
 
-`just coverage` measures branch coverage and fails below the floor each
-project carries: 97% in `backend/pyproject.toml`, 99% in
-`cli/pyproject.toml` and per metric in `frontend/vite.config.ts`. The
-floors are where the suites measure today, so coverage can rise and not
-drop; CI enforces them inside the existing test jobs rather than running
-the suites a second time.
+`just coverage` measures branch coverage and fails below 100%, the floor
+in `backend/pyproject.toml`, `cli/pyproject.toml` and, per metric,
+`frontend/vite.config.ts`. A path no test can reach carries an explicit
+exclusion with its reason (`# pragma: no cover - ...` in Python,
+`/* v8 ignore start */ ... /* v8 ignore stop */` in TypeScript; `next` is
+silently ignored there). CI enforces the floors inside the existing test
+jobs rather than running the suites a second time.
 
 On the backend the measurement needs `concurrency = ["thread",
 "greenlet"]`: SQLAlchemy's async adapter runs most of an async route body
