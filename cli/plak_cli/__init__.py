@@ -589,8 +589,16 @@ def cmd_publish(args: argparse.Namespace) -> int:
             # Straight to the output file ($GITHUB_OUTPUT, say): in CI stdout
             # also carries the '::add-mask::' command, and a shell capturing
             # stdout for the version id would take that command along.
-            with open(args.output_file, "a", encoding="utf-8") as handle:
-                handle.write(f"version-id={version_id}\n")
+            try:
+                with open(args.output_file, "a", encoding="utf-8") as handle:
+                    handle.write(f"version-id={version_id}\n")
+            except OSError as error:
+                print(
+                    f"Error: publish succeeded (version {version_id}) but could not "
+                    f"write to {args.output_file}: {error}",
+                    file=sys.stderr,
+                )
+                return 1
         else:
             print(version_id)
         return 0
