@@ -177,8 +177,12 @@ async def _within_creation_budget(request: Request, ip: str | None) -> bool:
     counter = _creation_counter(request)
     now = time.monotonic()
     per_ip = await counter.increment(f"ip:{ip}", DEVICE_CREATE_WINDOW_S, now)
+    if per_ip.count > DEVICE_CREATE_MAX_PER_IP:
+        # Already refused on its own budget: do not also spend the shared
+        # backstop, or a few over-budget IPs could exhaust it for everyone.
+        return False
     backstop = await counter.increment("global", DEVICE_CREATE_WINDOW_S, now)
-    return per_ip.count <= DEVICE_CREATE_MAX_PER_IP and backstop.count <= DEVICE_CREATE_MAX_GLOBAL
+    return backstop.count <= DEVICE_CREATE_MAX_GLOBAL
 
 
 def _factory(request: Request) -> async_sessionmaker[AsyncSession]:
