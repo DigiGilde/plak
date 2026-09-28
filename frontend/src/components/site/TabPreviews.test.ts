@@ -129,6 +129,18 @@ describe('TabPreviews: actions', () => {
     );
   });
 
+  it('toggles the genodigden exception both ways', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    // Seeded with invitees already on: the first toggle turns it off.
+    await runAction(wrapper, 'override-pr-42-genodigden');
+    expect(backend.data.previews[0]!.accessOverride).toMatchObject({ invitees: false });
+
+    await runAction(wrapper, 'override-pr-42-genodigden');
+    expect(backend.data.previews[0]!.accessOverride).toMatchObject({ invitees: true });
+  });
+
   it('does not offer the exceptions while the preview follows the site', async () => {
     backend.data.previews[0]!.accessOverride = null;
     const wrapper = makeWrapper();
@@ -192,5 +204,17 @@ describe('TabPreviews: actions', () => {
       'Toegang: Alleen genodigden',
     );
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
+  });
+
+  it('reports a generic failure when the access change throws something other than an ApiError', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    await runAction(wrapper, 'override-pr-42-public');
+
+    expect(wrapper.find('nldd-notification[variant="critical"]').attributes('supporting-text')).toBe(
+      'Opslaan is niet gelukt.',
+    );
   });
 });

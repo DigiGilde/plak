@@ -1,9 +1,10 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { SEARCH_DEBOUNCE_MS } from '@/composables/memberSearch';
 import TabMembers from './TabMembers.vue';
-import { untilIdle } from './testHelpers';
+import { serverErrorFetch, untilIdle } from './testHelpers';
 
 let backend: MockBackend;
 
@@ -115,5 +116,63 @@ describe('TabMembers', () => {
     expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
       'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
     );
+  });
+
+  it('changes the role of an existing site member in place', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await runAction(wrapper, 'weg@voorbeeld.nl', 'siterol-weg@voorbeeld.nl-reader');
+
+    expect(siteRowTexts(wrapper)).toContainEqual(['Wim Weg', 'Lezer']);
+    expect(backend.data.siteRoles).toContainEqual({
+      groupSlug: 'nldd',
+      siteSlug: 'website',
+      identifier: 'weg@voorbeeld.nl',
+      role: 'reader',
+    });
+  });
+
+  it('drops a site-only member entirely once the site role is removed', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await runAction(wrapper, 'weg@voorbeeld.nl', 'siterol-weghalen-weg@voorbeeld.nl');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    expect(siteRowTexts(wrapper)).toEqual([['Zoë de Wit', 'Beheerder']]);
+    expect(inheritedNames(wrapper)).not.toContain('Wim Weg');
+  });
+
+  it('reports a server error while loading the members', async () => {
+    vi.stubGlobal('fetch', serverErrorFetch());
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('nldd-banner').attributes('text')).toBe('Serverfout');
+  });
+
+  it('searches the site itself for suggestions as the group does', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const wrapper = makeWrapper();
+      await untilIdle();
+
+      wrapper
+        .find('nldd-combo-box[name="identifier"]')
+        .element.dispatchEvent(new CustomEvent('input', { detail: { value: 'Sanne' } }));
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      await flushPromises();
+
+      expect(
+        wrapper
+          .find('[data-testid="siterol-suggesties"]')
+          .findAll('nldd-menu-item')
+          .map((item) => item.attributes('value')),
+      ).toContain('sanne@voorbeeld.nl');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
