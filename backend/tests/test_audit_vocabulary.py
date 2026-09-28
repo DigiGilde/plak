@@ -8,6 +8,7 @@ code from writing a name that is in neither.
 from __future__ import annotations
 
 import re
+from datetime import date, timedelta
 from pathlib import Path
 
 from plak.audit import vocabulary
@@ -51,4 +52,16 @@ def test_the_short_retention_is_about_looking_not_about_security() -> None:
     for action, result in vocabulary.SHORT_RETENTION:
         assert action in vocabulary.ACTIONS
         assert result == vocabulary.ALLOWED
-    assert vocabulary.LONG_RETENTION_DAYS >= 3 * 365
+
+
+def test_the_long_retention_is_never_short_of_three_calendar_years() -> None:
+    """BIO2 5.28.01 asks for three years. Whichever day a row is written, the
+    term in days must reach the same date three years on, leap day or not."""
+    start = date(2024, 1, 1)
+    for offset in range(4 * 366):
+        written = start + timedelta(days=offset)
+        try:
+            three_years_on = written.replace(year=written.year + 3)
+        except ValueError:  # 29 February, three years on, is 1 March
+            three_years_on = date(written.year + 3, 3, 1)
+        assert (three_years_on - written).days <= vocabulary.LONG_RETENTION_DAYS

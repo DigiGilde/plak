@@ -265,7 +265,7 @@ As short as it can be, as long as BIO2 asks.
 | Period | What |
 |---|---|
 | **90 days** | viewing and presence: `content_access` with `allowed`, `login` with `allowed`, `logout`, `cli_logout` with `allowed` |
-| **3 years** | everything else: every refusal, login redirect, admin operation, publication, and every access to the audit log itself. Also `cli_login` and `cli_token_issued`: those hand out a credential that lives up to 90 days, so whoever approved it must be traceable for longer than the credential itself |
+| **3 years** (1096 days) | everything else: every refusal, login redirect, admin operation, publication, and every access to the audit log itself. Also `cli_login` and `cli_token_issued`: those hand out a credential that lives up to 90 days, so whoever approved it must be traceable for longer than the credential itself |
 
 Three years is the floor BIO2 5.28.01 sets for information about security
 incidents; every refusal and every admin operation can become part of one.
