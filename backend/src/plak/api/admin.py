@@ -222,7 +222,7 @@ _ERROR_SESSION = {
     401: "Er is geen geldige beheersessie: het cookie ontbreekt, is ongeldig of is verlopen (`NO_SESSION`).",
     403: (
         "Het verzoek komt van een andere origin dan de beheer-host, of het lid is niet (meer) actief "
-        "(`ANDERE_ORIGIN`, `MEMBER_NOT_ACTIVE`)."
+        "(`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`)."
     ),
     429: "Het ratelimit-budget voor deze sessie is op; probeer het later opnieuw.",
 }
@@ -3102,7 +3102,7 @@ def make_admin_router() -> APIRouter:
             {
                 422: (
                     "Eigenaar of repository is geen geldige naam (`REPOSITORY_INVALID`), de host hoort niet "
-                    "bij de provider of staat niet in `PLAK_CI_FORGEJO_HOSTS` (`HOST_NOT_ALLOWED`), de "
+                    "bij de provider of staat niet in de toegestane Forgejo-instanties (`HOST_NOT_ALLOWED`), de "
                     "live-branch is geen geldige branchnaam (`LIVE_BRANCH_INVALID`), of de provider kent de "
                     "repository niet, of niet openbaar (`REPOSITORY_NOT_FOUND`)."
                 )
