@@ -86,6 +86,14 @@ def test_ip_truncation_ipv6_other_prefix_other_result() -> None:
     assert truncate_ip("2001:db8:abcd::1") != truncate_ip("2001:db8:abce::1")
 
 
+def test_ip_truncation_ipv4_mapped_ipv6_is_truncated_as_ipv4() -> None:
+    """A dual-stack socket reports an IPv4 peer as ::ffff:a.b.c.d. Taken as
+    IPv6, its /48 is ::/48 for every IPv4 peer there is."""
+    assert truncate_ip("::ffff:203.0.113.42") == "203.0.113.0/24"
+    assert truncate_ip("::ffff:203.0.113.42") == truncate_ip("203.0.113.42")
+    assert truncate_ip("::ffff:203.0.113.42") != truncate_ip("::ffff:198.51.100.42")
+
+
 def test_recorder_matches_the_audit_log_signature() -> None:
     """AuditRecorder is a test double for AuditLog; if the two write signatures
     drift apart, every test built on the double stops meaning anything."""
