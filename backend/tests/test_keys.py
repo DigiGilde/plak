@@ -231,6 +231,29 @@ async def test_validate_cookie_unknown_id(db, site_id):
     assert await keys.validate_cookie(db, site_id, str(uuid.uuid4())) is None
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "kort",
+        "negentekentjes",
+        "acht-!!!",
+        "selector.verifier",
+    ],
+)
+def test_bare_selector_refuses_everything_that_is_no_bare_selector(value):
+    """None, the wrong length or a character outside the alphabet: none of
+    these is a selector shared without its code, so all get the same None a
+    full 'selector.verifier' value also gets."""
+    assert keys.bare_selector(value) is None
+
+
+def test_bare_selector_accepts_a_selector():
+    selector = keys._chars(keys.SELECTOR_LENGTH)
+    assert keys.bare_selector(selector) == selector
+
+
 async def test_validate_cookie_expired_key(db, site_id):
     # create_key refuses a past expiry, so this builds an already-expired
     # record directly, bypassing the guarantee, to test validate_cookie's own check.

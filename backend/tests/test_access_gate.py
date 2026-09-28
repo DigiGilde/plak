@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from plak.access import keys
 from plak.access.decision import DecisionKind
-from plak.access.gate import Visitor, code_page_needed, decide, decide_preview, decide_version
+from plak.access.gate import Visitor, _is_invitee, code_page_needed, decide, decide_preview, decide_version
 from plak.constants import AccessBase, AccessPolicy, Role
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
 from plak.models.publication import AccessKey, Invitee, KeyStatus, Preview, Site, Version, VersionTarget
@@ -703,3 +703,36 @@ async def test_the_code_page_follows_the_secret_link_extra_not_the_base(db):
     site.access_keys = False
     await db.flush()
     assert await code_page_needed(db, world.group_slug, world.site_slug, selector) is False
+
+
+async def test_code_page_needed_false_for_an_unknown_group_or_site(db):
+    """The code page must not leak that a selector would otherwise be usable
+    on a group or site that does not exist: False, same as any other refusal
+    here, never an exception or a different signal."""
+    world = await make_world(db, AccessPolicy(AccessBase.SITE_TEAM, keys=True))
+    selector = world.key_plain.split(".")[0]
+    assert await code_page_needed(db, "bestaat-niet", world.site_slug, selector) is False
+    assert await code_page_needed(db, world.group_slug, "bestaat-niet", selector) is False
+
+
+# --- _is_invitee as a unit: the identifier list it builds ---
+
+
+async def test_is_invitee_matches_on_email_alone_without_a_session_subject(db):
+    """_is_invitee builds its identifier list from whatever the visitor
+    carries; a caller that already has a verified email but no `sub` (not the
+    gate's own callers today, which all guard on `sub is not None`, but the
+    function itself does not assume that) still gets a correct match."""
+    world = await make_world(db, AccessPolicy(AccessBase.NOBODY, invitees=True))
+    visitor = Visitor(sub=None, email="genodigde@example.org", email_verified=True)
+    assert await _is_invitee(db, world.site_id, visitor) is True
+
+
+async def test_is_invitee_false_when_nothing_identifies_the_visitor(db):
+    """No sub and no verified email leaves the identifier list empty: nothing
+    to look up, so the function refuses before ever touching the database."""
+    world = await make_world(db, AccessPolicy(AccessBase.NOBODY, invitees=True))
+    assert await _is_invitee(db, world.site_id, Visitor()) is False
+    # An unverified email is the same as no email at all here.
+    unverified = Visitor(email="genodigde@example.org", email_verified=False)
+    assert await _is_invitee(db, world.site_id, unverified) is False
