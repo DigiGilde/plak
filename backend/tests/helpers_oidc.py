@@ -205,6 +205,8 @@ class MockIdP:
             "iss": self.issuer,
             "aud": self.client_id,
             "iat": now_,
+            # Two minutes out, as Keycloak sets it.
+            "exp": now_ + 120,
         }
         if isinstance(jti, str):
             claims["jti"] = jti

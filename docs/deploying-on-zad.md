@@ -272,7 +272,7 @@ POST https://beheer.plak.<domein>/-/oidc/backchannel-logout
 ```
 
 The endpoint expects a `logout_token` as a form field, and checks the
-signature (through the JWKS of the issuer), `iss`, `aud`, a recent `iat`, the
+signature (through the JWKS of the issuer), `iss`, `aud`, a recent `iat`, `exp`, the
 claim `events` with `http://schemas.openid.net/event/backchannel-logout`, the
 presence of `sid` or `sub`, the absence of a `nonce`, and a `jti` that did not
 come by shortly before. After that the corresponding Plak sessions (admin and

@@ -204,15 +204,28 @@ async def test_a_replayed_token_is_refused() -> None:
     assert app.state.session_store.get_session(second.id) is not None
 
 
-async def test_a_token_without_jti_is_not_replay_checked() -> None:
-    """The jti is optional in the spec; without one there is nothing to key a
-    replay cache on, and refusing the token outright would break an OP that
-    leaves it out."""
+async def test_a_token_without_jti_is_refused() -> None:
+    """Section 2.4 makes the jti REQUIRED. Without one there is nothing to key
+    the replay check on, so such a token could be replayed at will."""
     idp, app = _make()
+    session = _session(app)
     token = idp.make_logout_token(sid=idp.sid, jti=OMIT)
     async with make_test_client(app) as client:
-        assert (await _post(client, token)).status_code == 200
-        assert (await _post(client, token)).status_code == 200
+        response = await _post(client, token)
+
+    assert response.status_code == 400
+    assert app.state.session_store.get_session(session.id) is not None
+
+
+async def test_a_token_without_exp_is_refused() -> None:
+    """Section 2.4 makes exp REQUIRED as well."""
+    idp, app = _make()
+    session = _session(app)
+    async with make_test_client(app) as client:
+        response = await _post(client, idp.make_logout_token(sid=idp.sid, exp=OMIT))
+
+    assert response.status_code == 400
+    assert app.state.session_store.get_session(session.id) is not None
 
 
 async def test_an_expired_entry_is_pruned_on_the_next_access() -> None:

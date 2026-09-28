@@ -92,7 +92,7 @@ async def backchannel_logout(
         _logger.warning("Back-channel logout geweigerd: %s", error)
         return _refused("logout_token is niet geldig")
 
-    if token.jti and replay_cache(request.app).seen_before(token.jti, now=datetime.now(UTC)):
+    if replay_cache(request.app).seen_before(token.jti, now=datetime.now(UTC)):
         _logger.warning("Back-channel logout geweigerd: logout_token is al gebruikt")
         return _refused("logout_token is al gebruikt")
 
