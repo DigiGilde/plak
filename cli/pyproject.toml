@@ -15,7 +15,7 @@ plak = "plak_cli:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=8,<9",
+    "pytest>=9.1.1,<10",
     "pytest-cov>=6,<8",
     "pyyaml>=6,<7",
 ]
