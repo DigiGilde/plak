@@ -2055,6 +2055,23 @@ def test_stored_session_with_unreadable_expiry_is_used_as_is(
     assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer access-1"
 
 
+def test_stored_session_without_an_expiry_is_used_as_is(stub_server, host, isolated_cwd, capsys):
+    cli._write_env_file(
+        {
+            "PLAK_HOST": host,
+            "PLAK_ACCESS_TOKEN": "access-1",
+            "PLAK_REFRESH_TOKEN": "refresh-1",
+        }
+    )
+    stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 0
+    assert [r["path"] for r in stub_server.requests] == ["/-/api/v1/cli/whoami"]
+    assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer access-1"
+
+
 def test_expired_session_without_a_refresh_token_asks_to_log_in(
     stub_server, host, isolated_cwd, capsys
 ):
