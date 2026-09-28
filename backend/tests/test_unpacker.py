@@ -242,6 +242,36 @@ class TestPathValidation:
             unpack("site.tar.gz", data)
         assert reason_of(error) == "NULL_BYTE"
 
+    def test_tar_null_byte_past_512_bytes_in_a_gnu_long_name_refused(self, unpack: UnpackFn):
+        # CPython reads a GNU long name in one call sized to the name, not to
+        # BLOCKSIZE: past 512 bytes that read no longer looks like a header
+        # block by its size, which is what the fix has to see past.
+        name = "n" * 600 + "\x00.bak"
+        data = make_tar({"index.html": b"h", name: b"kwaad"}, tar_format=tarfile.GNU_FORMAT)
+        with pytest.raises(BundleError) as error:
+            unpack("site.tar.gz", data)
+        assert reason_of(error) == "NULL_BYTE"
+
+    def test_tar_null_byte_before_512_bytes_in_a_long_gnu_name_refused(self, unpack: UnpackFn):
+        # Same long-name payload, but the null byte sits in the first 512
+        # bytes of it: the counter-case to the one above, so the fix is not
+        # one that only looks past byte 512.
+        name = "n" * 100 + "\x00" + "y" * 600
+        data = make_tar({"index.html": b"h", name: b"kwaad"}, tar_format=tarfile.GNU_FORMAT)
+        with pytest.raises(BundleError) as error:
+            unpack("site.tar.gz", data)
+        assert reason_of(error) == "NULL_BYTE"
+
+    def test_tar_long_gnu_name_past_512_bytes_without_a_null_byte_is_unpacked(self, unpack: UnpackFn):
+        # The counter-test to the two above: a long name past 512 bytes is
+        # not itself a reason to refuse. Split over directories so no single
+        # segment trips a filesystem's own filename length limit; the raw
+        # long-name payload itself is still well past 512 bytes.
+        name = "/".join(["a" * 150, "b" * 150, "c" * 150, "d" * 60 + ".html"])
+        assert len(name) > 512
+        data = make_tar({"index.html": b"h", name: b"x"}, tar_format=tarfile.GNU_FORMAT)
+        assert unpack("site.tar.gz", data) == {"index.html": b"h", name: b"x"}
+
     def test_tar_null_byte_in_a_pax_long_name_refused(self, unpack: UnpackFn):
         # The pax format hands the null byte over unharmed, so there the path
         # check itself refuses. The counter-test to the two above: both routes
