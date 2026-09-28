@@ -676,6 +676,110 @@ describe('Overview', () => {
 
       wrapper.unmount();
     });
+
+    it('does not intercept dragleave for a member without an editor or admin role in any group', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'reader'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+
+      const section = wrapper.find('nldd-simple-section').element;
+      section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
+      section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="overzicht-sleep-actief"]').exists()).toBe(false);
+
+      wrapper.unmount();
+    });
+
+    it('prevents the browser default while dragging over the target', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+
+      const section = wrapper.find('nldd-simple-section').element;
+      const event = dragEvent('dragover', fakeDataTransfer([droppableFile()]));
+      section.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+
+      wrapper.unmount();
+    });
+
+    it('does not intercept dragover for a member without an editor or admin role in any group', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'reader'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+
+      const section = wrapper.find('nldd-simple-section').element;
+      const event = dragEvent('dragover', fakeDataTransfer([droppableFile()]));
+      section.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+
+      wrapper.unmount();
+    });
+
+    it('shows a dismissible error for a dropped file of an unsupported type', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+      const badFile = new File(['hoi'], 'site.pdf', { type: 'application/pdf' });
+
+      wrapper
+        .find('nldd-simple-section')
+        .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
+      await flushPromises();
+
+      const banner = wrapper.find('[data-testid="overzicht-sleep-fout"]');
+      expect(banner.exists()).toBe(true);
+      // Vue sets a custom element's prop as a DOM property, not an attribute.
+      expect((banner.element as unknown as { text: string }).text).toContain('Sleep één bestand');
+      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
+
+      banner.element.dispatchEvent(new CustomEvent('dismiss'));
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="overzicht-sleep-fout"]').exists()).toBe(false);
+
+      wrapper.unmount();
+    });
+
+    it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+
+      wrapper
+        .find('nldd-simple-section')
+        .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="overzicht-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
+
+      wrapper.unmount();
+    });
   });
 
   describe('a11y', () => {

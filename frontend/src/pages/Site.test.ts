@@ -90,6 +90,27 @@ describe('Site: structure', () => {
     );
   });
 
+  it('falls back to the slug for the heading when the site has no title', async () => {
+    backend.data.sites.find((p) => p.slug === 'website')!.title = '';
+
+    const { wrapper } = await makeWrapper('/nldd/website');
+
+    expect(wrapper.find('h1').text()).toBe('website');
+  });
+
+  it('passes an empty content base to the tabs for an anonymous visitor', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const { wrapper } = await makeWrapper('/nldd/website');
+
+    // MOCK_CONTENT_BASE only rides along on a real session; without one the
+    // live link falls back to a bare path instead of an empty-origin URL.
+    const link = wrapper.find('[data-testid="publieke-url"]');
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).not.toContain(MOCK_CONTENT_BASE);
+    expect(link.attributes('href')).toBe('/nldd/website/');
+  });
+
   it('opens the Overzicht tab by default', async () => {
     const { wrapper, router } = await makeWrapper('/nldd/website');
 
