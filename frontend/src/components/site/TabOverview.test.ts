@@ -144,6 +144,31 @@ describe('TabOverview: states', () => {
     expect(wrapper.html()).toContain('Serverfout');
   });
 
+  it('shows a 404 when the site vanished from its group between the two requests', async () => {
+    // A real race (deleted from another tab just as this one loads): the
+    // versions call still answers, but the group listing no longer has the
+    // site, so `found` in TabOverview's load() comes back undefined.
+    const realFetch = backend.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await realFetch(input, init);
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/-/api/v1/groups/nldd') {
+        const body = await response.clone().json();
+        body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
+        return new Response(JSON.stringify(body), {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
+      return response;
+    });
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.html()).toContain('Onbekend site');
+  });
+
   it('shows a 404 message for an unknown site', async () => {
     const wrapper = mount(TabOverview, {
       props: { group: 'nldd', site: 'bestaat-niet', contentBase: MOCK_CONTENT_BASE },
@@ -281,6 +306,19 @@ describe('TabOverview: danger zone', () => {
     expect(notice.attributes('supporting-text')).toBe('Serverfout');
     expect(wrapper.emitted('removed')).toBeFalsy();
     expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeUndefined();
+  });
+
+  it('reports a generic failure when deleting throws something other than an ApiError', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');
+    expect(notice.attributes('supporting-text')).toBe('Verwijderen is niet gelukt.');
   });
 
   it('puts the danger zone in an nldd-box with a critical background', async () => {

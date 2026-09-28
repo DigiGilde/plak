@@ -119,6 +119,16 @@ describe('packing: reading a drop', () => {
     ]);
   });
 
+  it('refuses a single dropped folder that carries a .env', async () => {
+    const result = await readDrop(
+      makeTransfer({ site: { 'index.html': file('index.html'), '.env': file('.env') } }),
+    );
+
+    expect(result.kind).toBe('refusal');
+    if (result.kind !== 'refusal') return;
+    expect(result.reason).toContain('.env');
+  });
+
   it('stops reading once there are more files than would ever be accepted', async () => {
     const content: Record<string, File> = {};
     for (let i = 0; i < 1200; i += 1) {
@@ -277,6 +287,12 @@ describe('packing: checks before sending', () => {
     expect(checkBundle('mijn-site', files)).toContain('Sleep de map "dist" zelf');
   });
 
+  it('picks the alphabetically first folder when two are equally shallow', () => {
+    const files = [large('zulu/index.html', 1), large('alpha/index.html', 1)];
+
+    expect(checkBundle('mijn-site', files)).toContain('Sleep de map "alpha" zelf');
+  });
+
   it('says plainly when there is no homepage anywhere', () => {
     const notice = checkBundle('mijn-site', [large('stijl.css', 1)]);
 
@@ -330,6 +346,14 @@ describe('packing: packing', () => {
     // ustar reads the path as prefix + "/" + name.
     expect(textIn(tar, 345, 155)).toBe(folder);
     expect(textIn(tar, 0, 100)).toBe(`${folder}/index.html`);
+  });
+
+  it('rejects a path no split can fit in ustar\'s two fields', async () => {
+    const path = `${'a'.repeat(200)}/${'b'.repeat(200)}`;
+
+    await expect(makeTar([{ path, file: file('index.html') }])).rejects.toThrow(
+      'does not fit in a tar header',
+    );
   });
 
   it('reports progress per file', async () => {
@@ -461,5 +485,13 @@ describe('a folder from the file picker', () => {
   it('refuses a folder with nothing publishable in it', () => {
     const outcome = readChosenFolder(chosen(['site/.DS_Store']));
     expect(outcome.kind).toBe('refusal');
+  });
+
+  it('falls back to the file name for a file without a webkitRelativePath', () => {
+    const outcome = readChosenFolder([new File(['x'], 'index.html')]);
+    expect(outcome.kind).toBe('bundle');
+    if (outcome.kind !== 'bundle') return;
+    expect(outcome.name).toBe('site');
+    expect(outcome.files.map((b) => b.path)).toEqual(['index.html']);
   });
 });

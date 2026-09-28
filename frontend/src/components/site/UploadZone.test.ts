@@ -171,6 +171,14 @@ describe('UploadZone: dragging', () => {
     wrapper.unmount();
   });
 
+  it('tolerates a dragover without a dataTransfer at all', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    expect(() => fireDrop(zone, 'dragover')).not.toThrow();
+
+    wrapper.unmount();
+  });
+
   it('accepts a dragged archive and publishes it via the button', async () => {
     const { wrapper, zone } = await mountComponent();
     const dropped = archive();
@@ -212,6 +220,25 @@ describe('UploadZone: dragging', () => {
     const sent = wrapper.emitted('file')?.[0]?.[0] as File;
     expect(sent.name).toBe('mijn-site.tar.gz');
     expect(sent.size).toBeGreaterThan(0);
+
+    wrapper.unmount();
+  });
+
+  it('uses the singular wording for a folder with exactly one file', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    fireDrop(
+      zone,
+      'drop',
+      makeTransfer({
+        'mijn-site': { 'index.html': file('index.html', '<h1>hoi</h1>') },
+      }),
+    );
+    await untilQuiet();
+
+    const notice = wrapper.find('[data-testid="sleep-klaar"]').attributes('supporting-text');
+    expect(notice).toContain('1 bestand');
+    expect(notice).not.toContain('1 bestanden');
 
     wrapper.unmount();
   });

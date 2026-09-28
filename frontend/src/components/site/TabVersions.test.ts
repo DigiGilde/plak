@@ -170,6 +170,18 @@ describe('TabVersions: states', () => {
     );
   });
 
+  it('falls back to "Handmatig geupload" without a known uploader', async () => {
+    const seeded = backend.data.versions.find((v) => v.id === 'versie-0')!;
+    seeded.createdByName = null;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(
+      wrapper.find('[data-testid="versie-versie-0"]').find('nldd-text-cell').attributes('supporting-text'),
+    ).toBe('Handmatig geupload');
+  });
+
   it('falls back to "Gepubliceerd door CI" without a known repository', async () => {
     const seeded = backend.data.versions.find((v) => v.id === 'versie-1')!;
     seeded.createdByRepository = null;
@@ -231,5 +243,17 @@ describe('TabVersions: setting live', () => {
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Versie niet live gezet');
     expect(wrapper.html()).toContain('Serverfout');
+  });
+
+  it('reports a generic failure when setting live throws something other than an ApiError', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    await runAction(wrapper, 'live-zetten-versie-0');
+
+    const notice = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notice.attributes('text')).toBe('Versie niet live gezet');
+    expect(notice.attributes('supporting-text')).toBe('Live zetten is niet gelukt.');
   });
 });
