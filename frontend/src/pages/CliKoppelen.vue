@@ -92,7 +92,10 @@ function submitManualCode(): void {
 
 async function respond(action: 'approve' | 'deny'): Promise<void> {
   const code = authorization.value?.userCode;
+  /* v8 ignore start -- the approve/deny buttons only render while
+     `authorization` (with its userCode) is set, so there is always a code. */
   if (!code) return;
+  /* v8 ignore stop */
   actionBusy.value = action;
   try {
     if (action === 'approve') {
@@ -175,7 +178,10 @@ const clientLine = computed(() => {
 });
 const accountLabel = computed(() => {
   const current = member.value;
+  /* v8 ignore start -- the 'lookup' stage that reads this only exists once
+     the session state is 'active', which always carries a member. */
   if (!current) return '';
+  /* v8 ignore stop */
   return current.name ? `${current.name} (${current.email})` : current.email;
 });
 </script>

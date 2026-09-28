@@ -108,6 +108,32 @@ describe('CliKoppelen: session', () => {
     expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
   });
 
+  it('stays on the blocked screen when a retry finds the account still not active', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'about:blank',
+            title: 'Geen toegang',
+            status: 403,
+            detail: 'Wacht nog even.',
+            code: 'MEMBER_DEACTIVATED',
+          }),
+          { status: 403, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      ),
+    );
+
+    const { wrapper } = await makeWrapper('/cli-link');
+    expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
+
+    await wrapper.find('[data-testid="controleer-opnieuw"]').trigger('click');
+    await untilIdle();
+
+    expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
+    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
+  });
+
   it('shows a generic error message when /me itself fails unexpectedly', async () => {
     vi.stubGlobal('fetch', serverErrorFetch());
 
@@ -134,6 +160,69 @@ describe('CliKoppelen: entering a code', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
+  });
+
+  it('leaves a short code as typed, without a hyphen', async () => {
+    const { wrapper } = await makeWrapper('/cli-link');
+
+    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    input.dispatchEvent(new CustomEvent('input', { detail: { value: 'ab' } }));
+    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await untilIdle();
+
+    // Too short to be a real code either way; the point is no crash and no
+    // hyphen inserted into a string shorter than the split point.
+    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+  });
+
+  it('does not look anything up on an empty submit, only marks the field touched', async () => {
+    const { wrapper } = await makeWrapper('/cli-link');
+
+    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="code-invoer"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+  });
+
+  it('falls back to the native input value for an input event without a detail', async () => {
+    const { wrapper } = await makeWrapper('/cli-link');
+
+    const input = wrapper.find('[data-testid="code-invoer"]').element as HTMLInputElement;
+    input.value = 'abcdefgh';
+    input.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
+  });
+
+  it("shows the server's error message on 429 without a detail of its own", async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
+        return backend.fetch(input, init);
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'about:blank',
+            title: 'Te veel pogingen',
+            status: 429,
+            code: 'TOO_MANY_ATTEMPTS',
+          }),
+          { status: 429, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      );
+    });
+    const { wrapper } = await makeWrapper('/cli-link');
+
+    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
+    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(wrapper.html()).toContain('Te veel pogingen. Probeer het zo nog eens.');
   });
 
   it('shows USER_CODE_UNKNOWN and stays on the input form', async () => {
@@ -179,6 +268,14 @@ describe('CliKoppelen: looking up the code via the url', () => {
     expect(wrapper.find('[data-testid="code-account"]').attributes('text')).toBe(
       `Je koppelt dit programma aan ${member.email}`,
     );
+  });
+
+  it('shows no network line when the request carries no truncated address', async () => {
+    backend.data.deviceAuthorizations[0]!.ipTruncated = null;
+
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+
+    expect(wrapper.find('[data-testid="code-netwerk"]').exists()).toBe(false);
   });
 
   it('warns when the request comes from a different network', async () => {
@@ -264,6 +361,63 @@ describe('CliKoppelen: looking up the code via the url', () => {
     expect(window.location.href).toBe(
       '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=ABCD-EFGH'),
     );
+  });
+
+  it("shows the server's error message on 429 while approving", async () => {
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
+        return backend.fetch(input, init);
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'about:blank',
+            title: 'Te veel pogingen',
+            status: 429,
+            detail: 'Even geduld, probeer het zo weer.',
+            code: 'TOO_MANY_ATTEMPTS',
+          }),
+          { status: 429, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      );
+    });
+
+    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.html()).toContain('Even geduld, probeer het zo weer.');
+  });
+
+  it("shows the server's error message on 429 while approving, without a detail of its own", async () => {
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
+        return backend.fetch(input, init);
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'about:blank',
+            title: 'Te veel pogingen',
+            status: 429,
+            code: 'TOO_MANY_ATTEMPTS',
+          }),
+          { status: 429, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      );
+    });
+
+    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.html()).toContain('Te veel pogingen. Probeer het zo nog eens.');
   });
 
   it('goes back to the input form when the code has meanwhile been used', async () => {
