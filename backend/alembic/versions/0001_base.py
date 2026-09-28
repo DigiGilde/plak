@@ -66,6 +66,12 @@ CREATE CONSTRAINT TRIGGER ck_groups_keep_one_admin
 # chains spread that contention while keeping each chain short enough to walk.
 # The shard follows from the row id, so a row cannot be moved to another chain
 # without breaking its hash.
+#
+# Sixteen per retention tier, not sixteen in all: shard = tier * 16 + the id's
+# share. A chain then holds rows of one term only, and since occurred_at rises
+# with chain_seq, what has expired in a chain is always a prefix of it. Mixing
+# the terms would let the purge cut 90-day rows out from between 3-year rows,
+# leaving gaps no walk could tell from a deletion.
 _CHAIN_SHARDS = 16
 # First key of the two-key advisory lock, so the chain locks cannot collide
 # with pg_advisory_xact_lock(hashtext(...)) in audit/log.py, which uses the
@@ -125,6 +131,55 @@ CREATE FUNCTION audit_log_chain_hash(
 $$ LANGUAGE sql STABLE;
 """
 
+# The retention lives here and nowhere else the cleanup could override: the
+# job asks the database what has expired. Shortening a term is a schema
+# change, which is what a retention decision should cost. docs/audit-log.md;
+# audit/vocabulary.py mirrors the tiers and the days, test_migrations.py holds
+# the two together.
+#
+# Tier 0 is looking and presence, tier 1 everything else.
+#
+# A row's tier is fixed when it is written, by the chain it lands in; the
+# delete guard and the purge ask audit_log_chain_retention() about the chain,
+# so moving an (action, result) to another tier later applies to new rows
+# only and never punches a hole into an existing chain.
+_RETENTION_FUNCTIONS = (
+    """
+CREATE FUNCTION audit_log_retention_tier(action text, result text) RETURNS integer AS $$
+    SELECT CASE
+        WHEN (action, result) IN (
+            ('content_access', 'allowed'),
+            ('login', 'allowed'),
+            ('logout', 'allowed'),
+            ('cli_logout', 'allowed')
+        ) THEN 0
+        ELSE 1
+    END;
+$$ LANGUAGE sql IMMUTABLE;
+""",
+    """
+CREATE FUNCTION audit_log_retention(tier integer) RETURNS interval AS $$
+    SELECT CASE tier WHEN 0 THEN interval '90 days' ELSE interval '3 years' END;
+$$ LANGUAGE sql IMMUTABLE;
+""",
+    f"""
+CREATE FUNCTION audit_log_chain_retention(chain_shard smallint) RETURNS interval AS $$
+    SELECT audit_log_retention(chain_shard / {_CHAIN_SHARDS});
+$$ LANGUAGE sql IMMUTABLE;
+""",
+)
+
+# Which chain a row lands in: its retention tier picks the set of chains, its
+# id the chain within that set. One definition, used by the trigger below.
+_CHAIN_SHARD_FUNCTION = f"""
+CREATE FUNCTION audit_log_chain_shard(entry_id uuid, action text, result text) RETURNS smallint AS $$
+    SELECT (
+        audit_log_retention_tier(action, result) * {_CHAIN_SHARDS}
+        + abs(mod(hashtext(entry_id::text)::bigint, {_CHAIN_SHARDS}))
+    )::smallint;
+$$ LANGUAGE sql IMMUTABLE;
+"""
+
 # occurred_at is stamped here and not left to the column default, so a caller
 # cannot pick the moment its row claims to have happened. clock_timestamp(),
 # not now(): read while holding the lock it makes occurred_at rise with
@@ -135,6 +190,13 @@ $$ LANGUAGE sql STABLE;
 # audit row written inside a long transaction blocks the other writers in its
 # shard for that long; the app writes its audit rows in a transaction of their
 # own (audit/log.py).
+#
+# The predecessor comes from audit_log_chain_heads, not from the newest row:
+# the purge may take every row of a quiet chain, and a chain that restarted at
+# position 1 would hand out positions a published checkpoint already holds a
+# different hash for. chain_prev_hash keeps the predecessor's hash on the row
+# itself, so the oldest surviving row stays checkable after its predecessor
+# has been purged.
 _CHAIN_FUNCTION = (
     """
 CREATE FUNCTION audit_log_chain() RETURNS trigger AS $$
@@ -142,32 +204,60 @@ DECLARE
     previous_seq bigint;
     previous_hash bytea;
 BEGIN
-    NEW.chain_shard := abs(mod(hashtext(NEW.id::text)::bigint, $SHARDS$))::smallint;
+    NEW.chain_shard := audit_log_chain_shard(NEW.id, NEW.action, NEW.result);
     PERFORM pg_advisory_xact_lock($LOCK$, NEW.chain_shard::int);
     NEW.occurred_at := clock_timestamp();
     SELECT chain_seq, chain_hash INTO previous_seq, previous_hash
-    FROM audit_log_entries
-    WHERE chain_shard = NEW.chain_shard
-    ORDER BY chain_seq DESC
-    LIMIT 1;
+    FROM audit_log_chain_heads
+    WHERE chain_shard = NEW.chain_shard;
     NEW.chain_seq := coalesce(previous_seq, 0) + 1;
+    NEW.chain_prev_hash := previous_hash;
     NEW.chain_hash := audit_log_chain_hash(
         previous_hash, NEW.id, NEW.actor_kind::text, NEW.actor_pseudonym, NEW.action,
         NEW.result, NEW.reason_code, NEW.refs, NEW.ip_truncated, NEW.ip_encrypted,
         NEW.occurred_at, NEW.chain_shard, NEW.chain_seq
     );
+    INSERT INTO audit_log_chain_heads (chain_shard, chain_seq, chain_hash, occurred_at)
+    VALUES (NEW.chain_shard, NEW.chain_seq, NEW.chain_hash, NEW.occurred_at)
+    ON CONFLICT (chain_shard) DO UPDATE
+    SET chain_seq = EXCLUDED.chain_seq, chain_hash = EXCLUDED.chain_hash, occurred_at = EXCLUDED.occurred_at;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 """
-    .replace("$SHARDS$", str(_CHAIN_SHARDS))
     .replace("$LOCK$", str(_CHAIN_LOCK_NAMESPACE))
 )
+
+# The head only ever moves one position forward, and only from inside
+# audit_log_chain() (trigger depth 2: the INSERT on audit_log_entries fired it).
+# A direct write would let the next row chain onto a hash of the writer's
+# choosing, or reuse positions a checkpoint already published.
+_CHAIN_HEAD_GUARD_FUNCTION = """
+CREATE FUNCTION audit_log_chain_head_guard() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'DELETE' OR pg_trigger_depth() < 2 THEN
+        RAISE EXCEPTION 'auditketenkop wordt alleen door de auditlog-trigger bijgewerkt: % niet toegestaan', TG_OP;
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        IF NEW.chain_seq <> OLD.chain_seq + 1 THEN
+            RAISE EXCEPTION 'auditketenkop schuift alleen een positie op: % na %', NEW.chain_seq, OLD.chain_seq;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+"""
 
 _CHAIN_TRIGGER = """
 CREATE TRIGGER audit_log_chain
 BEFORE INSERT ON audit_log_entries
 FOR EACH ROW EXECUTE FUNCTION audit_log_chain();
+"""
+
+_CHAIN_HEAD_GUARD_TRIGGER = """
+CREATE TRIGGER audit_log_chain_head_guard
+BEFORE INSERT OR UPDATE OR DELETE ON audit_log_chain_heads
+FOR EACH ROW EXECUTE FUNCTION audit_log_chain_head_guard();
 """
 
 
@@ -542,7 +632,20 @@ def upgrade() -> None:
         sa.Column("chain_shard", sa.SmallInteger(), nullable=False),
         sa.Column("chain_seq", sa.BigInteger(), nullable=False),
         sa.Column("chain_hash", sa.LargeBinary(), nullable=False),
+        # NULL only at position 1, which has no predecessor.
+        sa.Column("chain_prev_hash", sa.LargeBinary(), nullable=True),
         sa.UniqueConstraint("chain_shard", "chain_seq", name="uq_audit_log_entries_chain_position"),
+    )
+
+    # One row per chain: the position and hash the next audit row chains onto,
+    # and when the row there was written. Kept apart from audit_log_entries so
+    # it survives the purge; it holds no personal data, only positions and hashes.
+    op.create_table(
+        "audit_log_chain_heads",
+        sa.Column("chain_shard", sa.SmallInteger(), primary_key=True),
+        sa.Column("chain_seq", sa.BigInteger(), nullable=False),
+        sa.Column("chain_hash", sa.LargeBinary(), nullable=False),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     op.create_table(
@@ -603,35 +706,21 @@ def upgrade() -> None:
     # can switch the trigger off and recompute the whole chain; what it buys is
     # that tampering has to be complete to go unnoticed, and that an outside
     # verifier holding an earlier chain hash can tell. audit/chain.py walks it.
+    for statement in _RETENTION_FUNCTIONS:
+        op.execute(statement)
+    op.execute(_CHAIN_SHARD_FUNCTION)
     op.execute(_CHAIN_PART_FUNCTION)
     op.execute(_CHAIN_HASH_FUNCTION)
     op.execute(_CHAIN_FUNCTION)
     op.execute(_CHAIN_TRIGGER)
+    op.execute(_CHAIN_HEAD_GUARD_FUNCTION)
+    op.execute(_CHAIN_HEAD_GUARD_TRIGGER)
 
-    # The retention lives here and nowhere else the cleanup could override:
-    # the job asks the database what has expired. Shortening a term is a
-    # schema change, which is what a retention decision should cost.
-    # docs/audit-log.md; audit/vocabulary.py mirrors the tiers for reporting.
-    op.execute(
-        """
-        CREATE FUNCTION audit_log_retention(action text, result text) RETURNS interval AS $$
-            SELECT CASE
-                WHEN (action, result) IN (
-                    ('content_access', 'allowed'),
-                    ('login', 'allowed'),
-                    ('logout', 'allowed'),
-                    ('cli_logout', 'allowed')
-                ) THEN interval '90 days'
-                ELSE interval '3 years'
-            END;
-        $$ LANGUAGE sql IMMUTABLE
-        """
-    )
     op.execute(
         """
         CREATE FUNCTION audit_log_delete_after_retention() RETURNS trigger AS $$
         BEGIN
-            IF OLD.occurred_at > now() - audit_log_retention(OLD.action, OLD.result) THEN
+            IF OLD.occurred_at > now() - audit_log_chain_retention(OLD.chain_shard) THEN
                 RAISE EXCEPTION 'auditlog is append-only tot de bewaartermijn om is: % mag nog niet weg', OLD.id;
             END IF;
             RETURN OLD;
@@ -686,14 +775,19 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS audit_log_delete_after_retention ON audit_log_entries")
     op.execute("DROP TRIGGER IF EXISTS audit_log_chain ON audit_log_entries")
     op.execute("DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log_entries")
+    op.execute("DROP TRIGGER IF EXISTS audit_log_chain_head_guard ON audit_log_chain_heads")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_chain_head_guard()")
     op.execute("DROP FUNCTION IF EXISTS audit_log_chain()")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_chain_shard(uuid, text, text)")
     op.execute(
         "DROP FUNCTION IF EXISTS audit_log_chain_hash("
         "bytea, uuid, text, text, text, text, text, jsonb, text, bytea, timestamptz, smallint, bigint)"
     )
     op.execute("DROP FUNCTION IF EXISTS audit_log_chain_part(bytea)")
     op.execute("DROP FUNCTION IF EXISTS audit_log_delete_after_retention()")
-    op.execute("DROP FUNCTION IF EXISTS audit_log_retention(text, text)")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_chain_retention(smallint)")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_retention(integer)")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_retention_tier(text, text)")
     op.execute("DROP FUNCTION IF EXISTS audit_log_append_only()")
     op.drop_index("ix_audit_log_entries_occurred_at_id", table_name="audit_log_entries")
     op.drop_index("ix_content_viewers_last_seen_at", table_name="content_viewers")
@@ -705,6 +799,7 @@ def downgrade() -> None:
     op.drop_index("ix_group_members_member_id", table_name="group_members")
 
     op.drop_table("content_viewers")
+    op.drop_table("audit_log_chain_heads")
     op.drop_table("audit_log_entries")
     op.drop_table("access_keys")
     op.drop_table("invitees")

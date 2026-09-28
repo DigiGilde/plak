@@ -22,6 +22,10 @@ oldest rows of a chain as a matter of routine, so a chain that starts above
 position 1 is the normal state of a system that has been running for ninety
 days. Only a head published before those rows went (audit/checkpoint.py) can
 tell a purge from a truncation.
+
+Every row carries its predecessor's hash (chain_prev_hash), so each row's own
+hash is recomputed from the row alone, the oldest surviving one included, and
+the link to the row before it is checked separately.
 """
 
 from __future__ import annotations
@@ -44,11 +48,13 @@ _logger = logging.getLogger(__name__)
 
 SEQUENCE_GAP = "sequence_gap"
 HASH_MISMATCH = "hash_mismatch"
+LINK_MISMATCH = "link_mismatch"
 TIME_WENT_BACK = "time_went_back"
 
-# lag() over the chain hands each row its predecessor, so the expected hash is
-# recomputed by the database in one pass. A window function may not appear in
-# WHERE, hence the comparison happens in Python rather than in the query.
+# lag() over the chain hands each row its predecessor; the expected hash is
+# recomputed by the database from the row's own chain_prev_hash in the same
+# pass. A window function may not appear in WHERE, hence the comparison
+# happens in Python rather than in the query.
 _WALK = text(
     """
     SELECT
@@ -56,11 +62,13 @@ _WALK = text(
         chain_shard,
         chain_seq,
         chain_hash,
+        chain_prev_hash,
         occurred_at,
         lag(chain_seq) OVER chain AS previous_seq,
+        lag(chain_hash) OVER chain AS previous_hash,
         lag(occurred_at) OVER chain AS previous_occurred_at,
         audit_log_chain_hash(
-            lag(chain_hash) OVER chain, id, actor_kind::text, actor_pseudonym, action,
+            chain_prev_hash, id, actor_kind::text, actor_pseudonym, action,
             result, reason_code, refs, ip_truncated, ip_encrypted, occurred_at,
             chain_shard, chain_seq
         ) AS expected_hash
@@ -88,29 +96,33 @@ class ChainBreak:
         return f"keten {self.shard} positie {self.seq} (regel {self.entry_id}, {moment}): {self.reason}"
 
 
-def _break_reason(row) -> str | None:
-    """None when the row follows from its predecessor.
+def _hex(value: bytes | None) -> str | None:
+    return None if value is None else bytes(value).hex()
 
-    The oldest surviving row of a chain is the exception: the purge removes
-    from that end, so a chain may legitimately start above position 1, and the
-    row it starts at was hashed over a predecessor that is no longer there.
-    Neither its position nor its hash can be held against anything, so it
-    counts as the anchor and the walk starts judging at the row after it. A gap
-    between two surviving rows stays a break: the purge never leaves one, it
-    only ever takes from the front.
+
+def _break_reason(row) -> str | None:
+    """None when the row is intact and follows from its predecessor.
+
+    Every row's own hash is checked, the oldest surviving one included: it is
+    recomputed over the predecessor's hash the row itself carries. The link to
+    the predecessor is checked wherever there is one. The oldest surviving row
+    of a chain that starts above position 1 is the one row without it: the
+    purge removes from that end, so its predecessor may legitimately be gone,
+    and only a published checkpoint can say whether it went in time. A gap
+    between two surviving rows stays a break: a chain holds rows of one
+    retention term, written in order of time, so the purge only ever takes a
+    prefix and never leaves one.
     """
-    if row.previous_seq is None:
-        if row.chain_seq > 1:
-            return None
-        # Position 1 is checkable after all: it was hashed over no predecessor,
-        # which is exactly what the recomputation assumed here.
-        return HASH_MISMATCH if bytes(row.chain_hash) != bytes(row.expected_hash) else None
-    expected_seq = row.previous_seq + 1
-    if row.chain_seq != expected_seq:
-        return SEQUENCE_GAP
-    if bytes(row.chain_hash) != bytes(row.expected_hash):
+    if _hex(row.chain_hash) != _hex(row.expected_hash):
         return HASH_MISMATCH
-    if row.previous_occurred_at is not None and row.occurred_at < row.previous_occurred_at:
+    if row.previous_seq is None:
+        # Position 1 has no predecessor, so it cannot carry a link to one.
+        return LINK_MISMATCH if row.chain_seq == 1 and row.chain_prev_hash is not None else None
+    if row.chain_seq != row.previous_seq + 1:
+        return SEQUENCE_GAP
+    if _hex(row.chain_prev_hash) != _hex(row.previous_hash):
+        return LINK_MISMATCH
+    if row.occurred_at < row.previous_occurred_at:
         return TIME_WENT_BACK
     return None
 
