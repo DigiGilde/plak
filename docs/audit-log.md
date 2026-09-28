@@ -390,11 +390,25 @@ the purge only ever removes from the oldest end of a chain (one period per
 chain, times rising along it), so a gap *between* two surviving rows is never
 something it left, and that stays a break.
 
-The walk reports the first break per chain as one of: `sequence_gap` (a
-position is missing between two rows), `hash_mismatch` (the row's content no
-longer matches its hash), `link_mismatch` (the row's `chain_prev_hash` is not
-the hash of the row before it, or position 1 claims a predecessor) and
-`time_went_back` (the row is older than the one before it).
+**The newest end is held against the head.** Once the rows are walked, each
+chain's newest surviving row is compared with its entry in
+`audit_log_chain_heads`. The purge takes a chain from the front and the head
+row is always the last of a chain to expire, so while any row is left, the
+newest one is the head. A chain with no rows left is in order only when its
+head row has passed its retention deadline (the purge took all of it), or when
+the head never moved from position 0. Rows and heads are read in one snapshot,
+so an insert during the walk cannot look like a head without its row.
+
+The walk reports the first break per chain as one of:
+
+| Report | What it means |
+|---|---|
+| `sequence_gap` | a position is missing between two rows |
+| `hash_mismatch` | the row's content no longer matches its hash |
+| `link_mismatch` | the row's `chain_prev_hash` is not the hash of the row before it, or position 1 claims a predecessor |
+| `time_went_back` | the row is older than the one before it |
+| `tail_missing` | the chain's registered head stands past its newest surviving row, or the chain has no rows left while its head row is still within its retention period: rows were removed from the newest end. Reported at the head's position, with no row to name |
+| `head_mismatch` | the newest row and the registered head disagree otherwise (the head stands behind the row, holds another hash, or is missing while the chain has rows): the head was rewritten, and the next row would chain onto something else |
 
 **Which check catches what.** The two checks do not overlap, and neither is
 enough on its own:
@@ -405,9 +419,9 @@ enough on its own:
 | A row rewritten and its own hash recomputed | caught at the next row (`link_mismatch`) | caught if it is a published position |
 | A row rewritten, chain recomputed | not caught | caught |
 | A row removed from the middle | caught (`sequence_gap`) | caught if it is a published position |
-| Rows removed from the newest end | not caught | caught (`row_missing` before its deadline, `chain_shortened` if the head was moved back as well) |
+| Rows removed from the newest end | caught (`tail_missing`), unless the head was moved back to match | caught (`row_missing` before its deadline, `chain_shortened` if the head was moved back as well) |
 | Rows removed from the oldest end | not caught | caught (`front_purged` before its published deadline); after it, that is the purge |
-| The whole table emptied | not caught (nothing left to walk) | caught |
+| The whole table emptied | caught (`tail_missing` per chain) while the heads remain; not caught if they were emptied too | caught |
 
 So running only the walk is not enough, and a nightly publication with a
 retained log is what makes the second column exist at all.
@@ -415,9 +429,9 @@ retained log is what makes the second column exist at all.
 **What it does not prove.** The account is still the owner of the schema. An
 attacker holding those credentials can disable the trigger, rewrite rows and
 recompute every hash afterwards, and `verify-audit-log` will say the chain is
-whole. The same goes for rows dropped off either end of a chain: nothing that
-is left points at them, at the front not even suspiciously, because that is
-where the purge takes from. What the chain buys is that tampering now has to be
+whole. The same goes for rows dropped off the front of a chain, where nothing
+left points at them and the purge takes from anyway, and for rows dropped off
+the newest end by someone who also moves the head back. What the chain buys is that tampering now has to be
 complete and deliberate to go unnoticed, and that a verifier outside this
 database, holding a chain hash from an earlier moment, can tell that the
 history was rewritten. Only shipping the log off-host, to an append-only WORM
@@ -487,10 +501,11 @@ Rows written after the publication change nothing: a head that is no longer the
 head still has to be where it was, with the hash it had.
 
 **What this proves.** That an outside observer holding an older line can tell
-that history was rewritten, including in the three cases `verify-audit-log`
-cannot see: the schema owner who switched the trigger off and recomputed every
-hash, rows removed from the newest end, and the oldest end having moved
-further than the retention period allows.
+that history was rewritten, including in the cases `verify-audit-log` cannot
+see: the schema owner who switched the trigger off and recomputed every hash
+(the head included), rows removed from the newest end with the head moved back
+to match, and the oldest end having moved further than the retention period
+allows.
 **What it does not.** It prevents nothing, it notices nothing by itself, and it
 proves nothing at all if nobody kept an older line. Its whole value sits in the
 log retention and in the fact that the log leaves the machine. Shipping every

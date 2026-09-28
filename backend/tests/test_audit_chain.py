@@ -484,6 +484,134 @@ async def test_concurrent_writes_keep_the_chain_whole(
     assert await chain.verify(migrated_dsn) == []
 
 
+# --- The newest end against the registered head ---------------------------------------
+
+
+async def test_a_deleted_tail_row_is_a_break(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    """Rows removed from the newest end leave nothing behind that points at
+    them, but the head still says where the chain stood."""
+    shard = await _fill_one_shard(connection, count=3)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq >= 2", shard
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.entry_id, one.reason) for one in breaks] == [
+        (shard, 3, None, chain.TAIL_MISSING)
+    ]
+    assert f"keten {shard} positie 3 (ketenkop, " in breaks[0].describe()
+
+
+async def test_a_chain_deleted_before_its_deadline_is_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """Every row gone while the head row was still within its term: no purge
+    did that."""
+    shard = await _fill_one_shard(connection, count=2)
+    await _without_guards(connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1", shard)
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 2, chain.TAIL_MISSING)]
+
+
+async def test_an_honest_chain_matches_its_head(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    shard = await _fill_one_shard(connection, count=3)
+    head = await connection.fetchrow(
+        "SELECT chain_seq, chain_hash FROM audit_log_chain_heads WHERE chain_shard = $1", shard
+    )
+    newest = await connection.fetchrow(
+        "SELECT chain_seq, chain_hash FROM audit_log_entries WHERE chain_shard = $1 ORDER BY chain_seq DESC LIMIT 1",
+        shard,
+    )
+
+    assert tuple(head) == tuple(newest)
+    assert await chain.verify(migrated_dsn) == []
+
+
+async def test_a_chain_purged_to_nothing_is_not_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """The purge took every row, head row last, after its deadline."""
+    await insert_chained_audit_row(connection, "login", "allowed", timedelta(days=120))
+    await insert_chained_audit_row(connection, "logout", "allowed", timedelta(days=100))
+    await retention.purge(migrated_dsn)
+    empty_heads = await connection.fetchval(
+        """
+        SELECT count(*) FROM audit_log_chain_heads AS head
+        WHERE NOT EXISTS (SELECT 1 FROM audit_log_entries AS entry WHERE entry.chain_shard = head.chain_shard)
+        """
+    )
+
+    assert empty_heads >= 1
+    assert await chain.verify(migrated_dsn) == []
+
+
+async def test_a_head_that_never_moved_is_not_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """A head at position 0 stands for a chain nothing was written to."""
+    await _write_head(connection, 3, seq=0)
+
+    assert await chain.verify(migrated_dsn) == []
+
+
+async def test_rows_without_a_head_are_a_break(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    shard = await _fill_one_shard(connection, count=2)
+    await connection.execute("ALTER TABLE audit_log_chain_heads DISABLE TRIGGER audit_log_chain_head_guard")
+    try:
+        await connection.execute("DELETE FROM audit_log_chain_heads WHERE chain_shard = $1", shard)
+    finally:
+        await connection.execute("ALTER TABLE audit_log_chain_heads ENABLE TRIGGER audit_log_chain_head_guard")
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 2, chain.HEAD_MISMATCH)]
+    assert breaks[0].entry_id is not None
+
+
+@pytest.mark.parametrize(("seq", "hash_hex"), [(1, None), (2, "00" * 32), (5, None)])
+async def test_a_head_that_disagrees_with_the_newest_row_is_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection, seq: int, hash_hex: str | None
+) -> None:
+    """Behind the newest row, or at it with another hash: the head was
+    rewritten, so the next row would chain onto something else. Ahead of it
+    is the missing tail above."""
+    shard = await _fill_one_shard(connection, count=2)
+    await _write_head(connection, shard, seq=seq, hash_hex=hash_hex)
+
+    breaks = await chain.verify(migrated_dsn)
+    expected = chain.TAIL_MISSING if seq > 2 else chain.HEAD_MISMATCH
+    assert [(one.shard, one.reason) for one in breaks] == [(shard, expected)]
+
+
+async def test_a_chain_already_broken_gets_no_second_report(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """Only the first break per chain: a missing tail behind a gap adds nothing."""
+    shard = await _fill_one_shard(connection, count=4)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq IN (2, 4)", shard
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 3, chain.SEQUENCE_GAP)]
+
+
+async def test_breaks_come_in_chain_order(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    """A break found in the rows and one found at a head are reported by chain,
+    not by the pass that found them."""
+    await _write_head(connection, 3, seq=4)
+    shard = await _fill_one_shard(connection, count=2)
+    await _without_guards(
+        connection, "UPDATE audit_log_entries SET result = 'refused' WHERE chain_shard = $1 AND chain_seq = 2", shard
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.reason) for one in breaks] == [
+        (3, chain.TAIL_MISSING),
+        (shard, chain.HASH_MISMATCH),
+    ]
+
+
 # --- The command line -----------------------------------------------------------------
 
 
@@ -560,6 +688,29 @@ async def _fill_one_shard(connection: asyncpg.Connection, *, count: int) -> int:
         )
         if row is not None:
             return row["chain_shard"]
+
+
+async def _write_head(
+    connection: asyncpg.Connection, shard: int, *, seq: int, hash_hex: str | None = None
+) -> None:
+    """Sets a chain's registered head directly, the way only the schema owner
+    can; the hash stays what it was unless one is given."""
+    await connection.execute("ALTER TABLE audit_log_chain_heads DISABLE TRIGGER audit_log_chain_head_guard")
+    try:
+        await connection.execute(
+            """
+            INSERT INTO audit_log_chain_heads (chain_shard, chain_seq, chain_hash, occurred_at)
+            VALUES ($1, $2, coalesce(decode($3, 'hex'), '\\x00'), now())
+            ON CONFLICT (chain_shard) DO UPDATE
+            SET chain_seq = EXCLUDED.chain_seq,
+                chain_hash = coalesce(decode($3, 'hex'), audit_log_chain_heads.chain_hash)
+            """,
+            shard,
+            seq,
+            hash_hex,
+        )
+    finally:
+        await connection.execute("ALTER TABLE audit_log_chain_heads ENABLE TRIGGER audit_log_chain_head_guard")
 
 
 async def _without_guards(connection: asyncpg.Connection, statement: str, *args) -> None:
