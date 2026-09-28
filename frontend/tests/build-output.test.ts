@@ -18,6 +18,13 @@ function builtIndex(): string {
   }
 }
 
+// An end tag may carry whitespace and even ignored attributes before the `>`,
+// so `</script >` and `</script foo>` close a script just like `</script>`. A
+// pattern that misses those forms swallows a following inline script into the
+// content of an earlier one that does have a src, and the guard below then
+// waves it through.
+const SCRIPT_TAG_RE = /<script\b[^>]*>([\s\S]*?)<\/script(?:\s[^>]*)?>/gi;
+
 function distFiles(directory = distDir): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const full = join(directory, entry.name);
@@ -34,7 +41,7 @@ describe('gebouwde index.html', () => {
   it('bevat geen inline <script> zonder src', () => {
     const html = builtIndex();
 
-    const scriptTags = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+    const scriptTags = [...html.matchAll(SCRIPT_TAG_RE)];
     expect(scriptTags.length).toBeGreaterThan(0);
 
     for (const [tag, content] of scriptTags) {
@@ -54,6 +61,24 @@ describe('gebouwde index.html', () => {
 
     const styleAttributes = [...html.matchAll(/\sstyle\s*=\s*["']/gi)];
     expect(styleAttributes.length, 'style-attribuut gevonden in dist/index.html').toBe(0);
+  });
+});
+
+describe('script-tagpatroon', () => {
+  it.each(['</script >', '</script\t\n foo>'])('ziet elk script apart na %s', (endTag) => {
+    const html = `<script src="a.js">${endTag}<script>alert(1)</script>`;
+
+    const tags = [...html.matchAll(SCRIPT_TAG_RE)];
+
+    expect(tags.length).toBe(2);
+    expect(tags[1][1]).toBe('alert(1)');
+  });
+
+  it('ziet <scriptx> niet aan voor een eindtag', () => {
+    const tags = [...'<script>alert(1)</scriptx></script>'.matchAll(SCRIPT_TAG_RE)];
+
+    expect(tags.length).toBe(1);
+    expect(tags[0][1]).toBe('alert(1)</scriptx>');
   });
 });
 
