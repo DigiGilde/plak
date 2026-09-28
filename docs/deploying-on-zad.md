@@ -346,7 +346,9 @@ with `RijksICTGilde/zad-actions`. Both are pinned to commit SHAs.
 
 A PR gets a preview deployment `pr<nummer>` that is cloned from `productie`,
 and when the PR is closed the cleanup action removes the deployment, the
-GitHub deployments and the image.
+GitHub deployments and the image. Both jobs only run once the repository
+variable `ZAD_PROJECT_ID` is set; until then a PR builds and scans its image
+and stops there.
 
 Watch out with previews: **a clone does not carry over the settings of the
 source.** Besides the web address (the preview lands on the cluster address

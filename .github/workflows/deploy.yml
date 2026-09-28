@@ -203,8 +203,12 @@ jobs:
           sbom-path: sbom.cdx.json
           push-to-registry: true
 
+  # preview and opruimen wait for the ZAD project: without ZAD_PROJECT_ID
+  # there is nothing to deploy to, and every pull request would go red.
   preview:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: >-
+      github.event_name == 'pull_request' && github.event.action != 'closed'
+      && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
     # bouw already needs: ci, so this is transitively gated too; named
     # explicitly to match productie's needs: [ci, bouw] below.
@@ -381,6 +385,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' && github.event.action == 'closed'
       && github.event.pull_request.user.login != 'dependabot[bot]'
+      && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
