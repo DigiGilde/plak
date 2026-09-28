@@ -46,6 +46,6 @@ def determine(rel_path: str) -> str:
         mediatype, _ = mimetypes.guess_type(rel_path, strict=False)
     if mediatype is None:
         return DEFAULT_MIME
-    if mediatype == "text/html":
-        return "text/html; charset=utf-8"
+    if mediatype.startswith("text/"):
+        return f"{mediatype}; charset=utf-8"
     return mediatype
