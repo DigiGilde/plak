@@ -123,7 +123,10 @@ function sourceFiles(directory: string): string[] {
 /** The file without its comments and its <style> block. */
 function strippable(source: string): string {
   return source
-    .replace(/<style[\s\S]*?<\/style>/g, '')
+    // `</style >` and `</style\n>` are valid end tags; a naive `<\/style>`
+    // leaves the block in and the CSS then gets scanned for Dutch words.
+    // Same shape as build-output.test.ts, where it guards the CSP instead.
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style(?:\s[^>]*)?>/g, '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
