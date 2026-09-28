@@ -215,9 +215,9 @@ async def test_the_database_and_the_code_agree_on_the_terms(db_connection: async
     for action, result in vocabulary.SHORT_RETENTION:
         assert await db_connection.fetchval("SELECT audit_log_retention_tier($1, $2)", action, result) == 0
     assert await db_connection.fetchval("SELECT audit_log_retention_tier('admin_access', 'refused')") == 1
-    short_days = await db_connection.fetchval("SELECT extract(day FROM audit_log_retention(0))::int")
-    assert short_days == vocabulary.SHORT_RETENTION_DAYS
-    assert await db_connection.fetchval("SELECT audit_log_retention(1) = interval '3 years'")
+    # The database is authoritative; the vocabulary mirrors its numbers.
+    for tier, days in ((0, vocabulary.SHORT_RETENTION_DAYS), (1, vocabulary.LONG_RETENTION_DAYS)):
+        assert await db_connection.fetchval("SELECT audit_log_retention($1) = make_interval(days => $2)", tier, days)
 
 
 async def test_a_chain_keeps_the_term_of_its_tier(db_connection: asyncpg.Connection) -> None:

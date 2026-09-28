@@ -162,10 +162,12 @@ CI_REASONS: Final = frozenset(
     }
 )
 
-# Retention, in days. The database holds the same two numbers in
-# plak_audit_retention_days(); this is for the code that reports on it.
+# Retention, in days. The database is authoritative: audit_log_retention() in
+# 0001_base is what the delete guard and the purge enforce, and
+# test_migrations.py holds these two numbers to it. 1096 days is three years
+# with a leap day, so the long term never falls short of three calendar years.
 SHORT_RETENTION_DAYS: Final = 90
-LONG_RETENTION_DAYS: Final = 3 * 365
+LONG_RETENTION_DAYS: Final = 1096
 
 # (action, result) pairs that are about looking and presence rather than about
 # security: these go after SHORT_RETENTION_DAYS, everything else after LONG.

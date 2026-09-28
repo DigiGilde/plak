@@ -137,7 +137,10 @@ $$ LANGUAGE sql STABLE;
 # audit/vocabulary.py mirrors the tiers and the days, test_migrations.py holds
 # the two together.
 #
-# Tier 0 is looking and presence, tier 1 everything else.
+# Tier 0 is looking and presence, tier 1 everything else. The long term is in
+# days, not '3 years': a calendar interval is 1095 or 1096 days depending on
+# the leap day in it, and 1096 is never short of three years. These numbers
+# are the authoritative ones; vocabulary.py mirrors them.
 #
 # A row's tier is fixed when it is written, by the chain it lands in; the
 # delete guard and the purge ask audit_log_chain_retention() about the chain,
@@ -159,7 +162,7 @@ $$ LANGUAGE sql IMMUTABLE;
 """,
     """
 CREATE FUNCTION audit_log_retention(tier integer) RETURNS interval AS $$
-    SELECT CASE tier WHEN 0 THEN interval '90 days' ELSE interval '3 years' END;
+    SELECT CASE tier WHEN 0 THEN interval '90 days' ELSE interval '1096 days' END;
 $$ LANGUAGE sql IMMUTABLE;
 """,
     f"""
