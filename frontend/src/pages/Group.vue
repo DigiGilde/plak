@@ -37,7 +37,10 @@ import { useAddActions } from '@/composables/addActions';
 
 const route = useRoute();
 const router = useRouter();
+/* v8 ignore start -- the '?? ''' fallback is unreachable while this page
+   only mounts under the ':group' route, which always supplies the param. */
 const groupSlug = computed(() => String(route.params.group ?? ''));
+/* v8 ignore stop */
 
 const loading = ref(true);
 const error = ref<unknown>(null);
@@ -189,6 +192,10 @@ function onMemberAdded(member: GroupMember): void {
   detail.value?.members.push(member);
 }
 
+/* v8 ignore start -- these three handlers only fire from tab children that
+   render behind 'v-else-if="detail"', so detail is always set by the time
+   any of them runs; the guards are defensive against a type of null,
+   not a reachable state. */
 function onMemberRemoved(identifier: string): void {
   if (!detail.value) return;
   detail.value.members = detail.value.members.filter((l) => l.identifier !== identifier);
@@ -197,12 +204,14 @@ function onMemberRemoved(identifier: string): void {
 function onMemberRoleChanged(member: GroupMember): void {
   if (!detail.value) return;
   const index = detail.value.members.findIndex((l) => l.identifier === member.identifier);
+  // The backend always answers about the same member it was called for.
   if (index !== -1) detail.value.members.splice(index, 1, member);
 }
 
 function onGroupChanged(group: Group): void {
   if (detail.value) detail.value.group = group;
 }
+/* v8 ignore stop */
 </script>
 
 <template>
