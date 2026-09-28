@@ -447,6 +447,15 @@ Limits (defaults, env-overridable): request body 550 MB, 100 MB per unpacked
 file, 500 MB unpacked in total, 1000 files, depth 10 (`config.py`,
 `ingest_max_*`).
 
+Those bound one bundle. Two more bound what the bundles leave behind, because a
+live version is never cleaned up: `site_max_bytes` (20 GB, 0 turns it off) caps
+what every version of one site together occupies, measured on the volume just
+before the new version is renamed into place, so a refusal leaves nothing behind
+and answers 413. `storage_min_free_bytes` (2 GB, 0 turns it off) is the free
+space the volume must hold beyond one full-size deploy; below it the deploy is
+refused with a 503 before the body is read, because a volume run dry takes the
+serving of every other site down with it.
+
 The root of the site is settled in three steps: a chain of enclosing directories
 holding exactly one entry is peeled off; a `basispad` from the caller then wins;
 and if that yields no `index.html` in the root the bundle is refused, naming the

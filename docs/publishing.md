@@ -593,6 +593,17 @@ solution.
 The check on unsafe paths applies to every entry in the archive,
 published or not.
 
+Beyond the one bundle, the site itself has a ceiling: every version of it
+together may occupy at most 20 GB by default. A deploy that would cross it is
+refused with a `413` and the code `SITE_QUOTA_EXCEEDED`, naming what the site
+uses now and what this version would add. Live versions are kept forever, so
+the room usually comes back by removing previews you no longer need; your
+platform administrator can also raise the ceiling.
+
+If the volume itself is nearly full, a deploy answers `503` with
+`STORAGE_UNAVAILABLE` before the body is read. Nothing is wrong with your
+request then: try again later.
+
 ### Error contract
 
 Errors come back as `application/problem+json`

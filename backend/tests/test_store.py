@@ -203,3 +203,30 @@ class TestSweepTmp:
 
     def test_empty_is_zero(self, store: ContentStore):
         assert store.sweep_tmp(timedelta(hours=1)) == 0
+
+
+class TestMeasuring:
+    def test_site_bytes_counts_every_version_and_is_zero_without_one(self, root: Path):
+        store = ContentStore(root)
+        assert store.site_bytes("groep", "site") == 0
+        store.store_version("groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
+        store.store_version("groep", "site", uuid.uuid4(), {"b.html": b"y" * 5})
+        assert store.site_bytes("groep", "site") == 15
+        # Another site on the same volume does not count towards it.
+        store.store_version("groep", "andere", uuid.uuid4(), {"c.html": b"z" * 99})
+        assert store.site_bytes("groep", "site") == 15
+
+    def test_a_file_that_disappears_during_the_walk_is_not_counted(self, root: Path, monkeypatch):
+        """The cleanup job removes an expired preview while a deploy is being
+        measured: the race may not make the deploy fail."""
+        store = ContentStore(root)
+        store.store_version("groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
+
+        def gone(_path):
+            raise FileNotFoundError
+
+        monkeypatch.setattr(os, "lstat", gone)
+        assert store.site_bytes("groep", "site") == 0
+
+    def test_free_bytes_reports_the_volume(self, root: Path):
+        assert ContentStore(root).free_bytes() > 0

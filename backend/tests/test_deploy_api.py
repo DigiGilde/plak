@@ -1283,3 +1283,46 @@ async def test_concurrent_same_ref_deploys_give_one_preview_row(environment: Env
     # Only the file tree of the winning versie is left.
     sitedir = environment.settings.content_root / "nldd" / "website"
     assert {entry.name for entry in sitedir.iterdir()} == {str(previews[0].version_id)}
+
+
+async def test_a_full_site_quota_is_413(tmp_path: Path, migrated_dsn: str) -> None:
+    """A limit on what the site may occupy, so it lands beside the per-bundle
+    limits as a 413 rather than in the 422 bucket of an invalid archive."""
+    async with _environment(tmp_path, migrated_dsn, site_max_bytes=10) as environment:
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token)
+            )
+
+        content = _assert_problem(resp, 413)
+        assert content["code"] == "SITE_QUOTA_EXCEEDED"
+
+        async with environment.session_factory() as db:
+            row = (
+                await db.execute(
+                    select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY)
+                )
+            ).scalar_one()
+        assert row.reason_code == "SITE_QUOTA_EXCEEDED"
+
+
+async def test_a_volume_without_room_is_503(tmp_path: Path, migrated_dsn: str) -> None:
+    """503, not 4xx: nothing is wrong with this request, the platform has no
+    room at this moment. The refusal comes before the body is read."""
+    async with _environment(tmp_path, migrated_dsn, storage_min_free_bytes=2**62) as environment:
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token)
+            )
+
+        content = _assert_problem(resp, 503)
+        assert content["code"] == "STORAGE_UNAVAILABLE"
+
+        async with environment.session_factory() as db:
+            row = (
+                await db.execute(
+                    select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY)
+                )
+            ).scalar_one()
+        assert row.reason_code == "STORAGE_UNAVAILABLE"
+        assert list((environment.settings.content_root / "_tmp").iterdir()) == []

@@ -252,6 +252,15 @@ NL: Final[dict[str, str]] = {
     "FILE_TOO_LARGE": "Bestand '{path}' is uitgepakt groter dan {max_file} bytes.",
     "TOTAL_TOO_LARGE": "Bundel is uitgepakt groter dan {max_total} bytes.",
     "TOTAL_TOO_LARGE.archive": "Archief is uitgepakt groter dan {max_total} bytes.",
+    "SITE_QUOTA_EXCEEDED": (
+        "Deze site gebruikt al {used} van {max_bytes} bytes; daar passen de {added} bytes van "
+        "deze versie niet meer bij. Verwijder previews die je niet meer nodig hebt, of vraag de "
+        "platformbeheerder om meer ruimte."
+    ),
+    "STORAGE_UNAVAILABLE": (
+        "Er is nu te weinig vrije ruimte om te publiceren. Probeer het later opnieuw; de "
+        "platformbeheerder is hiervan op de hoogte."
+    ),
     "SYMLINK_REFUSED": "Symlink in archief geweigerd: {name}",
     "HARDLINK_REFUSED": "Hardlink in archief geweigerd: {name}",
     "SPECIAL_FILE": "Geen gewoon bestand, geweigerd: {name}",
@@ -505,6 +514,15 @@ EN: Final[dict[str, str]] = {
     "FILE_TOO_LARGE": "File '{path}' is larger than {max_file} bytes unpacked.",
     "TOTAL_TOO_LARGE": "The bundle is larger than {max_total} bytes unpacked.",
     "TOTAL_TOO_LARGE.archive": "The archive is larger than {max_total} bytes unpacked.",
+    "SITE_QUOTA_EXCEEDED": (
+        "This site already uses {used} of {max_bytes} bytes, which leaves no room for the "
+        "{added} bytes of this version. Remove previews you no longer need, or ask the platform "
+        "administrator for more room."
+    ),
+    "STORAGE_UNAVAILABLE": (
+        "There is too little free space to publish right now. Try again later; the platform "
+        "administrator has been notified."
+    ),
     "SYMLINK_REFUSED": "Symlink in the archive refused: {name}",
     "HARDLINK_REFUSED": "Hard link in the archive refused: {name}",
     "SPECIAL_FILE": "Not a regular file, refused: {name}",

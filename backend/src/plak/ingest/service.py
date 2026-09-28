@@ -58,6 +58,18 @@ class IngestService:
     def __init__(self, store: ContentStore, settings: Settings) -> None:
         self._content_store = store
         self._limits = Limits.from_settings(settings)
+        self._site_max_bytes = settings.site_max_bytes
+        # What one deploy may add at worst: the spooled upload plus everything
+        # unpacked out of it, both still on the volume at the same time.
+        self._deploy_headroom = (
+            settings.storage_min_free_bytes + settings.ingest_max_body + settings.ingest_max_total
+        )
+
+    def check_room(self) -> None:
+        """Refuses before the first byte is spooled when the content volume has
+        no room left for a deploy of full size."""
+        if self._deploy_headroom and self._content_store.free_bytes() < self._deploy_headroom:
+            raise IngestError("STORAGE_UNAVAILABLE")
 
     def _store_sync(
         self, group: Group, site: Site, filename: str, source: Path, base_path: str | None
@@ -65,7 +77,22 @@ class IngestService:
         version_id = uuid.uuid4()
         with self._content_store.write_version(group.slug, site.slug, version_id) as writer:
             unpack(filename, source, writer, self._limits, base_path=base_path)
+            # Inside the with: on a refusal the work directory is cleaned up
+            # and nothing is renamed into place. The site is measured only now
+            # because the size of this version is not known before it is
+            # unpacked, and the older versions are all still there.
+            self._check_quota(group, site, writer.total_bytes())
         return version_id, writer.storage_ref
+
+    def _check_quota(self, group: Group, site: Site, added: int) -> None:
+        if not self._site_max_bytes:
+            return
+        used = self._content_store.site_bytes(group.slug, site.slug)
+        if used + added > self._site_max_bytes:
+            raise IngestError(
+                "SITE_QUOTA_EXCEEDED",
+                params={"used": used, "added": added, "max_bytes": self._site_max_bytes},
+            )
 
     async def _store(
         self, group: Group, site: Site, filename: str, source: Path, base_path: str | None

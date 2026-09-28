@@ -683,6 +683,10 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
             auth = await _authorize(request, db, auth, site)
             actor = auth.actor
 
+        service = IngestService(store, settings)
+        # Before the body is read: a volume without room costs no upload.
+        service.check_room()
+
         upload = await _spool_upload(request, store, settings.ingest_max_body)
         preview = upload.fields.get(PREVIEW_FIELD)
         base_path = upload.fields.get(BASE_PATH_FIELD)
@@ -699,7 +703,7 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
                 trust.check_live_deploy(auth.ci.repository, auth.ci.token)
             except CiTokenError as error:
                 raise ci_error(error) from None
-    except ApiError as error:
+    except (ApiError, IngestError) as error:
         if upload is not None:
             upload.spool.unlink(missing_ok=True)
         await _audit(request, actor, AUDIT_ACTION_DEPLOY, "refused", error.reason, refs)
@@ -711,7 +715,6 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         await _audit_best_effort(request, actor, AUDIT_ACTION_DEPLOY, "refused", AUDIT_REASON_INTERNAL, refs)
         raise
 
-    service = IngestService(store, settings)
     deployer = _deployer(auth)
     try:
         async with factory() as db:

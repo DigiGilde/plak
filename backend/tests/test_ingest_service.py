@@ -68,8 +68,9 @@ class Environment:
         return {entry.name for entry in self.sitedir.iterdir()}
 
 
-def _settings(content_root: Path) -> Settings:
+def _settings(content_root: Path, **overrides) -> Settings:
     return Settings(
+        **overrides,
         db_url="postgresql+asyncpg://ongebruikt/ongebruikt",
         content_root=content_root,
         oidc_issuer="https://idp.example",
@@ -497,3 +498,69 @@ async def test_preview_expires_on_column_type(environment: Environment):
         ).one()
     assert expires_at.tzinfo is not None
     assert timedelta(days=29) < (expires_at - now_) < timedelta(days=31)
+
+
+class TestStorageRoom:
+    """Bounds on the history a site leaves behind, rather than on one bundle:
+    live versions are kept forever, so without these a site fills the volume
+    by publishing often enough."""
+
+    def _service(self, environment: Environment, **overrides) -> IngestService:
+        return IngestService(environment.store, _settings(environment.content_root, **overrides))
+
+    async def test_a_deploy_over_the_site_quota_is_refused(self, environment: Environment):
+        service = self._service(environment, site_max_bytes=200)
+        async with environment.session_factory() as session:
+            await service.deploy(
+                session, environment.group, environment.site, "index.html",
+                environment.source(b"x" * 150), environment.deployer,
+            )
+        async with environment.session_factory() as session:
+            with pytest.raises(IngestError) as error:
+                await service.deploy(
+                    session, environment.group, environment.site, "index.html",
+                    environment.source(b"x" * 150), environment.deployer,
+                )
+        assert error.value.reason == "SITE_QUOTA_EXCEEDED"
+
+    async def test_the_refused_version_leaves_nothing_behind(self, environment: Environment):
+        """The check sits inside write_version, so the work directory is
+        cleaned up and the earlier version is the only one left."""
+        service = self._service(environment, site_max_bytes=200)
+        async with environment.session_factory() as session:
+            await service.deploy(
+                session, environment.group, environment.site, "index.html",
+                environment.source(b"x" * 150), environment.deployer,
+            )
+        async with environment.session_factory() as session:
+            with pytest.raises(IngestError):
+                await service.deploy(
+                    session, environment.group, environment.site, "index.html",
+                    environment.source(b"x" * 150), environment.deployer,
+                )
+        assert len(environment.version_dirs()) == 1
+        assert list((environment.content_root / "_tmp").iterdir()) == []
+        assert len(await _versions(environment)) == 1
+
+    async def test_a_quota_of_zero_lets_everything_through(self, environment: Environment):
+        service = self._service(environment, site_max_bytes=0)
+        async with environment.session_factory() as session:
+            for _ in range(3):
+                await service.deploy(
+                    session, environment.group, environment.site, "index.html",
+                    environment.source(b"x" * 150), environment.deployer,
+                )
+        assert len(environment.version_dirs()) == 3
+
+    async def test_check_room_refuses_when_the_volume_is_nearly_full(self, environment: Environment):
+        # A floor above the size of any real volume, so the check fires on the
+        # free space this test run actually has.
+        service = self._service(environment, storage_min_free_bytes=2**62)
+        with pytest.raises(IngestError) as error:
+            service.check_room()
+        assert error.value.reason == "STORAGE_UNAVAILABLE"
+
+    async def test_check_room_passes_with_room_and_is_off_at_zero(self, environment: Environment):
+        self._service(environment).check_room()
+        # 0 turns the floor off, but the per-deploy headroom still stands.
+        self._service(environment, storage_min_free_bytes=0).check_room()

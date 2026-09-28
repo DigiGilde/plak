@@ -145,6 +145,17 @@ class Settings(BaseSettings):
     ingest_max_total: int = Field(default=500 * 1024 * 1024)
     ingest_max_files: int = Field(default=1000)
     ingest_max_depth: int = Field(default=10)
+    # What every version of one site together may occupy on the content
+    # volume; 0 turns the quota off. The per-bundle limits above bound one
+    # deploy, this one bounds the history they leave behind: live versions are
+    # kept forever, so without it a single site fills the volume by publishing
+    # often enough.
+    site_max_bytes: int = Field(default=20 * 1024 * 1024 * 1024)
+    # Free space the content volume must keep beyond what one deploy may add
+    # (ingest_max_body plus ingest_max_total). Below it a deploy is refused
+    # with a 503 rather than running the volume dry, which would take the
+    # serving of every other site down with it. 0 turns the check off.
+    storage_min_free_bytes: int = Field(default=2 * 1024 * 1024 * 1024)
 
     # Forgejo instances whose Actions ID tokens are accepted for CI deploys,
     # comma-separated base URLs (https only). GitHub is always accepted.

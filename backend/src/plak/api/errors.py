@@ -51,6 +51,11 @@ _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # bundle error is an invalid archive (422).
 _LIMIT_REASONS = frozenset({"FILE_TOO_LARGE", "TOTAL_TOO_LARGE", "TOO_MANY_FILES"})
 
+# IngestError reason codes that are not a 422: a full site quota is an
+# exceeded limit like the ones above, and a volume without room is a state of
+# the platform the client can retry out of.
+_INGEST_STATUS = {"SITE_QUOTA_EXCEEDED": 413, "STORAGE_UNAVAILABLE": 503}
+
 PROBLEM_SCHEMA_NAME = "Problem"
 PROBLEM_SCHEMA_REF = f"#/components/schemas/{PROBLEM_SCHEMA_NAME}"
 
@@ -291,7 +296,10 @@ def register_error_handlers(app: FastAPI) -> None:
     async def _ingest_error(request: Request, error: IngestError) -> JSONResponse:
         locale = locale_from_request(request)
         return problem_response(
-            422, messages.render(locale, error.message), locale=locale, code=error.reason
+            _INGEST_STATUS.get(error.reason, 422),
+            messages.render(locale, error.message),
+            locale=locale,
+            code=error.reason,
         )
 
     @app.exception_handler(RequestValidationError)

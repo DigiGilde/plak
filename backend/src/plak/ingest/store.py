@@ -55,6 +55,30 @@ class VersionWriter:
         except (FileExistsError, NotADirectoryError, IsADirectoryError) as error:
             raise StoreError(f"pad botst met een eerder geschreven pad: {rel_path!r}") from error
 
+    def total_bytes(self) -> int:
+        """What has been written so far, measured on disk rather than counted
+        along the way: this is the number the volume actually fills up with."""
+        return _tree_bytes(self._workdir)
+
+
+def _tree_bytes(root: Path) -> int:
+    """Apparent size of every file under `root`; a missing tree is 0.
+
+    st_size and not st_blocks: the quota is about what was published, not
+    about the block size the volume happens to round it up to.
+    """
+    total = 0
+    for directory, _, names in os.walk(root, onerror=None):
+        for name in names:
+            try:
+                total += os.lstat(os.path.join(directory, name)).st_size
+            except OSError:
+                # Gone between the walk and the stat: the cleanup job removing
+                # an expired preview alongside us. Not counting it is the safe
+                # side of the quota.
+                continue
+    return total
+
 
 class ContentStore:
     def __init__(self, root: Path) -> None:
@@ -76,6 +100,20 @@ class ContentStore:
         if path == self._tmp or path.is_relative_to(self._tmp):
             raise StoreError("storage_ref wijst naar de tempdirectory")
         return path
+
+    def free_bytes(self) -> int:
+        """Free space on the content volume."""
+        return shutil.disk_usage(self._root).free
+
+    def site_bytes(self, group: str, site: str) -> int:
+        """What every version of one site together occupies.
+
+        Measured on disk rather than kept in a column: a version's size is
+        never revised, but the set of versions is (the cleanup job removes
+        expired previews), and the volume is the only place where the two are
+        always in step.
+        """
+        return _tree_bytes(self._version_root(f"{group}/{site}"))
 
     def new_spool_file(self) -> Path:
         """Unique path in the tempdir for an upload still to be received."""
