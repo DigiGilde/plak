@@ -1,9 +1,13 @@
 """Removes audit rows that have outlived their retention (BIO2 8.15.04).
 
 Runs outside the app, on the same PLAK_DB_URL account. Which rows have expired
-is known only to the database (audit_log_retention() in 0001_base); this file
-carries no term of its own, so the two cannot drift apart. The BEFORE DELETE
-trigger, not this account, decides what may go.
+is known only to the database (audit_log_chain_retention() in 0001_base); this
+file carries no term of its own, so the two cannot drift apart. The BEFORE
+DELETE trigger, not this account, decides what may go.
+
+The term belongs to the chain a row sits in, and a chain holds one term with
+occurred_at rising along it, so what expires is always the oldest end of each
+chain: the purge never leaves a gap between two surviving rows.
 """
 
 from __future__ import annotations
@@ -26,14 +30,16 @@ _logger = logging.getLogger(__name__)
 
 # In batches, because the trigger fires per row: one DELETE over half a million
 # rows is one long transaction that keeps the app's audit inserts waiting.
+# chain_seq breaks ties in occurred_at, so each batch still takes a prefix of
+# every chain and no committed batch leaves a gap behind.
 _DELETE_BATCH = text(
     """
     DELETE FROM audit_log_entries
     WHERE id IN (
         SELECT id
         FROM audit_log_entries
-        WHERE occurred_at <= now() - audit_log_retention(action, result)
-        ORDER BY occurred_at
+        WHERE occurred_at <= now() - audit_log_chain_retention(chain_shard)
+        ORDER BY occurred_at, chain_seq
         LIMIT :batch
     )
     """
@@ -41,7 +47,7 @@ _DELETE_BATCH = text(
 
 # content_viewers has one term, fixed at 90 days like content_access/allowed
 # (docs/audit-log.md): no per-row (action, result) lookup, so no function of
-# its own next to audit_log_retention().
+# its own next to audit_log_chain_retention().
 _DELETE_CONTENT_VIEWERS_BATCH = text(
     """
     DELETE FROM content_viewers

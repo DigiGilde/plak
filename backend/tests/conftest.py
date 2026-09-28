@@ -118,9 +118,9 @@ async def db_connection(migrated_dsn: str) -> AsyncIterator[asyncpg.Connection]:
 
 # All data tables, child to parent (CASCADE covers the FK order anyway).
 _DATA_TABLES = (
-    "audit_log_entries, content_viewers, previews, versions, access_keys, invitees, site_repositories, "
-    "cli_refresh_tokens, cli_sessions, cli_device_authorizations, site_members, sites, group_members, groups, "
-    "members"
+    "audit_log_entries, audit_log_chain_heads, content_viewers, previews, versions, access_keys, invitees, "
+    "site_repositories, cli_refresh_tokens, cli_sessions, cli_device_authorizations, site_members, sites, "
+    "group_members, groups, members"
 )
 
 # Fixtures that use the migrated test database; when a test asks for one of

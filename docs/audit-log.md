@@ -274,7 +274,10 @@ to trace a leak in the weeks after.
 
 The periods are a SQL function in the database and are enforced by a
 trigger: only what is older than its period may be deleted. A shorter period
-takes a schema change, not a setting.
+takes a schema change, not a setting. The period a row gets is fixed when it
+is written, by the chain it lands in (see "The integrity chain" below): the
+trigger and the purge ask the chain, not the row, so moving an action to the
+other period later applies to new rows only.
 
 Purging is done with `python -m plak.audit.retention` (`just
 purge-audit-log`), on `PLAK_DB_URL`. `content_viewers` follows the same
@@ -293,6 +296,9 @@ The guarantee therefore rests entirely on the triggers from migration
 
 - `audit_log_chain` stamps `occurred_at` on every `INSERT` and hashes the row
   into its chain; see below.
+- `audit_log_chain_head_guard` refuses every write to
+  `audit_log_chain_heads` that does not come from `audit_log_chain`, and every
+  move of a head other than one position forward.
 - `audit_log_no_update` refuses every `UPDATE` on `audit_log_entries`,
   always.
 - `audit_log_delete_after_retention` refuses every `DELETE` of a row that
@@ -326,19 +332,38 @@ Every row is therefore hashed on insert, by `audit_log_chain` in `0001_base`:
 - The row gets a position in a chain, `chain_shard` plus `chain_seq`, and a
   `chain_hash` over the previous row's hash and its own content. The content
   is fed in length-prefixed, so no two different rows can produce the same
-  hash input.
+  hash input. The previous row's hash is kept on the row too, as
+  `chain_prev_hash`, so every row's own hash can be recomputed from the row
+  alone, also after its predecessor has been purged.
 - Removing a row, rewriting one or back-dating one leaves every row behind it
   in that chain with a hash that no longer follows, and the break says where.
 
-**Sixteen chains, not one.** A chain is a serialisation point: an insert has
-to read the tail of its chain under a lock, and audit rows are written on
-essentially every request. One global chain would put every audit write in
-the application behind a single lock. The chain a row lands in follows from
-its id, so sixteen chains spread that contention sixteen ways while the shard
-stays part of the hash (a row cannot be moved to another chain unnoticed).
-The lock is a transaction-scoped advisory lock, so it is released on commit
-or rollback and cannot outlive its writer; the app writes each audit row in a
-transaction of its own.
+**Sixteen chains per retention period, not one.** A chain is a serialisation
+point: an insert has to read the tail of its chain under a lock, and audit rows
+are written on essentially every request. One global chain would put every
+audit write in the application behind a single lock. Which chain a row lands
+in follows from its retention period and its id: chains 0 to 15 hold the
+90-day rows, chains 16 to 31 the three-year rows, and the id picks one of the
+sixteen. That spreads the contention sixteen ways while the shard stays part of
+the hash (a row cannot be moved to another chain unnoticed). The lock is a
+transaction-scoped advisory lock, so it is released on commit or rollback and
+cannot outlive its writer; the app writes each audit row in a transaction of
+its own.
+
+Keeping the two periods apart is what makes the purge and the chain fit
+together. Within a chain `occurred_at` rises with `chain_seq`, and every row
+has the same period, so what has expired is always the oldest stretch of the
+chain. Were the periods mixed in one chain, the purge would cut the 90-day
+rows out from between the three-year rows, and from day ninety on every chain
+would show gaps that look exactly like a deletion.
+
+**The head lives apart from the rows.** `audit_log_chain_heads` keeps, per
+chain, the last position, its hash and when that row was written; the trigger
+chains a new row onto that, not onto the newest row still in the table. A
+quiet 90-day chain can age out completely, and a chain that then restarted at
+position 1 would hand out positions a published checkpoint already holds a
+different hash for. The head table holds no personal data, only positions and
+hashes, so it outlives the rows without stretching any retention period.
 
 **Checking it.** `python -m plak.audit.chain` (`just verify-audit-log`) walks
 every chain and reports the first break in each, on the same `PLAK_DB_URL`.
@@ -348,27 +373,36 @@ the check cannot drift away from the write.
 **A chain does not have to start at position 1.** The retention purge removes
 the oldest rows of a chain, so on any environment older than ninety days the
 chains begin somewhere above 1, and the row they begin at was hashed over a
-predecessor that is gone. That row is therefore the anchor: neither its
-position nor its hash can be held against anything, and the walk starts
-judging at the row after it. It says in the log which position each chain
-begins at, because that is a fact about the log a reader has to know.
+predecessor that is gone. That row is the anchor. Its own hash is still
+checked, recomputed over the `chain_prev_hash` it carries, so rewriting it is a
+break like anywhere else; only its link backwards cannot be checked, because
+there is nothing left to link to. The walk says in the log which position each
+chain begins at, because that is a fact about the log a reader has to know.
 
-Reporting that as a break instead would have made `verify-audit-log` report a
-broken chain as a matter of routine, and the first real break after that would
-be read as "the purge again". The asymmetry that makes this safe: the purge
-only ever removes from the oldest end, so a gap *between* two surviving rows
-is never something it left, and that stays a break.
+Reporting a purged front as a break instead would have made `verify-audit-log`
+report a broken chain as a matter of routine, and the first real break after
+that would be read as "the purge again". The asymmetry that makes this safe:
+the purge only ever removes from the oldest end of a chain (one period per
+chain, times rising along it), so a gap *between* two surviving rows is never
+something it left, and that stays a break.
+
+The walk reports the first break per chain as one of: `sequence_gap` (a
+position is missing between two rows), `hash_mismatch` (the row's content no
+longer matches its hash), `link_mismatch` (the row's `chain_prev_hash` is not
+the hash of the row before it, or position 1 claims a predecessor) and
+`time_went_back` (the row is older than the one before it).
 
 **Which check catches what.** The two checks do not overlap, and neither is
 enough on its own:
 
 | | `verify-audit-log` (the walk) | `verify-audit-head` (a published line) |
 |---|---|---|
-| A row rewritten, triggers on | caught | caught if it is a published position |
+| A row rewritten, its hash left alone | caught (`hash_mismatch`), the oldest surviving row included | caught if it is a published position |
+| A row rewritten and its own hash recomputed | caught at the next row (`link_mismatch`) | caught if it is a published position |
 | A row rewritten, chain recomputed | not caught | caught |
-| A row removed from the middle | caught (gap) | caught if it is a published position |
-| Rows removed from the newest end | not caught | caught (`chain_shortened`) |
-| Rows removed from the oldest end | not caught | visible (`front_purged`); the retention period says whether it was allowed |
+| A row removed from the middle | caught (`sequence_gap`) | caught if it is a published position |
+| Rows removed from the newest end | not caught | caught (`row_missing` before its deadline, `chain_shortened` if the head was moved back as well) |
+| Rows removed from the oldest end | not caught | caught (`front_purged` before its published deadline); after it, that is the purge |
 | The whole table emptied | not caught (nothing left to walk) | caught |
 
 So running only the walk is not enough, and a nightly publication with a
@@ -392,11 +426,13 @@ and is what the next section does.
 
 `python -m plak.audit.checkpoint` (`just publish-audit-head`) writes one line
 to the application log with, per chain, the last position and its hash, plus
-the oldest position still present and its hash. The hash at the last position
-covers every row before it in that chain, so that one value is a commitment to
-the whole history up to that moment; the oldest position is there because the
-purge moves that end, and a line from before is the only thing that can say
-where it stood.
+the oldest position still present and its hash, and for both the moment their
+retention period runs out. The hash at the last position covers every row
+before it in that chain, so that one value is a commitment to the whole history
+up to that moment; the oldest position is there because the purge moves that
+end, and a line from before is the only thing that can say where it stood. The
+deadlines are what tell the purge from a deletion later: a published row that
+is gone before its deadline did not go by the purge.
 
 Why the application log: a line that has been shipped cannot be retracted
 afterwards. Whoever holds the database can rewrite every row and recompute
@@ -406,7 +442,7 @@ on the two disagree, and anyone who kept the older line can say so.
 The line looks like this, on one line:
 
 ```
-INFO audit-chain-checkpoint {"format":"plak-audit-chain-checkpoint/2","taken_at":"2026-09-24T03:00:01.284915+00:00","entries_total":41027,"digest":"9f2c...","shards":[{"shard":0,"first":1904,"first_hash":"c70d...","seq":2571,"hash":"4ab1..."}, ...]}
+INFO audit-chain-checkpoint {"format":"plak-audit-chain-checkpoint/3","taken_at":"2026-09-24T03:00:01.284915+00:00","entries_total":41027,"digest":"9f2c...","shards":[{"shard":0,"first":1904,"first_hash":"c70d...","first_expires":"2026-09-24T02:58:40.102311+00:00","seq":2571,"hash":"4ab1...","expires":"2026-12-23T02:59:57.881020+00:00"}, ...]}
 ```
 
 `audit-chain-checkpoint` is the grep handle and everything after it is one JSON
@@ -415,11 +451,11 @@ that reads it. What is in it and why:
 
 | Field | Why it is there |
 |---|---|
-| `format` | the line is meant to be compared with one from a year ago, so it says which version wrote it. A line in the older `/1`, which carried only the last position, still reads; it simply says nothing about the oldest end |
+| `format` | the line is meant to be compared with one from a year ago, so it says which version wrote it. `/3` is the layout with sixteen chains per retention period; a `/1` or `/2` line numbered its chains differently and is refused |
 | `taken_at` | the database's own clock, the same one that stamps `occurred_at`; without it two lines cannot be put in order |
-| `shards` | per chain the last position (`seq`) and its hash, and the oldest position still present (`first`) and its hash. This is the evidence: a hash is what a rewrite changes, the last position what a truncation lowers, the first position where the purge has got to |
+| `shards` | per chain the last position (`seq`) and its hash, and the oldest position still present (`first`) and its hash, each with the moment its retention period runs out (`expires`, `first_expires`). This is the evidence: a hash is what a rewrite changes, the last position what a truncation lowers, the first position where the purge has got to, and a deadline whether a row that is gone was allowed to go. A chain whose rows have all aged out has a last position and no first one |
 | `entries_total` | the sum of the positions, so the number of rows ever written. It may never go down, and it is the one number a reader can compare at a glance |
-| `digest` | one SHA-256 over all sixteen heads. Two lines with the same digest are the same history; a different one says to look at the shards |
+| `digest` | one SHA-256 over all the heads. Two lines with the same digest are the same history; a different one says to look at the shards |
 
 The hashes are not secret. They are a commitment, not a credential: they
 reveal nothing about the rows they cover, and they are worth exactly as much as
@@ -438,10 +474,10 @@ published head against the database:
 
 | Report | What it means |
 |---|---|
-| `chain_shortened` | that chain has fewer rows than when the line was published. Appending cannot do that |
-| `hash_mismatch` | the row at that position is not the row that was published: the history was rewritten, and the chain was recomputed to match |
-| `row_missing` | the published last row is gone while the chain did grow past it: either that whole chain aged out of its retention, or somebody removed the row |
-| `front_purged` | the published oldest row is gone. This is what the purge does every night, so it is reported and does not make the check fail. What makes it a finding after all is its date: no row may go before its retention period has run, so a line younger than ninety days whose front has moved is wrong |
+| `chain_shortened` | that chain's head stands at a lower position than when the line was published. Appending cannot do that |
+| `hash_mismatch` | the row at that position is not the row that was published: its stored hash differs, or its content no longer produces that hash. The history was rewritten |
+| `row_missing` | the published last row is gone. After its published deadline that is the whole quiet chain aging out, which is reported and does not make the check fail; before it, somebody removed the row |
+| `front_purged` | the published oldest row is gone. After its published deadline that is what the purge does every night, reported without failing the check; before it, the front of the chain was cut off, and the check fails |
 
 Rows written after the publication change nothing: a head that is no longer the
 head still has to be where it was, with the hash it had.

@@ -26,7 +26,7 @@ class AuditLogEntry(IDMixin, Base):
     account Plak has, including the app's own, so an owner who disables them gets past
     them; `docs/audit-log.md` says what that costs.
 
-    The chain columns (`chain_shard`, `chain_seq`, `chain_hash`) are deliberately not
+    The chain columns (`chain_shard`, `chain_seq`, `chain_hash`, `chain_prev_hash`) are deliberately not
     mapped here: they are written by the BEFORE INSERT trigger and read by
     `audit/chain.py`, and a mapping would invite the application to supply them.
     `occurred_at` is overwritten by that same trigger, whatever the INSERT carried.

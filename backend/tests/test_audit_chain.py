@@ -16,10 +16,10 @@ from datetime import UTC, datetime, timedelta
 import asyncpg
 import pytest
 import pytest_asyncio
-from helpers_audit import insert_aged_audit_row
+from helpers_audit import id_in_chain, insert_aged_audit_row, insert_chained_audit_row
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from plak.audit import chain, checkpoint
+from plak.audit import chain, checkpoint, retention
 from plak.audit.log import SYSTEM, AuditLog
 from plak.db import make_session_factory
 
@@ -49,12 +49,15 @@ async def audit_log(migrated_dsn: str) -> AsyncIterator[AuditLog]:
         await engine.dispose()
 
 
-async def _insert(connection: asyncpg.Connection, action: str = "test_actie") -> uuid.UUID:
+async def _insert(
+    connection: asyncpg.Connection, action: str = "test_actie", result: str = "allowed"
+) -> uuid.UUID:
     entry_id = uuid.uuid4()
     await connection.execute(
-        "INSERT INTO audit_log_entries (id, actor_kind, action, result) VALUES ($1, 'system', $2, 'allowed')",
+        "INSERT INTO audit_log_entries (id, actor_kind, action, result) VALUES ($1, 'system', $2, $3)",
         entry_id,
         action,
+        result,
     )
     return entry_id
 
@@ -88,7 +91,7 @@ async def test_every_row_gets_a_chain_position(connection: asyncpg.Connection) -
     rows = await connection.fetch("SELECT chain_shard, chain_seq, chain_hash FROM audit_log_entries")
     assert len(rows) == 8
     for row in rows:
-        assert 0 <= row["chain_shard"] < 16
+        assert 0 <= row["chain_shard"] < 32
         assert row["chain_seq"] >= 1
         assert len(row["chain_hash"]) == 32
     # Each chain numbers its own rows from one upwards, without gaps.
@@ -97,6 +100,36 @@ async def test_every_row_gets_a_chain_position(connection: asyncpg.Connection) -
         per_shard.setdefault(row["chain_shard"], []).append(row["chain_seq"])
     for sequence in per_shard.values():
         assert sorted(sequence) == list(range(1, len(sequence) + 1))
+
+
+async def test_each_retention_term_has_chains_of_its_own(connection: asyncpg.Connection) -> None:
+    """A chain holds rows of one term only: 90-day rows in chains 0 to 15,
+    three-year rows in 16 to 31. Mixed, the purge would cut the short rows out
+    from between the long ones."""
+    for _ in range(6):
+        await _insert(connection, action="content_access")
+        await _insert(connection, action="admin_access", result="refused")
+
+    rows = await connection.fetch("SELECT action, chain_shard FROM audit_log_entries")
+    for row in rows:
+        if row["action"] == "content_access":
+            assert 0 <= row["chain_shard"] < 16
+        else:
+            assert 16 <= row["chain_shard"] < 32
+
+
+async def test_every_row_carries_its_predecessors_hash(connection: asyncpg.Connection) -> None:
+    shard = await _fill_one_shard(connection, count=3)
+    rows = await connection.fetch(
+        "SELECT chain_seq, chain_hash, chain_prev_hash FROM audit_log_entries WHERE chain_shard = $1 "
+        "ORDER BY chain_seq",
+        shard,
+    )
+    assert rows[0]["chain_prev_hash"] is None
+    assert rows[1]["chain_prev_hash"] == rows[0]["chain_hash"]
+    assert rows[2]["chain_prev_hash"] == rows[1]["chain_hash"]
+    head = await connection.fetchrow("SELECT * FROM audit_log_chain_heads WHERE chain_shard = $1", shard)
+    assert (head["chain_seq"], head["chain_hash"]) == (3, rows[2]["chain_hash"])
 
 
 async def test_chain_position_is_taken_only_once(connection: asyncpg.Connection) -> None:
@@ -229,6 +262,68 @@ async def test_only_the_first_break_of_a_chain_is_reported(
     assert [(one.shard, one.seq) for one in breaks] == [(shard, 2)]
 
 
+async def test_a_rewritten_oldest_row_is_a_break(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    """The anchor is judged too: its hash is recomputed over the predecessor
+    hash it carries itself, so dropping the front and then rewriting the new
+    oldest row does not slip through."""
+    shard = await _fill_one_shard(connection, count=4)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq <= 2", shard
+    )
+    await _without_guards(
+        connection,
+        "UPDATE audit_log_entries SET action = 'vervalst', actor_pseudonym = 'iemand-anders' "
+        "WHERE chain_shard = $1 AND chain_seq = 3",
+        shard,
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 3, chain.HASH_MISMATCH)]
+
+
+async def test_a_recomputed_oldest_row_no_longer_links_to_the_next(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """Recomputing the rewritten anchor's hash only moves the break one row on:
+    the next row still carries the hash the anchor had."""
+    shard = await _fill_one_shard(connection, count=4)
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq <= 2", shard
+    )
+    await _without_guards(connection, _REWRITE_AND_RECOMPUTE + " WHERE chain_shard = $1 AND chain_seq = 3", shard)
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 4, chain.LINK_MISMATCH)]
+
+
+async def test_a_row_pointing_at_another_predecessor_is_a_break(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """A row whose own hash adds up but whose predecessor hash is not the hash
+    of the row before it has been spliced in from somewhere else."""
+    shard = await _fill_one_shard(connection, count=3)
+    await _without_guards(
+        connection,
+        _REPOINT_AND_RECOMPUTE + " WHERE chain_shard = $1 AND chain_seq = 2",
+        shard,
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 2, chain.LINK_MISMATCH)]
+
+
+async def test_position_one_cannot_claim_a_predecessor(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    shard = await _fill_one_shard(connection, count=1)
+    await _without_guards(
+        connection,
+        _REPOINT_AND_RECOMPUTE + " WHERE chain_shard = $1 AND chain_seq = 1",
+        shard,
+    )
+
+    breaks = await chain.verify(migrated_dsn)
+    assert [(one.shard, one.seq, one.reason) for one in breaks] == [(shard, 1, chain.LINK_MISMATCH)]
+
+
 async def test_a_purged_front_is_not_a_break(
     migrated_dsn: str, connection: asyncpg.Connection, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -251,7 +346,7 @@ async def test_a_purged_front_is_not_a_break(
 async def test_a_gap_after_a_purged_front_is_still_a_break(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """The asymmetry the fix leans on: the purge only ever takes from the
+    """The asymmetry the walk leans on: the purge only ever takes from the
     oldest end, so it never leaves a hole between two surviving rows."""
     shard = await _fill_one_shard(connection, count=5)
     await _without_guards(
@@ -286,11 +381,10 @@ async def test_a_rewrite_after_a_purged_front_is_still_a_break(
 async def test_only_a_published_line_sees_a_truncated_front_at_all(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """The price of the fix, stated: rows deleted from the oldest end leave
-    exactly what the purge leaves, and the walk has nothing left that pointed
-    at them. A line published before they went does see that the front moved
-    (`front_purged`); whether that was allowed follows from its date against
-    the retention period, not from the chain."""
+    """Rows deleted from the oldest end leave exactly what the purge leaves,
+    and the walk has nothing left that pointed at them. A line published
+    before they went does see that the front moved (`front_purged`), and the
+    deadline it published says this was no purge."""
     shard = await _fill_one_shard(connection, count=3)
     published = await checkpoint.collect(migrated_dsn)
     await _without_guards(
@@ -299,7 +393,79 @@ async def test_only_a_published_line_sees_a_truncated_front_at_all(
 
     assert await chain.verify(migrated_dsn) == []
     findings = await checkpoint.compare(migrated_dsn, published)
-    assert [(one.shard, one.seq, one.reason) for one in findings] == [(shard, 1, checkpoint.FRONT_PURGED)]
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (shard, 1, checkpoint.FRONT_PURGED, True)
+    ]
+
+
+# --- The chain against the purge ------------------------------------------------------
+
+
+async def test_the_purge_leaves_every_chain_verifiable(migrated_dsn: str, connection: asyncpg.Connection) -> None:
+    """Rows of both terms, written over two hundred days. The purge takes the
+    expired 90-day rows and nothing else, and because each term has chains of
+    its own that is always the front of a chain: every chain still verifies,
+    and a line published before the purge finds nothing but what aged out."""
+    for days_ago in range(200, 0, -5):
+        await insert_chained_audit_row(connection, "site_create", "allowed", timedelta(days=days_ago))
+        await insert_chained_audit_row(connection, "login", "allowed", timedelta(days=days_ago, hours=-1))
+    assert await chain.verify(migrated_dsn) == []
+    published = await checkpoint.collect(migrated_dsn)
+
+    deleted = await retention.purge(migrated_dsn)
+
+    expired = len(range(200, 90, -5))
+    assert deleted == expired
+    counts = dict(await connection.fetch("SELECT action, count(*) FROM audit_log_entries GROUP BY action"))
+    assert counts["site_create"] == 40
+    assert counts["login"] == 40 - expired
+    assert await chain.verify(migrated_dsn) == []
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert findings
+    assert {one.reason for one in findings} <= {checkpoint.FRONT_PURGED, checkpoint.ROW_MISSING}
+    assert not any(one.serious for one in findings)
+
+
+async def test_a_chain_purged_to_nothing_continues_where_it_stood(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """A quiet chain whose rows all age out: the next row takes the next
+    position and chains onto the hash that was published for the last one,
+    so no position is handed out twice and no published line goes stale."""
+    first = await insert_chained_audit_row(connection, "login", "allowed", timedelta(days=120))
+    shard = await connection.fetchval("SELECT chain_shard FROM audit_log_entries WHERE id = $1", first)
+    for days_ago in (110, 100):
+        await insert_chained_audit_row(
+            connection,
+            "login",
+            "allowed",
+            timedelta(days=days_ago),
+            entry_id=await id_in_chain(connection, shard, "login", "allowed"),
+        )
+    published = await checkpoint.collect(migrated_dsn)
+    last_hash = await connection.fetchval(
+        "SELECT chain_hash FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 3", shard
+    )
+
+    await retention.purge(migrated_dsn)
+    assert await connection.fetchval("SELECT count(*) FROM audit_log_entries WHERE chain_shard = $1", shard) == 0
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.reason, one.serious) for one in findings] == [
+        (shard, checkpoint.FRONT_PURGED, False),
+        (shard, checkpoint.ROW_MISSING, False),
+    ]
+
+    newcomer = await id_in_chain(connection, shard, "login", "allowed")
+    await connection.execute(
+        "INSERT INTO audit_log_entries (id, actor_kind, action, result) VALUES ($1, 'system', 'login', 'allowed')",
+        newcomer,
+    )
+    seq, previous = await connection.fetchrow(
+        "SELECT chain_seq, chain_prev_hash FROM audit_log_entries WHERE id = $1", newcomer
+    )
+    assert (seq, previous) == (4, last_hash)
+    assert await chain.verify(migrated_dsn) == []
+    assert not any(one.serious for one in await checkpoint.compare(migrated_dsn, published))
 
 
 async def test_concurrent_writes_keep_the_chain_whole(
@@ -358,6 +524,28 @@ async def test_main_reports_a_broken_chain(
 
 
 # --- Helpers --------------------------------------------------------------------------
+
+
+# Rewrites a row and recomputes its hash over the predecessor hash it carries,
+# the way the schema owner can.
+_REWRITE_AND_RECOMPUTE = """
+UPDATE audit_log_entries
+SET action = 'vervalst',
+    chain_hash = audit_log_chain_hash(
+        chain_prev_hash, id, actor_kind::text, actor_pseudonym, 'vervalst', result, reason_code, refs,
+        ip_truncated, ip_encrypted, occurred_at, chain_shard, chain_seq)
+"""
+
+# Points a row at a predecessor that is not there and recomputes its hash to
+# match, so only the link can give it away.
+_REPOINT_AND_RECOMPUTE = """
+UPDATE audit_log_entries
+SET chain_prev_hash = sha256('elders'::bytea),
+    chain_hash = audit_log_chain_hash(
+        sha256('elders'::bytea), id, actor_kind::text, actor_pseudonym, action, result, reason_code, refs,
+        ip_truncated, ip_encrypted, occurred_at, chain_shard, chain_seq)
+"""
+
 
 
 async def _fill_one_shard(connection: asyncpg.Connection, *, count: int) -> int:

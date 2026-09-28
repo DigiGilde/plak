@@ -16,13 +16,14 @@ import io
 import json
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import asyncpg
 import pytest
 import pytest_asyncio
+from helpers_audit import id_in_chain, insert_chained_audit_row
 
-from plak.audit import chain, checkpoint
+from plak.audit import chain, checkpoint, retention
 
 # asyncio_mode = "auto" (pyproject.toml) picks up the async tests by itself; this
 # file deliberately mixes sync and async tests, so no module-wide asyncio marker.
@@ -69,18 +70,25 @@ async def _rewrite_and_recompute(connection: asyncpg.Connection, entry_id: uuid.
     await _without_guards(
         connection,
         """
-        UPDATE audit_log_entries AS target
+        UPDATE audit_log_entries
         SET action = 'vervalst',
             chain_hash = audit_log_chain_hash(
-                (SELECT before.chain_hash FROM audit_log_entries AS before
-                 WHERE before.chain_shard = target.chain_shard
-                   AND before.chain_seq = target.chain_seq - 1),
-                target.id, target.actor_kind::text, target.actor_pseudonym, 'vervalst',
-                target.result, target.reason_code, target.refs, target.ip_truncated,
-                target.ip_encrypted, target.occurred_at, target.chain_shard, target.chain_seq)
-        WHERE target.id = $1
+                chain_prev_hash, id, actor_kind::text, actor_pseudonym, 'vervalst',
+                result, reason_code, refs, ip_truncated,
+                ip_encrypted, occurred_at, chain_shard, chain_seq)
+        WHERE id = $1
         """,
         entry_id,
+    )
+
+
+async def _rewrite_content_only(connection: asyncpg.Connection, shard: int, seq: int) -> None:
+    """The row is changed and its stored hash left as it was."""
+    await _without_guards(
+        connection,
+        "UPDATE audit_log_entries SET action = 'vervalst' WHERE chain_shard = $1 AND chain_seq = $2",
+        shard,
+        seq,
     )
 
 
@@ -110,6 +118,19 @@ async def _fill_one_shard(connection: asyncpg.Connection, *, count: int) -> int:
             return row["chain_shard"]
 
 
+async def _two_in_one_chain(connection: asyncpg.Connection, action: str, age: timedelta) -> None:
+    """Two allowed rows in one chain: one `age` old, one from yesterday."""
+    first = await insert_chained_audit_row(connection, action, "allowed", age)
+    shard = await connection.fetchval("SELECT chain_shard FROM audit_log_entries WHERE id = $1", first)
+    await insert_chained_audit_row(
+        connection,
+        action,
+        "allowed",
+        timedelta(days=1),
+        entry_id=await id_in_chain(connection, shard, action, "allowed"),
+    )
+
+
 # --- What is published ----------------------------------------------------------------
 
 
@@ -134,17 +155,22 @@ async def test_every_chain_with_rows_gets_both_its_ends(
             "SELECT max(chain_seq) FROM audit_log_entries WHERE chain_shard = $1", head.shard
         )
         assert head.seq == highest
-        stored = await connection.fetchval(
-            "SELECT chain_hash FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = $2",
+        stored = await connection.fetchrow(
+            "SELECT chain_hash, occurred_at + audit_log_chain_retention(chain_shard) AS expires "
+            "FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = $2",
             head.shard,
             head.seq,
         )
-        assert head.hash_hex == bytes(stored).hex()
+        assert head.hash_hex == bytes(stored["chain_hash"]).hex()
+        assert head.expires == stored["expires"]
         # And the other end, which is what a later run holds the purge against.
-        lowest = await connection.fetchval(
-            "SELECT min(chain_seq) FROM audit_log_entries WHERE chain_shard = $1", head.shard
+        lowest = await connection.fetchrow(
+            "SELECT chain_seq, occurred_at + audit_log_chain_retention(chain_shard) AS expires "
+            "FROM audit_log_entries WHERE chain_shard = $1 ORDER BY chain_seq LIMIT 1",
+            head.shard,
         )
-        assert head.first_seq == lowest
+        assert head.first_seq == lowest["chain_seq"]
+        assert head.first_expires == lowest["expires"]
 
 
 async def test_the_line_is_one_json_object_behind_a_grep_handle(
@@ -161,8 +187,10 @@ async def test_the_line_is_one_json_object_behind_a_grep_handle(
             "shard": head.shard,
             "first": head.first_seq,
             "first_hash": head.first_hash_hex,
+            "first_expires": head.first_expires.isoformat(),
             "seq": head.seq,
             "hash": head.hash_hex,
+            "expires": head.expires.isoformat(),
         }
         for head in published.heads
     ]
@@ -185,19 +213,43 @@ async def test_the_digest_follows_the_heads(migrated_dsn: str, connection: async
 
 
 def test_a_published_line_reads_back_as_it_was_written() -> None:
-    line = checkpoint.Checkpoint(
+    written = checkpoint.Checkpoint(
         taken_at=datetime.fromisoformat("2026-09-24T10:00:00+00:00"),
-        heads=(checkpoint.Head(shard=3, seq=7, hash_hex="ab" * 32),),
-    ).as_json()
+        heads=(
+            checkpoint.Head(
+                shard=3,
+                seq=7,
+                hash_hex="ab" * 32,
+                expires=datetime.fromisoformat("2029-09-24T10:00:00+00:00"),
+                first_seq=2,
+                first_hash_hex="cd" * 32,
+                first_expires=datetime.fromisoformat("2029-08-01T10:00:00+00:00"),
+            ),
+            # A chain whose rows have all aged out: a head and no front.
+            checkpoint.Head(
+                shard=5, seq=4, hash_hex="ef" * 32, expires=datetime.fromisoformat("2026-07-01T10:00:00+00:00")
+            ),
+        ),
+    )
+    line = written.as_json()
 
-    assert checkpoint.parse(line) == checkpoint.parse(f"INFO {checkpoint.MARKER} {line}")
-    assert checkpoint.parse(line).heads[0].seq == 7
+    assert checkpoint.parse(line) == written
+    assert checkpoint.parse(f"INFO {checkpoint.MARKER} {line}") == written
 
 
 def test_a_line_that_is_not_a_checkpoint_is_refused() -> None:
     for line in ("", "INFO iets anders", '{"format":"iets-anders/1"}', '{"format":"' + checkpoint.FORMAT + '"}'):
         with pytest.raises(checkpoint.MalformedCheckpointError):
             checkpoint.parse(line)
+
+
+@pytest.mark.parametrize("older", ["plak-audit-chain-checkpoint/1", "plak-audit-chain-checkpoint/2"])
+def test_a_line_from_before_the_per_term_chains_is_refused(older: str) -> None:
+    """Those formats numbered sixteen chains of mixed terms; holding one against
+    the chains per term would compare positions that describe other rows."""
+    line = json.dumps({"format": older, "taken_at": "2026-09-24T10:00:00+00:00", "shards": []})
+    with pytest.raises(checkpoint.MalformedCheckpointError, match="onbekend formaat"):
+        checkpoint.parse(line)
 
 
 # --- Holding the database against it --------------------------------------------------
@@ -237,7 +289,9 @@ async def test_a_rewrite_the_chain_cannot_see_shows_up_against_the_publication(
 async def test_rows_dropped_off_the_end_show_up_against_the_publication(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """Also invisible to the chain: nothing is left that pointed at the rows."""
+    """Also invisible to the chain: nothing is left that pointed at the rows.
+    The chain's head still stands where it was, so the published head row is
+    missing before its deadline."""
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
@@ -247,8 +301,9 @@ async def test_rows_dropped_off_the_end_show_up_against_the_publication(
     )
 
     assert await chain.verify(migrated_dsn) == []
-    assert [(one.shard, one.seq, one.reason) for one in await checkpoint.compare(migrated_dsn, published)] == [
-        (shard, seq, checkpoint.CHAIN_SHORTENED)
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (shard, seq, checkpoint.ROW_MISSING, True)
     ]
 
 
@@ -269,16 +324,43 @@ async def test_a_published_row_removed_from_the_middle_is_reported_as_missing(
         connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = $2", shard, seq
     )
 
-    assert [(one.shard, one.seq, one.reason) for one in await checkpoint.compare(migrated_dsn, published)] == [
-        (shard, seq, checkpoint.ROW_MISSING)
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (shard, seq, checkpoint.ROW_MISSING, True)
     ]
+
+
+async def test_a_head_that_aged_out_is_not_an_accusation(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """The published head row is gone after its deadline: the whole quiet chain
+    went in the purge, which is what it is supposed to do."""
+    await insert_chained_audit_row(connection, "logout", "allowed", timedelta(days=100))
+    published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
+    (head,) = published.heads
+
+    await retention.purge(migrated_dsn)
+
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (head.shard, head.seq, checkpoint.ROW_MISSING, False)
+    ]
+    # And that chain still publishes where it stands, with nothing at its front.
+    after = {one.shard: one for one in (await checkpoint.collect(migrated_dsn)).heads}[head.shard]
+    assert (after.seq, after.hash_hex, after.first_seq, after.first_hash_hex, after.first_expires) == (
+        head.seq,
+        head.hash_hex,
+        None,
+        None,
+        None,
+    )
 
 
 async def test_an_emptied_table_shows_up_against_the_publication(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """TRUNCATE fires no row trigger, so the log can be emptied in one command
-    and the chain has nothing left to say."""
+    """Emptied in one command, the chain has nothing left to say. The heads
+    stay behind, so every published head row is missing before its deadline."""
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
@@ -286,27 +368,58 @@ async def test_an_emptied_table_shows_up_against_the_publication(
 
     assert await chain.verify(migrated_dsn) == []
     findings = await checkpoint.compare(migrated_dsn, published)
+    missing = [one for one in findings if one.reason == checkpoint.ROW_MISSING]
+    assert {one.shard for one in missing} == {head.shard for head in published.heads}
+    assert all(one.serious for one in findings)
+
+
+async def test_emptied_heads_show_up_as_a_shortened_chain(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    for index in range(10):
+        await _insert(connection, action=f"test_actie_{index}")
+    published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
+    await connection.execute("TRUNCATE audit_log_entries, audit_log_chain_heads")
+
+    findings = await checkpoint.compare(migrated_dsn, published)
     shortened = [one for one in findings if one.reason == checkpoint.CHAIN_SHORTENED]
     assert {one.shard for one in shortened} == {head.shard for head in published.heads}
-    assert all(one.serious for one in shortened)
+    assert all(one.serious for one in findings)
 
 
 async def test_a_purged_front_is_reported_but_is_not_an_accusation(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
     """The purge takes the oldest rows every night, so a published front that
-    is gone is the normal state of an old environment. It is reported, because
-    only its date says whether it was allowed to go, and it does not make the
-    check fail."""
+    is gone after its published deadline is the normal state of an old
+    environment. It is reported, and it does not make the check fail."""
+    await _two_in_one_chain(connection, "content_access", timedelta(days=95))
+    published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
+    (head,) = [one for one in published.heads if one.first_seq != one.seq]
+
+    await retention.purge(migrated_dsn)
+
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (head.shard, head.first_seq, checkpoint.FRONT_PURGED, False)
+    ]
+
+
+async def test_a_front_gone_before_its_deadline_is_an_accusation(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """The same absence, but the published deadline has not come: no purge took
+    that row. This is what dropping the front of a chain looks like."""
     shard = await _fill_one_shard(connection, count=3)
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
     await _without_guards(
-        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 1", shard
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq < 3", shard
     )
 
     findings = await checkpoint.compare(migrated_dsn, published)
-    assert [(one.shard, one.seq, one.reason) for one in findings] == [(shard, 1, checkpoint.FRONT_PURGED)]
-    assert not any(one.serious for one in findings)
+    assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
+        (shard, 1, checkpoint.FRONT_PURGED, True)
+    ]
 
 
 async def test_a_rewritten_front_row_is_a_mismatch(
@@ -326,21 +439,39 @@ async def test_a_rewritten_front_row_is_a_mismatch(
     assert all(one.serious for one in findings)
 
 
-async def test_a_line_in_the_older_format_reads_without_a_front(
+async def test_a_rewritten_row_is_a_mismatch_even_with_its_old_hash(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """Format /1 published only the head. Such a line still checks what it
-    carries; it simply says nothing about the oldest end."""
-    await _insert(connection)
-    published = await checkpoint.collect(migrated_dsn)
-    older = json.loads(published.as_json())
-    older["format"] = "plak-audit-chain-checkpoint/1"
-    for shard in older["shards"]:
-        del shard["first"], shard["first_hash"]
+    """The stored hash still says what was published, the content does not: the
+    comparison recomputes the hash from the row instead of trusting the column."""
+    shard = await _fill_one_shard(connection, count=3)
+    published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
+    await _rewrite_content_only(connection, shard, 1)
+    await _rewrite_content_only(connection, shard, 3)
 
-    read_back = checkpoint.parse(json.dumps(older))
-    assert read_back.heads[0].first_seq is None
-    assert await checkpoint.compare(migrated_dsn, read_back) == []
+    findings = await checkpoint.compare(migrated_dsn, published)
+    assert [(one.shard, one.seq, one.reason) for one in findings] == [
+        (shard, 1, checkpoint.HASH_MISMATCH),
+        (shard, 3, checkpoint.HASH_MISMATCH),
+    ]
+
+
+async def test_a_front_without_a_deadline_counts_as_removed(
+    migrated_dsn: str, connection: asyncpg.Connection
+) -> None:
+    """A line that names a front without saying when it may go cannot vouch
+    for its absence, so the absence is not explained away."""
+    shard = await _fill_one_shard(connection, count=2)
+    published = await checkpoint.collect(migrated_dsn)
+    line = json.loads(published.as_json())
+    for entry in line["shards"]:
+        entry["first_expires"] = None
+    await _without_guards(
+        connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = 1", shard
+    )
+
+    findings = await checkpoint.compare(migrated_dsn, checkpoint.parse(json.dumps(line)))
+    assert [(one.reason, one.serious) for one in findings] == [(checkpoint.FRONT_PURGED, True)]
 
 
 # --- The command line -----------------------------------------------------------------
@@ -408,6 +539,22 @@ async def test_main_does_not_fail_on_what_the_purge_did(
 ) -> None:
     """A nightly check that goes red on the nightly purge would be turned off
     within a week, so this one reports it and exits 0."""
+    await _two_in_one_chain(connection, "login", timedelta(days=95))
+    line = tmp_path / "kop.log"
+    line.write_text(f"INFO {checkpoint.MARKER} {(await checkpoint.collect(migrated_dsn)).as_json()}\n")
+    await retention.purge(migrated_dsn)
+    monkeypatch.setenv(checkpoint.DB_URL_VAR, migrated_dsn)
+
+    with caplog.at_level("INFO"):
+        assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 0
+    assert "Opgeruimd sinds de publicatie" in caplog.text
+    assert "bewaartermijn" in caplog.text
+
+
+async def test_main_fails_on_a_front_removed_before_its_deadline(
+    migrated_dsn: str, connection: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture, tmp_path,
+) -> None:
     shard = await _fill_one_shard(connection, count=3)
     line = tmp_path / "kop.log"
     line.write_text(f"INFO {checkpoint.MARKER} {(await checkpoint.collect(migrated_dsn)).as_json()}\n")
@@ -416,10 +563,9 @@ async def test_main_does_not_fail_on_what_the_purge_did(
     )
     monkeypatch.setenv(checkpoint.DB_URL_VAR, migrated_dsn)
 
-    with caplog.at_level("INFO"):
-        assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 0
-    assert "Opgeruimd sinds de publicatie" in caplog.text
-    assert "bewaartermijn" in caplog.text
+    with caplog.at_level("ERROR"):
+        assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 1
+    assert checkpoint.FRONT_PURGED in caplog.text
 
 
 async def test_main_says_so_when_the_line_cannot_be_read(

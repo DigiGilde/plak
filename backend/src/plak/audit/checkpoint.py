@@ -9,9 +9,11 @@ account cannot reach, and the cheapest one is the application log: a line that
 has been shipped cannot be retracted afterwards.
 
 So this job writes one line per run with, per chain, the highest position and
-its hash. Anyone who kept an older line can hold it against the database later:
-a rewrite changes the hash at that position, a truncation makes the chain
-shorter than it was.
+its hash, the oldest position still present and its hash, and for both the
+moment their retention runs out. Anyone who kept an older line can hold it
+against the database later: a rewrite changes the hash at that position, a
+truncation makes the chain shorter than it was, and a row that is gone before
+its published deadline was removed, not purged.
 
 The hashes in that line are a commitment, not a credential. They reveal nothing
 about the rows (they are hashes), and they are worth only as much as the number
@@ -46,10 +48,10 @@ DB_URL_VAR = "PLAK_DB_URL"
 # Grep handle. The rest of the line is one JSON object, so a log search finds
 # the runs and a machine reads them without a parser of its own.
 MARKER = "audit-chain-checkpoint"
-FORMAT = "plak-audit-chain-checkpoint/2"
-# /1 published only the head of each chain. A line in that format still reads,
-# it simply carries nothing to check the oldest end against.
-READABLE_FORMATS = frozenset({FORMAT, "plak-audit-chain-checkpoint/1"})
+# /3 is the chain layout with one set of chains per retention term. A /1 or /2
+# line numbered its chains differently, so it is refused rather than held
+# against chains it never described.
+FORMAT = "plak-audit-chain-checkpoint/3"
 
 HASH_MISMATCH = "hash_mismatch"
 CHAIN_SHORTENED = "chain_shortened"
@@ -58,36 +60,60 @@ FRONT_PURGED = "front_purged"
 
 _logger = logging.getLogger(__name__)
 
-# Both ends of every chain in one pass: the head is the commitment, the oldest
-# surviving position says where the chain begins today, which is the only thing
-# a later line can hold a purge against.
+# Both ends of every chain in one pass. The head comes from
+# audit_log_chain_heads, which the purge does not touch, so a chain whose rows
+# have all aged out still publishes where it stands; the oldest surviving row
+# says where the chain begins today, which is the only thing a later line can
+# hold a purge against. Each end carries the moment its retention runs out.
 _ENDS = text(
     """
-    SELECT DISTINCT ON (chain_shard)
-        chain_shard,
-        first_value(chain_seq) OVER chain AS first_seq,
-        first_value(chain_hash) OVER chain AS first_hash,
-        last_value(chain_seq) OVER chain AS seq,
-        last_value(chain_hash) OVER chain AS hash
-    FROM audit_log_entries
-    WINDOW chain AS (
-        PARTITION BY chain_shard ORDER BY chain_seq
-        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-    )
-    ORDER BY chain_shard
+    SELECT
+        head.chain_shard,
+        head.chain_seq AS seq,
+        head.chain_hash AS hash,
+        head.occurred_at + audit_log_chain_retention(head.chain_shard) AS expires,
+        front.chain_seq AS first_seq,
+        front.chain_hash AS first_hash,
+        front.occurred_at + audit_log_chain_retention(head.chain_shard) AS first_expires
+    FROM audit_log_chain_heads AS head
+    LEFT JOIN LATERAL (
+        SELECT chain_seq, chain_hash, occurred_at
+        FROM audit_log_entries
+        WHERE chain_shard = head.chain_shard
+        ORDER BY chain_seq
+        LIMIT 1
+    ) AS front ON true
+    ORDER BY head.chain_shard
     """
 )
 
 # clock_timestamp(), the same clock the chain trigger stamps occurred_at with.
 _NOW = text("SELECT clock_timestamp()")
 
+# The stored hash and the hash recomputed from the row's content: a row whose
+# content was changed while its chain_hash was left alone matches on the first
+# and not on the second.
 _ROW_AT = text(
     """
-    SELECT chain_hash
+    SELECT
+        chain_hash,
+        audit_log_chain_hash(
+            chain_prev_hash, id, actor_kind::text, actor_pseudonym, action,
+            result, reason_code, refs, ip_truncated, ip_encrypted, occurred_at,
+            chain_shard, chain_seq
+        ) AS recomputed
     FROM audit_log_entries
     WHERE chain_shard = :shard AND chain_seq = :seq
     """
 )
+
+
+def _moment(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def _read_moment(value: str | None) -> datetime | None:
+    return None if value is None else datetime.fromisoformat(value)
 
 
 @dataclass(frozen=True)
@@ -95,14 +121,17 @@ class Head:
     """Both ends of one chain. `seq`/`hash_hex` are the last row: the hash there
     covers every row before it, so it is the commitment. `first_seq`/
     `first_hash_hex` are the oldest row still present, which is what a later
-    run can hold the retention purge against; they are `None` in a line
-    published in format /1."""
+    run can hold the retention purge against; they are `None` for a chain
+    whose rows have all aged out. `expires`/`first_expires` are when those
+    rows may go: before that moment, their absence is a removal."""
 
     shard: int
     seq: int
     hash_hex: str
+    expires: datetime
     first_seq: int | None = None
     first_hash_hex: str | None = None
+    first_expires: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -124,7 +153,8 @@ class Checkpoint:
         themselves stay in the line, because a digest alone cannot say which
         chain moved."""
         material = ";".join(
-            f"{head.shard}:{head.first_seq}:{head.first_hash_hex}:{head.seq}:{head.hash_hex}"
+            f"{head.shard}:{head.first_seq}:{head.first_hash_hex}:{_moment(head.first_expires)}:"
+            f"{head.seq}:{head.hash_hex}:{_moment(head.expires)}"
             for head in self.heads
         )
         return hashlib.sha256(material.encode()).hexdigest()
@@ -140,8 +170,10 @@ class Checkpoint:
                     "shard": head.shard,
                     "first": head.first_seq,
                     "first_hash": head.first_hash_hex,
+                    "first_expires": _moment(head.first_expires),
                     "seq": head.seq,
                     "hash": head.hash_hex,
+                    "expires": _moment(head.expires),
                 }
                 for head in self.heads
             ],
@@ -153,20 +185,17 @@ class Checkpoint:
 class Finding:
     """One thing the database says about a published position.
 
-    `serious` is false for the one finding the retention purge produces by
-    itself; everything else contradicts what was published. A check that
-    reported the purge as tampering would go off on every environment older
-    than ninety days, and the real finding after it would be read as the purge
-    again.
+    `serious` is false only for a published row that is gone after its
+    published retention deadline: that is what the purge does by itself, and
+    a check that reported it as tampering would go off on every environment
+    older than ninety days, so the real finding after it would be read as the
+    purge again. The same absence before the deadline is a removal.
     """
 
     shard: int
     seq: int
     reason: str
-
-    @property
-    def serious(self) -> bool:
-        return self.reason != FRONT_PURGED
+    serious: bool = True
 
     def describe(self) -> str:
         return f"keten {self.shard} positie {self.seq}: {self.reason}"
@@ -184,8 +213,10 @@ async def _collect(session: AsyncSession) -> Checkpoint:
             shard=row.chain_shard,
             seq=row.seq,
             hash_hex=bytes(row.hash).hex(),
+            expires=row.expires,
             first_seq=row.first_seq,
-            first_hash_hex=bytes(row.first_hash).hex(),
+            first_hash_hex=None if row.first_hash is None else bytes(row.first_hash).hex(),
+            first_expires=row.first_expires,
         )
         for row in rows
     )
@@ -213,15 +244,17 @@ def parse(line: str) -> Checkpoint:
         raise MalformedCheckpointError("geen JSON-object gevonden in de regel")
     try:
         payload = json.loads(line[start:])
-        if payload.get("format") not in READABLE_FORMATS:
+        if payload.get("format") != FORMAT:
             raise MalformedCheckpointError(f"onbekend formaat: {payload.get('format')!r}")
         heads = tuple(
             Head(
                 shard=int(shard["shard"]),
                 seq=int(shard["seq"]),
                 hash_hex=str(shard["hash"]),
-                first_seq=None if shard.get("first") is None else int(shard["first"]),
-                first_hash_hex=None if shard.get("first_hash") is None else str(shard["first_hash"]),
+                expires=datetime.fromisoformat(shard["expires"]),
+                first_seq=None if shard["first"] is None else int(shard["first"]),
+                first_hash_hex=None if shard["first_hash"] is None else str(shard["first_hash"]),
+                first_expires=_read_moment(shard["first_expires"]),
             )
             for shard in payload["shards"]
         )
@@ -233,9 +266,14 @@ def parse(line: str) -> Checkpoint:
     return Checkpoint(taken_at=taken_at, heads=heads)
 
 
-async def _at(session: AsyncSession, shard: int, seq: int) -> str | None:
-    stored = (await session.execute(_ROW_AT, {"shard": shard, "seq": seq})).scalar_one_or_none()
-    return None if stored is None else bytes(stored).hex()
+async def _at(session: AsyncSession, shard: int, seq: int) -> tuple[str, str] | None:
+    """The stored and the recomputed hash at a position, or None if the row is gone."""
+    row = (await session.execute(_ROW_AT, {"shard": shard, "seq": seq})).one_or_none()
+    return None if row is None else (bytes(row.chain_hash).hex(), bytes(row.recomputed).hex())
+
+
+def _matches(found: tuple[str, str], published_hex: str) -> bool:
+    return found == (published_hex, published_hex)
 
 
 async def compare(dsn: str, published: Checkpoint) -> list[Finding]:
@@ -244,35 +282,45 @@ async def compare(dsn: str, published: Checkpoint) -> list[Finding]:
     published, in the same shape.
 
     The findings say different things on purpose:
-    `chain_shortened` is a chain with fewer rows than it had, which appending
-    cannot do; `hash_mismatch` is that position rewritten; `row_missing` is the
-    row gone while the chain grew past it, which for a head means the whole
-    chain aged out or somebody removed it; `front_purged` is the published
-    oldest row gone, which is what the retention purge does every night and is
-    therefore the one finding that is not an accusation - what makes it one is
-    its date: no row may disappear before its retention period has run, so a
-    line younger than ninety days whose front is gone is wrong.
+    `chain_shortened` is a chain whose head stands lower than it did, which
+    appending cannot do; `hash_mismatch` is that position rewritten, whether
+    its stored hash changed or only its content; `row_missing` is the
+    published head row gone while the chain's head stands at or past it;
+    `front_purged` is the published oldest row gone. The last two are what
+    the retention purge does, and the deadline published next to the row
+    decides between purge and removal: gone after it is not serious, gone
+    before it is.
     """
     engine = create_async_engine(dsn, hide_parameters=True)
     factory = make_session_factory(engine)
     findings: list[Finding] = []
     try:
         async with factory() as session, session.begin():
+            now = (await session.execute(_NOW)).scalar_one()
             current = {head.shard: head.seq for head in (await _collect(session)).heads}
             for head in published.heads:
                 if head.first_seq is not None and head.first_seq != head.seq:
                     front = await _at(session, head.shard, head.first_seq)
                     if front is None:
-                        findings.append(Finding(shard=head.shard, seq=head.first_seq, reason=FRONT_PURGED))
-                    elif front != head.first_hash_hex:
+                        findings.append(
+                            Finding(
+                                shard=head.shard,
+                                seq=head.first_seq,
+                                reason=FRONT_PURGED,
+                                serious=head.first_expires is None or now < head.first_expires,
+                            )
+                        )
+                    elif not _matches(front, head.first_hash_hex):
                         findings.append(Finding(shard=head.shard, seq=head.first_seq, reason=HASH_MISMATCH))
                 if current.get(head.shard, 0) < head.seq:
                     findings.append(Finding(shard=head.shard, seq=head.seq, reason=CHAIN_SHORTENED))
                     continue
                 stored = await _at(session, head.shard, head.seq)
                 if stored is None:
-                    findings.append(Finding(shard=head.shard, seq=head.seq, reason=ROW_MISSING))
-                elif stored != head.hash_hex:
+                    findings.append(
+                        Finding(shard=head.shard, seq=head.seq, reason=ROW_MISSING, serious=now < head.expires)
+                    )
+                elif not _matches(stored, head.hash_hex):
                     findings.append(Finding(shard=head.shard, seq=head.seq, reason=HASH_MISMATCH))
     finally:
         await engine.dispose()
@@ -316,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
             _logger.error("Auditlog wijkt af van de publicatie van %s: %s", moment, finding.describe())
         else:
             _logger.info(
-                "Opgeruimd sinds de publicatie van %s: %s. Controleer of die regel ouder is dan de bewaartermijn.",
+                "Opgeruimd sinds de publicatie van %s, na afloop van de bewaartermijn: %s.",
                 moment,
                 finding.describe(),
             )

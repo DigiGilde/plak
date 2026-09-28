@@ -213,14 +213,88 @@ async def test_everything_else_stays_three_years(
 
 async def test_the_database_and_the_code_agree_on_the_terms(db_connection: asyncpg.Connection) -> None:
     for action, result in vocabulary.SHORT_RETENTION:
-        days = await db_connection.fetchval(
-            "SELECT extract(day FROM audit_log_retention($1, $2))::int", action, result
+        assert await db_connection.fetchval("SELECT audit_log_retention_tier($1, $2)", action, result) == 0
+    assert await db_connection.fetchval("SELECT audit_log_retention_tier('admin_access', 'refused')") == 1
+    short_days = await db_connection.fetchval("SELECT extract(day FROM audit_log_retention(0))::int")
+    assert short_days == vocabulary.SHORT_RETENTION_DAYS
+    assert await db_connection.fetchval("SELECT audit_log_retention(1) = interval '3 years'")
+
+
+async def test_a_chain_keeps_the_term_of_its_tier(db_connection: asyncpg.Connection) -> None:
+    """The delete guard and the purge ask the chain, not the row: chains 0 to
+    15 hold the 90-day rows, 16 to 31 the rest."""
+    for shard in (0, 15):
+        assert await db_connection.fetchval(
+            "SELECT audit_log_chain_retention($1::smallint) = audit_log_retention(0)", shard
         )
-        assert days == vocabulary.SHORT_RETENTION_DAYS
-    long_term = await db_connection.fetchval(
-        "SELECT audit_log_retention('admin_access', 'refused') = interval '3 years'"
+    for shard in (16, 31):
+        assert await db_connection.fetchval(
+            "SELECT audit_log_chain_retention($1::smallint) = audit_log_retention(1)", shard
+        )
+
+
+async def _refusal(conn: asyncpg.Connection, statement: str, *args) -> str:
+    """The message a guard trigger refused `statement` with; fails the test
+    when the statement went through."""
+    try:
+        async with conn.transaction():
+            await conn.execute(statement, *args)
+    except asyncpg.RaiseError as error:
+        return str(error)
+    raise AssertionError(f"not refused: {statement}")
+
+
+_TRIGGER_ONLY = "alleen door de auditlog-trigger"
+_ONE_ON = "schuift alleen een positie op"
+_INSERT_AUDIT_ROW = (
+    "INSERT INTO audit_log_entries (id, actor_kind, action, result) VALUES ($1, 'system', 'test_actie', 'allowed')"
+)
+
+
+async def test_a_chain_head_is_not_written_directly(db_connection: asyncpg.Connection) -> None:
+    """Only the chain trigger moves a head. A direct write would let the next
+    row chain onto a hash of the writer's choosing, or restart a chain at a
+    position a published checkpoint already holds."""
+    await db_connection.execute(_INSERT_AUDIT_ROW, uuid.uuid4())
+    shard = await db_connection.fetchval("SELECT chain_shard FROM audit_log_chain_heads")
+
+    assert _TRIGGER_ONLY in await _refusal(
+        db_connection, "INSERT INTO audit_log_chain_heads VALUES ($1, 1, '\\x00', now())", (shard + 1) % 32
     )
-    assert long_term
+    assert _TRIGGER_ONLY in await _refusal(
+        db_connection, "UPDATE audit_log_chain_heads SET chain_seq = chain_seq + 1"
+    )
+    assert _TRIGGER_ONLY in await _refusal(db_connection, "UPDATE audit_log_chain_heads SET chain_hash = '\\x00'")
+    assert _TRIGGER_ONLY in await _refusal(db_connection, "DELETE FROM audit_log_chain_heads")
+
+
+async def test_a_chain_head_only_moves_one_position_on(db_connection: asyncpg.Connection) -> None:
+    """Even from inside a trigger, the one place a head may be written from,
+    a head cannot jump ahead or go back."""
+    await db_connection.execute(_INSERT_AUDIT_ROW, uuid.uuid4())
+    await db_connection.execute(
+        """
+        CREATE FUNCTION test_move_the_head() RETURNS trigger AS $$
+        BEGIN
+            UPDATE audit_log_chain_heads SET chain_seq = chain_seq + current_setting('plak_test.step')::bigint;
+            RETURN NULL;
+        END;
+        $$ LANGUAGE plpgsql
+        """
+    )
+    await db_connection.execute(
+        "CREATE TRIGGER test_move_the_head AFTER INSERT ON content_viewers "
+        "FOR EACH ROW EXECUTE FUNCTION test_move_the_head()"
+    )
+    for step in ("5", "0", "-1"):
+        await db_connection.execute("SELECT set_config('plak_test.step', $1, true)", step)
+
+        assert _ONE_ON in await _refusal(
+            db_connection,
+            "INSERT INTO content_viewers (id, sso_subject) VALUES ($1, $2)",
+            uuid.uuid4(),
+            f"sub-{uuid.uuid4().hex}",
+        )
 
 
 async def test_content_viewers_deletable_only_after_ninety_days(db_connection: asyncpg.Connection) -> None:
