@@ -121,6 +121,17 @@ def test_audit_ip_key_equal_to_session_secret_refused(monkeypatch):
     assert "PLAK_AUDIT_IP_KEY" in str(excinfo.value)
 
 
+def test_audit_pepper_equal_to_session_secret_refused(monkeypatch):
+    """One leaked value would then both forge sessions and undo the
+    pseudonymisation of every actor in the audit log."""
+    shared = "g" * 32
+    _set_required_env(monkeypatch, PLAK_SESSION_SECRET=shared, PLAK_AUDIT_PEPPER=shared)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_PEPPER moet verschillen van PLAK_SESSION_SECRET" in str(excinfo.value)
+    assert shared not in _full_traceback(excinfo.value)
+
+
 def test_audit_ip_key_previous_absent_by_default(monkeypatch):
     _set_required_env(monkeypatch)
     settings = load_settings()

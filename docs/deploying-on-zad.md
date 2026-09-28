@@ -158,7 +158,7 @@ anybody an administrator.
 | `PLAK_DB_URL` | alias on the DB service | `postgresql+asyncpg://...`; the app, alembic and the purge job all three use this one account |
 | `PLAK_CONTENT_ROOT` | env-vars | equal to the `mount-path` of the volume: `/content` |
 | `PLAK_SESSION_SECRET` | user-env-var | at least 32 bytes |
-| `PLAK_AUDIT_PEPPER` | user-env-var | at least 32 bytes; rotating makes old audit pseudonyms incomparable |
+| `PLAK_AUDIT_PEPPER` | user-env-var | at least 32 bytes, different from `PLAK_SESSION_SECRET`; rotating makes old audit pseudonyms incomparable |
 | `PLAK_AUDIT_IP_KEY` | user-env-var | base64 of 32 random bytes (`openssl rand -base64 32`), different from `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` and (if set) `PLAK_AUDIT_IP_KEY_PREVIOUS`; see below for rotating |
 | `PLAK_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional; only during a key rotation, see below |
 | `PLAK_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |

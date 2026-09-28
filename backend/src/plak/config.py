@@ -213,6 +213,12 @@ class Settings(BaseSettings):
         return _decode_audit_ip_key("PLAK_AUDIT_IP_KEY_PREVIOUS", value)
 
     @model_validator(mode="after")
+    def _audit_pepper_distinct(self) -> Settings:
+        if self.audit_pepper == self.session_secret:
+            raise ValueError("PLAK_AUDIT_PEPPER moet verschillen van PLAK_SESSION_SECRET")
+        return self
+
+    @model_validator(mode="after")
     def _audit_ip_key_distinct(self) -> Settings:
         other_secrets = (self.session_secret, self.audit_pepper)
         if self.audit_ip_key in other_secrets:
