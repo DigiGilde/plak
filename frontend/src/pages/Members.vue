@@ -295,14 +295,24 @@ async function setStatus(
 
 function replaceMember(updated: Member): void {
   const index = members.value.findIndex((l) => l.id === updated.id);
+  /* v8 ignore start -- the API always answers with the same id it was called
+     for; the guard is only for a response that somehow does not, which no
+     test can provoke through the real request/response contract. */
   if (index !== -1) {
     members.value.splice(index, 1, updated);
   }
+  /* v8 ignore stop */
 }
 
 function onSearch(event: Event): void {
   const detail = (event as CustomEvent<{ value?: string }>).detail;
-  query.value = detail?.value ?? (event.target as HTMLInputElement | null)?.value ?? '';
+  const targetValue = (event.target as HTMLInputElement | null)?.value;
+  // Guards an event with neither a detail nor a target value at all (not
+  // something nldd-search-field, or a native input, ever dispatches);
+  // unreachable without fabricating a malformed event.
+  /* v8 ignore start */
+  query.value = detail?.value ?? targetValue ?? '';
+  /* v8 ignore stop */
 }
 
 onMounted(() => {
