@@ -76,6 +76,9 @@ class MockIdP:
         self.refresh_id_token: bool = True
         self.refresh_claim_overrides: dict = {}
         self.refresh_requests: list[dict[str, list[str]]] = []
+        # Override for a token endpoint that answers 200 with a body that is
+        # not the JSON object RFC 6749 expects (a proxy's maintenance page).
+        self.refresh_response_override: httpx.Response | None = None
         self.sid = "sessie-bij-de-idp-1"
         self.next_nonce: str | None = None
         self.iss_param_supported = False
@@ -171,6 +174,8 @@ class MockIdP:
 
     def _refresh_response(self, form: dict[str, list[str]]) -> httpx.Response:
         self.refresh_requests.append(form)
+        if self.refresh_response_override is not None:
+            return self.refresh_response_override
         if self.refresh_error is not None:
             return httpx.Response(self.refresh_status, json={"error": self.refresh_error})
         if self.refresh_status != 200:

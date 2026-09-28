@@ -156,6 +156,17 @@ def _error_code(response: httpx.Response) -> str | None:
     return code if isinstance(code, str) else None
 
 
+def _json_object(response: httpx.Response) -> dict[str, Any] | None:
+    """The parsed JSON body of a successful token response; None when it is
+    not the JSON object RFC 6749 §5.1 prescribes (a proxy's maintenance page,
+    for instance, still answers 200)."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) else None
+
+
 class OidcClient:
     def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:
         self._settings = settings
@@ -353,7 +364,9 @@ class OidcClient:
             ) from error
         if response.status_code != 200:
             raise OidcError(f"token-endpoint weigerde de code (status {response.status_code})")
-        data_ = response.json()
+        data_ = _json_object(response)
+        if data_ is None:
+            raise OidcError("token-endpoint gaf status 200 zonder JSON-object terug")
         if not data_.get("id_token"):
             raise OidcError("token-antwoord bevat geen id_token")
         return data_
@@ -382,7 +395,10 @@ class OidcClient:
         except Exception as error:
             raise IdpUnavailableError(f"token-endpoint niet bereikbaar: {error}") from error
         if response.status_code == 200:
-            return response.json()
+            data_ = _json_object(response)
+            if data_ is None:
+                raise IdpUnavailableError("token-endpoint gaf status 200 zonder JSON-object terug")
+            return data_
         code = _error_code(response)
         if response.status_code in (400, 401) and code == "invalid_grant":
             raise RefreshRejectedError("de IdP verwierp het verversingstoken")

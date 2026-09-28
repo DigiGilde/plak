@@ -11,6 +11,7 @@ import logging
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
 from helpers_audit import install_audit_recorder
 from helpers_oidc import (
@@ -107,6 +108,24 @@ async def test_a_rotated_refresh_token_is_stored() -> None:
         await _visit(client)
 
         assert app.state.session_store.get_session(session.id).refresh_token == "ververstoken-2"
+
+
+async def test_a_non_json_200_from_the_token_endpoint_keeps_the_session_and_backs_off() -> None:
+    """A 200 whose body is not JSON (a proxy's maintenance page) must defer
+    the recheck like any other soft failure, not raise past the middleware."""
+    idp, app = _make()
+    idp.refresh_response_override = httpx.Response(200, text="<html>onderhoud</html>")
+    recorder = install_audit_recorder(app)
+    async with make_test_client(app) as client:
+        session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+        _age(app, session, seconds=RECHECK_S + 1)
+
+        await _visit(client)
+
+        kept = app.state.session_store.get_session(session.id)
+        assert kept is not None
+        assert kept.recheck_not_before is not None
+        assert recorder.records == []
 
 
 async def test_a_hard_failure_logs_out_and_audits() -> None:
