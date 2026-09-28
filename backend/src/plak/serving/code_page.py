@@ -45,11 +45,7 @@ from plak.access.decision import REASON_KEY_CODE_INVALID, REASON_KEY_CODE_THROTT
 from plak.audit import vocabulary
 from plak.audit.log import ANONYMOUS, AuditLog
 from plak.auth import sessions
-from plak.constants import (
-    PATH_CONTENT_CODE,
-    PLATFORM_SEGMENT,
-    RESERVED_SLUGS,
-)
+from plak.constants import PATH_CONTENT_CODE
 from plak.host_separation import host_from_scope
 from plak.models.identity import Group
 from plak.models.publication import Site
@@ -239,20 +235,6 @@ def code_page_response(request: Request, selector: str, path: str, error: str = 
     )
 
 
-def site_from_path(path: str) -> tuple[str, str] | None:
-    """The group and site a submitted path belongs to; None when the path is
-    not a content path of a site."""
-    segments = path.split("?", 1)[0].split("/")
-    if len(segments) < 3:
-        return None
-    group, site = segments[1], segments[2]
-    if not group or not site:
-        return None
-    if group in RESERVED_SLUGS or group == PLATFORM_SEGMENT:
-        return None
-    return group, site
-
-
 def valid_target(value: str) -> str | None:
     """A path within our own origin, or None.
 
@@ -361,7 +343,7 @@ async def submit_code(request: Request) -> Response:
     selector = str(form.get("selector") or "")[: keys.SELECTOR_LENGTH]
     code = str(form.get("code") or "")
     target = valid_target(str(form.get("path") or ""))
-    site_path = site_from_path(target) if target is not None else None
+    site_path = sessions.parse_site_path(target) if target is not None else None
     if target is None or site_path is None:
         return neutral_404_response()
     group, site = site_path

@@ -44,8 +44,11 @@ from plak.auth.sessions import (
     SessionStore,
     check_signature,
     content_session_from_request,
+    content_site_prefix,
+    parse_site_path,
     session_from_request,
     sign,
+    site_prefix,
     valid_return_to,
 )
 from plak.constants import PATH_CONTENT_LOGIN, PATH_CONTENT_OAUTH2_PREFIX
@@ -114,6 +117,47 @@ class TestReturnTo:
     @pytest.mark.parametrize("value", ["//evil.example", "https://evil", "", None, "fin/rapport/"])
     def test_invalid_falls_back_to_given_default(self, value):
         assert valid_return_to(value, "/") == "/"
+
+
+class TestParseSitePath:
+    """The one shared rule for a site's own path, used by the session layer,
+    the code page and the serving router."""
+
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("/fin/rapport/index.html", ("fin", "rapport")),
+            ("/fin/rapport/", ("fin", "rapport")),
+            ("/fin/rapport", ("fin", "rapport")),
+            # Query string stripped before segments are read.
+            ("/fin/rapport/index.html?x=1", ("fin", "rapport")),
+            # Percent-encoding left exactly as it came in: an encoded slash
+            # does not split, so it stays inside the site segment.
+            ("/fin/si%2Fte/index.html", ("fin", "si%2Fte")),
+            # Too few segments.
+            ("/", None),
+            ("/fin", None),
+            ("/fin/", None),
+            ("", None),
+            # Empty group or site.
+            ("//rapport/index.html", None),
+            ("/fin//index.html", None),
+            # A reserved slug, or the platform namespace, as the group.
+            ("/robots.txt/rapport/index.html", None),
+            ("/-/sessions", None),
+        ],
+    )
+    def test_table(self, path, expected):
+        assert parse_site_path(path) == expected
+
+    def test_content_site_prefix_formats_a_match(self):
+        assert content_site_prefix("/fin/rapport/index.html") == "/fin/rapport/"
+
+    def test_content_site_prefix_passes_through_none(self):
+        assert content_site_prefix("/fin") is None
+
+    def test_site_prefix_formats_an_already_known_site(self):
+        assert site_prefix("fin", "rapport") == "/fin/rapport/"
 
 
 @pytest.fixture
