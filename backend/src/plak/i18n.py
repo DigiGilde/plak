@@ -212,6 +212,11 @@ def negotiate(accept_language: str | None, *, default: str = DEFAULT) -> str:
     you have", so it counts as nothing asked. `default` is what that case
     yields; the API passes API_DEFAULT there, the pages take DEFAULT.
 
+    A refused language (q=0) is never returned while a supported, unrefused
+    catalogue still exists, even when that refused language is `default`
+    itself (the API's `default` is equal to FOREIGN). Only when every
+    supported language is refused does this fall back to `default` regardless.
+
     A header that cannot be parsed has to fall back rather than fail.
     """
     if not accept_language:
@@ -232,9 +237,12 @@ def negotiate(accept_language: str | None, *, default: str = DEFAULT) -> str:
     # Turning down a language we have is itself a request for another one.
     if refused & set(_CATALOGUES):
         asked = True
-    if asked and FOREIGN not in refused:
+    if not asked:
+        return default
+    if FOREIGN not in refused:
         return FOREIGN
-    return default
+    remaining = [language for language in SUPPORTED if language not in refused]
+    return remaining[0] if remaining else default
 
 
 def t(locale: str, key: str) -> str:

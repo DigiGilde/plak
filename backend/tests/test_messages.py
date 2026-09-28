@@ -97,6 +97,24 @@ def test_an_unsupported_language_reaches_english_whatever_the_default() -> None:
     assert i18n.negotiate("fr") == "en"
 
 
+def test_refusing_the_default_itself_does_not_return_it_while_dutch_is_available() -> None:
+    """`default=API_DEFAULT` equals FOREIGN ("en"); explicitly refusing it must
+    not come back anyway just because it is the fallback."""
+    assert i18n.negotiate("en;q=0", default=i18n.API_DEFAULT) == "nl"
+    assert i18n.negotiate("en;q=0, fr;q=0.8", default=i18n.API_DEFAULT) == "nl"
+
+
+def test_refusing_every_supported_language_falls_back_to_the_default_anyway() -> None:
+    """A header must fall back rather than fail: with both catalogues turned
+    down there is nothing left to serve but the default itself."""
+    assert i18n.negotiate("nl;q=0, en;q=0", default=i18n.API_DEFAULT) == "en"
+    assert i18n.negotiate("nl;q=0, en;q=0") == "nl"
+
+
+def test_refusing_the_page_default_still_falls_through_to_english() -> None:
+    assert i18n.negotiate("nl;q=0") == "en"
+
+
 def test_rendering_an_unknown_key_is_an_error_rather_than_a_raw_key() -> None:
     with pytest.raises(KeyError):
         messages.render("en", Msg("NO_SUCH_KEY"))
