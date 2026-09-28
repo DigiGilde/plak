@@ -20,10 +20,12 @@ function builtIndex(): string {
 
 // An end tag may carry whitespace and even ignored attributes before the `>`,
 // so `</script >` and `</script foo>` close a script just like `</script>`. A
-// pattern that misses those forms swallows a following inline script into the
-// content of an earlier one that does have a src, and the guard below then
-// waves it through.
+// pattern that misses those forms reads straight past the real end tag: an
+// inline script then counts as the content of an earlier tag that does have a
+// src, and an inline <style> that ends that way is not seen at all. Both
+// guards below would let through exactly what they are there to catch.
 const SCRIPT_TAG_RE = /<script\b[^>]*>([\s\S]*?)<\/script(?:\s[^>]*)?>/gi;
+const STYLE_TAG_RE = /<style\b[^>]*>([\s\S]*?)<\/style(?:\s[^>]*)?>/gi;
 
 function distFiles(directory = distDir): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -54,7 +56,7 @@ describe('gebouwde index.html', () => {
   it('bevat geen inline <style> of style-attribuut', () => {
     const html = builtIndex();
 
-    const styleTags = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)];
+    const styleTags = [...html.matchAll(STYLE_TAG_RE)];
     for (const [tag] of styleTags) {
       expect.unreachable(`inline <style> gevonden: ${tag}`);
     }
@@ -79,6 +81,22 @@ describe('script-tagpatroon', () => {
 
     expect(tags.length).toBe(1);
     expect(tags[0][1]).toBe('alert(1)</scriptx>');
+  });
+});
+
+describe('style-tagpatroon', () => {
+  it.each(['</style >', '</style\t\n foo>'])('ziet een inline <style> die sluit met %s', (endTag) => {
+    const tags = [...`<style>body{color:red}${endTag}`.matchAll(STYLE_TAG_RE)];
+
+    expect(tags.length).toBe(1);
+    expect(tags[0][1]).toBe('body{color:red}');
+  });
+
+  it('ziet <stylex> niet aan voor een eindtag', () => {
+    const tags = [...'<style>a</stylex></style>'.matchAll(STYLE_TAG_RE)];
+
+    expect(tags.length).toBe(1);
+    expect(tags[0][1]).toBe('a</stylex>');
   });
 });
 
