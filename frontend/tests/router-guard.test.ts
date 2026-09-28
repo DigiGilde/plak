@@ -62,6 +62,17 @@ describe('router-guard /-/members', () => {
     expect(router.currentRoute.value.name).toBe('overview');
   });
 
+  it('stuurt terug naar het overzicht als de sessie niet is op te halen', async () => {
+    // An unexpected (non-401/403) failure while resolving /me: deny by
+    // default rather than let navigation hang on a network hiccup.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('netwerkfout'))));
+    const router = testRouter();
+    router.beforeEach(platformAdminGuard);
+    await router.push('/-/members');
+
+    expect(router.currentRoute.value.name).toBe('overview');
+  });
+
   it('laat publieke platformpagina\'s door zonder sessiecheck', async () => {
     // No fetch stub: if the guard were to call me() here after all, the test fails on a network error.
     const router = testRouter();

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { contentUrl, siteUrl } from './format';
+import { contentUrl, formatDate, siteUrl } from './format';
+
+describe('formatDate', () => {
+  it('formats an ISO timestamp in the date style of the language on screen', () => {
+    expect(formatDate('2026-01-15T10:00:00Z')).not.toBe('-');
+  });
+
+  it('falls back to a dash without a date, null or undefined alike', () => {
+    expect(formatDate(null)).toBe('-');
+    expect(formatDate(undefined)).toBe('-');
+  });
+});
 
 describe('contentUrl and siteUrl', () => {
   it('builds content paths on the given content origin', () => {
