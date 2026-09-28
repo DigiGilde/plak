@@ -14,7 +14,7 @@ import os
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 
 import pytest_asyncio
@@ -36,6 +36,7 @@ from plak.previews.cleanup_job import (
     TMP_OLDER_THAN_DEFAULT,
     CleanupResult,
     _run_daily,
+    _seconds_until,
     delete_expired,
 )
 
@@ -293,6 +294,16 @@ class TestTmpSweeper:
         assert fresh_dir.exists()
 
 
+class TestSecondsUntil:
+    def test_later_today_needs_no_rollover(self):
+        reference = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+        assert _seconds_until(time(12, 0), reference) == 2 * 3600
+
+    def test_already_passed_today_rolls_over_to_tomorrow(self):
+        reference = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
+        assert _seconds_until(time(3, 0), reference) == 17 * 3600
+
+
 class TestRunDaily:
     """`_run_daily` must survive a sweep that raises, and its stop event must
     still end the loop without running another sweep."""
@@ -359,6 +370,32 @@ class TestRunDaily:
         await asyncio.sleep(0)  # lets the task start waiting on stop.wait()
         stop.set()
         await asyncio.wait_for(task, timeout=5)
+
+        assert called is False
+
+    async def test_stop_already_set_before_the_first_tick_runs_no_sweep(
+        self, environment: Environment, monkeypatch
+    ):
+        called = False
+
+        async def fake_delete_expired(*args, **kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+
+        stop = asyncio.Event()
+        stop.set()
+        await asyncio.wait_for(
+            _run_daily(
+                environment.session_factory,
+                environment.store,
+                occurred_at=TIMESTAMP_DEFAULT,
+                tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                stop=stop,
+            ),
+            timeout=5,
+        )
 
         assert called is False
 
