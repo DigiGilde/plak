@@ -294,6 +294,22 @@ class TestLoginFlow:
         assert response.status_code == 400
         assert client.cookies.get(SESSION_COOKIE) is None
 
+    async def test_idp_error_on_callback_refused(self, client, idp, audit):
+        q = await start_login(client, idp)
+        response = await client.get(
+            "/-/oauth2/callback", params={"error": "access_denied", "state": q["state"]}
+        )
+        assert response.status_code == 400
+        record = audit.only()
+        assert record.reason_code == vocabulary.LOGIN_IDP_ERROR
+
+    async def test_callback_without_code_is_refused(self, client, idp, audit):
+        q = await start_login(client, idp)
+        response = await client.get("/-/oauth2/callback", params={"state": q["state"]})
+        assert response.status_code == 400
+        record = audit.only()
+        assert record.reason_code == vocabulary.LOGIN_CODE_MISSING
+
     async def test_callback_without_login_cookie_refused(self, client, idp):
         q = await start_login(client, idp)
         client.cookies.clear()
@@ -447,6 +463,20 @@ class TestContentLogout:
         assert response.headers["location"] == "https://beheer.plak.example/"
         assert app.state.session_store.get_session(session_id) is None
         assert CONTENT_ANCHOR_COOKIE + "=" in " ".join(response.headers.get_list("set-cookie"))
+
+    async def test_a_post_logout_on_the_content_host_is_the_content_logout(self, content_client, app, idp):
+        """The logout route is shared between hosts; on the content host a POST
+        takes the same branch as the GET the content leg normally arrives on."""
+        await _complete_content_login(content_client, idp)
+        session_id = check_signature(
+            app.state.settings.session_secret, content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
+        )
+
+        response = await content_client.post("/-/logout")
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/"
+        assert app.state.session_store.get_session(session_id) is None
 
     async def test_a_direct_content_logout_stays_on_the_content_host(self, content_client, idp):
         await _complete_content_login(content_client, idp)
