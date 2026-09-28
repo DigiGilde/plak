@@ -21,7 +21,7 @@ in step.
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
 | `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string |
-| `ip_truncated` | IPv4 truncated to /24, IPv6 to /48 |
+| `ip_truncated` | IPv4 truncated to /24, IPv6 to /48; an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) counts as IPv4 |
 | `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
 
