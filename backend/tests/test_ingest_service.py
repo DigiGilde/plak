@@ -373,6 +373,19 @@ class TestPreviewDeploy:
         assert len(await _previews(environment)) == 2
         assert len(await _versions(environment)) == 2
 
+    async def test_db_error_cleans_files_on(self, environment: Environment):
+        # Non-existent lid: an FK violation on the versie insert.
+        ghost_deployer = Deployer(member_id=uuid.uuid4())
+        async with environment.session_factory() as session:
+            with pytest.raises(IntegrityError):
+                await environment.service.preview_deploy(
+                    session, environment.group, environment.site, "pr-ghost", "index.html",
+                    environment.source(b"p"), ghost_deployer,
+                )
+        assert await _versions(environment) == []
+        assert await _previews(environment) == []
+        assert environment.version_dirs() == set()
+
     async def test_concurrent_same_ref_deploys(self, environment: Environment):
         async def deploy_task(content: bytes) -> uuid.UUID:
             async with environment.session_factory() as session:

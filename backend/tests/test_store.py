@@ -54,6 +54,11 @@ class TestStoreVersion:
             store.store_version("..", "p", uuid.uuid4(), FILES)
 
 
+class TestRoot:
+    def test_root_is_the_resolved_content_root(self, store: ContentStore, root: Path):
+        assert store.root == root.resolve()
+
+
 class TestWriteVersion:
     def test_streams_to_workdir_and_renames_atomic(self, store: ContentStore, root: Path):
         version_id = uuid.uuid4()
@@ -186,6 +191,12 @@ class TestDeleteVersion:
                 store.delete_version(ref)
         assert (root.parent / "extern").exists()
 
+    def test_refuses_a_null_byte_in_the_storage_ref(self, store: ContentStore):
+        # Guarded explicitly: a null byte would otherwise reach os.path
+        # functions and come back as an unhandled ValueError.
+        with pytest.raises(StoreError):
+            store.delete_version("g/p/\x00")
+
 
 class TestSweepTmp:
     def test_sweeps_only_old_entries(self, store: ContentStore, root: Path):
@@ -203,6 +214,24 @@ class TestSweepTmp:
 
     def test_empty_is_zero(self, store: ContentStore):
         assert store.sweep_tmp(timedelta(hours=1)) == 0
+
+    def test_entry_that_disappears_during_the_walk_is_skipped(
+        self, store: ContentStore, root: Path, monkeypatch
+    ):
+        """The cleanup job or another sweep removing the same stale entry
+        concurrently must not make this sweep fail."""
+        gone = root / "_tmp" / "verdwenen"
+        gone.mkdir()
+        original_stat = Path.stat
+
+        def flaky_stat(self: Path, *args, **kwargs):
+            if self == gone:
+                raise OSError("verdwenen tussen de iterdir en de stat")
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", flaky_stat)
+        assert store.sweep_tmp(timedelta(hours=1)) == 0
+        assert gone.exists()
 
 
 class TestMeasuring:
