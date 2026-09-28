@@ -23,7 +23,10 @@ const props = defineProps<{
 }>();
 
 /** The part before the dot; the value without a dot is the selector itself. */
+/* v8 ignore start -- String.split always returns at least one element, so the
+ * fallback never actually runs; it is only here to satisfy noUncheckedIndexedAccess. */
 const selector = computed(() => props.value.split('.')[0] ?? props.value);
+/* v8 ignore stop */
 const code = computed(() => props.value.slice(selector.value.length + 1));
 
 const fullLink = computed(() => `${props.siteUrl}?key=${props.value}`);

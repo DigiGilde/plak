@@ -230,7 +230,9 @@ function openLinkForm(): void {
 }
 
 function openChangeForm(): void {
+  /* v8 ignore start -- the only caller is a button that itself renders only when `repository` is already truthy (see template), and nothing changes `repository` between that render and this synchronous click handler */
   if (!repository.value) return;
+  /* v8 ignore stop */
   formProvider.value = repository.value.provider;
   formHost.value = repository.value.provider === 'forgejo' ? repository.value.host : (forgejoHosts.value[0] ?? '');
   formOwnerRepo.value = `${repository.value.owner}/${repository.value.repo}`;
@@ -430,7 +432,9 @@ const workflowSnippet = computed(() =>
 
 const workflowHint = computed(() =>
   segments('publish.deploy.workflow.hint', ['code'], {
+    /* v8 ignore start -- workflowHint is only ever read from `v-if="repository"` in the template, so `repository.value` is always set here and the '?? "github"' fallback cannot run */
     provider: providerLabel(repository.value?.provider ?? 'github'),
+    /* v8 ignore stop */
   }),
 );
 

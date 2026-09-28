@@ -6,6 +6,12 @@ import type { Access } from '@/api/types';
 import TabAccess from './TabAccess.vue';
 import { serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
 
+/** A network failure, as opposed to `serverErrorFetch()`'s problem+json: no
+ * `ApiError` comes out of this one, so it exercises `errorText`'s fallback. */
+function networkErrorFetch(): typeof fetch {
+  return () => Promise.reject(new TypeError('network down'));
+}
+
 let backend: MockBackend;
 
 beforeEach(() => {
@@ -122,6 +128,65 @@ describe('TabAccess: the base', () => {
       'Toegang niet opgeslagen',
     );
   });
+
+  it('reports the generic failure text when saving does not even reach the server', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', networkErrorFetch());
+    fireDetailEvent(wrapper.find('[data-testid="basis-public"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    // errorText's fallback: without an ApiError there is no problem detail or
+    // title to show, so the generic saveFailedDetail text carries the notice.
+    expect(wrapper.find('nldd-notification[variant="critical"]').attributes('supporting-text')).toBe(
+      'Opslaan is niet gelukt.',
+    );
+  });
+
+  it('does nothing when the radio reports the base it already has', async () => {
+    const calls: string[] = [];
+    const real = backend.fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).endsWith('/access')) calls.push(String(options?.body ?? ''));
+      return real(input, options);
+    });
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="basis-sso"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(calls).toEqual([]);
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
+
+  it('ignores base, secret link and invitee switches touched before the data has loaded', async () => {
+    // No await here: access is still null, so every save function's guard
+    // clause has to return early rather than PUT against a site it has not
+    // read yet.
+    const wrapper = makeWrapper();
+
+    fireDetailEvent(wrapper.find('[data-testid="basis-public"]').element, 'change', {
+      checked: true,
+    });
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+      checked: false,
+    });
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+      checked: false,
+    });
+    await untilIdle();
+
+    // The backend's seeded access ('sso', keys+invitees on) survived untouched.
+    expect(backend.data.sites[0]!.access).toEqual({ base: 'sso', keys: true, invitees: true });
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
 });
 
 describe('TabAccess: the two exceptions', () => {
@@ -173,6 +238,56 @@ describe('TabAccess: the two exceptions', () => {
     expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(false);
     // The keys table is untouched: the two extras are independent.
     expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(true);
+  });
+
+  it('turns off secret links and hides their table', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(true);
+
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+      checked: false,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.access.keys).toBe(false);
+    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-notification[text="Geheime links staan uit"]').exists()).toBe(true);
+  });
+
+  it('turns on invitees when it was off, without touching the base', async () => {
+    setAccess({ base: 'site_team', keys: true, invitees: false });
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.access).toEqual({
+      base: 'site_team',
+      keys: true,
+      invitees: true,
+    });
+    expect(wrapper.find('nldd-notification[text="Genodigden staan aan"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(true);
+  });
+
+  it('does nothing when a switch reports the value it already has', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+      checked: true,
+    });
+    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.access).toEqual({ base: 'sso', keys: true, invitees: true });
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
   });
 
   it('shows no tables as long as both exceptions are off', async () => {
@@ -253,6 +368,31 @@ describe('TabAccess: states', () => {
 
     expect(wrapper.html()).toContain('Serverfout');
   });
+
+  it('shows a 404 when the site vanished from its group between the two requests', async () => {
+    // A real race (deleted from another tab just as this one loads): the
+    // invitees and keys calls still answer, but the group listing no longer
+    // has the site, so `siteRow` in TabAccess's load() comes back undefined.
+    const realFetch = backend.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await realFetch(input, init);
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/-/api/v1/groups/nldd') {
+        const body = await response.clone().json();
+        body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
+        return new Response(JSON.stringify(body), {
+          status: response.status,
+          headers: response.headers,
+        });
+      }
+      return response;
+    });
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.html()).toContain('Onbekend site');
+  });
 });
 
 describe('TabAccess: external sources', () => {
@@ -314,6 +454,39 @@ describe('TabAccess: external sources', () => {
     expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeDefined();
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Externe bronnen niet opgeslagen');
+  });
+
+  it('saves turning it back on', async () => {
+    backend.data.sites[0]!.externalSources = false;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.externalSources).toBe(true);
+    expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeDefined();
+    expect(
+      wrapper.find('nldd-notification[text="Externe bronnen opgeslagen"]').attributes(
+        'supporting-text',
+      ),
+    ).toBe('Externe bronnen staan aan.');
+  });
+
+  it('does nothing when the switch reports the value it already has', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.externalSources).toBe(true);
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
   });
 });
 
@@ -394,6 +567,19 @@ describe('TabAccess: shielding from other sites', () => {
     expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeDefined();
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Afscherming niet opgeslagen');
+  });
+
+  it('does nothing when the switch reports the value it already has', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+      checked: true,
+    });
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.sandbox).toBe(true);
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
   });
 });
 
@@ -516,6 +702,26 @@ describe('TabAccess: invitees', () => {
 
     expect(wrapper.find('[data-testid="genodigde-reviewer@voorbeeld.nl"]').exists()).toBe(false);
     expect(backend.data.invitees).toHaveLength(0);
+  });
+
+  it('rolls back a fresh invitee entirely when adding it fails outright', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', serverErrorFetch());
+    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+      value: 'nieuw@voorbeeld.nl',
+    });
+    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    // Optimistic row shown before the server answers, same as on the happy path.
+    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(true);
+    await untilIdle();
+
+    // Unlike the duplicate case, this row was never on the server's list, so
+    // the whole provisional row comes back out, not just its optimistic state.
+    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(false);
+    expect(backend.data.invitees).toHaveLength(1);
+    expect(wrapper.find('nldd-validation-item#genodigde-server').text()).toBe('Serverfout');
   });
 
   it('rolls back a failed removal and reports it', async () => {
@@ -668,6 +874,50 @@ describe('TabAccess: secret links', () => {
     );
   });
 
+  it('shows the server error on the label field when creating a key fails', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    vi.stubGlobal('fetch', serverErrorFetch());
+    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+      value: 'Demo klanten',
+    });
+    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.keys).toHaveLength(1);
+    expect(wrapper.find('[data-testid="nieuwe-sleutel"]').exists()).toBe(false);
+    const field = wrapper.find('[data-testid="sleutel-label"]');
+    expect(field.attributes('invalid')).toBeDefined();
+    expect(field.attributes('unmet')).toBe('sleutel-server');
+    expect(wrapper.find('nldd-validation-item#sleutel-server').text()).toBe('Serverfout');
+  });
+
+  it('leaves an untouched key alone when revoking another one', async () => {
+    backend.data.keys.push({
+      siteSlug: 'website',
+      groupSlug: 'nldd',
+      label: 'Tweede link',
+      selector: 'sel-def456',
+      status: 'active',
+      createdAt: backend.data.keys[0]!.createdAt,
+      expiresAt: null,
+    });
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    wrapper
+      .find('[data-testid="sleutel-intrekken-sel-abc123"]')
+      .element.dispatchEvent(new CustomEvent('select'));
+    await untilIdle();
+
+    expect(backend.data.keys[0]!.status).toBe('revoked');
+    expect(backend.data.keys[1]!.status).toBe('active');
+    expect(
+      wrapper.find('[data-testid="sleutel-sel-def456"]').find('nldd-tag').attributes('text'),
+    ).toBe('Actief');
+  });
+
   it('revokes a key from the row menu and leaves the row without a menu', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
@@ -724,6 +974,38 @@ describe('TabAccess: secret links', () => {
     const notice = wrapper.find('[data-testid="nieuwe-sleutel-melding"]');
     expect(notice.text()).toBe('Link gekopieerd.');
     expect(notice.attributes('role')).toBe('status');
+  });
+
+  it('falls back to the DOM value when the field fires a plain input event without a detail', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const field = wrapper.find('[data-testid="sleutel-label"]').element as HTMLInputElement & {
+      value: string;
+    };
+    // Not every input source is the nldd wrapper's CustomEvent: a plain
+    // native 'input' event carries the value on the target instead.
+    field.value = 'Van het element zelf';
+    field.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(backend.data.keys[1]!.label).toBe('Van het element zelf');
+  });
+
+  it('falls back to an empty string when neither the detail nor the target carry a value', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const field = wrapper.find('[data-testid="sleutel-label"]').element;
+    // Neither a detail nor a DOM value property: inputValue lands on ''.
+    field.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await untilIdle();
+
+    // Same as submitting without ever touching the field: the server makes up
+    // a date-based label because the trimmed value is empty.
+    expect(backend.data.keys[1]!.label).toMatch(/^Link van \d{1,2} /);
   });
 
   it('points to the link itself when the clipboard is denied', async () => {
