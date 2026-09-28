@@ -231,6 +231,7 @@ class TestSweepTmp:
 
         monkeypatch.setattr(Path, "stat", flaky_stat)
         assert store.sweep_tmp(timedelta(hours=1)) == 0
+        monkeypatch.undo()
         assert gone.exists()
 
 
