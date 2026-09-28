@@ -708,6 +708,7 @@ class TestLogoutLookupAndRevokeAll:
             assert await cli.session_for_logout(db, access_token=f"plakcli_{selector}_{'0' * 64}") is None
             assert await cli.session_for_logout(db, access_token="rommel") is None
             assert await cli.session_for_logout(db, refresh_token=f"plakclr_{'a' * 16}_{'b' * 64}") is None
+            assert await cli.session_for_logout(db, refresh_token="rommel") is None
             assert await cli.session_for_logout(db) is None
 
     async def test_a_current_or_rotated_refresh_token_names_its_session(self, factory):
