@@ -29,6 +29,7 @@ import ErrorBanner from '@/components/ErrorBanner.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { resolveDroppedFile, useDropState, useWindowDropGuard } from '@/composables/fileDrop';
+import { goToDone } from '@/composables/publishedMark';
 import { mayCreateSiteIn } from '@/composables/roles';
 import { crumbOverview, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t, type MessageKey } from '@/i18n';
@@ -129,7 +130,7 @@ function onSiteCreated(site: Site): void {
 }
 
 function onPublished(site: Site): void {
-  void router.push(`/${site.groupSlug}/${site.slug}/done`);
+  void goToDone(router, site.groupSlug, site.slug);
 }
 
 const { newSite } = useAddActions();

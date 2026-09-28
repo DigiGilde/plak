@@ -12,7 +12,7 @@
  * buttons.
  */
 import { computed, onMounted, ref, watch, watchEffect } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import * as plak from '@/api/plak';
 import { ApiError } from '@/api/client';
@@ -20,6 +20,7 @@ import type { Me, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { takePublishedMark } from '@/composables/publishedMark';
 import { groupPath } from '@/composables/slug';
 import SecretLink from '@/components/site/SecretLink.vue';
 import { accessSummary, formatTimestamp, siteUrl } from '@/format';
@@ -32,6 +33,7 @@ interface Address {
 }
 
 const route = useRoute();
+const router = useRouter();
 const groupSlug = computed(() => String(route.params.group ?? ''));
 const siteSlug = computed(() => String(route.params.site ?? ''));
 
@@ -67,6 +69,7 @@ async function load(): Promise<void> {
   keyValue.value = null;
   keyError.value = null;
   keyRequested = false;
+  const fromPublish = takePublishedMark(router);
   try {
     const [detail, loggedIn] = await Promise.all([plak.group(groupSlug.value), fetchCurrentMember()]);
     // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
@@ -87,7 +90,7 @@ async function load(): Promise<void> {
       return;
     }
     site.value = found;
-    if (found.access.keys) {
+    if (found.access.keys && fromPublish) {
       // Not awaited: the address on this screen does not depend on it, and
       // it should not hold up the loading indicator.
       void ensureKeyLink();
@@ -104,6 +107,8 @@ async function load(): Promise<void> {
  * publishing a site whose only way in is the secret link leaves it online but
  * unreachable: no key exists yet, and this is the only screen that can still
  * show its value (TabAccess shows it too, but only for keys created there).
+ * Only on the visit the publish flow leads here (publishedMark.ts), so a link
+ * to this route cannot re-create a key an admin has just revoked.
  */
 async function ensureKeyLink(): Promise<void> {
   /* v8 ignore start -- a narrow race guard (two overlapping load() passes

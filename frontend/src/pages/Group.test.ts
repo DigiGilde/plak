@@ -12,6 +12,7 @@ import { serverErrorFetch, untilIdle, fireDetailEvent } from '@/components/site/
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import { _resetAddActions, useAddActions } from '@/composables/addActions';
+import { takePublishedMark } from '@/composables/publishedMark';
 
 import Group from './Group.vue';
 
@@ -407,6 +408,8 @@ describe('Group: put a site online', () => {
       backend.data.versions.some((v) => v.siteSlug === 'documentatie' && v.target === 'live'),
     ).toBe(true);
     expect(router.currentRoute.value.fullPath).toBe('/nldd/documentatie/done');
+    // Marked as the publish flow, so the result screen may make a secret link.
+    expect(takePublishedMark(router)).toBe(true);
   });
 
   it('puts a created site on the Sites tab immediately', async () => {
