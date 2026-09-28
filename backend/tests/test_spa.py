@@ -34,6 +34,7 @@ from plak.platform.spa import (
     MESSAGE_SPA_MISSING,
     SPA_PAGE_PATHS,
     SpaMiddleware,
+    _with_query,
     admin_csp,
     is_spa_path,
     spa_headers,
@@ -366,6 +367,30 @@ class TestMissingSpa:
             response = await client.get("/")
         assert response.status_code == 200
         assert response.content == INDEX_HTML
+
+    async def test_index_that_escapes_the_spa_dir_gives_503(self, tmp_path: Path) -> None:
+        """spa_available() checks index.html with is_file(), which follows a
+        symlink; StaticFiles.lookup_path refuses one that resolves outside the
+        served directory. So a requested asset that is also missing falls back
+        to an index.html that spa_available() thought was there, and the
+        fallback lookup fails too."""
+        dist = tmp_path / "dist"
+        dist.mkdir()
+        buiten = tmp_path / "buiten.html"
+        buiten.write_bytes(INDEX_HTML)
+        os.symlink(buiten, dist / "index.html")
+        async with _client(dist) as client:
+            response = await client.get("/onbekend")
+        assert response.status_code == 503
+        assert response.text == MESSAGE_SPA_MISSING
+
+
+class TestWithQuery:
+    def test_appends_the_query_string(self) -> None:
+        assert _with_query("/aurora", {"query_string": b"tab=leden"}) == "/aurora?tab=leden"
+
+    def test_without_a_query_string_stays_bare(self) -> None:
+        assert _with_query("/aurora", {"query_string": b""}) == "/aurora"
 
 
 def _settings(tmp_path: Path, spa_path: Path) -> Settings:
