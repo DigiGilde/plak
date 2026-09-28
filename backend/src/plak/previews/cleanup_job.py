@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ from plak.models.publication import Preview, Version, VersionTarget
 
 TIMESTAMP_DEFAULT = time(3, 0)
 TMP_OLDER_THAN_DEFAULT = timedelta(hours=24)
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -131,7 +134,13 @@ async def _run_daily(
             await asyncio.wait_for(stop.wait(), timeout=wait_time)
         if stop.is_set():
             break
-        await delete_expired(factory, store, datetime.now(tz=UTC), tmp_older_than=tmp_older_than)
+        try:
+            await delete_expired(factory, store, datetime.now(tz=UTC), tmp_older_than=tmp_older_than)
+        except Exception:
+            # A transient failure (DB hiccup, ...) must not end the loop: the
+            # process would then keep running with no sweep for the rest of
+            # its life. Log loud, wait for the next scheduled run.
+            _logger.exception("Dagelijkse opschoning mislukt, volgende poging op de volgende ronde")
 
 
 @asynccontextmanager
