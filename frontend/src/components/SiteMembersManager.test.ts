@@ -604,6 +604,17 @@ describe('SiteMembersManager (nothing picked)', () => {
     wrapper.unmount();
   });
 
+  it('refuses an outright empty submit, nothing ever typed', async () => {
+    const add = vi.fn();
+    const wrapper = mountComponent({ add });
+
+    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await flushPromises();
+
+    expect(add).not.toHaveBeenCalled();
+    expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
+  });
+
   it('still submits a chosen suggestion', async () => {
     const search = vi.fn().mockResolvedValue([suggestionOf()]);
     const add = vi.fn().mockResolvedValue(siteOnly);
@@ -709,6 +720,57 @@ describe('SiteMembersManager (error)', () => {
     expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
       'Dit lid heeft al een eigen rol op deze site. Die rol wijzig je in het menu achter de regel van dit lid.',
     );
+  });
+
+  it('puts the identifier back in the field on retry, and dismisses the notice', async () => {
+    const add = vi.fn().mockRejectedValue(
+      new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }),
+    );
+    const wrapper = mountComponent({ add });
+
+    await fillInAndSubmit(wrapper, 'onbekend@voorbeeld.nl');
+    await flushPromises();
+    expect(wrapper.find('nldd-notification').exists()).toBe(true);
+
+    await wrapper.find('nldd-notification nldd-button[slot="actions"]').trigger('click');
+
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
+    expect(comboBox(wrapper).attributes('value')).toBe('onbekend@voorbeeld.nl');
+  });
+
+  it('dismisses a notice on its own dismiss, without retrying', async () => {
+    const setRole = vi
+      .fn()
+      .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
+    const wrapper = mountComponent({ members: [both], setRole });
+
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-zoe@voorbeeld.nl-editor');
+    expect(wrapper.find('nldd-notification').exists()).toBe(true);
+
+    await wrapper.find('nldd-notification').trigger('dismiss');
+
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
+});
+
+describe('SiteMembersManager (the bubbled native event)', () => {
+  it('ignores the inner input firing its own bare input event, without a detail', () => {
+    const wrapper = mountComponent({});
+
+    comboBox(wrapper).element.dispatchEvent(new Event('input'));
+
+    expect(wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text')).not.toBe(
+      'Zoeken...',
+    );
+  });
+
+  it('ignores the inner input firing its own bare change event, without a detail', async () => {
+    const wrapper = mountComponent({});
+    await typeIn(wrapper, 'ver');
+
+    comboBox(wrapper).element.dispatchEvent(new Event('change'));
+
+    expect(comboBox(wrapper).attributes('value')).toBeFalsy();
   });
 });
 

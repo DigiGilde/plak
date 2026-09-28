@@ -12,6 +12,13 @@ function typeInText(wrapper: ReturnType<typeof mount>, selector: string, value: 
   el.dispatchEvent(new CustomEvent('input', { detail: { value: value } }));
 }
 
+/** As a real native `<input>` reports it: no detail, the value sits on the field. */
+function typeNative(wrapper: ReturnType<typeof mount>, selector: string, value: string): void {
+  const el = wrapper.find(selector).element as HTMLElement & { value?: string };
+  el.value = value;
+  el.dispatchEvent(new Event('input'));
+}
+
 const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false } };
 
 // `Mock` and not `ReturnType<typeof vi.fn>`: since vitest 4 that ReturnType
@@ -34,6 +41,16 @@ describe('NewGroupSheet', () => {
     expect(wrapper.find('nldd-text-field[name="slug"]').element.getAttribute('value')).toBe(
       'team-digitaal',
     );
+  });
+
+  it('stops deriving the slug once it has been edited by hand', async () => {
+    const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
+
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'eigen-slug');
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Digitaal');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('eigen-slug');
   });
 
   it('calls create with name and slug and emits created on success', async () => {
@@ -125,6 +142,99 @@ describe('NewGroupSheet', () => {
       'bestaat al een groep',
     );
     expect(wrapper.emitted('update:open')).toBeUndefined();
+  });
+
+  it('shows a server error other than a duplicate slug as a banner', async () => {
+    const create = vi.fn().mockRejectedValue(
+      new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }),
+    );
+    const wrapper = mountComponent(create);
+
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team');
+    await wrapper.find('nldd-form').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-banner').attributes('text')).toBe('Serverfout');
+    expect(wrapper.emitted('update:open')).toBeUndefined();
+  });
+
+  it('closes without creating when cancel is pressed', async () => {
+    const create = vi.fn();
+    const wrapper = mountComponent(create);
+
+    await wrapper.find('nldd-button[variant="secondary"]').trigger('click');
+
+    expect(create).not.toHaveBeenCalled();
+    expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
+  });
+
+  it('resets the form and closes when the sheet closes itself', async () => {
+    const wrapper = mountComponent(vi.fn());
+
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    await flushPromises();
+    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('Team');
+
+    await wrapper.find('nldd-sheet').trigger('close');
+
+    expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
+    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('');
+  });
+
+  it('falls back to the field value on a plain native input event, name field', async () => {
+    const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
+
+    typeNative(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('Team');
+  });
+
+  it('falls back to the field value on a plain native input event, slug field', async () => {
+    const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
+
+    typeNative(wrapper, 'nldd-text-field[name="slug"]', 'niet-geldig-handmatig');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe(
+      'niet-geldig-handmatig',
+    );
+  });
+
+  it('ignores a second submit while the first is still in flight', async () => {
+    let resolveCreate: (group: Group) => void;
+    const create = vi.fn().mockReturnValue(
+      new Promise<Group>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const wrapper = mountComponent(create);
+
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team');
+    await wrapper.find('nldd-form').trigger('submit');
+    await wrapper.find('nldd-form').trigger('submit');
+    resolveCreate!(newGroup);
+    await flushPromises();
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the title when a 409 refusal carries no detail', async () => {
+    const create = vi.fn().mockRejectedValue(
+      new ApiError({ type: 'about:blank', title: 'Groep bestaat al', status: 409 }),
+    );
+    const wrapper = mountComponent(create);
+
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'NLDD');
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'nldd');
+    await wrapper.find('nldd-form').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-validation-item#groep-slug-server').text()).toContain(
+      'Groep bestaat al',
+    );
   });
 
   it('teleports the sheet to document.body and cleans it up on unmount', () => {

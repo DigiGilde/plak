@@ -205,6 +205,12 @@ describe('GroupMembersManager (filled)', () => {
     expect(cellTexts(rows[0]!)).toEqual(['lid@voorbeeld.nl', 'Lezer']);
   });
 
+  it('shows the address in the name column when the account carries no name', () => {
+    const wrapper = mountComponent({ members: [memberWith({ name: '', identifier: 'kaal@voorbeeld.nl' })] });
+
+    expect(cellTexts(pageRows(wrapper)[0]!)).toEqual(['kaal@voorbeeld.nl', 'Lezer']);
+  });
+
   it('puts the email address under the name, not in a column next to it', () => {
     const wrapper = mountComponent({
       members: [memberWith({ name: 'Ada Vermeer', email: 'ada@voorbeeld.nl' })],
@@ -576,6 +582,28 @@ describe('GroupMembersManager (changing role)', () => {
     );
     expect(wrapper.emitted('roleChanged')).toBeUndefined();
   });
+
+  it('dismisses a notice when the notification asks to close itself', async () => {
+    const setRole = vi.fn().mockRejectedValue(
+      new ApiError({
+        type: 'about:blank',
+        title: 'Laatste beheerder',
+        status: 409,
+        detail: 'De groep moet minstens één beheerder houden.',
+      }),
+    );
+    const wrapper = mountComponent({
+      members: [memberWith({ name: 'Ada Vermeer', role: 'admin' })],
+      setRole,
+    });
+
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-reader');
+    expect(wrapper.find('nldd-notification').exists()).toBe(true);
+
+    await wrapper.find('nldd-notification').trigger('dismiss');
+
+    expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
 });
 
 describe('GroupMembersManager (adding)', () => {
@@ -714,6 +742,17 @@ describe('GroupMembersManager (adding)', () => {
 });
 
 describe('GroupMembersManager (nothing picked)', () => {
+  it('refuses an outright empty submit, nothing ever typed', async () => {
+    const add = vi.fn();
+    const wrapper = mountComponent({ add });
+
+    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await flushPromises();
+
+    expect(add).not.toHaveBeenCalled();
+    expect(comboBox(wrapper).attributes('invalid')).toBeDefined();
+  });
+
   it('refuses what was only typed, name or address, without calling the callback', async () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
@@ -873,6 +912,27 @@ describe('GroupMembersManager (error)', () => {
     expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
       'Dit lid zit al in de groep. De rol wijzig je in het menu achter de regel van dit lid.',
     );
+  });
+});
+
+describe('GroupMembersManager (the bubbled native event)', () => {
+  it('ignores the inner input firing its own bare input event, without a detail', () => {
+    const wrapper = mountComponent({});
+
+    comboBox(wrapper).element.dispatchEvent(new Event('input'));
+
+    expect(wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text')).not.toBe(
+      'Zoeken...',
+    );
+  });
+
+  it('ignores the inner input firing its own bare change event, without a detail', async () => {
+    const wrapper = mountComponent({});
+    await typeIn(wrapper, 'ver');
+
+    comboBox(wrapper).element.dispatchEvent(new Event('change'));
+
+    expect(comboBox(wrapper).attributes('value')).toBeFalsy();
   });
 });
 

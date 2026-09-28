@@ -105,6 +105,11 @@ function file(name: string): File {
   return new File(['<h1>hoi</h1>'], name, { type: 'text/html' });
 }
 
+/** Big enough to exercise the kB/MB step-up in the size shown beside the chip. */
+function bigFile(name: string, bytes: number): File {
+  return new File([new Uint8Array(bytes)], name, { type: 'application/zip' });
+}
+
 async function submit(wrapper: Wrapper): Promise<void> {
   await wrapper.find('nldd-form').trigger('submit');
   await flushPromises();
@@ -351,6 +356,20 @@ describe('PublishSheet (the group)', () => {
     expect(textOf(wrapper, 'publiceer-adres')).toContain('/team/site/');
   });
 
+  it('keeps the chosen group when the running list still contains it', async () => {
+    const { wrapper } = mountComponent({ groups: [NLDD, TEAM] });
+
+    const select = wrapper.find('nldd-dropdown select');
+    (select.element as HTMLSelectElement).value = 'team';
+    await select.trigger('change');
+
+    await wrapper.setProps({ groups: [NLDD, TEAM, FRESH] });
+    choose(wrapper, file('site.zip'));
+    await flushPromises();
+
+    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team/site/');
+  });
+
   it('does not let the flow strand without a group, but creates one', async () => {
     const { wrapper, actions } = mountComponent({ groups: [] });
 
@@ -524,6 +543,21 @@ describe('PublishSheet (publishing)', () => {
     const accessOrder = actions.setAccess.mock.invocationCallOrder[0];
     const publishOrder = actions.publish.mock.invocationCallOrder[0];
     expect(accessOrder).toBeLessThan(publishOrder);
+  });
+
+  it('stops before publishing when setting the chosen access fails', async () => {
+    const setAccess = vi.fn().mockRejectedValue(
+      new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }),
+    );
+    const { wrapper, actions } = mountComponent({ groups: [NLDD], setAccess });
+
+    await wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').trigger('change');
+    choose(wrapper, file('site.zip'));
+    await flushPromises();
+    await submit(wrapper);
+
+    expect(actions.publish).not.toHaveBeenCalled();
+    expect(wrapper.find('nldd-banner').attributes('text')).toBe('Serverfout');
   });
 
   it('publishes with a secret link in one go, without a detour via the Toegang tab', async () => {
@@ -1032,6 +1066,63 @@ describe('PublishSheet (dragging)', () => {
     el.dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
     expect(wrapper.find('[data-testid="publiceer-sleep-actief"]').exists()).toBe(false);
+  });
+
+  it('shows the size in kB, then MB, once it steps past the next unit', async () => {
+    const { wrapper } = mountComponent();
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([bigFile('groot.zip', 2_500)])));
+    await flushPromises();
+    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('2,5 kB');
+
+    await wrapper.find('[data-testid="publiceer-bestand-gekozen"]').trigger('dismiss');
+    sheetEl(wrapper).dispatchEvent(
+      dragEvent('drop', fakeDataTransfer([bigFile('reusachtig.zip', 2_500_000)])),
+    );
+    await flushPromises();
+    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('2,5 MB');
+  });
+
+  it('ignores a drop that carries no file at all, such as dragged text', async () => {
+    const { wrapper } = mountComponent();
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publiceer-bestand-gekozen"]').exists()).toBe(false);
+  });
+
+  it('prevents the default on dragover, so a drop can land on the sheet', async () => {
+    const { wrapper } = mountComponent();
+    const event = dragEvent('dragover', fakeDataTransfer([file('mijn-site.zip')])) as DragEvent;
+
+    sheetEl(wrapper).dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('dismisses the drop error banner on its own dismiss', async () => {
+    const { wrapper } = mountComponent();
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="publiceer-sleep-fout"]').trigger('dismiss');
+
+    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(false);
+  });
+
+  it('lets a second drop win over the async handoff of the first, without racing it', async () => {
+    const { wrapper } = mountComponent();
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('eerste.zip')])));
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('tweede.zip')])));
+    for (let i = 0; i < 5; i += 1) await flushPromises();
+
+    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Eerste');
+    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('tweede.zip');
   });
 
   it('fills the file right away when the sheet opens with a file already chosen', async () => {
