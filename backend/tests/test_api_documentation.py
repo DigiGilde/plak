@@ -19,6 +19,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
+from plak import messages
 from plak.api.docs import (
     _ASSETS,
     PATH_PARAMETERS,
@@ -32,6 +33,7 @@ from plak.api.docs import (
     docs_asset,
 )
 from plak.api.errors import (
+    _CODE_RE,
     FIELD_INDEX_CANDIDATES,
     PROBLEM_CONTENT_TYPE,
     PROBLEM_SCHEMA_NAME,
@@ -434,6 +436,20 @@ class TestErrorExamples:
 
     def test_a_word_without_lying_dash_is_no_error_code(self) -> None:
         assert "code" not in error_example(422, "Stuur het verzoek als `POST`.")
+
+    def test_every_documented_code_exists_in_the_messages_catalogue(self, schema) -> None:
+        # Every backticked SCREAMING_SNAKE token in a response description is
+        # read by error_example() as a code; one that the catalogue does not
+        # know cannot have been rendered in a real answer, so it is a typo.
+        known_codes = {messages.code_of(key) for key in messages.NL if not messages.is_fragment(key)}
+        for path, path_part in schema["paths"].items():
+            for method_, operation in path_part.items():
+                if not isinstance(operation, dict):
+                    continue
+                for status, response in operation.get("responses", {}).items():
+                    description = response.get("description", "")
+                    for code in _CODE_RE.findall(description):
+                        assert code in known_codes, f"{method_} {path} {status}: `{code}`"
 
 
 class TestSchemaEditsOnEdgeCases:
