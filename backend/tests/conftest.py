@@ -123,6 +123,9 @@ _DATA_TABLES = (
     "group_members, groups, members"
 )
 
+# The tables whose BEFORE TRUNCATE guard (0001_base) the cleanup switches off.
+_TRUNCATE_GUARDED = ("audit_log_entries", "audit_log_chain_heads", "content_viewers")
+
 # Fixtures that use the migrated test database; when a test asks for one of
 # them we clean up beforehand. That way container-free tests (test_config,
 # test_constants) still leave the container alone.
@@ -135,9 +138,10 @@ async def _clean_db(request: pytest.FixtureRequest) -> AsyncIterator[None]:
 
     Needed because some tests really commit (audit rows, member rows) through
     their own SQLAlchemy session factories in the session-scoped container;
-    those commits would otherwise leak into other test files. TRUNCATE fires
-    no ON DELETE triggers, so the append-only auditlog triggers do not block
-    it.
+    those commits would otherwise leak into other test files. The audit tables
+    refuse TRUNCATE, so their guards are switched off for this one
+    transaction, the way the owner of the schema can; DDL is transactional,
+    so no other session ever sees them off.
     """
     if not (_DB_FIXTURES & set(request.fixturenames)):
         yield
@@ -147,7 +151,12 @@ async def _clean_db(request: pytest.FixtureRequest) -> AsyncIterator[None]:
     )
     connection = await asyncpg.connect(dsn)
     try:
-        await connection.execute(f"TRUNCATE {_DATA_TABLES} RESTART IDENTITY CASCADE")
+        async with connection.transaction():
+            for table in _TRUNCATE_GUARDED:
+                await connection.execute(f"ALTER TABLE {table} DISABLE TRIGGER {table}_no_truncate")
+            await connection.execute(f"TRUNCATE {_DATA_TABLES} RESTART IDENTITY CASCADE")
+            for table in _TRUNCATE_GUARDED:
+                await connection.execute(f"ALTER TABLE {table} ENABLE TRIGGER {table}_no_truncate")
     finally:
         await connection.close()
     yield

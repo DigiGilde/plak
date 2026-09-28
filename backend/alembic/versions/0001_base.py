@@ -254,6 +254,9 @@ BEFORE INSERT ON audit_log_entries
 FOR EACH ROW EXECUTE FUNCTION audit_log_chain();
 """
 
+# The tables whose rows only go through a guarded DELETE (or not at all).
+_TRUNCATE_GUARDED = ("audit_log_entries", "audit_log_chain_heads", "content_viewers")
+
 _CHAIN_HEAD_GUARD_TRIGGER = """
 CREATE TRIGGER audit_log_chain_head_guard
 BEFORE INSERT OR UPDATE OR DELETE ON audit_log_chain_heads
@@ -760,6 +763,24 @@ def upgrade() -> None:
         """
     )
 
+    # TRUNCATE fires no row trigger, so every guard above would let it empty
+    # the table in one command. Like the others, this stops the app and an
+    # off-hand command, not an owner who disables it first.
+    op.execute(
+        """
+        CREATE FUNCTION audit_log_refuse_truncate() RETURNS trigger AS $$
+        BEGIN
+            RAISE EXCEPTION '%: TRUNCATE niet toegestaan, rijen gaan alleen weg na hun bewaartermijn', TG_TABLE_NAME;
+        END;
+        $$ LANGUAGE plpgsql
+        """
+    )
+    for table in _TRUNCATE_GUARDED:
+        op.execute(
+            f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} "
+            "FOR EACH STATEMENT EXECUTE FUNCTION audit_log_refuse_truncate()"
+        )
+
     op.execute(_GUARD_FUNCTION)
     op.execute(_GUARD_TRIGGER)
 
@@ -770,6 +791,9 @@ def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS ck_groups_keep_one_admin ON group_members")
     op.execute("DROP FUNCTION IF EXISTS guard_last_group_admin()")
 
+    for table in _TRUNCATE_GUARDED:
+        op.execute(f"DROP TRIGGER IF EXISTS {table}_no_truncate ON {table}")
+    op.execute("DROP FUNCTION IF EXISTS audit_log_refuse_truncate()")
     op.execute("DROP TRIGGER IF EXISTS content_viewer_delete_after_retention ON content_viewers")
     op.execute("DROP FUNCTION IF EXISTS content_viewer_delete_after_retention()")
     op.execute("DROP TRIGGER IF EXISTS audit_log_delete_after_retention ON audit_log_entries")
