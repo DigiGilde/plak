@@ -35,20 +35,15 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     coverage: {
-      // A ratchet, not an ambition: the floor is what the suite measures
-      // today, so coverage cannot quietly drop. Raise it when the
-      // measurement rises.
-      //
-      // The floor dropped from 97/91/90/97 on the move to vitest 4, which
-      // measures the same suite differently: coverage-v8 now always remaps
-      // through the AST instead of the source map, so a statement is a
-      // statement and no longer a v8 byte range (10494 counted statements
-      // became 3373). No test changed; only the denominator did.
+      // Every line and branch is tested or carries a v8 ignore with its
+      // reason (CLAUDE.md); anything below 100 fails the run. Only
+      // `/* v8 ignore start */ ... /* v8 ignore stop */` works in this
+      // setup, `next` and `if` are silently ignored.
       thresholds: {
-        statements: 93,
-        branches: 87,
-        functions: 92,
-        lines: 95,
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
       },
     },
   },
