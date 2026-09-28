@@ -789,6 +789,13 @@ def _unpack_zip(source: Path, destination: Destination, limits: Limits, base: tu
         counter = _EntryCounter(limits)
         for info in archive.infolist():
             counter.count()
+            # zipfile truncates a name at the first NUL byte, so an entry
+            # declared `index.html\0.bak` arrives as `index.html` and the
+            # archive listing disagrees with what lands on disk.
+            # `orig_filename` is the only place where that byte is still
+            # visible.
+            if "\x00" in info.orig_filename:
+                raise BundleError("NULL_BYTE", params={"path": info.orig_filename})
             scan.see(info.filename, info.is_dir())
         loop = _start_loop(scan, limits)
 

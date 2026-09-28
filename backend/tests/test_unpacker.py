@@ -208,6 +208,19 @@ class TestPathValidation:
             _safe_segments("a\x00b")
         assert reason_of(error) == "NULL_BYTE"
 
+    def test_zip_null_byte_in_the_name_refused(self, unpack: UnpackFn):
+        """zipfile cuts an entry name off at the null byte too, in both the
+        writer and the reader, so the archive has to be patched by hand to
+        carry one. `orig_filename` still holds it, and that is what is refused
+        on."""
+        marker = "\x7f"
+        data = make_zip({"index.html": b"<h1>hoi</h1>", f"index.html{marker}.bak": b"kwaad"})
+        data = data.replace(f"index.html{marker}.bak".encode(), b"index.html\x00.bak")
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", data)
+        assert reason_of(error) == "NULL_BYTE"
+        assert "index.html\\x00.bak" in str(error.value)
+
     def test_tar_null_byte_in_the_name_refused(self, unpack: UnpackFn):
         """tarfile cuts a member name off at the null byte before the unpacker
         sees it, so an entry declared `index.html\\0.bak` would quietly become
