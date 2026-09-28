@@ -6,6 +6,7 @@ from helpers_oidc."""
 from __future__ import annotations
 
 from typing import Annotated
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -19,13 +20,15 @@ from helpers_oidc import (
     set_session_cookie,
 )
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from plak.api.errors import register_error_handlers
-from plak.auth.members import REASON_DEACTIVATED, require_active_member
+from plak.auth.members import REASON_DEACTIVATED, get_or_create_member, require_active_member
+from plak.auth.sessions import SessionStore
 from plak.db import make_session_factory
-from plak.models.identity import Member
+from plak.models.identity import Member, MemberStatus, PlatformRole
 
 BOOTSTRAP_SUB = "bootstrap-beheerder-sub"
 
@@ -239,3 +242,39 @@ class TestBootstrap:
         members = await _members(factory)
         assert members[0].platform_role.value == "member"
         assert members[0].status.value == "active"
+
+
+class TestConcurrentFirstVisit:
+    async def test_concurrent_insert_falls_back_to_the_existing_row(self, idp, db_environment):
+        """Two concurrent first visits: the unique constraint on sso_subject
+        wins one of them; the loser adopts the record the winner created,
+        instead of raising or creating a duplicate."""
+        _, factory = db_environment
+        store = SessionStore()
+        session = store.create_session(
+            sub="race-sub", email="race@example.nl", email_verified=True, acr="urn:acr:hoog"
+        )
+
+        async with factory() as db:
+            async def racing_commit() -> None:
+                # Simulates a second, concurrent request whose insert commits
+                # first: our own db.commit() below fails on the unique
+                # constraint instead.
+                async with factory() as other:
+                    other.add(
+                        Member(
+                            sso_subject="race-sub",
+                            email="",
+                            platform_role=PlatformRole.MEMBER,
+                            status=MemberStatus.ACTIVE,
+                        )
+                    )
+                    await other.commit()
+                raise IntegrityError("insert", {}, Exception("duplicate key value violates unique constraint"))
+
+            db.commit = AsyncMock(side_effect=racing_commit)
+            member = await get_or_create_member(db, session, "")
+
+        assert member.sso_subject == "race-sub"
+        members = await _members(factory)
+        assert len(members) == 1

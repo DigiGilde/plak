@@ -235,7 +235,7 @@ class OidcClient:
             response = await self._http.get(meta["jwks_uri"])
             response.raise_for_status()
             self._keyset = JsonWebKey.import_key_set(response.json())
-        except OidcError:
+        except OidcError:  # pragma: no cover - nothing above raises OidcError, only httpx/authlib errors
             raise
         except Exception as error:
             raise OidcError(f"JWKS niet op te halen: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE) from error
