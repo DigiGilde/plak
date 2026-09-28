@@ -76,7 +76,8 @@ async def _truncate_as_owner(connection: asyncpg.Connection, *tables: str) -> No
 
 async def _rewrite_and_recompute(connection: asyncpg.Connection, entry_id: uuid.UUID) -> None:
     """What the verifier cannot catch: the row is changed and its hash is
-    recomputed with the database's own function, so the chain still adds up."""
+    recomputed with the database's own function, so the chain still adds up.
+    A thorough owner moves the registered head along when the row is one."""
     await _without_guards(
         connection,
         """
@@ -90,6 +91,19 @@ async def _rewrite_and_recompute(connection: asyncpg.Connection, entry_id: uuid.
         """,
         entry_id,
     )
+    await connection.execute("ALTER TABLE audit_log_chain_heads DISABLE TRIGGER audit_log_chain_head_guard")
+    try:
+        await connection.execute(
+            """
+            UPDATE audit_log_chain_heads AS head
+            SET chain_hash = entry.chain_hash
+            FROM audit_log_entries AS entry
+            WHERE entry.id = $1 AND head.chain_shard = entry.chain_shard AND head.chain_seq = entry.chain_seq
+            """,
+            entry_id,
+        )
+    finally:
+        await connection.execute("ALTER TABLE audit_log_chain_heads ENABLE TRIGGER audit_log_chain_head_guard")
 
 
 async def _rewrite_content_only(connection: asyncpg.Connection, shard: int, seq: int) -> None:
@@ -299,9 +313,8 @@ async def test_a_rewrite_the_chain_cannot_see_shows_up_against_the_publication(
 async def test_rows_dropped_off_the_end_show_up_against_the_publication(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """Also invisible to the chain: nothing is left that pointed at the rows.
-    The chain's head still stands where it was, so the published head row is
-    missing before its deadline."""
+    """The chain's head still stands where it was, so the published head row is
+    missing before its deadline; the walk sees the same from the head alone."""
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
@@ -310,7 +323,9 @@ async def test_rows_dropped_off_the_end_show_up_against_the_publication(
         connection, "DELETE FROM audit_log_entries WHERE chain_shard = $1 AND chain_seq = $2", shard, seq
     )
 
-    assert await chain.verify(migrated_dsn) == []
+    assert [(one.shard, one.seq, one.reason) for one in await chain.verify(migrated_dsn)] == [
+        (shard, seq, chain.TAIL_MISSING)
+    ]
     findings = await checkpoint.compare(migrated_dsn, published)
     assert [(one.shard, one.seq, one.reason, one.serious) for one in findings] == [
         (shard, seq, checkpoint.ROW_MISSING, True)
@@ -369,15 +384,18 @@ async def test_a_head_that_aged_out_is_not_an_accusation(
 async def test_an_emptied_table_shows_up_against_the_publication(
     migrated_dsn: str, connection: asyncpg.Connection
 ) -> None:
-    """Emptied in one command by the owner, the chain has nothing left to say.
-    The heads stay behind, so every published head row is missing before its
-    deadline."""
+    """Emptied in one command by the owner. The heads stay behind, so every
+    published head row is missing before its deadline, and the walk finds
+    every registered chain empty before its time."""
     for index in range(10):
         await _insert(connection, action=f"test_actie_{index}")
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
     await _truncate_as_owner(connection, "audit_log_entries")
 
-    assert await chain.verify(migrated_dsn) == []
+    walk = await chain.verify(migrated_dsn)
+    assert {(one.shard, one.reason) for one in walk} == {
+        (head.shard, chain.TAIL_MISSING) for head in published.heads
+    }
     findings = await checkpoint.compare(migrated_dsn, published)
     missing = [one for one in findings if one.reason == checkpoint.ROW_MISSING]
     assert {one.shard for one in missing} == {head.shard for head in published.heads}
@@ -392,6 +410,9 @@ async def test_emptied_heads_show_up_as_a_shortened_chain(
     published = checkpoint.parse((await checkpoint.collect(migrated_dsn)).as_json())
     await _truncate_as_owner(connection, "audit_log_entries", "audit_log_chain_heads")
 
+    # With the heads gone too, the walk has nothing left to hold anything
+    # against; only the published line does.
+    assert await chain.verify(migrated_dsn) == []
     findings = await checkpoint.compare(migrated_dsn, published)
     shortened = [one for one in findings if one.reason == checkpoint.CHAIN_SHORTENED]
     assert {one.shard for one in shortened} == {head.shard for head in published.heads}

@@ -15,13 +15,15 @@ hash. Only an outside verifier that kept an earlier chain hash of its own can
 catch that; against the schema owner this chain raises the cost of tampering
 and nothing more.
 
-Rows dropped from either end of a chain are invisible here for the same reason
-a missing first or last page is: nothing that is left points at them. At the
-front that is not even suspicious, because the retention purge removes the
-oldest rows of a chain as a matter of routine, so a chain that starts above
-position 1 is the normal state of a system that has been running for ninety
-days. Only a head published before those rows went (audit/checkpoint.py) can
-tell a purge from a truncation.
+Rows dropped from the front of a chain are invisible here for the same reason
+a missing first page is: nothing that is left points at them. That is not even
+suspicious, because the retention purge removes the oldest rows of a chain as
+a matter of routine, so a chain that starts above position 1 is the normal
+state of a system that has been running for ninety days. Only a head published
+before those rows went (audit/checkpoint.py) can tell a purge from a
+truncation. The newest end is different: audit_log_chain_heads registers where
+every chain stands, so the newest surviving row is held against that, and a
+chain with no rows left is only in order once its head has outlived its term.
 
 Every row carries its predecessor's hash (chain_prev_hash), so each row's own
 hash is recomputed from the row alone, the oldest surviving one included, and
@@ -50,6 +52,8 @@ SEQUENCE_GAP = "sequence_gap"
 HASH_MISMATCH = "hash_mismatch"
 LINK_MISMATCH = "link_mismatch"
 TIME_WENT_BACK = "time_went_back"
+TAIL_MISSING = "tail_missing"
+HEAD_MISMATCH = "head_mismatch"
 
 # lag() over the chain hands each row its predecessor; the expected hash is
 # recomputed by the database from the row's own chain_prev_hash in the same
@@ -78,22 +82,39 @@ _WALK = text(
     """
 )
 
+# Where every chain stands, and whether its head row may be gone by now: the
+# same deadline the delete guard applies (occurred_at + term <= now).
+_HEADS = text(
+    """
+    SELECT
+        chain_shard,
+        chain_seq,
+        chain_hash,
+        occurred_at,
+        occurred_at + audit_log_chain_retention(chain_shard) <= clock_timestamp() AS expired
+    FROM audit_log_chain_heads
+    """
+)
+
 
 @dataclass(frozen=True)
 class ChainBreak:
     """The first row of a chain that no longer follows from the one before it.
     Only the first is reported per chain: everything behind a break is
-    unverifiable, not necessarily tampered with."""
+    unverifiable, not necessarily tampered with. `entry_id` is None for a
+    break at a registered head whose row is gone; `occurred_at` is then the
+    moment the head registered."""
 
     shard: int
     seq: int
-    entry_id: uuid.UUID
+    entry_id: uuid.UUID | None
     occurred_at: datetime
     reason: str
 
     def describe(self) -> str:
         moment = f"{self.occurred_at:%Y-%m-%d %H:%M:%S}"
-        return f"keten {self.shard} positie {self.seq} (regel {self.entry_id}, {moment}): {self.reason}"
+        where = "ketenkop" if self.entry_id is None else f"regel {self.entry_id}"
+        return f"keten {self.shard} positie {self.seq} ({where}, {moment}): {self.reason}"
 
 
 def _hex(value: bytes | None) -> str | None:
@@ -127,19 +148,45 @@ def _break_reason(row) -> str | None:
     return None
 
 
+def _tail_break(shard: int, head, last) -> ChainBreak | None:
+    """Holds a chain's newest surviving row against its registered head.
+
+    The purge takes a chain from the front, and the head row is always the
+    last of a chain to expire, so while any row is left the newest one is the
+    head: a lower position is rows removed from the newest end
+    (`tail_missing`), anything else a head and a row that disagree
+    (`head_mismatch`). A chain with no rows left is in order only when its
+    head row has passed its retention deadline, or when the head has never
+    moved (position 0).
+    """
+    if last is None:
+        if head.chain_seq == 0 or head.expired:
+            return None
+        return ChainBreak(shard, head.chain_seq, None, head.occurred_at, TAIL_MISSING)
+    if head is not None and last.chain_seq < head.chain_seq:
+        return ChainBreak(shard, head.chain_seq, None, head.occurred_at, TAIL_MISSING)
+    if head is None or last.chain_seq != head.chain_seq or _hex(last.chain_hash) != _hex(head.chain_hash):
+        return ChainBreak(shard, last.chain_seq, last.id, last.occurred_at, HEAD_MISMATCH)
+    return None
+
+
 async def verify(dsn: str) -> list[ChainBreak]:
     """Returns the first break in each chain, in chain order; an empty list
     means every surviving row still follows from the one before it. A chain
     that no longer starts at position 1 is reported as a note, not as a break:
     what stood in front of it cannot be judged from here at all."""
-    engine = create_async_engine(dsn, hide_parameters=True)
+    # One snapshot for the rows and the heads, so an insert between the two
+    # reads cannot look like a head without its row.
+    engine = create_async_engine(dsn, hide_parameters=True, isolation_level="REPEATABLE READ")
     factory = make_session_factory(engine)
     breaks: list[ChainBreak] = []
     broken_shards: set[int] = set()
+    newest: dict[int, object] = {}
     try:
         async with factory() as session, session.begin():
             result = await session.stream(_WALK)
             async for row in result:
+                newest[row.chain_shard] = row
                 if row.chain_shard in broken_shards:
                     continue
                 if row.previous_seq is None and row.chain_seq > 1:
@@ -162,9 +209,14 @@ async def verify(dsn: str) -> list[ChainBreak]:
                         reason=reason,
                     )
                 )
+            heads = {head.chain_shard: head for head in (await session.execute(_HEADS)).all()}
     finally:
         await engine.dispose()
-    return breaks
+    for shard in sorted((heads.keys() | newest.keys()) - broken_shards):
+        tail_break = _tail_break(shard, heads.get(shard), newest.get(shard))
+        if tail_break is not None:
+            breaks.append(tail_break)
+    return sorted(breaks, key=lambda one: one.shard)
 
 
 def main() -> int:
