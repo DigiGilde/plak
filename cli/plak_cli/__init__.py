@@ -783,7 +783,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
     host_matches_stored = stored_host is not None and stored_host.rstrip("/") == host
     if stored_host is not None and not host_matches_stored:
         print(
-            f"Warning: the stored session belongs to {stored_host}, not {host}; "
+            f"Warning: the stored session belongs to another host than {host}; "
             "not revoking it at the server.",
             file=sys.stderr,
         )
