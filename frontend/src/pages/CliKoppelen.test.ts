@@ -37,23 +37,80 @@ async function makeWrapper(path: string): Promise<{ wrapper: ReturnType<typeof m
   return { wrapper, router };
 }
 
-describe('CliKoppelen: session', () => {
-  it('redirects an anonymous visitor to login, with the code in returnTo', async () => {
-    backend.data.loggedInMemberId = null;
+const LOGIN_HREF = '/-/login?returnTo=' + encodeURIComponent('/cli-link');
 
-    await makeWrapper('/cli-link?code=abcd-efgh');
+const notFresh = {
+  type: 'about:blank',
+  title: 'Sessie niet vers genoeg',
+  status: 401,
+  detail: 'Log opnieuw in.',
+  code: 'SESSION_NOT_FRESH',
+};
 
-    expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=abcd-efgh'),
+/** The mock backend for /me, the given problem for every other call. */
+function refusingFetch(problem: { status: number }) {
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
+      return backend.fetch(input, init);
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(problem), {
+        status: problem.status,
+        headers: { 'content-type': 'application/problem+json' },
+      }),
     );
+  };
+}
+
+/** How many device-authorization lookups reach the backend from here on. */
+function countLookups(): () => number {
+  let count = 0;
+  const inner = backend.fetch;
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/device-authorizations/lookup')) count += 1;
+    return inner(input, init);
+  });
+  return () => count;
+}
+
+/**
+ * The sign-in stage: a real link the member follows themselves, back to the
+ * bare /cli-link. No code rides along; a code from someone else's link must
+ * not come back pre-filled after a login.
+ */
+function expectLoginStage(wrapper: ReturnType<typeof mount>): void {
+  const link = wrapper.find('[data-testid="code-inloggen"]');
+  expect(link.exists()).toBe(true);
+  expect(link.attributes('href')).toBe(LOGIN_HREF);
+  expect(link.attributes('disabled')).toBeUndefined();
+  expect(wrapper.find('nldd-title h1').text()).toBe('Apparaat koppelen');
+  expect(wrapper.text()).toContain('kort nadat je zelf bent ingelogd');
+  expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
+}
+
+describe('CliKoppelen: session', () => {
+  it('asks an anonymous visitor to sign in, without navigating there itself', async () => {
+    backend.data.loggedInMemberId = null;
+    const lookups = countLookups();
+
+    const { wrapper } = await makeWrapper('/cli-link?code=abcd-efgh');
+
+    // A script navigation would reach /-/login as a same-origin request the
+    // backend counts as self-initiated; only the member's own click may.
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
+    expect(lookups()).toBe(0);
   });
 
-  it('redirects to login even without a code', async () => {
+  it('asks an anonymous visitor to sign in when there is no code either', async () => {
     backend.data.loggedInMemberId = null;
 
-    await makeWrapper('/cli-link');
+    const { wrapper } = await makeWrapper('/cli-link');
 
-    expect(window.location.href).toBe('/-/login?returnTo=' + encodeURIComponent('/cli-link'));
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
   });
 
   it('shows the revoked-access treatment for a deactivated member', async () => {
@@ -78,6 +135,10 @@ describe('CliKoppelen: session', () => {
     const { wrapper } = await makeWrapper('/cli-link?code=abcd-efgh');
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
+    expect(wrapper.find('[data-testid="reden"]').text()).toBe(
+      'Je toegang is ingetrokken door een platformbeheerder.',
+    );
+    expect(window.location.href).toBe('');
   });
 
   it('proceeds to the code lookup after reactivation, to the input form without a code', async () => {
@@ -132,6 +193,34 @@ describe('CliKoppelen: session', () => {
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
     expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
+  });
+
+  it('asks for a sign-in when a retry from the blocked screen finds the session gone', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'about:blank',
+            title: 'Geen toegang',
+            status: 403,
+            detail: 'Wacht nog even.',
+            code: 'MEMBER_DEACTIVATED',
+          }),
+          { status: 403, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      ),
+    );
+
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+    expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
+
+    backend.data.loggedInMemberId = null;
+    vi.stubGlobal('fetch', backend.fetch);
+    await wrapper.find('[data-testid="controleer-opnieuw"]').trigger('click');
+    await untilIdle();
+
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
   });
 
   it('shows a generic error message when /me itself fails unexpectedly', async () => {
@@ -240,7 +329,11 @@ describe('CliKoppelen: entering a code', () => {
 
 describe('CliKoppelen: looking up the code via the url', () => {
   it('looks up the code from the query and shows the data for confirmation', async () => {
+    const lookups = countLookups();
+
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+
+    expect(lookups()).toBe(1);
 
     expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
     expect(wrapper.find('[data-testid="code-programma"]').text()).toContain('plak-cli');
@@ -333,34 +426,30 @@ describe('CliKoppelen: looking up the code via the url', () => {
     expect(backend.data.deviceAuthorizations[0]!.status).toBe('denied');
   });
 
-  it('redirects to login on SESSION_NOT_FRESH during Koppelen', async () => {
+  it('asks for a fresh sign-in on SESSION_NOT_FRESH during Koppelen, and drops the request', async () => {
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
-        return backend.fetch(input, init);
-      }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            type: 'about:blank',
-            title: 'Sessie niet vers genoeg',
-            status: 401,
-            detail: 'Log opnieuw in.',
-            code: 'SESSION_NOT_FRESH',
-          }),
-          { status: 401, headers: { 'content-type': 'application/problem+json' } },
-        ),
-      );
-    });
+    vi.stubGlobal('fetch', refusingFetch(notFresh));
 
     await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
     await untilIdle();
 
-    expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=ABCD-EFGH'),
-    );
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
+    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+    expect(backend.data.deviceAuthorizations[0]!.status).toBe('pending');
+  });
+
+  it('asks for a fresh sign-in on SESSION_NOT_FRESH during Weigeren', async () => {
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+
+    vi.stubGlobal('fetch', refusingFetch(notFresh));
+
+    await wrapper.find('[data-testid="code-weigeren"]').trigger('click');
+    await untilIdle();
+
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
   });
 
   it("shows the server's error message on 429 while approving", async () => {
@@ -466,31 +555,27 @@ describe('CliKoppelen: looking up the code via the url', () => {
     expect(wrapper.html()).toContain('Serverfout');
   });
 
-  it('redirects to login on SESSION_NOT_FRESH, carrying the code along', async () => {
-    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url.includes('/me') && (init?.method ?? 'GET') === 'GET') {
-        return backend.fetch(input, init);
-      }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            type: 'about:blank',
-            title: 'Sessie niet vers genoeg',
-            status: 401,
-            detail: 'Log opnieuw in.',
-            code: 'SESSION_NOT_FRESH',
-          }),
-          { status: 401, headers: { 'content-type': 'application/problem+json' } },
-        ),
-      );
-    });
+  it('asks for a fresh sign-in on SESSION_NOT_FRESH, without the code and without navigating', async () => {
+    vi.stubGlobal('fetch', refusingFetch(notFresh));
 
-    await makeWrapper('/cli-link?code=ABCD-EFGH');
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    expect(window.location.href).toBe(
-      '/-/login?returnTo=' + encodeURIComponent('/cli-link?code=ABCD-EFGH'),
-    );
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
+    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+  });
+
+  it('asks for a fresh sign-in when a typed code meets SESSION_NOT_FRESH', async () => {
+    const { wrapper } = await makeWrapper('/cli-link');
+    vi.stubGlobal('fetch', refusingFetch(notFresh));
+
+    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
+    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await untilIdle();
+
+    expect(window.location.href).toBe('');
+    expectLoginStage(wrapper);
   });
 
   it("shows the server's error message on 429", async () => {

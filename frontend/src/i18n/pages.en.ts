@@ -117,6 +117,10 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'This code is unknown, expired or already used. Start plak login again.',
   'page.cliPair.error.tooManyAttempts': 'Too many attempts. Try again in a moment.',
   'page.cliPair.unknownClient': 'Unknown program',
+  'page.cliPair.login.intro': 'You can only link a device shortly after signing in yourself.',
+  'page.cliPair.login.afterwards':
+    'Sign in, then copy in the code that plak login shows in your terminal.',
+  'page.cliPair.login.action': 'Sign in',
   'page.cliPair.codeEntry.intro':
     'Copy in the code your terminal shows to link plak login to your account.',
   'page.cliPair.codeEntry.label': 'Code from your terminal',
