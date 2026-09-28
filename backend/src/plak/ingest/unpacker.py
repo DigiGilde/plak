@@ -871,17 +871,22 @@ class _TarSource(gzip.GzipFile):
 
     Blocks read since the previous member was handed over are kept: that is
     the header of the member being handed over now, and in front of it the
-    long-name blocks that belong to it.
+    long-name blocks that belong to it. Recording is off while a member's
+    content is being read: a GNU long-name payload past 512 bytes comes back
+    from one `read()` call sized to the name (not to BLOCKSIZE), so blocks
+    cannot be told apart from content reads by their size; only by when they
+    happen, before `raw_name_of` for the next member, not during it.
     """
 
     def __init__(self, path: Path) -> None:
         super().__init__(filename=str(path), mode="rb")
         self._blocks: dict[int, bytes] = {}
+        self.recording = True
 
     def read(self, size: int = -1) -> bytes:
         start = self.tell()
         data = super().read(size)
-        if len(data) == tarfile.BLOCKSIZE:
+        if self.recording and data:
             self._blocks[start] = data
         return data
 
@@ -936,8 +941,12 @@ def _unpack_tar(source: Path, destination: Destination, limits: Limits, base: tu
                     # tarfile gives no guarantee and None would turn into an
                     # AttributeError here.
                     raise BundleError("INVALID_ARCHIVE.tar_entry", params={"name": member.name})
-                with stream:
-                    _write_entry(stream, placement.path, member.size, loop.tree, destination, limits)
+                stream_source.recording = False
+                try:
+                    with stream:
+                        _write_entry(stream, placement.path, member.size, loop.tree, destination, limits)
+                finally:
+                    stream_source.recording = True
                 loop.index_seen = loop.index_seen or placement.path == INDEX_FILE
     except BundleError:
         raise
