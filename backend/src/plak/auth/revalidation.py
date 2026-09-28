@@ -23,7 +23,9 @@ No token material is ever logged or written to an audit ref.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import weakref
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -122,13 +124,41 @@ async def revalidate_sessions(request: Request) -> None:
             await _revalidate(request, session, interval)
 
 
-async def _revalidate(request: Request, session: Session, interval: timedelta) -> None:
-    now = datetime.now(UTC)
+def _due(session: Session, now: datetime, interval: timedelta) -> bool:
     if now - session.last_confirmed_at < interval:
-        return
-    if session.recheck_not_before is not None and now < session.recheck_not_before:
-        return
+        return False
+    return session.recheck_not_before is None or now >= session.recheck_not_before
 
+
+def _session_lock(app: FastAPI, session_id: str) -> asyncio.Lock:
+    locks = getattr(app.state, "revalidation_locks", None)
+    if locks is None:
+        locks = weakref.WeakValueDictionary()
+        app.state.revalidation_locks = locks
+    lock = locks.get(session_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        locks[session_id] = lock
+    return lock
+
+
+async def _revalidate(request: Request, session: Session, interval: timedelta) -> None:
+    if not _due(session, datetime.now(UTC), interval):
+        return
+    # Concurrent requests of one session would each redeem the same refresh
+    # token, and an OP that makes them single-use answers all but the first
+    # with invalid_grant, which drops the session. The store lives in this
+    # process, so a lock per session is enough; whoever waited re-reads the
+    # session the winner left behind.
+    async with _session_lock(request.app, session.id):
+        store: SessionStore = request.app.state.session_store
+        current = store.get_session(session.id)
+        now = datetime.now(UTC)
+        if current is not None and _due(current, now, interval):
+            await _redeem(request, current, now)
+
+
+async def _redeem(request: Request, session: Session, now: datetime) -> None:
     store: SessionStore = request.app.state.session_store
     if not session.refresh_token:
         # Nothing to check with: the OP handed out no refresh token. Keeping

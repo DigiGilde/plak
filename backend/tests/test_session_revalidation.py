@@ -7,6 +7,7 @@ unreachable endpoint).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,7 @@ from helpers_oidc import (
 )
 
 from plak.audit import vocabulary
+from plak.auth.oidc import RefreshRejectedError
 from plak.auth.revalidation import RECHECK_BACKOFF, idp_fault, revalidation_status
 from plak.auth.sessions import SessionStore
 from plak.models.audit import ActorKind
@@ -96,6 +98,64 @@ async def test_a_second_request_right_after_a_check_does_not_check_again() -> No
         await _visit(client)
 
         assert len(_refresh_grants(idp)) == 1
+
+
+def _single_use_refresh(monkeypatch: pytest.MonkeyPatch, app, *, first: str | None) -> tuple[list[str], asyncio.Event]:
+    """A token endpoint that holds every redemption until released and, like an
+    OP with single-use refresh tokens, refuses a token it has seen before.
+    `first` is the refresh token the first redemption hands out; None refuses
+    that one too."""
+    redeemed: list[str] = []
+    release = asyncio.Event()
+
+    async def refresh_tokens(refresh_token: str) -> dict:
+        redeemed.append(refresh_token)
+        await release.wait()
+        if first is None or redeemed.count(refresh_token) > 1:
+            raise RefreshRejectedError("de IdP verwierp het verversingstoken")
+        return {"refresh_token": first}
+
+    monkeypatch.setattr(app.state.oidc_client, "refresh_tokens", refresh_tokens)
+    return redeemed, release
+
+
+async def _visit_twice_at_once(client, release: asyncio.Event) -> None:
+    visits = asyncio.gather(_visit(client), _visit(client))
+    # Give the second request every chance to reach the token endpoint too.
+    for _ in range(50):
+        await asyncio.sleep(0)
+    release.set()
+    await visits
+
+
+async def test_concurrent_requests_redeem_the_refresh_token_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, app = _make()
+    async with make_test_client(app) as client:
+        redeemed, release = _single_use_refresh(monkeypatch, app, first="ververstoken-2")
+        session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+        _age(app, session, seconds=RECHECK_S + 1)
+
+        await _visit_twice_at_once(client, release)
+
+        assert redeemed == ["ververstoken-1"]
+        kept = app.state.session_store.get_session(session.id)
+        assert kept is not None
+        assert kept.refresh_token == "ververstoken-2"
+        assert len(app.state.revalidation_locks) == 0
+
+
+async def test_a_request_waiting_on_a_dropped_session_does_not_redeem(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, app = _make()
+    install_audit_recorder(app)
+    async with make_test_client(app) as client:
+        redeemed, release = _single_use_refresh(monkeypatch, app, first=None)
+        session = set_session_cookie(client, app, refresh_token="ververstoken-1")
+        _age(app, session, seconds=RECHECK_S + 1)
+
+        await _visit_twice_at_once(client, release)
+
+        assert redeemed == ["ververstoken-1"]
+        assert app.state.session_store.get_session(session.id) is None
 
 
 async def test_a_rotated_refresh_token_is_stored() -> None:
