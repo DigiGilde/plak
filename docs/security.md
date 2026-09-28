@@ -343,6 +343,7 @@ unnecessary at once.
 | Base images pinned on digest | open: `containers/plak/Containerfile` (node 22, uv 0.5/python 3.12, python 3.12-slim-bookworm) pins on fixed tags; digests are a production prerequisite. `containers/nginx-dev/Containerfile` is only the dev proxy and falls outside this |
 | CI actions pinned on commit SHA | done: every `uses:` in `ci.yml` and `deploy.yml` sits on a commit SHA, fixed by `test_workflows.py`. Handled on the user side: `docs/publishing.md` pins every `uses:` on a commit SHA, and the one nested `uses:` in `actions/publiceer/action.yml` (`astral-sh/setup-uv`) sits on a commit SHA too, fixed by `cli/tests/test_cli.py` |
 | Lockfiles (uv.lock, package-lock.json) | implemented |
+| Vendored files pinned on hash | done since 2026-09-28: `backend/src/plak/static/docs/SHA256SUMS` records the sha256 of the two Swagger UI files, `just refresh-swagger-ui` checks its download against it, and `test_api_documentation.py` checks the shipped bytes without a network call. Before this the recipe printed a truncated hash and compared it to nothing, which read as verification. It hid a real change: a repo-wide rename of `project` to `site` had edited a URI-scheme list inside the minified bundle. Both files were restored from the npm registry tarball of the pinned version. Weight: 1.5 MB of minified JavaScript, served from the beheer origin under `script-src 'self'`, so fully trusted script beside the session cookie, arriving in git as a diff nobody reads |
 | Vulnerability scan on dependencies | done: the CI job `vulnerabilities` runs pip-audit on the exported lockfile and npm audit on the frontend, locally via `just scan`. Accepted findings sit in `.trivyignore.yaml` with a date and a motivation and come back by themselves on that date |
 | SBOM per image | done: `deploy.yml` generates a CycloneDX SBOM with trivy and keeps it 90 days as an artefact |
 | Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `herkomst`, not in `bouw`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public, which it is since 2026-09-27; going private again would take it away |
@@ -443,11 +444,33 @@ in Settings and not a change in this repository.
   when the repository became public.
 - [x] **Private vulnerability reporting** is on, so
   `/security/advisories/new` no longer answers a 404.
-- [ ] **Go through the first CodeQL run.** A local run of the same three
-  analyses on 2026-09-27 reported eleven Python and four TypeScript findings,
-  none in `actions`. They are triage, not a gate; the query set stays the
-  default one, and a finding is answered or dismissed with a reason, never
-  made quiet by narrowing the queries.
+- [x] **Go through the first CodeQL run.** Fifteen alerts on 2026-09-27:
+  eleven Python and four TypeScript, none in `actions`. One was real
+  (`js/bad-tag-filter`: the build-output test matched `</script>` without
+  allowing a space or attributes, so the CSP guard failed open) and is fixed;
+  fourteen were dismissed, each with the mechanism and a test named in the
+  dismissal comment. The query set stays the default one; a finding is
+  answered or dismissed with a reason, never made quiet by narrowing the
+  queries.
+
+  Re-audited adversarially on 2026-09-28, with the brief of proving the
+  dismissals wrong rather than confirming them: payloads were run through the
+  real validators, not reasoned about. All fourteen hold. Three of them rest
+  on the same blind spot, worth naming because it will recur: `filename in
+  _ASSETS`, `lang in i18n.SUPPORTED` and `base in _CATALOGUES` are
+  allowlists-by-membership, the strongest validation there is (nothing is left
+  to escape), and a dataflow analysis cannot model an equality test as a
+  barrier. A codebase that escapes gets green; one that uses allowlists gets
+  red. Do not let the alert count steer the design.
+
+  That re-audit found four issues CodeQL never raised, all of them outside its
+  language model (a `justfile`, shell, file writing, a URL parse): the
+  unverified Swagger UI download (see "Supply chain" above), and three
+  credential paths in the CLI, closed in `b6edbac` -- userinfo accepted in
+  `--host` and then printed by every message naming the host, a token with a
+  newline able to inject `PLAK_HOST` into `.env.plak`, and the `::add-mask::`
+  line being written when stdout is a plain file the runner never reads.
+  The CLI's stdout must not be captured in CI; see `docs/publishing.md` §3.
 - [ ] **Turn on Dependabot security updates**
   (`dependabot_security_updates`, Settings, Code security). Dependabot opens
   version updates today; without this it does not open a pull request for an
