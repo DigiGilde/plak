@@ -8,6 +8,7 @@ import inspect
 import json
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import timedelta
 
 import asyncpg
@@ -237,6 +238,16 @@ async def test_write_fails_not_on_broken_db(caplog: pytest.LogCaptureFixture) ->
 # --- Daily lookup cap: write_strict_limited -------------------------------------------
 
 
+async def test_write_strict_limited_refuses_an_actor_without_identifier(audit_log: AuditLog) -> None:
+    # The cap is per actor; without an identifier there is nothing to count
+    # against, so this is a programming error in the caller, not a runtime
+    # refusal.
+    with pytest.raises(ValueError):
+        await audit_log.write_strict_limited(
+            "test_actie", ANONYMOUS, "allowed", refs=None, ip=None, limit=5, counted_actions=("test_actie",)
+        )
+
+
 async def test_write_strict_limited_writes_the_row_under_the_cap(
     audit_log: AuditLog, db_connection: asyncpg.Connection
 ) -> None:
@@ -415,3 +426,87 @@ def test_the_job_refuses_to_run_without_a_dsn(
 
     assert retention.main() == 1
     assert retention.DB_URL_VAR in caplog.text
+
+
+def test_the_job_purges_and_logs_the_count_on(
+    migrated_dsn: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    asyncio.run(_committed_row(migrated_dsn, "logout", "allowed", timedelta(days=91)))
+    monkeypatch.setenv(retention.DB_URL_VAR, migrated_dsn)
+    caplog.set_level("INFO")
+
+    assert retention.main() == 0
+    assert "Auditlog opgeruimd" in caplog.text
+
+
+class _FailingSession:
+    """Fake session whose execute() blows up inside the batch's own
+    transaction, to drive _delete_in_batches's except branch without a real
+    database."""
+
+    @asynccontextmanager
+    async def begin(self):
+        yield
+
+    async def execute(self, statement, params):
+        raise RuntimeError("verbinding weg")
+
+
+async def test_delete_in_batches_reports_a_failure_instead_of_raising() -> None:
+    deleted, error = await retention._delete_in_batches(_FailingSession(), retention._DELETE_BATCH, batch=10)
+
+    assert deleted == 0
+    assert isinstance(error, RuntimeError)
+
+
+async def test_purge_logs_and_continues_when_the_audit_table_delete_fails(
+    migrated_dsn: str, db_connection: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mirrors test_purge_continues_the_other_table_when_one_fails, but with
+    the failure on the other table: audit_log_entries fails, content_viewers
+    still gets purged."""
+    stale_viewer = await _committed_viewer(migrated_dsn, timedelta(days=91))
+
+    original = retention._delete_in_batches
+
+    async def _flaky(session, statement, *, batch):
+        if statement is retention._DELETE_BATCH:
+            return 0, RuntimeError("audit_log_entries kapot")
+        return await original(session, statement, batch=batch)
+
+    monkeypatch.setattr(retention, "_delete_in_batches", _flaky)
+
+    with pytest.raises(RuntimeError):
+        await purge(migrated_dsn, batch=1)
+
+    remaining_viewers = {row["id"] for row in await db_connection.fetch("SELECT id FROM content_viewers")}
+    assert stale_viewer not in remaining_viewers  # content_viewers purge still ran
+
+    purge_row = await db_connection.fetchrow(
+        "SELECT * FROM audit_log_entries WHERE action = $1", vocabulary.AUDIT_PURGE
+    )
+    assert purge_row is not None
+    assert json.loads(purge_row["refs"]) == {"audit_log_entries": 0, "content_viewers": 1}
+
+
+async def test_purge_skips_the_audit_purge_row_when_nothing_was_deleted(
+    migrated_dsn: str, db_connection: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When neither table has anything to remove, purge() must not insert an
+    audit_purge row of its own (that would count as something purged)."""
+
+    async def _nothing_deleted(session, statement, *, batch):
+        return 0, None
+
+    monkeypatch.setattr(retention, "_delete_in_batches", _nothing_deleted)
+    before = await db_connection.fetchval(
+        "SELECT count(*) FROM audit_log_entries WHERE action = $1", vocabulary.AUDIT_PURGE
+    )
+
+    deleted = await purge(migrated_dsn, batch=1)
+
+    assert deleted == 0
+    after = await db_connection.fetchval(
+        "SELECT count(*) FROM audit_log_entries WHERE action = $1", vocabulary.AUDIT_PURGE
+    )
+    assert after == before
