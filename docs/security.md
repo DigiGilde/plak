@@ -37,6 +37,46 @@ the app or was deliberately postponed (base image digests, DPIA, pentest).
 | Sessions do not survive a restart and cannot be revoked centrally | deliberate: the store sits in process memory and ZAD runs one replica. Deactivating works immediately anyway, because member status is checked per request (`require_active_member`, `_belongs_to_site`); revoking sessions would replace the message "je toegang is ingetrokken" with "je bent niet meer ingelogd" |
 | `returnTo` strictly validated (own origin only, paths only) | implemented: `auth/sessions.py` (`valid_return_to`), `backend/tests/test_sessions.py` |
 
+## Session lifetime and logout
+
+A summary of the session and logout rows above, in one place, with the
+platform's own timeouts alongside.
+
+- **Plak admin and content sessions** last at most `MAX_SESSION_AGE`, 12 hours
+  after login, with no idle timeout of its own (`auth/sessions.py`). They live
+  in the process memory of a single replica, so a restart or a redeploy ends
+  every session at once.
+- **Re-validation at Keycloak** runs on the first request after
+  `PLAK_IDP_RECHECK_SECONDS` (default 900 seconds) since the session was last
+  checked; an `invalid_grant` from the token endpoint ends the Plak session
+  (`auth/revalidation.py`).
+- **The ZAD Keycloak's own SSO session limits**, as set by the platform
+  (RijksICTGilde/RIG-Cluster, `operations-manager/python/opi/configs/keycloak/bootstrap.yaml`):
+  `ssoSessionIdleTimeout` 28800 seconds (8 hours), `ssoSessionMaxLifespan` 43200
+  seconds (12 hours), explicitly to keep "a working day in one session" instead
+  of Keycloak's own defaults (30 minutes idle, 10 hours max). These values come
+  from the platform's own source, not from a measurement against our realm.
+  `connectors/keycloak.py` applies `create_realm`/`update_realm` with the same
+  session settings to every realm it manages, platform and per-project alike,
+  so the project realm should carry the same values, but this was not
+  independently confirmed against the live realm.
+
+What ends a session, and when:
+
+| Event | Effect |
+|---|---|
+| Logging out in Plak | Ends the admin and the content session at once (`platform/pages.py`, see the logout rows above). The Keycloak session itself stays unless `PLAK_OIDC_RP_LOGOUT` is on, so the next login may be silent (an existing SSO session). CLI sessions (`plak login`) are untouched and are revoked separately, on the linked-CLI-sessions page |
+| Logging out at Keycloak, or out of another app in the same realm | At once, if back-channel logout is configured on the client (§6a of `docs/deploying-on-zad.md`); otherwise at the next re-validation, at most `PLAK_IDP_RECHECK_SECONDS` later |
+| Account disabled or deleted in the ZAD realm | At the next re-validation (`invalid_grant`) |
+| Account closed at SSO Rijk | Does **not** reach the realm: the ZAD realm brokers SSO Rijk over SAML and imports the user locally, and the refresh grant reads only that local `enabled` flag, never SSO Rijk itself. A new login fails, but an existing session lasts until the 12-hour cap. Same realm setup as Waggle, which raised the same gap with the platform team (`docs/security.md` commit `87fd3750` there; see also [RijksICTGilde/RIG-Cluster#173](https://github.com/RijksICTGilde/RIG-Cluster/issues/173)) |
+| Member deactivated in Plak (`_deactivate`) | Immediate: `require_active_member` checks `member.status` on every request. Also revokes every CLI session of that member at once (`auth/members.py`, `api/admin.py`) |
+
+**CLI sessions** (`plak login`) follow a schedule of their own, unrelated to
+the admin/content sessions above: 30 days after the last refresh, and 90 days
+after linking at the latest, whichever comes first (`REFRESH_IDLE_TTL`,
+`SESSION_MAX_TTL`, `cli/service.py`). They are not re-validated at the IdP;
+see the CLI row above.
+
 ## Access to content
 
 | Item | Status |
@@ -372,6 +412,56 @@ come back, with `postInitSQL` as the place for the roles and their rights. Open
 point, not a prerequisite.
 
 ## Pre-production / open points
+
+### The platform's shared domains are not on the Public Suffix List
+
+Checked on 2026-09-29: none of the four ZAD domain families (`rijks.app`,
+`rijksapps.nl`, `rijksapp.nl`, `rijksapp.dev`, see `docs/deploying-on-zad.md`
+§3) appear in the Public Suffix List. Plak's own base domain today is
+`rijksapp.nl` (`beheer.plak.rijksapp.nl`, `plak.rijksapp.nl`).
+
+Because the base domain is not on the list, a browser treats it as an
+ordinary registrable domain rather than as a suffix under which unrelated
+sites are isolated from each other. JavaScript running on the content host
+could therefore set cookies scoped to `Domain=plak.rijksapp.nl` (reaching the
+admin host, `beheer.plak.rijksapp.nl`) and to `Domain=rijksapp.nl` (reaching
+every other application on `*.rijksapp.nl`, ZAD-hosted or not).
+
+That exposure is not the default, though. Every site has its own shielding
+switch, "Afschermen van andere sites" (`Site.sandbox`, `serving/response.py`,
+`serving/router.py` ~274-285), **on by default** for a site regardless of
+whether it is public or restricted (`Site.sandbox` is read on its own; access
+level plays no part in it). With it on, the page is served under
+`sandbox="allow-scripts allow-forms allow-popups"` and deliberately without
+`allow-same-origin`, which gives the page an opaque origin; a sandboxed
+document with an opaque origin cannot read or write `document.cookie` or use
+`cookieStore` at all (throws in Chromium, Firefox and WebKit). So a script on
+a shielded site cannot reach cookies in the first place, whether its own,
+the admin host's or another `*.rijksapp.nl` application's. The exposure above
+is real only for a site whose own administrator switched shielding off (or
+any third-party or DOM-XSS script that runs inside such a site).
+
+The admin session cookie is `__Host-` prefixed (see the cookie row above), so
+even on an unshielded site this cannot fix or overwrite that cookie itself:
+the `__Host-` prefix forbids a `Domain` attribute and requires an exact host
+match, which is exactly why the admin session uses it. What a cookie bomb can
+still do is push the total cookie volume sent to `*.rijksapp.nl` past the
+browser's per-domain limits, which makes the admin host unusable for that
+browser until its cookies for the domain are cleared - a denial of service,
+not a session takeover, and one the admin host cannot defend itself against:
+an oversized `Cookie` header is refused by the router or by uvicorn before
+Plak's own code ever runs, and `Clear-Site-Data: "cookies"` would clear the
+whole registrable domain, every `*.rijksapp.nl` application along with it, not
+only Plak's own cookies. Other applications on `*.rijksapp.nl` that use an
+ordinary (non-`__Host-`) session cookie do not have the `__Host-` protection
+either and are exposed to cookie tossing: a `Domain=rijksapp.nl` cookie that a
+more specific path match lets substitute for theirs.
+
+Status: open. Options under evaluation: making the per-site shielding
+mandatory rather than a switch a site administrator can turn off, a separate
+registrable domain for content that no other application shares (ideally one
+that is itself on the Public Suffix List), and getting `rijks.app` onto the
+Public Suffix List. No decision made yet.
 
 ### Proving trusted publishing end to end, deliberately postponed
 

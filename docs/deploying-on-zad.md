@@ -263,7 +263,7 @@ One line of its own per environment. After the first rollout, check that both
 URIs are on the client; without the second one every viewer login breaks on
 `invalid_redirect_uri`.
 
-## 6a. Requesting back-channel logout from the platform team
+## 6a. Keycloak client: logout settings
 
 Plak offers the endpoint from OIDC Back-Channel Logout 1.0 on the admin host:
 
@@ -271,26 +271,41 @@ Plak offers the endpoint from OIDC Back-Channel Logout 1.0 on the admin host:
 POST https://beheer.plak.<domein>/-/oidc/backchannel-logout
 ```
 
-The endpoint expects a `logout_token` as a form field, and checks the
-signature (through the JWKS of the issuer), `iss`, `aud`, a recent `iat`, `exp`, the
-claim `events` with `http://schemas.openid.net/event/backchannel-logout`, the
-presence of `sid` or `sub`, the absence of a `nonce`, and a `jti` that did not
-come by shortly before. After that the corresponding Plak sessions (admin and
-content) lapse and a 200 follows with `Cache-Control: no-store`.
+The endpoint expects a `logout_token` as a form field. A cheap, unverified
+pre-check runs first (token size, JWT shape, `typ`/`alg`, `iss`, a recent
+`iat`, `jti`, no `nonce`, the `events` claim, and a jti already in the replay
+cache), then the full check: the signature (through the JWKS of the issuer),
+`iss`, `aud`, a recent `iat`, `exp`, the claim `events` with
+`http://schemas.openid.net/event/backchannel-logout`, the presence of `sid` or
+`sub`, the absence of a `nonce`, and a `jti` that did not come by shortly
+before. After that the corresponding Plak sessions (admin and content) lapse
+and a 200 follows with `Cache-Control: no-store`. See `docs/security.md`
+("Session lifetime and logout") for the full session picture and the
+pre-check.
 
-Self-service has no field for this, so this is a request to the platform team.
-Ask for the following on the Keycloak client of the project:
+Self-service has no field for this, so this is set per client in the Keycloak
+admin console (Clients -> `<client>` -> Settings), where the project has
+access; otherwise ask the platform team.
 
-1. **Backchannel logout URL**: `https://beheer.plak.<domein>/-/oidc/backchannel-logout`
-   (per environment its own admin host).
-2. **Backchannel logout session required**: on, so that the logout token
-   carries a `sid` and only the session it is about lapses. If it is off, the
-   token only carries a `sub` and every session of that person lapses.
-3. **Backchannel logout revoke offline sessions**: not needed; Plak keeps no
-   offline sessions.
+Per environment, on the client in the ZAD Keycloak (Clients -> `<client>` ->
+Settings):
+
+| Field | Value | Why |
+|---|---|---|
+| Front channel logout | Off | While it is on, Keycloak skips back-channel logout for the client entirely, whatever the URL says |
+| Backchannel logout URL | `https://beheer.plak.<domein>/-/oidc/backchannel-logout` | Empty means Keycloak never calls us and `POST /-/oidc/backchannel-logout` is dead code. Per environment its own admin host |
+| Backchannel logout session required | On | Puts `sid` in the logout token, which is what matches the exact session; only the session it is about lapses. Off means the token carries only a `sub`, and every session of that person lapses |
+| Backchannel logout revoke offline sessions | Off | Only adds a `revoke_offline_access` event to the token; Plak keeps no offline sessions and does not act on it |
+| Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Plak does not speak |
 
 Without this configuration the rest works fine: the endpoint then only exists
-and is never called, and the re-validation above stays the boundary.
+and is never called, and the periodic re-validation stays the boundary (at
+most `PLAK_IDP_RECHECK_SECONDS`, see `docs/security.md`).
+
+Test it: log in, sign the session out from Users -> Sessions in the Keycloak
+console, and refresh. You should land on the login page at once rather than
+after the session's 12-hour cap; the attempt shows up as an `idp_session_ended`
+audit event with reason `IDP_BACKCHANNEL_LOGOUT` (`audit/vocabulary.py`).
 
 ## 7. Running migrations
 
