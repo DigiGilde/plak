@@ -47,6 +47,9 @@ COPY --from=build --chown=plak:plak /app/src /app/src
 COPY --from=spa --chown=plak:plak /spa/dist /app/spa
 COPY --chown=plak:plak backend/alembic ./alembic
 COPY --chown=plak:plak backend/alembic.ini ./alembic.ini
+# 555, not 755: the file is read and executed, never written, and the user
+# that runs it does not own it.
+COPY --chown=plak:plak --chmod=555 containers/plak/entrypoint.sh ./entrypoint.sh
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
@@ -56,7 +59,7 @@ USER plak
 
 EXPOSE 8080
 
-# --no-access-log: uvicorn's access log logs path plus querystring and would
-# write every secret link (?key=...) in plain text to stdout and the log
-# stack; the audit log and app logging remain (docs/security.md).
-CMD ["uvicorn", "plak.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]
+# The entrypoint migrates and then execs uvicorn; the --no-access-log that
+# keeps secret links (?key=...) out of the log stack lives there now
+# (docs/security.md).
+CMD ["./entrypoint.sh"]
