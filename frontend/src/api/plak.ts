@@ -84,10 +84,6 @@ export function createGroup(name: string, slug: string): Promise<Group> {
   });
 }
 
-export function deleteGroup(slug: string): Promise<void> {
-  return request<void>(groupPath(slug), { method: 'DELETE' });
-}
-
 export function setGroupDefaultAccess(slug: string, access: Access): Promise<Group> {
   return request<Group>(`${groupPath(slug)}/default-access`, {
     method: 'PUT',

@@ -739,16 +739,6 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         return json(200, detail);
       }
 
-      // DELETE /groups/{group}
-      if (method === 'DELETE' && rest.length === 2) {
-        if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
-        if (data.sites.some((p) => p.groupSlug === groupSlug)) {
-          return problem(409, 'Groep niet leeg', 'Verwijder eerst alle sites in deze groep.');
-        }
-        data.groups = data.groups.filter((g) => g.slug !== groupSlug);
-        return empty(204);
-      }
-
       // PUT /groups/{group}/default-access
       if (method === 'PUT' && rest.length === 3 && rest[2] === 'default-access') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);

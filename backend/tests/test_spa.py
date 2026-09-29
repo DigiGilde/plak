@@ -34,7 +34,6 @@ from plak.platform.spa import (
     MESSAGE_SPA_MISSING,
     SPA_PAGE_PATHS,
     SpaMiddleware,
-    _with_query,
     admin_csp,
     is_spa_path,
     spa_headers,
@@ -383,14 +382,6 @@ class TestMissingSpa:
             response = await client.get("/onbekend")
         assert response.status_code == 503
         assert response.text == MESSAGE_SPA_MISSING
-
-
-class TestWithQuery:
-    def test_appends_the_query_string(self) -> None:
-        assert _with_query("/aurora", {"query_string": b"tab=leden"}) == "/aurora?tab=leden"
-
-    def test_without_a_query_string_stays_bare(self) -> None:
-        assert _with_query("/aurora", {"query_string": b""}) == "/aurora"
 
 
 def _settings(tmp_path: Path, spa_path: Path) -> Settings:
