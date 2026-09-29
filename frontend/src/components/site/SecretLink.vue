@@ -144,6 +144,6 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
 }
 
 .code {
-  font-family: var(--primitives-font-family-mono, monospace);
+  font-family: var(--primitives-font-family-monospace, monospace);
 }
 </style>
