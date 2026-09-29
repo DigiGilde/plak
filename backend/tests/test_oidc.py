@@ -17,13 +17,17 @@ from helpers_oidc import CLIENT_SECRET, OMIT, MockIdP, make_oidc_client, make_se
 
 from plak.audit import vocabulary
 from plak.auth.oidc import (
+    ALG_ALLOWLIST,
     BACKCHANNEL_LOGOUT_EVENT,
     CLIENT_ASSERTION_TYPE,
+    LOGOUT_TOKEN_MAX_CHARS,
     ClientRejectedError,
     IdpUnavailableError,
     OidcClient,
     OidcError,
     RefreshRejectedError,
+    logout_token_prefilter,
+    unverified_logout_token_jti,
 )
 from plak.config import ConfigurationError
 
@@ -785,3 +789,121 @@ class TestValidateLogoutToken:
         token = JsonWebToken(["RS256"]).encode(header, claims, idp.private_key).decode("ascii")
         with pytest.raises(OidcError, match="jti"):
             await oidc.validate_logout_token(token)
+
+
+def _b64url_json(data: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode("ascii")
+
+
+def _raw_token(header: dict, claims: dict, signature: str = "sig") -> str:
+    """A JWT-shaped string whose signature was never made and is never
+    checked by the prefilter."""
+    return f"{_b64url_json(header)}.{_b64url_json(claims)}.{signature}"
+
+
+class TestLogoutTokenPrefilter:
+    """logout_token_prefilter() and unverified_logout_token_jti(): the cheap,
+    unverified pre-check that runs before a signature verification."""
+
+    def test_a_genuine_token_passes(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid)
+        assert logout_token_prefilter(token, settings) is None
+        assert unverified_logout_token_jti(token) == "logout-token-1"
+
+    def test_an_oversized_token_is_refused(self, idp):
+        settings = make_settings(idp)
+        assert logout_token_prefilter("x" * (LOGOUT_TOKEN_MAX_CHARS + 1), settings) == "oversized"
+
+    @pytest.mark.parametrize("token", ["not-a-jwt", "one.two", "one.two.three.four"])
+    def test_a_token_with_the_wrong_shape_is_refused(self, idp, token):
+        settings = make_settings(idp)
+        assert logout_token_prefilter(token, settings) == "malformed"
+        assert unverified_logout_token_jti(token) is None
+
+    def test_a_header_that_is_not_valid_json_is_refused(self, idp):
+        settings = make_settings(idp)
+        claims_segment = _b64url_json({"iss": idp.issuer})
+        token = f"not-base64-json.{claims_segment}.sig"
+        assert logout_token_prefilter(token, settings) == "malformed"
+
+    def test_claims_that_are_not_valid_json_is_refused(self, idp):
+        settings = make_settings(idp)
+        header_segment = _b64url_json({"alg": "RS256"})
+        token = f"{header_segment}.not-base64-json.sig"
+        assert logout_token_prefilter(token, settings) == "malformed"
+        assert unverified_logout_token_jti(token) is None
+
+    def test_a_foreign_typ_is_refused(self, idp):
+        settings = make_settings(idp)
+        header = {"alg": "RS256", "typ": "at+jwt"}
+        claims = {"iss": idp.issuer, "iat": int(time.time()), "jti": "x", "events": {BACKCHANNEL_LOGOUT_EVENT: {}}}
+        assert logout_token_prefilter(_raw_token(header, claims), settings) == "typ"
+
+    def test_a_non_string_typ_is_refused(self, idp):
+        settings = make_settings(idp)
+        header = {"alg": "RS256", "typ": 1}
+        claims = {"iss": idp.issuer, "iat": int(time.time()), "jti": "x", "events": {BACKCHANNEL_LOGOUT_EVENT: {}}}
+        assert logout_token_prefilter(_raw_token(header, claims), settings) == "typ"
+
+    @pytest.mark.parametrize("typ", ["JWT", "jwt", "logout+jwt", "Logout+JWT"])
+    def test_the_typ_keycloak_and_the_spec_both_send_is_accepted(self, idp, typ):
+        """Keycloak still mints plain "JWT" rather than the spec's
+        "logout+jwt" (github.com/keycloak/keycloak#28939); both pass."""
+        settings = make_settings(idp)
+        header = {"alg": "RS256", "typ": typ}
+        claims = {"iss": idp.issuer, "iat": int(time.time()), "jti": "x", "events": {BACKCHANNEL_LOGOUT_EVENT: {}}}
+        assert logout_token_prefilter(_raw_token(header, claims), settings) is None
+
+    def test_an_alg_outside_the_allowlist_is_refused(self, idp):
+        settings = make_settings(idp)
+        assert "none" not in ALG_ALLOWLIST
+        header = {"alg": "none"}
+        claims = {"iss": idp.issuer, "iat": int(time.time()), "jti": "x", "events": {BACKCHANNEL_LOGOUT_EVENT: {}}}
+        assert logout_token_prefilter(_raw_token(header, claims), settings) == "alg"
+
+    def test_a_wrong_issuer_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, iss="https://evil.example/realms/x")
+        assert logout_token_prefilter(token, settings) == "iss"
+
+    def test_a_missing_iat_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, iat=OMIT)
+        assert logout_token_prefilter(token, settings) == "iat"
+
+    def test_a_stale_iat_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, iat=int(time.time()) - 999)
+        assert logout_token_prefilter(token, settings) == "iat"
+
+    def test_an_iat_in_the_future_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, iat=int(time.time()) + 999)
+        assert logout_token_prefilter(token, settings) == "iat"
+
+    @pytest.mark.parametrize("jti", [OMIT, ""])
+    def test_a_missing_or_empty_jti_is_refused(self, idp, jti):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, jti=jti)
+        assert logout_token_prefilter(token, settings) == "jti"
+
+    def test_a_nonce_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, nonce="hoort-hier-niet")
+        assert logout_token_prefilter(token, settings) == "nonce"
+
+    def test_a_missing_events_claim_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, with_event=False)
+        assert logout_token_prefilter(token, settings) == "events"
+
+    def test_an_events_claim_of_the_wrong_shape_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, events="not-a-dict")
+        assert logout_token_prefilter(token, settings) == "events"
+
+    def test_an_events_claim_without_the_backchannel_event_is_refused(self, idp):
+        settings = make_settings(idp)
+        token = idp.make_logout_token(sid=idp.sid, events={"http://example.com/other-event": {}})
+        assert logout_token_prefilter(token, settings) == "events"
