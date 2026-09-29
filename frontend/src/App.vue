@@ -122,9 +122,6 @@ function logout(): void {
              first word has to carry the meaning. -->
         <nldd-status-bar
           variant="warning"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
           :text="t('beta.bar')"
           data-testid="beta-banner"
         ></nldd-status-bar>
