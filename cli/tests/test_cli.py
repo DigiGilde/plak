@@ -2606,3 +2606,292 @@ def test_the_mask_is_skipped_when_stdout_is_a_file(tmp_path, capfd):
         _os.dup2(saved, 1)
         _os.close(saved)
     assert "super-geheim-token" not in target.read_text()
+
+
+# --- group create / site create ---------------------------------------------
+
+
+def _group_answer(base: str = "site_team", keys: bool = False, invitees: bool = False, **extra: Any) -> dict:
+    access = {"base": base, "keys": keys, "invitees": invitees}
+    return {"slug": "team", "name": "Team", "defaultAccess": access} | extra
+
+
+def _site_answer(base: str = "site_team", keys: bool = False, invitees: bool = False, **extra: Any) -> dict:
+    return {
+        "groupSlug": "team",
+        "slug": "docs",
+        "title": "Docs",
+        "access": {"base": base, "keys": keys, "invitees": invitees},
+    } | extra
+
+
+def test_group_create_sends_only_slug_and_name_without_access_flags(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _group_answer())
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 0
+    record = stub_server.requests[0]
+    assert record["method"] == "POST"
+    assert record["path"] == "/-/api/v1/groups"
+    assert record["headers"]["Authorization"] == "Bearer tok"
+    assert json.loads(record["body"]) == {"slug": "team", "name": "Team"}
+    assert capsys.readouterr().out.splitlines() == [
+        "Created group 'team' (Team). You are its admin.",
+        (
+            "Default access for new sites: site_team (members of the site and its group), "
+            "secret links off, invitees off."
+        ),
+        "Who can see it: members of the site and its group.",
+        f"Change it at: {host}/team/-/settings",
+    ]
+
+
+def test_group_create_sends_the_access_flags_that_were_given(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _group_answer("public", invitees=True))
+
+    code = cli.main(
+        [
+            "group", "create", "team", "--name", "Team",
+            "--access", "public", "--no-secret-links", "--invitees", "--host", host,
+        ]
+    )
+
+    assert code == 0
+    assert json.loads(stub_server.requests[0]["body"])["defaultAccess"] == {
+        "base": "public",
+        "keys": False,
+        "invitees": True,
+    }
+    # Public needs no "who" and no pointer to where it changes.
+    assert capsys.readouterr().out.splitlines() == [
+        "Created group 'team' (Team). You are its admin.",
+        "Default access for new sites: public (anyone), secret links off, invitees on.",
+    ]
+
+
+def test_group_create_uses_the_stored_session_and_host(stub_server, host, isolated_cwd, capsys):
+    cli._write_env_file(
+        {"PLAK_HOST": host, "PLAK_ACCESS_TOKEN": "stored", "PLAK_ACCESS_EXPIRES_AT": "9999999999"}
+    )
+    stub_server.responder = _json_responder(201, _group_answer())
+
+    code = cli.main(["group", "create", "team", "--name", "Team"])
+
+    assert code == 0
+    assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer stored"
+
+
+def test_group_create_without_a_session_asks_to_log_in_and_sends_nothing(
+    stub_server, host, isolated_cwd, capsys
+):
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_group_create_never_trades_for_a_ci_oidc_token(stub_server, host, isolated_cwd, monkeypatch, capsys):
+    """The server takes only a member's CLI token here, so the CLI does not
+    fetch an OIDC token it would be refused with."""
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-token")
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 2
+    assert stub_server.requests == []
+
+
+def test_group_create_refuses_an_invalid_slug(stub_server, host, token_env, capsys):
+    code = cli.main(["group", "create", "Team Aurora", "--name", "Team", "--host", host])
+
+    assert code == 2
+    assert "group must be a valid slug" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_group_create_refuses_plain_http_to_another_host(stub_server, token_env, capsys):
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", "http://plak.example"])
+
+    assert code == 2
+    assert "https://" in capsys.readouterr().err
+
+
+def test_group_create_refuses_an_unknown_access_base(stub_server, host, token_env, capsys):
+    code = cli.main(["group", "create", "team", "--name", "Team", "--access", "everyone", "--host", host])
+
+    assert code == 2
+    assert stub_server.requests == []
+
+
+def test_group_create_shows_the_problem_detail_and_gives_exit_1(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(
+        409, {"status": 409, "code": "SLUG_EXISTS", "detail": "A group with slug 'team' already exists."}
+    )
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.strip() == "Error: A group with slug 'team' already exists."
+
+
+def test_group_create_connection_failure_gives_exit_1(stub_server, host, token_env, monkeypatch, capsys):
+    monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 1
+    assert "could not connect to" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "default_access",
+    [None, "public", {"base": "everyone", "keys": False, "invitees": False}, {"base": "sso", "keys": "yes"}],
+)
+def test_group_create_refuses_an_answer_without_a_usable_access(
+    stub_server, host, token_env, capsys, default_access
+):
+    stub_server.responder = _json_responder(
+        201, {"slug": "team", "name": "Team", "defaultAccess": default_access}
+    )
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 1
+    assert "unexpected answer" in capsys.readouterr().err
+
+
+def test_group_create_cleans_the_name_from_the_server_and_falls_back_to_the_slug(
+    stub_server, host, token_env, capsys
+):
+    stub_server.responder = _json_responder(201, _group_answer(name="Team\x1b[31m\nred"))
+    cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+    assert capsys.readouterr().out.splitlines()[0] == "Created group 'team' (Team [31m red). You are its admin."
+
+    stub_server.responder = _json_responder(201, _group_answer(name=None))
+    cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+    assert capsys.readouterr().out.splitlines()[0] == "Created group 'team' (team). You are its admin."
+
+
+def test_site_create_without_access_flags_lets_the_site_inherit(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _site_answer("public"))
+
+    code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
+
+    assert code == 0
+    record = stub_server.requests[0]
+    assert record["path"] == "/-/api/v1/groups/team/sites"
+    assert record["headers"]["Authorization"] == "Bearer tok"
+    assert json.loads(record["body"]) == {"slug": "docs", "title": "Docs"}
+    assert capsys.readouterr().out.splitlines() == [
+        "Created site 'team/docs' (Docs). You are its admin.",
+        "Access: public (anyone), secret links off, invitees off.",
+        f"Publish to it with: plak publish <dist> --host {host} --site team/docs",
+    ]
+
+
+def test_site_create_sends_only_the_given_flags_and_says_who_can_see_it(stub_server, host, token_env, capsys):
+    """Only --secret-links given: base and invitees come from the group's
+    default on the server."""
+    stub_server.responder = _json_responder(201, _site_answer("nobody", keys=True))
+
+    code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--secret-links", "--host", host])
+
+    assert code == 0
+    assert json.loads(stub_server.requests[0]["body"]) == {
+        "slug": "docs",
+        "title": "Docs",
+        "access": {"keys": True},
+    }
+    assert capsys.readouterr().out.splitlines() == [
+        "Created site 'team/docs' (Docs). You are its admin.",
+        "Access: nobody (nobody by default), secret links on, invitees off.",
+        "Who can see it: anyone with a secret link.",
+        f"Change it at: {host}/team/docs/access",
+        f"Publish to it with: plak publish <dist> --host {host} --site team/docs",
+    ]
+
+
+def test_site_create_names_every_way_in(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _site_answer("sso", keys=True, invitees=True))
+
+    cli.main(
+        [
+            "site", "create", "team/docs", "--title", "Docs",
+            "--access", "sso", "--secret-links", "--invitees", "--host", host,
+        ]
+    )
+
+    assert json.loads(stub_server.requests[0]["body"])["access"] == {
+        "base": "sso",
+        "keys": True,
+        "invitees": True,
+    }
+    assert (
+        "Who can see it: anyone who signs in with SSO Rijk, anyone with a secret link, invitees, once signed in."
+        in capsys.readouterr().out.splitlines()
+    )
+
+
+def test_site_create_that_nobody_can_see_says_so(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _site_answer("nobody"))
+
+    cli.main(
+        ["site", "create", "team/docs", "--title", "Docs", "--access", "nobody", "--no-invitees", "--host", host]
+    )
+
+    assert json.loads(stub_server.requests[0]["body"])["access"] == {"base": "nobody", "invitees": False}
+    assert "Who can see it: nobody yet." in capsys.readouterr().out.splitlines()
+
+
+@pytest.mark.parametrize("site", ["docs", "team/", "/docs", "team/docs/extra"])
+def test_site_create_refuses_a_site_that_is_not_group_slash_site(stub_server, host, token_env, capsys, site):
+    code = cli.main(["site", "create", site, "--title", "Docs", "--host", host])
+
+    assert code == 2
+    assert "The site must have the form 'group/site'" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_site_create_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd, capsys):
+    code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_site_create_shows_the_refusal_and_gives_exit_1(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(
+        403, {"status": 403, "code": "INSUFFICIENT_ROLE", "detail": "This needs at least the role editor."}
+    )
+
+    code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.strip() == "Error: This needs at least the role editor."
+
+
+def test_site_create_refuses_an_answer_without_a_usable_access(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, {"slug": "docs", "title": "Docs"})
+
+    code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
+
+    assert code == 1
+    assert "unexpected answer" in capsys.readouterr().err
+
+
+def test_site_create_falls_back_to_the_slug_without_a_title(stub_server, host, token_env, capsys):
+    stub_server.responder = _json_responder(201, _site_answer("public", title=7))
+
+    cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
+
+    assert capsys.readouterr().out.splitlines()[0] == "Created site 'team/docs' (docs). You are its admin."
+
+
+def test_group_and_site_need_a_subcommand_and_their_required_flags(capsys):
+    assert cli.main(["group"]) == 2
+    assert cli.main(["site"]) == 2
+    assert cli.main(["site", "create", "team/docs"]) == 2

@@ -11,6 +11,12 @@ Usage:
         --site <group/site> [--preview <ref>] [--base-path <dir>] \
         [--output-file <path>]
     plak preview-remove <ref> --host <host> --site <group/site>
+    plak group create <group> --name <name> [--access <base>] \
+        [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
+        [--host <host>]
+    plak site create <group/site> --title <title> [--access <base>] \
+        [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
+        [--host <host>]
 
 Signing in happens with 'plak login': the session
 (accessToken/refreshToken) is kept in .env.plak in the current directory.
@@ -94,11 +100,11 @@ def _valid_slug(value: str, what: str) -> str:
     return value
 
 
-def _split_site(site: str) -> tuple[str, str]:
+def _split_site(site: str, label: str = "--site") -> tuple[str, str]:
     parts = site.split("/")
     if len(parts) != 2 or not parts[0] or not parts[1]:
         raise UsageError(
-            f"--site must have the form 'group/site', got: {site!r}"
+            f"{label} must have the form 'group/site', got: {site!r}"
         )
     return _valid_slug(parts[0], "group"), _valid_slug(parts[1], "site")
 
@@ -427,6 +433,18 @@ def _get_bearer_token(host: str) -> str:
     )
 
 
+def _get_member_token(host: str) -> str:
+    """The token for creating a group or a site: an explicit PLAK_ACCESS_TOKEN,
+    then the stored session. No CI OIDC token: the server takes only a
+    member's CLI token there."""
+    token = os.environ.get("PLAK_ACCESS_TOKEN") or _stored_token(host)
+    if token:
+        return token
+    raise UsageError(
+        "No session: log in with 'plak login --host <host>', or set PLAK_ACCESS_TOKEN"
+    )
+
+
 def _file_extension(path: Path) -> str:
     name = path.name.lower()
     for ext in (".tar.gz", ".tgz", ".zip", ".html"):
@@ -636,6 +654,164 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
 
     _print_problem_detail(response)
     return 1
+
+
+ACCESS_BASES = ("public", "sso", "site_team", "nobody")
+
+# Who a base lets in, for the terminal. Mirrors the server's ACCESS_BASE_HINT.
+ACCESS_BASE_WHO = {
+    "public": "anyone",
+    "sso": "anyone who signs in with SSO Rijk",
+    "site_team": "members of the site and its group",
+    "nobody": "nobody by default",
+}
+
+
+def _access_body(args: argparse.Namespace) -> dict[str, object] | None:
+    """Only the flags that were given: the server fills in the rest from the
+    default (for a site: the group's default access)."""
+    body: dict[str, object] = {}
+    if args.access is not None:
+        body["base"] = args.access
+    if args.secret_links is not None:
+        body["keys"] = args.secret_links
+    if args.invitees is not None:
+        body["invitees"] = args.invitees
+    return body or None
+
+
+def _parse_access(data: object) -> tuple[str, bool, bool] | None:
+    if not isinstance(data, dict):
+        return None
+    base, keys, invitees = data.get("base"), data.get("keys"), data.get("invitees")
+    if base not in ACCESS_BASE_WHO or not isinstance(keys, bool) or not isinstance(invitees, bool):
+        return None
+    return base, keys, invitees
+
+
+def _on_off(value: bool) -> str:
+    return "on" if value else "off"
+
+
+def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -> None:
+    base, keys, invitees = access
+    print(
+        f"{label}: {base} ({ACCESS_BASE_WHO[base]}), "
+        f"secret links {_on_off(keys)}, invitees {_on_off(invitees)}."
+    )
+    if base == "public":
+        return
+    who = [] if base == "nobody" else [ACCESS_BASE_WHO[base]]
+    if keys:
+        who.append("anyone with a secret link")
+    if invitees:
+        who.append("invitees, once signed in")
+    print(f"Who can see it: {', '.join(who) if who else 'nobody yet'}.")
+    print(f"Change it at: {change_url}")
+
+
+def _create(host: str, token: str, path: str, body: dict[str, object]) -> dict | None:
+    """POSTs to a creation route; the answer on 201, None after an error has
+    been printed."""
+    try:
+        response = httpx.post(
+            f"{host}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+            timeout=30.0,
+        )
+    except httpx.HTTPError as error:
+        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+        return None
+    if response.status_code != 201:
+        _print_problem_detail(response)
+        return None
+    return _problem_data(response)
+
+
+def cmd_group_create(args: argparse.Namespace) -> int:
+    try:
+        host = _resolve_host(args)
+        _require_https(host)
+        token = _get_member_token(host)
+        group = _valid_slug(args.group, "group")
+    except UsageError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    body: dict[str, object] = {"slug": group, "name": args.name}
+    access = _access_body(args)
+    if access is not None:
+        body["defaultAccess"] = access
+    data = _create(host, token, "/-/api/v1/groups", body)
+    if data is None:
+        return 1
+    default_access = _parse_access(data.get("defaultAccess"))
+    if default_access is None:
+        print("Error: unexpected answer without the group's access", file=sys.stderr)
+        return 1
+    name = _clean(data["name"]) if isinstance(data.get("name"), str) else group
+    print(f"Created group '{group}' ({name}). You are its admin.")
+    _print_access(default_access, "Default access for new sites", f"{host}/{group}/-/settings")
+    return 0
+
+
+def cmd_site_create(args: argparse.Namespace) -> int:
+    try:
+        host = _resolve_host(args)
+        _require_https(host)
+        token = _get_member_token(host)
+        group, site = _split_site(args.site, "The site")
+    except UsageError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    body: dict[str, object] = {"slug": site, "title": args.title}
+    access = _access_body(args)
+    if access is not None:
+        body["access"] = access
+    data = _create(host, token, f"/-/api/v1/groups/{group}/sites", body)
+    if data is None:
+        return 1
+    site_access = _parse_access(data.get("access"))
+    if site_access is None:
+        print("Error: unexpected answer without the site's access", file=sys.stderr)
+        return 1
+    title = _clean(data["title"]) if isinstance(data.get("title"), str) else site
+    print(f"Created site '{group}/{site}' ({title}). You are its admin.")
+    _print_access(site_access, "Access", f"{host}/{group}/{site}/access")
+    print(f"Publish to it with: plak publish <dist> --host {host} --site {group}/{site}")
+    return 0
+
+
+def _add_access_flags(parser: argparse.ArgumentParser, defaults: tuple[str, str, str]) -> None:
+    """--access, --secret-links and --invitees, with what leaving each out means."""
+    base_default, keys_default, invitees_default = defaults
+    parser.add_argument(
+        "--access",
+        choices=ACCESS_BASES,
+        default=None,
+        help=(
+            "Who may see the content: public (anyone), sso (anyone who signs in "
+            "with SSO Rijk), site_team (members of the site and its group) or "
+            f"nobody (only through the exceptions below). Left out: {base_default}"
+        ),
+    )
+    parser.add_argument(
+        "--secret-links",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=f"Whether a valid secret link lets anyone in, without signing in. Left out: {keys_default}",
+    )
+    parser.add_argument(
+        "--invitees",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=f"Whether invitees get in after signing in with SSO Rijk. Left out: {invitees_default}",
+    )
+    parser.add_argument(
+        "--host", default=None, help="Admin origin of Plak; defaults to the host you logged in to"
+    )
 
 
 AUTH_ERROR_MESSAGES = {
@@ -928,6 +1104,37 @@ def _build_parser() -> argparse.ArgumentParser:
     remove.add_argument("--host", required=True)
     remove.add_argument("--site", required=True, help="group/site")
     remove.set_defaults(func=cmd_preview_remove)
+
+    group = subparsers.add_parser("group", help="Manage groups.")
+    group_commands = group.add_subparsers(dest="group_command", required=True)
+    group_create = group_commands.add_parser(
+        "create",
+        help="Create a group; you become its admin.",
+        description=(
+            "Create a group and become its admin. The access flags set the "
+            "default access that new sites in the group start with."
+        ),
+    )
+    group_create.add_argument("group", help="Slug of the group, for instance team-aurora")
+    group_create.add_argument("--name", required=True, help="Display name of the group")
+    _add_access_flags(group_create, ("site_team", "off", "off"))
+    group_create.set_defaults(func=cmd_group_create)
+
+    site = subparsers.add_parser("site", help="Manage sites.")
+    site_commands = site.add_subparsers(dest="site_command", required=True)
+    site_create = site_commands.add_parser(
+        "create",
+        help="Create a site in a group; you become its admin.",
+        description=(
+            "Create a site in a group where you are editor or admin, and become "
+            "admin of the site. Access flags you leave out follow the group's "
+            "default access."
+        ),
+    )
+    site_create.add_argument("site", help="group/site, for instance team-aurora/docs")
+    site_create.add_argument("--title", required=True, help="Display name of the site")
+    _add_access_flags(site_create, ("the group's default",) * 3)
+    site_create.set_defaults(func=cmd_site_create)
 
     return parser
 
