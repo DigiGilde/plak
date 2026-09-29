@@ -155,18 +155,6 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
 }
 
 /**
- * The sentence for a machine-readable error code, or null when this catalogue
- * does not know it. The backend's own `detail` is the fallback: the API
- * answers in the language this SPA asks for (`Accept-Language`), so an
- * untranslated code still yields a sentence in the right language.
- */
-export function messageForCode(code: string | undefined): string | null {
-  if (code === undefined) return null;
-  const key = `error.code.${code}` as MessageKey;
-  return key in nl ? t(key) : null;
-}
-
-/**
  * For tests: render in this language, whatever the resolution would say.
  * It stands in for the browser as well as clearing any member choice, so a
  * `/me` without a language of its own lands here rather than on the fallback.

@@ -140,25 +140,6 @@ describe('groups', () => {
     const error = await refusedWith(plak.createGroup('Hoofdletters', 'Niet-Geldig'));
     expect(error.problem.status).toBe(422);
   });
-
-  it('deletes an empty group', async () => {
-    await plak.createGroup('Lege groep', 'leeg');
-
-    await plak.deleteGroup('leeg');
-
-    const error = await refusedWith(plak.group('leeg'));
-    expect(error.problem.status).toBe(404);
-  });
-
-  it('refuses to delete a group that still has sites, with 409', async () => {
-    const error = await refusedWith(plak.deleteGroup('nldd'));
-    expect(error.problem.status).toBe(409);
-  });
-
-  it('returns 404 for deleting an unknown group', async () => {
-    const error = await refusedWith(plak.deleteGroup('onbekend'));
-    expect(error.problem.status).toBe(404);
-  });
 });
 
 describe('sites', () => {

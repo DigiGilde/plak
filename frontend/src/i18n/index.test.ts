@@ -4,7 +4,6 @@ import {
   _setLocaleForTest,
   applyMemberLanguage,
   currentLocale,
-  messageForCode,
   setLocale,
   t,
 } from './index';
@@ -50,7 +49,7 @@ describe('Interface language', () => {
   it('fills placeholders with the given values', () => {
     setLocale('nl');
     expect(t('access.label.only', { extras: 'geheime links' })).toBe('Alleen geheime links');
-    expect(t('error.code.SELF_NOT_ALLOWED')).toBe(nl['error.code.SELF_NOT_ALLOWED']);
+    expect(t('error.expired.action')).toBe(nl['error.expired.action']);
   });
 
   it('leaves a placeholder alone when nothing was given for it', () => {
@@ -115,22 +114,6 @@ describe('Interface language', () => {
 
     setLocale(null);
     expect(window.localStorage.getItem('plak-taal')).toBeNull();
-  });
-
-  it('translates a machine-readable error code in the language on screen', () => {
-    setLocale('nl');
-    expect(messageForCode('SELF_NOT_ALLOWED')).toBe(nl['error.code.SELF_NOT_ALLOWED']);
-
-    setLocale('en');
-    expect(messageForCode('SELF_NOT_ALLOWED')).toBe(en['error.code.SELF_NOT_ALLOWED']);
-  });
-
-  it('returns null for a code neither catalogue knows, so callers fall back to the wire detail', () => {
-    expect(messageForCode('SOME_UNKNOWN_CODE')).toBeNull();
-  });
-
-  it('returns null without a code at all', () => {
-    expect(messageForCode(undefined)).toBeNull();
   });
 
   it('renders without storage at all', async () => {

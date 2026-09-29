@@ -29,13 +29,6 @@ const shared = {
   'error.expired.detail':
     'Je sessie is verlopen of beëindigd. Log opnieuw in om verder te gaan waar je was.',
   'error.expired.action': 'Opnieuw inloggen',
-  'error.code.MEMBER_DEACTIVATED': 'Je toegang is ingetrokken door een platformbeheerder.',
-  'error.code.LAST_GROUP_ADMIN':
-    'Dit is de laatste beheerder van de groep. Wijs eerst iemand anders aan.',
-  'error.code.LAST_PLATFORM_ADMIN':
-    'Dit is de laatste actieve platformbeheerder. Wijs eerst iemand anders aan.',
-  'error.code.SELF_NOT_ALLOWED': 'Dit kun je niet bij jezelf doen.',
-  'error.code.UNKNOWN_MEMBER': 'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
   // What this interface can add to a refusal that holds for every client of
   // the API: where, on this screen, the thing it names is changed.
   'error.guidance.ALREADY_GROUP_MEMBER':

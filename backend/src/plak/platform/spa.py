@@ -126,11 +126,6 @@ def _unavailable(csp: str = ADMIN_CSP) -> Response:
     return PlainTextResponse(MESSAGE_SPA_MISSING, status_code=503, headers=headers)
 
 
-def _with_query(path: str, scope: Scope) -> str:
-    query = scope.get("query_string", b"").decode("latin-1")
-    return f"{path}?{query}" if query else path
-
-
 class SpaMiddleware:
     def __init__(self, app: ASGIApp, *, spa_path: Path, content_host: str, csp: str = ADMIN_CSP) -> None:
         self.app = app
