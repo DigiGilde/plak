@@ -250,8 +250,12 @@ async def _audit_refusal(request: Request, error: ApiError) -> None:
         return
     if not _is_audited_refusal(request, error.status):
         return
-    session = session_from_request(request)
-    actor = Actor(ActorKind.MEMBER, session.sub) if session is not None else ANONYMOUS
+    # A route that authenticated its member some other way than the session
+    # cookie (a CLI token, api/admin.py:require_creator) leaves it here.
+    actor = getattr(request.state, "audit_actor", None)
+    if actor is None:
+        session = session_from_request(request)
+        actor = Actor(ActorKind.MEMBER, session.sub) if session is not None else ANONYMOUS
     await log.write(
         vocabulary.ADMIN_ACCESS,
         actor,
@@ -261,6 +265,7 @@ async def _audit_refusal(request: Request, error: ApiError) -> None:
             "method": request.method,
             "route": getattr(request.scope.get("route"), "path", None),
             "status": error.status,
+            **getattr(request.state, "audit_refs", {}),
         },
         ip=net.client_ip_from_request(request),
     )

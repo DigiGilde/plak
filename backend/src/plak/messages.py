@@ -79,7 +79,8 @@ NL: Final[dict[str, str]] = {
     "INSUFFICIENT_ROLE": "Hiervoor heb je minimaal de rol {role} nodig.",
     "NO_AUTHENTICATION": "Geen geldige sessie of bearer-token.",
     "BEARER_NOT_ACCEPTED": (
-        "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints geaccepteerd."
+        "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints en bij het aanmaken van "
+        "een groep of site geaccepteerd."
     ),
     # -- Groups, sites, members ----------------------------------------------
     "UNKNOWN_GROUP": "Onbekende groep.",
@@ -178,10 +179,12 @@ NL: Final[dict[str, str]] = {
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "Het token is ongeldig, ingetrokken of verlopen.",
     "TOKEN_INVALID.missing": "Het token ontbreekt.",
+    "TOKEN_INVALID.cli_only": "Hier wordt alleen een CLI-token uit 'plak login' geaccepteerd.",
     "EXPIRY_IN_PAST": "De vervaldatum ligt in het verleden.",
     "EXPIRY_TOO_FAR": "De vervaldatum mag hoogstens {days} dagen vooruit liggen.",
     # -- CLI login ------------------------------------------------------------
     "TOO_MANY_ATTEMPTS": "Te veel pogingen; wacht een paar minuten.",
+    "TOO_MANY_CREATIONS": "Hoogstens {limit} nieuwe groepen en sites per uur; probeer het later opnieuw.",
     "TOO_MANY_REQUESTS": "Te veel verzoeken. Probeer het over enkele ogenblikken opnieuw.",
     "TOO_MANY_REQUESTS.cli_login": "Te veel inlogpogingen vanaf dit adres; probeer het later opnieuw.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` ontbreekt.",
@@ -336,7 +339,8 @@ EN: Final[dict[str, str]] = {
     "INSUFFICIENT_ROLE": "This needs at least the role {role}.",
     "NO_AUTHENTICATION": "No valid session or bearer token.",
     "BEARER_NOT_ACCEPTED": (
-        "Bearer authentication is accepted on the deploy and CLI endpoints only."
+        "Bearer authentication is accepted on the deploy and CLI endpoints and for creating a "
+        "group or site only."
     ),
     # -- Groups, sites, members ----------------------------------------------
     "UNKNOWN_GROUP": "Unknown group.",
@@ -440,10 +444,12 @@ EN: Final[dict[str, str]] = {
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "The token is invalid, revoked or expired.",
     "TOKEN_INVALID.missing": "The token is missing.",
+    "TOKEN_INVALID.cli_only": "Only a CLI token from 'plak login' is accepted here.",
     "EXPIRY_IN_PAST": "The expiry date is in the past.",
     "EXPIRY_TOO_FAR": "The expiry date may be at most {days} days ahead.",
     # -- CLI login ------------------------------------------------------------
     "TOO_MANY_ATTEMPTS": "Too many attempts; wait a few minutes.",
+    "TOO_MANY_CREATIONS": "At most {limit} new groups and sites per hour; try again later.",
     "TOO_MANY_REQUESTS": "Too many requests. Try again in a few moments.",
     "TOO_MANY_REQUESTS.cli_login": "Too many sign-in attempts from this address; try again later.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` is missing.",

@@ -9,9 +9,11 @@ Auth is one of three:
   which acts as its member with exactly that member's roles;
 - a beheer session with CSRF, for the upload in the SPA.
 
-Bearer is accepted on these two endpoints and the two CLI session endpoints
-only: `BearerOutsideDeploysMiddleware` rejects any other request carrying a
-Bearer Authorization header with a 401.
+Bearer is accepted on these two endpoints, the two CLI session endpoints and
+the two creation endpoints of the beheer API (`POST /groups`, `POST
+/groups/{group}/sites`, CLI token only) and nowhere else:
+`BearerOutsideDeploysMiddleware` rejects any other request carrying a Bearer
+Authorization header with a 401.
 main.py registers router and middleware; the app supplies on app.state:
 settings, session_factory, session_store, content_store and audit_log.
 
@@ -84,6 +86,10 @@ _PREVIEW_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/previews/[^/]+$")
 # token as well.
 CLI_SESSION_PATH = "/-/api/v1/cli/session"
 CLI_WHOAMI_PATH = "/-/api/v1/cli/whoami"
+# Creating a group or a site (api/admin.py) also takes the CLI token; nothing
+# else in the beheer API does.
+GROUP_CREATE_PATH = "/-/api/v1/groups"
+_SITE_CREATE_PATH_RE = re.compile(r"^/-/api/v1/groups/[^/]+/sites$")
 
 router = APIRouter(prefix="/-/api/v1")
 
@@ -219,9 +225,16 @@ def is_deploy_endpoint(method_: str, path: str) -> bool:
     return bool(method_ == "DELETE" and _PREVIEW_PATH_RE.match(path))
 
 
+def is_creation_endpoint(method_: str, path: str) -> bool:
+    if method_ != "POST":
+        return False
+    return path == GROUP_CREATE_PATH or bool(_SITE_CREATE_PATH_RE.match(path))
+
+
 def accepts_bearer(method_: str, path: str) -> bool:
-    """The deploy endpoints plus the CLI's logout and whoami."""
-    if is_deploy_endpoint(method_, path):
+    """The deploy endpoints, the CLI's logout and whoami, and group and site
+    creation."""
+    if is_deploy_endpoint(method_, path) or is_creation_endpoint(method_, path):
         return True
     return (method_, path) in (("DELETE", CLI_SESSION_PATH), ("GET", CLI_WHOAMI_PATH))
 
@@ -600,7 +613,8 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "(`Authorization: Bearer plakcli_...`): dat handelt als het lid dat inlogde, met precies diens "
         "rollen. (3) Een beheersessie plus CSRF-header. Bij (2) en (3) moet het lid actief zijn en op deze "
         "site minstens de rol `editor` hebben. Dit endpoint en de preview-teardown zijn samen met de "
-        "CLI-sessie-endpoints de enige die een Bearer-token accepteren; elders levert die header 401.\n\n"
+        "CLI-sessie-endpoints en het aanmaken van een groep of site de enige die een Bearer-token "
+        "accepteren; elders levert die header 401.\n\n"
         "**Verloop:** eerst wordt geautoriseerd, pas daarna wordt het lichaam gelezen, zodat een geweigerd "
         "verzoek geen upload kost. De upload streamt naar schijf en wordt uitgepakt tegen de limieten "
         "hieronder. Elke deploy, geslaagd of geweigerd, komt in het auditlogboek.\n\n"

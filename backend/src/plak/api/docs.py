@@ -246,17 +246,22 @@ _SECURITY_SCHEMES: dict[str, dict[str, Any]] = {
         "scheme": "bearer",
         "description": (
             "Een CI-ID-token (JWT van GitHub of Forgejo Actions, audience de beheer-URL) of een CLI-token "
-            "`plakcli_...` uit `plak login`. Plak het hele token achter Authorize. Alleen de deploy-endpoints "
-            "en de CLI-sessie-endpoints accepteren het; elders levert een Bearer-header 401, ook als het "
-            "token geldig is."
+            "`plakcli_...` uit `plak login`. Plak het hele token achter Authorize. Alleen de deploy-endpoints, "
+            "de CLI-sessie-endpoints en het aanmaken van een groep of site (die laatste twee alleen met het "
+            "CLI-token) accepteren het; elders levert een Bearer-header 401, ook als het token geldig is."
         ),
     },
 }
 
-# The two endpoints that accept a bearer token besides the session, recognised
-# by the tail of their path template (see deploys.is_deploy_endpoint). The CLI
+# The endpoints that accept a bearer token besides the session, recognised by
+# the tail of their path template (see deploys.accepts_bearer). The CLI
 # endpoints declare their own security in api/cli.py.
-_TOKEN_ENDPOINTS = (("post", "/deploys"), ("delete", "/previews/{ref}"))
+_TOKEN_ENDPOINTS = (
+    ("post", "/deploys"),
+    ("delete", "/previews/{ref}"),
+    ("post", "/-/api/v1/groups"),
+    ("post", "/groups/{group_slug}/sites"),
+)
 
 
 def _set_security(schema: dict[str, Any]) -> None:

@@ -12,6 +12,7 @@ connecting, so `app.openapi()` works without a container.
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -20,6 +21,7 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from plak import messages
+from plak.api.deploys import accepts_bearer
 from plak.api.docs import (
     _ASSETS,
     PATH_PARAMETERS,
@@ -342,7 +344,7 @@ class TestSecurity:
             for method_, operation in path_part.items():
                 assert operation["security"], f"{method_} {path}"
 
-    def test_only_the_deploy_and_cli_session_endpoints_accept_a_token(self, schema) -> None:
+    def test_only_the_deploy_cli_session_and_creation_endpoints_accept_a_token(self, schema) -> None:
         with_token = {
             (path, method_)
             for path, path_part in schema["paths"].items()
@@ -354,7 +356,20 @@ class TestSecurity:
             (self.TEARDOWN, "delete"),
             ("/-/api/v1/cli/session", "delete"),
             ("/-/api/v1/cli/whoami", "get"),
+            ("/-/api/v1/groups", "post"),
+            ("/-/api/v1/groups/{group_slug}/sites", "post"),
         }
+
+    def test_the_documented_token_endpoints_are_exactly_the_ones_the_middleware_lets_through(
+        self, schema
+    ) -> None:
+        """The docs and BearerOutsideDeploysMiddleware answer the same question
+        from two places; over every operation they have to agree."""
+        for path, path_part in schema["paths"].items():
+            concrete = re.sub(r"\{[^}]+\}", "x", path)
+            for method_, operation in path_part.items():
+                documented = any(SECURITY_BEARER in requirement for requirement in operation["security"])
+                assert accepts_bearer(method_.upper(), concrete) == documented, f"{method_} {path}"
 
     def test_the_cli_login_start_and_token_endpoint_need_no_authentication(self, schema) -> None:
         assert schema["paths"]["/-/api/v1/cli/device-authorizations"]["post"]["security"] == [{}]
