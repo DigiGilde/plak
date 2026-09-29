@@ -49,6 +49,8 @@ export const adminNl = {
   'admin.sessions.empty': 'Nog geen gekoppelde sessies',
   'admin.sessions.empty.detail':
     'Voer plak login uit op je computer om de Plak-CLI te koppelen aan je account.',
+  'admin.sessions.empty.install.before': 'Nog geen Plak-CLI? ',
+  'admin.sessions.empty.install.link': 'Zo installeer en gebruik je hem.',
   'admin.sessions.unknownClient': 'Onbekend programma',
   'admin.sessions.neverUsed': 'nog niet',
   'admin.sessions.times': 'Gekoppeld {linked} - laatst gebruikt {lastUsed} - verloopt {expires}',

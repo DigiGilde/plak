@@ -292,7 +292,7 @@ describe('App', () => {
       'Groepen',
       'Platformbeheer',
       'Profiel',
-      'Gekoppelde sessies',
+      'Gekoppelde CLI-sessies',
       'Uitloggen',
     ]);
     // Navigation items are real links, so middle click and "copy link" work;
@@ -312,7 +312,7 @@ describe('App', () => {
     // with the account actions.
     const group = menu.find('nldd-menu-group');
     expect(property<string>(group.element, 'text')).toBe('Account');
-    expect(texts(group, 'nldd-menu-item')).toEqual(['Profiel', 'Gekoppelde sessies', 'Uitloggen']);
+    expect(texts(group, 'nldd-menu-item')).toEqual(['Profiel', 'Gekoppelde CLI-sessies', 'Uitloggen']);
 
     // Who you are sits inside that group, no longer above the list or on the
     // button itself.
@@ -346,7 +346,7 @@ describe('App', () => {
       'Overzicht',
       'Groepen',
       'Profiel',
-      'Gekoppelde sessies',
+      'Gekoppelde CLI-sessies',
       'Uitloggen',
     ]);
   });
@@ -374,7 +374,7 @@ describe('App', () => {
 
     expect(router.currentRoute.value.fullPath).toBe('/-/profile');
 
-    const sessions = withText(app, 'nldd-menu-group nldd-menu-item', 'Gekoppelde sessies')!;
+    const sessions = withText(app, 'nldd-menu-group nldd-menu-item', 'Gekoppelde CLI-sessies')!;
     sessions.element.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     await flushPromises();
 
@@ -435,7 +435,7 @@ describe('App', () => {
     const item = app.findAll('nldd-toolbar-item[slot="end"]')[0];
     expect(
       texts(item, '[slot="overflow"] nldd-menu-item, nldd-menu-item[slot="overflow"]'),
-    ).toEqual(['Overzicht', 'Groepen', 'Profiel', 'Gekoppelde sessies', 'Uitloggen']);
+    ).toEqual(['Overzicht', 'Groepen', 'Profiel', 'Gekoppelde CLI-sessies', 'Uitloggen']);
   });
 
   it('logs out via the item that the toolbar clones into its overflow menu', async () => {

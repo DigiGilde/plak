@@ -1,5 +1,5 @@
 /**
- * Dutch catalogue section: the public pages and the flows around them (front page, About, Privacy, Accessibility, linking a device, the result screen after publishing).
+ * Dutch catalogue section: the public pages and the flows around them (front page, About, Privacy, Accessibility, linking a CLI session, the result screen after publishing).
  *
  * A section per area rather than one file of many hundreds of keys: this is
  * the unit a reviewer can hold in their head, and the unit a screen change
@@ -113,18 +113,20 @@ export const pagesNl = {
   'page.accessibility.report.bodyAfterEmail':
     '. Je krijgt binnen tien werkdagen een reactie. Wij werken doorlopend aan het verbeteren van de toegankelijkheid.',
 
-  // -- Linking a device (plak login) ---------------------------------------
+  // -- Linking a CLI session (plak login) -----------------------------------
   'page.cliPair.loading': 'Bezig met laden',
   'page.cliPair.error.unknownCode':
     'Deze code is onbekend, verlopen of al gebruikt. Start plak login opnieuw.',
   'page.cliPair.error.tooManyAttempts': 'Te veel pogingen. Probeer het zo nog eens.',
   'page.cliPair.unknownClient': 'Onbekend programma',
-  'page.cliPair.login.intro': 'Een apparaat koppelen kan alleen kort nadat je zelf bent ingelogd.',
+  'page.cliPair.login.intro': 'Een CLI-sessie koppelen kan alleen kort nadat je zelf bent ingelogd.',
   'page.cliPair.login.afterwards':
     'Log in en vul daarna de code over die plak login in je terminal toont.',
   'page.cliPair.login.action': 'Inloggen',
   'page.cliPair.codeEntry.intro':
     'Vul de code over die je terminal toont om plak login te koppelen aan je account.',
+  'page.cliPair.codeEntry.install.before': 'Nog geen Plak-CLI? ',
+  'page.cliPair.codeEntry.install.link': 'Zo installeer en gebruik je hem.',
   'page.cliPair.codeEntry.label': 'Code uit je terminal',
   'page.cliPair.codeEntry.placeholder': 'ABCD-EFGH',
   'page.cliPair.codeEntry.required': 'De code uit je terminal, in de vorm ABCD-EFGH',

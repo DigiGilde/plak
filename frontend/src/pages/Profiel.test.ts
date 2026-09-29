@@ -90,6 +90,16 @@ describe('Profiel: who you are', () => {
       '/-/sessions',
     );
   });
+
+  it('points a member without the CLI yet at the install instructions', async () => {
+    const wrapper = await makeWrapper();
+
+    const link = wrapper.find('[data-testid="profiel-cli-install"]');
+    expect(link.attributes('href')).toBe(
+      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+    );
+    expect(link.attributes('target')).toBe('_blank');
+  });
 });
 
 describe('Profiel: the language choice', () => {

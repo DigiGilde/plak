@@ -28,6 +28,7 @@ import {
   t,
   type LanguageChoice,
 } from '@/i18n';
+import { PLAK_LOGIN_DOCS_URL } from '@/urls';
 
 const route = useRoute();
 const { member } = currentMemberState();
@@ -195,6 +196,14 @@ onMounted(() => {
             <h2 id="kop-sessies">{{ t('profile.sessions.heading') }}</h2>
             <span slot="subtitle">{{ t('profile.sessions.body') }}</span>
           </nldd-title>
+          <nldd-rich-text>
+            <p>
+              {{ t('profile.sessions.install.before')
+              }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="profiel-cli-install"
+                >{{ t('profile.sessions.install.link') }}</nldd-link
+              >
+            </p>
+          </nldd-rich-text>
           <nldd-button
             variant="secondary"
             start-icon="link"

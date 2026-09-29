@@ -80,13 +80,33 @@ describe('Sessions: overview', () => {
     );
   });
 
+  it('points a member without the CLI yet at the install instructions in the empty state', async () => {
+    backend.data.cliSessions = [];
+
+    const wrapper = await makeWrapper();
+    await untilIdle();
+
+    const link = wrapper.find('[data-testid="sessies-cli-install"]');
+    expect(link.attributes('href')).toBe(
+      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+    );
+    expect(link.attributes('target')).toBe('_blank');
+  });
+
+  it('does not show the install link once a session is linked', async () => {
+    const wrapper = await makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="sessies-cli-install"]').exists()).toBe(false);
+  });
+
   it('provides the breadcrumb path to the app shell', async () => {
     await makeWrapper();
     await untilIdle();
 
     expect(breadcrumbsFor('/-/sessions')).toEqual([
       { text: 'Overzicht', href: '/' },
-      { text: 'Gekoppelde sessies' },
+      { text: 'Gekoppelde CLI-sessies' },
     ]);
   });
 

@@ -20,6 +20,7 @@ import Landing from './Landing.vue';
 import { fetchSession, type Session } from '@/composables/currentMember';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
+import { PLAK_LOGIN_DOCS_URL } from '@/urls';
 
 /**
  * What the page shows. The lookup stage carries the authorization it shows,
@@ -205,6 +206,12 @@ function clientLine(authorization: DeviceAuthorization): string {
       <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
       <nldd-rich-text>
         <p>{{ t('page.cliPair.codeEntry.intro') }}</p>
+        <p>
+          {{ t('page.cliPair.codeEntry.install.before')
+          }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="code-cli-install"
+            >{{ t('page.cliPair.codeEntry.install.link') }}</nldd-link
+          >
+        </p>
       </nldd-rich-text>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-form data-testid="code-formulier" @submit.prevent="submitManualCode">
