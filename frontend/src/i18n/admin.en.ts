@@ -46,6 +46,8 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.sessions.subtitle': 'Every sign-in through {command} that still has access to your account.',
   'admin.sessions.loading': 'Loading sessions',
   'admin.sessions.empty': 'No linked sessions yet',
+  'admin.sessions.empty.install.before': 'No Plak CLI yet? ',
+  'admin.sessions.empty.install.link': 'Here is how to install and use it.',
   'admin.sessions.empty.detail':
     'Run plak login on your computer to link the Plak CLI to your account.',
   'admin.sessions.unknownClient': 'Unknown program',

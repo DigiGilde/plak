@@ -162,7 +162,7 @@ export const publishNl = {
   'publish.deploy.cli.install':
     'Met de plak-cli publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren met {install}, bijwerken met {upgrade}. Werk je uit een checkout, dan draait {run} hem zonder installatie.',
   'publish.deploy.cli.login':
-    '{login} opent je browser op {link} om het apparaat te koppelen; daarna bewaart de cli die sessie voor volgende {publish}-aanroepen.',
+    '{login} opent je browser op {link} om de CLI-sessie te koppelen; daarna bewaart de cli die sessie voor volgende {publish}-aanroepen.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Repository ontkoppelen?',

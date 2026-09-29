@@ -85,7 +85,7 @@ function expectLoginStage(wrapper: ReturnType<typeof mount>): void {
   expect(link.exists()).toBe(true);
   expect(link.attributes('href')).toBe(LOGIN_HREF);
   expect(link.attributes('disabled')).toBeUndefined();
-  expect(wrapper.find('nldd-title h1').text()).toBe('Apparaat koppelen');
+  expect(wrapper.find('nldd-title h1').text()).toBe('CLI-sessie koppelen');
   expect(wrapper.text()).toContain('kort nadat je zelf bent ingelogd');
   expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
 }
@@ -238,6 +238,16 @@ describe('CliKoppelen: entering a code', () => {
 
     expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+  });
+
+  it('points a member without the CLI yet at the install instructions', async () => {
+    const { wrapper } = await makeWrapper('/cli-link');
+
+    const link = wrapper.find('[data-testid="code-cli-install"]');
+    expect(link.attributes('href')).toBe(
+      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+    );
+    expect(link.attributes('target')).toBe('_blank');
   });
 
   it('normalizes and looks up the manually entered code', async () => {

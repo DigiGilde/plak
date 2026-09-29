@@ -162,7 +162,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.cli.install':
     'With the plak cli you publish without CI, with your own access. If you do not have it yet: {repo} holds it in {folder}. Install it with {install}, update it with {upgrade}. If you work from a checkout, {run} runs it without installing.',
   'publish.deploy.cli.login':
-    '{login} opens your browser at {link} to link the device; after that the cli keeps that session for later {publish} calls.',
+    '{login} opens your browser at {link} to link the CLI session; after that the cli keeps that session for later {publish} calls.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Unlink repository?',

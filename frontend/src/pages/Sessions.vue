@@ -19,6 +19,7 @@ import Notices from '@/components/site/Notices.vue';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
+import { PLAK_LOGIN_DOCS_URL } from '@/urls';
 
 const route = useRoute();
 
@@ -116,39 +117,57 @@ async function confirmRevoke(): Promise<void> {
 
     <ErrorBanner v-else-if="error" :error="error" />
 
-    <nldd-list v-else variant="box-tinted" :accessible-label="t('nav.sessions')">
-      <nldd-inline-dialog
-        v-if="sessions.length === 0"
-        slot="empty"
-        icon="link"
-        :text="t('admin.sessions.empty')"
-        :supporting-text="t('admin.sessions.empty.detail')"
-        data-testid="sessies-leeg"
-      ></nldd-inline-dialog>
-      <nldd-list-item
-        v-for="session in sessions"
-        :key="session.id"
-        size="md"
-        :data-testid="`sessie-${session.id}`"
-      >
-        <nldd-text-cell
-          :text="clientName(session)"
-          :supporting-text="supportingText(session)"
-        ></nldd-text-cell>
-        <nldd-list-item-segment
-          button
-          :accessible-label="t('admin.sessions.revoke.label', { name: clientName(session) })"
-          :data-testid="`sessie-intrekken-${session.id}`"
-          @click="revoking = session"
+    <template v-else>
+      <nldd-list variant="box-tinted" :accessible-label="t('nav.sessions')">
+        <nldd-inline-dialog
+          v-if="sessions.length === 0"
+          slot="empty"
+          icon="link"
+          :text="t('admin.sessions.empty')"
+          :supporting-text="t('admin.sessions.empty.detail')"
+          data-testid="sessies-leeg"
+        ></nldd-inline-dialog>
+        <nldd-list-item
+          v-for="session in sessions"
+          :key="session.id"
+          size="md"
+          :data-testid="`sessie-${session.id}`"
         >
           <nldd-text-cell
-            :text="t('admin.sessions.revoke')"
-            color="critical"
-            width="fit-content"
+            :text="clientName(session)"
+            :supporting-text="supportingText(session)"
           ></nldd-text-cell>
-        </nldd-list-item-segment>
-      </nldd-list-item>
-    </nldd-list>
+          <nldd-list-item-segment
+            button
+            :accessible-label="t('admin.sessions.revoke.label', { name: clientName(session) })"
+            :data-testid="`sessie-intrekken-${session.id}`"
+            @click="revoking = session"
+          >
+            <nldd-text-cell
+              :text="t('admin.sessions.revoke')"
+              color="critical"
+              width="fit-content"
+            ></nldd-text-cell>
+          </nldd-list-item-segment>
+        </nldd-list-item>
+      </nldd-list>
+
+      <!-- A sibling block, not the inline-dialog's own content slot: that slot
+           sits outside the layout that centres the icon and the heading (see
+           Sessions.test.ts), which would leave this sentence hanging beside
+           them instead of below. -->
+      <template v-if="sessions.length === 0">
+        <nldd-spacer size="16"></nldd-spacer>
+        <nldd-rich-text>
+          <p>
+            {{ t('admin.sessions.empty.install.before')
+            }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="sessies-cli-install"
+              >{{ t('admin.sessions.empty.install.link') }}</nldd-link
+            >
+          </p>
+        </nldd-rich-text>
+      </template>
+    </template>
 
     <ConfirmModal
       :open="revoking !== null"
