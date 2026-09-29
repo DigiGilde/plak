@@ -735,6 +735,65 @@ plak preview-remove pr-42 \
     --site nldd/website
 ```
 
+### Creating a group or a site
+
+A site has to exist before you can publish to it. With the CLI token you can
+create both a group and a site from the terminal; you become admin of what
+you create, exactly as in the admin. Deleting and managing members stay in
+the admin: the CLI token is refused there.
+
+```bash
+plak group create team-aurora --name "Team Aurora"
+plak site create team-aurora/docs --title "Documentation" --access sso
+```
+
+`--host` is optional here: without it the CLI uses the host you logged in
+to. Any active member may create a group; a site needs group role `editor`
+or `admin` in that group. The access flags are all optional:
+
+| Flag | Meaning |
+|---|---|
+| `--access {public,sso,site_team,nobody}` | the base: anyone, anyone signed in with SSO Rijk, the members of the site and its group, or nobody except through the two exceptions below |
+| `--secret-links` / `--no-secret-links` | whether a valid secret link lets anyone in, without signing in |
+| `--invitees` / `--no-invitees` | whether invitees get in after signing in |
+
+On a group they set the default access that new sites in that group start
+with; left out, a group starts on `site_team` without exceptions. On a site
+every flag you leave out follows the group's default access, so
+`--secret-links` alone keeps the group's base and invitee setting and turns
+secret links on. The CLI sends only the flags you gave; the server fills in
+the rest.
+
+The CLI prints what it created and the access it ended up with. When that is
+not public, it says who can see it and where to change it:
+
+```text
+$ plak site create team/docs --title Docs --secret-links
+Created site 'team/docs' (Docs). You are its admin.
+Access: nobody (nobody by default), secret links on, invitees off.
+Who can see it: anyone with a secret link.
+Change it at: https://beheer.plak.example.org/team/docs/access
+Publish to it with: plak publish <dist> --host https://beheer.plak.example.org --site team/docs
+```
+
+```text
+$ plak group create team --name Team
+Created group 'team' (Team). You are its admin.
+Default access for new sites: site_team (members of the site and its group), secret links off, invitees off.
+Who can see it: members of the site and its group.
+Change it at: https://beheer.plak.example.org/team/-/settings
+```
+
+Per member at most 20 groups and sites together can be created per hour,
+through the admin and the CLI together; over that the server answers 429 and
+the CLI prints the reason. Exit codes are those of every other command: `0`
+created, `1` refused or unreachable (the server's reason on stderr, for
+instance an existing slug or a role that is too narrow), `2` wrong usage or
+no session.
+
+The CI ID token from a workflow cannot create anything: it is bound to the
+one site whose repository is linked.
+
 Your linked sessions are in the admin under the account menu,
 "Gekoppelde sessies" (linked sessions, `/-/sessions`): name, when linked,
 last used and when the session expires, with a button to revoke one. One
