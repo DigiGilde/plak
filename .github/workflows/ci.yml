@@ -72,8 +72,11 @@ jobs:
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
         # -rs shows the reason for every skipped test, so a silently
-        # skipped container test stays visible in the log.
-        run: uv run python -m pytest -q -rs --cov=src/plak --cov-report=term-missing:skip-covered
+        # skipped container test stays visible in the log. -n auto runs one
+        # worker per CPU; each worker starts its own PostgreSQL container
+        # (the container fixtures are session-scoped, and a session is a
+        # worker), so no two workers ever share a database.
+        run: uv run python -m pytest -q -rs -n auto --cov=src/plak --cov-report=term-missing:skip-covered
 
   # cli/ is its own uv project (the `plak` command), separate from the
   # backend. Its lint runs in the backend job, on the ruff pinned there.

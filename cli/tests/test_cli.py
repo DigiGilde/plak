@@ -140,6 +140,14 @@ def _json_step(status: int, data: dict[str, Any]) -> Callable[[dict], tuple[int,
     return lambda _record: (status, payload, "application/json")
 
 
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    """The login poll waits `interval` seconds between polls; the stub server
+    answers at once, so waiting for real only slows the suite. A test that
+    checks the waits patches sleep again with its own recorder."""
+    monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+
+
 @pytest.fixture
 def stub_server():
     server = HTTPServer(("127.0.0.1", 0), _StubHandler)
