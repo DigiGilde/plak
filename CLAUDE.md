@@ -3,7 +3,7 @@
 An addition to the global instructions. What is written here applies in
 this repo.
 
-## Test coverage: aim for 100%
+## Test coverage: 100%
 
 Every line and every branch is covered by a test, or explicitly excluded
 with a reason. There is no third category. A branch you do not test is a
@@ -12,10 +12,14 @@ branch nobody knows the behaviour of.
 - **New code arrives with its tests.** Not in a next round, not "not
   just yet": in the same change.
 - **Excluding is allowed, silently is not.** If you genuinely cannot
-  reach a path in a test, mark it (`# pragma: no cover` in Python,
-  `/* v8 ignore */` in TypeScript) with a comment saying why. Such a
-  marking is a claim a reviewer can contradict; an uncovered line
-  without a marking is a blind spot nobody sees.
+  reach a path in a test, mark it (`# pragma: no cover - <why>` in
+  Python, `/* v8 ignore start */ ... /* v8 ignore stop */` in
+  TypeScript, with a comment saying why). `v8 ignore next` and
+  `v8 ignore if` are silently ignored by this vitest setup, so a marker
+  of that kind excludes nothing. A marking is a claim a reviewer can
+  contradict; an uncovered line without a marking is a blind spot
+  nobody sees. Reading `coverage-final.json` directly does not show the
+  exclusions; the text or html report does.
 - **Cover behaviour, not lines.** A test that only touches a line to
   make the counter go up is worse than no test: it suggests coverage
   that is not there. Every branch comes with the question of what goes
@@ -29,8 +33,9 @@ branch nobody knows the behaviour of.
   `vitest --coverage`). In a report, name the measured number, never an
   estimate.
 
-Coverage must never drop. If a module sits lower than the rest, that is
-an open task with a name, not background noise.
+All three suites sit at 100% and the floors are set there
+(`backend/pyproject.toml`, `cli/pyproject.toml`,
+`frontend/vite.config.ts`), so anything uncovered and unmarked fails CI.
 
 ## Language
 
