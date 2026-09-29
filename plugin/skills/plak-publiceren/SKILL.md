@@ -1,6 +1,6 @@
 ---
 name: plak-publiceren
-description: Publish a static site to a Plak instance, or clean up a preview. Use when the user points at a Plak admin URL (https://beheer.plak...) or a group/site slug, when a build directory (dist/, build/, _site/, out/) has to go online, or when they say things like "zet deze map online op Plak", "publiceer dit", "zet dit online", "maak er een preview van", "werk mijn site bij", "vervang de site" or "mijn Plak-site geeft 404". Carries the safety rules (a preview by default, live only when the user asks for it in this conversation, sign in with plak login and never approve that yourself), the publishing path with the plak CLI, and what the error codes mean.
+description: Publish a static site to a Plak instance, create the group or site to publish to, or clean up a preview. Use when the user points at a Plak admin URL (https://beheer.plak...) or a group/site slug, when a build directory (dist/, build/, _site/, out/) has to go online, or when they say things like "zet deze map online op Plak", "publiceer dit", "zet dit online", "maak er een preview van", "werk mijn site bij", "vervang de site", "maak een nieuwe site aan" or "mijn Plak-site geeft 404". Carries the safety rules (a preview by default, live only when the user asks for it in this conversation, access only as the user states it, sign in with plak login and never approve that yourself), the publishing path with the plak CLI, and what the error codes mean.
 ---
 
 # Publishing to Plak
@@ -98,8 +98,13 @@ link. So never call a preview URL "protected" or "only for you". Say what you
 know: at which address the version sits, and that whoever can open that
 address sees it.
 
-You do not change visibility yourself. That is an action in the admin
-environment, and the CLI does not offer it here.
+You do not change visibility yourself. Changing it on an existing group or
+site is an action in the admin environment, and the CLI does not offer it.
+The one moment you pass access is when you create a group or a site (see
+"Creating the group or site" below), and then only what the user said about
+who may see it. Without such a statement, leave the access flags out: a new
+site then follows its group's default. Never choose `--access public` on your
+own: making something public is the user's decision, not a convenience.
 
 ### 5. Host and site come from the human
 
@@ -118,14 +123,16 @@ token to somebody else's server.
 
 | Action | Who | Why |
 | --- | --- | --- |
-| Create the site in the admin environment | user | Only with a signed-in session |
+| Decide that a new group or site is needed, and who may see it | user | Policy; ask when it is not clear |
+| Create that group or site (`plak group create`, `plak site create`) | you, on request | It runs as the user, who becomes its admin |
 | Approve `plak login` in the browser | user | You may start the sign-in, never confirm it yourself |
-| Choose the visibility | user | Policy, and session-only |
+| Choose the visibility | user | You pass it only at creation, as the user stated it; changing it later is session-only |
 | Prepare and check the build output | you | See rule 3 |
 | Publish a preview and report the address | you | The normal path |
 | Publish live | you, after an explicit request | See rule 1 |
 | Clean up a preview | you | Idempotent, no risk to live |
 | Roll back to an earlier version | user | Session-only, the CLI does not offer it |
+| Delete a group or site, manage members | user | Session-only, the CLI refuses it |
 | Sign out (`plak logout`) | user or you, on request | Simple, reversible action |
 
 Say this to a user who has no session yet, in these words:
@@ -152,6 +159,8 @@ Then do not go on until the terminal shows "Logged in as ...".
    version tag instead once one exists. The repository is public, so the
    install needs no credentials). When you work in a checkout of that repository, `uv run --project cli
    plak ...` runs it without installing.
+   If the site does not exist yet, see "Creating the group or site" below
+   before you publish.
 2. **Look at the build.** Plak does not serve on the root of the host, so the
    build has to know the right base path: `/{group}/{site}/` for live,
    `/{group}/{site}/_preview/{ref}/` for a preview. See `docs/publishing.md`
@@ -193,6 +202,41 @@ Then do not go on until the terminal shows "Logged in as ...".
    Idempotent: a preview that is gone already is a successful call too. If you
    clean up nothing, a preview expires by itself 30 days after the last
    deploy.
+
+## Creating the group or site
+
+When the user wants something online and there is no site for it yet ("maak
+een nieuwe site aan", "zet dit online op een nieuwe plek"), you can create it
+with their session. Ask for the slug and a display name if they did not give
+them, and ask who may see it if that matters and they did not say.
+
+```bash
+plak group create team-aurora --name "Team Aurora"
+plak site create team-aurora/docs --title "Documentation"
+```
+
+Any active member may create a group; a site needs the `editor` role in its
+group. `--host` may be left out after `plak login`. The access flags are
+`--access {public,sso,site_team,nobody}`, `--secret-links` /
+`--no-secret-links` and `--invitees` / `--no-invitees`, all optional: a group
+left without them starts on `site_team`, and a site follows its group's
+default for every flag you leave out. Pass only what the user said (rule 4).
+
+The CLI prints what it created and the access it ended up with, and when that
+is not public, who can see it and where the user changes it. Relay those
+lines to the user as they are:
+
+```
+Created site 'team/docs' (Docs). You are its admin.
+Access: nobody (nobody by default), secret links on, invitees off.
+Who can see it: anyone with a secret link.
+Change it at: https://beheer.plak.example.nl/team/docs/access
+Publish to it with: plak publish <dist> --host https://beheer.plak.example.nl --site team/docs
+```
+
+Then publish a preview to it as in "The path" above. Create a group or site
+once: if it already exists (`SLUG_EXISTS`), that is the user's site or
+somebody else's, so ask instead of trying another slug.
 
 ## Example from start to finish
 
@@ -276,9 +320,12 @@ upload, and the live site stands as it stood.
 | `PREVIEW_REF_INVALID` (422) | The ref is not a slug | Lowercase letters, digits, hyphens, at most 63 characters |
 | `FILE_TOO_LARGE`, `TOTAL_TOO_LARGE`, `TOO_MANY_FILES`, `BODY_TOO_LARGE` (413) | A limit was exceeded | Name the number from `detail`; do not try again with the same archive |
 | `TOKEN_INVALID`, `NO_AUTHENTICATION` (401) | Session invalid, revoked or expired; or no session was sent | Stop and ask; let the user do `plak login` (again) |
-| `INSUFFICIENT_ROLE`, `MEMBER_NOT_ACTIVE` (403) | The signed-in user does not have at least the `editor` role on this site, or is no longer an active member | Stop and ask; do not try another site |
+| `INSUFFICIENT_ROLE`, `MEMBER_NOT_ACTIVE` (403) | The signed-in user does not have at least the `editor` role on this site (for `plak site create`: in this group), or is no longer an active member | Stop and ask; do not try another site |
 | `CI_REPOSITORY_NOT_TRUSTED`, `CI_BRANCH_NOT_ALLOWED` (403) | CI only: the repository is not linked to this site, or this is a live deploy that does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch | Link the repository in the admin environment ("Publiceren vanuit GitHub of Forgejo"), or use a preview here instead of live |
 | `UNKNOWN_SITE` (404) | Unknown group or unknown site | Have the slug confirmed; do not start guessing variants |
+| `UNKNOWN_GROUP` (404) | `plak site create` into a group that does not exist | Have the group confirmed; create it only if the user asks for a new group |
+| `SLUG_EXISTS` (409) | `plak group create` or `plak site create` with a slug that is taken | Ask the user; it may be theirs already, or someone else's |
+| `TOO_MANY_CREATIONS` (429) | More than 20 groups and sites created in an hour | Stop; this is not something to wait out in a loop |
 | (429) | Rate limit | Wait out `Retry-After`, do not keep retrying in a loop |
 
 For 401, 403 and 404: do not retry with variations. That is a question for the

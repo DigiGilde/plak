@@ -163,6 +163,18 @@ plak publish ./dist --site nldd/website --preview pr-42
 code, you confirm it in the admin, and the session lands in `.env.plak`
 in the current directory (mode 0600, so put it in your `.gitignore`).
 
+No site yet? Create the group and the site from the terminal too; you
+become admin of both. The access flags are optional (`--access`,
+`--secret-links`, `--invitees`); a site you create without them follows
+its group's default access:
+
+```bash
+plak group create team-aurora --name "Team Aurora"
+plak site create team-aurora/docs --title "Documentation" --access sso
+```
+
+Deleting groups and sites and managing members stays in the admin.
+
 From a checkout of this repository the same commands run without
 installing anything:
 
