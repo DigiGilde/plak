@@ -248,4 +248,15 @@ describe('NewGroupSheet', () => {
     wrapper.unmount();
     expect(document.body.querySelector('nldd-sheet')).toBeNull();
   });
+
+  it('slots an nldd-page, the component that brings the sheet its scroller', () => {
+    // nldd-sheet is `overflow: hidden` with `--context-scroll-mode: nested`,
+    // so a slotted container is clipped rather than scrolled: on a short
+    // viewport the submit button then cannot be reached at all.
+    const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
+
+    const page = wrapper.find('nldd-sheet > nldd-page');
+    expect(page.exists()).toBe(true);
+    expect(page.element.querySelector(':scope > nldd-container')).not.toBeNull();
+  });
 });

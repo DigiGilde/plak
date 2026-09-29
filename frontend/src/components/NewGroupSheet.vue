@@ -114,71 +114,74 @@ watch(
       :accessible-label="t('group.new.title')"
       @close="onClose"
     >
-      <nldd-container padding="24" gap="16">
-        <nldd-title :size="4"><h2>{{ t('group.new.title') }}</h2></nldd-title>
+      <!-- nldd-page brings the scroller the sheet expects; see PublishSheet. -->
+      <nldd-page>
+        <nldd-container padding="24" gap="16">
+          <nldd-title :size="4"><h2>{{ t('group.new.title') }}</h2></nldd-title>
 
-        <ErrorBanner v-if="error" :error="error" />
+          <ErrorBanner v-if="error" :error="error" />
 
-        <nldd-form @submit.prevent="onSubmit">
-          <nldd-form-field :label="t('group.new.name.label')">
-            <nldd-text-field
-              name="naam"
-              :value="name"
-              required
-              :invalid="nameEmpty || undefined"
-              @input="(e: CustomEvent) => { name = (e.detail?.value ?? (e.target as HTMLInputElement).value); onNameInput(); }"
-            ></nldd-text-field>
-            <nldd-validation-list>
-              <nldd-validation-item id="groep-naam-vereist" required>
-                {{ t('group.new.name.required') }}
-              </nldd-validation-item>
-            </nldd-validation-list>
-          </nldd-form-field>
+          <nldd-form @submit.prevent="onSubmit">
+            <nldd-form-field :label="t('group.new.name.label')">
+              <nldd-text-field
+                name="naam"
+                :value="name"
+                required
+                :invalid="nameEmpty || undefined"
+                @input="(e: CustomEvent) => { name = (e.detail?.value ?? (e.target as HTMLInputElement).value); onNameInput(); }"
+              ></nldd-text-field>
+              <nldd-validation-list>
+                <nldd-validation-item id="groep-naam-vereist" required>
+                  {{ t('group.new.name.required') }}
+                </nldd-validation-item>
+              </nldd-validation-list>
+            </nldd-form-field>
 
-          <nldd-form-field :label="t('group.new.slug.label')">
-            <nldd-text-field
-              name="slug"
-              :value="slug"
-              required
-              :pattern="SLUG_PATTERN"
-              :invalid="slugInvalid || slugServerError !== null || undefined"
-              :unmet="slugServerError !== null ? 'groep-slug-server' : undefined"
-              @input="(e: CustomEvent) => onSlugInput(e.detail?.value ?? (e.target as HTMLInputElement).value)"
-            ></nldd-text-field>
-            <!-- The list normally reads the value off the field on every
-                 input event; here the slug is also derived from the name, and
-                 it does not see that change. `value` hands it the value the app
-                 keeps. -->
-            <nldd-validation-list :value="slug">
-              <nldd-validation-item id="groep-slug-vereist" required>
-                {{ t('group.new.slug.required') }}
-              </nldd-validation-item>
-              <nldd-validation-item id="groep-slug-vorm" hint :match="SLUG_MATCH">
-                {{ t('group.new.slug.pattern') }}
-              </nldd-validation-item>
-              <nldd-validation-item id="groep-slug-server">
-                {{ slugServerError }}
-              </nldd-validation-item>
-            </nldd-validation-list>
-          </nldd-form-field>
+            <nldd-form-field :label="t('group.new.slug.label')">
+              <nldd-text-field
+                name="slug"
+                :value="slug"
+                required
+                :pattern="SLUG_PATTERN"
+                :invalid="slugInvalid || slugServerError !== null || undefined"
+                :unmet="slugServerError !== null ? 'groep-slug-server' : undefined"
+                @input="(e: CustomEvent) => onSlugInput(e.detail?.value ?? (e.target as HTMLInputElement).value)"
+              ></nldd-text-field>
+              <!-- The list normally reads the value off the field on every
+                   input event; here the slug is also derived from the name, and
+                   it does not see that change. `value` hands it the value the app
+                   keeps. -->
+              <nldd-validation-list :value="slug">
+                <nldd-validation-item id="groep-slug-vereist" required>
+                  {{ t('group.new.slug.required') }}
+                </nldd-validation-item>
+                <nldd-validation-item id="groep-slug-vorm" hint :match="SLUG_MATCH">
+                  {{ t('group.new.slug.pattern') }}
+                </nldd-validation-item>
+                <nldd-validation-item id="groep-slug-server">
+                  {{ slugServerError }}
+                </nldd-validation-item>
+              </nldd-validation-list>
+            </nldd-form-field>
 
-          <nldd-form-actions>
-            <nldd-button-group>
-              <nldd-button
-                variant="secondary"
-                :text="t('group.new.cancel')"
-                type="button"
-                @click="onCancel"
-              ></nldd-button>
-              <nldd-button
-                :text="t('group.action.newGroup')"
-                variant="primary"
-                type="submit"
-              ></nldd-button>
-            </nldd-button-group>
-          </nldd-form-actions>
-        </nldd-form>
-      </nldd-container>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button
+                  variant="secondary"
+                  :text="t('group.new.cancel')"
+                  type="button"
+                  @click="onCancel"
+                ></nldd-button>
+                <nldd-button
+                  :text="t('group.action.newGroup')"
+                  variant="primary"
+                  type="submit"
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </nldd-form>
+        </nldd-container>
+      </nldd-page>
     </nldd-sheet>
   </Teleport>
 </template>
