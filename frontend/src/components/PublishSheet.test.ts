@@ -1154,4 +1154,18 @@ describe('PublishSheet (dragging)', () => {
     expect(page.exists()).toBe(true);
     expect(page.element.querySelector(':scope > nldd-container')).not.toBeNull();
   });
+
+  it('puts each exception hint beside its switch, where it renders', () => {
+    // nldd-switch-field has no slot of its own: a help text written inside it
+    // stays in the DOM and never reaches the screen, which jsdom cannot see.
+    const { wrapper } = mountComponent();
+
+    for (const id of ['publiceer-uitzondering-sleutels', 'publiceer-uitzondering-genodigden']) {
+      const control = wrapper.find(`[data-testid="${id}"]`).element;
+      expect(control.querySelector('nldd-form-field-help-text')).toBeNull();
+      const field = control.closest('nldd-form-field');
+      expect(field, `${id} has no nldd-form-field around it`).not.toBeNull();
+      expect(field!.querySelector(':scope > nldd-form-field-help-text')?.textContent).toBeTruthy();
+    }
+  });
 });

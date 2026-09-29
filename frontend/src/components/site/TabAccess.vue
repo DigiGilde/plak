@@ -427,23 +427,25 @@ function keyActions(key: Key): RowAction[] {
             data-testid="uitzonderingen-zinloos"
           ></nldd-banner>
 
-          <nldd-switch-field
-            :label="keysLabel()"
-            :checked="access?.keys || undefined"
-            data-testid="uitzondering-sleutels"
-            @change="toggleKeys"
-          >
+          <nldd-form-field>
+            <nldd-switch-field
+              :label="keysLabel()"
+              :checked="access?.keys || undefined"
+              data-testid="uitzondering-sleutels"
+              @change="toggleKeys"
+            ></nldd-switch-field>
             <nldd-form-field-help-text>{{ keysHint() }}</nldd-form-field-help-text>
-          </nldd-switch-field>
+          </nldd-form-field>
 
-          <nldd-switch-field
-            :label="inviteesLabel()"
-            :checked="access?.invitees || undefined"
-            data-testid="uitzondering-genodigden"
-            @change="toggleInvitees"
-          >
+          <nldd-form-field>
+            <nldd-switch-field
+              :label="inviteesLabel()"
+              :checked="access?.invitees || undefined"
+              data-testid="uitzondering-genodigden"
+              @change="toggleInvitees"
+            ></nldd-switch-field>
             <nldd-form-field-help-text>{{ inviteesHint() }}</nldd-form-field-help-text>
-          </nldd-switch-field>
+          </nldd-form-field>
         </nldd-container>
       </section>
 
@@ -530,13 +532,11 @@ function keyActions(key: Key): RowAction[] {
                 :supporting-text="key.selector"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
                 color="secondary"
                 :text="formatDate(key.createdAt)"
                 hide-below="md"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
                 color="secondary"
                 :text="key.expiresAt ? formatDate(key.expiresAt) : t('publish.access.keys.never')"
                 hide-below="md"
@@ -667,7 +667,6 @@ function keyActions(key: Key): RowAction[] {
             >
               <nldd-text-cell :text="invitee.identifier"></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
                 color="secondary"
                 :text="formatDate(invitee.addedAt)"
                 hide-below="md"

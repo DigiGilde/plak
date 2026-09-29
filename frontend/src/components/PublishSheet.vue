@@ -799,30 +799,36 @@ watch(
 
             <!-- The same two extras as the Toegang tab (components/site/
                  TabAccess.vue): without them that base publishes a
-                 site nobody can reach. A form-section, not a form-field: a
-                 switch field is a field of its own and nesting fields would
-                 label the control twice. -->
+                 site nobody can reach. Each switch sits in a form-field of its
+                 own without a label: nldd-switch-field renders no slot, so a
+                 help text written inside it never appears, and the field is
+                 what gives that text a place. It does not label the control
+                 twice either, because _applyAccessibleLabel only writes to a
+                 control with `accessibleLabel` or a native input, and a switch
+                 field is neither. -->
             <nldd-form-section
               :text="t('publish.sheet.extras.heading')"
               :supporting-text="t('publish.sheet.extras.hint')"
             >
-              <nldd-switch-field
-                :label="keysLabel()"
-                :checked="effectiveAccess.keys || undefined"
-                data-testid="publiceer-uitzondering-sleutels"
-                @change="toggleKeys"
-              >
+              <nldd-form-field>
+                <nldd-switch-field
+                  :label="keysLabel()"
+                  :checked="effectiveAccess.keys || undefined"
+                  data-testid="publiceer-uitzondering-sleutels"
+                  @change="toggleKeys"
+                ></nldd-switch-field>
                 <nldd-form-field-help-text>{{ keysHint() }}</nldd-form-field-help-text>
-              </nldd-switch-field>
+              </nldd-form-field>
 
-              <nldd-switch-field
-                :label="inviteesLabel()"
-                :checked="effectiveAccess.invitees || undefined"
-                data-testid="publiceer-uitzondering-genodigden"
-                @change="toggleInvitees"
-              >
+              <nldd-form-field>
+                <nldd-switch-field
+                  :label="inviteesLabel()"
+                  :checked="effectiveAccess.invitees || undefined"
+                  data-testid="publiceer-uitzondering-genodigden"
+                  @change="toggleInvitees"
+                ></nldd-switch-field>
                 <nldd-form-field-help-text>{{ inviteesHint() }}</nldd-form-field-help-text>
-              </nldd-switch-field>
+              </nldd-form-field>
 
               <!-- The sum of base and extras, which is what someone came for and
                    the one thing three separate controls cannot say. -->

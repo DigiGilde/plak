@@ -189,6 +189,22 @@ describe('TabAccess: the base', () => {
   });
 });
 
+/**
+ * The help text next to a control, and only there. Written inside the switch
+ * it is still in the DOM, so a plain `.text()` or a descendant query reads it
+ * either way; what decides whether anyone sees it is being a direct child of
+ * the form-field, because nldd-switch-field renders no slot of its own.
+ */
+function helpTextBeside(control: Element): string {
+  const field = control.closest('nldd-form-field');
+  expect(field, 'the switch has no nldd-form-field around it').not.toBeNull();
+  expect(
+    control.querySelector('nldd-form-field-help-text'),
+    'the help text sits inside the switch, where it never renders',
+  ).toBeNull();
+  return field!.querySelector(':scope > nldd-form-field-help-text')?.textContent ?? '';
+}
+
 describe('TabAccess: the two exceptions', () => {
   it('offers them as switches beside the base, not as options within it', async () => {
     const wrapper = makeWrapper();
@@ -198,12 +214,15 @@ describe('TabAccess: the two exceptions', () => {
     expect(keys.element.tagName.toLowerCase()).toBe('nldd-switch-field');
     expect(keys.attributes('label')).toBe('Geheime links');
     expect(keys.attributes('checked')).toBeDefined();
-    expect(keys.text()).toContain('zonder in te loggen');
+    // The hint belongs to the surrounding form-field, not inside the switch:
+    // nldd-switch-field renders no slot, so a help text written within it is
+    // in the DOM but never on the screen, which jsdom cannot tell apart.
+    expect(helpTextBeside(keys.element)).toContain('zonder in te loggen');
 
     const invitees = wrapper.find('[data-testid="uitzondering-genodigden"]');
     expect(invitees.attributes('label')).toBe('Genodigden');
     expect(invitees.attributes('checked')).toBeDefined();
-    expect(invitees.text()).toContain('SSO Rijk');
+    expect(helpTextBeside(invitees.element)).toContain('SSO Rijk');
   });
 
   it('turns on an exception without touching the base', async () => {
