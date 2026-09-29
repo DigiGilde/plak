@@ -134,6 +134,18 @@ therefore means someone deliberately turned it off.
 `false` means someone deliberately gave up the shielding, normally because
 their site needs browser storage.
 
+`group_create` and `site_create` record the access the new group or site
+starts with, in the same three fields as below: `refs.base`, `refs.keys` and
+`refs.invitees`, alongside group (and site). That is the effective access,
+whether it was chosen or taken from the default (for a group: `site_team`
+without extras; for a site: the group's default access). Created with the
+CLI token from `plak login` (`plak group create`, `plak site create`), the
+row also carries `refs.via` with the value `cli` and `refs.cli_session` with
+the id of the CLI session, as on a deploy. A refusal on those two routes
+through the CLI token arrives as `admin_access` like any other, with the
+member as actor and the same `refs.via` and `refs.cli_session`; that
+includes `TOO_MANY_CREATIONS`, the 429 of the creation budget.
+
 `group_default_visibility`, `site_visibility` and `preview_visibility` carry
 no single level, but the three fields access is made of: `refs.base`
 (`public`, `sso`, `site_team` or `nobody`), `refs.keys` and `refs.invitees`
@@ -630,9 +642,10 @@ rotation (`docs/security.md`) older rows stay readable as long as
   chain head makes it visible afterwards, it does not prevent it.
 - No alerting. Reading is possible, signalling not yet.
 - The 429 from the rate limiter and the 401 on a Bearer header outside the
-  deploy endpoints do not reach the log; they bypass `ApiError`. The 429
-  from `LOOKUP_LIMIT_REACHED` does go through `ApiError` and therefore does
-  reach the log, as `admin_access`/`refused`.
+  endpoints that accept one do not reach the log; they bypass `ApiError`.
+  The 429 from `LOOKUP_LIMIT_REACHED` and from `TOO_MANY_CREATIONS` does go
+  through `ApiError` and therefore does reach the log, as
+  `admin_access`/`refused`.
 - If `PLAK_AUDIT_IP_KEY` is lost or rotated without setting
   `PLAK_AUDIT_IP_KEY_PREVIOUS`, older `ip_encrypted` values become
   unreadable (docs/security.md); they do stay in place until their row

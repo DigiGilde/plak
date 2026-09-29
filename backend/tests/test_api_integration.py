@@ -192,6 +192,53 @@ async def test_bearer_outside_deploy_endpoints_gives_401(
     assert "WWW-Authenticate" in resp.headers
 
 
+async def test_bearer_creates_a_group_and_a_site_through_the_full_stack(
+    app: FastAPI, client: httpx.AsyncClient
+) -> None:
+    """The CLI sends no Origin and no CSRF header: the origin guard lets it
+    through, as on the deploy router, and the token stands in for the session."""
+    token = await _seed_site_with_token(app)
+
+    group = await client.post(
+        f"{BASE}/groups",
+        json={"name": "Team", "slug": "team", "defaultAccess": {"base": "nobody"}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    site = await client.post(
+        f"{BASE}/groups/team/sites",
+        json={"title": "Docs", "slug": "docs", "access": {"keys": True}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert group.status_code == 201, group.text
+    assert site.status_code == 201, site.text
+    assert site.json()["access"] == {"base": "nobody", "keys": True, "invitees": False}
+
+
+async def test_bearer_creation_with_a_content_origin_is_refused(app: FastAPI, client: httpx.AsyncClient) -> None:
+    """Content JS on the sibling host that got hold of a token still meets the
+    origin guard."""
+    token = await _seed_site_with_token(app)
+
+    resp = await client.post(
+        f"{BASE}/groups",
+        json={"name": "Team", "slug": "team"},
+        headers={"Authorization": f"Bearer {token}", "Origin": OTHER_ORIGIN},
+    )
+
+    assert resp.status_code == 403
+    assert resp.json()["code"] == REASON_OTHER_ORIGIN
+
+
+async def test_bearer_on_deleting_a_group_is_still_401(app: FastAPI, client: httpx.AsyncClient) -> None:
+    token = await _seed_site_with_token(app)
+
+    resp = await client.delete(f"{BASE}/groups/nldd", headers={"Authorization": f"Bearer {token}"})
+
+    assert resp.status_code == 401
+    assert resp.json()["code"] == "BEARER_NOT_ACCEPTED"
+
+
 async def test_docs_gives_200_without_external_origins(client: httpx.AsyncClient) -> None:
     resp = await client.get("/-/api/docs")
 

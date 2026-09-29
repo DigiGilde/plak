@@ -135,7 +135,8 @@ IDP_SESSION_REASONS: Final = frozenset(
     }
 )
 
-# refs["via"] on a deploy or preview teardown by a member through `plak login`.
+# refs["via"] on a deploy, a preview teardown, or a group or site creation by a
+# member through `plak login`.
 VIA_CLI: Final = "cli"
 
 # refs["ip_unvouched"], set to true on a row whose IP address was derived over

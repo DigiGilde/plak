@@ -15,17 +15,26 @@ deliberately do NOT live in this router: `api/deploys.py` serves those paths
 for bearer and session at once. main.py puts `require_admin_origin` on that
 router too (bearer CI sends no Origin/Sec-Fetch-Site and passes it
 unhindered).
+
+Two routes here do take a bearer as well: creating a group and creating a
+site accept the CLI token from `plak login` (`require_creator`), with the
+same role checks as the session. A bearer request carries no ambient
+credentials, so it skips the CSRF check; the origin guard stays on it, as on
+the deploy router. Every other route in this router is session only, which
+`BearerOutsideDeploysMiddleware` enforces before the request gets here.
 """
 
 from __future__ import annotations
 
 import base64
 import hmac
+import math
 import time
 import unicodedata
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -40,6 +49,7 @@ from plak import net
 from plak.access import keys as access_keys
 from plak.access import roles
 from plak.api.authorization import require_group_role, require_site_role
+from plak.api.deploys import bearer_from_request, cli_member
 from plak.api.docs import (
     TAG_AUDIT,
     TAG_CI,
@@ -56,7 +66,7 @@ from plak.api.docs import (
     TAG_SITES,
     TAG_VERSIONS,
 )
-from plak.api.errors import ApiError, error_responses
+from plak.api.errors import WWW_AUTHENTICATE_BEARER, ApiError, error_responses
 from plak.api.origin_guard import require_admin_origin
 from plak.api.schema import ApiModel
 from plak.audit import vocabulary
@@ -288,11 +298,33 @@ def _require_aware(value: datetime | None) -> datetime | None:
     return value
 
 
+class AccessChoice(ApiModel):
+    """Toegang bij het aanmaken: basis plus uitzonderingen. Elk veld mag weg; wat er dan geldt,
+    staat bij het veld dat dit object draagt."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"base": "nobody", "keys": True}, {"base": "public"}]}
+    )
+
+    base: AccessBase | None = Field(default=None, description=f"De basis, precies een van: {ACCESS_BASE_HINT}")
+    keys: bool | None = Field(
+        default=None, description="Of geheime links toegang geven. " + ACCESS_EXTRAS_HINT
+    )
+    invitees: bool | None = Field(
+        default=None, description="Of genodigden toegang geven na inloggen met SSO Rijk."
+    )
+
+
 class GroupCreate(ApiModel):
     """Een nieuwe groep."""
 
     model_config = ConfigDict(
-        json_schema_extra={"examples": [{"name": "Team Aurora", "slug": "aurora"}]}
+        json_schema_extra={
+            "examples": [
+                {"name": "Team Aurora", "slug": "aurora"},
+                {"name": "Team Aurora", "slug": "aurora", "defaultAccess": {"base": "sso"}},
+            ]
+        }
     )
 
     name: str = Field(description="Weergavenaam van de groep.", examples=["Team Aurora"])
@@ -304,19 +336,40 @@ class GroupCreate(ApiModel):
         ),
         examples=["aurora"],
     )
+    default_access: AccessChoice | None = Field(
+        default=None,
+        description=(
+            "Optioneel: de standaardtoegang waarmee de groep begint. Elk weggelaten veld, of het hele "
+            "object weggelaten, krijgt de standaard: basis `site_team`, geen geheime links, geen "
+            "genodigden."
+        ),
+    )
 
 
 class SiteCreate(ApiModel):
     """Een nieuwe site binnen een groep."""
 
     model_config = ConfigDict(
-        json_schema_extra={"examples": [{"title": "Documentatie", "slug": "docs"}]}
+        json_schema_extra={
+            "examples": [
+                {"title": "Documentatie", "slug": "docs"},
+                {"title": "Documentatie", "slug": "docs", "access": {"base": "public"}},
+            ]
+        }
     )
 
     title: str = Field(description="Weergavenaam van de site.", examples=["Documentatie"])
     slug: str = Field(
         description="Slug van de site: kleine letters, cijfers en koppeltekens, uniek binnen de groep.",
         examples=["docs"],
+    )
+    access: AccessChoice | None = Field(
+        default=None,
+        description=(
+            "Optioneel: de toegang waarmee de site begint. Elk weggelaten veld, of het hele object "
+            "weggelaten, neemt de standaardtoegang van de groep over, dus `{\"keys\": true}` zet alleen "
+            "geheime links aan bovenop wat de groep al voorschrijft."
+        ),
     )
 
 
@@ -2389,6 +2442,79 @@ def _unknown_user_code() -> ApiError:
     return ApiError(404, "USER_CODE_UNKNOWN")
 
 
+# Per member, groups and sites together; every attempt that gets past the
+# role check and the input validation counts, a slug collision included.
+CREATION_MAX_PER_WINDOW = 20
+CREATION_WINDOW_S = 3600
+
+
+@dataclass(frozen=True)
+class Creator:
+    """Who creates a group or a site: the member, plus the CLI session when the
+    request came with a CLI token instead of a beheer session."""
+
+    member: Member
+    cli_session_id: uuid.UUID | None = None
+
+    def audit_refs(self) -> dict:
+        if self.cli_session_id is None:
+            return {}
+        return {"via": vocabulary.VIA_CLI, "cli_session": str(self.cli_session_id)}
+
+
+async def require_creator(request: Request) -> Creator:
+    """The two creation routes take a beheer session with CSRF, exactly as
+    before, or a CLI access token. A bearer header decides: with one, the
+    session cookie is not looked at, and neither is CSRF, since nothing
+    ambient came along. A CI ID token is site-bound and creates nothing."""
+    plaintext = bearer_from_request(request)
+    if plaintext is None:
+        await require_csrf(request)
+        return Creator(member=await require_active_member(request))
+    if not plaintext.startswith(cli.ACCESS_TOKEN_PREFIX + "_"):
+        raise ApiError(401, "TOKEN_INVALID.cli_only", headers=WWW_AUTHENTICATE_BEARER)
+    async with request.app.state.session_factory() as db:
+        session, member = await cli_member(request, db, plaintext)
+    creator = Creator(member=member, cli_session_id=session.id)
+    # A refusal after this point (role, rate limit) is audited by
+    # api/errors.py, which cannot see this member through a session cookie.
+    request.state.audit_actor = Actor(ActorKind.MEMBER, member.sso_subject)
+    request.state.audit_refs = creator.audit_refs()
+    return creator
+
+
+async def _require_creation_budget(request: Request, member: Member) -> None:
+    counter = getattr(request.app.state, "creation_counter", None)
+    if counter is None:
+        counter = InMemoryCounter()
+        request.app.state.creation_counter = counter
+    result = await counter.increment(f"member:{member.id}", CREATION_WINDOW_S, time.monotonic())
+    if result.count > CREATION_MAX_PER_WINDOW:
+        raise ApiError(
+            429,
+            "TOO_MANY_CREATIONS",
+            params={"limit": CREATION_MAX_PER_WINDOW},
+            headers={"Retry-After": str(max(1, math.ceil(result.remaining_s)))},
+        )
+
+
+def _chosen_access(
+    choice: AccessChoice | None, base: AccessBase, keys: bool, invitees: bool
+) -> tuple[AccessBase, bool, bool]:
+    """The access asked for, with every field left out taken from the default."""
+    if choice is None:
+        return base, keys, invitees
+    return (
+        choice.base if choice.base is not None else base,
+        choice.keys if choice.keys is not None else keys,
+        choice.invitees if choice.invitees is not None else invitees,
+    )
+
+
+def _access_refs(base: AccessBase, keys: bool, invitees: bool) -> dict:
+    return {"base": str(base), "keys": keys, "invitees": invitees}
+
+
 # -- Router -----------------------------------------------------------------
 
 
@@ -2401,6 +2527,26 @@ _ERROR_APPROVAL = {
     404: "De code is onbekend, verlopen of al afgehandeld (`USER_CODE_UNKNOWN`).",
     429: "Te veel pogingen door dit lid in korte tijd (`TOO_MANY_ATTEMPTS`).",
 }
+_ERROR_CLI_TOKEN = {
+    401: (
+        "Met een Bearer-header: het is geen CLI-token uit `plak login`, of het is ongeldig, ingetrokken of "
+        "verlopen (`TOKEN_INVALID`); het antwoord draagt dan `WWW-Authenticate: Bearer`."
+    ),
+    403: "Met een CLI-token: het lid is niet (meer) actief (`MEMBER_NOT_ACTIVE`).",
+}
+_ERROR_CREATIONS = {
+    429: (
+        f"Dit lid heeft in het afgelopen uur al {CREATION_MAX_PER_WINDOW} groepen en sites samen aangemaakt "
+        "(`TOO_MANY_CREATIONS`); de header `Retry-After` zegt na hoeveel seconden het weer kan."
+    )
+}
+_CREATION_RULE = (
+    "Behalve met de beheersessie en een geldige CSRF-header mag dit ook met een CLI-token uit "
+    "`plak login` (`Authorization: Bearer plakcli_...`), met precies dezelfde rolcontrole; de CSRF-header "
+    "vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een CI-ID-token mag het niet. "
+    f"Per lid geldt een limiet van {CREATION_MAX_PER_WINDOW} nieuwe groepen en sites samen per "
+    f"{CREATION_WINDOW_S // 60} minuten, via beheer en CLI samen."
+)
 _APPROVAL_RULE = (
     "**Mag:** elk actief lid, met een beheersessie van hoogstens een kwartier oud en een geldige "
     "CSRF-header. Per lid tellen opzoeken, goedkeuren en weigeren samen voor een limiet van "
@@ -2513,14 +2659,18 @@ def make_admin_router() -> APIRouter:
         summary="Groep aanmaken",
         response_description="De aangemaakte groep.",
         description=(
-            "Maakt een groep aan en maakt de aanmaker meteen groepslid, zodat hij er sites in kan zetten. "
-            "De nieuwe groep begint met basis `site_team` en geen uitzonderingen; dat is daarna te "
-            "wijzigen.\n\n"
+            "Maakt een groep aan en maakt de aanmaker meteen groepsbeheerder (`admin`), zodat hij er sites "
+            "in kan zetten. De nieuwe groep begint met basis `site_team` en geen uitzonderingen, tenzij "
+            "`defaultAccess` iets anders vraagt; dat is daarna te wijzigen. Omdat de aanmaker groepsbeheerder "
+            "wordt, is de standaardtoegang meteen kiezen niets meer dan hij daarna zelf ook mag.\n\n"
             "**Mag:** ieder actief lid, met een geldige CSRF-header. Een groep aanmaken is geen "
-            "voorbehouden handeling: wie iets wil publiceren moet daar zelf een plek voor kunnen maken."
+            "voorbehouden handeling: wie iets wil publiceren moet daar zelf een plek voor kunnen maken. "
+            + _CREATION_RULE
         ),
         responses=_errors(
             _ERROR_CSRF,
+            _ERROR_CLI_TOKEN,
+            _ERROR_CREATIONS,
             {409: "Er bestaat al een groep met deze slug (`SLUG_EXISTS`)."},
             {
                 422: (
@@ -2531,11 +2681,20 @@ def make_admin_router() -> APIRouter:
         ),
     )
     async def create_group(
-        request: Request, body: GroupCreate, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request, body: GroupCreate, creator: Annotated[Creator, Depends(require_creator)], db: Db
     ) -> GroupOut:
+        member = creator.member
         slug = _validate_slug(body.slug, reserved_refused=True)
         name = _validate_text(body.name, "name")
-        group = Group(slug=slug, name=name, default_access_base=AccessBase.SITE_TEAM)
+        base, keys, invitees = _chosen_access(body.default_access, AccessBase.SITE_TEAM, False, False)
+        await _require_creation_budget(request, member)
+        group = Group(
+            slug=slug,
+            name=name,
+            default_access_base=base,
+            default_access_keys=keys,
+            default_access_invitees=invitees,
+        )
         db.add(group)
         try:
             await db.flush()
@@ -2546,7 +2705,12 @@ def make_admin_router() -> APIRouter:
         # they cannot create a site in their own fresh group (403).
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
         await db.commit()
-        await _audit(request, member, "group_create", {"group": slug})
+        await _audit(
+            request,
+            member,
+            "group_create",
+            {"group": slug, **_access_refs(base, keys, invitees), **creator.audit_refs()},
+        )
         return _group_json(group)
 
     @router.get(
@@ -2644,13 +2808,17 @@ def make_admin_router() -> APIRouter:
         summary="Site aanmaken",
         response_description="Het aangemaakte site.",
         description=(
-            "Maakt een site binnen een groep. De site krijgt de standaardzichtbaarheid van de groep en "
-            "staat op `/{groupSlug}/{siteSlug}/` op de content-origin, zodra er iets naartoe is gedeployd.\n\n"
+            "Maakt een site binnen een groep. De site krijgt de standaardzichtbaarheid van de groep, of wat "
+            "`access` daarvan afwijkend vraagt, en staat op `/{groupSlug}/{siteSlug}/` op de content-origin, "
+            "zodra er iets naartoe is gedeployd.\n\n"
             "**Mag:** groepsrol `editor` of ruimer, met een geldige CSRF-header; de maker wordt `admin` van "
-            "de site die hij aanmaakt. Een platformbeheerder die geen groepsrol heeft, mag dit niet."
+            "de site die hij aanmaakt, en mag de toegang dus meteen kiezen: dat is niets meer dan hij daarna "
+            "zelf ook mag. Een platformbeheerder die geen groepsrol heeft, mag dit niet. " + _CREATION_RULE
         ),
         responses=_errors(
             _ERROR_CSRF,
+            _ERROR_CLI_TOKEN,
+            _ERROR_CREATIONS,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
             {409: "Er bestaat al een site met deze slug in deze groep (`SLUG_EXISTS`)."},
@@ -2658,18 +2826,27 @@ def make_admin_router() -> APIRouter:
         ),
     )
     async def create_site(
-        request: Request, group_slug: str, body: SiteCreate, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request,
+        group_slug: str,
+        body: SiteCreate,
+        creator: Annotated[Creator, Depends(require_creator)],
+        db: Db,
     ) -> SiteOut:
+        member = creator.member
         group = await _group_with_role(db, member, group_slug, Role.EDITOR)
         slug = _validate_slug(body.slug)
         title = _validate_text(body.title, "title")
+        base, keys, invitees = _chosen_access(
+            body.access, group.default_access_base, group.default_access_keys, group.default_access_invitees
+        )
+        await _require_creation_budget(request, member)
         site = Site(
             group_id=group.id,
             slug=slug,
             title=title,
-            access_base=group.default_access_base,
-            access_keys=group.default_access_keys,
-            access_invitees=group.default_access_invitees,
+            access_base=base,
+            access_keys=keys,
+            access_invitees=invitees,
             created_by=member.id,
         )
         db.add(site)
@@ -2685,7 +2862,12 @@ def make_admin_router() -> APIRouter:
             )
         )
         await db.commit()
-        await _audit(request, member, "site_create", {"group": group_slug, "site": slug})
+        await _audit(
+            request,
+            member,
+            "site_create",
+            {"group": group_slug, "site": slug, **_access_refs(base, keys, invitees), **creator.audit_refs()},
+        )
         return _site_json(site, group.slug, None, 0)
 
     @router.delete(
