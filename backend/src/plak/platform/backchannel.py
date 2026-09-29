@@ -23,7 +23,12 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse, Response
 
 from plak.audit import vocabulary
-from plak.auth.oidc import LOGOUT_TOKEN_MAX_AGE_S, OidcError
+from plak.auth.oidc import (
+    LOGOUT_TOKEN_MAX_AGE_S,
+    OidcError,
+    logout_token_prefilter,
+    unverified_logout_token_jti,
+)
 from plak.auth.revalidation import audit_session_ended
 from plak.constants import PATH_BACKCHANNEL_LOGOUT
 
@@ -32,6 +37,7 @@ if TYPE_CHECKING:
 
     from plak.auth.oidc import OidcClient
     from plak.auth.sessions import SessionStore
+    from plak.config import Settings
 
 _logger = logging.getLogger(__name__)
 
@@ -50,10 +56,20 @@ class ReplayCache:
 
     _seen: dict[str, datetime] = field(default_factory=dict)
 
-    def seen_before(self, jti: str, *, now: datetime) -> bool:
+    def _prune(self, *, now: datetime) -> None:
         for key, expiry in list(self._seen.items()):
             if expiry <= now:
                 del self._seen[key]
+
+    def already_seen(self, jti: str, *, now: datetime) -> bool:
+        """Read-only: called before signature verification, so it must not
+        record anything - storing an unverified jti would let a caller
+        pre-burn the id of a logout token the IdP has yet to send."""
+        self._prune(now=now)
+        return jti in self._seen
+
+    def seen_before(self, jti: str, *, now: datetime) -> bool:
+        self._prune(now=now)
         if jti in self._seen:
             return True
         self._seen[jti] = now + REPLAY_TTL
@@ -84,6 +100,22 @@ async def backchannel_logout(
 ) -> Response:
     if not logout_token:
         return _refused("logout_token ontbreekt")
+
+    # Cheap refusals first: this endpoint is unauthenticated and its rate
+    # limit keys on a client-controlled address (see docs/security.md), so
+    # nothing but this bounds how often a caller can ask for a signature
+    # verification.
+    settings: Settings = request.app.state.settings
+    prefilter_reason = logout_token_prefilter(logout_token, settings)
+    if prefilter_reason is not None:
+        _logger.warning("Back-channel logout geweigerd (prefilter): %s", prefilter_reason)
+        return _refused("logout_token is niet geldig")
+
+    unverified_jti = unverified_logout_token_jti(logout_token)
+    assert unverified_jti is not None  # noqa: S101 - the prefilter above requires a jti
+    if replay_cache(request.app).already_seen(unverified_jti, now=datetime.now(UTC)):
+        _logger.warning("Back-channel logout geweigerd: logout_token is al gebruikt")
+        return _refused("logout_token is al gebruikt")
 
     oidc: OidcClient = request.app.state.oidc_client
     try:

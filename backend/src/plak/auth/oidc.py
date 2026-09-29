@@ -49,6 +49,13 @@ SCOPES = "openid profile email"
 BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
 LOGOUT_TOKEN_MAX_AGE_S = 300
 
+# A Keycloak logout token sits well under 2 KB; the cap only keeps an
+# unauthenticated caller from making us base64-decode an arbitrary body.
+LOGOUT_TOKEN_MAX_CHARS = 8192
+# Section 2.4 asks for "logout+jwt"; Keycloak still mints plain "JWT"
+# (github.com/keycloak/keycloak#28939 tracks the gap).
+_LOGOUT_TOKEN_TYPES = frozenset({"jwt", "logout+jwt"})
+
 # RFC 6749 §5.2 error codes that say the deployment is broken rather than that
 # a session ended: the client, its credentials or the grant it is allowed to
 # use. Refusing these keeps everyone logged in, but loudly (ClientRejectedError).
@@ -135,6 +142,66 @@ class LogoutToken:
 
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _unverified_jwt_segment(token: str, index: int) -> dict[str, Any] | None:
+    """Decodes one segment of a JWT without checking its signature."""
+    try:
+        segment = token.split(".")[index]
+        padded = segment + "=" * (-len(segment) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(padded))
+    except (ValueError, TypeError, IndexError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def logout_token_prefilter(token: str, settings: Settings) -> str | None:
+    """A refusal reason for a logout token not worth a signature verification, else None.
+
+    Reads the JWT without checking its signature, so it may only narrow what
+    reaches `OidcClient.validate_logout_token` - never stand in for it. The
+    back-channel logout endpoint is unauthenticated and its rate limit keys on
+    a client-controlled address (see docs/security.md), so this is what bounds
+    how often a caller can make us fetch the JWKS and verify a signature.
+    """
+    if len(token) > LOGOUT_TOKEN_MAX_CHARS:
+        return "oversized"
+    if token.count(".") != 2:
+        return "malformed"
+    header = _unverified_jwt_segment(token, 0)
+    claims = _unverified_jwt_segment(token, 1)
+    if header is None or claims is None:
+        return "malformed"
+
+    typ = header.get("typ")
+    if typ is not None and (not isinstance(typ, str) or typ.lower() not in _LOGOUT_TOKEN_TYPES):
+        return "typ"
+    if header.get("alg") not in ALG_ALLOWLIST:
+        return "alg"
+
+    if claims.get("iss") != settings.oidc_issuer:
+        return "iss"
+    iat = claims.get("iat")
+    if not isinstance(iat, int) or abs(time.time() - iat) > LOGOUT_TOKEN_MAX_AGE_S:
+        return "iat"
+    jti = claims.get("jti")
+    if not isinstance(jti, str) or not jti:
+        return "jti"
+    if "nonce" in claims:
+        return "nonce"
+    events = claims.get("events")
+    if not isinstance(events, dict) or not isinstance(events.get(BACKCHANNEL_LOGOUT_EVENT), dict):
+        return "events"
+    return None
+
+
+def unverified_logout_token_jti(token: str) -> str | None:
+    """The `jti` as the token claims it, for the replay check before verification."""
+    claims = _unverified_jwt_segment(token, 1)
+    if claims is None:
+        return None
+    jti = claims.get("jti")
+    return jti if isinstance(jti, str) and jti else None
 
 
 def _check_sub_exp_iat(claims: Mapping[str, Any]) -> None:
@@ -565,6 +632,7 @@ __all__ = [
     "BACKCHANNEL_LOGOUT_EVENT",
     "CLIENT_ASSERTION_TYPE",
     "LOGOUT_TOKEN_MAX_AGE_S",
+    "LOGOUT_TOKEN_MAX_CHARS",
     "SCOPES",
     "IdpUnavailableError",
     "LoginStart",
@@ -572,4 +640,6 @@ __all__ = [
     "OidcClient",
     "OidcError",
     "RefreshRejectedError",
+    "logout_token_prefilter",
+    "unverified_logout_token_jti",
 ]
