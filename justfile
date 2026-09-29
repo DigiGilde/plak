@@ -28,7 +28,7 @@ test:
     else
         export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/podman/podman.sock"
     fi
-    cd backend && uv run python -m pytest
+    cd backend && uv run python -m pytest -n 4
     cd "{{justfile_directory()}}" && just test-cli
 
 # Draai de CLI-tests (cli/tests); cli/ is een eigen uv-project, los van de backend
@@ -48,7 +48,7 @@ coverage:
     else
         export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/podman/podman.sock"
     fi
-    cd backend && uv run python -m pytest --cov=src/plak --cov-report=term-missing:skip-covered
+    cd backend && uv run python -m pytest -n 4 --cov=src/plak --cov-report=term-missing:skip-covered
     cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
     cd "{{justfile_directory()}}/frontend" && npm run coverage
 

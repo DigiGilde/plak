@@ -24,6 +24,7 @@ dev = [
     "testcontainers>=4,<5",
     "ruff>=0.9,<1",
     "pytest-cov>=6,<8",
+    "pytest-xdist>=3,<4",
     "pyyaml>=6,<7",
     # The parser behind the Digital Trust Center's security.txt check, so the
     # file is validated where it is written rather than after a deploy.
