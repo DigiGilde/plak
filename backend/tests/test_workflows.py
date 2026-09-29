@@ -47,14 +47,18 @@ class TestTheCheckGate:
         to production, tested or not."""
         assert deploy["jobs"]["productie"]["needs"] == ["ci", "bouw"]
 
-    def test_a_push_to_beta_builds_an_image_without_deploying(self, deploy) -> None:
-        """There is no production environment yet and no main branch, so a
-        push to the default branch exists to produce a container package to
-        roll out by hand. The checks run with it, because deploy.yml calls
-        them; production stays bound to main and does not fire."""
+    def test_a_push_to_beta_deploys_to_production(self, deploy) -> None:
+        """`beta` is the default branch and there is no `main`. Bound to the
+        branch that does not exist, the rollout was skipped on every push
+        while the run stayed green, because a skipped job counts as success.
+        The ZAD_PROJECT_ID guard keeps it standing down where there is no
+        project, instead of failing the action on an empty api-key."""
         assert deploy[True]["push"]["branches"] == ["main", "beta"]
-        assert deploy["jobs"]["productie"]["if"] == (
-            "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+        condition = " ".join(deploy["jobs"]["productie"]["if"].split())
+        assert condition == (
+            "github.event_name == 'push' "
+            "&& github.ref == 'refs/heads/beta' "
+            "&& vars.ZAD_PROJECT_ID != ''"
         )
         assert deploy["jobs"]["preview"]["if"].startswith(
             "github.event_name == 'pull_request'"
