@@ -77,7 +77,6 @@ const siteHref = computed(
       <span class="alleen-schermlezer">{{ accessText }}</span>
     </nldd-cell>
     <nldd-text-cell
-      size="sm"
       color="secondary"
       :text="lastPublishedLabel"
       hide-below="md"

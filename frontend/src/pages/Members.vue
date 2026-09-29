@@ -411,19 +411,16 @@ onMounted(() => {
       <nldd-table-row v-for="member in sortedMembers" :key="member.id">
         <nldd-text-cell :text="member.name" :supporting-text="member.email"></nldd-text-cell>
         <nldd-text-cell
-          size="sm"
           :color="standing(member).color"
           :text="standing(member).text"
           hide-below="md"
         ></nldd-text-cell>
         <nldd-text-cell
-          size="sm"
           color="secondary"
           :text="formatDate(member.createdAt)"
           hide-below="md"
         ></nldd-text-cell>
         <nldd-text-cell
-          size="sm"
           color="secondary"
           :text="formatTimestamp(member.lastLoginAt)"
           hide-below="md"

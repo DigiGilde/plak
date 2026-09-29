@@ -492,7 +492,6 @@ async function onRemove(row: Row): Promise<void> {
           <nldd-table-row v-for="row in inherited" :key="row.identifier">
             <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
             <nldd-text-cell
-              size="sm"
               color="secondary"
               :text="roleLabel(row.effectiveRole)"
             ></nldd-text-cell>
@@ -537,7 +536,6 @@ async function onRemove(row: Row): Promise<void> {
         <nldd-table-row v-for="row in own" :key="row.identifier">
           <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
           <nldd-text-cell
-            size="sm"
             color="secondary"
             :text="roleLabel(row.effectiveRole)"
             :supporting-text="

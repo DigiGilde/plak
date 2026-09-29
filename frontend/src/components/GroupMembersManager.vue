@@ -408,7 +408,6 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
       <nldd-table-row v-for="row in rows" :key="row.identifier">
         <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
         <nldd-text-cell
-          size="sm"
           color="secondary"
           :text="roleLabel(row.role)"
           hide-below="md"
