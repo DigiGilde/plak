@@ -692,8 +692,14 @@ entering a password or client secret yourself:
 
 ```bash
 uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
-plak login --host https://beheer.plak.example.org
+plak login
 ```
+
+Every command finds its host in this order: `--host`, `PLAK_HOST`, the
+host you last logged in to, and otherwise the DigiGilde instance,
+`https://beheer.plak.rijks.app`. For another instance, log in once with
+`plak login --host <admin origin>`; the commands below then need no
+`--host` either.
 
 `beta` is the default branch, so this installs the latest and
 `uv tool upgrade plak` follows it. Pin to a version tag instead once one
@@ -701,8 +707,7 @@ exists; `README.md` carries both forms. The repository is public, so the
 install needs no credentials. From a
 checkout of this repository the same command runs without installing
 anything:
-`uv run --project cli plak login --host ...`, and so for every command
-below.
+`uv run --project cli plak login`, and so for every command below.
 
 The CLI shows a code (`ABCD-EFGH`) and an address in the admin
 (`/cli-link`); open that address (the CLI tries this automatically), check
@@ -721,19 +726,14 @@ without you having to link again. A linked session works at most
 the linking itself, and acts with exactly the roles of the member who linked.
 
 ```bash
-plak publish ./dist \
-    --host https://beheer.plak.example.org \
-    --site nldd/website \
-    --preview pr-42
+plak publish ./dist --site nldd/website --preview pr-42
 ```
 
 Leave `--preview` out for a live deploy. You purge a preview with the
 subcommand `preview-remove`:
 
 ```bash
-plak preview-remove pr-42 \
-    --host https://beheer.plak.example.org \
-    --site nldd/website
+plak preview-remove pr-42 --site nldd/website
 ```
 
 ### Creating a group or a site
@@ -748,8 +748,7 @@ plak group create team-aurora --name "Team Aurora"
 plak site create team-aurora/docs --title "Documentation" --access sso
 ```
 
-`--host` is optional here: without it the CLI uses the host you logged in
-to. Any active member may create a group; a site needs group role `editor`
+Any active member may create a group; a site needs group role `editor`
 or `admin` in that group. The access flags are all optional:
 
 | Flag | Meaning |

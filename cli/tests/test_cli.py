@@ -8,6 +8,7 @@ of rechtstreeks:
 
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import os
@@ -221,11 +222,16 @@ class _MemoryKeyring(keyring.backend.KeyringBackend):
         del self.secrets[(service, username)]
 
 
+TEST_DEFAULT_HOST = "https://default.plak.invalid"
+
+
 @pytest.fixture(autouse=True)
 def memory_keyring(tmp_path, monkeypatch):
-    """No test ever touches the real keyring or the real ~/.config/plak."""
+    """No test ever touches the real keyring, the real ~/.config/plak or the
+    real default host."""
     monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.delenv("PLAK_HOST", raising=False)
+    monkeypatch.setattr(cli, "DEFAULT_HOST", TEST_DEFAULT_HOST)
     backend = _MemoryKeyring()
     previous = keyring.get_keyring()
     keyring.set_keyring(backend)
@@ -1770,6 +1776,51 @@ def test_default_host_is_used_when_no_host_flag_given(stub_server, host, monkeyp
     assert stub_server.requests[0]["path"] == "/-/api/v1/cli/whoami"
 
 
+def test_the_host_comes_from_the_flag_then_plak_host_then_the_last_login_then_the_default(
+    monkeypatch,
+):
+    assert _resolved_host() == TEST_DEFAULT_HOST
+
+    _store_session("https://laatst.example")
+    assert _resolved_host() == "https://laatst.example"
+
+    monkeypatch.setenv("PLAK_HOST", "https://omgeving.example/")
+    assert _resolved_host() == "https://omgeving.example"
+
+    assert cli._resolve_host(argparse.Namespace(host="https://vlag.example/")) == "https://vlag.example"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [["publish", "DIST", "--site", "nldd/website"], ["preview-remove", "pr-1", "--site", "nldd/website"]],
+    ids=["publish", "preview-remove"],
+)
+def test_publish_and_preview_remove_need_no_host_flag(stub_server, host, dist_folder, command):
+    _store_session(host, access="stored")
+    stub_server.responder = lambda record: (
+        (201, json.dumps({"versionId": "00000000-0000-0000-0000-000000000000"}).encode(), "application/json")
+        if record["method"] == "POST"
+        else (204, None, "text/plain")
+    )
+
+    code = cli.main([str(dist_folder) if part == "DIST" else part for part in command])
+
+    assert code == 0
+    assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer stored"
+
+
+def test_the_built_in_default_host_is_used_without_anything_else(monkeypatch, stub_server, host):
+    """Without --host, PLAK_HOST or a login, a command goes to DEFAULT_HOST."""
+    monkeypatch.setattr(cli, "DEFAULT_HOST", host)
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
+
+    code = cli.main(["whoami"])
+
+    assert code == 0
+    assert [r["path"] for r in stub_server.requests] == ["/-/api/v1/cli/whoami"]
+
+
 def test_the_session_holds_in_any_directory(stub_server, host, tmp_path, monkeypatch, capsys):
     """The point of the whole design: one login, every project."""
     stub_server.responder = _sequence_responder(
@@ -1793,32 +1844,28 @@ def test_the_session_holds_in_any_directory(stub_server, host, tmp_path, monkeyp
     assert list(first.iterdir()) == [] and list(second.iterdir()) == []
 
 
+def _resolved_host() -> str:
+    return cli._resolve_host(argparse.Namespace())
+
+
 @pytest.mark.parametrize("mode", [0o644, 0o640, 0o604, 0o660])
-def test_hosts_file_readable_or_writable_by_others_is_ignored(stub_server, mode, capsys):
-    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://beheer.example"}), mode)
+def test_hosts_file_readable_or_writable_by_others_is_ignored(mode, capsys):
+    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}), mode)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
-    error_output = capsys.readouterr().err
-    assert f"ignoring {hosts_path}" in error_output
-    assert "No host" in error_output
-    assert stub_server.requests == []
+    assert _resolved_host() == TEST_DEFAULT_HOST
+    assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
-def test_hosts_file_owned_by_someone_else_is_ignored(stub_server, monkeypatch, capsys):
-    _write_raw_hosts(json.dumps({"default_host": "https://beheer.example"}))
+def test_hosts_file_owned_by_someone_else_is_ignored(monkeypatch, capsys):
+    _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
     real_uid = os.getuid()
     monkeypatch.setattr(cli.os, "getuid", lambda: real_uid + 1)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
+    assert _resolved_host() == TEST_DEFAULT_HOST
     assert "it must be a file of yours with mode 0600" in capsys.readouterr().err
-    assert stub_server.requests == []
 
 
-def test_hosts_file_behind_a_symlink_is_ignored(stub_server, tmp_path, capsys):
+def test_hosts_file_behind_a_symlink_is_ignored(tmp_path, capsys):
     """A symlink could point hosts.json at another 0600 file of the user's."""
     elsewhere = tmp_path / "elders.json"
     elsewhere.write_text(json.dumps({"default_host": "https://kwaad.example"}))
@@ -1827,29 +1874,21 @@ def test_hosts_file_behind_a_symlink_is_ignored(stub_server, tmp_path, capsys):
     hosts_path.parent.mkdir(mode=0o700, parents=True)
     hosts_path.symlink_to(elsewhere)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
-    error_output = capsys.readouterr().err
-    assert f"ignoring {hosts_path}" in error_output
-    assert "No host" in error_output
-    assert stub_server.requests == []
+    assert _resolved_host() == TEST_DEFAULT_HOST
+    assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("mode", [0o770, 0o707, 0o777])
-def test_hosts_file_in_a_directory_others_can_write_to_is_ignored(stub_server, mode, capsys):
+def test_hosts_file_in_a_directory_others_can_write_to_is_ignored(mode, capsys):
     """Whoever can write the directory can swap the file for one of their own."""
     hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
     hosts_path.parent.chmod(mode)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
+    assert _resolved_host() == TEST_DEFAULT_HOST
     assert "in a directory only you can write to" in capsys.readouterr().err
-    assert stub_server.requests == []
 
 
-def test_hosts_file_in_a_directory_of_someone_else_is_ignored(stub_server, monkeypatch, capsys):
+def test_hosts_file_in_a_directory_of_someone_else_is_ignored(monkeypatch, capsys):
     hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
     real_stat = Path.stat
     directory_uid = os.getuid() + 1
@@ -1864,20 +1903,17 @@ def test_hosts_file_in_a_directory_of_someone_else_is_ignored(stub_server, monke
 
     monkeypatch.setattr(Path, "stat", stat_with_foreign_directory)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
+    assert _resolved_host() == TEST_DEFAULT_HOST
     assert "in a directory only you can write to" in capsys.readouterr().err
-    assert stub_server.requests == []
 
 
-def test_hosts_path_that_cannot_be_opened_is_ignored(stub_server, capsys):
+def test_hosts_path_that_cannot_be_opened_is_ignored(capsys):
     hosts_path = _write_raw_hosts("{}", 0o000)
 
-    code = cli.main(["whoami"])
+    host = _resolved_host()
 
     hosts_path.chmod(0o600)
-    assert code == 2
+    assert host == TEST_DEFAULT_HOST
     assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
@@ -1904,39 +1940,37 @@ def test_plain_text_session_in_an_untrusted_hosts_file_is_never_sent(
 
 
 @pytest.mark.parametrize("content", ["{niet json", "[]", '"tekst"'])
-def test_hosts_file_that_is_not_a_json_object_is_ignored(stub_server, content, capsys):
+def test_hosts_file_that_is_not_a_json_object_is_ignored(content):
     _write_raw_hosts(content)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
-    assert "No host" in capsys.readouterr().err
+    assert _resolved_host() == TEST_DEFAULT_HOST
 
 
-def test_hosts_file_that_is_not_utf8_is_ignored_with_a_warning(stub_server, capsys):
+def test_hosts_file_that_is_not_utf8_is_ignored_with_a_warning(capsys):
     _write_raw_hosts(b'{"default_host": "\xff\xfe"}')
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
+    assert _resolved_host() == TEST_DEFAULT_HOST
     assert "not readable JSON" in capsys.readouterr().err
 
 
-def test_a_directory_in_place_of_the_hosts_file_is_ignored(stub_server, capsys):
+def test_a_directory_in_place_of_the_hosts_file_is_ignored(capsys):
     hosts_path = cli._hosts_path()
     hosts_path.mkdir(parents=True, mode=0o700)
 
-    code = cli.main(["whoami"])
-
-    assert code == 2
+    assert _resolved_host() == TEST_DEFAULT_HOST
     assert f"ignoring {hosts_path}: it must be a file of yours" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("default_host", [42, "", None, ["https://kwaad.example"]])
+def test_a_default_host_that_is_not_a_string_falls_back_to_the_built_in_one(default_host):
+    _write_raw_hosts(json.dumps({"default_host": default_host}))
+
+    assert _resolved_host() == TEST_DEFAULT_HOST
 
 
 @pytest.mark.parametrize(
     "config",
     [
-        {"default_host": 42},
-        {"default_host": ""},
         {"hosts": ["niet", "een", "object"]},
         {"hosts": {"HOST": "geen object"}},
     ],
@@ -1945,7 +1979,7 @@ def test_odd_shapes_in_the_hosts_file_count_as_no_session(stub_server, host, con
     raw = json.dumps(config).replace("HOST", host)
     _write_raw_hosts(raw)
 
-    code = cli.main(["whoami", "--host", host] if "hosts" in config else ["whoami"])
+    code = cli.main(["whoami", "--host", host])
 
     assert code == 2
     error_output = capsys.readouterr().err
@@ -2357,16 +2391,14 @@ def test_login_points_at_a_leftover_env_file(stub_server, host, isolated_cwd, ca
     assert LEGACY_NOTE in capsys.readouterr().err
 
 
-def test_a_leftover_env_file_is_named_when_there_is_no_host(stub_server, isolated_cwd, capsys):
-    (isolated_cwd / ".env.plak").write_text("PLAK_HOST=https://beheer.example\n")
+def test_a_leftover_env_file_never_supplies_the_host(stub_server, isolated_cwd, capsys):
+    (isolated_cwd / ".env.plak").write_text("PLAK_HOST=https://kwaad.example\n")
 
+    assert _resolved_host() == TEST_DEFAULT_HOST
     code = cli.main(["whoami"])
 
     assert code == 2
-    error_output = capsys.readouterr().err
-    assert LEGACY_NOTE in error_output
-    assert "No host" in error_output
-    # Its contents are never used.
+    assert LEGACY_NOTE in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -3063,14 +3095,21 @@ def test_a_token_with_a_line_break_cannot_change_the_default_host():
 # --- plak logout: no host, server unreachable --------------------------------
 
 
-def test_logout_without_any_host_gives_exit_2(stub_server, isolated_cwd, monkeypatch, capsys):
-    monkeypatch.delenv("PLAK_HOST", raising=False)
-
-    code = cli.main(["logout"])
+def test_logout_refuses_http_to_the_network(stub_server, capsys):
+    code = cli.main(["logout", "--host", "http://plak.example.nl"])
 
     assert code == 2
-    assert "No host" in capsys.readouterr().err
+    assert "Use https://" in capsys.readouterr().err
     assert stub_server.requests == []
+
+
+def test_logout_without_a_host_or_session_sends_nothing(stub_server, isolated_cwd, capsys):
+    code = cli.main(["logout"])
+
+    assert code == 0
+    assert "Logged out." in capsys.readouterr().out
+    assert stub_server.requests == []
+    assert not cli._hosts_path().exists()
 
 
 def test_logout_with_an_unreachable_server_still_clears_locally(
