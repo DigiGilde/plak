@@ -278,3 +278,88 @@ class TestConcurrentFirstVisit:
         assert member.sso_subject == "race-sub"
         members = await _members(factory)
         assert len(members) == 1
+
+
+class TestTheDisplayName:
+    """The `name` claim, the one field the IdP fills and nothing else writes."""
+
+    async def test_the_name_from_the_claim_lands_on_a_new_member(self, idp, db_environment):
+        _, factory = db_environment
+        store = SessionStore()
+        session = store.create_session(
+            sub="naam-sub",
+            email="naam@example.nl",
+            email_verified=True,
+            acr="urn:acr:hoog",
+            name="Stéphanie Anne-marie de Vries",
+        )
+
+        async with factory() as db:
+            member = await get_or_create_member(db, session, "")
+
+        assert member.name == "Stéphanie Anne-marie de Vries"
+
+    async def test_a_changed_name_follows_on_the_next_visit(self, idp, db_environment):
+        """Unlike the email, which is only filled where it is missing, the name
+        follows the IdP: nothing else writes it, so a correction has to show."""
+        _, factory = db_environment
+        store = SessionStore()
+        first = store.create_session(
+            sub="hernoemd", email="h@example.nl", email_verified=True, acr="urn:acr:hoog", name="R. Bos"
+        )
+        async with factory() as db:
+            await get_or_create_member(db, first, "")
+
+        later = store.create_session(
+            sub="hernoemd", email="h@example.nl", email_verified=True, acr="urn:acr:hoog", name="Robbert Bos"
+        )
+        async with factory() as db:
+            member = await get_or_create_member(db, later, "")
+
+        assert member.name == "Robbert Bos"
+
+    async def test_a_login_without_the_claim_leaves_the_name_alone(self, idp, db_environment):
+        """An IdP that stops sending the claim must not erase what it told us
+        before: an empty name would read as "Onbekend" in the interface."""
+        _, factory = db_environment
+        store = SessionStore()
+        named = store.create_session(
+            sub="stil", email="s@example.nl", email_verified=True, acr="urn:acr:hoog", name="Wim Wever"
+        )
+        async with factory() as db:
+            await get_or_create_member(db, named, "")
+
+        silent = store.create_session(
+            sub="stil", email="s@example.nl", email_verified=True, acr="urn:acr:hoog"
+        )
+        async with factory() as db:
+            member = await get_or_create_member(db, silent, "")
+
+        assert member.name == "Wim Wever"
+
+    async def test_the_claim_travels_the_whole_login_into_the_record(self, idp, db_environment):
+        """The mapping in platform/pages.py, not just the member upsert: the
+        claim has to survive the token exchange and the session to reach the
+        row the interface reads."""
+        _, factory = db_environment
+        idp.token_claim_overrides = {"name": "Robbert Bos"}
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            await complete_login(client, idp)
+            assert (await client.get("/admin")).status_code == 200
+
+        members = await _members(factory)
+        assert members[0].name == "Robbert Bos"
+
+    async def test_a_structured_name_is_refused(self, idp, db_environment):
+        """An IdP that sends an object where OIDC says string would otherwise
+        put that object where the interface prints a person."""
+        _, factory = db_environment
+        idp.token_claim_overrides = {"name": {"given": "Robbert", "family": "Bos"}}
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            await complete_login(client, idp)
+            assert (await client.get("/admin")).status_code == 200
+
+        members = await _members(factory)
+        assert members[0].name is None

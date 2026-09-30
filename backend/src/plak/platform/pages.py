@@ -691,6 +691,9 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
         email=claims.get("email"),
         # Strict: bool("false") is True, and only a JSON true verifies.
         email_verified=claims.get("email_verified") is True,
+        # Only a string: an IdP that sends a structured name would otherwise
+        # put an object where the interface prints a person.
+        name=claims["name"] if isinstance(claims.get("name"), str) else None,
         acr=claims["acr"],
         kind=profile.kind,
         id_token=tokens["id_token"],

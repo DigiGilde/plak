@@ -43,6 +43,9 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
     # role resolves an email to a member (api/admin.py), and an unverified
     # claim is whatever someone typed into their IdP profile.
     verified_email = (session.email or "").lower() if session.email_verified else ""
+    # The display name has no verified counterpart in OIDC, so there is nothing
+    # to hold it against; it is shown next to the email, never matched on.
+    claimed_name = (session.name or "").strip()
 
     result = await db.execute(select(Member).where(Member.sso_subject == session.sub))
     member = result.scalar_one_or_none()
@@ -51,6 +54,7 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
         member = Member(
             sso_subject=session.sub,
             email=verified_email,
+            name=claimed_name or None,
             platform_role=PlatformRole.ADMIN if is_bootstrap else PlatformRole.MEMBER,
             status=MemberStatus.ACTIVE,
             last_login_at=datetime.now(UTC),
@@ -71,6 +75,11 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
         member.status = MemberStatus.ACTIVE
     if not member.email and verified_email:
         member.email = verified_email
+    # Unlike the email, which is only filled in where it is missing because
+    # adding a member by address resolves against it, the name follows the IdP:
+    # nothing else writes it, and a changed name should show.
+    if claimed_name and member.name != claimed_name:
+        member.name = claimed_name
     member.last_login_at = datetime.now(UTC)
     await db.commit()
     return member

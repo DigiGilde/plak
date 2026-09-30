@@ -135,6 +135,10 @@ class Session:
     csrf_token: str
     created_at: datetime
     kind: SessionKind = SessionKind.ADMIN
+    # The `name` claim, the IdP's own display name. Unlike the email it has no
+    # `_verified` counterpart in OIDC, so there is nothing to check it against;
+    # it is shown, never matched on.
+    name: str | None = None
     # For the id_token_hint of an RP-initiated logout; it never leaves the
     # server except back to the issuer that made it.
     id_token: str | None = None
@@ -189,6 +193,7 @@ class SessionStore:
         email: str | None,
         email_verified: bool,
         acr: str,
+        name: str | None = None,
         kind: SessionKind = SessionKind.ADMIN,
         id_token: str | None = None,
         refresh_token: str | None = None,
@@ -202,6 +207,7 @@ class SessionStore:
             email=email,
             email_verified=email_verified,
             acr=acr,
+            name=name,
             csrf_token=secrets.token_urlsafe(32),
             created_at=datetime.now(UTC),
             kind=kind,
