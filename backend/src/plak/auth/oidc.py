@@ -623,7 +623,11 @@ class OidcClient:
             if not access_token:
                 raise OidcError("at_hash aanwezig maar geen access_token om te controleren")
             expected = _b64url(hashlib.sha256(access_token.encode("ascii")).digest()[:16])
-            if not hmac.compare_digest(expected, at_hash):
+            # Compare as bytes: compare_digest raises TypeError for non-ASCII
+            # str and for anything that is not a str at all.
+            if not isinstance(at_hash, str) or not hmac.compare_digest(
+                expected.encode("ascii"), at_hash.encode("utf-8")
+            ):
                 raise OidcError("at_hash komt niet overeen met het access_token")
 
 

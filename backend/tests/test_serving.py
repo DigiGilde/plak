@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from plak.access import gate, keys
 from plak.access.decision import allow
 from plak.audit.log import AuditLog
-from plak.auth.sessions import KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
+from plak.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
 from plak.config import Settings
 from plak.constants import AccessBase, AccessPolicy, Role
 from plak.ingest.store import ContentStore
@@ -676,6 +676,15 @@ class TestKey:
         client.cookies.set(KEY_COOKIE, unprefixed, domain="plak.example", path="/")
         response = await client.get("/aurora/geheim/")
         assert response.status_code == 404
+
+    @pytest.mark.parametrize("cookie", [KEY_COOKIE, CONTENT_SESSION_COOKIE])
+    async def test_a_non_ascii_cookie_is_the_neutral_404_not_a_500(self, client, cookie):
+        """A cookie arrives latin-1 decoded; a non-ASCII value must end in the
+        same refusal as an anonymous visitor, byte for byte."""
+        anonymous = await client.get("/aurora/geheim/")
+        response = await client.get("/aurora/geheim/", headers={"cookie": f"{cookie}=\xe9.x".encode("latin-1")})
+        assert response.status_code == 404
+        assert response.content == anonymous.content
 
     async def test_invalid_key_is_neutral_404(self, client):
         response = await client.get("/aurora/geheim/?key=verkeerd.sleutelwaarde")

@@ -46,6 +46,7 @@ from plak.auth.sessions import (
     SessionKind,
     SessionStore,
     check_signature,
+    content_anchor_session_from_request,
     content_presence,
     content_session_from_request,
     content_site_prefix,
@@ -83,6 +84,12 @@ class TestSigning:
     def test_bare_value_without_signature_refused(self):
         assert check_signature(SECRET, "waarde-zonder-punt") is None
         assert check_signature(SECRET, "") is None
+
+    @pytest.mark.parametrize("token", ["é.x", "waarde-1.é", "wåarde.abcdef"])
+    def test_non_ascii_token_refused_not_raised(self, token):
+        # compare_digest on str raises TypeError for non-ASCII; a cookie can
+        # carry any latin-1 byte.
+        assert check_signature(SECRET, token) is None
 
 
 class TestReturnTo:
@@ -684,6 +691,13 @@ class TestSession:
         request = _request_with_cookies(app, f"{SESSION_COOKIE}=vervalst.abcdef")
         assert session_from_request(request) is None
 
+    @pytest.mark.parametrize("cookie", [SESSION_COOKIE, CONTENT_SESSION_COOKIE, CONTENT_ANCHOR_COOKIE])
+    async def test_a_non_ascii_session_cookie_counts_as_no_session(self, app, cookie):
+        request = _request_with_cookies(app, f"{cookie}=é.x")
+        assert session_from_request(request) is None
+        assert content_session_from_request(request) is None
+        assert content_anchor_session_from_request(request) is None
+
 
 class TestRobots:
     async def test_robots_txt_shuts_out_the_whole_admin_host(self, client):
@@ -1220,6 +1234,10 @@ class TestVisitorFromRequest:
         visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={tampered}"))
         assert visitor.key_cookie == ""
 
+    async def test_a_non_ascii_key_cookie_is_reported_invalid(self, app):
+        visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}=é.x"))
+        assert visitor.key_cookie == ""
+
     async def test_a_validly_signed_value_from_another_purpose_is_reported_invalid(self, app):
         """A session cookie value, replayed as the key cookie: the signature
         checks out, but the purpose prefix does not match."""
@@ -1248,6 +1266,20 @@ class TestCsrfValid:
         session = self._session()
         request = _request_with_headers(
             app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}=een-ander-token"
+        )
+        assert csrf_valid(request, session) is False
+
+    async def test_a_non_ascii_header_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: "é" + session.csrf_token}, cookie_header=f"{CSRF_COOKIE}={session.csrf_token}"
+        )
+        assert csrf_valid(request, session) is False
+
+    async def test_a_non_ascii_cookie_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}=é{session.csrf_token}"
         )
         assert csrf_valid(request, session) is False
 

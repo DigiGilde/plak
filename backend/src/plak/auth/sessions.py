@@ -353,7 +353,9 @@ def check_signature(secret: str, token: str) -> str | None:
     value, separation, _ = token.rpartition(".")
     if not separation or not value:
         return None
-    if not hmac.compare_digest(sign(secret, value), token):
+    # Compare as bytes: compare_digest on str raises TypeError for non-ASCII,
+    # and a cookie value arrives latin-1 decoded.
+    if not hmac.compare_digest(sign(secret, value).encode("utf-8"), token.encode("utf-8")):
         return None
     return value
 
@@ -580,7 +582,10 @@ def csrf_valid(request: Request, session: Session) -> bool:
     cookie = request.cookies.get(CSRF_COOKIE)
     if not header or not cookie:
         return False
-    return hmac.compare_digest(header, session.csrf_token) and hmac.compare_digest(cookie, session.csrf_token)
+    expected = session.csrf_token.encode("utf-8")
+    return hmac.compare_digest(header.encode("utf-8"), expected) and hmac.compare_digest(
+        cookie.encode("utf-8"), expected
+    )
 
 
 __all__ = [
