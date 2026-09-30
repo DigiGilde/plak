@@ -609,10 +609,10 @@ in Settings and not a change in this repository.
 
   #2 and #3 stay dismissed as the old fingerprints of #17 and #18; they match
   no code any more.
-- [ ] **Turn on Dependabot security updates**
-  (`dependabot_security_updates`, Settings, Code security). Dependabot opens
-  version updates today; without this it does not open a pull request for an
-  advisory out of the weekly rhythm.
+- [x] **Dependabot security updates** (`dependabot_security_updates`,
+  Settings, Code security) are on, checked on 2026-09-30: an advisory gets
+  its pull request at once, outside the weekly rhythm and without the
+  cooldown in `.github/dependabot.yml`.
 - [ ] **Turn on the two extra secret-scanning options**
   (`secret_scanning_non_provider_patterns` and
   `secret_scanning_validity_checks`, Settings, Code security). The first
