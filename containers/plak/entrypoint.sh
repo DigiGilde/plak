@@ -23,8 +23,17 @@ alembic upgrade head
 
 # exec: uvicorn replaces this shell as PID 1, so the SIGTERM that ends a
 # rollout reaches the server instead of a shell that ignores it.
+#
+# --no-proxy-headers: uvicorn rewrites `request.client` from X-Forwarded-For
+# whenever the peer is in --forwarded-allow-ips, and that list falls back to
+# the FORWARDED_ALLOW_IPS environment variable. Set by anyone -- a platform
+# default, a line copied from a sibling project -- it would silently put a
+# second derivation in front of net.py's, which then walks the header starting
+# from an address that already came out of it. net.py is the one place that
+# decides who the client is.
 exec uvicorn plak.main:create_app \
     --factory \
     --host 0.0.0.0 \
     --port 8080 \
-    --no-access-log
+    --no-access-log \
+    --no-proxy-headers
