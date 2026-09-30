@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import asyncpg
+import parts
 import pytest
 import pytest_asyncio
 from alembic.config import Config
@@ -23,6 +24,15 @@ from alembic import command
 
 ALEMBIC_DIR = Path(__file__).resolve().parents[1] / "alembic"
 DB_URL_VAR = "PLAK_DB_URL"
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    part = os.environ.get(parts.PART_VAR)
+    if not part or not collection_path.name.startswith("test_") or collection_path.suffix != ".py":
+        return None
+    if part not in parts.PARTS:
+        raise pytest.UsageError(f"{parts.PART_VAR}={part!r}; expected one of {', '.join(parts.PARTS)}")
+    return not parts.runs_in(part, collection_path.name)
 
 
 def _podman_socket() -> str | None:

@@ -33,8 +33,8 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
 
-  # Same ruff as `just lint` and the CI lint steps: the version pinned in
-  # backend/uv.lock. Config resolution is per file, so backend/ uses
+  # Same ruff as `just lint`: the version pinned in backend/uv.lock. This
+  # hook is also the only lint in CI, through the `pre-commit` job. Config resolution is per file, so backend/ uses
   # backend/pyproject.toml and cli/ the ruff defaults, exactly as the
   # justfile arranges it. No formatter hook: reformatting whole files is a
   # deliberate no.

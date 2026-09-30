@@ -389,11 +389,11 @@ unnecessary at once.
 | Vendored files pinned on hash | done since 2026-09-28: `backend/src/plak/static/docs/SHA256SUMS` records the sha256 of the two Swagger UI files, `just refresh-swagger-ui` checks its download against it, and `test_api_documentation.py` checks the shipped bytes without a network call. Before this the recipe printed a truncated hash and compared it to nothing, which read as verification. It hid a real change: a repo-wide rename of `project` to `site` had edited a URI-scheme list inside the minified bundle. Both files were restored from the npm registry tarball of the pinned version. Weight: 1.5 MB of minified JavaScript, served from the admin origin under `script-src 'self'`, so fully trusted script beside the session cookie, arriving in git as a diff nobody reads |
 | Vulnerability scan on dependencies | done: the CI job `vulnerabilities` runs pip-audit on the exported lockfile and npm audit on the frontend, locally via `just scan`. Accepted findings sit in `.trivyignore.yaml` with a date and a motivation and come back by themselves on that date |
 | SBOM per image | done: `deploy.yml` generates a CycloneDX SBOM with trivy and keeps it 90 days as an artefact |
-| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `herkomst`, not in `bouw`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public, which it is since 2026-09-27; going private again would take it away |
+| Build provenance and SBOM attestation | done: `deploy.yml` attests the pushed image digest with `actions/attest`, once as SLSA build provenance and once with the CycloneDX SBOM, and pushes both to the registry. That happens in the job `provenance`, not in `build`: see "Where `id-token: write` may sit" below. `test_workflows.py` fixes the wiring. Verify with `gh attestation verify oci://<image> -R DigiGilde/plak`. On the Free plan this only works while the repository is public, which it is since 2026-09-27; going private again would take it away |
 | Updating dependencies | done: `.github/dependabot.yml` follows github-actions, uv, npm (frontend and e2e) and docker (both Containerfiles), weekly and grouped. A dependabot PR gets no preview environment but does go through the test gate |
-| Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `productie` hangs on `needs: [ci, bouw]`. Open: branch protection on `beta` with the eight `ci /` checks and the three `CodeQL /` checks as required, see the checklist below |
+| Production deploy behind the tests | done: `ci.yml` has become `workflow_call` and `deploy.yml` calls it; the job `production` hangs on `needs: [ci, build]`. Open: branch protection on `beta` with the eight `ci /` checks and the three `CodeQL /` checks as required, see the checklist below |
 | Static analysis in CI | done: `codeql.yml` runs CodeQL over `actions`, `javascript-typescript` and `python`, each with `build-mode: none`, on every pull request, on a push to `beta` and weekly. Its own workflow and not a job in `ci.yml`, because a called workflow carries no schedule; `security-events: write` sits on the analyse job alone. Findings land in the security tab; the analyse job itself only goes red on an analysis that breaks. What can go red on a pull request is the separate `Code scanning results / CodeQL` check GitHub adds, on newly introduced alerts above the threshold in Settings |
-| Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `bouw`, so nothing gets deployed |
+| Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `build`, so nothing gets deployed |
 | `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. The GitHub advisory form is the first `Contact` and `SECURITY.md` the first `Policy`, both reachable since the repository went public with private vulnerability reporting on. No `Encryption` field: it cannot be tied to one `Contact`, and NCSC-NL's key would read as the Plak team's (`SECURITY.md`) |
 
 ## Production prerequisites (organisational)
@@ -502,11 +502,11 @@ carries this repository's numeric id. Whoever gets to run in such a job can
 therefore speak as this repository to anything that trusts it, this project's
 own CI trust rules included.
 
-Today `deploy.yml` is the only file with the permission, in the job `herkomst`,
+Today `deploy.yml` is the only file with the permission, in the job `provenance`,
 which does four things: log in to ghcr, download the SBOM artefact, and run
-`actions/attest` twice. `bouw` builds the image, so it executes the
+`actions/attest` twice. `build` builds the image, so it executes the
 Containerfile and with it `npm ci` and `uv sync`; it keeps `contents: read` and
-`packages: write` and nothing more. The digest passes from `bouw` to `herkomst`
+`packages: write` and nothing more. The digest passes from `build` to `provenance`
 as a job output, so the split cannot make the two disagree about which image
 was attested. `backend/tests/test_workflows.py` holds both halves of that in
 place.
@@ -619,7 +619,7 @@ in Settings and not a change in this repository.
   catches keys of providers GitHub has no partner pattern for, the second says
   whether a leaked token is still live.
 - [ ] **Branch protection on `beta`**, which is the default branch, with the
-  required checks `ci / backend`, `ci / cli`, `ci / frontend`, `ci / e2e`,
+  required checks `ci / backend-coverage`, `ci / cli`, `ci / frontend`, `ci / e2e`,
   `ci / pre-commit`, `ci / secret-scan`, `ci / containers`,
   `ci / vulnerabilities` and `CodeQL / Analyse (actions)`,
   `CodeQL / Analyse (javascript-typescript)`, `CodeQL / Analyse (python)`.
@@ -627,7 +627,7 @@ in Settings and not a change in this repository.
   The rule moves along to `main` on the day production exists. Merging goes
   through a merge queue (rebase), which runs the same required checks on the
   queued commit; that is why `deploy.yml` and `codeql.yml` also trigger on
-  `merge_group`, and why `bouw` skips it.
+  `merge_group`, and why `build` skips it.
 - [x] **`security.txt` is complete.**
   `Contact: https://github.com/DigiGilde/plak/security/advisories/new` leads the
   `Contact` lines and `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`
