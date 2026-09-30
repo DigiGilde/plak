@@ -15,6 +15,8 @@ export const adminNl = {
   // -- Shared controls ------------------------------------------------------
   'admin.retry': 'Opnieuw proberen',
   'admin.confirm.keep': 'Behoud',
+  'admin.confirm.phrase.label': 'Typ {phrase} om te bevestigen',
+  'admin.confirm.phrase.mismatch': 'Precies {phrase}',
   'admin.rowActions.label': 'Acties voor {label}',
   'admin.notice.unknownError': 'Onbekende fout.',
   'admin.errorBanner.status': 'Foutcode {status}.',

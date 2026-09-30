@@ -85,9 +85,9 @@ Code: `access/gate.py` (`_belongs_to_site`). Guarded by: `test_access_gate.py`.
 
 There is no general platform-administrator bypass in the role checks. A platform
 administrator activates and deactivates members, reads the platform member list,
-grants the platform role, creates groups and deletes empty ones, reads the
-overview of every group and site as metadata, and reads and changes group
-membership and group roles, including their own. To do anything inside a group
+grants the platform role, creates groups, reads the overview of every group
+and site as metadata, and reads and changes group membership and group roles,
+including their own. To do anything inside a group
 they give themselves a group role, which is one visible act in the audit log
 instead of a silent exception.
 
@@ -126,10 +126,11 @@ platform administrator may do without a group role (§3.4).
 |---|---|
 | Read own profile (`/me`), read the overview | active member |
 | Activate, deactivate a member; read the platform member list; grant the platform role | platform administrator |
-| Create a group; delete an empty group | platform administrator |
+| Create a group | platform administrator |
 | Read a group, read its member list | group `reader`, or platform administrator |
 | Add a group member, change a group role, remove a group member | group `admin`, or platform administrator |
 | Change the group default access | group `admin` |
+| Delete a group, with every site in it | group `admin` |
 | Create a site | group `editor`; the creator becomes site `admin` |
 | Read versions, previews, site members | effective site `reader` |
 | Deploy live or preview, tear a preview down, set a version live | effective site `editor` |
@@ -808,8 +809,9 @@ and its files, and the job also sweeps orphaned preview versions, stale `_tmp`
 directories and expired CLI device authorizations and sessions.
 
 **Deleting.** Deleting a site cascades over versions, previews, invitees, keys,
-site members and the repository link, and removes the file trees. A group can
-only be deleted when it is empty, by a platform administrator.
+site members and the repository link, and removes the file trees. Deleting a
+group does the same for every site in it, then removes the group and its
+memberships; only a group admin may.
 
 **Error contract.** Every API error is `application/problem+json` (RFC 9457, NL
 API Design Rules) with `code` as the machine-readable extension: 401, 403, 404,

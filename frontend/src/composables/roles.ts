@@ -17,3 +17,11 @@ const CAN_CREATE_SITE: readonly Role[] = ['editor', 'admin'];
 export function mayCreateSiteIn(me: Me | null | undefined, groupSlug: string): boolean {
   return me?.groupRoles.some((r) => r.groupSlug === groupSlug && CAN_CREATE_SITE.includes(r.role)) ?? false;
 }
+
+/**
+ * Whether `me` is beheerder of this group. Mirrors `delete_group` in
+ * backend/src/plak/api/admin.py: group role admin, no platform-admin bypass.
+ */
+export function isGroupAdmin(me: Me | null | undefined, groupSlug: string): boolean {
+  return me?.groupRoles.some((r) => r.groupSlug === groupSlug && r.role === 'admin') ?? false;
+}

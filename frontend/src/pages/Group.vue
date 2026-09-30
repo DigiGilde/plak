@@ -30,7 +30,7 @@ import PublishSheet from '@/components/PublishSheet.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { resolveDroppedFile, useDropState, useWindowDropGuard } from '@/composables/fileDrop';
 import { goToDone } from '@/composables/publishedMark';
-import { mayCreateSiteIn } from '@/composables/roles';
+import { isGroupAdmin, mayCreateSiteIn } from '@/composables/roles';
 import { crumbOverview, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t, type MessageKey } from '@/i18n';
 import { setDocumentTitle } from '@/title';
@@ -55,6 +55,8 @@ const me = ref<Me | null>(null);
 // `contentBase` above): with the role unknown, the button stays rather than
 // stranding a flow that may well be allowed.
 const canPublish = computed(() => me.value == null || mayCreateSiteIn(me.value, groupSlug.value));
+// Unlike canPublish, an unknown role hides it: deleting is not a flow to strand.
+const canDeleteGroup = computed(() => isGroupAdmin(me.value, groupSlug.value));
 
 async function loadGroup(): Promise<void> {
   loading.value = true;
@@ -189,6 +191,10 @@ watch(sheetOpen, (open) => {
 
 // -- Changes coming out of the tabs ---------------------------------------
 
+function afterRemoval(): void {
+  void router.replace('/');
+}
+
 function onMemberAdded(member: GroupMember): void {
   detail.value?.members.push(member);
 }
@@ -291,10 +297,12 @@ function onGroupChanged(group: Group): void {
           :sites="detail.sites"
           :members="detail.members"
           :access="detail.group.defaultAccess"
+          :can-delete="canDeleteGroup"
           @member-added="onMemberAdded"
           @member-removed="onMemberRemoved"
           @member-role-changed="onMemberRoleChanged"
           @group-changed="onGroupChanged"
+          @removed="afterRemoval"
         />
       </router-view>
 

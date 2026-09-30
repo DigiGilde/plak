@@ -130,20 +130,21 @@ describe('Group: layout', () => {
     const { wrapper, router } = await makeWrapper('/team-aurora');
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Team Aurora');
-    // One h2 per tab: that tab's heading, never two at once.
-    for (const [path, heading] of [
-      ['/team-aurora', 'Sites'],
-      ['/team-aurora/-/members', 'Leden'],
-      ['/team-aurora/-/settings', 'Standaardtoegang voor nieuwe sites'],
-    ]) {
-      await router.push(path!);
+    // Only the open tab's h2s, never those of another tab.
+    for (const [path, expected] of [
+      ['/team-aurora', ['Sites']],
+      ['/team-aurora/-/members', ['Leden']],
+      // The logged-in member is group admin, so the danger zone is there too.
+      ['/team-aurora/-/settings', ['Standaardtoegang voor nieuwe sites', 'Gevarenzone']],
+    ] as const) {
+      await router.push(path);
       await untilIdle();
       const headings = wrapper
         .findAll('nldd-title h2')
         // The publish sheet stands ready on every tab and carries its own h2.
         .filter((h) => !h.element.closest('nldd-sheet'))
         .map((h) => h.text());
-      expect(headings).toEqual([heading]);
+      expect(headings).toEqual(expected);
     }
   });
 
@@ -651,6 +652,45 @@ describe('Group: settings', () => {
       invitees: false,
     });
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
+});
+
+describe('Group: deleting the group', () => {
+  it('offers it to a group admin and goes to the overview once the group is gone', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    expect(
+      wrapper.findAll('[data-testid="groep-sites-lijst"] nldd-text-cell').map((c) => c.attributes('supporting-text')),
+    ).toContain('team-aurora/website');
+
+    await wrapper.find('[data-testid="verwijder-groep"]').trigger('click');
+    fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', {
+      value: 'team-aurora',
+    });
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    expect(backend.data.groups.map((g) => g.slug)).not.toContain('team-aurora');
+    expect(backend.data.sites.filter((s) => s.groupSlug === 'team-aurora')).toHaveLength(0);
+    expect(router.currentRoute.value.name).toBe('overview');
+  });
+
+  it('keeps the danger zone away from an editor of the group', async () => {
+    // lid-3 (Ada Vermeer) is editor on team-aurora.
+    backend.data.loggedInMemberId = 'lid-3';
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="standaardtoegang-groep"]').exists()).toBe(true);
+    expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
+  });
+
+  it('keeps the danger zone away while the role is unknown', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/me') ? serverErrorFetch()(input, init) : backend.fetch(input, init),
+    );
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="standaardtoegang-groep"]').exists()).toBe(true);
+    expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
   });
 });
 
