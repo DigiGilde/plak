@@ -1034,10 +1034,23 @@ class TestFirstVisitToPreviewOrVersion:
         assert response.content == PREVIEW_INDEX
         assert "location" not in response.headers
 
-    async def test_the_redirect_is_audited_as_a_login_redirect(self, client, environment):
-        await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
+    async def test_the_redirect_is_audited_with_the_reason_that_refused(self, client, environment):
+        """Outward every path gets the same redirect; the audit log keeps what
+        lay behind it, so probing for refs or version ids stays visible."""
+        for path in (
+            "/aurora/site/_preview/pr-besloten/",
+            "/aurora/site/_preview/pr-999/",
+            "/nergens/niks/_preview/pr-1/",
+            f"/aurora/site/_version/{uuid.uuid4()}/",
+        ):
+            await client.get(path, headers=self.NAVIGATION)
         rows = await _audit_rows(environment)
-        assert [(row.result, row.reason_code) for row in rows] == [("login_redirect", "LOGIN_REQUIRED")]
+        assert [(row.result, row.reason_code) for row in rows] == [
+            ("login_redirect", "NO_ACCESS"),
+            ("login_redirect", "UNKNOWN_PREVIEW"),
+            ("login_redirect", "UNKNOWN_GROUP"),
+            ("login_redirect", "NO_ACCESS"),
+        ]
 
     @pytest.mark.parametrize(
         "headers",

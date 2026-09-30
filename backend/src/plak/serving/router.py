@@ -40,7 +40,6 @@ from plak import net
 from plak.access import gate, keys
 from plak.access.decision import (
     REASON_KEY_CODE_REQUIRED,
-    REASON_LOGIN_REQUIRED,
     AccessDecision,
     DecisionKind,
     neutral_404,
@@ -330,7 +329,9 @@ async def _serve(
         and sessions.content_site_prefix(request.url.path) is not None
         and sessions.top_level_navigation(request)
     ):
-        await _audit(request, visitor, "login_redirect", REASON_LOGIN_REQUIRED, refs)
+        # The reason that really refused, so probing for refs or version ids
+        # stays visible in the audit log although the answer is the same.
+        await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
         return _login_redirect(request)
 
     if decision.kind is DecisionKind.NEUTRAL_404:
