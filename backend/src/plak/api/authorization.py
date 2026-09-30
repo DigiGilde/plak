@@ -1,4 +1,4 @@
-"""Role checks for the beheer API: a route demands a minimum role.
+"""Role checks for the admin API: a route demands a minimum role.
 
 Same shape as the existing `_require_*` helpers in api/admin.py: a call at the
 start of the route that returns nothing and otherwise raises a 403. The role

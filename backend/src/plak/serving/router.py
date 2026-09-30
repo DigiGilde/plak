@@ -493,7 +493,7 @@ async def unmatched_path(rest: str) -> Response:
     route at all (`/onbekend`, `/favicon.ico`, `/-/`) got FastAPI's own
     `{"detail":"Not Found"}`: another body, another header set, another
     content type. On the content host that difference is exactly the
-    enumeration signal the neutral 404 exists to remove, and on the beheer host
+    enumeration signal the neutral 404 exists to remove, and on the admin host
     it is what keeps a mistyped app path from being told apart from a real one.
 
     Only GET (and HEAD): a path that does have a route but not for this method

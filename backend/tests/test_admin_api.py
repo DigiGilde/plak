@@ -127,8 +127,8 @@ async def data(factory) -> SimpleNamespace:
     and groep 'team' with site 'site'."""
     async with factory() as db:
         admin_member = Member(
-            sso_subject="beheer-sub",
-            email="beheer@example.nl",
+            sso_subject="admin-sub",
+            email="admin@example.nl",
             platform_role=PlatformRole.ADMIN,
             status=MemberStatus.ACTIVE,
         )
@@ -301,14 +301,14 @@ class TestAuthorization:
         """Whoever creates a groep is a member immediately and can create a
         site in it at once; without membership that would give a 403
         NOT_GROUP_MEMBER."""
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/groups", json={"name": "Nieuw", "slug": "nieuw"}, headers=headers
         )
         assert response.status_code == 201
 
         members = (await client.get(f"{BASE}/groups/nieuw/members")).json()
-        assert [member["identifier"] for member in members] == ["beheer@example.nl"]
+        assert [member["identifier"] for member in members] == ["admin@example.nl"]
 
         response = await client.post(
             f"{BASE}/groups/nieuw/sites",
@@ -320,7 +320,7 @@ class TestAuthorization:
 
         # Adding again is the ordinary duplicate, not a double membership.
         response = await client.post(
-            f"{BASE}/groups/nieuw/members", json={"identifier": "beheer@example.nl"}, headers=headers
+            f"{BASE}/groups/nieuw/members", json={"identifier": "admin@example.nl"}, headers=headers
         )
         assert response.status_code == 409
 
@@ -328,16 +328,16 @@ class TestAuthorization:
         login(client, app, sub="lid-a", email="a@example.nl")
         assert (await client.get(f"{BASE}/platform/members")).status_code == 403
 
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.get(f"{BASE}/platform/members")
         assert response.status_code == 200
-        assert {member["ssoSubject"] for member in response.json()} >= {"beheer-sub", "lid-a", "lid-b"}
+        assert {member["ssoSubject"] for member in response.json()} >= {"admin-sub", "lid-a", "lid-b"}
 
     async def test_platform_members_carry_both_dates(self, client, app, data):
         """The platform page sorts on these two, so they have to be in the payload."""
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
         members = (await client.get(f"{BASE}/platform/members")).json()
-        admin = next(member for member in members if member["ssoSubject"] == "beheer-sub")
+        admin = next(member for member in members if member["ssoSubject"] == "admin-sub")
         assert admin["createdAt"].endswith("Z")
         # Logging in is what fetched this list, so the admin has been seen.
         assert admin["lastLoginAt"].endswith("Z")
@@ -346,7 +346,7 @@ class TestAuthorization:
         login(client, app, sub="iemand-nieuw")
         assert (await client.get(f"{BASE}/me")).status_code == 200
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         members = (await client.get(f"{BASE}/platform/members")).json()
         new = next(member for member in members if member["ssoSubject"] == "iemand-nieuw")
         response = await client.post(
@@ -358,7 +358,7 @@ class TestAuthorization:
         login(client, app, sub="iemand-nieuw")
         assert (await client.get(f"{BASE}/me")).status_code == 403
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/platform/members/{new['id']}/_activate", headers=headers
         )
@@ -379,7 +379,7 @@ class TestAuthorization:
         second = await cli_login(data.member_a)
         bystander = await cli_login(data.member_b)
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(f"{BASE}/platform/members/{data.member_a.id}/_deactivate", headers=headers)
         assert response.status_code == 200
         response = await client.post(f"{BASE}/platform/members/{data.member_a.id}/_activate", headers=headers)
@@ -397,7 +397,7 @@ class TestAuthorization:
     async def test_an_admin_may_not_deactivate_himself(self, client, app, data):
         """The admin API is the only way back in, so switching yourself off
         would lock the platform rather than only your own account."""
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/platform/members/{data.admin_member.id}/_deactivate", headers=headers
         )
@@ -408,7 +408,7 @@ class TestAuthorization:
         # A second admin, so the first one may step down after all.
         async with factory() as db:
             second = Member(
-                sso_subject="beheer-twee",
+                sso_subject="admin-twee",
                 email="twee@example.nl",
                 platform_role=PlatformRole.ADMIN,
                 status=MemberStatus.ACTIVE,
@@ -417,16 +417,16 @@ class TestAuthorization:
             await db.commit()
             second_id = second.id
 
-        headers = login(client, app, sub="beheer-twee", email="twee@example.nl")
+        headers = login(client, app, sub="admin-twee", email="twee@example.nl")
         response = await client.post(
             f"{BASE}/platform/members/{data.admin_member.id}/_deactivate", headers=headers
         )
         assert response.status_code == 200
 
         # Now the second one is the only one left, and nobody can remove them.
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.get(f"{BASE}/me")).status_code == 403
-        headers = login(client, app, sub="beheer-twee", email="twee@example.nl")
+        headers = login(client, app, sub="admin-twee", email="twee@example.nl")
         response = await client.put(
             f"{BASE}/platform/members/{second_id}/platform-role",
             json={"platformRole": "member"},
@@ -440,10 +440,10 @@ class TestAuthorization:
     ):
         """Without this the change looks like it worked and auth/members.py
         undoes it on the next request."""
-        app.state.settings = app.state.settings.model_copy(update={"bootstrap_admin_sub": "beheer-sub"})
+        app.state.settings = app.state.settings.model_copy(update={"bootstrap_admin_sub": "admin-sub"})
         async with factory() as db:
             other = Member(
-                sso_subject="beheer-drie",
+                sso_subject="admin-drie",
                 email="drie@example.nl",
                 platform_role=PlatformRole.ADMIN,
                 status=MemberStatus.ACTIVE,
@@ -451,7 +451,7 @@ class TestAuthorization:
             db.add(other)
             await db.commit()
 
-        headers = login(client, app, sub="beheer-drie", email="drie@example.nl")
+        headers = login(client, app, sub="admin-drie", email="drie@example.nl")
         response = await client.post(
             f"{BASE}/platform/members/{data.admin_member.id}/_deactivate", headers=headers
         )
@@ -459,7 +459,7 @@ class TestAuthorization:
         assert response.json()["code"] == "BOOTSTRAP_MEMBER"
 
     async def test_an_admin_appoints_and_stands_down_another(self, client, app, data):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.put(
             f"{BASE}/platform/members/{data.member_a.id}/platform-role",
@@ -480,7 +480,7 @@ class TestAuthorization:
         )
         assert response.status_code == 409, "je eigen rol afnemen mag niet"
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.put(
             f"{BASE}/platform/members/{data.member_a.id}/platform-role",
             json={"platformRole": "member"},
@@ -509,7 +509,7 @@ class TestAuthorization:
     async def test_an_unknown_member_id_is_404_on_activate_deactivate_and_role(
         self, client, app, data
     ):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         unknown = uuid.uuid4()
 
         activate = await client.post(f"{BASE}/platform/members/{unknown}/_activate", headers=headers)
@@ -673,7 +673,7 @@ class TestOriginGuard:
 
 class TestGroupsAndSites:
     async def test_group_create_validates_slug(self, client, app, data):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         # "beheer" and "admin" are ordinary slugs now that the SPA sits at the
         # root of its own host; what stays reserved is what the web claims.
         for slug in ("robots.txt", "Hoofdletters", "-x", "_x"):
@@ -725,7 +725,7 @@ class TestGroupsAndSites:
         assert site.json()["code"] == "FIELD_EMPTY"
 
     async def test_group_slug_duplicate_409(self, client, app, data):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/groups", json={"name": "Team 2", "slug": "team"}, headers=headers
         )
@@ -733,7 +733,7 @@ class TestGroupsAndSites:
 
     async def test_409_conflicts_distinguishable_via_code(self, client, app, data):
         """Two different 409s each carry their own stable `code`."""
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         duplicate = await client.post(
             f"{BASE}/groups", json={"name": "Team 2", "slug": "team"}, headers=headers
         )
@@ -758,7 +758,7 @@ class TestGroupsAndSites:
         assert overview["groups"] == []
 
     async def test_admin_sees_all_groups(self, client, app, data):
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
         overview = (await client.get(f"{BASE}/overview")).json()
         assert [group["group"]["slug"] for group in overview["groups"]] == ["team"]
 
@@ -766,7 +766,7 @@ class TestGroupsAndSites:
         async with factory() as db:
             db.add(Group(slug="leeg", name="Leeg", default_access_base=AccessBase.SITE_TEAM))
             await db.commit()
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
 
         overview = (await client.get(f"{BASE}/overview")).json()
 
@@ -796,7 +796,7 @@ class TestGroupsAndSites:
         assert "tokens" not in detail
 
     async def test_unknown_group_404(self, client, app, data):
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.get(f"{BASE}/groups/bestaat-niet")).status_code == 404
 
     async def test_default_access_set_and_inherit(self, client, app, data):
@@ -968,7 +968,7 @@ class TestGroupsAndSites:
             await client.delete(f"{BASE}/groups/team", headers=headers_member)
         ).status_code == 403
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.delete(f"{BASE}/groups/team", headers=headers)).status_code == 409
 
         headers_member = login(client, app, sub="lid-a", email="a@example.nl")
@@ -976,7 +976,7 @@ class TestGroupsAndSites:
             await client.delete(f"{BASE}/sites/team/site", headers=headers_member)
         ).status_code == 204
 
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.delete(f"{BASE}/groups/team", headers=headers)).status_code == 204
         assert (await client.get(f"{BASE}/groups/team")).status_code == 404
 
@@ -1130,7 +1130,7 @@ class TestGroupMembers:
         assert [member["identifier"] for member in members] == ["b@example.nl"]
 
     async def test_admin_may_members_manage_without_membership(self, client, app, data):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/groups/team/members", json={"identifier": "b@example.nl"}, headers=headers
         )
@@ -1149,7 +1149,7 @@ class TestGroupMembers:
         assert response.status_code == 409
 
     async def test_an_unverified_email_does_not_resolve_to_a_member(self, client, app, data, factory):
-        """Someone whose IdP profile carries an unverified alice@ visits beheer
+        """Someone whose IdP profile carries an unverified alice@ visits admin
         before Alice does: adding "alice@" must not pick that person."""
         set_session_cookie(client, app, sub="aanvaller", email="alice@example.nl", email_verified=False)
         assert (await client.get(f"{BASE}/me")).status_code == 200
@@ -1731,7 +1731,7 @@ class TestRoles:
     ):
         """A platform admin manages people and groups; for content he gives
         himself a visible groepsrol (spec §3.4)."""
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.get(f"{BASE}/groups/team")).status_code == 200
         assert (await client.get(f"{BASE}/groups/team/members")).status_code == 200
 
@@ -1949,7 +1949,7 @@ class TestSiteMembers:
         refused = {
             "toevoegen": await client.post(
                 f"{BASE}/sites/team/site/members",
-                json={"identifier": "beheer@example.nl"},
+                json={"identifier": "admin@example.nl"},
                 headers=headers,
             ),
             "wijzigen": await client.put(
@@ -2185,7 +2185,7 @@ class TestMemberSearch:
     ):
         """Whoever may add someone to the groep may look them up there."""
         await _new_member(factory, sub="lid-jansen", email="jj@example.nl", name="Joke Jansen")
-        login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        login(client, app, sub="admin-sub", email="admin@example.nl")
 
         hits = (await client.get(self.GROUP, params={"q": "joke"})).json()
 
@@ -2892,7 +2892,7 @@ class TestAudit:
         """Unlike `_audit`, `_audit_strict` fails closed: reading the log is
         itself a disclosure, so a missing log must not let the page through."""
         app.state.audit_log = None
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.get(f"{BASE}/platform/audit", headers=headers)
         assert response.status_code == 503
@@ -2904,7 +2904,7 @@ class TestAudit:
         """Same fail-closed shape as the audit read, for `_audit_strict_limited`
         (actor-pseudonym, actor-identity, the IP reveal)."""
         app.state.audit_log = None
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.post(
             f"{BASE}/platform/audit/actor-pseudonym",
@@ -2924,7 +2924,7 @@ class TestAuditFilters:
         timezone) is read as UTC rather than compared against an aware
         `occurred_at` and failing outright."""
         await app.state.audit_log.write("test_sinds", ANONYMOUS, "allowed")
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         before = (datetime.now(UTC) - timedelta(hours=1)).replace(tzinfo=None).isoformat()
         after = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
@@ -2942,7 +2942,7 @@ class TestAuditFilters:
     async def test_reason_code_filters_to_that_refusal(self, client, app, data):
         await app.state.audit_log.write("test_a", ANONYMOUS, "refused", reason_code="CODE_A")
         await app.state.audit_log.write("test_b", ANONYMOUS, "refused", reason_code="CODE_B")
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.get(f"{BASE}/platform/audit", params={"reasonCode": "CODE_A"}, headers=headers)
 
@@ -2957,7 +2957,7 @@ class TestAuditFilters:
         await app.state.audit_log.write(
             "test_ander", ANONYMOUS, "allowed", refs={"group": "ander", "site": "site"}
         )
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.get(f"{BASE}/platform/audit", params={"group": "team"}, headers=headers)
 
@@ -2971,7 +2971,7 @@ class TestActorLookupBranches:
     sso_subject match that the forward lookup only reaches by name."""
 
     async def test_an_exact_sso_subject_resolves_to_the_member_directly(self, client, app, data):
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
 
         response = await client.post(
             f"{BASE}/platform/audit/actor-pseudonym",
@@ -2996,7 +2996,7 @@ class TestActorLookupBranches:
                 ]
             )
             await db.commit()
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         pseudonym = pseudonymise(app.state.settings.audit_pepper, "kijker-twee")
 
         response = await client.post(
@@ -3044,7 +3044,7 @@ class TestActorLookupBranches:
                 ]
             )
             await db.commit()
-        headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         pseudonym = pseudonymise(app.state.settings.audit_pepper, "github:https://github.com:2")
 
         response = await client.post(
@@ -3077,7 +3077,7 @@ class TestIpRevealDecryptFailure:
         app.state.settings.audit_ip_key = "bm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm4="
         app.state.audit_log._ip_key = app.state.settings.audit_ip_key_bytes
 
-        admin_headers = login(client, app, sub="beheer-sub", email="beheer@example.nl")
+        admin_headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.post(
             f"{BASE}/platform/audit/entries/{entry.id}/ip",
             json={"reason": "onderzoek naar een melding"},

@@ -398,7 +398,7 @@ class TestLoginOrigin:
 
     async def test_a_same_origin_navigation_without_user_activation_still_counts(self, client, app, idp):
         """What Chromium and Firefox send for `location.href = '/-/login'` from
-        a beheer page, and what Safari sends even for a real click: no
+        an admin page, and what Safari sends even for a real click: no
         Sec-Fetch-User. Requiring it would lock every Safari member out of
         CLI approval (WebKit bug 247697), so this counts as self-initiated and
         the SPA never navigates to the login by script instead
@@ -452,7 +452,7 @@ class TestLogout:
         response = await client.post("/-/logout")
         assert response.status_code == 303
 
-    async def test_the_spa_form_from_the_beheer_origin_logs_out(self, client, app, idp):
+    async def test_the_spa_form_from_the_admin_origin_logs_out(self, client, app, idp):
         """What the browser really sends for the hidden form in App.vue."""
         await complete_login(client, idp)
         session_id = check_signature(app.state.settings.session_secret, client.cookies.get(SESSION_COOKIE))
@@ -463,8 +463,8 @@ class TestLogout:
         assert response.status_code == 303
         assert app.state.session_store.get_session(session_id) is None
 
-    async def test_a_form_on_the_content_host_cannot_end_the_beheer_session(self, client, app, idp):
-        """The content origin is same-site with the beheer origin, so
+    async def test_a_form_on_the_content_host_cannot_end_the_admin_session(self, client, app, idp):
+        """The content origin is same-site with the admin origin, so
         SameSite=Strict sends the session cookie along and POST alone is no
         guard."""
         await complete_login(client, idp)

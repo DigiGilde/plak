@@ -1,9 +1,9 @@
 """Host separation inside the app.
 
 Without nginx in front, the app decides per Host which world a path belongs
-to. The SPA sits on the root of the beheer host, so the two worlds do not
+to. The SPA sits on the root of the admin host, so the two worlds do not
 differ in which paths exist there, but in what answers them: on the
-beheer host the SPA is the fallback for the whole path space, with the app's
+admin host the SPA is the fallback for the whole path space, with the app's
 own paths carved out of it (platform/spa.py), and only `/healthz` does not
 exist at all. On the content host only content exists
 (`/{group}/{site}/...`), robots.txt, favicon.ico, .well-known, the public
@@ -20,7 +20,7 @@ neutral 404, headers included (anti-enumeration: SecurityHeadersMiddleware sits
 outside this one and reads the host, not the path), and leaves ratelimit, audit
 and router untouched.
 
-`/admin` and `/beheer` are not carved out here: on the beheer host they fall to
+`/admin` and `/beheer` are not carved out here: on the admin host they fall to
 the SPA like any other path (platform/spa.py), and on the content host they
 are ordinary content paths, because neither is a reserved group slug.
 """
@@ -67,7 +67,7 @@ def belongs_to_content(path: str) -> bool:
     if path_under(path, PLATFORM_PREFIX):
         # Only the content login, its callback, logout and the code of a
         # secret link live here. Everything else under /-/ belongs to the
-        # beheer host alone; the API above all, which this branch is what
+        # admin host alone; the API above all, which this branch is what
         # keeps off the content host.
         return path in (PATH_CONTENT_LOGIN, PATH_CONTENT_LOGOUT, PATH_CONTENT_CODE) or path.startswith(
             PATH_CONTENT_OAUTH2_PREFIX

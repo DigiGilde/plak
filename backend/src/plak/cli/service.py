@@ -1,8 +1,8 @@
 """CLI login (`plak login`): an OAuth 2.0 device authorization grant
-(RFC 8628) that Plak runs itself, on top of the beheer SSO login.
+(RFC 8628) that Plak runs itself, on top of the admin SSO login.
 
 The CLI asks for a device code and a user code, the member approves the user
-code in the beheer SPA with a fresh session, and the CLI trades its device
+code in the admin SPA with a fresh session, and the CLI trades its device
 code for a CLI session: a one-hour access token plus a refresh token that
 rotates on every use. A refresh token that comes back after it was rotated
 means two parties hold the chain, so the whole session is revoked.

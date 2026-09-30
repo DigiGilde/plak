@@ -7,10 +7,10 @@ Auth is one of three:
   repository by ci/trust.py;
 - a CLI access token (`Authorization: Bearer plakcli_...` from `plak login`),
   which acts as its member with exactly that member's roles;
-- a beheer session with CSRF, for the upload in the SPA.
+- an admin session with CSRF, for the upload in the SPA.
 
 Bearer is accepted on these two endpoints, the two CLI session endpoints and
-the two creation endpoints of the beheer API (`POST /groups`, `POST
+the two creation endpoints of the admin API (`POST /groups`, `POST
 /groups/{group}/sites`, CLI token only) and nowhere else:
 `BearerOutsideDeploysMiddleware` rejects any other request carrying a Bearer
 Authorization header with a 401.
@@ -87,7 +87,7 @@ _PREVIEW_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/previews/[^/]+$")
 CLI_SESSION_PATH = "/-/api/v1/cli/session"
 CLI_WHOAMI_PATH = "/-/api/v1/cli/whoami"
 # Creating a group or a site (api/admin.py) also takes the CLI token; nothing
-# else in the beheer API does.
+# else in the admin API does.
 GROUP_CREATE_PATH = "/-/api/v1/groups"
 _SITE_CREATE_PATH_RE = re.compile(r"^/-/api/v1/groups/[^/]+/sites$")
 

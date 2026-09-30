@@ -436,7 +436,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
                sense once you know whom it is for. -->
           <!-- A combo box without allow-custom: typing searches, but only a
                name from the list can be submitted. An address that is not in
-               it belongs to nobody who has ever logged in on the beheer, and
+               it belongs to nobody who has ever logged in on the admin, and
                the server would refuse it. -->
         <nldd-form-field :label="t('group.members.add.identifier.label')">
           <nldd-combo-box

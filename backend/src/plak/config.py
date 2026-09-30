@@ -128,15 +128,15 @@ class Settings(BaseSettings):
     # dev explicitly for local development.
     environment: str = "productie"
     base_url: str | None = None
-    # Two origins, always: the beheer host and the content host are
+    # Two origins, always: the admin host and the content host are
     # separate origins, and the app derives the content host from this URL.
-    # There is no single-host fallback: the SPA sits on the root of the beheer
+    # There is no single-host fallback: the SPA sits on the root of the admin
     # host, so one origin would put the interface and uploaded content
     # together. Dev compose, the ZAD deployment and production all set it. So:
     # required, everywhere.
     content_base_url: str
     trusted_proxies: str = ""
-    # Built beheer SPA (Vite base /); by default relative to the
+    # Built admin SPA (Vite base /); by default relative to the
     # working directory of `just dev` (backend/). The app image sets this to
     # /app/spa.
     spa_path: Path = Path("../frontend/dist")

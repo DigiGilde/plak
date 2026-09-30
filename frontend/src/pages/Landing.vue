@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// What the beheer host shows to whoever may not get in. Two of
+// What the admin host shows to whoever may not get in. Two of
 // the three session states land here: no session, and a session whose member
 // was deactivated. Without that distinction a deactivated account would see
 // a login button after logging in, and clicking it would return the same

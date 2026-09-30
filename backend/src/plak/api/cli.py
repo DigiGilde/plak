@@ -1,10 +1,10 @@
 """CLI login API (`plak login`): the device authorization grant (RFC 8628)
-that Plak brokers on top of its own beheer SSO login.
+that Plak brokers on top of its own admin SSO login.
 
 The CLI side lives here and needs no session: asking for a device code,
 polling the token endpoint, and logging out or asking who it is with its
 access token. The member side (looking up, approving and denying a user code,
-and the list of linked sessions) needs a fresh beheer session with CSRF and
+and the list of linked sessions) needs a fresh admin session with CSRF and
 lives in api/admin.py.
 
 The token endpoint answers RFC 8628's error codes as problem+json 400 with

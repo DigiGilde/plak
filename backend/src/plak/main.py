@@ -5,9 +5,9 @@ rate limit: SPA assets are unlimited), host separation (outside rate
 limit and SPA, but inside the security headers so its neutral 404 carries the
 same header set as the router's neutral 404), security headers, TrustedHost,
 API-Version. Three of those know the content host, and they all derive it from
-the same PLAK_CONTENT_BASE_URL: the SPA answers on the beheer host only, the
+the same PLAK_CONTENT_BASE_URL: the SPA answers on the admin host only, the
 host separation decides which world a path belongs to, and the security headers
-put the beheer regime on the beheer host alone. The app serves content, SPA and
+put the admin regime on the admin host alone. The app serves content, SPA and
 platform routes itself and enforces the origin separation itself; any proxy in
 front of it is dumb.
 
@@ -203,7 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(ratelimit_class, **ratelimit_kwargs)
 
     # Outside the ratelimit (SPA assets are unlimited) and inside the host
-    # separation: the SPA is the fallback for the whole beheer host, so it has
+    # separation: the SPA is the fallback for the whole admin host, so it has
     # to know which host it is on itself.
     # The logout form passes the content host, and with RP-initiated logout on
     # the IdP; Chrome checks each redirect of a form navigation against
@@ -228,7 +228,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.base_url:
         # Added after ratelimit, so further out: a forged Host is refused
         # before it counts against any rate-limit budget.
-        # Two origins share this one app: besides the beheer host,
+        # Two origins share this one app: besides the admin host,
         # the content host is on the allowlist too.
         allowed_hosts = {urlsplit(settings.base_url).hostname, content_host}
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(allowed_hosts))
@@ -258,7 +258,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Platform/auth routes before the serving catch-all, otherwise
     # /{group}/{site} would already capture paths like /-/login.
     app.include_router(pages.router)
-    # Beheer host only (host_separation.py); no origin check, because the OP
+    # Admin host only (host_separation.py); no origin check, because the OP
     # calls it server to server and authenticates with the logout token itself.
     app.include_router(backchannel_router)
     # The only POST on the content host; before the serving catch-all for the

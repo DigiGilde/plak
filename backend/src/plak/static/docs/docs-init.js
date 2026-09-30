@@ -1,5 +1,5 @@
 // Starts Swagger UI against our own OpenAPI schema. Deliberately a separate
-// file and not an inline <script>: the beheer CSP allows script-src 'self' only.
+// file and not an inline <script>: the admin CSP allows script-src 'self' only.
 
 (function () {
   var CSRF_COOKIE = '__Host-plak-csrf';
@@ -39,7 +39,7 @@
       showCommonExtensions: true,
       syntaxHighlight: { activated: true, theme: 'idea' },
       requestInterceptor: function (verzoek) {
-        // "Try it out" runs on the same origin as the SPA: the beheer session
+        // "Try it out" runs on the same origin as the SPA: the admin session
         // has to ride along, and every mutation demands the double submit header.
         verzoek.credentials = 'same-origin';
         var token = csrfToken();

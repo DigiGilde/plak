@@ -36,7 +36,7 @@ def _reveal_url(entry_id) -> str:
 
 
 def _as_admin(client, app) -> dict[str, str]:
-    return login(client, app, sub="beheer-sub", email="beheer@example.nl")
+    return login(client, app, sub="admin-sub", email="admin@example.nl")
 
 
 async def _write_with_ip(app, *, action: str = "content_access", ip: str = "203.0.113.42"):

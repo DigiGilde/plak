@@ -65,7 +65,7 @@ async def test_a_refusal_is_english_when_the_client_asks_for_nothing() -> None:
 
 
 async def test_a_refusal_is_dutch_when_the_client_asks_for_dutch() -> None:
-    """What the beheer SPA does: it sends `nl`, so its users keep reading
+    """What the admin SPA does: it sends `nl`, so its users keep reading
     Dutch while the interface itself is still Dutch."""
     body = (await _fetch("/-/api/v1/crashes", {"Accept-Language": "nl"})).json()
 

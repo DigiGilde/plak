@@ -1,7 +1,7 @@
 """Tracks SSO viewers of protected content.
 
 A content-only viewer never gets a `members` row (that comes into being only
-on a first beheer visit, `auth/members.py`), so without this table there
+on a first admin visit, `auth/members.py`), so without this table there
 would be nothing for `actor-identity` to resolve them to at all. Upserted on
 every successful content-host SSO login (`last_seen_at` is therefore last
 *login*, not last page view); purged by `audit/retention.py` after 90 days

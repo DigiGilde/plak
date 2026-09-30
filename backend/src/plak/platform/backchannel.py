@@ -1,7 +1,7 @@
 """OIDC Back-Channel Logout 1.0: the endpoint the OP calls when a session at
 the OP ends.
 
-Lives on the beheer host only (host_separation.py keeps everything under `/-/`
+Lives on the admin host only (host_separation.py keeps everything under `/-/`
 off the content host), takes the `logout_token` as a form field, verifies it
 per section 2.6 and then drops every Plak session that token points at. Both
 session kinds go: one login at the OP produced them both, so the `sid` claim

@@ -1,6 +1,6 @@
 """Creating a group or a site with the CLI token (`plak group create`,
 `plak site create`), and the edge of that: the two creation routes of
-api/admin.py take a bearer, no other beheer route does.
+api/admin.py take a bearer, no other admin route does.
 
 The app under test wires the admin router, the CLI router and
 BearerOutsideDeploysMiddleware the way main.py does. The full stack (origin
@@ -631,7 +631,7 @@ class TestCreationBudget:
         assert response.status_code == 201
 
 
-# -- Bearer on every other beheer route: refused exactly as before ------------
+# -- Bearer on every other admin route: refused exactly as before ------------
 
 
 def _admin_routes() -> list[tuple[str, str]]:
@@ -653,7 +653,7 @@ ADMIN_ROUTES = _admin_routes()
 
 
 @pytest.mark.parametrize(("method_", "path"), ADMIN_ROUTES, ids=[f"{m} {p}" for m, p in ADMIN_ROUTES])
-async def test_a_valid_cli_token_on_any_other_beheer_route_is_refused(client, factory, method_, path):
+async def test_a_valid_cli_token_on_any_other_admin_route_is_refused(client, factory, method_, path):
     member = await _member(factory, "maker")
     token = await _token(factory, member)
 

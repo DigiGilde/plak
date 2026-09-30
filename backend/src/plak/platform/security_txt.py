@@ -2,7 +2,7 @@
 
 One document for two origins. RFC 9116 section 2.5.3 says a file whose
 retrieval URI appears in none of its Canonical fields should not be trusted,
-so the content origin and the beheer origin each get a Canonical line of their
+so the content origin and the admin origin each get a Canonical line of their
 own and both hosts serve the same body. A Canonical web URI must be https, so
 an http origin (the dev and e2e stacks) yields no Canonical line rather than an
 invalid one: the field is optional, Contact and Expires are not.

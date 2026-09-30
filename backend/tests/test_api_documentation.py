@@ -560,7 +560,7 @@ class TestAssetPathComesFromTheTable:
 
 class TestVendoredAssets:
     """The Swagger UI files are downloaded bytes that nobody reads: 1.5 MB of
-    minified JavaScript, served from the beheer origin under `script-src
+    minified JavaScript, served from the admin origin under `script-src
     'self'`, so fully trusted script beside the session cookie. SHA256SUMS is
     the reviewed record of which bytes those are; this test is what makes a
     change to them visible without a network call.

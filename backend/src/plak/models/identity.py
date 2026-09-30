@@ -43,7 +43,7 @@ _RESERVED_SLUGS_SQL = ", ".join(f"'{slug}'" for slug in sorted(RESERVED_SLUGS))
 
 
 class Member(IDMixin, Base):
-    """Comes into being on the first visit to the beheer host; logging in alone creates no member."""
+    """Comes into being on the first visit to the admin host; logging in alone creates no member."""
 
     __tablename__ = "members"
 

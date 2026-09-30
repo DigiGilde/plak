@@ -1,5 +1,5 @@
 /* Our own shell around Swagger UI: a header with the brand and a way back to
-   the beheer environment. The rest of the page is Swagger UI's own stylesheet,
+   the admin environment. The rest of the page is Swagger UI's own stylesheet,
    and that goes for the dark theme too: `docs-theme.js` sets the class that
    switches it on, and `swagger-ui.css` then sets `color-scheme: dark` itself. */
 
