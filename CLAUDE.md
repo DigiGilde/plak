@@ -40,9 +40,8 @@ All three suites sit at 100% and the floors are set there
 ## Language
 
 Dutch for everything a person sees: UI texts, error messages, OpenAPI
-descriptions, the `just --list` recipe descriptions, the output of the
-shell scripts in `dev/` and the step names in the workflows under
-`.github/workflows/`.
+descriptions, the `just --list` recipe descriptions and the output of the
+shell scripts in `dev/`.
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
@@ -81,8 +80,11 @@ quote is the English string the CLI really prints.
 
 The CLI (`cli/`) is English all the way out: identifiers, the argparse
 help and description texts, and everything it prints to stdout and
-stderr. The same holds for the step names and the echoed messages in
-`actions/publiceer/action.yml`. It is developer tooling with English
+stderr. The same holds for the step names, job names and echoed
+messages in `actions/publiceer/action.yml` and in the workflows under
+`.github/workflows/`, except where a name is a contract with the
+platform: the ZAD deployment and GitHub environment `productie` and the
+component `beheer`. It is developer tooling with English
 documentation in a repository that goes public, not a part of the
 interface. That now holds for the text it relays too: the CLI sends no
 `Accept-Language`, so the `detail` it prints comes back in English.

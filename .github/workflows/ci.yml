@@ -1,7 +1,7 @@
 # The gates that `just lint`, `just test` and the frontend build already
 # enforce locally, run again on the server. Written before the repo had a
 # remote, which is why it follows the local commands rather than the other
-# way round; it is green on `beta` with all eight jobs.
+# way round.
 #
 # This workflow has no trigger of its own: deploy.yml calls it, so a
 # deploy cannot bypass the gate and the checks run once per commit
@@ -28,25 +28,23 @@ env:
   TRIVY_VERSION: v0.74.0
 
 jobs:
-  backend:
+  # The backend suite in parts side by side (backend/tests/parts.py); the
+  # `backend` job below merges their coverage.
+  backend-tests:
+    name: backend-tests (${{ matrix.part }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [access, auth, rest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: uv installeren
+      - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-
-      - name: Linten (ruff)
-        working-directory: backend
-        run: uv run ruff check src tests
-
-      # From the repo root, so ruff uses its defaults for cli/ instead of
-      # backend/pyproject.toml; --project only picks the pinned ruff.
-      - name: CLI linten (ruff)
-        run: uv run --project backend ruff check cli/plak_cli cli/tests
 
       # The DB tests run PostgreSQL 16 via testcontainers. The
       # GitHub-hosted ubuntu runner has Docker on board, but the conftest
@@ -55,43 +53,90 @@ jobs:
       # the difference between running and silently skipping. On a runner
       # without a container runtime the step below fails with a clear
       # message instead of going green on skipped tests.
-      - name: Containerruntime controleren
+      - name: Check the container runtime
         run: |
           if [ ! -S /var/run/docker.sock ]; then
-            echo "Geen containerruntime op deze runner: testcontainers kan geen PostgreSQL starten." >&2
-            echo "Draai deze job op een runner met Docker of Podman, of zet DOCKER_HOST." >&2
+            echo "No container runtime on this runner: testcontainers cannot start PostgreSQL." >&2
+            echo "Run this job on a runner with Docker or Podman, or set DOCKER_HOST." >&2
             exit 1
           fi
 
-      # Coverage runs inside this job rather than in one of its own: the
-      # suite takes minutes and running it twice for a number is a cost
-      # with nothing behind it. The floor lives in backend/pyproject.toml
-      # (fail_under), so pytest fails the job when coverage drops.
-      - name: Backend-tests met dekking (testcontainers)
+      # The floor is not checked per part, only on the merged data in
+      # `backend`.
+      - name: Backend tests with coverage (testcontainers)
         working-directory: backend
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
+          PLAK_TEST_PART: ${{ matrix.part }}
+          COVERAGE_FILE: .coverage.${{ matrix.part }}
         # -rs shows the reason for every skipped test, so a silently
         # skipped container test stays visible in the log. -n auto runs one
         # worker per CPU; each worker starts its own PostgreSQL container
         # (the container fixtures are session-scoped, and a session is a
         # worker), so no two workers ever share a database.
-        run: uv run python -m pytest -q -rs -n auto --cov=src/plak --cov-report=term-missing:skip-covered
+        run: uv run python -m pytest -q -rs -n auto --cov=src/plak --cov-report= --cov-fail-under=0
+
+      - name: Keep the coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: backend-coverage-${{ matrix.part }}
+          path: backend/.coverage.${{ matrix.part }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # The required check. `!cancelled()` because a failed part would skip a
+  # plain dependent, and a skipped required check counts as passed.
+  backend-coverage:
+    needs: backend-tests
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every test part to pass
+        if: needs.backend-tests.result != 'success'
+        env:
+          RESULT: ${{ needs.backend-tests.result }}
+        run: |
+          echo "Not every backend test part passed (${RESULT})." >&2
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Fetch the coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: backend-coverage-*
+          merge-multiple: true
+          path: backend
+
+      # The floor lives in backend/pyproject.toml (fail_under), so the
+      # report fails this job when the merged coverage drops.
+      - name: Coverage over all parts
+        working-directory: backend
+        run: |
+          uv run coverage combine
+          uv run coverage report --skip-covered --show-missing
 
   # cli/ is its own uv project (the `plak` command), separate from the
-  # backend. Its lint runs in the backend job, on the ruff pinned there.
+  # backend. Its lint runs in `pre-commit`, like the backend's.
   cli:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: uv installeren
+      - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: cli/uv.lock
 
-      - name: CLI-tests met dekking
+      - name: CLI tests with coverage
         working-directory: cli
         run: uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
 
@@ -106,23 +151,23 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Afhankelijkheden installeren
+      - name: Install dependencies
         working-directory: frontend
         run: npm ci --no-audit --no-fund
 
-      - name: Typen controleren
+      - name: Check types
         working-directory: frontend
         run: npm run typecheck
 
       # Must be before the tests: the CSP gate reads frontend/dist/index.html.
-      - name: Bouwen
+      - name: Build
         working-directory: frontend
         run: npm run build
 
       # With coverage, on the same run: the thresholds in vite.config.ts
       # fail this step when coverage drops, and a second pass purely for a
       # number would cost the suite twice.
-      - name: Frontend-tests met dekking
+      - name: Frontend tests with coverage
         working-directory: frontend
         run: npm run coverage
 
@@ -131,7 +176,7 @@ jobs:
       # carry an inline <script> without src, otherwise the admin CSP
       # (script-src 'self', no unsafe-inline) no longer matches what is
       # served.
-      - name: CSP-check op de gebouwde SPA
+      - name: CSP check on the built SPA
         working-directory: frontend
         run: npx vitest run tests/build-output.test.ts
 
@@ -163,7 +208,7 @@ jobs:
 
       # run.sh generates dev/.secrets/ with a Python one-liner, and the CLI
       # scenario runs the real CLI through `uv run --project cli`.
-      - name: uv installeren
+      - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
@@ -171,37 +216,37 @@ jobs:
             backend/uv.lock
             cli/uv.lock
 
-      # Same reasoning as in the backend job: fail loudly rather than run
+      # Same reasoning as in `backend-tests`: fail loudly rather than run
       # a suite that quietly has nothing to talk to.
-      - name: Containerruntime controleren
+      - name: Check the container runtime
         run: |
           if [ ! -S /var/run/docker.sock ]; then
-            echo "Geen containerruntime op deze runner: de e2e-stack kan niet starten." >&2
+            echo "No container runtime on this runner: the e2e stack cannot start." >&2
             exit 1
           fi
 
       # dev/compose.yml mounts frontend/dist read-only into the app; without
       # it /admin answers 503 and half the scenarios fail on that.
-      - name: SPA bouwen
+      - name: Build the SPA
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
 
-      - name: Playwright installeren
+      - name: Install Playwright
         working-directory: e2e
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
-      - name: E2E-suite draaien
+      - name: Run the e2e suite
         env:
           PLAK_E2E_ENGINE: docker
         run: ./e2e/run.sh
 
       # A trace and a screenshot per failed scenario; without them an e2e
       # failure in CI is a stack trace and nothing to look at.
-      - name: Playwright-artefacten bewaren
+      - name: Keep the Playwright artefacts
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -219,18 +264,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: uv installeren
+      - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       # Building the gitleaks hook from source takes longer than the rest
       # of the job together; the cache key follows the pinned revisions.
-      - name: Hookomgevingen uit de cache
+      - name: Hook environments from the cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Pre-commit-hooks draaien
+      - name: Run the pre-commit hooks
         run: uv run --project backend --only-group tools pre-commit run --all-files --show-diff-on-failure
 
   # `git commit --no-verify` walks past the local gitleaks hook, so the
@@ -263,15 +308,15 @@ jobs:
       # go install lands the binary in GOPATH/bin, which is not on PATH in
       # the next step. Adding it there beats calling gitleaks by full path
       # in every scan below.
-      - name: Gitleaks installeren
+      - name: Install gitleaks
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Werkboom scannen op geheimen
+      - name: Scan the working tree for secrets
         run: gitleaks dir . --redact --no-banner
 
-      - name: Commits van deze pull request scannen
+      - name: Scan the commits of this pull request
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
@@ -295,7 +340,7 @@ jobs:
   #
   # Not scanned here: the built image, because building it means npm ci,
   # a vite build and a uv sync on every pull request, minutes of work that
-  # `bouw` in deploy.yml already does. What a full image scan would add on
+  # `build` in deploy.yml already does. What a full image scan would add on
   # top of the base image is the Python and npm dependency tree, and the
   # `vulnerabilities` job below reads those from the lockfiles already.
   #
@@ -310,7 +355,7 @@ jobs:
       # Read the digests out of the Containerfiles rather than repeating
       # them here: Dependabot bumps the Containerfiles, and a second copy
       # would quietly keep scanning yesterday's image.
-      - name: Basisimages uit de Containerfiles lezen
+      - name: Read the base images from the Containerfiles
         id: bases
         run: |
           set -euo pipefail
@@ -319,13 +364,13 @@ jobs:
           nginx="$(grep -oE '^FROM docker\.io/nginxinc/nginx-unprivileged@sha256:[0-9a-f]{64}' \
             containers/nginx-dev/Containerfile | tail -1 | cut -d' ' -f2)"
           if [ -z "$runtime" ] || [ -z "$nginx" ]; then
-            echo "Basisimage niet gevonden: staat de FROM-regel er nog zoals verwacht?" >&2
+            echo "Base image not found: is the FROM line still as expected?" >&2
             exit 1
           fi
           echo "runtime=$runtime" >> "$GITHUB_OUTPUT"
           echo "nginx=$nginx" >> "$GITHUB_OUTPUT"
 
-      - name: Containerfiles scannen (trivy config)
+      - name: Scan the Containerfiles (trivy config)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
@@ -335,7 +380,7 @@ jobs:
           exit-code: "1"
           version: ${{ env.TRIVY_VERSION }}
 
-      - name: Runtime-basisimage scannen (trivy)
+      - name: Scan the runtime base image (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.bases.outputs.runtime }}
@@ -351,7 +396,7 @@ jobs:
       # to 1. What is left is carried in .trivyignore.yaml with a date on
       # which it comes back, so the gate stays honest instead of standing
       # open.
-      - name: Nginx-basisimage scannen (trivy)
+      - name: Scan the nginx base image (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.bases.outputs.nginx }}
@@ -366,7 +411,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: uv installeren
+      - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
@@ -381,7 +426,7 @@ jobs:
       # uv export instead of the venv: pip-audit then reads exactly what
       # the lockfile pins, including the dev group, and nothing from the
       # runner.
-      - name: Backend-afhankelijkheden scannen (pip-audit)
+      - name: Scan the backend dependencies (pip-audit)
         env:
           REQUIREMENTS: ${{ runner.temp }}/requirements.txt
         run: |
@@ -399,7 +444,7 @@ jobs:
       # cli/ is the one component users install on their own machines
       # (README.md); it has its own uv project and lockfile, separate from
       # the backend, so it needs its own export-and-audit step.
-      - name: CLI-afhankelijkheden scannen (pip-audit)
+      - name: Scan the CLI dependencies (pip-audit)
         env:
           REQUIREMENTS: ${{ runner.temp }}/cli-requirements.txt
         run: |
@@ -416,7 +461,7 @@ jobs:
 
       # npm audit reads the lockfile and does not need node_modules; the
       # script does the filtering, because npm audit has no ignore list.
-      - name: Frontend-afhankelijkheden scannen (npm audit)
+      - name: Scan the frontend dependencies (npm audit)
         env:
           REPORT: ${{ runner.temp }}/npm-audit.json
         run: |

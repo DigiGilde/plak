@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import parts
 import pytest
 import yaml
 
@@ -43,9 +44,16 @@ def plugin() -> dict:
 class TestTheCheckGate:
     def test_production_waits_for_the_checks(self, deploy) -> None:
         """BIO2 8.31.02: significant changes are tested before they go to
-        production. With only `needs: bouw` a push to main went straight
+        production. With only `needs: build` a push to main went straight
         to production, tested or not."""
-        assert deploy["jobs"]["productie"]["needs"] == ["ci", "bouw"]
+        assert deploy["jobs"]["production"]["needs"] == ["ci", "build"]
+
+    def test_a_preview_waits_for_the_checks_too(self, deploy) -> None:
+        """The image builds alongside the checks, so this `needs` is the only
+        thing keeping untested code out of a preview, which inherits
+        production secrets."""
+        assert "needs" not in deploy["jobs"]["build"]
+        assert deploy["jobs"]["preview"]["needs"] == ["ci", "build"]
 
     def test_a_push_to_beta_deploys_to_production(self, deploy) -> None:
         """`beta` is the default branch and there is no `main`. Bound to the
@@ -54,7 +62,7 @@ class TestTheCheckGate:
         The ZAD_PROJECT_ID guard keeps it standing down where there is no
         project, instead of failing the action on an empty api-key."""
         assert deploy[True]["push"]["branches"] == ["main", "beta"]
-        condition = " ".join(deploy["jobs"]["productie"]["if"].split())
+        condition = " ".join(deploy["jobs"]["production"]["if"].split())
         assert condition == (
             "github.event_name == 'push' "
             "&& github.ref == 'refs/heads/beta' "
@@ -70,8 +78,8 @@ class TestTheCheckGate:
         nothing merges. That commit is throwaway, so no image gets built for
         it, and preview and production stay bound to their own events."""
         assert "merge_group" in deploy[True]
-        assert "github.event_name != 'merge_group'" in deploy["jobs"]["bouw"]["if"]
-        assert "github.event_name == 'pull_request'" in deploy["jobs"]["opruimen"]["if"]
+        assert "github.event_name != 'merge_group'" in deploy["jobs"]["build"]["if"]
+        assert "github.event_name == 'pull_request'" in deploy["jobs"]["cleanup"]["if"]
 
     def test_the_checks_are_called_rather_than_triggered(self, ci, deploy) -> None:
         """You cannot pass a standalone workflow as `needs`. Calling it is
@@ -80,13 +88,36 @@ class TestTheCheckGate:
         assert list(ci[True]) == ["workflow_call"]
         assert deploy["jobs"]["ci"]["uses"] == "./.github/workflows/ci.yml"
 
+    def test_the_backend_parts_are_the_ones_the_suite_knows(self, ci) -> None:
+        assert ci["jobs"]["backend-tests"]["strategy"]["matrix"]["part"] == list(parts.PARTS)
+        assert ci["jobs"]["backend-tests"]["strategy"]["fail-fast"] is False
+
+    def test_a_failed_backend_part_fails_the_required_check(self, ci) -> None:
+        """A failed part skips a plain dependent, and a skipped required
+        check counts as passed: the tests would go red and the merge
+        button green. So `backend-coverage` runs regardless and fails itself."""
+        backend = ci["jobs"]["backend-coverage"]
+        assert backend["needs"] == "backend-tests"
+        assert backend["if"] == "${{ !cancelled() }}"
+        first = backend["steps"][0]
+        assert first["if"] == "needs.backend-tests.result != 'success'"
+        assert "exit 1" in first["run"]
+
+    def test_the_coverage_floor_holds_over_the_merged_parts(self, ci) -> None:
+        run = ci["jobs"]["backend-tests"]["steps"][-2]["run"]
+        assert "--cov-fail-under=0" in run
+        report = ci["jobs"]["backend-coverage"]["steps"][-1]["run"]
+        assert "coverage combine" in report
+        assert "coverage report" in report
+
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
         # These are also the names branch protection should be set to
-        # later: `ci / backend`, `ci / cli`, `ci / frontend`,
+        # later: `ci / backend-coverage`, `ci / cli`, `ci / frontend`,
         # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`,
         # `ci / containers`, `ci / e2e`.
         assert set(ci["jobs"]) == {
-            "backend",
+            "backend-coverage",
+            "backend-tests",
             "cli",
             "frontend",
             "vulnerabilities",
@@ -99,7 +130,7 @@ class TestTheCheckGate:
 
 class TestTheScans:
     def test_the_image_is_scanned_before_anything_rolls_out(self, deploy) -> None:
-        steps = deploy["jobs"]["bouw"]["steps"]
+        steps = deploy["jobs"]["build"]["steps"]
         scans = [s for s in steps if "trivy-action" in str(s.get("uses", ""))]
 
         # One that reports everything, one that closes the gate, and the SBOM.
@@ -111,19 +142,19 @@ class TestTheScans:
 
     def test_the_image_carries_provenance_and_sbom_attestations(self, deploy) -> None:
         """Both attest the digest that was pushed, never a tag, which can move."""
-        herkomst = deploy["jobs"]["herkomst"]
+        provenance = deploy["jobs"]["provenance"]
         for permission in ("id-token", "attestations", "artifact-metadata"):
-            assert herkomst["permissions"][permission] == "write"
+            assert provenance["permissions"][permission] == "write"
         # push-to-registry writes the attestation next to the image.
-        assert herkomst["permissions"]["packages"] == "write"
+        assert provenance["permissions"]["packages"] == "write"
 
         attests = [
-            s for s in herkomst["steps"] if str(s.get("uses", "")).startswith("actions/attest@")
+            s for s in provenance["steps"] if str(s.get("uses", "")).startswith("actions/attest@")
         ]
         assert len(attests) == 2
         for step in attests:
-            assert step["with"]["subject-name"] == "${{ needs.bouw.outputs.naam }}"
-            assert step["with"]["subject-digest"] == "${{ needs.bouw.outputs.digest }}"
+            assert step["with"]["subject-name"] == "${{ needs.build.outputs.name }}"
+            assert step["with"]["subject-digest"] == "${{ needs.build.outputs.digest }}"
             assert step["with"]["push-to-registry"] is True
         assert [s["with"].get("sbom-path") for s in attests] == [None, "sbom.cdx.json"]
 
@@ -132,13 +163,13 @@ class TestTheScans:
         names, and that token carries this repository's identity. So it may
         not be the job that executes the Containerfile, which runs `npm ci`
         and `uv sync`."""
-        assert deploy["jobs"]["bouw"]["permissions"] == {
+        assert deploy["jobs"]["build"]["permissions"] == {
             "contents": "read",
             "packages": "write",
         }
 
         # No checkout, no build, no scan: login, download, attest twice.
-        steps = deploy["jobs"]["herkomst"]["steps"]
+        steps = deploy["jobs"]["provenance"]["steps"]
         assert [s["uses"].split("@")[0] for s in steps] == [
             "docker/login-action",
             "actions/download-artifact",
@@ -147,24 +178,24 @@ class TestTheScans:
         ]
 
     def test_only_a_pushed_image_gets_attested(self, deploy) -> None:
-        """No `if:` of its own: a skipped or failed `bouw` skips this job as
+        """No `if:` of its own: a skipped or failed `build` skips this job as
         well, so nothing gets attested that was not built and pushed. The
         digest is handed over rather than re-resolved, so the two jobs
         cannot disagree about which image that was."""
-        herkomst = deploy["jobs"]["herkomst"]
-        assert herkomst["needs"] == "bouw"
-        assert "if" not in herkomst
-        assert deploy["jobs"]["bouw"]["outputs"]["digest"] == "${{ steps.push.outputs.digest }}"
+        provenance = deploy["jobs"]["provenance"]
+        assert provenance["needs"] == "build"
+        assert "if" not in provenance
+        assert deploy["jobs"]["build"]["outputs"]["digest"] == "${{ steps.push.outputs.digest }}"
 
         # The SBOM reaches the attestation as an artefact, under one name.
         upload = next(
             s
-            for s in deploy["jobs"]["bouw"]["steps"]
+            for s in deploy["jobs"]["build"]["steps"]
             if str(s.get("uses", "")).startswith("actions/upload-artifact@")
         )
         download = next(
             s
-            for s in herkomst["steps"]
+            for s in provenance["steps"]
             if str(s.get("uses", "")).startswith("actions/download-artifact@")
         )
         assert upload["with"]["name"] == download["with"]["name"] == "sbom-${{ github.sha }}"
@@ -224,7 +255,7 @@ class TestCodeQL:
         assert triggers["schedule"][0]["cron"].endswith(" * * 0")
 
     def test_the_write_permission_sits_on_the_job(self, codeql) -> None:
-        """Same split as `herkomst` in deploy.yml: the permission to write
+        """Same split as `provenance` in deploy.yml: the permission to write
         into the security tab is not handed to the whole file."""
         assert codeql["permissions"] == {"contents": "read"}
         assert codeql["jobs"]["analyse"]["permissions"] == {

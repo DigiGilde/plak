@@ -413,7 +413,7 @@ CI passing, not on review), and from that code mint session cookies
 production accepts and decrypt production's audited IP addresses.
 
 `deploy.yml` therefore gives every preview its own three, in the step
-`Preview voorzien van eigen geheimen`, before anything reaches the cluster:
+`Give the preview its own secrets`, before anything reaches the cluster:
 
 1. `POST /api/v2/projects/{project}/:upsert-deployment?rollout=false` with
    `cloneFrom: productie` and the component plus its image. `rollout=false`

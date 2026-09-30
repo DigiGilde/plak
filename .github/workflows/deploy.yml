@@ -14,7 +14,7 @@
 # All third-party actions are pinned to a commit SHA; the tag after it is
 # the readable label, not the reference.
 
-name: Deploy
+name: Test and deploy
 
 on:
   push:
@@ -46,42 +46,40 @@ jobs:
   # A dependabot PR does not need a preview environment; the gate above
   # still runs over it.
   #
-  # needs: ci, so an image only gets built (and can only reach a preview or
-  # production) once the tests pass; without this a pull request can deploy
-  # unreviewed, untested code to a preview that inherits production secrets
-  # (see the preview job below).
-  bouw:
-    needs: ci
+  # Builds alongside `ci` rather than after it. What keeps untested code out
+  # of a preview (which inherits production secrets) and out of production
+  # is `needs: [ci, build]` on those two jobs, not this one.
+  build:
     if: >-
       github.event.action != 'closed' && github.event_name != 'merge_group'
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # This job executes the Containerfile, so `npm ci` and `uv sync` run
     # here. It therefore holds no more than building and pushing needs; the
-    # attestation permissions sit in `herkomst` below.
+    # attestation permissions sit in `provenance` below.
     permissions:
       contents: read
       packages: write
     outputs:
       image: ${{ steps.tag.outputs.image }}
-      naam: ${{ steps.tag.outputs.naam }}
+      name: ${{ steps.tag.outputs.name }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Imagetag bepalen
+      - name: Determine the image tag
         id: tag
         run: |
-          naam="${REGISTRY}/${IMAGE_NAME}"
-          naam="$(echo "${naam}" | tr '[:upper:]' '[:lower:]')"
-          echo "naam=${naam}" >> "$GITHUB_OUTPUT"
+          name="${REGISTRY}/${IMAGE_NAME}"
+          name="$(echo "${name}" | tr '[:upper:]' '[:lower:]')"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "image=${naam}:pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "image=${name}:pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
           else
-            echo "image=${naam}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "image=${name}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Inloggen bij het register
+      - name: Log in to the registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -90,13 +88,13 @@ jobs:
 
       # Needed for the cache step below: the default driver cannot export
       # cache, this action boots one with the docker-container driver.
-      - name: Buildx klaarzetten
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Build context is the repo root: the image bundles the built admin
       # SPA from frontend/ alongside the backend (see
       # containers/plak/Containerfile).
-      - name: Image bouwen en pushen
+      - name: Build and push the image
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -107,7 +105,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: SBOM genereren (CycloneDX)
+      - name: Generate the SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.tag.outputs.image }}
@@ -115,8 +113,8 @@ jobs:
           output: sbom.cdx.json
           version: ${{ env.TRIVY_VERSION }}
 
-      # Also the transport to `herkomst`, which attests it.
-      - name: SBOM bewaren
+      # Also the transport to `provenance`, which attests it.
+      - name: Keep the SBOM
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sbom-${{ github.sha }}
@@ -126,7 +124,7 @@ jobs:
       # Everything in the log first, only then the gate. The difference
       # between "not found" and "seen, deliberately not blocked" is
       # exactly what an auditor asks first.
-      - name: Image scannen, volledig rapport (trivy)
+      - name: Scan the image, full report (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.tag.outputs.image }}
@@ -135,9 +133,9 @@ jobs:
           exit-code: "0"
           version: ${{ env.TRIVY_VERSION }}
 
-      # A red scan fails `bouw` and thereby also `preview` and `productie`;
+      # A red scan fails `build` and thereby also `preview` and `production`;
       # the tag stays in the registry, but nothing deploys with it.
-      - name: Image scannen, poort op hoog en kritiek (trivy)
+      - name: Scan the image, gate on high and critical (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.tag.outputs.image }}
@@ -149,26 +147,26 @@ jobs:
 
   # A job holding `id-token: write` can mint an OIDC token for any audience
   # it names, and that token carries this repository's identity. So it does
-  # not belong in `bouw`, which runs the whole dependency tree of this
+  # not belong in `build`, which runs the whole dependency tree of this
   # project through the Containerfile. actions/attest needs neither the
   # image nor a checkout: a subject name plus the digest that was pushed is
   # enough, and the SBOM travels as an artefact. That makes a job of its own
   # that runs no project code possible, and this is it.
   #
-  # The digest comes straight from `bouw` as a job output, never re-resolved
+  # The digest comes straight from `build` as a job output, never re-resolved
   # from the tag: the two jobs cannot disagree about what was pushed.
   #
-  # `needs: bouw` and nothing else: a skipped or failed `bouw` skips this
+  # `needs: build` and nothing else: a skipped or failed `build` skips this
   # too, so there is no path on which an image gets attested that was not
-  # built, scanned and pushed. It sits beside `preview` and `productie`
+  # built, scanned and pushed. It sits beside `preview` and `production`
   # rather than in front of them; a deploy does not wait on it.
   #
   # Attestations on a private repository need GitHub Enterprise Cloud; on
   # the Free plan they work only while the repository is public, which it
   # is since 2026-09-27. Available, not yet exercised: every run so far
-  # skipped this job with `bouw`, so no attestation exists to verify.
-  herkomst:
-    needs: bouw
+  # skipped this job with `build`, so no attestation exists to verify.
+  provenance:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -179,49 +177,47 @@ jobs:
       attestations: write
       artifact-metadata: write
     steps:
-      - name: Inloggen bij het register
+      - name: Log in to the registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: SBOM ophalen
+      - name: Fetch the SBOM
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: sbom-${{ github.sha }}
 
-      - name: Herkomst vastleggen (SLSA build provenance)
+      - name: Attest build provenance (SLSA)
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-name: ${{ needs.bouw.outputs.naam }}
-          subject-digest: ${{ needs.bouw.outputs.digest }}
+          subject-name: ${{ needs.build.outputs.name }}
+          subject-digest: ${{ needs.build.outputs.digest }}
           push-to-registry: true
 
-      - name: SBOM vastleggen als attestation
+      - name: Attest the SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-name: ${{ needs.bouw.outputs.naam }}
-          subject-digest: ${{ needs.bouw.outputs.digest }}
+          subject-name: ${{ needs.build.outputs.name }}
+          subject-digest: ${{ needs.build.outputs.digest }}
           sbom-path: sbom.cdx.json
           push-to-registry: true
 
-  # preview and opruimen wait for the ZAD project: without ZAD_PROJECT_ID
+  # preview and cleanup wait for the ZAD project: without ZAD_PROJECT_ID
   # there is nothing to deploy to, and every pull request would go red.
   preview:
     if: >-
       github.event_name == 'pull_request' && github.event.action != 'closed'
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
-    # bouw already needs: ci, so this is transitively gated too; named
-    # explicitly to match productie's needs: [ci, bouw] below.
-    needs: [ci, bouw]
+    needs: [ci, build]
     permissions:
       contents: read
       pull-requests: write
     environment:
       name: pr${{ github.event.pull_request.number }}
-      url: ${{ steps.uitrol.outputs.url }}
+      url: ${{ steps.rollout.outputs.url }}
     env:
       # The same base URL the deploy action defaults to, named once so the
       # step below and the action cannot drift apart. The action gets it
@@ -251,13 +247,13 @@ jobs:
       # The secrets are generated once per preview and never rotated on a
       # later push: a rewrite would be a change saved with rollout=false
       # that the rollout below has no reason to pick up.
-      - name: Preview voorzien van eigen geheimen
+      - name: Give the preview its own secrets
         env:
           ZAD_API_KEY: ${{ secrets.ZAD_API_KEY }}
           PROJECT_ID: ${{ vars.ZAD_PROJECT_ID }}
           DEPLOYMENT: pr${{ github.event.pull_request.number }}
           COMPONENT: beheer
-          IMAGE: ${{ needs.bouw.outputs.image }}
+          IMAGE: ${{ needs.build.outputs.image }}
         run: |
           set -euo pipefail
 
@@ -279,27 +275,27 @@ jobs:
             CALL_BODY=$(printf '%s' "$out" | sed '$d')
           }
 
-          eis_geslaagd() {
+          require_success() {
             case "${CALL_CODE}" in
               2*) return 0 ;;
             esac
-            echo "::error::$1 gaf HTTP ${CALL_CODE}"
+            echo "::error::$1 returned HTTP ${CALL_CODE}"
             echo "${CALL_BODY}"
             return 1
           }
 
           # Both writes are asynchronous: the task has to finish before the
           # next step may assume its result.
-          wacht_op_taak() {
+          wait_for_task() {
             local id status
             id=$(printf '%s' "${CALL_BODY}" | jq -r '.task_id // empty')
             if [ -z "${id}" ]; then
-              echo "::error::$1 leverde geen task_id op"
+              echo "::error::$1 returned no task_id"
               return 1
             fi
             for _ in $(seq 1 120); do
               call GET "${ZAD_API_BASE_URL}/tasks/${id}"
-              eis_geslaagd "Opvragen van taak ${id}"
+              require_success "Fetching task ${id}"
               status=$(printf '%s' "${CALL_BODY}" | jq -r '.status // empty')
               case "${status}" in
                 completed) return 0 ;;
@@ -310,29 +306,29 @@ jobs:
               esac
               sleep 5
             done
-            echo "::error::$1 was na tien minuten nog niet klaar"
+            echo "::error::$1 had not finished after ten minutes"
             return 1
           }
 
-          echo "Deployment ${DEPLOYMENT} aanmaken zonder uitrol"
-          aanmaak=$(jq -n --arg d "${DEPLOYMENT}" --arg c "${COMPONENT}" --arg i "${IMAGE}" \
+          echo "Creating deployment ${DEPLOYMENT} without a rollout"
+          create_body=$(jq -n --arg d "${DEPLOYMENT}" --arg c "${COMPONENT}" --arg i "${IMAGE}" \
             '{deploymentName: $d, cloneFrom: "productie", components: [{reference: $c, image: $i}]}')
-          call POST "${ZAD_API_BASE_URL}/v2/projects/${PROJECT_ID}/:upsert-deployment?rollout=false" "${aanmaak}"
-          eis_geslaagd "Aanmaken van de deployment"
-          wacht_op_taak "Aanmaken van de deployment"
+          call POST "${ZAD_API_BASE_URL}/v2/projects/${PROJECT_ID}/:upsert-deployment?rollout=false" "${create_body}"
+          require_success "Creating the deployment"
+          wait_for_task "Creating the deployment"
 
           call GET "${values}"
-          eis_geslaagd "Uitlezen van de previewgeheimen"
-          compleet=true
-          for naam in PLAK_SESSION_SECRET PLAK_AUDIT_PEPPER PLAK_AUDIT_IP_KEY; do
-            printf '%s' "${CALL_BODY}" | jq -e --arg n "${naam}" '.values | has($n)' >/dev/null || compleet=false
+          require_success "Reading the preview secrets"
+          complete=true
+          for name in PLAK_SESSION_SECRET PLAK_AUDIT_PEPPER PLAK_AUDIT_IP_KEY; do
+            printf '%s' "${CALL_BODY}" | jq -e --arg n "${name}" '.values | has($n)' >/dev/null || complete=false
           done
-          if [ "${compleet}" = true ]; then
-            echo "Deze preview heeft al eigen geheimen; ongewijzigd gelaten"
+          if [ "${complete}" = true ]; then
+            echo "This preview already has its own secrets; left unchanged"
             exit 0
           fi
 
-          echo "Eigen geheimen aanmaken voor ${DEPLOYMENT}"
+          echo "Creating own secrets for ${DEPLOYMENT}"
           # base64 of 32 random bytes each: long enough for the two 32-byte
           # minimums, and the exact shape PLAK_AUDIT_IP_KEY wants. The
           # alphabet carries no whitespace or quotes, so the value reads back
@@ -348,17 +344,17 @@ jobs:
           # A partly filled layer is cleared first: POST refuses a name that
           # is already there, and this layer belongs to this preview alone.
           call DELETE "${values}?rollout=false"
-          eis_geslaagd "Leegmaken van de previewgeheimen"
-          wacht_op_taak "Leegmaken van de previewgeheimen"
+          require_success "Clearing the preview secrets"
+          wait_for_task "Clearing the preview secrets"
 
-          geheimen=$(jq -n '{values: {
+          secrets_body=$(jq -n '{values: {
             PLAK_SESSION_SECRET: env.SESSION_SECRET,
             PLAK_AUDIT_PEPPER: env.AUDIT_PEPPER,
             PLAK_AUDIT_IP_KEY: env.AUDIT_IP_KEY
           }}')
-          call POST "${values}?rollout=false" "${geheimen}"
-          eis_geslaagd "Zetten van de previewgeheimen"
-          wacht_op_taak "Zetten van de previewgeheimen"
+          call POST "${values}?rollout=false" "${secrets_body}"
+          require_success "Setting the preview secrets"
+          wait_for_task "Setting the preview secrets"
 
       # clone-from copies the `productie` deployment, but DROPS THE WEB
       # ADDRESS: a preview lands on the cluster address with a single host,
@@ -371,8 +367,8 @@ jobs:
       # The step above already created the deployment (rollout=false), so
       # this call updates it and is the one that rolls out. It processes
       # only this deployment, never productie.
-      - name: Uitrollen naar ZAD
-        id: uitrol
+      - name: Roll out to ZAD
+        id: rollout
         uses: RijksICTGilde/zad-actions/deploy@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
         with:
           api-key: ${{ secrets.ZAD_API_KEY }}
@@ -380,11 +376,11 @@ jobs:
           project-id: ${{ vars.ZAD_PROJECT_ID }}
           deployment-name: pr${{ github.event.pull_request.number }}
           component: beheer
-          image: ${{ needs.bouw.outputs.image }}
+          image: ${{ needs.build.outputs.image }}
           clone-from: productie
           comment-on-pr: true
 
-  opruimen:
+  cleanup:
     if: >-
       github.event_name == 'pull_request' && github.event.action == 'closed'
       && github.event.pull_request.user.login != 'dependabot[bot]'
@@ -396,7 +392,7 @@ jobs:
       packages: write
       pull-requests: write
     steps:
-      - name: Preview opruimen
+      - name: Clean up the preview
         uses: RijksICTGilde/zad-actions/cleanup@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
         with:
           api-key: ${{ secrets.ZAD_API_KEY }}
@@ -413,7 +409,7 @@ jobs:
           # on both lines once that exists.
           delete-github-env: false
 
-  productie:
+  production:
     # `beta` is this repository's default branch; there is no `main`, so that
     # ref never matched and every push built an image the rollout then never
     # collected. The ZAD_PROJECT_ID guard is the same one `preview` carries:
@@ -424,19 +420,19 @@ jobs:
       && github.ref == 'refs/heads/beta'
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
-    needs: [ci, bouw]
+    needs: [ci, build]
     permissions:
       contents: read
     environment:
       name: productie
-      url: ${{ steps.uitrol.outputs.url }}
+      url: ${{ steps.rollout.outputs.url }}
     steps:
-      - name: Uitrollen naar ZAD
-        id: uitrol
+      - name: Roll out to ZAD
+        id: rollout
         uses: RijksICTGilde/zad-actions/deploy@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
         with:
           api-key: ${{ secrets.ZAD_API_KEY }}
           project-id: ${{ vars.ZAD_PROJECT_ID }}
           deployment-name: productie
           component: beheer
-          image: ${{ needs.bouw.outputs.image }}
+          image: ${{ needs.build.outputs.image }}
