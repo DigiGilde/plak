@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import IO
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -21,13 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from plak import i18n, messages
 from plak.config import Settings
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, VersionWriter
 from plak.ingest.unpacker import Limits, unpack
 from plak.messages import Msg
 from plak.models.identity import Group
 from plak.models.publication import Preview, Site, Version, VersionTarget
 
 PREVIEW_VALIDITY = timedelta(days=30)
+
+# How far a deploy writes on one measurement of the content volume. Other
+# writers (a concurrent deploy) can only shift that reading by this much before
+# it is taken again, and statvfs stays out of the per-chunk loop.
+ROOM_CHECK_STRIDE = 4 * 1024 * 1024
 
 
 class IngestError(Exception):
@@ -54,29 +60,86 @@ class Deployer:
             raise IngestError("ORIGIN_INVALID")
 
 
+class RoomGuard:
+    """Keeps one deploy's writes above storage_min_free_bytes on the content
+    volume. Called with the size of every chunk before it is written; refuses
+    with STORAGE_UNAVAILABLE once that chunk would take the volume below the
+    floor. The caller cleans up what it wrote, as on any other refusal."""
+
+    def __init__(self, store: ContentStore, min_free: int) -> None:
+        self._store = store
+        self._min_free = min_free
+        # What may still be written above the floor, and before the volume is
+        # measured again, both counted down from the last measurement.
+        self._left = 0
+        self._stride_left = 0
+
+    def reserve(self, count: int) -> None:
+        if not self._min_free:
+            return
+        if count > self._left or count > self._stride_left:
+            # Measured again rather than refused on the countdown alone: other
+            # deploys and the cleanup job free space as well as take it.
+            self._left = self._store.free_bytes() - self._min_free
+            self._stride_left = ROOM_CHECK_STRIDE
+            if count > self._left:
+                raise IngestError("STORAGE_UNAVAILABLE")
+        self._left -= count
+        self._stride_left -= count
+
+
+class _GuardedFile:
+    """A file in the work directory whose every write passes the guard first."""
+
+    def __init__(self, file: IO[bytes], room: RoomGuard) -> None:
+        self._file = file
+        self._room = room
+
+    def __enter__(self) -> _GuardedFile:
+        return self
+
+    def __exit__(self, *_exc_info: object) -> None:
+        self._file.close()
+
+    def write(self, data: bytes) -> int:
+        self._room.reserve(len(data))
+        return self._file.write(data)
+
+
+class _GuardedDestination:
+    def __init__(self, writer: VersionWriter, room: RoomGuard) -> None:
+        self._writer = writer
+        self._room = room
+
+    def open_file(self, rel_path: str) -> _GuardedFile:
+        return _GuardedFile(self._writer.open_file(rel_path), self._room)
+
+
 class IngestService:
     def __init__(self, store: ContentStore, settings: Settings) -> None:
         self._content_store = store
         self._limits = Limits.from_settings(settings)
         self._site_max_bytes = settings.site_max_bytes
-        # What one deploy may add at worst: the spooled upload plus everything
-        # unpacked out of it, both still on the volume at the same time.
-        self._deploy_headroom = (
-            settings.storage_min_free_bytes + settings.ingest_max_body + settings.ingest_max_total
-        )
+        self._min_free = settings.storage_min_free_bytes
 
-    def check_room(self) -> None:
-        """Refuses before the first byte is spooled when the content volume has
-        no room left for a deploy of full size."""
-        if self._deploy_headroom and self._content_store.free_bytes() < self._deploy_headroom:
+    def check_room(self, incoming: int = 0) -> None:
+        """Refuses before the first byte is spooled when `incoming` more bytes
+        (the declared size of the upload, if the client sent one) would take
+        the content volume below storage_min_free_bytes. The RoomGuard keeps
+        watching from there, while the upload is spooled and unpacked."""
+        if self._min_free and self._content_store.free_bytes() - incoming < self._min_free:
             raise IngestError("STORAGE_UNAVAILABLE")
+
+    def room_guard(self) -> RoomGuard:
+        return RoomGuard(self._content_store, self._min_free)
 
     def _store_sync(
         self, group: Group, site: Site, filename: str, source: Path, base_path: str | None
     ) -> tuple[uuid.UUID, str]:
         version_id = uuid.uuid4()
         with self._content_store.write_version(group.slug, site.slug, version_id) as writer:
-            unpack(filename, source, writer, self._limits, base_path=base_path)
+            destination = _GuardedDestination(writer, self.room_guard())
+            unpack(filename, source, destination, self._limits, base_path=base_path)
             # Inside the with: on a refusal the work directory is cleaned up
             # and nothing is renamed into place. The site is measured only now
             # because the size of this version is not known before it is

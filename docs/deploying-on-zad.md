@@ -171,6 +171,22 @@ anybody an administrator.
 | `PLAK_OIDC_RP_LOGOUT` | env-vars | `false` until `{PLAK_CONTENT_BASE_URL}/-/logout?from=beheer` is registered as post-logout redirect at the IdP |
 | `PLAK_AUDIT_LOOKUP_DAILY_LIMIT` | env-vars | optional, default 25, 1-1000; daily limit per platform administrator on resolving a pseudonym or IP address |
 | `PLAK_CI_FORGEJO_HOSTS` | env-vars | optional, comma-separated list of https base URLs, default `https://code.overheid.nl`; every Forgejo instance whose OIDC ID token from Actions is accepted for CI publishing |
+| `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
+| `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
+| `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
+| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy |
+| `PLAK_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
+
+The last five defaults fit the 1Gi content volume (§9). While a deploy runs,
+its upload and what it unpacks sit on the volume side by side, so one deploy
+needs at most `PLAK_INGEST_MAX_BODY` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB)
+on top of the stored versions. Plak measures the actual deploy, not that
+maximum: it checks the declared upload size before reading the body and keeps
+checking while it writes, refusing with `503` `STORAGE_UNAVAILABLE` rather than
+letting the volume drop below `PLAK_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
+one full-size deploy (400 MiB with the defaults) well below the volume size, or
+a large deploy can only ever be refused; on a bigger volume the limits can grow
+with it.
 
 Besides the host separation, `PLAK_BASE_URL` is also the exact CI audience: a
 GitHub or Forgejo workflow requests its ID token with this value as

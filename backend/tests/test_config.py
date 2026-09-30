@@ -50,7 +50,11 @@ def test_valid_configuration_loads_with_expected_defaults(monkeypatch):
     assert settings.base_url is None
     assert settings.spa_path == Path("../frontend/dist")
     assert settings.oidc_iss_required is False
-    assert settings.ingest_max_body == 550 * 1024 * 1024
+    assert settings.ingest_max_body == 100 * 1024 * 1024
+    assert settings.ingest_max_file == 50 * 1024 * 1024
+    assert settings.ingest_max_total == 200 * 1024 * 1024
+    assert settings.site_max_bytes == 500 * 1024 * 1024
+    assert settings.storage_min_free_bytes == 100 * 1024 * 1024
 
 
 def test_too_short_session_secret_refused(monkeypatch):

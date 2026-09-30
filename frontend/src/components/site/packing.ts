@@ -23,8 +23,8 @@ import { t } from '@/i18n';
 export const LIMITS = {
   files: 1000,
   depth: 10,
-  file: 100 * 1024 * 1024,
-  total: 500 * 1024 * 1024,
+  file: 50 * 1024 * 1024,
+  total: 200 * 1024 * 1024,
 } as const;
 
 /** Name of the start page, as the ingest expects it in the root. */

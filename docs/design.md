@@ -443,18 +443,23 @@ tree. Decompression is checked incrementally against the limits, so an archive
 bomb never gets past them; header sizes are not trusted, though a header already
 claiming more than the limit is an early refusal.
 
-Limits (defaults, env-overridable): request body 550 MB, 100 MB per unpacked
-file, 500 MB unpacked in total, 1000 files, depth 10 (`config.py`,
-`ingest_max_*`).
+Limits (defaults, env-overridable, sized for a 1 GiB volume): request body
+100 MiB, 50 MiB per unpacked file, 200 MiB unpacked in total, 1000 files, depth
+10 (`config.py`, `ingest_max_*`).
 
 Those bound one bundle. Two more bound what the bundles leave behind, because a
-live version is never cleaned up: `site_max_bytes` (20 GB, 0 turns it off) caps
-what every version of one site together occupies, measured on the volume just
-before the new version is renamed into place, so a refusal leaves nothing behind
-and answers 413. `storage_min_free_bytes` (2 GB, 0 turns it off) is the free
-space the volume must hold beyond one full-size deploy; below it the deploy is
-refused with a 503 before the body is read, because a volume run dry takes the
-serving of every other site down with it.
+live version is never cleaned up: `site_max_bytes` (500 MiB, 0 turns it off)
+caps what every version of one site together occupies, measured on the volume
+just before the new version is renamed into place, so a refusal leaves nothing
+behind and answers 413. `storage_min_free_bytes` (100 MiB, 0 turns it off) is
+the free space a deploy never takes the volume below, because a volume run dry
+takes the serving of every other site down with it. It is held against the
+actual deploy, not the largest one allowed: before the body is read, the
+declared `Content-Length` (capped at the body limit) must fit above it; while
+the upload is spooled and unpacked, every chunk is checked against it, with the
+volume measured again at least every 4 MiB. Crossing it at any of those
+moments answers the same 503 `STORAGE_UNAVAILABLE`, and the spool and work
+directory are cleaned up as on any other refusal.
 
 The root of the site is settled in three steps: a chain of enclosing directories
 holding exactly one entry is peeled off; a `basispad` from the caller then wins;
