@@ -284,6 +284,48 @@ async def test_global_backstop_stores_to_about_all_keys() -> None:
     assert statuses == [200, 200, 200, 429]
 
 
+async def test_evicting_per_key_buckets_leaves_the_backstop_standing() -> None:
+    """Per-key buckets are the client's to create, one per address it can
+    send from. Filling the counter to its bound must not evict the backstop
+    and so reset the budget of the whole class."""
+    settings = _make_settings(
+        ratelimit_api_max=1000,
+        ratelimit_api_window_s=60,
+        ratelimit_api_global_max=5,
+        trusted_proxies="127.0.0.1/32",
+    )
+    counter = InMemoryCounter(max_keys=2)
+    async with _make_client(settings, clock=_FakeClock(), counter=counter, client_ip="127.0.0.1") as client:
+        statuses = [
+            (await client.get("/-/api/v1/x", headers={"x-forwarded-for": f"198.51.100.{i}"})).status_code
+            for i in range(8)
+        ]
+
+    assert statuses == [200] * 5 + [429] * 3
+
+
+async def test_ipv6_addresses_in_one_slash_64_share_a_budget() -> None:
+    """Rotating through a /64 opens no fresh budgets: it is one subscriber."""
+    settings = _make_settings(
+        ratelimit_login_max=2,
+        ratelimit_login_window_s=60,
+        trusted_proxies="127.0.0.1/32",
+    )
+    async with _make_client(settings, clock=_FakeClock(), client_ip="127.0.0.1") as client:
+        rotating = [
+            (await client.get("/-/login", headers={"x-forwarded-for": f"2001:db8:1:2::{i:x}"})).status_code
+            for i in range(1, 5)
+        ]
+        next_prefix = await client.get("/-/login", headers={"x-forwarded-for": "2001:db8:1:3::1"})
+        ipv4_neighbour = await client.get("/-/login", headers={"x-forwarded-for": "203.0.113.10"})
+        ipv4_other = await client.get("/-/login", headers={"x-forwarded-for": "203.0.113.11"})
+
+    assert rotating == [200, 200, 429, 429]
+    assert next_prefix.status_code == 200
+    # IPv4 stays per address.
+    assert [ipv4_neighbour.status_code, ipv4_other.status_code] == [200, 200]
+
+
 async def test_refused_key_does_not_spend_the_global_backstop() -> None:
     """One key that runs into its own limit may not exhaust the shared
     backstop, which would refuse every other client for the rest of the

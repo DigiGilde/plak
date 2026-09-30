@@ -46,6 +46,7 @@ from plak.auth.sessions import (
     SessionKind,
     SessionStore,
     check_signature,
+    content_anchor_session_from_request,
     content_presence,
     content_session_from_request,
     content_site_prefix,
@@ -83,6 +84,12 @@ class TestSigning:
     def test_bare_value_without_signature_refused(self):
         assert check_signature(SECRET, "waarde-zonder-punt") is None
         assert check_signature(SECRET, "") is None
+
+    @pytest.mark.parametrize("token", ["é.x", "waarde-1.é", "wåarde.abcdef"])
+    def test_non_ascii_token_refused_not_raised(self, token):
+        # compare_digest on str raises TypeError for non-ASCII; a cookie can
+        # carry any latin-1 byte.
+        assert check_signature(SECRET, token) is None
 
 
 class TestReturnTo:
@@ -139,8 +146,18 @@ class TestParseSitePath:
             # Query string stripped before segments are read.
             ("/fin/rapport/index.html?x=1", ("fin", "rapport")),
             # Percent-encoding left exactly as it came in: an encoded slash
-            # does not split, so it stays inside the site segment.
-            ("/fin/si%2Fte/index.html", ("fin", "si%2Fte")),
+            # does not split, and what stays in the segment is not a slug.
+            ("/fin/si%2Fte/index.html", None),
+            # The result becomes a cookie Path, written unquoted: a `;` or
+            # `=` in a segment would add attributes of its own.
+            ("/x;Path=/;Domain=example.org/y/", None),
+            ("/fin/rapport;Path=/", None),
+            ("/fin=x/rapport/", None),
+            ("/fin/rap=port/", None),
+            # Not a slug in any other way either.
+            ("/Fin/rapport/", None),
+            ("/fin/-rapport/", None),
+            ("/fin/rapport\n/", None),
             # Too few segments.
             ("/", None),
             ("/fin", None),
@@ -152,6 +169,8 @@ class TestParseSitePath:
             # A reserved slug, or the platform namespace, as the group.
             ("/robots.txt/rapport/index.html", None),
             ("/-/sessions", None),
+            # The one reserved slug that is slug-shaped.
+            ("/cli-link/rapport/", None),
         ],
     )
     def test_table(self, path, expected):
@@ -672,6 +691,13 @@ class TestSession:
         request = _request_with_cookies(app, f"{SESSION_COOKIE}=vervalst.abcdef")
         assert session_from_request(request) is None
 
+    @pytest.mark.parametrize("cookie", [SESSION_COOKIE, CONTENT_SESSION_COOKIE, CONTENT_ANCHOR_COOKIE])
+    async def test_a_non_ascii_session_cookie_counts_as_no_session(self, app, cookie):
+        request = _request_with_cookies(app, f"{cookie}=é.x")
+        assert session_from_request(request) is None
+        assert content_session_from_request(request) is None
+        assert content_anchor_session_from_request(request) is None
+
 
 class TestRobots:
     async def test_robots_txt_shuts_out_the_whole_admin_host(self, client):
@@ -771,6 +797,19 @@ class TestContentLogin:
         token = content_client.cookies.get(CONTENT_ANCHOR_COOKIE)
         session_id = check_signature(app.state.settings.session_secret, token)
         assert app.state.session_store.get_session(session_id).email_verified is False
+
+    async def test_a_return_to_that_is_not_a_site_path_gets_no_site_cookie(self, content_client, idp):
+        """A `;` in the returnTo would otherwise reach the cookie Path and widen
+        the SameSite=None session cookie to the whole host."""
+        response = await _complete_content_login(
+            content_client, idp, return_to="/x;Path=/;Domain=example.org/y/"
+        )
+        assert response.status_code == 303
+        headers_ = response.headers.get_list("set-cookie")
+        assert not any(k.startswith(CONTENT_SESSION_COOKIE + "=") for k in headers_)
+        assert not any("domain=" in k.lower() for k in headers_)
+        # The anchor still arrives: the login itself succeeded.
+        assert "path=/-/" in _set_cookie_header(response, CONTENT_ANCHOR_COOKIE).lower()
 
     async def test_returnto_invalid_falls_back_to_root(self, content_client, idp):
         response = await _complete_content_login(content_client, idp, return_to="//evil.example")
@@ -930,6 +969,19 @@ class TestContentCookiePerSite:
         response = await content_client.get(PATH_CONTENT_LOGIN, params={"returnTo": "/"}, headers=self.NAVIGATION)
         assert response.status_code == 302
         assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+
+    async def test_a_return_to_with_cookie_attributes_mints_nothing(self, content_client, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN,
+            params={"returnTo": "/x;Path=/;Domain=example.org/y/"},
+            headers=self.NAVIGATION,
+        )
+        assert response.status_code == 302
+        assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+        assert not any(
+            k.startswith(CONTENT_SESSION_COOKIE + "=") for k in response.headers.get_list("set-cookie")
+        )
 
     async def test_the_logout_clears_every_site_cookie_it_handed_out(self, content_client, app, idp):
         await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
@@ -1182,6 +1234,10 @@ class TestVisitorFromRequest:
         visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={tampered}"))
         assert visitor.key_cookie == ""
 
+    async def test_a_non_ascii_key_cookie_is_reported_invalid(self, app):
+        visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}=é.x"))
+        assert visitor.key_cookie == ""
+
     async def test_a_validly_signed_value_from_another_purpose_is_reported_invalid(self, app):
         """A session cookie value, replayed as the key cookie: the signature
         checks out, but the purpose prefix does not match."""
@@ -1210,6 +1266,20 @@ class TestCsrfValid:
         session = self._session()
         request = _request_with_headers(
             app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}=een-ander-token"
+        )
+        assert csrf_valid(request, session) is False
+
+    async def test_a_non_ascii_header_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: "é" + session.csrf_token}, cookie_header=f"{CSRF_COOKIE}={session.csrf_token}"
+        )
+        assert csrf_valid(request, session) is False
+
+    async def test_a_non_ascii_cookie_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"{CSRF_COOKIE}=é{session.csrf_token}"
         )
         assert csrf_valid(request, session) is False
 

@@ -7,10 +7,11 @@ values a client can write into X-Forwarded-For.
 
 from __future__ import annotations
 
+import pytest
 from starlette.requests import Request
 
 from plak.audit.pseudonymisation import truncate_ip
-from plak.net import UNKNOWN, client_ip, client_ip_from_request, parse_trusted_proxies
+from plak.net import UNKNOWN, client_ip, client_ip_from_request, parse_trusted_proxies, rate_limit_key
 
 # What production carries today: every RFC1918 range counts as a proxy.
 _ALL_PRIVATE = parse_trusted_proxies("10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
@@ -135,3 +136,27 @@ def test_the_derived_address_is_a_plain_string_everywhere_else() -> None:
     assert isinstance(derived, str)
     assert f"ip:{derived}" == "ip:203.0.113.9"
     assert truncate_ip(derived) == "203.0.113.0/24"
+
+
+# --- rate_limit_key: what a per-client limit counts on --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        # IPv4 stays per address: neighbours in a /24 are different subscribers.
+        ("203.0.113.9", "203.0.113.9"),
+        ("203.0.113.10", "203.0.113.10"),
+        # IPv6 counts per /64: one subscriber gets the whole prefix.
+        ("2001:db8:1:2::1", "2001:db8:1:2::/64"),
+        ("2001:db8:1:2:ffff:ffff:ffff:ffff", "2001:db8:1:2::/64"),
+        ("2001:db8:1:3::1", "2001:db8:1:3::/64"),
+        # An IPv4 client on a dual-stack socket is still that IPv4 address.
+        ("::ffff:203.0.113.9", "203.0.113.9"),
+        # No peer, or nothing parseable: its own key, never widened.
+        (UNKNOWN, UNKNOWN),
+        ("not-an-ip", "not-an-ip"),
+    ],
+)
+def test_rate_limit_key(address: str, expected: str) -> None:
+    assert rate_limit_key(address) == expected

@@ -187,6 +187,10 @@ class RateLimitMiddleware:
         self._settings = settings
         self._get_authenticated_key = get_authenticated_key
         self._counter = counter if counter is not None else InMemoryCounter()
+        # Apart from the per-key buckets, which the client chooses and can
+        # therefore push past `max_keys`: the eviction that follows must never
+        # reset a backstop.
+        self._backstops = InMemoryCounter()
         self._clock = clock
         self._trusted_networks = net.parse_trusted_proxies(settings.trusted_proxies)
 
@@ -214,7 +218,7 @@ class RateLimitMiddleware:
                 # its whole class and lock every other client out.
                 refusal_s: float | None = per_key.remaining_s
             else:
-                backstop = await self._counter.increment(f"{klass.value}:{_BACKSTOP_KEY}", limit.window_s, now_)
+                backstop = await self._backstops.increment(f"{klass.value}:{_BACKSTOP_KEY}", limit.window_s, now_)
                 refusal_s = backstop.remaining_s if backstop.count > limit.global_max else None
         except Exception:
             _logger.exception("Ratelimit-teller kapot; verzoek fail-closed geweigerd (klasse=%s)", klass.value)
@@ -238,7 +242,7 @@ class RateLimitMiddleware:
             if member_key:
                 return f"member:{member_key}"
 
-        return f"ip:{net.client_ip(request, self._trusted_networks)}"
+        return f"ip:{net.rate_limit_key(net.client_ip(request, self._trusted_networks))}"
 
 
 def _too_many_requests_response(remaining_s: float, accept_language: str | None) -> JSONResponse:

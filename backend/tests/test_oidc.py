@@ -133,6 +133,13 @@ class TestIdTokenValidation:
         with pytest.raises(OidcError):
             await validate(oidc, idp, token, access_token="ander-access-token")
 
+    @pytest.mark.parametrize("at_hash", ["é" * 22, 12345, ["x"]], ids=["non-ascii", "number", "list"])
+    async def test_at_hash_of_the_wrong_shape_refused(self, oidc, idp, at_hash):
+        """A refusal, not a TypeError out of compare_digest."""
+        token = idp.make_id_token(nonce="nonce-1", at_hash=at_hash)
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
     async def test_at_hash_absent_accepted(self, oidc, idp):
         token = idp.make_id_token(nonce="nonce-1", with_at_hash=False)
         claims = await validate(oidc, idp, token)

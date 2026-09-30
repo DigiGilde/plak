@@ -67,7 +67,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from plak.constants import PLATFORM_PREFIX, PLATFORM_SEGMENT, RESERVED_SLUGS
+from plak.constants import PLATFORM_PREFIX, RESERVED_SLUGS, SLUG_RE
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
@@ -353,7 +353,9 @@ def check_signature(secret: str, token: str) -> str | None:
     value, separation, _ = token.rpartition(".")
     if not separation or not value:
         return None
-    if not hmac.compare_digest(sign(secret, value), token):
+    # Compare as bytes: compare_digest on str raises TypeError for non-ASCII,
+    # and a cookie value arrives latin-1 decoded.
+    if not hmac.compare_digest(sign(secret, value).encode("utf-8"), token.encode("utf-8")):
         return None
     return value
 
@@ -433,20 +435,24 @@ def top_level_navigation(request: Request) -> bool:
 
 def parse_site_path(path: str) -> tuple[str, str] | None:
     """The (group, site) a content path addresses, or None when the path is
-    not a content path of a site: fewer than two segments, an empty group or
-    site, or a group reserved for the platform namespace.
+    not a content path of a site: fewer than two segments, a group or site
+    that is not a slug, or a group reserved for the platform namespace.
 
     Percent-encoding is left exactly as it came in: a browser matches a cookie
     path against the encoded request path, so decoding here would hand out a
     cookie the browser never sends back, and the login redirect would loop.
+
+    The slug check is what keeps the result safe as a cookie `Path`: the
+    response layer writes it unquoted, so a `;` in a segment would add
+    attributes of its own to the Set-Cookie line.
     """
     segments = path.split("?", 1)[0].split("/")
     if len(segments) < 3:
         return None
     group, site = segments[1], segments[2]
-    if not group or not site:
+    if not SLUG_RE.fullmatch(group) or not SLUG_RE.fullmatch(site):
         return None
-    if group in RESERVED_SLUGS or group == PLATFORM_SEGMENT:
+    if group in RESERVED_SLUGS:
         return None
     return group, site
 
@@ -576,7 +582,10 @@ def csrf_valid(request: Request, session: Session) -> bool:
     cookie = request.cookies.get(CSRF_COOKIE)
     if not header or not cookie:
         return False
-    return hmac.compare_digest(header, session.csrf_token) and hmac.compare_digest(cookie, session.csrf_token)
+    expected = session.csrf_token.encode("utf-8")
+    return hmac.compare_digest(header.encode("utf-8"), expected) and hmac.compare_digest(
+        cookie.encode("utf-8"), expected
+    )
 
 
 __all__ = [
