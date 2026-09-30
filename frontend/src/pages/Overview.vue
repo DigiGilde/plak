@@ -257,25 +257,17 @@ watch(siteSheetOpen, (open) => {
         >
           <nldd-table-row slot="header">
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('group.sites.column.live')"
+              :text="`**${t('group.sites.column.live')}**`"
             ></nldd-text-cell>
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('group.sites.column.site')"
+              :text="`**${t('group.sites.column.site')}**`"
             ></nldd-text-cell>
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('group.sites.column.access')"
+              :text="`**${t('group.sites.column.access')}**`"
               hide-below="md"
             ></nldd-text-cell>
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('group.sites.column.lastPublished')"
+              :text="`**${t('group.sites.column.lastPublished')}**`"
               hide-below="md"
             ></nldd-text-cell>
           </nldd-table-row>

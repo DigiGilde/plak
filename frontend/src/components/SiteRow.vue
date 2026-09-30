@@ -5,10 +5,11 @@
  * site overview both use them, so one site reads the same wherever it appears.
  *
  * Only the title stretches; the rest are fixed at what their widest content
- * measures at a root font of 16 px. Fixed rather than `auto`, because `auto`
- * measures per table, so two tables on one page would drift out of line.
+ * measures at a root font of 16 px, plus at least 16 px of room. Fixed rather
+ * than `auto`, because `auto` measures per table, so two tables on one page
+ * would drift out of line.
  */
-export const SITE_COLUMNS = '2.5rem minmax(11rem, 1fr) 9.25rem 9rem';
+export const SITE_COLUMNS = '3.25rem minmax(11rem, 1fr) 9.25rem 12rem';
 /** Below 640 px only the marker and the title remain. */
 export const SITE_COLUMNS_SM = 'auto minmax(0, 1fr)';
 </script>
@@ -77,7 +78,6 @@ const siteHref = computed(
       <span class="alleen-schermlezer">{{ accessText }}</span>
     </nldd-cell>
     <nldd-text-cell
-      color="secondary"
       :text="lastPublishedLabel"
       hide-below="md"
     ></nldd-text-cell>

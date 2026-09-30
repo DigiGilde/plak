@@ -106,7 +106,6 @@ function onGroupCreated(group: Group): void {
           <nldd-text-cell
             width="fit-content"
             size="sm"
-            color="secondary"
             horizontal-alignment="right"
             :text="sitesLabel(row)"
           ></nldd-text-cell>
@@ -117,7 +116,6 @@ function onGroupCreated(group: Group): void {
           <nldd-text-cell
             width="fit-content"
             size="sm"
-            color="secondary"
             horizontal-alignment="right"
             hide-below="md"
             :text="onlineLabel(row)"

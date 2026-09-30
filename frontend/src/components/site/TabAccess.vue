@@ -486,32 +486,24 @@ function keyActions(key: Key): RowAction[] {
           >
             <nldd-table-row slot="header">
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.keys.column.label')"
+                :text="`**${t('publish.access.keys.column.label')}**`"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.keys.column.created')"
+                :text="`**${t('publish.access.keys.column.created')}**`"
                 hide-below="md"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.keys.column.expires')"
+                :text="`**${t('publish.access.keys.column.expires')}**`"
                 hide-below="md"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.keys.column.status')"
+                :text="`**${t('publish.access.keys.column.status')}**`"
                 hide-below="md"
               ></nldd-text-cell>
               <!-- Named but not shown, as on the Leden tab: a word above one
                    icon button says nothing, and a columnheader without a name
                    is an axe violation. -->
-              <nldd-text-cell size="sm" color="secondary" horizontal-alignment="right">
+              <nldd-text-cell horizontal-alignment="right">
                 <span class="alleen-schermlezer">{{ t('publish.access.column.actions') }}</span>
               </nldd-text-cell>
             </nldd-table-row>
@@ -532,12 +524,10 @@ function keyActions(key: Key): RowAction[] {
                 :supporting-text="key.selector"
               ></nldd-text-cell>
               <nldd-text-cell
-                color="secondary"
                 :text="formatDate(key.createdAt)"
                 hide-below="md"
               ></nldd-text-cell>
               <nldd-text-cell
-                color="secondary"
                 :text="key.expiresAt ? formatDate(key.expiresAt) : t('publish.access.keys.never')"
                 hide-below="md"
               ></nldd-text-cell>
@@ -639,17 +629,13 @@ function keyActions(key: Key): RowAction[] {
           >
             <nldd-table-row slot="header">
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.invitees.column.email')"
+                :text="`**${t('publish.access.invitees.column.email')}**`"
               ></nldd-text-cell>
               <nldd-text-cell
-                size="sm"
-                color="secondary"
-                :text="t('publish.access.invitees.column.added')"
+                :text="`**${t('publish.access.invitees.column.added')}**`"
                 hide-below="md"
               ></nldd-text-cell>
-              <nldd-text-cell size="sm" color="secondary" horizontal-alignment="right">
+              <nldd-text-cell horizontal-alignment="right">
                 <span class="alleen-schermlezer">{{ t('publish.access.column.actions') }}</span>
               </nldd-text-cell>
             </nldd-table-row>
@@ -667,7 +653,6 @@ function keyActions(key: Key): RowAction[] {
             >
               <nldd-text-cell :text="invitee.identifier"></nldd-text-cell>
               <nldd-text-cell
-                color="secondary"
                 :text="formatDate(invitee.addedAt)"
                 hide-below="md"
               ></nldd-text-cell>

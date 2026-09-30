@@ -169,14 +169,14 @@ describe('Overview', () => {
     expect(table.attributes('background')).toBe('tinted');
     // The column widths sit on the table once: that lands the cells of every
     // row, and of every group table on this page, on the same x.
-    expect(table.attributes('columns')).toBe('2.5rem minmax(11rem, 1fr) 9.25rem 9rem');
+    expect(table.attributes('columns')).toBe('3.25rem minmax(11rem, 1fr) 9.25rem 12rem');
     expect(table.attributes('sm-columns')).toBe('auto minmax(0, 1fr)');
 
     const headings = table
       .find('nldd-table-row[slot="header"]')
       .findAll('nldd-text-cell')
       .map((cell) => cell.attributes('text'));
-    expect(headings).toEqual(['Live', 'Site', 'Toegang', 'Laatste publicatie']);
+    expect(headings).toEqual(['**Live**', '**Site**', '**Toegang**', '**Laatste publicatie**']);
     // No empty column header: it would land in the accessibility tree as a
     // nameless columnheader.
     expect(headings.every((text) => (text ?? '').length > 0)).toBe(true);

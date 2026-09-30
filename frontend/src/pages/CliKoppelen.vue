@@ -172,7 +172,7 @@ function clientLine(authorization: DeviceAuthorization): string {
 </script>
 
 <template>
-  <nldd-simple-section>
+  <nldd-simple-section class="leesbreedte">
     <nldd-activity-indicator
       v-if="view.stage === 'loading'"
       :text="t('page.cliPair.loading')"

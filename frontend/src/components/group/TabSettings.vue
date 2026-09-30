@@ -228,7 +228,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
             ></nldd-text-cell>
           </nldd-list-item>
           <nldd-list-item v-if="unnamedSites > 0" data-testid="groep-sites-rest">
-            <nldd-text-cell size="sm" color="secondary" :text="unnamedText"></nldd-text-cell>
+            <nldd-text-cell size="sm" :text="unnamedText"></nldd-text-cell>
           </nldd-list-item>
         </nldd-list>
       </ConfirmModal>

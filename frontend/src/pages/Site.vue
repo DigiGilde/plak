@@ -141,7 +141,9 @@ function afterRemoval(): void {
 </script>
 
 <template>
-  <nldd-simple-section>
+  <!-- The deploy tab keeps the reading width itself, so its code can run to
+       the work width. -->
+  <nldd-simple-section :class="{ leesbreedte: route.name !== 'site-deploy' }">
     <nldd-activity-indicator v-if="loading" :text="t('site.loading')"></nldd-activity-indicator>
 
     <ErrorBanner v-else-if="error" :error="error" />

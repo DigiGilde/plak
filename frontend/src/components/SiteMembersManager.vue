@@ -460,7 +460,7 @@ async function onRemove(row: Row): Promise<void> {
       <summary data-testid="leden-via-groep-samenvatting">{{ inheritedSummary }}</summary>
 
       <nldd-container layout="stack" gap="8" class="via-groep-inhoud">
-        <nldd-text size="sm" color="secondary">
+        <nldd-text size="sm">
           {{ inheritedNote[0]
           }}<nldd-link
             :href="groupPath(group, '/-/members')"
@@ -479,20 +479,15 @@ async function onRemove(row: Row): Promise<void> {
         >
           <nldd-table-row slot="header">
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('admin.column.member')"
+              :text="`**${t('admin.column.member')}**`"
             ></nldd-text-cell>
             <nldd-text-cell
-              size="sm"
-              color="secondary"
-              :text="t('admin.column.role')"
+              :text="`**${t('admin.column.role')}**`"
             ></nldd-text-cell>
           </nldd-table-row>
           <nldd-table-row v-for="row in inherited" :key="row.identifier">
             <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
             <nldd-text-cell
-              color="secondary"
               :text="roleLabel(row.effectiveRole)"
             ></nldd-text-cell>
           </nldd-table-row>
@@ -510,20 +505,16 @@ async function onRemove(row: Row): Promise<void> {
       >
         <nldd-table-row slot="header">
           <nldd-text-cell
-            size="sm"
-            color="secondary"
-            :text="t('admin.column.member')"
+            :text="`**${t('admin.column.member')}**`"
           ></nldd-text-cell>
           <nldd-text-cell
-            size="sm"
-            color="secondary"
-            :text="t('admin.column.role')"
+            :text="`**${t('admin.column.role')}**`"
             hide-below="md"
           ></nldd-text-cell>
           <!-- Named but not shown, as on the group's Leden tab: a word above
                one icon button says nothing, and a columnheader without a name
                is an axe violation. -->
-          <nldd-text-cell size="sm" color="secondary" horizontal-alignment="right">
+          <nldd-text-cell horizontal-alignment="right">
             <span class="alleen-schermlezer">{{ t('admin.column.actions') }}</span>
           </nldd-text-cell>
         </nldd-table-row>
@@ -536,7 +527,6 @@ async function onRemove(row: Row): Promise<void> {
         <nldd-table-row v-for="row in own" :key="row.identifier">
           <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
           <nldd-text-cell
-            color="secondary"
             :text="roleLabel(row.effectiveRole)"
             :supporting-text="
               row.effectiveRole === row.siteRole ? undefined : t('admin.siteMembers.viaGroup')
@@ -587,7 +577,7 @@ async function onRemove(row: Row): Promise<void> {
                        control, so it is no tab stop either. The slot is
                        unpadded, hence the container. -->
                   <nldd-container v-if="startingList" slot="footer" padding="8">
-                    <nldd-text size="sm" color="secondary" data-testid="siterol-verder-zoeken">
+                    <nldd-text size="sm" data-testid="siterol-verder-zoeken">
                       {{ t('admin.siteMembers.form.searchFurther') }}
                     </nldd-text>
                   </nldd-container>

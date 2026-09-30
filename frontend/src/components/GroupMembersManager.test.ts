@@ -195,7 +195,7 @@ describe('GroupMembersManager (filled)', () => {
     const wrapper = mountComponent({ members: [member] });
 
     const headings = wrapper.find('nldd-table-row[slot="header"]').findAll('nldd-text-cell');
-    expect(headings.map((cell) => cell.attributes('text'))).toEqual(['Lid', 'Rol', undefined]);
+    expect(headings.map((cell) => cell.attributes('text'))).toEqual(['**Lid**', '**Rol**', undefined]);
     // The action column carries a header too: an empty columnheader lands in
     // the accessibility tree without a name.
     expect(headings[2]!.find('.alleen-schermlezer').text()).toBe('Acties');

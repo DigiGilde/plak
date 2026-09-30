@@ -104,7 +104,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <nldd-simple-section>
+  <nldd-simple-section class="leesbreedte">
     <Notices ref="notices" />
 
     <nldd-title :size="1">
@@ -124,25 +124,19 @@ onMounted(() => {
           <nldd-list variant="box-tinted" :accessible-label="t('profile.account.heading')">
             <nldd-list-item size="md" data-testid="profiel-naam">
               <nldd-text-cell
-                :text="t('profile.account.name')"
-                size="sm"
-                color="secondary"
+                :text="`**${t('profile.account.name')}**`"
               ></nldd-text-cell>
               <nldd-text-cell :text="name"></nldd-text-cell>
             </nldd-list-item>
             <nldd-list-item size="md" data-testid="profiel-email">
               <nldd-text-cell
-                :text="t('profile.account.email')"
-                size="sm"
-                color="secondary"
+                :text="`**${t('profile.account.email')}**`"
               ></nldd-text-cell>
               <nldd-text-cell :text="email"></nldd-text-cell>
             </nldd-list-item>
             <nldd-list-item size="md" data-testid="profiel-rol">
               <nldd-text-cell
-                :text="t('profile.account.role')"
-                size="sm"
-                color="secondary"
+                :text="`**${t('profile.account.role')}**`"
               ></nldd-text-cell>
               <nldd-text-cell :text="platformRole"></nldd-text-cell>
             </nldd-list-item>

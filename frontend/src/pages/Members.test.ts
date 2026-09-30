@@ -141,7 +141,7 @@ describe('Platform management (filled)', () => {
 
     const table = app.find('nldd-table');
     expect(table.exists()).toBe(true);
-    expect(table.attributes('columns')).toBe('minmax(12rem, 1fr) 9rem 6.5rem 8.5rem 3rem');
+    expect(table.attributes('columns')).toBe('minmax(12rem, 1fr) 12rem 7.5rem 11rem 3rem');
     // Five cells per row, in the order of the header row: member, role,
     // created, last activity, actions. No status column: the state sits
     // on the member's own overline.

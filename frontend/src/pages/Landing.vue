@@ -36,7 +36,7 @@ async function checkAgain(): Promise<void> {
 </script>
 
 <template>
-  <nldd-simple-section v-if="props.state === 'awaiting-activation'">
+  <nldd-simple-section v-if="props.state === 'awaiting-activation'" class="leesbreedte">
     <nldd-title slot="header" :size="1">
       <h1>{{ t('page.landing.withdrawn.title') }}</h1>
     </nldd-title>
@@ -64,7 +64,7 @@ async function checkAgain(): Promise<void> {
     </template>
   </nldd-simple-section>
 
-  <nldd-simple-section v-else>
+  <nldd-simple-section v-else class="leesbreedte">
     <nldd-title slot="header" :size="1"><h1>Plak</h1></nldd-title>
     <nldd-rich-text>
       <p>{{ t('page.landing.intro') }}</p>

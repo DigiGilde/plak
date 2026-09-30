@@ -19,7 +19,7 @@ watch(() => [route.path, props.title], setCrumbs);
 </script>
 
 <template>
-  <nldd-simple-section>
+  <nldd-simple-section class="leesbreedte">
     <nldd-title :size="1"><h1>{{ title }}</h1></nldd-title>
     <nldd-spacer size="16"></nldd-spacer>
     <nldd-rich-text>

@@ -382,20 +382,16 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
     >
       <nldd-table-row slot="header">
         <nldd-text-cell
-          size="sm"
-          color="secondary"
-          :text="t('group.members.column.member')"
+          :text="`**${t('group.members.column.member')}**`"
         ></nldd-text-cell>
         <nldd-text-cell
-          size="sm"
-          color="secondary"
-          :text="t('group.members.column.role')"
+          :text="`**${t('group.members.column.role')}**`"
           hide-below="md"
         ></nldd-text-cell>
         <!-- Named but not shown, as on Platformbeheer: a word above one icon
              button says nothing, and a columnheader without a name is an axe
              violation. -->
-        <nldd-text-cell size="sm" color="secondary" horizontal-alignment="right">
+        <nldd-text-cell horizontal-alignment="right">
           <span class="alleen-schermlezer">{{ t('group.members.column.actions') }}</span>
         </nldd-text-cell>
       </nldd-table-row>
@@ -408,7 +404,6 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
       <nldd-table-row v-for="row in rows" :key="row.identifier">
         <nldd-text-cell :text="row.name" :supporting-text="row.email"></nldd-text-cell>
         <nldd-text-cell
-          color="secondary"
           :text="roleLabel(row.role)"
           hide-below="md"
         ></nldd-text-cell>
@@ -530,7 +525,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
           ></nldd-text-cell>
         </nldd-list-item>
         <nldd-list-item v-if="unnamedSites > 0" data-testid="siterollen-rest">
-          <nldd-text-cell size="sm" color="secondary" :text="unnamedText"></nldd-text-cell>
+          <nldd-text-cell size="sm" :text="unnamedText"></nldd-text-cell>
         </nldd-list-item>
       </nldd-list>
 

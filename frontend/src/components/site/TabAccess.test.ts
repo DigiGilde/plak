@@ -618,8 +618,8 @@ describe('TabAccess: invitees', () => {
 
     const header = table.find('nldd-table-row[slot="header"]');
     const columns = header.findAll('nldd-text-cell').map((c) => c.attributes('text'));
-    expect(columns).toContain('E-mailadres');
-    expect(columns).toContain('Toegevoegd');
+    expect(columns).toContain('**E-mailadres**');
+    expect(columns).toContain('**Toegevoegd**');
     // A columnheader without a name is an axe violation, so the menu column is
     // named for a screen reader and hidden for everyone else.
     expect(header.find('.alleen-schermlezer').text()).toBe('Acties');
@@ -771,10 +771,10 @@ describe('TabAccess: secret links', () => {
     expect(table.element.tagName.toLowerCase()).toBe('nldd-table');
     const header = table.find('nldd-table-row[slot="header"]');
     const columns = header.findAll('nldd-text-cell').map((c) => c.attributes('text'));
-    expect(columns).toContain('Label');
-    expect(columns).toContain('Aangemaakt');
-    expect(columns).toContain('Vervalt');
-    expect(columns).toContain('Status');
+    expect(columns).toContain('**Label**');
+    expect(columns).toContain('**Aangemaakt**');
+    expect(columns).toContain('**Vervalt**');
+    expect(columns).toContain('**Status**');
     expect(header.find('.alleen-schermlezer').text()).toBe('Acties');
 
     const row = wrapper.find('[data-testid="sleutel-sel-abc123"]');

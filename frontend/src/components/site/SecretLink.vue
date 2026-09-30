@@ -50,13 +50,13 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
 <template>
   <nldd-container layout="stack" gap="16">
     <nldd-container layout="stack" gap="4">
-      <nldd-text size="sm" color="secondary">{{ t('site.secretLink.withCode') }}</nldd-text>
+      <nldd-text size="sm">{{ t('site.secretLink.withCode') }}</nldd-text>
       <p class="address">
         <nldd-link :href="fullLink" target="_blank" :data-testid="`${prefix}-link`">{{
           fullLink
         }}</nldd-link>
       </p>
-      <nldd-text size="sm" color="secondary">
+      <nldd-text size="sm">
         {{ t('site.secretLink.withCode.hint') }}
       </nldd-text>
       <nldd-button
@@ -77,7 +77,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
     </nldd-container>
 
     <nldd-container layout="stack" gap="4">
-      <nldd-text size="sm" color="secondary">{{ t('site.secretLink.withoutCode') }}</nldd-text>
+      <nldd-text size="sm">{{ t('site.secretLink.withoutCode') }}</nldd-text>
       <p class="address">
         <nldd-link
           :href="linkWithoutCode"
@@ -86,9 +86,9 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
           >{{ linkWithoutCode }}</nldd-link
         >
       </p>
-      <nldd-text size="sm" color="secondary">{{ t('site.secretLink.code') }}</nldd-text>
+      <nldd-text size="sm">{{ t('site.secretLink.code') }}</nldd-text>
       <p class="address code" :data-testid="`${prefix}-code`">{{ code }}</p>
-      <nldd-text size="sm" color="secondary">
+      <nldd-text size="sm">
         {{ t('site.secretLink.withoutCode.hint') }}
       </nldd-text>
       <nldd-button-group orientation="horizontal">
@@ -127,7 +127,6 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
          announced when it appears after a copy too. -->
     <nldd-text
       size="sm"
-      color="secondary"
       role="status"
       :data-testid="`${prefix}-melding`"
       >{{ notice }}</nldd-text

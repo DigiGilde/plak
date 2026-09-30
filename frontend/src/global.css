@@ -12,14 +12,9 @@ body {
 }
 
 /* The work width: the column that gets worked in, the same size on every page.
-   Measured in Chromium at a root font of 16 px, in a window of 1400 px, with
-   the widest content these pages hold: the site table asks 651 px, the
-   member table 619 px, the token table 530 px, the header row of the overview
-   610 px (h1 408 + gap 16 + button 186) and the tab bar of the group page
-   462 px. Nothing asks for more. 45rem (720 px) sits just above that: room for
-   a longer site title without the fixed columns drifting apart, and 80 px
-   above the 640 px below which nldd-table hides its secondary columns. In rem,
-   so the size grows with the text size.
+   60rem (960 px at a root font of 16 px) gives the site table room for its
+   fixed columns on one line each, with the title column taking the rest. In
+   rem, so the size grows with the text size.
 
    The cap hangs on the design system's body token, so it holds for the whole
    page: the page sections, the toolbar (which reads the token, see the
@@ -28,8 +23,9 @@ body {
    same right edge; capping the content alone would have left the brand at the
    old 1280, drifting away from the h1. */
 :root {
-  --plak-work-width: 45rem;
+  --plak-work-width: 60rem;
   --semantics-page-sections-body-max-width: var(--plak-work-width);
+  --plak-reading-width: 45rem;
 
   /* Left over: GroepsledenBeheer.vue and TokensBeheer.vue still cap their
      table separately. That is now the same size as the work width, so those
@@ -53,6 +49,28 @@ body {
 .page-header > nldd-title {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* A page without a wide table: its content stays at the reading width while
+   the toolbar and footer keep the work width. On the children rather than the
+   section's own `width`, because that centres the body and pulls the h1 off
+   the x of the wordmark. */
+.leesbreedte > * {
+  max-width: var(--plak-reading-width);
+}
+
+/* No grey text: subtitles, supporting text and cell text read in the content
+   colour. Scoped to the text components, because the same token also greys
+   the placeholder of an input, which has to stay apart from a typed value.
+   nldd-title reads the semantics token directly, the cells the context token
+   first, so both are set. */
+nldd-title,
+nldd-text,
+nldd-text-cell,
+nldd-title-cell,
+nldd-description-cell {
+  --semantics-content-secondary-color: var(--context-content-color, var(--semantics-content-color));
+  --context-content-secondary-color: var(--context-content-color, var(--semantics-content-color));
 }
 
 /* Names something for a screen reader without taking room on screen. Not
