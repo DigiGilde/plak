@@ -1313,6 +1313,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         stored_access, refresh_token = None, None
     access_token = os.environ.get("PLAK_ACCESS_TOKEN") or stored_access
     revoked = True
+    incompatible = None
     if access_token or refresh_token:
         headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
         json_body = {"refreshToken": refresh_token} if refresh_token else None
@@ -1327,8 +1328,13 @@ def cmd_logout(args: argparse.Namespace) -> int:
             revoked = response.status_code in (200, 204)
         except httpx.HTTPError:
             revoked = False
+        except IncompatibleServer as error:
+            incompatible = error
 
     _forget_session(host)
+    if incompatible:
+        print("Logged out locally.")
+        raise incompatible
     if (access_token or refresh_token) and not revoked:
         print(
             "Warning: could not revoke the session at the server; "

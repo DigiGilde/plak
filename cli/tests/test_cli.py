@@ -1138,6 +1138,23 @@ def test_a_newer_api_major_is_refused_before_the_body_is_read(
     assert "API 2.x" in captured.err
 
 
+def test_logout_against_a_newer_api_major_still_forgets_the_session(
+    stub_server, host, isolated_cwd, memory_keyring, capsys
+):
+    _store_session(host)
+    stub_server.extra_headers["API-Version"] = "2.0.0"
+    stub_server.responder = _empty_responder(204)
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "Logged out locally." in captured.out
+    assert "API 2.x" in captured.err
+    assert memory_keyring.secrets == {}
+    assert host not in cli._read_hosts()["hosts"]
+
+
 def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, memory_keyring, capsys):
     _store_session(host)
     stub_server.responder = _empty_responder(204)

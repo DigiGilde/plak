@@ -978,5 +978,5 @@ response header (for example `1.0.0`).
   exit code 1 and `Error: this server speaks API 2.x, this plak CLI (<version>)
   supports API 1.x. Install a newer CLI: ...`. A missing or malformed header
   is ignored.
-- `plak --version` prints the installed version (`plak 0.2.0`). The CLI also
+- `plak --version` prints the installed version (`plak 2026.10.1`). The CLI also
   identifies itself on every request as `User-Agent: plak-cli/<version>`.
