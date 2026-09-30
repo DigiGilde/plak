@@ -136,6 +136,7 @@ sent to the host it was issued for.
 | Link a repository for CI (`plak site link`) | you, on request, with the repository and live branch the user names | From then on that repository's workflows may publish live; see "Letting CI publish" |
 | Approve `plak login` in the browser | user | You may start the sign-in, never confirm it yourself |
 | Choose the visibility | user | You pass it only at creation, as the user stated it; changing it later is session-only |
+| Turn "Afschermen van andere sites" off | user (site admin) | Session-only; it trades isolation from the other sites for module scripts, fonts and storage |
 | Prepare and check the build output | you | See rule 3 |
 | Publish a preview and report the address | you | The normal path |
 | Publish live | you, after an explicit request | See rule 1 |
@@ -177,6 +178,37 @@ Then do not go on until the terminal shows "Logged in as ...".
    in the plak repository for the contract and the Astro and Vite examples. If
    there are absolute paths such as `/assets/...` in the HTML, say so before
    uploading: the page will come online, but without styling.
+
+   Then check what the shielding will refuse. Every site is shielded from the
+   other sites unless its admin turned that off, and a shielded page cannot
+   load a module script, a web font or a `fetch` from its own site, and
+   cannot use `localStorage`, `sessionStorage` or `document.cookie`:
+
+   ```bash
+   grep -rlE 'type="module"|rel="modulepreload"' dist
+   grep -rl '@font-face' dist
+   grep -rlE 'localStorage|sessionStorage|document\.cookie' dist
+   ```
+
+   A Vite build (Vue, React, Svelte) always has a hit on the first line: its
+   whole app is one module script, so under the shielding the page is blank.
+   An Astro build has one as soon as a component has a `<script>` or an
+   island (`client:*`): the page looks right, but nothing on it responds.
+   Tell the user before you publish, not after they found a dead page: that
+   the build loads its scripts as modules, that the browser refuses those
+   while "Afschermen van andere sites" is on (so the page stays blank, or
+   nothing on it responds), that the site's admin can turn it off on the tab
+   "Toegang" in the admin environment, and that the site then shares its
+   web address with the other sites that have it off, so only for content
+   they trust.
+
+   Turning the shielding off is the site admin's decision, in the admin
+   environment; the CLI does not offer it, and you never present it as a
+   formality. For a few small Astro scripts, `<script is:inline>` keeps them
+   working under the shielding; a font or library from Google Fonts or a CDN
+   loads too. A hit on `@font-face` only matters when its `url()` points into
+   the dist. `docs/publishing.md`, "Shielding: what a build tool has to
+   know", has the full table.
 3. **Publish the preview.**
 
    ```bash
@@ -388,6 +420,13 @@ upload, and the live site stands as it stood.
 
 For 401, 403 and 404: do not retry with variations. That is a question for the
 human, not a search.
+
+**The deploy worked, but the page is blank or nothing responds.** If the
+browser console says `... from origin 'null' has been blocked by CORS
+policy`, that is the shielding refusing a module script, font or `fetch`,
+not a deploy error and not something a build or server setting fixes. Do not
+publish again with variations; explain it as in step 2 of "The path" and let
+the user decide about the switch.
 
 If you get `Error: No token: log in with 'plak login --host <host>'...` (exit
 2, before anything was sent): there is no valid session. Start `plak login`
