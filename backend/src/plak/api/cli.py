@@ -176,7 +176,7 @@ def _creation_counter(request: Request) -> InMemoryCounter:
 async def _within_creation_budget(request: Request, ip: str | None) -> bool:
     counter = _creation_counter(request)
     now = time.monotonic()
-    per_ip = await counter.increment(f"ip:{ip}", DEVICE_CREATE_WINDOW_S, now)
+    per_ip = await counter.increment(f"ip:{net.rate_limit_key(ip or net.UNKNOWN)}", DEVICE_CREATE_WINDOW_S, now)
     if per_ip.count > DEVICE_CREATE_MAX_PER_IP:
         # Already refused on its own budget: do not also spend the shared
         # backstop, or a few over-budget IPs could exhaust it for everyone.

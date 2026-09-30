@@ -270,6 +270,23 @@ class TestCreationBudget:
 
         assert await cli_api._within_creation_budget(request, "198.51.100.7") is True
 
+    async def test_ipv6_addresses_in_one_slash_64_share_a_budget(self, app) -> None:
+        """One subscriber holds a whole /64; rotating through it must not
+        open a fresh budget per address and drain the backstop for everyone."""
+        request = _FakeRequest(app)
+        for i in range(1, cli_api.DEVICE_CREATE_MAX_PER_IP + 1):
+            assert await cli_api._within_creation_budget(request, f"2001:db8:1:2::{i:x}") is True
+        assert await cli_api._within_creation_budget(request, "2001:db8:1:2::ffff") is False
+
+        # The next /64 is another subscriber, with a budget of its own.
+        assert await cli_api._within_creation_budget(request, "2001:db8:1:3::1") is True
+
+    async def test_without_a_peer_every_request_shares_one_budget(self, app) -> None:
+        request = _FakeRequest(app)
+        for _ in range(cli_api.DEVICE_CREATE_MAX_PER_IP):
+            assert await cli_api._within_creation_budget(request, None) is True
+        assert await cli_api._within_creation_budget(request, None) is False
+
     async def test_the_global_backstop_still_refuses_once_reached_by_many_ips(self, app) -> None:
         request = _FakeRequest(app)
         counter = cli_api._creation_counter(request)
