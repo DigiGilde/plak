@@ -66,7 +66,7 @@ def postgres_container() -> Iterator[object]:
     # The ryuk cleanup container is not always available or needed under Podman.
     os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
-    from testcontainers.postgres import PostgresContainer
+    from testcontainers.community.postgres import PostgresContainer
 
     container = PostgresContainer("postgres:16", driver=None)
     try:

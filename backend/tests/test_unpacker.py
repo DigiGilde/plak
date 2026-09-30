@@ -318,7 +318,10 @@ class TestPathValidation:
 
     def test_duplicate_path_refused(self, unpack: UnpackFn):
         buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as archive:
+        with (
+            pytest.warns(UserWarning, match="Duplicate name"),
+            zipfile.ZipFile(buf, "w") as archive,
+        ):
             archive.writestr("a.txt", b"1")
             archive.writestr("a.txt", b"2")
         with pytest.raises(BundleError) as error:
