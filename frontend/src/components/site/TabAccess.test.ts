@@ -533,6 +533,10 @@ describe('TabAccess: shielding from other sites', () => {
     // opaque origin. Claiming otherwise sends a publisher hunting elsewhere.
     expect(section.text()).toContain('Weblettertypen laden niet');
     expect(section.text()).toContain('bestand van je site ophaalt');
+    // Module scripts are what an Astro or Vite build emits, and the one
+    // failure a publisher cannot map onto "scripts load as usual".
+    expect(section.text()).toContain('<script type="module">');
+    expect(section.text()).toContain('Astro, Vite');
   });
 
   it('is off when the site has turned it off', async () => {
