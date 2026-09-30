@@ -315,6 +315,14 @@ const idsCommand = computed(() => {
 
 const idsIntro = computed(() => segments('publish.deploy.form.idsIntro', ['command']));
 
+// The same link from a checkout; an empty live branch means --any-branch, as in the form.
+const cliLinkCommand = computed(() => {
+  const branch = formLiveBranch.value.trim();
+  return `plak site link ${props.group}/${props.site} ${branch ? `--live-branch ${branch}` : '--any-branch'}`;
+});
+
+const cliLinkHint = computed(() => segments('publish.deploy.form.cliHint', ['command']));
+
 async function submitRepository(): Promise<void> {
   formError.value = null;
   idsError.value = null;
@@ -778,6 +786,10 @@ plak logout
                 {{ t('publish.deploy.form.branchHelp') }}
               </nldd-form-field-help-text>
             </nldd-form-field>
+
+            <nldd-rich-text data-testid="repository-cli-hint">
+              <p>{{ cliLinkHint[0] }}<code>{{ cliLinkCommand }}</code>{{ cliLinkHint[1] }}</p>
+            </nldd-rich-text>
 
             <nldd-form-actions>
               <nldd-button-group>

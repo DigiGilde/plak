@@ -707,6 +707,34 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
   });
 
+  it('points at plak site link, with the live branch the form holds', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
+
+    expect(hint().find('code').text()).toBe('plak site link nldd/website --any-branch');
+    expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
+
+    typeInto(wrapper, 'repository-livebranch-invoer', ' main ');
+    await untilIdle();
+    expect(hint().find('code').text()).toBe('plak site link nldd/website --live-branch main');
+  });
+
+  it('points at plak site link in English too', async () => {
+    _setLocaleForTest('en');
+    try {
+      backend.data.repositories = [];
+      const wrapper = makeWrapper();
+      await openLinkForm(wrapper);
+      expect(wrapper.find('[data-testid="repository-cli-hint"]').text()).toContain(
+        'Rather from the terminal? Run plak site link nldd/website --any-branch in a checkout',
+      );
+    } finally {
+      _setLocaleForTest('nl');
+    }
+  });
+
   it('hides the id fields again when the form is reopened', async () => {
     backend.data.repositories = [];
     recordRepositoryPuts();
