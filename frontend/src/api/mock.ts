@@ -1181,7 +1181,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           if (!owner || !repo) {
             return problem(422, 'Ongeldig repository', 'Vul zowel eigenaar als repository in.', 'REPOSITORY_INVALID');
           }
-          if (provider === 'forgejo' && !MOCK_CI_FORGEJO_HOSTS.includes(host)) {
+          if (provider === 'forgejo' && !MOCK_CI_FORGEJO_HOSTS.some((allowed) => allowed === host)) {
             return problem(422, 'Host niet toegestaan', `"${host}" is geen toegestane Forgejo-host.`, 'HOST_NOT_ALLOWED');
           }
           const liveBranch = (body.liveBranch as string | null) ?? null;

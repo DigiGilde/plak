@@ -153,12 +153,17 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 # allows no CDN.
 SWAGGER_UI_VERSION = "5.32.15"
 
-_ASSETS = {
-    "docs.css": "text/css",
-    "docs-init.js": "text/javascript",
-    "docs-theme.js": "text/javascript",
-    "swagger-ui-bundle.js": "text/javascript",
-    "swagger-ui.css": "text/css",
+# The requested filename only picks an entry; the path on disk comes from
+# this table, never from the request.
+_ASSETS: dict[str, tuple[Path, str]] = {
+    name: (STATIC_DOCS_DIR / name, media_type)
+    for name, media_type in (
+        ("docs.css", "text/css"),
+        ("docs-init.js", "text/javascript"),
+        ("docs-theme.js", "text/javascript"),
+        ("swagger-ui-bundle.js", "text/javascript"),
+        ("swagger-ui.css", "text/css"),
+    )
 }
 
 # Swagger UI sets its own `style` attributes on elements; with just
@@ -212,10 +217,10 @@ async def docs_ui() -> HTMLResponse:
 
 @router.get("/-/api/docs/assets/{filename}", include_in_schema=False)
 async def docs_asset(filename: str) -> Response:
-    media_type = _ASSETS.get(filename)
-    if media_type is None:
+    asset = _ASSETS.get(filename)
+    if asset is None:
         raise ApiError(404, "UNKNOWN_ASSET")
-    path = STATIC_DOCS_DIR / filename
+    path, media_type = asset
     if not path.is_file():
         raise ApiError(404, "UNKNOWN_ASSET")
     return FileResponse(path, media_type=media_type, headers={"Cache-Control": _CACHE_ASSET})

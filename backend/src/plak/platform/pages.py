@@ -524,7 +524,8 @@ async def front_page(request: Request, lang: str | None = None) -> Response:
     whose browser asks for a language they cannot read. A value we do not
     have falls through to the header rather than being echoed anywhere.
     """
-    chosen = lang if lang in i18n.SUPPORTED else None
+    # Our own constant rather than `lang`: the locale goes into the markup unescaped.
+    chosen = next((code for code in i18n.SUPPORTED if code == lang), None)
     locale = chosen or i18n.negotiate(request.headers.get("accept-language"))
     return front_page_response(request.app.state.settings, locale)
 

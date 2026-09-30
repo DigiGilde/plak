@@ -530,9 +530,30 @@ class TestAssetOnAllowlistButMissing:
     async def test_missing_file_gives_the_same_404_as_a_unknown_name(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        monkeypatch.setattr("plak.api.docs.STATIC_DOCS_DIR", tmp_path)
+        monkeypatch.setitem(_ASSETS, "docs.css", (tmp_path / "docs.css", "text/css"))
         with pytest.raises(ApiError) as error:
             await docs_asset("docs.css")
+        assert error.value.status == 404
+        assert error.value.reason == "UNKNOWN_ASSET"
+
+
+class TestAssetPathComesFromTheTable:
+    """The route's {filename} only selects an entry; the file served is the
+    table's own path, so no spelling of a name reaches the filesystem."""
+
+    def test_every_asset_path_is_its_own_name_in_the_static_docs_dir(self) -> None:
+        for name, (path, _media_type) in _ASSETS.items():
+            assert path == STATIC_DOCS_DIR / name
+            assert path.parent == STATIC_DOCS_DIR
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["../docs.css", "../../main.py", "/etc/passwd", "docs.css/", "./docs.css", "DOCS.CSS", "docs.css\x00"],
+    )
+    async def test_a_name_that_is_not_exactly_an_entry_is_refused(self, filename: str) -> None:
+        # Called directly, so the router's own path normalisation plays no part.
+        with pytest.raises(ApiError) as error:
+            await docs_asset(filename)
         assert error.value.status == 404
         assert error.value.reason == "UNKNOWN_ASSET"
 

@@ -2895,3 +2895,53 @@ def test_group_and_site_need_a_subcommand_and_their_required_flags(capsys):
     assert cli.main(["group"]) == 2
     assert cli.main(["site"]) == 2
     assert cli.main(["site", "create", "team/docs"]) == 2
+
+
+_STORED_ACCESS = "stored-access-token-must-never-be-printed"
+_STORED_REFRESH = "stored-refresh-token-must-never-be-printed"
+
+
+@pytest.mark.parametrize(
+    ("argv", "answer", "unreachable", "expected"),
+    [
+        (["whoami"], {"member": {"email": "iemand@example.nl"}}, None, "Logged in as iemand@example.nl on {host}."),
+        (["whoami"], None, "get", "Error: could not connect to {host}"),
+        (["group", "create", "team", "--name", "Team"], _group_answer(), None, "Change it at: {host}/team/-/settings"),
+        (["group", "create", "team", "--name", "Team"], None, "post", "Error: could not connect to {host}"),
+        (
+            ["site", "create", "team/docs", "--title", "Docs"],
+            _site_answer("public"),
+            None,
+            "Publish to it with: plak publish <dist> --host {host} --site team/docs",
+        ),
+        (["login", "--no-open"], None, "post", "Logging in at {host}"),
+    ],
+    ids=["whoami", "whoami-unreachable", "group-create", "group-create-unreachable", "site-create", "login"],
+)
+def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_are(
+    stub_server, host, isolated_cwd, monkeypatch, capsys, argv, answer, unreachable, expected
+):
+    """The host and the tokens share .env.plak; a message naming the host must
+    carry the host alone."""
+    for name in ("PLAK_HOST", "PLAK_ACCESS_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"):
+        monkeypatch.delenv(name, raising=False)
+    cli._write_env_file(
+        {
+            "PLAK_HOST": host,
+            "PLAK_ACCESS_TOKEN": _STORED_ACCESS,
+            "PLAK_REFRESH_TOKEN": _STORED_REFRESH,
+            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
+        }
+    )
+    if answer is not None:
+        stub_server.responder = _json_responder(200 if argv[0] == "whoami" else 201, answer)
+    if unreachable is not None:
+        monkeypatch.setattr(cli.httpx, unreachable, _raise_connect_error)
+
+    cli.main(argv)
+
+    output = capsys.readouterr()
+    printed = output.out + output.err
+    assert expected.format(host=host) in printed
+    assert _STORED_ACCESS not in printed
+    assert _STORED_REFRESH not in printed

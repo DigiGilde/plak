@@ -169,6 +169,11 @@ class TestOnTheContentHost:
         response = await content.get("/?lang=de", headers={"Accept-Language": "nl"})
         assert '<html lang="nl">' in response.text
 
+        # Only an exact code counts; a near miss is not a spelling of one.
+        for near_miss in ("EN", "en%20", "en-GB", "e"):
+            response = await content.get(f"/?lang={near_miss}", headers={"Accept-Language": "nl"})
+            assert '<html lang="nl">' in response.text, near_miss
+
         injected = await content.get('/?lang=%22%3E%3Cscript%3E', headers={"Accept-Language": "en"})
         assert '<html lang="en">' in injected.text
         assert "<script" not in injected.text.lower()
