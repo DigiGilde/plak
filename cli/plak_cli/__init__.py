@@ -44,6 +44,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import io
 import json
 import os
@@ -58,13 +59,19 @@ import time
 import urllib.parse
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 import httpx
 import keyring
 import keyring.core
 import keyring.errors
 
-VERSION = "0.1.0"
+VERSION = importlib.metadata.version("plak")
+
+# The major of the server API contract (the `API-Version` response header)
+# this CLI understands. A server with a higher major is refused.
+SUPPORTED_API_MAJOR = 1
+API_VERSION_RE = re.compile(r"^(\d+)\.\d+\.\d+$")
 
 DEFAULT_HOST = "https://beheer.plak.rijks.app"
 HOST_HELP = (
@@ -109,6 +116,10 @@ CONTENT_TYPES = {
     ".tar.gz": "application/gzip",
     ".tgz": "application/gzip",
 }
+
+
+class IncompatibleServer(Exception):
+    """The server speaks a newer API major than this CLI supports."""
 
 
 class UsageError(Exception):
@@ -421,6 +432,31 @@ def _note_legacy_env_file() -> None:
         )
 
 
+def _check_api_version(response: httpx.Response) -> None:
+    match = API_VERSION_RE.match(response.headers.get("API-Version", ""))
+    if match and int(match.group(1)) > SUPPORTED_API_MAJOR:
+        raise IncompatibleServer(
+            f"this server speaks API {match.group(1)}.x, this plak CLI "
+            f"({VERSION}) supports API {SUPPORTED_API_MAJOR}.x. Install a "
+            "newer CLI: uv tool install --force "
+            '"git+https://github.com/DigiGilde/plak@<tag>#subdirectory=cli"'
+        )
+
+
+def _http(method: str, url: str, **kwargs: Any) -> httpx.Response:
+    """The one way out to the server: sets the User-Agent and refuses a server
+    with a newer API major before any caller reads the response."""
+    headers = {**kwargs.pop("headers", {}), "User-Agent": f"plak-cli/{VERSION}"}
+    if method == "DELETE" and "json" in kwargs:
+        # httpx.delete() itself refuses a body (the old DELETE-has-no-body
+        # convention); httpx.request() does not.
+        response = httpx.request(method, url, headers=headers, **kwargs)
+    else:
+        response = getattr(httpx, method.lower())(url, headers=headers, **kwargs)
+    _check_api_version(response)
+    return response
+
+
 def _problem_data(response: httpx.Response) -> dict:
     try:
         data = response.json()
@@ -431,7 +467,8 @@ def _problem_data(response: httpx.Response) -> dict:
 
 def _refresh_token(host: str, refresh_token: str, entry: dict) -> str:
     try:
-        response = httpx.post(
+        response = _http(
+            "POST",
             f"{host}/-/api/v1/cli/tokens",
             json={"grantType": "refresh_token", "refreshToken": refresh_token},
             timeout=30.0,
@@ -498,7 +535,8 @@ def _fetch_oidc_token(host: str) -> str | None:
     separator = "&" if "?" in request_url else "?"
     url = f"{request_url}{separator}audience={urllib.parse.quote(host, safe='')}"
     try:
-        response = httpx.get(
+        response = _http(
+            "GET",
             url, headers={"Authorization": f"bearer {request_token}"}, timeout=30.0
         )
     except httpx.HTTPError as error:
@@ -708,7 +746,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
         form_fields["basePath"] = base_path
 
     try:
-        response = httpx.post(
+        response = _http(
+            "POST",
             url,
             headers={"Authorization": f"Bearer {token}"},
             files={"file": (file_name, content, content_type)},
@@ -775,7 +814,8 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
     url = f"{host}/-/api/v1/sites/{group}/{site}/previews/{args.ref}"
 
     try:
-        response = httpx.delete(
+        response = _http(
+            "DELETE",
             url,
             headers={"Authorization": f"Bearer {token}"},
             timeout=60.0,
@@ -850,7 +890,8 @@ def _create(host: str, token: str, path: str, body: dict[str, object]) -> dict |
     """POSTs to a creation route; the answer on 201, None after an error has
     been printed."""
     try:
-        response = httpx.post(
+        response = _http(
+            "POST",
             f"{host}{path}",
             headers={"Authorization": f"Bearer {token}"},
             json=body,
@@ -1051,7 +1092,8 @@ def cmd_site_link(args: argparse.Namespace) -> int:
             ids_from = "from gh"
 
     try:
-        response = httpx.put(
+        response = _http(
+            "PUT",
             f"{host}/-/api/v1/sites/{group}/{site}/repository",
             headers={"Authorization": f"Bearer {token}"},
             json=body,
@@ -1134,7 +1176,8 @@ def cmd_login(args: argparse.Namespace) -> int:
     print(f"Logging in at {host}", file=sys.stderr)
     client_name = f"plak-cli {VERSION} on {platform.system()}"
     try:
-        response = httpx.post(
+        response = _http(
+            "POST",
             f"{host}/-/api/v1/cli/device-authorizations",
             json={"clientName": client_name},
             timeout=30.0,
@@ -1197,7 +1240,8 @@ def cmd_login(args: argparse.Namespace) -> int:
             return 1
         time.sleep(interval)
         try:
-            response = httpx.post(
+            response = _http(
+                "POST",
                 f"{host}/-/api/v1/cli/tokens",
                 json={"grantType": "device_code", "deviceCode": device_code},
                 timeout=30.0,
@@ -1273,9 +1317,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
         json_body = {"refreshToken": refresh_token} if refresh_token else None
         try:
-            # httpx.delete() itself refuses a body (the old
-            # DELETE-has-no-body convention); httpx.request() does not.
-            response = httpx.request(
+            response = _http(
                 "DELETE",
                 f"{host}/-/api/v1/cli/session",
                 headers=headers,
@@ -1307,7 +1349,8 @@ def cmd_whoami(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        response = httpx.get(
+        response = _http(
+            "GET",
             f"{host}/-/api/v1/cli/whoami",
             headers={"Authorization": f"Bearer {token}"},
             timeout=30.0,
@@ -1334,6 +1377,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="plak",
         description="Publish static sites to Plak and manage previews.",
     )
+    parser.add_argument("--version", action="version", version=f"plak {VERSION}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login = subparsers.add_parser(
@@ -1488,4 +1532,8 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as error:
         code = error.code if isinstance(error.code, int) else 2
         return code
-    return args.func(args)
+    try:
+        return args.func(args)
+    except IncompatibleServer as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1

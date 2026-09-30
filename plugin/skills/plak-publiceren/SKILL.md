@@ -352,7 +352,10 @@ Errors come back as `application/problem+json`: `{type, title, status,
 detail}` plus a field `code` with a stable reason code. The CLI prints
 `Error: <detail>` on stderr and exits 1 (error from the server) or 2 (wrong
 usage: a missing argument, an unknown path, an unknown file type, or no
-session). The CLI sends no `Accept-Language`, so the `detail` comes back in
+session). If the server speaks a newer API major than the CLI supports, it
+prints `Error: this server speaks API 2.x, this plak CLI (...) supports API 1.x`
+with the upgrade command and exits 1: run that command, then retry. The CLI
+sends no `Accept-Language`, so the `detail` comes back in
 English. Read the `code`, not the text: the text is for humans and may
 change.
 
