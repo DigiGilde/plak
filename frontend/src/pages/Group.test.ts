@@ -200,6 +200,18 @@ describe('Group: tab navigation', () => {
     }
   });
 
+  it('gives the site table the work width and the other tabs the reading width', async () => {
+    const { wrapper, router } = await makeWrapper('/nldd');
+    const section = () => wrapper.find('nldd-simple-section');
+    expect(section().classes()).not.toContain('leesbreedte');
+
+    for (const path of ['/nldd/-/members', '/nldd/-/settings']) {
+      await router.push(path);
+      await untilIdle();
+      expect(section().classes()).toContain('leesbreedte');
+    }
+  });
+
   it('does not rebuild the group header when switching tabs', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora');
     const bar = wrapper.find('[data-testid="groep-tabs"]').element;

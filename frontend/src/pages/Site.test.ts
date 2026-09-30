@@ -169,6 +169,16 @@ describe('Site: tab navigation', () => {
     expect(wrapper.find('[data-testid="live-marker-versie-1"]').exists()).toBe(true);
   });
 
+  it('gives every tab the reading width except deploy, which keeps it itself', async () => {
+    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const section = () => wrapper.find('nldd-simple-section');
+    expect(section().classes()).toContain('leesbreedte');
+
+    await router.push('/nldd/website/deploy');
+    await untilIdle();
+    expect(section().classes()).not.toContain('leesbreedte');
+  });
+
   it('also loads each tab directly via its URL', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/website/access');
 

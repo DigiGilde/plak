@@ -62,18 +62,16 @@ const SORTABLE = computed<SortableColumn[]>(() => [
 /**
  * The columns, set once on the table so every row lines up on the same x.
  * Only the member column stretches; the rest are fixed at the width their
- * widest content actually measures in Chromium at a root font of 16 px, sort
- * arrow included: role 125 px ("Platformbeheerder"), created 83 px (the
- * header, wider than a medium date), last activity 127 px (a medium date plus
- * a time) and the menu button 32 px.
- *
- * They have to fit: the workspace is capped at 45 rem, which leaves 688 px
- * inside the table's own padding, and these add up to 624.
+ * widest content actually measures in Chromium at a root font of 16 px, with
+ * the 18 px cell text: role 170 px ("Platform administrator"), created 99 px
+ * ("27 Sept 2026"), last activity 151 px ("30 Sept 2026, 20:56") and the menu
+ * button 32 px, each with at least 16 px of room on top. The sortable headers
+ * are narrower than their contents.
  *
  * Fixed rather than `auto`, because an auto column shrinks to min-content
  * under pressure and breaks a date across two lines.
  */
-const COLUMNS = 'minmax(12rem, 1fr) 9rem 6.5rem 8.5rem 3rem';
+const COLUMNS = 'minmax(12rem, 1fr) 12rem 7.5rem 11rem 3rem';
 /** Below md only the member and the menu remain; the rest drops out. */
 const COLUMNS_SM = 'minmax(0, 1fr) 3rem';
 
@@ -172,14 +170,14 @@ async function refresh(): Promise<void> {
  * WCAG 1.4.1 colour may not be the only signal, and "Geen toegang" reads as
  * itself in a screen reader and in forced colours.
  */
-function standing(member: Member): { text: string; color: 'content' | 'secondary' | 'warning' | 'critical' } {
+function standing(member: Member): { text: string; color: 'content' | 'warning' | 'critical' } {
   if (member.status === 'deactivated') {
     return { text: t('admin.members.standing.noAccess'), color: 'critical' };
   }
   if (member.platformRole === 'admin') {
     return { text: t('admin.members.standing.admin'), color: 'content' };
   }
-  return { text: t('admin.members.standing.member'), color: 'secondary' };
+  return { text: t('admin.members.standing.member'), color: 'content' };
 }
 
 /** You, in the list. Your own row is the one the API refuses every change on. */
@@ -375,13 +373,11 @@ onMounted(() => {
         <nldd-text-cell
           v-for="column in SORTABLE"
           :key="column.key"
-          size="sm"
-          color="secondary"
           :aria-sort="ariaSort(column.key)"
           :hide-below="column.key === 'name' ? undefined : 'md'"
         >
           <button type="button" class="sort-header" @click="sortOn(column)">
-            {{ column.label }}
+            <strong>{{ column.label }}</strong>
             <!-- The arrow is decoration: aria-sort already announces the order,
                  and a screen reader would otherwise read it twice. -->
             <span aria-hidden="true" class="sort-header__arrow">{{
@@ -394,7 +390,7 @@ onMounted(() => {
              It cannot be left out altogether, because a columnheader without a
              name is an axe violation (empty-table-header) and leaves a screen
              reader announcing the menu cell with no column to hang it on. -->
-        <nldd-text-cell size="sm" color="secondary" horizontal-alignment="right">
+        <nldd-text-cell horizontal-alignment="right">
           <span class="alleen-schermlezer">{{ t('admin.column.actions') }}</span>
         </nldd-text-cell>
       </nldd-table-row>
@@ -416,12 +412,10 @@ onMounted(() => {
           hide-below="md"
         ></nldd-text-cell>
         <nldd-text-cell
-          color="secondary"
           :text="formatDate(member.createdAt)"
           hide-below="md"
         ></nldd-text-cell>
         <nldd-text-cell
-          color="secondary"
           :text="formatTimestamp(member.lastLoginAt)"
           hide-below="md"
         ></nldd-text-cell>
@@ -458,8 +452,7 @@ onMounted(() => {
   font: inherit;
   color: inherit;
   cursor: pointer;
-  /* 24px, so the target keeps the minimum size of WCAG 2.5.8 even though the
-     label itself is set at the small type scale. */
+  /* 24px, so the target keeps the minimum size of WCAG 2.5.8. */
   min-height: var(--primitives-space-24);
 }
 

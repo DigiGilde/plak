@@ -163,7 +163,7 @@ function keyErrorText(): string {
 </script>
 
 <template>
-  <nldd-simple-section>
+  <nldd-simple-section class="leesbreedte">
     <nldd-inline-dialog
       v-if="loading"
       variant="loading"
@@ -191,7 +191,7 @@ function keyErrorText(): string {
             data-testid="klaar-adres"
           >
             <nldd-container layout="stack" gap="4">
-              <nldd-text size="sm" color="secondary">{{ address.label }}</nldd-text>
+              <nldd-text size="sm">{{ address.label }}</nldd-text>
               <p class="address">
                 <nldd-link
                   :href="address.url"
@@ -226,7 +226,6 @@ function keyErrorText(): string {
                  has to be announced when it appears after the copy too. -->
             <nldd-text
               size="sm"
-              color="secondary"
               role="status"
               :data-testid="`klaar-kopieermelding-${address.id}`"
               >{{ copyNotice[address.id] ?? '' }}</nldd-text

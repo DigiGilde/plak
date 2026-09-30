@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <nldd-title :size="4">
+  <nldd-title :size="5">
     <h2>
       <nldd-link :href="`/${group.slug}`">{{ group.name }}</nldd-link>
     </h2>

@@ -579,7 +579,7 @@ plak logout
 
   <ErrorBanner v-else-if="error" :error="error" />
 
-  <nldd-container v-else layout="stack" gap="24">
+  <nldd-container v-else layout="stack" gap="24" class="deploy">
     <section aria-labelledby="kop-repository">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4">
@@ -614,17 +614,17 @@ plak logout
                     {{ providerLabel(repository.provider) }} -
                     {{ repository.owner }}/{{ repository.repo }}
                   </nldd-text>
-                  <nldd-text size="sm" color="secondary">
+                  <nldd-text size="sm">
                     {{ repository.host }}
                   </nldd-text>
-                  <nldd-text size="sm" color="secondary" data-testid="repository-livebranch">
+                  <nldd-text size="sm" data-testid="repository-livebranch">
                     {{
                       t('publish.deploy.repo.liveBranch', {
                         branch: repository.liveBranch ?? t('publish.deploy.repo.anyBranch'),
                       })
                     }}
                   </nldd-text>
-                  <nldd-text size="sm" color="secondary">
+                  <nldd-text size="sm">
                     {{
                       t('publish.deploy.repo.linkedBy', {
                         who: repository.createdBy || t('publish.deploy.repo.unknownWho'),
@@ -724,7 +724,7 @@ plak logout
                 data-testid="repository-eigenaar-repo"
                 @input="formOwnerRepo = inputValue($event)"
               ></nldd-text-field>
-              <nldd-text v-if="recognizedRepository" size="sm" color="secondary" data-testid="repository-herkend">
+              <nldd-text v-if="recognizedRepository" size="sm" data-testid="repository-herkend">
                 {{ recognizedRepository }}
               </nldd-text>
               <nldd-form-field-help-text>
@@ -890,6 +890,12 @@ plak logout
 </template>
 
 <style scoped>
+/* The reading width for everything but the code: nldd-rich-text keeps its own
+   text at 720 px and lets a code viewer run to the full work width. */
+.deploy nldd-container > :not(nldd-container, nldd-rich-text) {
+  max-width: var(--plak-reading-width);
+}
+
 .veiligheid {
   border: var(--semantics-surfaces-border-width, 1px) solid
     var(--semantics-surfaces-base-border-color, #e6e8ea);

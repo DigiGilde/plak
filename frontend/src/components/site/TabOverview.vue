@@ -171,7 +171,7 @@ function errorText(f: unknown, fallback: string): string {
             <nldd-box>
               <nldd-container layout="stack" gap="12" padding="16">
                 <nldd-container layout="stack" gap="4">
-                  <nldd-text size="sm" color="secondary" data-testid="adres-label">
+                  <nldd-text size="sm" data-testid="adres-label">
                     {{ addressLabel }}
                   </nldd-text>
                   <p class="address">
@@ -208,7 +208,6 @@ function errorText(f: unknown, fallback: string): string {
                      and has to be announced when it appears after the copy too. -->
                 <nldd-text
                   size="sm"
-                  color="secondary"
                   role="status"
                   data-testid="kopieermelding"
                   >{{ copyNotice }}</nldd-text
@@ -217,7 +216,7 @@ function errorText(f: unknown, fallback: string): string {
                 <nldd-text size="sm" data-testid="zichtbaar-voor">
                   {{ accessSummary(siteInfo.access) }}
                 </nldd-text>
-                <nldd-text size="sm" color="secondary">
+                <nldd-text size="sm">
                   {{
                     t('site.overview.lastDeploy', {
                       timestamp: formatTimestamp(siteInfo.lastPublishedAt),
@@ -231,7 +230,7 @@ function errorText(f: unknown, fallback: string): string {
             <nldd-container layout="wrap" gap="8">
               <nldd-tag color="neutral" :text="t('site.overview.noLiveVersion')"></nldd-tag>
             </nldd-container>
-            <nldd-text color="secondary">
+            <nldd-text>
               {{ t('site.overview.noLiveVersion.hint') }}
             </nldd-text>
           </template>

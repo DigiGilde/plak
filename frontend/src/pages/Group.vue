@@ -222,7 +222,10 @@ function onGroupChanged(group: Group): void {
 </script>
 
 <template>
+  <!-- The sites tab holds the wide site table; the other tabs read at the
+       reading width. -->
   <nldd-simple-section
+    :class="{ leesbreedte: route.name !== 'group-sites' }"
     @dragenter="onPageDragEnter"
     @dragover="onPageDragOver"
     @dragleave="onPageDragLeave"

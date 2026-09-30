@@ -100,7 +100,7 @@ async function confirmRevoke(): Promise<void> {
 </script>
 
 <template>
-  <nldd-simple-section>
+  <nldd-simple-section class="leesbreedte">
     <Notices ref="notices" />
 
     <nldd-title :size="1">
