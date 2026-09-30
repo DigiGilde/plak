@@ -139,8 +139,18 @@ class TestParseSitePath:
             # Query string stripped before segments are read.
             ("/fin/rapport/index.html?x=1", ("fin", "rapport")),
             # Percent-encoding left exactly as it came in: an encoded slash
-            # does not split, so it stays inside the site segment.
-            ("/fin/si%2Fte/index.html", ("fin", "si%2Fte")),
+            # does not split, and what stays in the segment is not a slug.
+            ("/fin/si%2Fte/index.html", None),
+            # The result becomes a cookie Path, written unquoted: a `;` or
+            # `=` in a segment would add attributes of its own.
+            ("/x;Path=/;Domain=example.org/y/", None),
+            ("/fin/rapport;Path=/", None),
+            ("/fin=x/rapport/", None),
+            ("/fin/rap=port/", None),
+            # Not a slug in any other way either.
+            ("/Fin/rapport/", None),
+            ("/fin/-rapport/", None),
+            ("/fin/rapport\n/", None),
             # Too few segments.
             ("/", None),
             ("/fin", None),
@@ -152,6 +162,8 @@ class TestParseSitePath:
             # A reserved slug, or the platform namespace, as the group.
             ("/robots.txt/rapport/index.html", None),
             ("/-/sessions", None),
+            # The one reserved slug that is slug-shaped.
+            ("/cli-link/rapport/", None),
         ],
     )
     def test_table(self, path, expected):
@@ -772,6 +784,19 @@ class TestContentLogin:
         session_id = check_signature(app.state.settings.session_secret, token)
         assert app.state.session_store.get_session(session_id).email_verified is False
 
+    async def test_a_return_to_that_is_not_a_site_path_gets_no_site_cookie(self, content_client, idp):
+        """A `;` in the returnTo would otherwise reach the cookie Path and widen
+        the SameSite=None session cookie to the whole host."""
+        response = await _complete_content_login(
+            content_client, idp, return_to="/x;Path=/;Domain=example.org/y/"
+        )
+        assert response.status_code == 303
+        headers_ = response.headers.get_list("set-cookie")
+        assert not any(k.startswith(CONTENT_SESSION_COOKIE + "=") for k in headers_)
+        assert not any("domain=" in k.lower() for k in headers_)
+        # The anchor still arrives: the login itself succeeded.
+        assert "path=/-/" in _set_cookie_header(response, CONTENT_ANCHOR_COOKIE).lower()
+
     async def test_returnto_invalid_falls_back_to_root(self, content_client, idp):
         response = await _complete_content_login(content_client, idp, return_to="//evil.example")
         assert response.status_code == 303
@@ -930,6 +955,19 @@ class TestContentCookiePerSite:
         response = await content_client.get(PATH_CONTENT_LOGIN, params={"returnTo": "/"}, headers=self.NAVIGATION)
         assert response.status_code == 302
         assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+
+    async def test_a_return_to_with_cookie_attributes_mints_nothing(self, content_client, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN,
+            params={"returnTo": "/x;Path=/;Domain=example.org/y/"},
+            headers=self.NAVIGATION,
+        )
+        assert response.status_code == 302
+        assert response.headers["location"].startswith(idp.issuer + "/authorize?")
+        assert not any(
+            k.startswith(CONTENT_SESSION_COOKIE + "=") for k in response.headers.get_list("set-cookie")
+        )
 
     async def test_the_logout_clears_every_site_cookie_it_handed_out(self, content_client, app, idp):
         await _complete_content_login(content_client, idp, return_to="/fin/rapport/")

@@ -67,7 +67,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from plak.constants import PLATFORM_PREFIX, PLATFORM_SEGMENT, RESERVED_SLUGS
+from plak.constants import PLATFORM_PREFIX, RESERVED_SLUGS, SLUG_RE
 
 if TYPE_CHECKING:
     from fastapi import Request, Response
@@ -433,20 +433,24 @@ def top_level_navigation(request: Request) -> bool:
 
 def parse_site_path(path: str) -> tuple[str, str] | None:
     """The (group, site) a content path addresses, or None when the path is
-    not a content path of a site: fewer than two segments, an empty group or
-    site, or a group reserved for the platform namespace.
+    not a content path of a site: fewer than two segments, a group or site
+    that is not a slug, or a group reserved for the platform namespace.
 
     Percent-encoding is left exactly as it came in: a browser matches a cookie
     path against the encoded request path, so decoding here would hand out a
     cookie the browser never sends back, and the login redirect would loop.
+
+    The slug check is what keeps the result safe as a cookie `Path`: the
+    response layer writes it unquoted, so a `;` in a segment would add
+    attributes of its own to the Set-Cookie line.
     """
     segments = path.split("?", 1)[0].split("/")
     if len(segments) < 3:
         return None
     group, site = segments[1], segments[2]
-    if not group or not site:
+    if not SLUG_RE.fullmatch(group) or not SLUG_RE.fullmatch(site):
         return None
-    if group in RESERVED_SLUGS or group == PLATFORM_SEGMENT:
+    if group in RESERVED_SLUGS:
         return None
     return group, site
 
