@@ -138,6 +138,8 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'Owner and repository separated by a slash (for example "minbzk/website"), or a repository URL.',
   'publish.deploy.form.idsIntro':
     'Plak cannot look this repository up itself, for instance because it is private. Enter the two ids yourself, then. Get them with {command}: the first line is the repository id, the second the owner id. A wrong id links nothing else, it only refuses every deploy.',
+  'publish.deploy.form.cliHint':
+    'Rather from the terminal? Run {command} in a checkout of the repository, after plak login. For a private GitHub repository the CLI gets the ids itself through gh.',
   'publish.deploy.form.repositoryId': 'Repository id',
   'publish.deploy.form.ownerId': 'Owner id',
   'publish.deploy.form.idsInvalid': 'Enter both the repository id and the owner id, in digits only.',
