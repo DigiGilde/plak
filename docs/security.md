@@ -551,9 +551,12 @@ in Settings and not a change in this repository.
   on the same blind spot, worth naming because it will recur: `filename in
   _ASSETS`, `lang in i18n.SUPPORTED` and `base in _CATALOGUES` are
   allowlists-by-membership, the strongest validation there is (nothing is left
-  to escape), and a dataflow analysis cannot model an equality test as a
-  barrier. A codebase that escapes gets green; one that uses allowlists gets
-  red. Do not let the alert count steer the design.
+  to escape), and CodeQL counts a comparison as a barrier only against a
+  literal (`x == "nl"`, `x in ("nl", "en")`), not against a named table. A
+  codebase that escapes gets green; one that uses allowlists gets red. Do not
+  let the alert count steer the design. What does both is handing on the
+  table's own value instead of the checked input, which is what the docs
+  assets and `?lang=` now do (see below).
 
   That re-audit found four issues CodeQL never raised, all of them outside its
   language model (a `justfile`, shell, file writing, a URL parse): the
@@ -563,6 +566,48 @@ in Settings and not a change in this repository.
   newline able to inject `PLAK_HOST` into `.env.plak`, and the `::add-mask::`
   line being written when stdout is a plain file the runner never reads.
   The CLI's stdout must not be captured in CI; see `docs/publishing.md` §3.
+
+  Re-reviewed on 2026-09-30 with the brief of fixing rather than dismissing,
+  with CodeQL 2.27.1 run locally on the default suites (it reproduces the
+  security tab alert for alert). Twenty alerts stood dismissed by then: the
+  fourteen, #16 (the `::add-mask::` line, first flagged once `b6edbac` moved
+  it into a function whose parameter is called `secret`), #17 and #18 (#2 and
+  #3 again, under a new fingerprint after the regex fix in `d6733b6`), and
+  #24 to #26 from `plak group create` and `plak site create`. Thirteen no
+  longer fire because the code changed:
+
+  - `py/clear-text-logging-sensitive-data` on the CLI host, #9 to #14 and #24
+    to #26. The dismissals blamed the `.env.plak` dict, but the source was the
+    function name `_trusted_stored_host`: CodeQL's sensitive-data heuristic
+    reads any name containing "trusted" as a secret. Renamed to
+    `_stored_host_if_safe`, with a test that a host from the stored session is
+    printed while its tokens never reach stdout or stderr.
+  - `py/path-injection` #6 and #7: `_ASSETS` holds each asset's path, so the
+    route's `filename` only selects an entry and is never joined onto a path.
+  - `py/reflective-xss` #5: `?lang=` picks one of `i18n.SUPPORTED` and the
+    page renders that constant, never the query value.
+  - `js/incomplete-url-substring-sanitization` #4: the mock compares the
+    Forgejo host with an explicit `===`; `Array.includes` on a value that may
+    hold `https://github.com` read as a substring check.
+
+  Five stay dismissed, where the query is right about the pattern, wrong about
+  the risk, and the only change that would silence it makes the code worse:
+
+  - #16, `::add-mask::` in `_mask_in_ci_log`: writing the token to stdout is
+    how the runner learns to mask it; there is no other channel.
+  - #15, `dev/seed.py` prints the secret-link key it just created: a dev
+    fixture on the developer's own terminal, kept out of the image by
+    `.dockerignore`.
+  - #8, `py/url-redirection` in `_cookie_for_next_site`: `target` has passed
+    `valid_return_to`. CodeQL accepts only a literal comparison or the value on
+    the right of a `+` here, and `"/" + value[1:]` would silence it without
+    checking anything.
+  - #17 and #18, `strippable()` in `dutch-literals.test.ts`: a `<!--` or
+    `<style` left after one pass makes the scanner read more and fail loudly;
+    stripping to a fixpoint, which is what the query wants, makes it read less.
+
+  #2 and #3 stay dismissed as the old fingerprints of #17 and #18; they match
+  no code any more.
 - [ ] **Turn on Dependabot security updates**
   (`dependabot_security_updates`, Settings, Code security). Dependabot opens
   version updates today; without this it does not open a pull request for an
