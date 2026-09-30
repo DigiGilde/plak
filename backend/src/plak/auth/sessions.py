@@ -14,7 +14,7 @@ authority) on the content origin. One store holds both; the field
 host (dev). `session_from_request` returns management sessions only,
 `content_session_from_request` content sessions only.
 
-The content session rides in three cookies, because every site of every group
+The content session rides in two cookies, because every site of every group
 is served from one hostname under a path prefix and uploaded content may run
 its own JavaScript:
 
@@ -31,13 +31,8 @@ its own JavaScript:
   so it grants nothing there. SameSite=Lax: the login, the callback and the
   logout are top-level navigations, which Lax covers, and this is the cookie
   that can mint a site cookie for the next site.
-- `__Host-plak-content-present`, `Path=/`: a flag, no session id and no
-  authority. It only tells the serving layer that this browser has a content
-  session somewhere, which is what lets a preview or a `_version` view send a
-  member to the login instead of the neutral 404 they would otherwise get on
-  the first request to a site.
 
-All three carry one server-side session: one lifetime, one `kind`, one
+Both carry one server-side session: one lifetime, one `kind`, one
 revocation.
 
 SameSite=None on the site cookie (and on the secret-link cookie in
@@ -77,7 +72,6 @@ CSRF_COOKIE = "__Host-plak-csrf"
 LOGIN_COOKIE = "__Host-plak-login"
 CONTENT_SESSION_COOKIE = "__Secure-plak-content"
 CONTENT_ANCHOR_COOKIE = "__Secure-plak-content-anchor"
-CONTENT_PRESENCE_COOKIE = "__Host-plak-content-present"
 CONTENT_LOGIN_COOKIE = "__Host-plak-content-login"
 KEY_COOKIE = "__Secure-plak-key"
 CSRF_HEADER = "X-CSRF-Token"
@@ -85,7 +79,6 @@ CSRF_HEADER = "X-CSRF-Token"
 # Where the anchor cookie lives: the platform namespace, which per SLUG_RE can
 # never be a group, so this path never overlaps a site.
 CONTENT_ANCHOR_PATH = f"{PLATFORM_PREFIX}/"
-CONTENT_PRESENT = "1"
 
 MAX_SESSION_AGE = timedelta(hours=12)
 MAX_LOGIN_ATTEMPT_AGE = timedelta(minutes=10)
@@ -415,12 +408,6 @@ def content_anchor_session_from_request(request: Request) -> Session | None:
     return _session_from_cookie(request, CONTENT_ANCHOR_COOKIE, SessionKind.CONTENT)
 
 
-def content_presence(request: Request) -> bool:
-    """Whether this browser says it has a content session somewhere. A flag,
-    not a credential: it carries no session id and grants nothing."""
-    return request.cookies.get(CONTENT_PRESENCE_COOKIE) == CONTENT_PRESENT
-
-
 def top_level_navigation(request: Request) -> bool:
     """Whether the browser calls this request a top-level navigation.
 
@@ -525,14 +512,13 @@ def clear_session_cookies(response: Response) -> None:
 
 
 def clear_content_session_cookies(response: Response, paths: Iterable[str] = ()) -> None:
-    """Clears the anchor, the presence flag and the site cookie at every path
-    this session handed one out for. A site cookie past that list, or one from
+    """Clears the anchor and the site cookie at every path this session handed
+    one out for. A site cookie past that list, or one from
     a session the store lost, survives in the browser until it closes and
     opens nothing: revocation is server-side."""
     response.delete_cookie(
         CONTENT_ANCHOR_COOKIE, path=CONTENT_ANCHOR_PATH, secure=True, httponly=True, samesite="lax"
     )
-    response.delete_cookie(CONTENT_PRESENCE_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
     for path in paths:
         response.delete_cookie(CONTENT_SESSION_COOKIE, path=path, secure=True, httponly=True, samesite="none")
 
@@ -548,14 +534,6 @@ def set_content_anchor_cookies(response: Response, session: Session, secret: str
         secure=True,
         samesite="lax",
         path=CONTENT_ANCHOR_PATH,
-    )
-    response.set_cookie(
-        CONTENT_PRESENCE_COOKIE,
-        CONTENT_PRESENT,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        path="/",
     )
 
 
@@ -592,8 +570,6 @@ __all__ = [
     "CONTENT_ANCHOR_COOKIE",
     "CONTENT_ANCHOR_PATH",
     "CONTENT_LOGIN_COOKIE",
-    "CONTENT_PRESENCE_COOKIE",
-    "CONTENT_PRESENT",
     "CONTENT_SESSION_COOKIE",
     "CSRF_COOKIE",
     "CSRF_HEADER",
@@ -613,7 +589,6 @@ __all__ = [
     "clear_content_session_cookies",
     "clear_session_cookies",
     "content_anchor_session_from_request",
-    "content_presence",
     "content_session_from_request",
     "content_site_prefix",
     "csrf_valid",

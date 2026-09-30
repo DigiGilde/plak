@@ -33,8 +33,6 @@ from plak.audit import vocabulary
 from plak.auth.sessions import (
     CONTENT_ANCHOR_COOKIE,
     CONTENT_LOGIN_COOKIE,
-    CONTENT_PRESENCE_COOKIE,
-    CONTENT_PRESENT,
     CONTENT_SESSION_COOKIE,
     CSRF_COOKIE,
     CSRF_HEADER,
@@ -47,7 +45,6 @@ from plak.auth.sessions import (
     SessionStore,
     check_signature,
     content_anchor_session_from_request,
-    content_presence,
     content_session_from_request,
     content_site_prefix,
     csrf_valid,
@@ -1000,7 +997,6 @@ class TestContentCookiePerSite:
             if "max-age=0" in k.lower()
         }
         assert (CONTENT_ANCHOR_COOKIE, "/-/") in cleared
-        assert (CONTENT_PRESENCE_COOKIE, "/") in cleared
         assert (CONTENT_SESSION_COOKIE, "/fin/rapport/") in cleared
         assert (CONTENT_SESSION_COOKIE, "/fin/jaarverslag/") in cleared
         assert app.state.session_store.get_session(session_id) is None
@@ -1198,16 +1194,6 @@ class TestSignKeyCookie:
         # Purpose-tagged, so this signature cannot be replayed as a session
         # or CSRF cookie value even though it uses the same secret.
         assert check_signature(SECRET, token) == "key:sleutel-1"
-
-
-class TestContentPresence:
-    async def test_true_when_the_flag_cookie_is_set(self, app):
-        request = _request_with_cookies(app, f"{CONTENT_PRESENCE_COOKIE}={CONTENT_PRESENT}")
-        assert content_presence(request) is True
-
-    async def test_false_without_the_cookie(self, app):
-        request = _request_with_cookies(app, "")
-        assert content_presence(request) is False
 
 
 class TestVisitorFromRequest:

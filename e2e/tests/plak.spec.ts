@@ -276,8 +276,8 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     expect(list.find((version) => version.id === versionId1)?.isLive).toBe(false);
     expect(list.find((version) => version.id === versionId2)?.isLive).toBe(true);
 
-    // Anonymously a _version view is always the neutral 404, never a login
-    // redirect (spec 7).
+    // Anonymously a _version view is the neutral 404; only a top-level
+    // navigation, which an API request is not, goes to the login (spec 7).
     const anonymousVersion = await contentApi.get(`${SITE_PATH}/_version/${versionId1}/`, {
       maxRedirects: 0,
     });
@@ -430,12 +430,11 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     // content host, and on the admin host the invitee holds no cookie at all
     // (the content login set nothing there). The session id itself is
     // path-scoped to this site (auth/sessions.py), so it only shows up for a
-    // URL under the site; on the root of the host there is the presence flag
-    // and nothing that grants anything.
+    // URL under the site; on the root of the host there is nothing that
+    // grants anything.
     const siteCookies = await inviteeContext.cookies(`${CONTENT_URL}${SITE_PATH}/`);
     expect(siteCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(true);
     const contentCookies = await inviteeContext.cookies(CONTENT_URL);
-    expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-content-present')).toBe(true);
     expect(contentCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(false);
     expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-session')).toBe(false);
     // From inside the page the call does not even leave the browser: the
