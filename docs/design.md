@@ -85,14 +85,14 @@ Code: `access/gate.py` (`_belongs_to_site`). Guarded by: `test_access_gate.py`.
 
 There is no general platform-administrator bypass in the role checks. A platform
 administrator activates and deactivates members, reads the platform member list,
-grants the platform role, creates groups, reads the overview of every group
-and site as metadata, and reads and changes group membership and group roles,
-including their own. To do anything inside a group
+grants the platform role, and reads and changes group membership and group
+roles, including their own. To do anything inside a group
 they give themselves a group role, which is one visible act in the audit log
-instead of a silent exception.
+instead of a silent exception. Their overview lists only the groups they have a
+role in, like anyone else's.
 
 Two reading concessions follow from that, not a bypass: a platform administrator
-sees that a site exists (they already see it in the overview), so they get a 403
+sees that a site exists (they can read every group, its sites included), so they get a 403
 rather than the 404 a stranger gets.
 
 Code: `api/authorization.py`, `api/admin.py` (`_group_with_role` with
@@ -126,7 +126,7 @@ platform administrator may do without a group role (§3.4).
 |---|---|
 | Read own profile (`/me`), read the overview | active member |
 | Activate, deactivate a member; read the platform member list; grant the platform role | platform administrator |
-| Create a group | platform administrator |
+| Create a group; the creator becomes group `admin` | active member |
 | Read a group, read its member list | group `reader`, or platform administrator |
 | Add a group member, change a group role, remove a group member | group `admin`, or platform administrator |
 | Change the group default access | group `admin` |
