@@ -375,11 +375,16 @@ frontend tests and the CSP check on the built SPA.
 `.github/workflows/deploy.yml` builds the image, pushes it to GHCR and deploys
 with `RijksICTGilde/zad-actions`. Both are pinned to commit SHAs.
 
-A PR gets a preview deployment `pr<nummer>` that is cloned from `productie`,
+A PR gets a preview deployment `pr-<nummer>` that is cloned from `productie`,
 and when the PR is closed the cleanup action removes the deployment, the
 GitHub deployments and the image. Both jobs only run once the repository
 variable `ZAD_PROJECT_ID` is set; until then a PR builds and scans its image
 and stops there.
+
+The `pr-` prefix is there so one pattern covers every preview: ZAD's
+sleep-mode service matches deployment names with `pr-*`, and the
+`scheduled-cleanup` action of zad-actions finds leftover environments with
+the regex `^pr-?[0-9]+$`.
 
 Watch out with previews: **a clone does not carry over the settings of the
 source.** Besides the web address (the preview lands on the cluster address
@@ -466,9 +471,10 @@ question 7.
 
 The database is not shared. `generate_database_name` and
 `generate_database_username` in `opi/utils/naming.py` compose
-`{project}_{deployment}`, and `DatabaseManager` provisions a database, a
-user and a password per deployment, so `pr123` gets `plak_pr123` with its
-own credentials, not production's. `PLAK_DB_URL` is an alias over the
+`{project}_{deployment}` with hyphens turned into underscores, and
+`DatabaseManager` provisions a database, a user and a password per
+deployment, so `pr-123` gets `plak_pr_123` with its own credentials, not
+production's. `PLAK_DB_URL` is an alias over the
 per-deployment `DATABASE_*` variables (§4), so it resolves to that database.
 The one-account limitation of §7 is about role separation inside one
 deployment's database, not about previews reaching production's.
@@ -568,7 +574,7 @@ is not there:
    `generate_database_username` in `opi/utils/naming.py` of
    `RijksICTGilde/RIG-Cluster` compose `{project}_{deployment}`, and
    `DatabaseManager` creates the database, the user and the password per
-   deployment, so `pr123` lands on `plak_pr123` with credentials of its
+   deployment, so `pr-123` lands on `plak_pr_123` with credentials of its
    own. Because `PLAK_DB_URL` is an alias over the per-deployment
    `DATABASE_*` variables, that is what a preview receives. What we could
    not check from here is whether the shared database server keeps one
