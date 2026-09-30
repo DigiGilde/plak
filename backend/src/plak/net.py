@@ -110,6 +110,19 @@ def client_ip(request: Request, trusted_networks: tuple[Network, ...]) -> Client
     return ClientAddress(remote, vouched=True)
 
 
+def rate_limit_key(address: str) -> str:
+    """What a per-client limit counts on: an IPv4 address as it is, an IPv6
+    address by its /64. A single subscriber is handed a whole /64, so keying on
+    the full address would give every one of its 2**64 addresses a budget of
+    its own. Anything unparseable is its own key."""
+    parsed = _parse(address)
+    if parsed is None or parsed.version == 4:
+        return address
+    if parsed.ipv4_mapped is not None:
+        return str(parsed.ipv4_mapped)
+    return str(ipaddress.IPv6Network((parsed, 64), strict=False))
+
+
 def client_ip_from_request(request: Request) -> ClientAddress | None:
     """Convenience variant for audit call sites: reads the trusted proxies from
     `request.app.state.settings` and returns None without a connected peer."""
