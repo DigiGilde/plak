@@ -11,8 +11,8 @@ import time
 
 import httpx
 import pytest
-from authlib.jose import RSAKey
 from helpers_ci import AUDIENCE, FORGEJO_HOST, FORGEJO_ISSUER, OMIT, MockCi
+from joserfc.jwk import RSAKey
 
 from plak.audit import vocabulary
 from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer
@@ -222,7 +222,7 @@ class TestIssuer:
 class TestSignature:
     async def test_bad_signature_refused(self):
         ci = MockCi()
-        other_key = RSAKey.generate_key(2048, is_private=True)
+        other_key = RSAKey.generate_key(2048)
         token = ci.token("github", key=other_key)  # signed with foreign key, right kid in header
         with pytest.raises(CiTokenError) as exc:
             await _verifier(ci).verify(token)
@@ -315,8 +315,8 @@ class TestKidSelection:
 
     async def test_no_kid_with_two_jwks_keys_refused(self):
         ci = MockCi()
-        second_key = RSAKey.generate_key(2048, is_private=True)
-        second_public = second_key.as_dict(is_private=False)
+        second_key = RSAKey.generate_key(2048)
+        second_public = second_key.as_dict(private=False)
         second_public["kid"] = "github-sleutel-2"
         jwks = {"keys": [*ci.github.jwks["keys"], second_public]}
         ci.failures[ci.github.jwks_uri] = httpx.Response(200, json=jwks)
@@ -336,7 +336,7 @@ class TestUnknownKidRefresh:
 
         # Rotate: a new key becomes current, but the token still names it by
         # the old kid until we mint one for the new key.
-        rotated_key = RSAKey.generate_key(2048, is_private=True)
+        rotated_key = RSAKey.generate_key(2048)
         ci.github.key = rotated_key
         ci.github.kid = "github-sleutel-2"
         token = ci.token("github")  # signed with the rotated key, new kid
@@ -599,7 +599,7 @@ class TestFetchDiscipline:
             _settings(), httpx.AsyncClient(transport=httpx.MockTransport(slow)), clock=FakeClock()
         )
         await verifier.verify(ci.token("github"))
-        ci.github.key = RSAKey.generate_key(2048, is_private=True)
+        ci.github.key = RSAKey.generate_key(2048)
         ci.github.kid = "github-sleutel-2"
         token = ci.token("github")
         issuer = next(iter(verifier._issuers.values()))

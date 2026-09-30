@@ -16,8 +16,9 @@ from collections.abc import Sequence
 from urllib.parse import parse_qs
 
 import httpx
-from authlib.jose import JsonWebToken, RSAKey
 from fastapi import FastAPI
+from joserfc import jwt
+from joserfc.jwk import OctKey, RSAKey
 
 from plak.api.errors import register_error_handlers
 from plak.auth.oidc import OidcClient
@@ -48,8 +49,8 @@ def _b64url(data: bytes) -> str:
 
 
 def make_client_jwk() -> str:
-    key = RSAKey.generate_key(2048, is_private=True)
-    data_ = key.as_dict(is_private=True)
+    key = RSAKey.generate_key(2048)
+    data_ = key.as_dict(private=True)
     data_["kid"] = "client-sleutel-1"
     return json.dumps(data_)
 
@@ -58,9 +59,9 @@ class MockIdP:
     def __init__(self, issuer: str = "https://idp.example", client_id: str = "plak-client") -> None:
         self.issuer = issuer
         self.client_id = client_id
-        self.private_key = RSAKey.generate_key(2048, is_private=True)
+        self.private_key = RSAKey.generate_key(2048)
         self.kid = "idp-sleutel-1"
-        public = self.private_key.as_dict(is_private=False)
+        public = self.private_key.as_dict(private=False)
         public["kid"] = self.kid
         self.jwks = {"keys": [public]}
 
@@ -141,7 +142,9 @@ class MockIdP:
             header["kid"] = kid_override
         elif alg != "HS256" and key is self.private_key:
             header["kid"] = self.kid
-        return JsonWebToken([alg]).encode(header, claims, key).decode("ascii")
+        if isinstance(key, str | bytes):
+            key = OctKey.import_key(key)
+        return jwt.encode(header, claims, key, algorithms=[alg])
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -223,7 +226,7 @@ class MockIdP:
         header = {"alg": "RS256"}
         if key is self.private_key:
             header["kid"] = self.kid
-        return JsonWebToken(["RS256"]).encode(header, claims, key).decode("ascii")
+        return jwt.encode(header, claims, key, algorithms=["RS256"])
 
 
 CLIENT_SECRET = "client-geheim-van-de-mock-idp"

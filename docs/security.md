@@ -18,8 +18,8 @@ the app or was deliberately postponed (base image digests, DPIA, pentest).
 
 | Item | Status |
 |---|---|
-| Alg allowlist (RS256/PS256/ES256, no `none`/HS*) as our own code on top of authlib | implemented: `auth/oidc.py` (`ALG_ALLOWLIST`), `backend/tests/test_oidc.py` |
-| RFC 9207 `iss` check on the callback query parameters, our own code on top of authlib | implemented: `auth/oidc.py` (`check_callback_iss`), `backend/tests/test_oidc.py` |
+| Alg allowlist (RS256/PS256/ES256, no `none`/HS*) as our own code on top of joserfc | implemented: `auth/oidc.py` (`ALG_ALLOWLIST`), `backend/tests/test_oidc.py` |
+| RFC 9207 `iss` check on the callback query parameters, our own code on top of joserfc | implemented: `auth/oidc.py` (`check_callback_iss`), `backend/tests/test_oidc.py` |
 | `acr` from a configured list (`PLAK_OIDC_REQUIRED_ACR`); empty = no acr check and no `acr_values`, with a startup warning in production. Adjusted because the ZAD Keycloak only supplies `acr` `0`/`1` | implemented: `auth/oidc.py`, `backend/tests/test_oidc.py`; see `docs/local-development.md`, OIDC configuration |
 | Client authentication `private_key_jwt` (default) or `client_secret_post`/`client_secret_basic` via `PLAK_OIDC_CLIENT_AUTH`; exactly the matching secrets required, error messages without secret values. `client_secret_*` deviates from the NL GOV OIDC profile (private_key_jwt or mTLS) and exists for the ZAD Keycloak, which only creates client-secret clients; the ZAD variables `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are the source for the `PLAK_OIDC_*` settings | implemented: `config.py`, `auth/oidc.py`, `backend/tests/test_config.py`, `backend/tests/test_oidc.py` |
 | `at_hash` validation when present in the id token | implemented: `auth/oidc.py`, `backend/tests/test_oidc.py` |
