@@ -136,7 +136,7 @@ REFUSAL_KEY = "NOT_ADMIN"
 
 def _refusal_app(status: int, *, mark_audited: bool = False) -> FastAPI:
     app = FastAPI()
-    app.state.settings = SimpleNamespace(trusted_proxies="")
+    app.state.settings = SimpleNamespace(behind_proxy=False)
     register_error_handlers(app)
 
     @app.api_route("/-/api/v1/things/{slug}", methods=["GET", "POST", "DELETE"])

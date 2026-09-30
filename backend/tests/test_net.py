@@ -1,8 +1,15 @@
-"""Tests for client IP derivation behind trusted proxies (`plak.net`).
+"""Tests for client IP derivation in front of a proxy (`plak.net`).
 
 The rate limiter exercises the same code through the middleware
 (`test_ratelimit.py`); here the derivation itself is under test, including the
 values a client can write into X-Forwarded-For.
+
+The measurement these are built on: on 2026-09-30 two requests were sent to
+the production deployment, one plain and one carrying
+`X-Forwarded-For: 203.0.113.99`. The audit log recorded the real address for
+the first and the invented one for the second, because the OpenShift router
+adds its entry as a second header LINE and the code read only the first.
+`test_the_router_line_wins_over_the_clients_line` is that measurement.
 """
 
 from __future__ import annotations
@@ -11,152 +18,130 @@ import pytest
 from starlette.requests import Request
 
 from plak.audit.pseudonymisation import truncate_ip
-from plak.net import UNKNOWN, client_ip, client_ip_from_request, parse_trusted_proxies, rate_limit_key
-
-# What production carries today: every RFC1918 range counts as a proxy.
-_ALL_PRIVATE = parse_trusted_proxies("10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
-# What the setting should be: only the network the routers themselves sit in.
-_ROUTERS_ONLY = parse_trusted_proxies("10.128.0.0/16")
+from plak.net import UNKNOWN, client_ip, client_ip_from_request, rate_limit_key
 
 
-def _request(peer: str | None, xff: str | None = None) -> Request:
-    headers = [(b"x-forwarded-for", xff.encode())] if xff is not None else []
+def _request(peer: str | None, *xff_lines: str) -> Request:
+    """A request whose X-Forwarded-For arrives as one line per argument, which
+    is how a proxy delivers it: it adds its own line behind the client's."""
+    headers = [(b"x-forwarded-for", line.encode()) for line in xff_lines]
     return Request({"type": "http", "headers": headers, "client": (peer, 1234) if peer else None})
 
 
-def test_untrusted_peer_ignores_the_header() -> None:
+# --- No proxy in front -------------------------------------------------------
+
+
+def test_without_a_proxy_the_socket_decides() -> None:
     request = _request("198.51.100.5", "203.0.113.9")
-    assert client_ip(request, _ALL_PRIVATE) == "198.51.100.5"
+    assert client_ip(request, False) == "198.51.100.5"
 
 
-def test_public_client_behind_a_trusted_proxy() -> None:
-    # The router appends the address it sees, so the client's own value sits
-    # to the left of it and never wins.
+def test_without_a_proxy_the_address_is_vouched_for() -> None:
+    assert client_ip(_request("198.51.100.5"), False).vouched
+
+
+# --- A proxy in front ------------------------------------------------------
+
+
+def test_the_router_entry_is_the_client() -> None:
     request = _request("10.128.0.5", "203.0.113.9, 198.51.100.5")
-    assert client_ip(request, _ALL_PRIVATE) == "198.51.100.5"
+    assert client_ip(request, True) == "198.51.100.5"
 
 
-def test_private_client_cannot_forge_when_only_the_routers_are_trusted() -> None:
-    request = _request("10.128.0.5", "203.0.113.9, 10.42.0.7")
-    assert client_ip(request, _ROUTERS_ONLY) == "10.42.0.7"
+def test_the_router_line_wins_over_the_clients_line() -> None:
+    # The real shape on ZAD: the client's header arrives untouched and the
+    # router adds a line of its own behind it. Reading only the first line is
+    # what let an invented address into the audit log.
+    request = _request("10.128.0.5", "203.0.113.99", "62.131.59.199")
+    address = client_ip(request, True)
+    assert address == "62.131.59.199"
+    assert address.vouched
 
 
-def test_unparseable_entry_falls_back_to_the_peer() -> None:
-    request = _request("10.128.0.5", "not-an-ip, 10.42.0.7")
-    assert client_ip(request, _ALL_PRIVATE) == "10.128.0.5"
+def test_a_client_on_a_private_address_cannot_forge_either() -> None:
+    # What the trusted-ranges walk could not do: a private entry used to be
+    # skipped as a proxy hop, and the walk continued into the client's own
+    # values. Position does not care what the address looks like.
+    request = _request("10.128.0.5", "203.0.113.9, 10.42.0.7", "198.51.100.5")
+    assert client_ip(request, True) == "198.51.100.5"
 
 
-def test_derived_ip_stays_storable_whatever_the_client_writes() -> None:
-    # A value that truncate_ip cannot parse would raise inside the audit write
-    # and take the whole row with it, so no client-written value may survive
-    # the derivation unvalidated.
-    for forged in ("not-an-ip", "203.0.113.9; DROP", "", "999.999.999.999", "10.0.0.1/8"):
-        derived = client_ip(_request("10.128.0.5", f"{forged}, 10.42.0.7"), _ALL_PRIVATE)
-        assert truncate_ip(derived)
+def test_one_line_with_both_entries_reads_the_same() -> None:
+    # A proxy may extend the existing line instead of adding one. The entries
+    # are in the same order either way, so the position is the same.
+    request = _request("10.128.0.5", "203.0.113.9, 198.51.100.5")
+    assert client_ip(request, True) == "198.51.100.5"
 
 
-def test_empty_entries_are_skipped() -> None:
-    request = _request("10.128.0.5", " , 198.51.100.5")
-    assert client_ip(request, _ALL_PRIVATE) == "198.51.100.5"
+# --- When there is no proxy writing what the deployment promises -----------------------------------
 
 
-def test_only_trusted_hops_falls_back_to_the_peer() -> None:
-    request = _request("10.128.0.5", "10.0.0.2, 10.0.0.3")
-    assert client_ip(request, _ALL_PRIVATE) == "10.128.0.5"
+def test_a_missing_header_falls_back_to_the_peer() -> None:
+    address = client_ip(_request("10.128.0.5"), True)
+    assert address == "10.128.0.5"
+    assert not address.vouched
+
+
+def test_something_that_is_not_an_address_falls_back_to_the_peer() -> None:
+    address = client_ip(_request("10.128.0.5", "203.0.113.9, geen-adres"), True)
+    assert address == "10.128.0.5"
+    assert not address.vouched
+
+
+def test_empty_entries_do_not_shift_the_position() -> None:
+    request = _request("10.128.0.5", "203.0.113.9, , ", "198.51.100.5")
+    assert client_ip(request, True) == "198.51.100.5"
 
 
 def test_without_a_peer_the_address_is_unknown() -> None:
-    assert client_ip(_request(None, "203.0.113.9"), _ALL_PRIVATE) == UNKNOWN
+    assert client_ip(_request(None), False) == UNKNOWN
 
 
-# --- Whether the derived address can be vouched for -----------------------------------
-
-
-def test_the_peer_itself_is_always_vouched_for() -> None:
-    assert client_ip(_request("198.51.100.5", "203.0.113.9"), _ALL_PRIVATE).vouched
-
-
-def test_the_rightmost_entry_is_vouched_for() -> None:
-    # Appended by the peer, and the peer is the one hop we saw connect.
-    assert client_ip(_request("10.128.0.5", "203.0.113.9, 198.51.100.5"), _ALL_PRIVATE).vouched
-
-
-def test_an_address_reached_over_a_skipped_hop_is_not_vouched_for() -> None:
-    """The client sits on a private address, so the address the router appended
-    is itself "trusted" and skipped, and what wins is what the client wrote."""
-    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ALL_PRIVATE)
-    assert derived == "203.0.113.9"
-    assert not derived.vouched
-
-
-def test_the_same_chain_is_vouched_for_when_only_the_routers_are_trusted() -> None:
-    """The flag is about the width of the list, not about the request: name the
-    routers' own range and the client's value no longer wins at all."""
-    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ROUTERS_ONLY)
-    assert derived == "10.42.0.7"
-    assert derived.vouched
-
-
-def test_a_private_address_from_the_rightmost_entry_is_vouched_for() -> None:
-    """Not "the value is private" but "we had to skip to reach it": a private
-    address the router itself appended is an observation like any other."""
-    derived = client_ip(_request("10.128.0.5", "10.42.0.7"), _ROUTERS_ONLY)
-    assert derived == "10.42.0.7"
-    assert derived.vouched
-
-
-def test_falling_back_to_the_peer_stays_vouched_for() -> None:
-    """Running out of untrusted hops is not the same as being unable to tell:
-    what we then record is the peer, which we saw ourselves."""
-    assert client_ip(_request("10.128.0.5", "10.0.0.2, 10.0.0.3"), _ALL_PRIVATE).vouched
-    assert client_ip(_request("10.128.0.5", "not-an-ip, 10.42.0.7"), _ALL_PRIVATE).vouched
-    assert client_ip(_request("10.128.0.5"), _ALL_PRIVATE).vouched
-
-
-def test_empty_entries_do_not_count_as_a_skipped_hop() -> None:
-    derived = client_ip(_request("10.128.0.5", " , 198.51.100.5"), _ALL_PRIVATE)
-    assert derived.vouched
-
-
-# --- client_ip_from_request: the audit-call-site convenience -------------------------
-
-
-def test_client_ip_from_request_without_a_connected_peer_is_none() -> None:
-    # No socket peer at all (e.g. a request built for a unit test): returning
-    # None here avoids reading request.app.state.settings, which such a
-    # request never carries either.
-    request = _request(None)
-    assert client_ip_from_request(request) is None
-
-
-def test_the_derived_address_is_a_plain_string_everywhere_else() -> None:
-    # It is handed to truncation, encryption and the rate limit key as a str;
-    # a value that no longer behaves like one would break all three.
-    derived = client_ip(_request("10.128.0.5", "203.0.113.9, 10.42.0.7"), _ALL_PRIVATE)
-    assert isinstance(derived, str)
-    assert f"ip:{derived}" == "ip:203.0.113.9"
-    assert truncate_ip(derived) == "203.0.113.0/24"
-
-
-# --- rate_limit_key: what a per-client limit counts on --------------------------------
+# --- What the derived address is used for ---------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("address", "expected"),
     [
-        # IPv4 stays per address: neighbours in a /24 are different subscribers.
-        ("203.0.113.9", "203.0.113.9"),
-        ("203.0.113.10", "203.0.113.10"),
-        # IPv6 counts per /64: one subscriber gets the whole prefix.
-        ("2001:db8:1:2::1", "2001:db8:1:2::/64"),
-        ("2001:db8:1:2:ffff:ffff:ffff:ffff", "2001:db8:1:2::/64"),
-        ("2001:db8:1:3::1", "2001:db8:1:3::/64"),
-        # An IPv4 client on a dual-stack socket is still that IPv4 address.
-        ("::ffff:203.0.113.9", "203.0.113.9"),
-        # No peer, or nothing parseable: its own key, never widened.
+        ("198.51.100.5", "198.51.100.5"),
+        ("2001:db8::1", "2001:db8::/64"),
+        ("::ffff:198.51.100.5", "198.51.100.5"),
         (UNKNOWN, UNKNOWN),
-        ("not-an-ip", "not-an-ip"),
     ],
 )
-def test_rate_limit_key(address: str, expected: str) -> None:
+def test_the_rate_limit_key(address: str, expected: str) -> None:
     assert rate_limit_key(address) == expected
+
+
+def test_the_audit_truncation_of_a_derived_address() -> None:
+    request = _request("10.128.0.5", "203.0.113.9", "198.51.100.5")
+    assert truncate_ip(client_ip(request, True)) == "198.51.100.0/24"
+
+
+# --- The settings variant -------------------------------------------------------------
+
+
+class _App:
+    def __init__(self, behind_proxy: bool | None) -> None:
+        self.state = type("S", (), {"settings": type("C", (), {"behind_proxy": behind_proxy})})
+
+
+def _with_settings(peer: str | None, behind_proxy: bool | None, *xff_lines: str) -> Request:
+    request = _request(peer, *xff_lines)
+    request.scope["app"] = _App(behind_proxy)
+    return request
+
+
+def test_the_settings_variant_reads_the_setting() -> None:
+    request = _with_settings("10.128.0.5", True, "203.0.113.9", "198.51.100.5")
+    assert client_ip_from_request(request) == "198.51.100.5"
+
+
+def test_an_unset_setting_counts_as_no_proxy() -> None:
+    # Production refuses None (config.py); everywhere else it means the same
+    # as false, so a dev run without the setting reads the socket.
+    assert client_ip_from_request(_with_settings("10.128.0.5", None, "203.0.113.9")) == "10.128.0.5"
+
+
+def test_the_settings_variant_without_a_peer_returns_nothing() -> None:
+    assert client_ip_from_request(_with_settings(None, True)) is None

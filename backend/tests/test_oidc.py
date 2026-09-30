@@ -267,7 +267,7 @@ class TestClientConfiguration:
 
 PRODUCTION_OVERRIDES = {
     "environment": "productie",
-    "trusted_proxies": "10.0.0.0/8",
+    "behind_proxy": True,
     "oidc_iss_required": True,
     "base_url": "https://beheer.plak.example",
     "content_base_url": "https://plak.example",

@@ -529,26 +529,32 @@ row to a sink the runtime account cannot reach remains the heavier answer.
 
 ## When the IP address is a claim
 
-`PLAK_TRUSTED_PROXIES` says which hops count as a proxy, and the derivation
-(`net.py`) walks `X-Forwarded-For` from the right, skipping those hops. The
-setting currently names all of RFC1918, which is wider than the routers really
-are. For a visitor whose own address is private as well (another pod, a VPN
-user, an internal NAT), the address the router appended is then skipped along
-with the rest, and what is left standing is the value the visitor wrote
-themselves.
+`PLAK_BEHIND_PROXY` says whether a proxy stands in front of the pod. With one,
+the derivation (`net.py`) reads the last `X-Forwarded-For` entry: the one that
+proxy wrote about the connection it accepted. Everything to the left of it is
+the client's to invent, and is never read. Without one, the socket decides and
+the header is not read at all.
 
-The row says so. `refs.ip_unvouched` is `true` on a row whose address was
-reached over at least one skipped entry; then `ip_truncated` and `ip_encrypted`
-are what the client claimed, not what we saw. The flag is absent on every other
-row, and that absence is the ordinary case: the direct peer is what the socket
-says, and the rightmost `X-Forwarded-For` entry was written by that peer. The
-address itself is stored unchanged either way, and nothing is refused over it:
-this is a note about the derivation, not a decision.
+The row says when that did not hold. `refs.ip_unvouched` is `true` where the
+proxy the deployment promises wrote nothing usable: no `X-Forwarded-For`
+arrived, or its last entry is not an address; `ip_truncated` and `ip_encrypted` then carry the direct peer
+instead, which is a proxy's address rather than a visitor's. The flag is absent
+on every other row, and that absence is the ordinary case.
 
-The flag stops being a concern the day `PLAK_TRUSTED_PROXIES` names the real
-range of the router pods; that range can be read off in production from the
-direct peer address the app sees. Until then a `true` here means: usable as a
-lead, not as evidence.
+A `true` here is a sign that the deployment and the chain in front of it
+disagree, which is a configuration question rather than a visitor's doing. The
+address is stored unchanged either way and nothing is refused over it: this is
+a note about the derivation, not a decision.
+
+Reading a fixed entry replaced a walk that skipped entries falling inside
+`PLAK_TRUSTED_PROXIES`. That needed the setting to name the routers, and on ZAD
+their range cannot be had, so it named all of RFC1918 -- wide enough that a
+visitor on a private address could write an entry the walk would skip. Worse,
+the walk read `X-Forwarded-For` with `headers.get`, which returns the first
+header line only; the OpenShift router adds a line of its own rather than
+extending the client's, so the entry it wrote was never read at all. Measured
+on 2026-09-30: a request carrying `X-Forwarded-For: 203.0.113.99` was recorded
+under that address.
 
 ## Access
 

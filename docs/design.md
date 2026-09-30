@@ -894,7 +894,7 @@ assets sit outside the middleware entirely.
 The login class covers the login paths of both flows, from the same constants
 the routes are registered with, so moving a route cannot silently change its
 class. Behind the ZAD router, trusted-proxy configuration
-(`PLAK_TRUSTED_PROXIES`, X-Forwarded-For) is a required deployment setting.
+(`PLAK_BEHIND_PROXY`, X-Forwarded-For) is a required deployment setting.
 
 Code: `ratelimit.py`, `net.py`, `constants.py`. Guarded by: `test_ratelimit.py`,
 `test_app_integration.py`.

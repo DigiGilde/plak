@@ -135,7 +135,12 @@ class Settings(BaseSettings):
     # together. Dev compose, the ZAD deployment and production all set it. So:
     # required, everywhere.
     content_base_url: str
-    trusted_proxies: str = ""
+    # Whether a proxy stands in front of the pod, and thereby whether the last
+    # X-Forwarded-For entry is the client address or the socket is (net.py).
+    # None means nobody said; production refuses that, because either answer
+    # can be the wrong one and neither fails loudly: without a proxy the header
+    # is the client's to write, and behind one the socket is the proxy.
+    behind_proxy: bool | None = None
     # Built admin SPA (Vite base /); by default relative to the
     # working directory of `just dev` (backend/). The app image sets this to
     # /app/spa.
@@ -349,9 +354,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _production_requirements(self) -> Settings:
         if self.environment == "productie":
-            if not self.trusted_proxies.strip():
+            if self.behind_proxy is None:
                 raise ValueError(
-                    "PLAK_TRUSTED_PROXIES is verplicht wanneer PLAK_ENVIRONMENT=productie"
+                    "PLAK_BEHIND_PROXY is verplicht wanneer "
+                    "PLAK_ENVIRONMENT=productie; 'false' betekent: geen proxy ervoor"
                 )
             if not self.oidc_iss_required:
                 raise ValueError(

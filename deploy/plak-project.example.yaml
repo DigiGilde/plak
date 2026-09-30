@@ -209,11 +209,12 @@ deployments:
           # eIDAS LoA requirement would lock everyone out. The app logs at
           # startup that there is no acr check.
           PLAK_OIDC_REQUIRED_ACR: ""
-          # The HAProxy router adds X-Forwarded-For in append mode; Plak
-          # takes the last untrusted hop. The exact CIDR of the router pods
-          # is a question for the platform team; these are the RFC1918
-          # ranges as a safe starting value, without public ranges.
-          PLAK_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+          # The HAProxy router stands in front of the pod and adds an
+          # X-Forwarded-For line of its own behind the client's, so Plak reads
+          # the last entry. Position rather than recognition, because the
+          # router pods sit on the cluster pod network and that range is not
+          # on offer.
+          PLAK_BEHIND_PROXY: "true"
           # The `sub` from the ZAD Keycloak of the first platform admin;
           # they thereby get in without a member record. Different per
           # environment.

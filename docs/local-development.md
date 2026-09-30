@@ -322,7 +322,7 @@ message names only the variable name, never the value.
 An empty `PLAK_OIDC_REQUIRED_ACR` logs a message at startup, in
 `PLAK_ENVIRONMENT=productie` as a warning: the authentication level then
 depends entirely on the OP. The other production requirements
-(`PLAK_TRUSTED_PROXIES`, `PLAK_OIDC_ISS_REQUIRED`, `PLAK_BASE_URL`,
+(`PLAK_BEHIND_PROXY`, `PLAK_OIDC_ISS_REQUIRED`, `PLAK_BASE_URL`,
 `PLAK_CONTENT_BASE_URL`) stay fail-fast.
 
 In `PLAK_ENVIRONMENT=productie` the issuer is checked as well:

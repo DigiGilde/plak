@@ -192,7 +192,7 @@ class RateLimitMiddleware:
         # reset a backstop.
         self._backstops = InMemoryCounter()
         self._clock = clock
-        self._trusted_networks = net.parse_trusted_proxies(settings.trusted_proxies)
+        self._behind_proxy = bool(settings.behind_proxy)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -242,7 +242,7 @@ class RateLimitMiddleware:
             if member_key:
                 return f"member:{member_key}"
 
-        return f"ip:{net.rate_limit_key(net.client_ip(request, self._trusted_networks))}"
+        return f"ip:{net.rate_limit_key(net.client_ip(request, self._behind_proxy))}"
 
 
 def _too_many_requests_response(remaining_s: float, accept_language: str | None) -> JSONResponse:
