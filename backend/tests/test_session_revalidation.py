@@ -310,7 +310,7 @@ async def test_a_refreshed_id_token_from_another_issuer_drops_the_session() -> N
 
 @pytest.mark.parametrize("claim", ["exp", "iat"])
 async def test_a_refreshed_id_token_without_exp_or_iat_drops_the_session(claim: str) -> None:
-    """authlib treats both as optional; the refresh path demands them like the
+    """joserfc treats both as optional; the refresh path demands them like the
     login path does."""
     idp, app = _make()
     idp.refresh_claim_overrides = {claim: OMIT}

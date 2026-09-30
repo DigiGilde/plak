@@ -678,7 +678,7 @@ Authorization code plus PKCE. Client authentication is configurable
 (`private_key_jwt`, `client_secret_post`, `client_secret_basic`), because the
 ZAD Keycloak hands out client-secret clients. Id token validation: an
 asymmetric alg allowlist (RS256/PS256/ES256, never `none` or HS\*) as our own
-code on top of authlib, exact issuer, `aud`, `azp`, `nonce`, `exp`, `iat`,
+code on top of joserfc, exact issuer, `aud`, `azp`, `nonce`, `exp`, `iat`,
 `at_hash` when present, and the RFC 9207 `iss` response parameter, checked on
 the callback query before the token exchange and enforceable through a config
 flag. The `acr` requirement is a configured list and may be empty, which is

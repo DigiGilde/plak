@@ -12,8 +12,10 @@ import time
 
 import httpx
 import pytest
-from authlib.jose import JsonWebKey, JsonWebToken, RSAKey
 from helpers_oidc import CLIENT_SECRET, OMIT, MockIdP, make_oidc_client, make_settings
+from joserfc import jws, jwt
+from joserfc.jwk import RSAKey, import_key
+from joserfc.jwt import JWTClaimsRegistry
 
 from plak.audit import vocabulary
 from plak.auth.oidc import (
@@ -69,8 +71,16 @@ class TestIdTokenValidation:
         with pytest.raises(OidcError):
             await validate(oidc, idp, f"{header}.{payload}.")
 
+    async def test_payload_that_is_not_a_json_object_refused(self, oidc, idp):
+        """A genuinely signed token whose payload is a JSON array: joserfc
+        decodes it without complaint, so the object check is ours."""
+        header = {"alg": "RS256", "kid": idp.kid}
+        token = jws.serialize_compact(header, b'["geen", "object"]', idp.private_key, algorithms=["RS256"])
+        with pytest.raises(OidcError, match="JSON-object"):
+            await validate(oidc, idp, token)
+
     async def test_foreign_key_refused(self, oidc, idp):
-        other_one = RSAKey.generate_key(2048, is_private=True)
+        other_one = RSAKey.generate_key(2048)
         token = idp.make_id_token(nonce="nonce-1", key=other_one)
         with pytest.raises(OidcError):
             await validate(oidc, idp, token)
@@ -229,7 +239,7 @@ class TestRefusalReasons:
 
 class TestClientConfiguration:
     def test_symmetric_jwk_refused(self, idp):
-        jwk = json.dumps({"kty": "oct", "k": base64.urlsafe_b64encode(b"x" * 32).decode()})
+        jwk = json.dumps({"kty": "oct", "k": base64.urlsafe_b64encode(b"x" * 32).rstrip(b"=").decode()})
         with pytest.raises(ConfigurationError):
             make_oidc_client(make_settings(idp, oidc_client_private_jwk=jwk), idp)
 
@@ -399,9 +409,9 @@ class TestPrivateKeyJwt:
 
         assertion = request["client_assertion"][0]
         client_jwk = json.loads(settings.oidc_client_private_jwk)
-        public_key = JsonWebKey.import_key({k: v for k, v in client_jwk.items() if k in ("kty", "n", "e", "kid")})
-        claims = JsonWebToken(["RS256"]).decode(assertion, public_key)
-        claims.validate(leeway=60)
+        public_key = import_key({k: v for k, v in client_jwk.items() if k in ("kty", "n", "e", "kid")})
+        claims = jwt.decode(assertion, public_key, algorithms=["RS256"]).claims
+        JWTClaimsRegistry(leeway=60).validate(claims)
         assert claims["iss"] == settings.oidc_client_id
         assert claims["sub"] == settings.oidc_client_id
         assert claims["aud"] == idp.metadata["token_endpoint"]
@@ -469,10 +479,10 @@ class TestJwksRefreshOnUnknownKid:
     async def test_key_rotation_succeeds_after_once_refresh(self, oidc, idp):
         await oidc._fetch_keyset()  # caches the (old) JWKS
 
-        new_key = RSAKey.generate_key(2048, is_private=True)
+        new_key = RSAKey.generate_key(2048)
         idp.kid = "idp-sleutel-2"
         idp.private_key = new_key
-        public = new_key.as_dict(is_private=False)
+        public = new_key.as_dict(private=False)
         public["kid"] = idp.kid
         idp.jwks = {"keys": [public]}
 
@@ -500,8 +510,8 @@ class TestJwksRefreshOnUnknownKid:
         assert idp.jwks_requests == after_first_attempt  # cooldown: no second fetch
 
     async def test_no_kid_with_multiple_keys_in_jwks_refused(self, idp):
-        second_key = RSAKey.generate_key(2048, is_private=True)
-        second_public = second_key.as_dict(is_private=False)
+        second_key = RSAKey.generate_key(2048)
+        second_public = second_key.as_dict(private=False)
         second_public["kid"] = "idp-sleutel-2"
         idp.jwks = {"keys": [*idp.jwks["keys"], second_public]}
         oidc = make_oidc_client(make_settings(idp), idp)
@@ -518,7 +528,7 @@ class TestJwksRefreshOnUnknownKid:
         }
         # No "kid" in the header: with a single key in the JWKS that key is
         # used regardless, but with two keys the token is ambiguous.
-        token = JsonWebToken(["RS256"]).encode({"alg": "RS256"}, claims, idp.private_key).decode("ascii")
+        token = jwt.encode({"alg": "RS256"}, claims, idp.private_key, algorithms=["RS256"])
         with pytest.raises(OidcError):
             await validate(oidc, idp, token)
 
@@ -585,9 +595,8 @@ class TestClientAssertionGuard:
             oidc._make_client_assertion("https://idp.example/token")
 
     async def test_assertion_header_omits_kid_when_jwk_has_none(self, idp):
-        key = RSAKey.generate_key(2048, is_private=True)
-        jwk = key.as_dict(is_private=True)
-        jwk.pop("kid", None)  # as_dict adds a thumbprint kid; this test wants none
+        key = RSAKey.generate_key(2048)
+        jwk = key.as_dict(private=True)
         settings = make_settings(idp, oidc_client_private_jwk=json.dumps(jwk))
         oidc = make_oidc_client(settings, idp)
         idp.next_nonce = "nonce-1"
@@ -761,7 +770,7 @@ class TestValidateLogoutToken:
             await oidc.validate_logout_token(token)
 
     async def test_missing_exp_refused(self, oidc, idp):
-        """Section 2.4: exp is REQUIRED. authlib only checks it when present."""
+        """Section 2.4: exp is REQUIRED. joserfc only checks it when present."""
         token = idp.make_logout_token(sid=idp.sid, exp=OMIT)
         with pytest.raises(OidcError, match="exp"):
             await oidc.validate_logout_token(token)
@@ -793,7 +802,7 @@ class TestValidateLogoutToken:
             "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
         }
         header = {"alg": "RS256", "kid": idp.kid}
-        token = JsonWebToken(["RS256"]).encode(header, claims, idp.private_key).decode("ascii")
+        token = jwt.encode(header, claims, idp.private_key, algorithms=["RS256"])
         with pytest.raises(OidcError, match="jti"):
             await oidc.validate_logout_token(token)
 

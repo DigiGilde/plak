@@ -12,7 +12,8 @@ import time
 from dataclasses import dataclass, field
 
 import httpx
-from authlib.jose import JsonWebToken, RSAKey
+from joserfc import jwt
+from joserfc.jwk import OctKey, RSAKey
 
 from plak.ci.providers import GITHUB_API, GITHUB_ISSUER
 
@@ -49,7 +50,7 @@ class _Issuer:
 
     @property
     def jwks(self) -> dict:
-        public = self.key.as_dict(is_private=False)
+        public = self.key.as_dict(private=False)
         public["kid"] = self.kid
         return {"keys": [public]}
 
@@ -62,7 +63,7 @@ class MockCi:
         default_factory=lambda: _Issuer(
             GITHUB_ISSUER,
             GITHUB_ISSUER + "/.well-known/jwks",
-            RSAKey.generate_key(2048, is_private=True),
+            RSAKey.generate_key(2048),
             "github-sleutel-1",
         )
     )
@@ -70,7 +71,7 @@ class MockCi:
         default_factory=lambda: _Issuer(
             FORGEJO_ISSUER,
             FORGEJO_ISSUER + "/.well-known/keys",
-            RSAKey.generate_key(2048, is_private=True),
+            RSAKey.generate_key(2048),
             "forgejo-sleutel-1",
         )
     )
@@ -169,4 +170,6 @@ class MockCi:
         elif kid is not OMIT:
             header["kid"] = kid
         signing_key = key if key is not None else issuer.key
-        return JsonWebToken([alg]).encode(header, claims, signing_key).decode("ascii")
+        if isinstance(signing_key, str | bytes):
+            signing_key = OctKey.import_key(signing_key)
+        return jwt.encode(header, claims, signing_key, algorithms=[alg])

@@ -28,8 +28,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from authlib.jose import JsonWebKey, JsonWebToken
-from authlib.jose.errors import JoseError
+from joserfc import jwt
+from joserfc.errors import InvalidKeyIdError, JoseError
+from joserfc.jwk import KeySet
+from joserfc.jws import JWSRegistry
+from joserfc.jwt import JWTClaimsRegistry
 
 from plak import i18n, messages
 from plak.audit import vocabulary
@@ -128,7 +131,7 @@ class CiTokenVerifier:
         self._http = http
         self._clock = clock
         self._issuers = known_issuers(settings)
-        self._jwt = JsonWebToken([ALGORITHM])
+        self._registry = JWSRegistry(algorithms=[ALGORITHM])
         # Bounded by construction: one entry per configured issuer at most,
         # in all three.
         self._keys: dict[str, _Keys] = {}
@@ -177,20 +180,20 @@ class CiTokenVerifier:
                 raise _invalid("unknown_key") from None
 
     async def _decode_with(self, issuer: Issuer, token: str, keyset):
-        def _key(header: Mapping[str, Any], _payload: Any):
-            kid = header.get("kid")
+        def _key(obj: Any):
+            kid = obj.headers().get("kid")
             if not kid:
                 if len(keyset.keys) == 1:
                     return keyset.keys[0]
                 raise _invalid("no_kid")
             try:
-                return keyset.find_by_kid(kid)
-            except ValueError as error:
+                return keyset.get_by_kid(kid)
+            except InvalidKeyIdError as error:
                 raise _UnknownKid() from error
 
         try:
-            claims = self._jwt.decode(token, _key)
-            claims.validate(now=int(time.time()), leeway=LEEWAY_S)
+            claims = jwt.decode(token, _key, registry=self._registry).claims
+            JWTClaimsRegistry(now=int(time.time()), leeway=LEEWAY_S).validate(claims)
         except (_UnknownKid, CiTokenError):
             raise
         except (JoseError, ValueError, TypeError) as error:
@@ -264,7 +267,7 @@ class CiTokenVerifier:
         if not isinstance(jwks_uri, str) or not _same_origin(jwks_uri, issuer.issuer):
             raise FetchError("jwks_uri ligt buiten de origin van de issuer")
         jwks = await fetch_json(self._http, jwks_uri, max_bytes=MAX_JWKS_BYTES)
-        return JsonWebKey.import_key_set(jwks)
+        return KeySet.import_key_set(jwks)
 
 
 def _same_origin(url: str, issuer: str) -> bool:

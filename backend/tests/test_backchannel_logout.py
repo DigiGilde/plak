@@ -13,9 +13,9 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from authlib.jose import RSAKey
 from helpers_audit import install_audit_recorder
 from helpers_oidc import OMIT, MockIdP, make_app, make_settings, make_test_client
+from joserfc.jwk import RSAKey
 
 from plak.audit import vocabulary
 from plak.auth.sessions import SessionStore
@@ -119,7 +119,7 @@ async def test_a_missing_token_is_refused() -> None:
 async def test_a_forged_signature_is_refused() -> None:
     idp, app = _make()
     session = _session(app)
-    foreign_key = RSAKey.generate_key(2048, is_private=True)
+    foreign_key = RSAKey.generate_key(2048)
     async with make_test_client(app) as client:
         response = await _post(client, idp.make_logout_token(sid=idp.sid, key=foreign_key))
 
@@ -374,7 +374,7 @@ async def test_the_prefilter_refusal_is_byte_identical_to_the_full_validation_re
     token failed the cheap pre-check or the full, signature-verified check."""
     idp, app = _make()
     prefilter_token = idp.make_logout_token(sid=idp.sid, iss="https://evil.example/realms/x")
-    forged_key = RSAKey.generate_key(2048, is_private=True)
+    forged_key = RSAKey.generate_key(2048)
     full_validation_token = idp.make_logout_token(sid=idp.sid, key=forged_key)
 
     async with make_test_client(app) as client:

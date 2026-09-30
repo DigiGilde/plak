@@ -5,9 +5,9 @@ Client authentication: `private_key_jwt` (RFC 7523, the default) or, for the
 ZAD Keycloak that only creates client-secret clients, `client_secret_post` or
 `client_secret_basic` (RFC 6749 §2.3.1).
 
-Security code of our own on top of authlib, deliberately not metadata-driven:
+Security code of our own on top of joserfc, deliberately not metadata-driven:
 
-- the alg allowlist for id tokens is a fixed JsonWebToken of our own
+- the alg allowlist for id tokens is a fixed JWSRegistry of our own
   (RS256/PS256/ES256); what the provider metadata advertises does not matter;
 - the RFC 9207 iss check runs on the callback query parameters before the
   token exchange;
@@ -29,8 +29,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote_plus, urlencode
 
-from authlib.jose import JsonWebKey, JsonWebToken
-from authlib.jose.errors import JoseError
+from joserfc import jwt
+from joserfc.errors import InvalidKeyIdError, JoseError
+from joserfc.jwk import KeySet, import_key
+from joserfc.jws import JWSRegistry
+from joserfc.jwt import JWTClaimsRegistry
 
 from plak.audit import vocabulary
 from plak.config import ConfigurationError
@@ -205,7 +208,7 @@ def unverified_logout_token_jti(token: str) -> str | None:
 
 
 def _check_sub_exp_iat(claims: Mapping[str, Any]) -> None:
-    """authlib treats `exp` and `iat` as optional, so demand them ourselves."""
+    """joserfc treats `exp` and `iat` as optional, so demand them ourselves."""
     if not claims.get("sub"):
         raise OidcError("id-token sub ontbreekt")
     if "exp" not in claims or "iat" not in claims:
@@ -238,7 +241,7 @@ class OidcClient:
     def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:
         self._settings = settings
         self._http = http
-        self._jwt = JsonWebToken(list(ALG_ALLOWLIST))
+        self._registry = JWSRegistry(algorithms=list(ALG_ALLOWLIST))
         self._metadata: dict[str, Any] | None = None
         self._keyset = None
         self._last_kid_refresh: float | None = None
@@ -264,7 +267,7 @@ class OidcClient:
         if self.client_auth == "private_key_jwt":
             try:
                 self._private_jwk = json.loads(settings.oidc_client_private_jwk)
-                self._private_key = JsonWebKey.import_key(self._private_jwk)
+                self._private_key = import_key(self._private_jwk)
             except (ValueError, JoseError) as error:
                 raise ConfigurationError(
                     "PLAK_OIDC_CLIENT_PRIVATE_JWK is geen geldige private JWK"
@@ -301,8 +304,8 @@ class OidcClient:
         try:
             response = await self._http.get(meta["jwks_uri"])
             response.raise_for_status()
-            self._keyset = JsonWebKey.import_key_set(response.json())
-        except OidcError:  # pragma: no cover - nothing above raises OidcError, only httpx/authlib errors
+            self._keyset = KeySet.import_key_set(response.json())
+        except OidcError:  # pragma: no cover - nothing above raises OidcError, only httpx/joserfc errors
             raise
         except Exception as error:
             raise OidcError(f"JWKS niet op te halen: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE) from error
@@ -389,7 +392,7 @@ class OidcClient:
             "iat": now_,
             "exp": now_ + 300,
         }
-        return self._jwt.encode(header, claims, self._private_key).decode("ascii")
+        return jwt.encode(header, claims, self._private_key, registry=self._registry)
 
     def _client_authentication(self, token_endpoint: str) -> tuple[dict[str, str], dict[str, str]]:
         """Returns (extra form fields, extra headers) for the token exchange."""
@@ -499,7 +502,7 @@ class OidcClient:
         if not isinstance(iat, int) or abs(time.time() - iat) > LOGOUT_TOKEN_MAX_AGE_S:
             raise OidcError("logout-token heeft geen recente iat")
 
-        # §2.4 makes both REQUIRED. authlib checks exp only when it is there,
+        # §2.4 makes both REQUIRED. joserfc checks exp only when it is there,
         # and the replay check in platform/backchannel.py keys on the jti.
         if "exp" not in claims:
             raise OidcError("logout-token mist exp")
@@ -559,12 +562,12 @@ class OidcClient:
     async def _decode_id_token(self, id_token: str):
         keyset = await self._fetch_keyset()
 
-        def _key(header: Mapping[str, Any], _payload: Any):
-            kid = header.get("kid")
+        def _key(obj: Any):
+            kid = obj.headers().get("kid")
             if kid:
                 try:
-                    return keyset.find_by_kid(kid)
-                except ValueError as error:
+                    return keyset.get_by_kid(kid)
+                except InvalidKeyIdError as error:
                     raise _UnknownKid(str(error)) from error
             keys = keyset.keys
             if len(keys) == 1:
@@ -572,8 +575,12 @@ class OidcClient:
             raise OidcError("id-token zonder kid terwijl de JWKS meerdere sleutels bevat")
 
         try:
-            claims = self._jwt.decode(id_token, _key)
-            claims.validate(leeway=60)
+            claims = jwt.decode(id_token, _key, registry=self._registry).claims
+            # jwt.decode only checks that the payload is JSON; a signed array
+            # or scalar would otherwise reach the claim checks as a non-dict.
+            if not isinstance(claims, dict):
+                raise OidcError("id-token payload is geen JSON-object")
+            JWTClaimsRegistry(leeway=60).validate(claims)
         except _UnknownKid:
             raise
         except OidcError:
