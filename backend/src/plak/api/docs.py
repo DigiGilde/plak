@@ -96,7 +96,7 @@ de majorversie staat in het pad (`/-/api/v1`). Verzoeken zijn ratelimited: bij o
 
 OPENAPI_TAGS: list[dict[str, str]] = [
     {"name": TAG_SESSION, "description": "Wie ben ik, en waar staat mijn content."},
-    {"name": TAG_OVERVIEW, "description": "Startscherm van de SPA: alle groepen met hun sites."},
+    {"name": TAG_OVERVIEW, "description": "Startscherm van de SPA: de eigen groepen met hun sites."},
     {
         "name": TAG_GROUPS,
         "description": "Groepen aanmaken, bekijken, verwijderen en hun standaardtoegang zetten.",

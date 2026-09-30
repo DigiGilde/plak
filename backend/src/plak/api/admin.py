@@ -1661,7 +1661,7 @@ async def _site_with_role(
     Two people are spared that: someone who does have a role and only a
     narrower one than this action needs, and a platformbeheerder. Both can
     already see that the site exists, the first from within the group and the
-    second from the overview of every group, so hiding it from them protects
+    second from the detail of any group, so hiding it from them protects
     nothing and only sends them looking for a mistake
     they did not make.
     """
@@ -2674,19 +2674,16 @@ def make_admin_router() -> APIRouter:
         description=(
             "Het startscherm van de beheer-SPA: per groep de sites met hun zichtbaarheid, of er iets live "
             "staat, wanneer er voor het laatst is gedeployd en hoeveel previews er openstaan.\n\n"
-            "**Mag:** elk actief lid. Een platformbeheerder ziet alle groepen met al hun sites. Een gewoon "
-            "lid ziet de groepen waar het een groepsrol in heeft, elk met al hun sites, plus de groepen "
+            "**Mag:** elk actief lid. Het lid ziet de groepen waar het een groepsrol in heeft, elk met al "
+            "hun sites, plus de groepen "
             "waar het alleen een siterol heeft: daarvan verschijnen uitsluitend die sites, want een "
-            "siterol geeft niets op groepsniveau. Wie nergens een rol heeft krijgt een lege lijst, geen 403."
+            "siterol geeft niets op groepsniveau. Een platformbeheerder ziet net zo alleen zijn eigen "
+            "groepen. Wie nergens een rol heeft krijgt een lege lijst, geen 403."
         ),
         responses=_errors(),
     )
     async def overview(member: ActiveMember, db: Db) -> Overview:
-        if member.platform_role == PlatformRole.ADMIN:
-            groups = list(await db.scalars(select(Group).order_by(Group.slug)))
-            sites_per_group = {group.id: await _group_sites(db, group) for group in groups}
-        else:
-            groups, sites_per_group = await _groups_for_member(db, member)
+        groups, sites_per_group = await _groups_for_member(db, member)
         rows = [
             GroupRow(
                 group=_group_json(group),

@@ -748,6 +748,14 @@ class TestGroupsAndSites:
         assert already.status_code == 409
         assert already.json()["code"] == "ALREADY_GROUP_MEMBER"
 
+    async def test_a_platform_admin_sees_only_own_groups_too(self, client, app, factory, data):
+        login(client, app, sub="admin-sub", email="admin@example.nl")
+        assert (await client.get(f"{BASE}/overview")).json()["groups"] == []
+
+        await _join_group(factory, data.group, data.admin_member, Role.READER)
+        overview = (await client.get(f"{BASE}/overview")).json()
+        assert [group["group"]["slug"] for group in overview["groups"]] == ["team"]
+
     async def test_overview_shows_only_own_groups(self, client, app, data):
         login(client, app, sub="lid-a", email="a@example.nl")
         overview = (await client.get(f"{BASE}/overview")).json()
@@ -760,16 +768,14 @@ class TestGroupsAndSites:
         overview = (await client.get(f"{BASE}/overview")).json()
         assert overview["groups"] == []
 
-    async def test_admin_sees_all_groups(self, client, app, data):
-        login(client, app, sub="admin-sub", email="admin@example.nl")
-        overview = (await client.get(f"{BASE}/overview")).json()
-        assert [group["group"]["slug"] for group in overview["groups"]] == ["team"]
-
-    async def test_admin_sees_a_group_without_any_sites(self, client, app, data, factory):
+    async def test_a_group_without_any_sites_is_listed_empty(self, client, app, factory, data):
         async with factory() as db:
-            db.add(Group(slug="leeg", name="Leeg", default_access_base=AccessBase.SITE_TEAM))
+            group = Group(slug="leeg", name="Leeg", default_access_base=AccessBase.SITE_TEAM)
+            db.add(group)
+            await db.flush()
+            db.add(GroupMember(group_id=group.id, member_id=data.member_a.id, role=Role.READER))
             await db.commit()
-        login(client, app, sub="admin-sub", email="admin@example.nl")
+        login(client, app, sub="lid-a", email="a@example.nl")
 
         overview = (await client.get(f"{BASE}/overview")).json()
 
