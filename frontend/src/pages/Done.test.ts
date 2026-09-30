@@ -265,7 +265,7 @@ describe('Done (what goes wrong)', () => {
     await flushPromises();
 
     const banner = wrapper.find('nldd-banner[variant="critical"]');
-    expect(banner.attributes('text')).toBe('Onbekend site');
+    expect(banner.attributes('text')).toBe('Onbekende site');
     expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(false);
 
     wrapper.unmount();

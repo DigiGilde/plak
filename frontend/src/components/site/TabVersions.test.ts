@@ -170,7 +170,7 @@ describe('TabVersions: states', () => {
     );
   });
 
-  it('falls back to "Handmatig geupload" without a known uploader', async () => {
+  it('falls back to "Handmatig geüpload" without a known uploader', async () => {
     const seeded = backend.data.versions.find((v) => v.id === 'versie-0')!;
     seeded.createdByName = null;
 
@@ -179,7 +179,7 @@ describe('TabVersions: states', () => {
 
     expect(
       wrapper.find('[data-testid="versie-versie-0"]').find('nldd-text-cell').attributes('supporting-text'),
-    ).toBe('Handmatig geupload');
+    ).toBe('Handmatig geüpload');
   });
 
   it('falls back to "Gepubliceerd door CI" without a known repository', async () => {

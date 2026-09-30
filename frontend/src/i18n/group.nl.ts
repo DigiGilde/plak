@@ -74,7 +74,7 @@ export const groupNl = {
   // -- Group page: members tab ---------------------------------------------
   'group.members.heading': 'Leden',
   'group.members.intro':
-    'De rol bepaalt wat iemand in deze groep mag: een lezer kijkt mee, een redacteur zet sites online, een beheerder bepaalt wie erbij mag. Iedereen op deze lijst ziet ook wat op basis "Alleen het siteteam" staat. Toevoegen gaat op het geverifieerde e-mailadres waarmee iemand met SSO Rijk inlogt.',
+    'De rol bepaalt wat iemand in deze groep mag: een lezer kijkt mee, een redacteur zet sites online, een beheerder bepaalt wie erbij mag. Iedereen op deze lijst ziet ook wat is ingesteld op "Alleen het siteteam". Toevoegen gaat op het geverifieerde e-mailadres waarmee iemand met SSO Rijk inlogt.',
   'group.members.table.label': 'Leden van deze groep',
   'group.members.column.member': 'Lid',
   'group.members.column.role': 'Rol',
@@ -98,7 +98,7 @@ export const groupNl = {
   'group.members.confirm.remove.siteRoles.more.many': 'En nog {count} sites',
   'group.members.confirm.remove.siteRoles.also': 'Haal deze siterollen ook weg',
   'group.members.confirm.remove.siteRoles.keeps':
-    'Laat je dit uit staan, dan houdt {name} die siterollen en blijft daarmee bij die sites kunnen.',
+    'Laat je dit uit staan, dan houdt {name} die siterollen en kan daarmee nog steeds bij die sites.',
   'group.members.confirm.remove.keep': 'Behoud het lidmaatschap',
   'group.members.confirm.remove.confirm': 'Uit de groep halen',
   'group.members.confirm.remove.confirmWithSiteRoles': 'Uit de groep halen en siterollen weghalen',

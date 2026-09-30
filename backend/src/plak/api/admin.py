@@ -242,7 +242,7 @@ _ERROR_ADMIN = {403: "Alleen een platformbeheerder mag dit (`NOT_ADMIN`)."}
 _ERROR_GROUP_ROLE = {403: "Je rol in deze groep is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."}
 _ERROR_SITE_ROLE = {403: "Je rol op deze site is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."}
 _ERROR_GROUP = {404: "Onbekende groep (`UNKNOWN_GROUP`)."}
-_ERROR_SITE = {404: "Onbekende groep (`UNKNOWN_GROUP`) of onbekend site (`UNKNOWN_SITE`)."}
+_ERROR_SITE = {404: "Onbekende groep (`UNKNOWN_GROUP`) of onbekende site (`UNKNOWN_SITE`)."}
 _ERROR_SEARCH = {422: "De zoekterm is korter dan twee tekens (`SEARCH_TOO_SHORT`)."}
 _ERROR_AUDIT_FILTER = {
     422: (
@@ -307,7 +307,7 @@ class AccessChoice(ApiModel):
         json_schema_extra={"examples": [{"base": "nobody", "keys": True}, {"base": "public"}]}
     )
 
-    base: AccessBase | None = Field(default=None, description=f"De basis, precies een van: {ACCESS_BASE_HINT}")
+    base: AccessBase | None = Field(default=None, description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
     keys: bool | None = Field(
         default=None, description="Of geheime links toegang geven. " + ACCESS_EXTRAS_HINT
     )
@@ -381,7 +381,7 @@ class AccessBody(ApiModel):
         json_schema_extra={"examples": [{"base": "nobody", "keys": True, "invitees": False}]}
     )
 
-    base: AccessBase = Field(description=f"De basis, precies een van: {ACCESS_BASE_HINT}")
+    base: AccessBase = Field(description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
     keys: bool = Field(
         default=False, description="Of geheime links toegang geven. " + ACCESS_EXTRAS_HINT
     )
@@ -393,7 +393,7 @@ class AccessBody(ApiModel):
 class AccessOut(ApiModel):
     """Wie de content mag zien: een basis plus twee uitzonderingen."""
 
-    base: AccessBase = Field(description=f"De basis, precies een van: {ACCESS_BASE_HINT}")
+    base: AccessBase = Field(description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
     keys: bool = Field(description="Of geheime links toegang geven, ook zonder inloggen.")
     invitees: bool = Field(description="Of genodigden toegang geven na inloggen met SSO Rijk.")
 
@@ -1016,7 +1016,7 @@ class Overview(ApiModel):
 
 
 class GroupDetail(ApiModel):
-    """Alles wat de groepspagina van de SPA in een keer nodig heeft."""
+    """Alles wat de groepspagina van de SPA in één keer nodig heeft."""
 
     group: GroupOut = Field(description="De groep zelf.")
     sites: list[SiteOut] = Field(description="Sites van de groep, op slug gesorteerd.")
@@ -2760,7 +2760,7 @@ def make_admin_router() -> APIRouter:
         summary="Groep met sites en leden",
         response_description="De groep met haar sites en leden.",
         description=(
-            "Alles wat de groepspagina van de SPA in een keer nodig heeft.\n\n"
+            "Alles wat de groepspagina van de SPA in één keer nodig heeft.\n\n"
             "**Mag:** groepsrol `reader` of ruimer, of een platformbeheerder."
         ),
         responses=_errors(_ERROR_GROUP_ROLE, _ERROR_GROUP),
@@ -2818,7 +2818,7 @@ def make_admin_router() -> APIRouter:
         response_description="De groep met haar nieuwe standaardtoegang.",
         description=(
             "Zet de toegang die sites meekrijgen die hierna in deze groep worden aangemaakt: de "
-            "basis en de twee uitzonderingen in een keer. Bestaande sites veranderen niet mee; "
+            "basis en de twee uitzonderingen in één keer. Bestaande sites veranderen niet mee; "
             "die zet je per site.\n\n"
             "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Dit is beleid over content, dus een "
             "platformbeheerder die geen groepsrol heeft mag het niet."
@@ -2952,7 +2952,7 @@ def make_admin_router() -> APIRouter:
         response_description="De site met zijn nieuwe toegang.",
         description=(
             "Bepaalt wie de live content van deze site mag zien: de basis en de twee "
-            "uitzonderingen in een keer, want ze horen bij elkaar en een bezoeker komt binnen "
+            "uitzonderingen in één keer, want ze horen bij elkaar en een bezoeker komt binnen "
             "zodra een van de drie hem binnenlaat. De wijziging geldt onmiddellijk voor elke "
             "volgende aanvraag van de content. Previews met een eigen `accessOverride` volgen "
             "deze waarde niet.\n\n"
@@ -4511,7 +4511,7 @@ def make_admin_router() -> APIRouter:
         summary="Terugrollen naar een eerdere versie",
         response_description="De site met de nieuwe live versie.",
         description=(
-            "Zet een bestaande versie (terug) op de publieke URL. Er wordt niets opnieuw geupload: de "
+            "Zet een bestaande versie (terug) op de publieke URL. Er wordt niets opnieuw geüpload: de "
             "uitgepakte bestanden van die versie staan er al. De wissel geldt onmiddellijk.\n\n"
             "Alleen versies met doel `live` kunnen live staan; een preview-versie levert 422.\n\n"
             "**Mag:** effectieve siterol `editor` of ruimer, met een geldige CSRF-header."
@@ -4521,7 +4521,7 @@ def make_admin_router() -> APIRouter:
             _ERROR_SITE_ROLE,
             {
                 404: (
-                    "Onbekende groep (`UNKNOWN_GROUP`), onbekend site (`UNKNOWN_SITE`), of de versie "
+                    "Onbekende groep (`UNKNOWN_GROUP`), onbekende site (`UNKNOWN_SITE`), of de versie "
                     "bestaat niet of hoort bij een ander site (`UNKNOWN_VERSION`, `VERSION_OTHER_SITE`)."
                 )
             },
@@ -4593,7 +4593,7 @@ def make_admin_router() -> APIRouter:
             _ERROR_SITE_ROLE,
             {
                 404: (
-                    "Onbekende groep (`UNKNOWN_GROUP`), onbekend site (`UNKNOWN_SITE`), of dit "
+                    "Onbekende groep (`UNKNOWN_GROUP`), onbekende site (`UNKNOWN_SITE`), of dit "
                     "site heeft geen preview met deze ref (`UNKNOWN_PREVIEW`)."
                 )
             },

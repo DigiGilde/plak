@@ -80,7 +80,7 @@ describe('verzoek', () => {
         new Response(
           JSON.stringify({
             type: 'https://plak.example/fouten/onbekend-site',
-            title: 'Onbekend site',
+            title: 'Onbekende site',
             status: 404,
             detail: 'Er bestaat geen site met deze slug.',
           }),
@@ -95,7 +95,7 @@ describe('verzoek', () => {
     const error = await refusedWith(request('/-/api/v1/sites/groep/onbekend'));
     expect(error.problem).toEqual({
       type: 'https://plak.example/fouten/onbekend-site',
-      title: 'Onbekend site',
+      title: 'Onbekende site',
       status: 404,
       detail: 'Er bestaat geen site met deze slug.',
     });

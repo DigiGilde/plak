@@ -94,9 +94,9 @@ class Problem(ApiModel):
             "Extensielid (RFC 9457): bij `NO_INDEX`, `BASE_PATH_WITHOUT_INDEX`, `BASE_PATH_UNKNOWN` en "
             "`TOO_MANY_FILES` de "
             "`index.html`-paden die in de bundel gevonden zijn, kortste eerst en hoogstens vijf. De paden "
-            "staan relatief aan de wortel na het afpellen, dus de map van zo'n pad is precies de waarde die "
+            "staan relatief aan de hoofdmap na het afpellen, dus de map van zo'n pad is precies de waarde die "
             "als formveld `basePath` teruggestuurd kan worden. Bevat een pad geen `/`, dan staat die "
-            "`index.html` al in de wortel: dan is er geen map om terug te sturen en is de herstelactie juist "
+            "`index.html` al in de hoofdmap: dan is er geen map om terug te sturen en is de herstelactie juist "
             "om `basePath` weg te laten."
         ),
         examples=[["dist/index.html", "docs/site/index.html"]],

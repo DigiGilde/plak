@@ -1019,7 +1019,7 @@ describe('TabDeploy: why this is safe', () => {
     await block.find('summary').trigger('click');
 
     const text = block.text();
-    expect(text).toContain('Er komt geen geheim in het repository');
+    expect(text).toContain('Er komt geen geheim in de repository');
     expect(text).toContain('nooit vanuit een pull request');
     expect(text).toContain('raken de live site nooit');
     expect(text).toContain('auditlog');

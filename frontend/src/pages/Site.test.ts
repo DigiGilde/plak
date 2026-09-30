@@ -122,7 +122,7 @@ describe('Site: structure', () => {
   it('shows a 404 message for an unknown site, without tabs', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/bestaat-niet');
 
-    expect(wrapper.html()).toContain('Onbekend site');
+    expect(wrapper.html()).toContain('Onbekende site');
     expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(false);
   });
 

@@ -410,7 +410,7 @@ describe('TabAccess: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.html()).toContain('Onbekend site');
+    expect(wrapper.html()).toContain('Onbekende site');
   });
 });
 
