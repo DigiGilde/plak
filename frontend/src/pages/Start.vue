@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Decides what '/' shows: the site overview after login, the landing page for
 // a visitor who is not logged in. The landing page on the content host's root
-// is a backend platform page (platform/pages.py); this is the beheer-side
+// is a backend platform page (platform/pages.py); this is the admin-side
 // equivalent of it.
 import { onMounted, ref } from 'vue';
 

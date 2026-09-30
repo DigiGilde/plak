@@ -21,7 +21,7 @@ request can get a preview of its own. A site is a tree of files that Plak does
 not interpret; what Plak owns is who may see it, which version is live and who
 may change that.
 
-One application answers on two hosts (§4a), serves content and the beheer
+One application answers on two hosts (§4a), serves content and the admin
 interface itself, and keeps one PostgreSQL database. There is no nginx logic in
 production; the dev stack has a dumb reverse proxy only.
 
@@ -34,7 +34,7 @@ production; the dev stack has a dumb reverse proxy only.
 - **Version**: an immutable file tree, target `live` or `preview`.
 - **Preview**: a named temporary variant per ref (`pr-42`) pointing at a version
   with target `preview`, with an expiry.
-- **Member**: a person with a record in the beheer environment. A viewer is not
+- **Member**: a person with a record in the admin environment. A viewer is not
   a member and gets no member record (§7).
 - **Invitee**: an email address or SSO subject on a site's viewer list.
 - **Secret link**: a URL carrying a key that grants access without logging in.
@@ -161,26 +161,26 @@ The slug is the stable identifier, in the API too; renaming is out of scope.
 | `/{group}/{site}/_version/{version-id}/...` | an older version, for the site team only |
 | `/-/login`, `/-/oauth2/callback`, `/-/logout` | OIDC login, callback and logout, spelled the same on both hosts |
 | `/-/code` | hands in the code of a secret link (content host only) |
-| `/-/api/v1/...` | JSON and deploy API (beheer host only) |
+| `/-/api/v1/...` | JSON and deploy API (admin host only) |
 | `/-/api/docs` | API documentation, self-hosted UI, publicly readable |
-| `/-/oidc/backchannel-logout` | back-channel logout from the OP (beheer host only) |
+| `/-/oidc/backchannel-logout` | back-channel logout from the OP (admin host only) |
 | `/-/groups`, `/-/members`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/sessions` | SPA pages inside the platform namespace |
 | `/cli-link` | SPA page the CLI device flow opens by URL |
-| `/` on the beheer host | the SPA |
+| `/` on the admin host | the SPA |
 | `/` on the content host | public front page |
 | `/robots.txt`, `/favicon.ico`, `/.well-known/...` | the locations the web pins down, on both hosts |
 | `/healthz` | internal only, on neither public host |
 
 The platform namespace is the single segment `-`. Because `-` is not a valid
 slug it can never collide with content, and every application endpoint lives
-under it on both hosts, which is what keeps the root of the beheer host free for
+under it on both hosts, which is what keeps the root of the admin host free for
 the SPA. Inside a dist the reserved top-level segments are `_preview` and
 `_version` (§6). Reserved group slugs are the web's own locations plus the
 root-level SPA pages, one constant shared by routing, slug validation and a
 CHECK on `groups.slug`.
 
-The beheer SPA has no `/beheer` or `/admin` path prefix: it sits on the root of
-the beheer host and the application's own paths are carved out of it (§9).
+The admin SPA has no `/beheer` or `/admin` path prefix: it sits on the root of
+the admin host and the application's own paths are carved out of it (§9).
 
 Code: `constants.py`, `serving/router.py`, `platform/spa.py`,
 `frontend/src/router.ts`. Guarded by: `test_constants.py`,
@@ -190,28 +190,28 @@ Code: `constants.py`, `serving/router.py`, `platform/spa.py`,
 
 Published content may contain arbitrary JavaScript (§5.7 allows
 `script-src 'self' 'unsafe-inline'`). On one shared origin that content could
-call the beheer API with the session cookie the browser sends along, so beheer
+call the admin API with the session cookie the browser sends along, so admin
 and content stand on separate origins:
 
-- **beheer host** (`beheer.<domain>`, `PLAK_BASE_URL`): the SPA, `/-/api/v1`,
-  login, callback, logout, back-channel logout. Carries the beheer session
+- **admin host** (`beheer.<domain>`, `PLAK_BASE_URL`): the SPA, `/-/api/v1`,
+  login, callback, logout, back-channel logout. Carries the admin session
   cookie (`__Host-plak-session`, SameSite=Strict) and the CSRF cookie.
 - **content host** (`<domain>`, `PLAK_CONTENT_BASE_URL`): published sites,
   previews and version views, the public front page, and of the platform
   namespace exactly four paths: content login, its callback, content logout and
   `/-/code`. Restricted content gets a content session (SameSite=Lax) without
-  any beheer authority, in a cookie scoped to the site it is for (§5.10).
+  any admin authority, in a cookie scoped to the site it is for (§5.10).
 
 The separation is enforced by the application itself, as middleware that reads
-the `Host` header: on the content host only the paths above exist, on the beheer
+the `Host` header: on the content host only the paths above exist, on the admin
 host everything but `/healthz`. Every refusal is byte-identical to any other
 neutral 404, headers included, because the security headers sit outside that
 middleware and follow the host rather than the path (§5.6, §9).
 
-The defence on the beheer API is layered, and the Origin check is the load
-bearing one: a present `Origin` must be exactly the beheer origin, and in its
+The defence on the admin API is layered, and the Origin check is the load
+bearing one: a present `Origin` must be exactly the admin origin, and in its
 absence `Sec-Fetch-Site` may be at most `same-origin` or `none`. `same-site` is
-refused on purpose, because the content host is a sibling of the beheer host and
+refused on purpose, because the content host is a sibling of the admin host and
 a browser would count it as same-site; for the same reason SameSite=Strict is a
 second layer and not the defence. CORS is never opened. A non-browser client
 without either header (CI, curl) passes, and session-borne mutations still need
@@ -367,7 +367,7 @@ section only pins the rule down.
 Previews and `_version` views carry `X-Robots-Tag: noindex, nofollow`, and so
 does every SPA response (§9). Live content with a public base is deliberately
 indexable; every other base yields a crawler no content at all. `robots.txt`
-differs per host: the beheer host disallows everything, the content host
+differs per host: the admin host disallows everything, the content host
 disallows nothing.
 
 Code: `serving/router.py`, `platform/spa.py` (`spa_headers`),
@@ -595,10 +595,10 @@ Code: `access/keys.py`, `serving/code_page.py`, `serving/router.py`
 ### 7.5 Looking creates no member record
 
 A login only to look creates no member record: the decision uses session claims
-only. A record comes into being on a first beheer visit, and it is created
+only. A record comes into being on a first admin visit, and it is created
 **active** straight away, because anyone who can complete the SSO login may use
 Plak. `PLAK_BOOTSTRAP_ADMIN_SUB` additionally makes that member a platform
-administrator, idempotently. A member set to `deactivated` loses beheer access
+administrator, idempotently. A member set to `deactivated` loses admin access
 and the `site_team` route; the other ways in do not depend on member status.
 
 Because a viewer has no member row, an SSO viewer of protected content is
@@ -616,7 +616,7 @@ reference, claims never stand on their own in the cookie. The store is in
 process memory, because Plak runs one replica (§11), and sessions deliberately
 do not survive a restart. Maximum session age is 12 hours, with session id
 rotation at login. Two kinds (§4a) live in one store, kept apart by the kind
-field plus a separate cookie name: beheer routes accept the beheer session only,
+field plus a separate cookie name: admin routes accept the admin session only,
 content serving the content session only. `returnTo` is validated strictly: own
 origin, paths only, and never carrying a `key` parameter.
 
@@ -628,7 +628,7 @@ sandboxed page needs to reach its own assets, since its opaque origin is
 cross-site with its own site (§5.7, §5.10). The anchor is the cookie that can
 mint a site cookie for the next site and is only ever read on a top-level
 navigation, so it keeps the narrower Lax. What None costs, and why the
-alternatives are worse, is in `docs/security.md`. Logging out on the beheer
+alternatives are worse, is in `docs/security.md`. Logging out on the admin
 host is POST only and ends the content session too, through a redirect to
 `/-/logout` on the content host.
 
@@ -642,7 +642,7 @@ hostname (§5.10):
   same registrable domain; the value is signed and the session has to exist in
   the store, so the worst a shadow achieves is pushing a visitor into a session
   of the shadower's own, on an origin that has no session-borne mutations. The
-  beheer cookie keeps its `__Host-` prefix and with it the guarantee that
+  admin cookie keeps its `__Host-` prefix and with it the guarantee that
   nothing on the content host can write it.
 - `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
   login, the callback and the logout can read it, and nowhere else.
@@ -684,7 +684,7 @@ the callback query before the token exchange and enforceable through a config
 flag. The `acr` requirement is a configured list and may be empty, which is
 logged explicitly at startup.
 
-Back-channel logout is accepted on `/-/oidc/backchannel-logout`, beheer host
+Back-channel logout is accepted on `/-/oidc/backchannel-logout`, admin host
 only, with signature, `iss`, `aud`/`azp`, a recent `iat`, the logout event
 claim, `sid` or `sub`, the absence of a `nonce` and a `jti` replay cache.
 
@@ -705,8 +705,8 @@ Code: `auth/oidc.py`, `auth/revalidation.py`, `platform/backchannel.py`,
 
 ### 7.8 API security
 
-The beheer API refuses everything that does not demonstrably come from the
-beheer origin (§4a) and never sets CORS headers. Session-borne mutations need
+The admin API refuses everything that does not demonstrably come from the
+admin origin (§4a) and never sets CORS headers. Session-borne mutations need
 the CSRF double submit against `__Host-plak-csrf`. A `Bearer` Authorization
 header is accepted on the two deploy endpoints and the two CLI session endpoints
 and nowhere else; a middleware answers 401 to any other request carrying one.
@@ -753,7 +753,7 @@ The API base is `/-/api/v1` and addressing is on slugs, never UUIDs.
 
 | Endpoint | Auth |
 |---|---|
-| `POST /-/api/v1/sites/{group}/{site}/deploys` | CI ID token, CLI token, or beheer session with CSRF |
+| `POST /-/api/v1/sites/{group}/{site}/deploys` | CI ID token, CLI token, or admin session with CSRF |
 | `DELETE /-/api/v1/sites/{group}/{site}/previews/{ref}` | the same three |
 
 A live deploy is the default; the form field `preview=<ref>` makes it a preview
@@ -790,7 +790,7 @@ teardown accept any ref and any event. Claims copied into the audit record
 capped.
 
 **CLI login.** `plak login` is an OAuth 2.0 device authorization grant (RFC
-8628) Plak runs itself on top of the beheer SSO login: the CLI asks for a device
+8628) Plak runs itself on top of the admin SSO login: the CLI asks for a device
 code and a user code, the member approves that code in the SPA with a fresh
 session, and the CLI trades its device code for a one-hour access token plus a
 rotating refresh token (idle 30 days, absolute 90). A refresh token presented
@@ -827,10 +827,10 @@ Code: `api/deploys.py`, `api/cli.py`, `api/admin.py`, `api/errors.py`,
 `test_ci_tokens.py`, `test_ci_trust.py`, `test_ci_providers.py`,
 `test_cleanup_job.py`, `test_api_documentation.py`, `test_error_handlers.py`.
 
-## 9. The beheer interface
+## 9. The admin interface
 
 A Vue 3 SPA (runtime-only build, Vite base `/`), served by the application
-itself from `PLAK_SPA_PATH` on the root of the beheer host, as pure ASGI
+itself from `PLAK_SPA_PATH` on the root of the admin host, as pure ASGI
 middleware outside the rate limit and inside the host separation. On the content
 host it steps aside entirely.
 
@@ -842,12 +842,12 @@ pins down, and `/healthz`. Everything else is the SPA: an existing file is
 served statically, every other path gets `index.html`.
 
 Every SPA response carries a fixed header set: `Cache-Control`
-(`immutable` for `assets/`, `no-cache` otherwise), the beheer CSP,
+(`immutable` for `assets/`, `no-cache` otherwise), the admin CSP,
 `nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
 `X-Robots-Tag: noindex, nofollow` (§5.9) and
 `Cross-Origin-Opener-Policy: same-origin`.
 
-The beheer CSP is the strict regime beside the content CSP of §5.7:
+The admin CSP is the strict regime beside the content CSP of §5.7:
 
 ```
 default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;
@@ -864,7 +864,7 @@ Vue build, and a design system that needs no runtime `<style>` injection.
 The regime follows the host, not the path: a path rule used to make a refusal on
 the content host distinguishable from an ordinary neutral 404. Responses that
 carry no CSP of their own get it from the security-headers middleware: HTML on
-the beheer host gets the full beheer CSP plus `noindex`, JSON gets
+the admin host gets the full admin CSP plus `noindex`, JSON gets
 `frame-ancestors 'none'`. `/-/api/docs` carries its own, identical but for
 `style-src`, which allows `'unsafe-inline'` because Swagger UI puts style
 attributes on its elements; `script-src` stays `'self'`.

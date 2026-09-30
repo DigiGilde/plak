@@ -1,8 +1,8 @@
-"""Beheer SPA: the built Vue app (Vite base `/`) from PLAK_SPA_PATH, served by
-the app itself on the root of the beheer host.
+"""Admin SPA: the built Vue app (Vite base `/`) from PLAK_SPA_PATH, served by
+the app itself on the root of the admin host.
 
 Pure ASGI middleware, outside the rate limit (SPA assets are unlimited) and
-inside the host separation. It answers on the beheer host only; on
+inside the host separation. It answers on the admin host only; on
 the content host it steps aside completely, because the fallback below would
 otherwise hand out the interface for every content path.
 
@@ -58,7 +58,7 @@ SPA_PAGE_PATHS = tuple(
 
 
 def admin_csp(*form_targets: str) -> str:
-    """The strict beheer regime, alongside the content CSP from
+    """The strict admin regime, alongside the content CSP from
     serving/response.py.
 
     form-action has no fallback to default-src, so without it a form injected
@@ -88,7 +88,7 @@ MESSAGE_SPA_MISSING = (
 
 
 def is_spa_path(path: str) -> bool:
-    """Whether the SPA answers this path (on the beheer host; the middleware
+    """Whether the SPA answers this path (on the admin host; the middleware
     decides about the host itself).
 
     The rule is a negative one, and that is the point: since the move to the

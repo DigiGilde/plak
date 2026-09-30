@@ -1,4 +1,4 @@
-"""Member administration: upsert only on a beheer visit.
+"""Member administration: upsert only on an admin visit.
 
 Viewing never creates a member record (data minimisation); a record comes
 into being only once require_active_member runs, so on management endpoints.
@@ -32,7 +32,7 @@ REASON_NO_SESSION = "NO_SESSION"
 async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub: str) -> Member:
     """Looks up the member for the session sub, or creates it active.
 
-    Anyone who can complete SSO Rijk login may use Plak, so a first beheer
+    Anyone who can complete SSO Rijk login may use Plak, so a first admin
     visit needs no approval: the member is created active straight away. The
     bootstrap sub (PLAK_BOOTSTRAP_ADMIN_SUB) becomes admin besides, also when
     the record already existed before the bootstrap was configured
@@ -88,7 +88,7 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
 async def require_active_member(request: Request) -> Member:
     """FastAPI dependency for management endpoints: requires an active member.
 
-    The member record is upserted here (a first beheer visit creates it,
+    The member record is upserted here (a first admin visit creates it,
     active) and stays in place even when the 403 follows: a deactivated
     member keeps its record, so reactivation by a platform administrator
     brings back the same one.

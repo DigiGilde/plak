@@ -2,7 +2,7 @@
 
 `/-/api/docs` is publicly readable and refers only to our own assets
 (`/-/api/docs/assets/...`); no CDN scripts or stylesheets, so the page
-keeps working under the beheer CSP. The assets are plain files under
+keeps working under the admin CSP. The assets are plain files under
 `static/docs/` and are served here from an explicit allowlist of file
 names (no open path traversal through StaticFiles needed for this handful of
 fixed files).
@@ -149,7 +149,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 ]
 
 # Swagger UI 5.32.15, verbatim from the npm package swagger-ui-dist; refresh
-# with `just ververs-swagger-ui`. Served ourselves because the beheer CSP
+# with `just ververs-swagger-ui`. Served ourselves because the admin CSP
 # allows no CDN.
 SWAGGER_UI_VERSION = "5.32.15"
 

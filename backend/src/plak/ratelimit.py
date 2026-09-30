@@ -45,7 +45,7 @@ _LOGIN_PREFIXES = (
     PATH_CONTENT_OAUTH2_PREFIX,
 )
 # The API class covers the API alone. The SPA sits outside this middleware
-# (main.py) and on the root of the beheer host its paths are indistinguishable
+# (main.py) and on the root of the admin host its paths are indistinguishable
 # from content paths anyway: whatever the SPA does not answer there is an app
 # path or a miss, and the content class is the right bucket for those. This
 # module sits below the API layer, so this is a literal rather than an import

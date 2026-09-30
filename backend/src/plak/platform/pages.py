@@ -17,7 +17,7 @@ a request enters (`_profile_for`). On top of that the login attempt carries
 the kind, so a callback can never redeem an attempt from the other flow.
 
 The root of the content host is answered here too, with the public front page
-(see front_page_html). The root of the beheer host is not: since the SPA moved
+(see front_page_html). The root of the admin host is not: since the SPA moved
 there the SPA middleware answers it, and this router never sees it.
 """
 
@@ -91,7 +91,7 @@ def _login_failed(request: Request) -> str:
     """
     return i18n.t(i18n.negotiate(request.headers.get("accept-language")), "login.failed")
 
-# One route, two answers: on the beheer host the SPA is everything,
+# One route, two answers: on the admin host the SPA is everything,
 # so nothing there is for a crawler; on the content host the published sites
 # are the point. Since the SPA moved to the root, `Disallow: /admin` would
 # leave the whole interface open to crawlers.
@@ -151,7 +151,7 @@ def _redirect_uri(request: Request, profile: _LoginProfile) -> str:
 
 # --- Public front page on the root of the content host ---------------------
 
-# The same sentence the beheer environment carries above its pages, so someone
+# The same sentence the admin environment carries above its pages, so someone
 # who meets Plak on either side is told the same thing.
 BETA_NOTICE = i18n.NL["beta.bar"]
 #
@@ -322,7 +322,7 @@ body {
 }
 
 /* min-height rather than a fixed height, so the bar grows when the text does.
-   The beheer host reaches the same end through the component's own token
+   The admin host reaches the same end through the component's own token
    (--components-status-bar-height in frontend/src/global.css); this page has
    no design system, so it says it in plain CSS.
 
@@ -516,7 +516,7 @@ def front_page_response(settings: Settings, locale: str = i18n.DEFAULT) -> Respo
 
 @router.get("/", include_in_schema=False, response_model=None)
 async def front_page(request: Request, lang: str | None = None) -> Response:
-    """The public front page. Only the content host gets here: on the beheer
+    """The public front page. Only the content host gets here: on the admin
     host the SPA middleware answers `/` itself, with the interface, where
     Start.vue picks between landing and overview based on the session.
 
@@ -751,14 +751,14 @@ async def callback(request: Request) -> RedirectResponse:
 
 
 # The value of ?from= that says the content logout is one leg of a logout that
-# started on the beheer host. A fixed token rather than a URL, so the parameter
+# started on the admin host. A fixed token rather than a URL, so the parameter
 # cannot be turned into an open redirect.
-_FROM_BEHEER = "beheer"
+_FROM_ADMIN = "beheer"
 
 
 @router.post(PATH_LOGOUT, include_in_schema=False)
 async def logout(request: Request) -> Response:
-    """Logging out of the beheer host ends the content session as well.
+    """Logging out of the admin host ends the content session as well.
 
     The browser is sent on to the content host, because that session lives in
     a cookie only that origin can clear. With RP-initiated logout on, the IdP
@@ -768,9 +768,9 @@ async def logout(request: Request) -> Response:
     if on_content_host(request):
         return await _content_logout(request)
 
-    # The SPA submits a real form from the beheer origin, so it passes; a form
+    # The SPA submits a real form from the admin origin, so it passes; a form
     # on the content host does not. POST alone is no guard here: the content
-    # origin is same-site with the beheer origin, so SameSite=Strict still
+    # origin is same-site with the admin origin, so SameSite=Strict still
     # sends the session cookie along.
     if not admin_origin_ok(request):
         raise ApiError(403, REASON_OTHER_ORIGIN)
@@ -784,7 +784,7 @@ async def logout(request: Request) -> Response:
             request, vocabulary.LOGOUT, Actor(ActorKind.MEMBER, session.sub), vocabulary.ALLOWED, kind=session.kind
         )
 
-    content_leg = f"{settings.content_base_url.rstrip('/')}{PATH_CONTENT_LOGOUT}?from={_FROM_BEHEER}"
+    content_leg = f"{settings.content_base_url.rstrip('/')}{PATH_CONTENT_LOGOUT}?from={_FROM_ADMIN}"
     target = content_leg
     if settings.oidc_rp_logout and session is not None:
         oidc: OidcClient = request.app.state.oidc_client
@@ -797,7 +797,7 @@ async def logout(request: Request) -> Response:
 
 @router.get(PATH_CONTENT_LOGOUT, include_in_schema=False)
 async def content_logout(request: Request) -> Response:
-    """GET, because the beheer logout arrives here through a 303. Logging
+    """GET, because the admin logout arrives here through a 303. Logging
     someone out by making them load this URL is the most harmless forgery
     there is, and the content session carries no CSRF cookie to check."""
     if not on_content_host(request):
@@ -814,7 +814,7 @@ async def _content_logout(request: Request) -> Response:
         await _audit_auth(
             request, vocabulary.LOGOUT, Actor(ActorKind.MEMBER, session.sub), vocabulary.ALLOWED, kind=session.kind
         )
-    came_from_admin = request.query_params.get("from") == _FROM_BEHEER and settings.base_url
+    came_from_admin = request.query_params.get("from") == _FROM_ADMIN and settings.base_url
     target = f"{settings.base_url.rstrip('/')}/" if came_from_admin else DEFAULT_CONTENT_RETURN_TO
     response = RedirectResponse(target, status_code=303)
     clear_content_session_cookies(response, session.content_sites if session is not None else ())

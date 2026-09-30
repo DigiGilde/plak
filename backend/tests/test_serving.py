@@ -1470,7 +1470,7 @@ class TestLoginRedirect:
         assert response.headers["cache-control"] == "private, no-cache, must-revalidate"
 
     async def test_admin_session_counts_not_as_viewer(self, client, environment):
-        # A admin session carries no viewing right on content: the serving
+        # An admin session carries no viewing right on content: the serving
         # layer knows content sessions and nothing else (spec §4a, session
         # kinds).
         set_session_cookie(client, environment.app, sub="willekeurige-kijker")

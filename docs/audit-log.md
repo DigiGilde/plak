@@ -211,7 +211,7 @@ pseudonym as an ordinary login.
 
 | Action | Result | When |
 |---|---|---|
-| `member_language` | `allowed` | a member set the interface language of the beheer on their own account, from the profile page. `refs.language` is the new value: `nl`, `en`, or `null` when the member handed the choice back to their browser |
+| `member_language` | `allowed` | a member set the interface language of the admin on their own account, from the profile page. `refs.language` is the new value: `nl`, `en`, or `null` when the member handed the choice back to their browser |
 
 The value is in the row because it is a setting somebody changed about
 themselves, and a row saying only that something changed answers nothing. It

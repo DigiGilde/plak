@@ -46,7 +46,7 @@ async def _write(app, *, action: str, result: str = "allowed", sub: str | None =
 
 
 def _as_admin(client, app) -> dict[str, str]:
-    return login(client, app, sub="beheer-sub", email="beheer@example.nl")
+    return login(client, app, sub="admin-sub", email="admin@example.nl")
 
 
 async def _link(factory, data) -> None:

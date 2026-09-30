@@ -1,4 +1,4 @@
-"""Session API for the beheer SPA on `/-/api/v1`.
+"""Session API for the admin SPA on `/-/api/v1`.
 
 Every route runs behind `require_admin_origin` (origin separation) and
 `require_active_member`; mutations additionally demand the CSRF double-submit
@@ -1669,7 +1669,7 @@ def _require_admin(member: Member) -> None:
 def _refuse_self(target: Member, member: Member, what: str) -> None:
     """You cannot take your own platform rights away.
 
-    Not paternalism but a lockout guard: the beheer API is the only way back
+    Not paternalism but a lockout guard: the admin API is the only way back
     in, and a member who has just switched themselves off can no longer reach
     it. Someone else with the role does it, or you change the bootstrap
     setting.
@@ -2451,7 +2451,7 @@ CREATION_WINDOW_S = 3600
 @dataclass(frozen=True)
 class Creator:
     """Who creates a group or a site: the member, plus the CLI session when the
-    request came with a CLI token instead of a beheer session."""
+    request came with a CLI token instead of an admin session."""
 
     member: Member
     cli_session_id: uuid.UUID | None = None
@@ -2463,7 +2463,7 @@ class Creator:
 
 
 async def require_creator(request: Request) -> Creator:
-    """The two creation routes take a beheer session with CSRF, exactly as
+    """The two creation routes take an admin session with CSRF, exactly as
     before, or a CLI access token. A bearer header decides: with one, the
     session cookie is not looked at, and neither is CSRF, since nothing
     ambient came along. A CI ID token is site-bound and creates nothing."""

@@ -1,10 +1,10 @@
-"""Origin guarding for the beheer API.
+"""Origin guarding for the admin API.
 
-The beheer API only accepts requests from its own beheer origin: an Origin
-header that is present must be exactly the beheer origin (PLAK_BASE_URL); if
+The admin API only accepts requests from its own admin origin: an Origin
+header that is present must be exactly the admin origin (PLAK_BASE_URL); if
 Origin is absent, Sec-Fetch-Site may at most be `same-origin` or `none`.
 `same-site` is refused on purpose: the content origin is a sibling host of
-the beheer origin and counts as same-site to browsers. CORS headers are never
+the admin origin and counts as same-site to browsers. CORS headers are never
 set, so another origin can never read a response either. Requests carrying
 neither header (curl, CI) pass this gate: they carry no ambient credentials
 sent along by the browser, and mutations stay covered by the CSRF double
@@ -78,7 +78,7 @@ def _refuse() -> ApiError:
 
 
 def admin_origin_ok(request: Request) -> bool:
-    """Whether this request comes from the beheer origin itself."""
+    """Whether this request comes from the admin origin itself."""
     settings = request.app.state.settings
     target = admin_origin(settings)
 
@@ -96,7 +96,7 @@ def admin_origin_ok(request: Request) -> bool:
 
 
 async def require_admin_origin(request: Request) -> None:
-    """FastAPI dependency for every beheer API route."""
+    """FastAPI dependency for every admin API route."""
     if not admin_origin_ok(request):
         raise _refuse()
 

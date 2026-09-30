@@ -83,7 +83,7 @@ CONTENT_ANCHOR_PATH = f"{PLATFORM_PREFIX}/"
 MAX_SESSION_AGE = timedelta(hours=12)
 MAX_LOGIN_ATTEMPT_AGE = timedelta(minutes=10)
 
-# The root of the beheer host, where the SPA lives (platform/spa.py).
+# The root of the admin host, where the SPA lives (platform/spa.py).
 DEFAULT_RETURN_TO = "/"
 # The root of the content host is the public front page (platform/pages.py);
 # a content login without a valid returnTo (which the serving router always
@@ -150,7 +150,7 @@ class Session:
     # cookie for, so the logout can clear every one of them: a browser only
     # deletes a cookie when the path matches.
     content_sites: frozenset[str] = frozenset()
-    # Whether the login that made this session was started from the beheer
+    # Whether the login that made this session was started from the admin
     # origin itself. A login a third-party page navigated the browser into is
     # still a valid session, but does not count as fresh where freshness is
     # meant to prove deliberate intent (CLI device approval).

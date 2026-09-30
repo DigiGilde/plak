@@ -104,7 +104,7 @@ function logout(): void {
   // Without a CSRF token: a form cannot set the X-CSRF-Token header and the
   // route does not demand one. What guards it is the backend's origin check
   // (admin_origin_ok in platform/pages.py), which only lets a POST from the
-  // beheer origin itself through; SameSite=Strict does not, because the
+  // admin origin itself through; SameSite=Strict does not, because the
   // content origin is same-site. Should the route ever require CSRF, this has
   // to become a fetch with that header.
   logoutForm.value?.submit();

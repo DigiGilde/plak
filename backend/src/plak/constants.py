@@ -29,7 +29,7 @@ STANDARD_LOCATIONS = ("/robots.txt", "/favicon.ico", "/.well-known")
 INTERNAL_ONLY_PATHS = frozenset({"/healthz"})
 
 
-# SPA pages at the root of the beheer host rather than under /-/, because a
+# SPA pages at the root of the admin host rather than under /-/, because a
 # client opens them by URL (the CLI's device flow opens /cli-link). The
 # Vue router matches them before /:group, so a group of that name would be
 # unreachable in the SPA. frontend/src/router.ts holds the same list.
@@ -54,7 +54,7 @@ INDEX_FILE = "index.html"
 # Platform namespace: per SLUG_RE the segment "-" can never be a
 # group, so /-/... is never content.
 # Every app endpoint lives under it, on both hosts, which is what keeps the
-# root of the beheer host free for the SPA.
+# root of the admin host free for the SPA.
 PLATFORM_SEGMENT = "-"
 PLATFORM_PREFIX = f"/{PLATFORM_SEGMENT}"
 
@@ -70,7 +70,7 @@ PATH_OAUTH2_PREFIX = f"/{PLATFORM_SEGMENT}/oauth2/"
 PATH_LOGOUT = f"/{PLATFORM_SEGMENT}/logout"
 
 # Where the OP delivers a back-channel logout token (OIDC Back-Channel Logout
-# 1.0, platform/backchannel.py). Beheer host only: belongs_to_content() refuses
+# 1.0, platform/backchannel.py). Admin host only: belongs_to_content() refuses
 # everything under /-/ that is not one of the four content paths.
 PATH_BACKCHANNEL_LOGOUT = f"/{PLATFORM_SEGMENT}/oidc/backchannel-logout"
 

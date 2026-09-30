@@ -2,10 +2,10 @@
 front of the app to set them.
 
 - `Permissions-Policy` on every response.
-- HSTS on every response, only when the beheer origin is https.
-- On the beheer host: `Cross-Origin-Opener-Policy: same-origin` and
+- HSTS on every response, only when the admin origin is https.
+- On the admin host: `Cross-Origin-Opener-Policy: same-origin` and
   `X-Content-Type-Options: nosniff` on every response. When the response does
-  not carry a CSP yet, HTML (such as the API docs) gets the full beheer CSP
+  not carry a CSP yet, HTML (such as the API docs) gets the full admin CSP
   plus `X-Robots-Tag: noindex`, and everything else (JSON API) gets
   `frame-ancestors 'none'`. The SPA and the neutral 404 carry their own full
   CSP; content keeps the content CSP from serving/response.py.
@@ -13,7 +13,7 @@ front of the app to set them.
 The regime follows the HOST, not the path. Following the path would make a
 refusal on the content host tell tales: `/admin/x` refused with
 `Cross-Origin-Opener-Policy` and `/bestaat/niet/` refused without it is one
-neutral 404 in two shapes, which gives away that there is a beheer world
+neutral 404 in two shapes, which gives away that there is an admin world
 behind this origin. On the content host every response, refusal included,
 carries the two general headers and nothing more.
 

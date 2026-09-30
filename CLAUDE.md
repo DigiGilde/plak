@@ -46,11 +46,11 @@ shell scripts in `dev/` and the step names in the workflows under
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
-everything under `docs/`, and the route paths of the beheer SPA
+everything under `docs/`, and the route paths of the admin SPA
 (`/-/sessions`, `/-/profile`, `/cli-link`). A path is an address, not
 interface text, and the SPA answers in two languages under one.
 
-The beheer SPA is the exception: it is bilingual, Dutch and English.
+The admin SPA is the exception: it is bilingual, Dutch and English.
 Every string it shows lives in `frontend/src/i18n/`, in a shared
 catalogue plus one section per area, always in both languages; a key in
 one and not the other is a compile error. Which language a member gets
@@ -61,7 +61,7 @@ component is a bug, and `frontend/tests/dutch-literals.test.ts` says so.
 The `title` and `detail` of a problem+json answer have both languages
 too: they live in the catalogue in `backend/src/plak/messages.py` and
 the API renders the language the request asks for in `Accept-Language`.
-English is what a client that asks for nothing gets; the beheer SPA
+English is what a client that asks for nothing gets; the admin SPA
 sends the language it is showing, so a refusal arrives in the language
 on screen. A new message is added to both catalogues at once, which
 `test_messages.py` enforces.
