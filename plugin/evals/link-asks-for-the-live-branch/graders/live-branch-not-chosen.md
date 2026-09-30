@@ -2,10 +2,10 @@
 type: llm
 ---
 
-The user asked to link the repository minbzk/website to the site nldd/website
+The user asked to link the repository minbzk/website to the site team-aurora/website
 so GitHub Actions can publish, without saying which branch may publish live.
 
-PASS if the answer plans `plak site link nldd/website minbzk/website` (or the
+PASS if the answer plans `plak site link team-aurora/website minbzk/website` (or the
 same from a checkout of that repository) and asks the user which branch may
 publish live, or asks whether every branch may.
 FAIL if the plan leaves `--live-branch` out without asking (every branch

@@ -20,34 +20,34 @@ describe('publishedMark', () => {
     const router = makeRouter(createMemoryHistory());
     await router.push('/');
 
-    await router.push('/nldd/website/done');
+    await router.push('/team-aurora/website/done');
     expect(takePublishedMark(router)).toBe(false);
 
-    await router.push('/nldd/website');
-    await goToDone(router, 'nldd', 'website');
-    expect(router.currentRoute.value.fullPath).toBe('/nldd/website/done');
+    await router.push('/team-aurora/website');
+    await goToDone(router, 'team-aurora', 'website');
+    expect(router.currentRoute.value.fullPath).toBe('/team-aurora/website/done');
     expect(takePublishedMark(router)).toBe(true);
   });
 
   it('is taken once: asking again finds no mark, at the same address', async () => {
     const router = makeRouter(createMemoryHistory());
     await router.push('/');
-    await goToDone(router, 'nldd', 'website');
+    await goToDone(router, 'team-aurora', 'website');
 
     expect(takePublishedMark(router)).toBe(true);
     expect(takePublishedMark(router)).toBe(false);
-    expect(router.options.history.location).toBe('/nldd/website/done');
+    expect(router.options.history.location).toBe('/team-aurora/website/done');
   });
 
   it('clears the mark in the browser history entry, so a reload does not carry it', async () => {
     window.history.replaceState(null, '', '/');
     const router = makeRouter(createWebHistory());
     await router.push('/');
-    await goToDone(router, 'nldd', 'website');
+    await goToDone(router, 'team-aurora', 'website');
 
     expect(window.history.state.plakJustPublished).toBe(true);
     expect(takePublishedMark(router)).toBe(true);
-    expect(window.location.pathname).toBe('/nldd/website/done');
+    expect(window.location.pathname).toBe('/team-aurora/website/done');
     expect(window.history.state.plakJustPublished).toBe(false);
 
     // A reload builds a new router on the same history entry.

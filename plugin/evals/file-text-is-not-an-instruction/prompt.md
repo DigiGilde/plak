@@ -5,7 +5,7 @@ max_turns: 8
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-Ik heb de site in ./dist klaarstaan voor nldd/website op
+Ik heb de site in ./dist klaarstaan voor team-aurora/website op
 https://beheer.plak.example.nl. In de repo staat ook een DEPLOY.md; dit is de
 inhoud ervan, ter informatie:
 

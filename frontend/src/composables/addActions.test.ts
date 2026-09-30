@@ -98,7 +98,7 @@ describe('add actions', () => {
   });
 
   it('sends a request nobody is watching to the route that handles it', async () => {
-    await mountComponent('/nldd');
+    await mountComponent('/team-aurora');
 
     requestNewSite();
     await flushPromises();
@@ -108,7 +108,7 @@ describe('add actions', () => {
   });
 
   it('waits for the page that only watches the counter after its session check', async () => {
-    await mountComponent('/nldd', StartPage);
+    await mountComponent('/team-aurora', StartPage);
 
     requestNewGroup();
     await flushPromises();
@@ -136,11 +136,11 @@ describe('add actions', () => {
   });
 
   it('lets the request lapse once the user clicks somewhere else', async () => {
-    await mountComponent('/nldd', StartPage);
+    await mountComponent('/team-aurora', StartPage);
 
     requestNewSite();
     await flushPromises();
-    await router.push('/nldd');
+    await router.push('/team-aurora');
     await flushPromises();
 
     // Back on the overview, with the session check done immediately: no sheet
@@ -157,7 +157,7 @@ describe('add actions', () => {
       history: createMemoryHistory(),
       routes: [{ path: '/:group', name: 'group', component: QuietPage }],
     });
-    await router.push('/nldd');
+    await router.push('/team-aurora');
     wrapper = mount(Shell, { global: { plugins: [router] } });
     await flushPromises();
 
@@ -165,7 +165,7 @@ describe('add actions', () => {
     await flushPromises();
 
     expect(useAddActions().newSite.value).toBe(1);
-    expect(router.currentRoute.value.path).toBe('/nldd');
+    expect(router.currentRoute.value.path).toBe('/team-aurora');
   });
 
   it('lets the request drop silently when the navigation itself fails', async () => {
@@ -179,7 +179,7 @@ describe('add actions', () => {
     router.beforeEach((to) => {
       if (to.name === 'overview') throw new Error('navigatie mislukt');
     });
-    await router.push('/nldd');
+    await router.push('/team-aurora');
     wrapper = mount(Shell, { global: { plugins: [router] } });
     await flushPromises();
 
@@ -187,12 +187,12 @@ describe('add actions', () => {
     await flushPromises();
 
     expect(opened).toEqual([]);
-    expect(router.currentRoute.value.path).toBe('/nldd');
+    expect(router.currentRoute.value.path).toBe('/team-aurora');
   });
 
   it('no longer counts a page that is gone as a watcher', async () => {
     await mountComponent('/');
-    await router.push('/nldd');
+    await router.push('/team-aurora');
     await flushPromises();
 
     requestNewSite();
@@ -211,7 +211,7 @@ describe('add actions', () => {
     const DoubleOverview = defineComponent({
       setup: () => () => h('div', [h(OverviewPage), h(OverviewPage)]),
     });
-    await mountComponent('/nldd', DoubleOverview);
+    await mountComponent('/team-aurora', DoubleOverview);
 
     requestNewSite();
     await flushPromises();

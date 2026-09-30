@@ -1,7 +1,7 @@
 {
   "name": "plak",
   "displayName": "Plak",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Publish a static site to a Plak instance: a preview by default, live only when the user asks for it.",
   "author": {
     "name": "Plak team",

@@ -67,9 +67,9 @@ async function makeWrapper(path: string) {
 
 describe('Site: structure', () => {
   it('shows title, visibility and the six tabs with clean hrefs', async () => {
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
 
-    expect(wrapper.find('h1').text()).toBe('NLDD website');
+    expect(wrapper.find('h1').text()).toBe('Team Aurora website');
     expect(wrapper.find('[data-testid="zichtbaarheid-tag"]').attributes('text')).toBe('Publiek');
 
     const tabs = wrapper.findAll('nldd-tab-bar-item');
@@ -83,17 +83,17 @@ describe('Site: structure', () => {
     ]);
     expect(wrapper.find('[data-testid="tab-overzicht"]').attributes('current')).toBeDefined();
     expect(wrapper.find('[data-testid="tab-previews"]').attributes('href')).toBe(
-      '/nldd/website/previews',
+      '/team-aurora/website/previews',
     );
     expect(wrapper.find('[data-testid="tab-overzicht"]').attributes('href')).toBe(
-      '/nldd/website',
+      '/team-aurora/website',
     );
   });
 
   it('falls back to the slug for the heading when the site has no title', async () => {
     backend.data.sites.find((p) => p.slug === 'website')!.title = '';
 
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
 
     expect(wrapper.find('h1').text()).toBe('website');
   });
@@ -101,18 +101,18 @@ describe('Site: structure', () => {
   it('passes an empty content base to the tabs for an anonymous visitor', async () => {
     backend.data.loggedInMemberId = null;
 
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
 
     // MOCK_CONTENT_BASE only rides along on a real session; without one the
     // live link falls back to a bare path instead of an empty-origin URL.
     const link = wrapper.find('[data-testid="publieke-url"]');
     expect(link.exists()).toBe(true);
     expect(link.attributes('href')).not.toContain(MOCK_CONTENT_BASE);
-    expect(link.attributes('href')).toBe('/nldd/website/');
+    expect(link.attributes('href')).toBe('/team-aurora/website/');
   });
 
   it('opens the Overzicht tab by default', async () => {
-    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
 
     expect(router.currentRoute.value.name).toBe('site-overview');
     expect(wrapper.text()).toContain('Status');
@@ -120,7 +120,7 @@ describe('Site: structure', () => {
   });
 
   it('shows a 404 message for an unknown site, without tabs', async () => {
-    const { wrapper } = await makeWrapper('/nldd/bestaat-niet');
+    const { wrapper } = await makeWrapper('/team-aurora/bestaat-niet');
 
     expect(wrapper.html()).toContain('Onbekend site');
     expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(false);
@@ -135,7 +135,7 @@ describe('Site: structure', () => {
 
   it('shows an error message on a server error', async () => {
     vi.stubGlobal('fetch', serverErrorFetch());
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
 
     expect(wrapper.html()).toContain('Serverfout');
   });
@@ -143,34 +143,34 @@ describe('Site: structure', () => {
 
 describe('Site: tab navigation', () => {
   it('navigates per tab to the matching subpath', async () => {
-    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
 
     await wrapper.find('[data-testid="tab-previews"]').trigger('click');
     await untilIdle();
     expect(router.currentRoute.value.name).toBe('site-previews');
-    expect(router.currentRoute.value.path).toBe('/nldd/website/previews');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/website/previews');
     expect(wrapper.find('[data-testid="preview-pr-42"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="tab-previews"]').attributes('current')).toBeDefined();
     expect(wrapper.find('[data-testid="tab-overzicht"]').attributes('current')).toBeUndefined();
 
     await wrapper.find('[data-testid="tab-toegang"]').trigger('click');
     await untilIdle();
-    expect(router.currentRoute.value.path).toBe('/nldd/website/access');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/website/access');
     expect(wrapper.text()).toContain('Wie kan deze site bekijken?');
 
     await wrapper.find('[data-testid="tab-deploy"]').trigger('click');
     await untilIdle();
-    expect(router.currentRoute.value.path).toBe('/nldd/website/deploy');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/website/deploy');
     expect(wrapper.text()).toContain('Publiceren vanuit GitHub of Forgejo');
 
     await wrapper.find('[data-testid="tab-versies"]').trigger('click');
     await untilIdle();
-    expect(router.currentRoute.value.path).toBe('/nldd/website/versions');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/website/versions');
     expect(wrapper.find('[data-testid="live-marker-versie-1"]').exists()).toBe(true);
   });
 
   it('also loads each tab directly via its URL', async () => {
-    const { wrapper } = await makeWrapper('/nldd/website/access');
+    const { wrapper } = await makeWrapper('/team-aurora/website/access');
 
     expect(wrapper.text()).toContain('Wie kan deze site bekijken?');
     expect(wrapper.find('[data-testid="tab-toegang"]').attributes('current')).toBeDefined();
@@ -179,35 +179,35 @@ describe('Site: tab navigation', () => {
 
 describe('Site: content origin', () => {
   it('passes the content origin from /me to the tabs for shared links', async () => {
-    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
 
     // Overview: public URL on the content host, not on the admin origin.
     const publicHref = wrapper.find('[data-testid="publieke-url"]').attributes('href');
-    expect(publicHref).toBe(`${MOCK_CONTENT_BASE}/nldd/website/`);
+    expect(publicHref).toBe(`${MOCK_CONTENT_BASE}/team-aurora/website/`);
     expect(publicHref).not.toContain(window.location.origin);
 
     // Versies: viewing sits in the row menu, so the URL only shows up
     // from what the action opens.
     const open = vi.fn();
     vi.stubGlobal('open', open);
-    await router.push('/nldd/website/versions');
+    await router.push('/team-aurora/website/versions');
     await untilIdle();
     wrapper
       .find('[data-testid="bekijk-versie-0"]')
       .element.dispatchEvent(new CustomEvent('select'));
     expect(open).toHaveBeenCalledWith(
-      `${MOCK_CONTENT_BASE}/nldd/website/_version/versie-0/`,
+      `${MOCK_CONTENT_BASE}/team-aurora/website/_version/versie-0/`,
       '_blank',
       'noopener',
     );
 
-    await router.push('/nldd/website/previews');
+    await router.push('/team-aurora/website/previews');
     await untilIdle();
     expect(
       wrapper.find('[data-testid="preview-pr-42"]').find('nldd-link').attributes('href'),
-    ).toBe(`${MOCK_CONTENT_BASE}/nldd/website/_preview/pr-42/`);
+    ).toBe(`${MOCK_CONTENT_BASE}/team-aurora/website/_preview/pr-42/`);
 
-    await router.push('/nldd/website/deploy');
+    await router.push('/team-aurora/website/deploy');
     await untilIdle();
     // Deploy shows the CI audience (the admin origin), not the content host:
     // the workflow snippet uploads there, it does not link to the site itself.
@@ -219,12 +219,12 @@ describe('Site: content origin', () => {
 
 describe('Site: breadcrumb path', () => {
   it('supplies the breadcrumb path to the app shell instead of putting it at the top itself', async () => {
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
 
     expect(wrapper.find('nldd-breadcrumbs').exists()).toBe(false);
-    expect(breadcrumbsFor('/nldd/website')).toEqual([
+    expect(breadcrumbsFor('/team-aurora/website')).toEqual([
       { text: 'Overzicht', href: '/' },
-      { text: 'NLDD', href: '/nldd' },
+      { text: 'Team Aurora', href: '/team-aurora' },
       { text: 'website' },
     ]);
   });
@@ -232,13 +232,13 @@ describe('Site: breadcrumb path', () => {
   it('puts the site name and the tab in the browser tab title', async () => {
     // Every route was called "Plak", so a row of tabs said nothing and a
     // screen reader reported no location after navigating (WCAG 2.4.2).
-    const { router } = await makeWrapper('/nldd/website');
-    expect(document.title).toBe('NLDD website - Plak');
+    const { router } = await makeWrapper('/team-aurora/website');
+    expect(document.title).toBe('Team Aurora website - Plak');
 
-    await router.push('/nldd/website/versions');
+    await router.push('/team-aurora/website/versions');
     await untilIdle();
 
-    expect(document.title).toBe('NLDD website - Versies - Plak');
+    expect(document.title).toBe('Team Aurora website - Versies - Plak');
   });
 
   // The group slug is whatever the visitor's URL decoded to, and the trail is
@@ -254,15 +254,15 @@ describe('Site: breadcrumb path', () => {
   );
 
   it('moves the breadcrumb path along to the path of the open tab', async () => {
-    const { router } = await makeWrapper('/nldd/website');
+    const { router } = await makeWrapper('/team-aurora/website');
 
-    await router.push('/nldd/website/versions');
+    await router.push('/team-aurora/website/versions');
     await untilIdle();
 
-    expect(breadcrumbsFor('/nldd/website')).toEqual([]);
-    expect(breadcrumbsFor('/nldd/website/versions')).toEqual([
+    expect(breadcrumbsFor('/team-aurora/website')).toEqual([]);
+    expect(breadcrumbsFor('/team-aurora/website/versions')).toEqual([
       { text: 'Overzicht', href: '/' },
-      { text: 'NLDD', href: '/nldd' },
+      { text: 'Team Aurora', href: '/team-aurora' },
       { text: 'website' },
     ]);
   });
@@ -270,7 +270,7 @@ describe('Site: breadcrumb path', () => {
 
 describe('Site: deleting', () => {
   it('returns to the overview after deleting the site', async () => {
-    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
 
     await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
@@ -283,7 +283,7 @@ describe('Site: deleting', () => {
 
 describe('Site: refreshing after a change', () => {
   it("leaves the tab's confirmation in place and doesn't rebuild the tab bar", async () => {
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
     const bar = wrapper.find('[data-testid="site-tabs"]').element;
 
     fireDetailEvent(wrapper.find('[data-testid="upload-invoer"]').element, 'change', {
@@ -298,7 +298,7 @@ describe('Site: refreshing after a change', () => {
   });
 
   it("refreshes the page without swallowing the Toegang tab's notification", async () => {
-    const { wrapper } = await makeWrapper('/nldd/website/access');
+    const { wrapper } = await makeWrapper('/team-aurora/website/access');
     const bar = wrapper.find('[data-testid="site-tabs"]').element;
 
     fireDetailEvent(wrapper.find('[data-testid="basis-site_team"]').element, 'change', {
@@ -314,7 +314,7 @@ describe('Site: refreshing after a change', () => {
   });
 
   it('keeps the page in place when the refresh itself fails', async () => {
-    const { wrapper } = await makeWrapper('/nldd/website');
+    const { wrapper } = await makeWrapper('/team-aurora/website');
     const bar = wrapper.find('[data-testid="site-tabs"]').element;
 
     vi.stubGlobal('fetch', serverErrorFetch());
@@ -322,17 +322,17 @@ describe('Site: refreshing after a change', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="site-tabs"]').element).toBe(bar);
-    expect(wrapper.find('h1').text()).toBe('NLDD website');
+    expect(wrapper.find('h1').text()).toBe('Team Aurora website');
   });
 });
 
 describe('Site: tab switch', () => {
   it("doesn't rebuild the site header when switching tabs", async () => {
-    const { wrapper, router } = await makeWrapper('/nldd/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
     const bar = wrapper.find('[data-testid="site-tabs"]').element;
     const title = wrapper.find('h1').element;
 
-    await router.push('/nldd/website/versions');
+    await router.push('/team-aurora/website/versions');
     await untilIdle();
 
     expect(wrapper.find('[data-testid="site-tabs"]').element).toBe(bar);

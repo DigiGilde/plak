@@ -288,7 +288,7 @@ def test_publish_packs_a_folder_as_tar_gz_with_the_right_relative_paths(
     stub_server, host, dist_folder, token_env, capsys
 ):
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 0
@@ -298,7 +298,7 @@ def test_publish_packs_a_folder_as_tar_gz_with_the_right_relative_paths(
     assert len(stub_server.requests) == 1
     record = stub_server.requests[0]
     assert record["method"] == "POST"
-    assert record["path"] == "/-/api/v1/sites/nldd/website/deploys"
+    assert record["path"] == "/-/api/v1/sites/team-aurora/website/deploys"
     assert record["headers"]["Authorization"] == "Bearer tok"
 
     fields = _parse_multipart(record["headers"]["Content-Type"], record["body"])
@@ -330,7 +330,7 @@ def test_publish_sends_a_single_html_file_unchanged(
     html_path.write_bytes(html_bytes)
 
     code = cli.main(
-        ["publish", str(html_path), "--host", host, "--site", "nldd/website"]
+        ["publish", str(html_path), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 0
@@ -348,7 +348,7 @@ def test_publish_with_the_preview_field(stub_server, host, dist_folder, token_en
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--preview",
             "pr-42",
         ]
@@ -368,7 +368,7 @@ def test_publish_with_base_path(stub_server, host, dist_folder, token_env):
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--base-path",
             "./dist/",
         ]
@@ -384,7 +384,7 @@ def test_publish_without_base_path_does_not_send_the_field(
     stub_server, host, dist_folder, token_env
 ):
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 0
@@ -404,7 +404,7 @@ def test_publish_invalid_base_path_gives_exit_2_without_a_request(
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--base-path",
             base_path,
         ]
@@ -430,7 +430,7 @@ def test_publish_refused_bundle_shows_the_suggestion_and_the_flag(
     )
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -464,7 +464,7 @@ def test_publish_suggestion_in_the_root_advises_dropping_the_flag(
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--base-path",
             "dist",
         ]
@@ -494,7 +494,7 @@ def test_publish_suggestion_with_odd_characters_is_not_shown(
     )
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -522,7 +522,7 @@ def test_publish_detail_with_control_characters_is_cleaned(
     )
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -540,7 +540,7 @@ def test_publish_detail_is_truncated(stub_server, host, dist_folder, token_env, 
     )
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -561,7 +561,7 @@ def test_publish_client_error_prints_the_dutch_detail_and_gives_exit_1(
     )
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -576,7 +576,7 @@ def test_publish_unknown_file_type_gives_exit_2_without_a_request(
     pdf_path.write_bytes(b"%PDF-1.4")
 
     code = cli.main(
-        ["publish", str(pdf_path), "--host", host, "--site", "nldd/website"]
+        ["publish", str(pdf_path), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 2
@@ -601,7 +601,7 @@ def test_publish_missing_path_gives_exit_2(stub_server, host, tmp_path, token_en
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
         ]
     )
 
@@ -617,19 +617,19 @@ def test_publish_missing_required_arguments_gives_exit_2(stub_server):
 def test_preview_remove_succeeds(stub_server, host, token_env, capsys):
     stub_server.responder = _empty_responder(204)
 
-    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "nldd/website"])
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
     record = stub_server.requests[0]
     assert record["method"] == "DELETE"
-    assert record["path"] == "/-/api/v1/sites/nldd/website/previews/pr-42"
+    assert record["path"] == "/-/api/v1/sites/team-aurora/website/previews/pr-42"
     assert record["headers"]["Authorization"] == "Bearer tok"
 
 
 def test_preview_remove_is_idempotent(stub_server, host, token_env):
     stub_server.responder = _empty_responder(204)
 
-    args = ["preview-remove", "pr-42", "--host", host, "--site", "nldd/website"]
+    args = ["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"]
 
     first_code = cli.main(args)
     second_code = cli.main(args)
@@ -651,7 +651,7 @@ def test_preview_remove_client_error_gives_exit_1(stub_server, host, monkeypatch
         },
     )
 
-    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "nldd/website"])
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     assert "Token is ongeldig of ingetrokken" in capsys.readouterr().err
@@ -665,7 +665,7 @@ def test_publish_symlink_in_the_dist_folder_gives_exit_2_without_a_request(
     (dist_folder / "kwaadaardige-link").symlink_to(outside_file)
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 2
@@ -679,7 +679,7 @@ def test_publish_server_sending_a_version_id_with_a_newline_gives_exit_1(
     stub_server.responder = _json_responder(201, {"versionId": "not-a-uuid\nevil=1"})
 
     code = cli.main(
-        ["publish", str(dist_folder), "--host", host, "--site", "nldd/website"]
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
     )
 
     assert code == 1
@@ -712,7 +712,7 @@ def test_publish_http_not_localhost_gives_exit_2_without_a_request(
             "--host",
             "http://plak.example.nl",
             "--site",
-            "nldd/website",
+            "team-aurora/website",
         ]
     )
 
@@ -773,7 +773,7 @@ def test_publish_token_via_environment_variable(
 ):
     monkeypatch.setenv("PLAK_ACCESS_TOKEN", "geheim-uit-omgeving")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
     record = stub_server.requests[0]
@@ -795,7 +795,7 @@ def test_publish_client_error_does_not_leak_the_token_in_the_output(
         },
     )
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     output = capsys.readouterr()
@@ -806,7 +806,7 @@ def test_publish_client_error_does_not_leak_the_token_in_the_output(
 def test_publish_without_any_token_source_asks_to_log_in(
     stub_server, host, dist_folder, isolated_cwd, capsys
 ):
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 2
     assert stub_server.requests == []
@@ -1077,7 +1077,7 @@ def test_publish_fetches_and_masks_an_oidc_token_in_ci(
     stub_server.responder = _sequence_responder(
         {
             "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token", "count": 0})],
-            "/-/api/v1/sites/nldd/website/deploys": [
+            "/-/api/v1/sites/team-aurora/website/deploys": [
                 _json_step(201, {"versionId": "00000000-0000-0000-0000-000000000000"})
             ],
         }
@@ -1085,7 +1085,7 @@ def test_publish_fetches_and_masks_an_oidc_token_in_ci(
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
     out = capsys.readouterr()
@@ -1097,7 +1097,7 @@ def test_publish_fetches_and_masks_an_oidc_token_in_ci(
     assert "audience=" in oidc_requests[0]["path"]
 
     deploy_requests = [
-        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/nldd/website/deploys"
+        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/team-aurora/website/deploys"
     ]
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
 
@@ -1112,12 +1112,12 @@ def test_explicit_plak_access_token_takes_priority_over_oidc(
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
     assert all(not r["path"].startswith("/oidc-token") for r in stub_server.requests)
     deploy_requests = [
-        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/nldd/website/deploys"
+        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/team-aurora/website/deploys"
     ]
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer expliciet-token"
 
@@ -1184,7 +1184,7 @@ def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
     stub_server.responder = _sequence_responder(
         {
             "/oidc-token": [_json_step(200, {"value": "super-secret-oidc-jwt"})],
-            "/-/api/v1/sites/nldd/website/deploys": [
+            "/-/api/v1/sites/team-aurora/website/deploys": [
                 _json_step(201, {"versionId": "00000000-0000-0000-0000-000000000000"})
             ],
         }
@@ -1207,7 +1207,7 @@ def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--output-file",
             str(github_output),
         ],
@@ -1338,10 +1338,10 @@ def _action_responder(stub_server, *, deploy=None, remove=None) -> None:
     stub_server.responder = _sequence_responder(
         {
             "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
-            "/-/api/v1/sites/nldd/website/deploys": [
+            "/-/api/v1/sites/team-aurora/website/deploys": [
                 deploy or _json_step(201, {"versionId": "11111111-2222-3333-4444-555555555555"})
             ],
-            "/-/api/v1/sites/nldd/website/previews/pr-42": [
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [
                 remove or (lambda _record: (204, None, "text/plain"))
             ],
         }
@@ -1350,7 +1350,7 @@ def _action_responder(stub_server, *, deploy=None, remove=None) -> None:
 
 def _deploy_requests(stub_server) -> list[dict]:
     return [
-        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/nldd/website/deploys"
+        r for r in stub_server.requests if r["path"] == "/-/api/v1/sites/team-aurora/website/deploys"
     ]
 
 
@@ -1360,7 +1360,7 @@ def test_action_publishes_live_and_reports_the_version_id(
     _action_responder(stub_server)
 
     run = _run_action(
-        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
         env=action_env,
         cwd=isolated_cwd,
     )
@@ -1394,7 +1394,7 @@ def test_action_passes_preview_ref_and_base_path_on_to_the_server(
     run = _run_action(
         {
             "host": host,
-            "site": "nldd/website",
+            "site": "team-aurora/website",
             "dist-path": str(dist_folder),
             "preview-ref": "pr-42",
             "base-path": "assets",
@@ -1422,7 +1422,7 @@ def test_action_teardown_removes_the_preview_and_publishes_nothing(
     run = _run_action(
         {
             "host": host,
-            "site": "nldd/website",
+            "site": "team-aurora/website",
             "dist-path": str(dist_folder),
             "preview-ref": "pr-42",
             "teardown": "true",
@@ -1438,7 +1438,7 @@ def test_action_teardown_removes_the_preview_and_publishes_nothing(
     removals = [r for r in stub_server.requests if "/previews/" in r["path"]]
     assert len(removals) == 1
     assert removals[0]["method"] == "DELETE"
-    assert removals[0]["path"] == "/-/api/v1/sites/nldd/website/previews/pr-42"
+    assert removals[0]["path"] == "/-/api/v1/sites/team-aurora/website/previews/pr-42"
     assert removals[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
     assert Path(action_env["GITHUB_OUTPUT"]).read_text() == ""
 
@@ -1451,7 +1451,7 @@ def test_action_refuses_a_teardown_without_a_preview_ref(
     _action_responder(stub_server)
 
     run = _run_action(
-        {"host": host, "site": "nldd/website", "teardown": "true"},
+        {"host": host, "site": "team-aurora/website", "teardown": "true"},
         env=action_env,
         cwd=isolated_cwd,
     )
@@ -1468,7 +1468,7 @@ def test_action_refuses_a_publish_without_a_dist_path(
     _action_responder(stub_server)
 
     run = _run_action(
-        {"host": host, "site": "nldd/website"}, env=action_env, cwd=isolated_cwd
+        {"host": host, "site": "team-aurora/website"}, env=action_env, cwd=isolated_cwd
     )
 
     assert run.returncode == 2
@@ -1487,7 +1487,7 @@ def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
     _action_responder(stub_server)
 
     run = _run_action(
-        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
         env={"GITHUB_OUTPUT": str(isolated_cwd / "github_output.txt")},
         cwd=isolated_cwd,
     )
@@ -1515,7 +1515,7 @@ def test_action_fails_the_step_when_the_server_refuses_the_deploy(
     )
 
     run = _run_action(
-        {"host": host, "site": "nldd/website", "dist-path": str(dist_folder)},
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
         env=action_env,
         cwd=isolated_cwd,
     )
@@ -1535,7 +1535,7 @@ def test_action_fails_the_teardown_step_when_the_server_refuses_it(
     )
 
     run = _run_action(
-        {"host": host, "site": "nldd/website", "preview-ref": "pr-42", "teardown": "true"},
+        {"host": host, "site": "team-aurora/website", "preview-ref": "pr-42", "teardown": "true"},
         env=action_env,
         cwd=isolated_cwd,
     )
@@ -1795,7 +1795,7 @@ def test_the_host_comes_from_the_flag_then_plak_host_then_the_last_login_then_th
 
 @pytest.mark.parametrize(
     "command",
-    [["publish", "DIST", "--site", "nldd/website"], ["preview-remove", "pr-1", "--site", "nldd/website"]],
+    [["publish", "DIST", "--site", "team-aurora/website"], ["preview-remove", "pr-1", "--site", "team-aurora/website"]],
     ids=["publish", "preview-remove"],
 )
 def test_publish_and_preview_remove_need_no_host_flag(stub_server, host, dist_folder, command):
@@ -2250,8 +2250,8 @@ def test_logout_warns_when_a_refused_delete_cannot_be_checked_either(
     "command",
     [
         ["whoami"],
-        ["publish", "DIST", "--site", "nldd/website"],
-        ["preview-remove", "pr-1", "--site", "nldd/website"],
+        ["publish", "DIST", "--site", "team-aurora/website"],
+        ["preview-remove", "pr-1", "--site", "team-aurora/website"],
         ["group", "create", "team", "--name", "Team"],
         ["site", "create", "team/docs", "--title", "Docs"],
     ],
@@ -2549,7 +2549,7 @@ def test_publish_connection_failure_gives_exit_1(
 ):
     monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     assert "could not connect to" in capsys.readouterr().err
@@ -2561,7 +2561,7 @@ def test_publish_201_without_version_id_gives_exit_1(
 ):
     stub_server.responder = _json_responder(201, {"iets": "anders"})
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     out = capsys.readouterr()
@@ -2582,7 +2582,7 @@ def test_publish_writes_the_version_id_to_the_output_file_instead_of_stdout(
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--output-file",
             str(output_file),
         ]
@@ -2609,7 +2609,7 @@ def test_publish_reports_an_unwritable_output_file_after_a_successful_publish(
             "--host",
             host,
             "--site",
-            "nldd/website",
+            "team-aurora/website",
             "--output-file",
             str(tmp_path / "geen" / "zo'n-map" / "output.txt"),
         ]
@@ -2626,7 +2626,7 @@ def test_publish_non_json_error_body_is_shown_as_the_detail(
 ):
     stub_server.responder = lambda _record: (502, b"Bad gateway van de proxy", "text/plain")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     assert "Error: Bad gateway van de proxy" in capsys.readouterr().err
@@ -2637,7 +2637,7 @@ def test_publish_empty_error_body_falls_back_to_the_http_status(
 ):
     stub_server.responder = _empty_responder(500)
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     assert "Error: HTTP 500" in capsys.readouterr().err
@@ -2649,7 +2649,7 @@ def test_publish_skips_a_git_folder_inside_the_dist_folder(
     (dist_folder / ".git").mkdir()
     (dist_folder / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
     fields = _parse_multipart(
@@ -2667,7 +2667,7 @@ def test_publish_empty_folder_gives_exit_2_without_a_request(
     empty = tmp_path / "leeg"
     (empty / "alleen-een-submap").mkdir(parents=True)
 
-    code = cli.main(["publish", str(empty), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(empty), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 2
     assert stub_server.requests == []
@@ -2679,7 +2679,7 @@ def test_preview_remove_connection_failure_gives_exit_1(
 ):
     monkeypatch.setattr(cli.httpx, "delete", _raise_connect_error)
 
-    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "nldd/website"])
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
 
     assert code == 1
     assert "could not connect to" in capsys.readouterr().err
@@ -2787,7 +2787,7 @@ def test_oidc_connection_failure_gives_exit_2_without_a_deploy(
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
     monkeypatch.setattr(cli.httpx, "get", _raise_connect_error)
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 2
     assert "Could not fetch an OIDC token" in capsys.readouterr().err
@@ -2801,7 +2801,7 @@ def test_oidc_endpoint_refusal_explains_the_missing_permission(
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token?api-version=2")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 2
     error_output = capsys.readouterr().err
@@ -2820,7 +2820,7 @@ def test_oidc_answer_without_a_value_gives_exit_2(
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
 
-    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "nldd/website"])
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
     assert code == 2
     out = capsys.readouterr()

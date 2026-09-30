@@ -54,7 +54,7 @@ describe('groups: not found and defaults', () => {
   it('defaults default-access to public and an empty body when none is given', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/default-access', { method: 'PUT' });
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/default-access', { method: 'PUT' });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { defaultAccess: { base: string } };
@@ -83,7 +83,7 @@ describe('groups: not found and defaults', () => {
   it('refuses creating a site without a slug', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/sites', { method: 'POST' });
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/sites', { method: 'POST' });
 
     expect(response.status).toBe(422);
   });
@@ -99,7 +99,7 @@ describe('groups: not found and defaults', () => {
   it('refuses an identifier-less member invite and defaults the role', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members', { method: 'POST' });
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members', { method: 'POST' });
 
     expect(response.status).toBe(422);
   });
@@ -107,7 +107,7 @@ describe('groups: not found and defaults', () => {
   it('adds a group member with the default reader role when none is given', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members', {
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members', {
       method: 'POST',
       body: JSON.stringify({ identifier: 'iris@voorbeeld.nl' }),
     });
@@ -130,7 +130,7 @@ describe('groups: not found and defaults', () => {
   it('treats a missing search query as empty and refuses it as too short', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members/search', { method: 'GET' });
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members/search', { method: 'GET' });
 
     expect(response.status).toBe(422);
   });
@@ -149,7 +149,7 @@ describe('groups: not found and defaults', () => {
   it('refuses changing the role of an unknown member', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members/geen-lid/role', {
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members/geen-lid/role', {
       method: 'PUT',
       body: JSON.stringify({ role: 'admin' }),
     });
@@ -209,7 +209,7 @@ describe('site members and invitees: defaults', () => {
   it('refuses an identifier-less site member invite', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/members', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/members', {
       method: 'POST',
     });
 
@@ -219,7 +219,7 @@ describe('site members and invitees: defaults', () => {
   it('adds a site member with the default reader role when none is given', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/members', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/members', {
       method: 'POST',
       body: JSON.stringify({ identifier: 'iris@voorbeeld.nl' }),
     });
@@ -232,7 +232,7 @@ describe('site members and invitees: defaults', () => {
   it('refuses an identifier-less invitee', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/invitees', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/invitees', {
       method: 'POST',
     });
 
@@ -242,17 +242,17 @@ describe('site members and invitees: defaults', () => {
 
 describe('sites: not found', () => {
   it.each([
-    ['DELETE', '/-/api/v1/sites/nldd/geen-site'],
-    ['PUT', '/-/api/v1/sites/nldd/geen-site/external-sources'],
-    ['PUT', '/-/api/v1/sites/nldd/geen-site/sandbox'],
-    ['GET', '/-/api/v1/sites/nldd/geen-site/members'],
-    ['GET', '/-/api/v1/sites/nldd/geen-site/members/search'],
-    ['PUT', '/-/api/v1/sites/nldd/geen-site/members/lid-1/role'],
-    ['DELETE', '/-/api/v1/sites/nldd/geen-site/members/lid-1'],
-    ['GET', '/-/api/v1/sites/nldd/geen-site/invitees'],
-    ['DELETE', '/-/api/v1/sites/nldd/geen-site/invitees/genodigde-1'],
-    ['GET', '/-/api/v1/sites/nldd/geen-site/keys'],
-    ['DELETE', '/-/api/v1/sites/nldd/geen-site/keys/sel-abc123'],
+    ['DELETE', '/-/api/v1/sites/team-aurora/geen-site'],
+    ['PUT', '/-/api/v1/sites/team-aurora/geen-site/external-sources'],
+    ['PUT', '/-/api/v1/sites/team-aurora/geen-site/sandbox'],
+    ['GET', '/-/api/v1/sites/team-aurora/geen-site/members'],
+    ['GET', '/-/api/v1/sites/team-aurora/geen-site/members/search'],
+    ['PUT', '/-/api/v1/sites/team-aurora/geen-site/members/lid-1/role'],
+    ['DELETE', '/-/api/v1/sites/team-aurora/geen-site/members/lid-1'],
+    ['GET', '/-/api/v1/sites/team-aurora/geen-site/invitees'],
+    ['DELETE', '/-/api/v1/sites/team-aurora/geen-site/invitees/genodigde-1'],
+    ['GET', '/-/api/v1/sites/team-aurora/geen-site/keys'],
+    ['DELETE', '/-/api/v1/sites/team-aurora/geen-site/keys/sel-abc123'],
   ])('answers %s %s with a 404 for an unknown site', async (method, path) => {
     const backend = makeMockBackend();
 
@@ -267,7 +267,7 @@ describe('sites: not found', () => {
   it('treats a missing site member search query as empty and refuses it as too short', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/members/search', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/members/search', {
       method: 'GET',
     });
 
@@ -277,7 +277,7 @@ describe('sites: not found', () => {
   it('refuses revoking an unknown key', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/keys/geen-sleutel', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/keys/geen-sleutel', {
       method: 'DELETE',
     });
 
@@ -289,9 +289,9 @@ describe('site repository: defaults', () => {
   it('does not find a "prive" repository without ids, and links it with them', async () => {
     const backend = makeMockBackend();
     const link = (extra: Record<string, unknown>) =>
-      backend.fetch('/-/api/v1/sites/nldd/website/repository', {
+      backend.fetch('/-/api/v1/sites/team-aurora/website/repository', {
         method: 'PUT',
-        body: JSON.stringify({ provider: 'github', owner: 'nldd', repo: 'prive-site', ...extra }),
+        body: JSON.stringify({ provider: 'github', owner: 'team-aurora', repo: 'prive-site', ...extra }),
       });
 
     const notFound = await link({});
@@ -305,9 +305,9 @@ describe('site repository: defaults', () => {
 
   it('refuses ids that are incomplete or not positive whole numbers', async () => {
     for (const ids of [{ repositoryId: 5005 }, { ownerId: 6006 }, { repositoryId: 0, ownerId: 6006 }, { repositoryId: 1.5, ownerId: 6006 }]) {
-      const response = await makeMockBackend().fetch('/-/api/v1/sites/nldd/website/repository', {
+      const response = await makeMockBackend().fetch('/-/api/v1/sites/team-aurora/website/repository', {
         method: 'PUT',
-        body: JSON.stringify({ provider: 'github', owner: 'nldd', repo: 'prive-site', ...ids }),
+        body: JSON.stringify({ provider: 'github', owner: 'team-aurora', repo: 'prive-site', ...ids }),
       });
       expect(response.status).toBe(422);
       expect(((await response.json()) as { code: string }).code).toBe('REPOSITORY_IDS_INVALID');
@@ -317,7 +317,7 @@ describe('site repository: defaults', () => {
   it('refuses linking a repository without owner or repo', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/repository', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/repository', {
       method: 'PUT',
       body: JSON.stringify({ provider: 'github' }),
     });
@@ -328,9 +328,9 @@ describe('site repository: defaults', () => {
   it('refuses a Forgejo repository without a host', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/repository', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/repository', {
       method: 'PUT',
-      body: JSON.stringify({ provider: 'forgejo', owner: 'nldd', repo: 'website' }),
+      body: JSON.stringify({ provider: 'forgejo', owner: 'team-aurora', repo: 'website' }),
     });
 
     expect(response.status).toBe(422);
@@ -340,9 +340,9 @@ describe('site repository: defaults', () => {
 
   it('allows a Forgejo host only when it is exactly an allowed one', async () => {
     const link = (host: string) =>
-      makeMockBackend().fetch('/-/api/v1/sites/nldd/website/repository', {
+      makeMockBackend().fetch('/-/api/v1/sites/team-aurora/website/repository', {
         method: 'PUT',
-        body: JSON.stringify({ provider: 'forgejo', host, owner: 'nldd', repo: 'website' }),
+        body: JSON.stringify({ provider: 'forgejo', host, owner: 'team-aurora', repo: 'website' }),
       });
 
     expect((await link('https://code.overheid.nl')).status).toBe(200);
@@ -361,13 +361,13 @@ describe('derived member rows: edge cases', () => {
   it('falls back to the identifier when a site role belongs to nobody known', async () => {
     const backend = makeMockBackend();
     backend.data.siteRoles.push({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'website',
       identifier: 'spook@voorbeeld.nl',
       role: 'reader',
     });
 
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/members', { method: 'GET' });
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/members', { method: 'GET' });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as Array<{
@@ -389,13 +389,13 @@ describe('derived member rows: edge cases', () => {
   it('falls back to the site slug as title when a member holds a role on a since-removed site', async () => {
     const backend = makeMockBackend();
     backend.data.siteRoles.push({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'verdwenen',
       identifier: 'ada@voorbeeld.nl',
       role: 'editor',
     });
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members', { method: 'GET' });
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members', { method: 'GET' });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as Array<{
@@ -432,7 +432,7 @@ describe('derived member rows: edge cases', () => {
       },
     );
 
-    const response = await backend.fetch('/-/api/v1/groups/nldd/members/search?q=Dubbele', {
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/members/search?q=Dubbele', {
       method: 'GET',
     });
 
@@ -463,13 +463,13 @@ describe('groups: creator not logged in', () => {
 
 describe('mockFetch: unmatched methods fall through to the route 404', () => {
   it.each([
-    ['PUT', '/-/api/v1/groups/nldd/members'],
+    ['PUT', '/-/api/v1/groups/team-aurora/members'],
     ['PUT', '/-/api/v1/me/cli-sessions/extra'],
-    ['PUT', '/-/api/v1/sites/nldd/website/members'],
-    ['DELETE', '/-/api/v1/sites/nldd/website/invitees'],
-    ['PUT', '/-/api/v1/sites/nldd/website/keys'],
-    ['PATCH', '/-/api/v1/sites/nldd/website/repository'],
-    ['GET', '/-/api/v1/sites/nldd/website/deploys'],
+    ['PUT', '/-/api/v1/sites/team-aurora/website/members'],
+    ['DELETE', '/-/api/v1/sites/team-aurora/website/invitees'],
+    ['PUT', '/-/api/v1/sites/team-aurora/website/keys'],
+    ['PATCH', '/-/api/v1/sites/team-aurora/website/repository'],
+    ['GET', '/-/api/v1/sites/team-aurora/website/deploys'],
   ])('answers %s %s with a 404, having matched no route for it', async (method, path) => {
     const backend = makeMockBackend();
 

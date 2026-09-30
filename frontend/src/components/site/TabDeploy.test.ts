@@ -23,7 +23,7 @@ afterEach(() => {
 
 function makeWrapper() {
   return mount(TabDeploy, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
     global: { stubs: { teleport: true } },
   });
 }
@@ -52,7 +52,7 @@ describe('TabDeploy: linked repository', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain(
-      'GitHub - nldd/website',
+      'GitHub - team-aurora/website',
     );
     expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('main');
     expect(wrapper.html()).toContain('Bea Heerder');
@@ -120,7 +120,7 @@ describe('TabDeploy: linking and changing the repository', () => {
 
     expect(backend.data.repositories).toHaveLength(1);
     expect(backend.data.repositories[0]).toMatchObject({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'website',
       provider: 'github',
       owner: 'minbzk',
@@ -355,10 +355,10 @@ describe('TabDeploy: linking and changing the repository', () => {
       (wrapper.find('[data-testid="repository-eigenaar-repo"]').element as HTMLInputElement).getAttribute(
         'value',
       ),
-    ).toBe('nldd/website');
+    ).toBe('team-aurora/website');
 
     fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
-      value: 'nldd/nieuwe-website',
+      value: 'team-aurora/nieuwe-website',
     });
     await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
     await untilIdle();
@@ -486,13 +486,13 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await openLinkForm(wrapper);
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     expect(bodies[0]).not.toHaveProperty('repositoryId');
     expect(wrapper.html()).toContain('vul dan het repository-id en het eigenaar-id zelf in');
     expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
-      "gh api repos/nldd/prive-site --jq '.id, .owner.id'",
+      "gh api repos/team-aurora/prive-site --jq '.id, .owner.id'",
     );
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
 
@@ -500,7 +500,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     typeInto(wrapper, 'repository-eigenaar-id', '6006');
     await submitForm(wrapper);
 
-    expect(bodies[1]).toMatchObject({ owner: 'nldd', repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
+    expect(bodies[1]).toMatchObject({ owner: 'team-aurora', repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
     expect(backend.data.repositories[0]).toMatchObject({ repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
     expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
   });
@@ -510,7 +510,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
     await submitForm(wrapper);
 
@@ -531,7 +531,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     typeInto(wrapper, 'repository-id', repositoryId);
@@ -555,7 +555,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     );
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/website');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/website');
     await submitForm(wrapper);
     typeInto(wrapper, 'repository-id', '1');
     typeInto(wrapper, 'repository-eigenaar-id', '2');
@@ -571,16 +571,16 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/nldd/prive-site');
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/team-aurora/prive-site');
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/nldd/prive-docs');
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/team-aurora/prive-docs');
   });
 
   it('names the Forgejo API for a Forgejo repository', async () => {
@@ -589,11 +589,11 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
-      `curl -s -H "Authorization: token <token>" https://code.overheid.nl/api/v1/repos/nldd/prive-site | jq '.id, .owner.id'`,
+      `curl -s -H "Authorization: token <token>" https://code.overheid.nl/api/v1/repos/team-aurora/prive-site | jq '.id, .owner.id'`,
     );
   });
 
@@ -677,7 +677,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     typeInto(wrapper, 'repository-id', '5005');
     typeInto(wrapper, 'repository-eigenaar-id', '6006');
     await wrapper.find('[data-testid="repository-provider"]').setValue('github');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
     await untilIdle();
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('5005');
   });
@@ -688,7 +688,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await untilIdle();
     await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
     await untilIdle();
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
@@ -699,7 +699,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     backend.data.repositories = [];
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
     await submitForm(wrapper);
 
@@ -714,22 +714,22 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
     const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-commando"]');
 
-    expect(command().text()).toBe('plak site link nldd/website');
+    expect(command().text()).toBe('plak site link team-aurora/website');
     expect(command().attributes('no-copy')).toBeUndefined();
     expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
 
     typeInto(wrapper, 'repository-livebranch-invoer', ' main ');
     await untilIdle();
-    expect(command().text()).toBe('plak site link nldd/website --live-branch main');
+    expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
 
     // Named, the repository no longer depends on the checkout the command runs in.
     typeInto(wrapper, 'repository-eigenaar-repo', 'https://github.com/minbzk/website.git');
     await untilIdle();
-    expect(command().text()).toBe('plak site link nldd/website minbzk/website --live-branch main');
+    expect(command().text()).toBe('plak site link team-aurora/website minbzk/website --live-branch main');
 
     typeInto(wrapper, 'repository-eigenaar-repo', 'minbzk/');
     await untilIdle();
-    expect(command().text()).toBe('plak site link nldd/website --live-branch main');
+    expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
   });
 
   it('names a Forgejo repository by its URL, since a bare owner/repo means GitHub', async () => {
@@ -741,7 +741,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toBe(
-      'plak site link nldd/website https://code.overheid.nl/minbzk/website',
+      'plak site link team-aurora/website https://code.overheid.nl/minbzk/website',
     );
   });
 
@@ -753,7 +753,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toContain(
-      `plak site link nldd/website ${linked.owner}/${linked.repo}`,
+      `plak site link team-aurora/website ${linked.owner}/${linked.repo}`,
     );
   });
 
@@ -762,7 +762,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     typeInto(wrapper, 'repository-livebranch-invoer', 'main');
     await submitForm(wrapper);
 
@@ -770,7 +770,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const blocks = explanation.findAll('nldd-code-viewer').map((block) => block.attributes('data-testid'));
     expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-commando']);
     expect(explanation.find('[data-testid="repository-ids-cli"]').text()).toBe(
-      'plak site link nldd/website nldd/prive-site --live-branch main',
+      'plak site link team-aurora/website team-aurora/prive-site --live-branch main',
     );
     expect(explanation.text()).toContain('Een verkeerd id koppelt niets anders');
     expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(false);
@@ -782,7 +782,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-ids-cli"]').exists()).toBe(false);
@@ -799,7 +799,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       const hint = wrapper.find('[data-testid="repository-cli-hint"]');
       expect(hint.text()).toContain('Rather from the terminal? Run this in a checkout of the repository');
       expect(hint.find('[data-testid="repository-cli-commando"]').text()).toBe(
-        'plak site link nldd/website',
+        'plak site link team-aurora/website',
       );
     } finally {
       _setLocaleForTest('nl');
@@ -811,7 +811,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(true);
 
@@ -856,7 +856,7 @@ describe('TabDeploy: unlinking the repository', () => {
 
 describe('TabDeploy: visibility by role', () => {
   it('editor sees no link form or buttons, but does see the linked repository and the snippet', async () => {
-    // lid-3 (Ada Vermeer) is editor in group nldd, not a site admin.
+    // lid-3 (Ada Vermeer) is editor in group team-aurora, not a site admin.
     backend.data.loggedInMemberId = 'lid-3';
 
     const wrapper = makeWrapper();
@@ -868,7 +868,7 @@ describe('TabDeploy: visibility by role', () => {
     expect(wrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(false);
 
     expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain(
-      'GitHub - nldd/website',
+      'GitHub - team-aurora/website',
     );
     expect(wrapper.find('[data-testid="workflow-snippet"]').exists()).toBe(true);
   });
@@ -913,7 +913,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('host: https://plak.test');
-    expect(snippet).toContain('site: nldd/website');
+    expect(snippet).toContain('site: team-aurora/website');
     expect(snippet).toContain('DigiGilde/plak/actions/publiceer@<commit-sha>');
     expect(snippet).toContain('id-token: write');
     expect(snippet).toContain('branches: [main]');
@@ -943,9 +943,9 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const snippet = wrapper.find('[data-testid="cli-snippet"]').text();
     expect(snippet).toContain('plak login --host https://plak.test');
-    expect(snippet).toContain('plak publish ./dist --host https://plak.test --site nldd/website');
+    expect(snippet).toContain('plak publish ./dist --host https://plak.test --site team-aurora/website');
     expect(snippet).toContain(
-      'plak publish ./dist --host https://plak.test --site nldd/website --preview pr-42',
+      'plak publish ./dist --host https://plak.test --site team-aurora/website --preview pr-42',
     );
     expect(snippet).toContain('plak logout');
     expect(snippet).not.toContain(MOCK_CONTENT_BASE);
@@ -984,7 +984,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     expect(richText.textContent).toContain('.github/workflows/publiceer.yml');
 
     const versionsLink = wrapper.find('[data-testid="deploy-naar-versies"]');
-    expect(versionsLink.attributes('href')).toBe('/nldd/website/versions');
+    expect(versionsLink.attributes('href')).toBe('/team-aurora/website/versions');
     expect(versionsLink.text()).toBe('Versies');
   });
 
@@ -1047,14 +1047,14 @@ describe('TabDeploy: admin status', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain('GitHub - nldd/website');
+    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain('GitHub - team-aurora/website');
     expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(false);
   });
 
   it('grants admin controls through an effective site role, not only platform or group admin', async () => {
-    // lid-4 (Zoë de Wit) is a group reader in nldd, but holds an explicit
-    // "admin" site role on nldd/website, so her effective role there is admin.
+    // lid-4 (Zoë de Wit) is a group reader in team-aurora, but holds an explicit
+    // "admin" site role on team-aurora/website, so her effective role there is admin.
     backend.data.loggedInMemberId = 'lid-4';
 
     const wrapper = makeWrapper();

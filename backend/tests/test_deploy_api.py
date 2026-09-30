@@ -56,7 +56,7 @@ from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
 
 BASE_URL = "https://plak.example"
-DEPLOY_PATH = "/-/api/v1/sites/nldd/website/deploys"
+DEPLOY_PATH = "/-/api/v1/sites/team-aurora/website/deploys"
 
 
 def _make_settings(tmp_path: Path, dsn: str, **overrides: object) -> Settings:
@@ -123,7 +123,7 @@ class Environment:
 
     @property
     def ci_token(self) -> str:
-        """A push to main of minbzk/website, the repository linked to nldd/website."""
+        """A push to main of minbzk/website, the repository linked to team-aurora/website."""
         return self.ci.token()
 
     def client(self) -> httpx.AsyncClient:
@@ -170,7 +170,7 @@ async def _environment(tmp_path: Path, dsn: str, **overrides: object):
         outsider = Member(
             id=uuid.uuid4(), sso_subject="sub-buiten", email="buiten@example.org", status=MemberStatus.ACTIVE
         )
-        group = Group(id=uuid.uuid4(), slug="nldd", name="NLDD", default_access_base=AccessBase.PUBLIC)
+        group = Group(id=uuid.uuid4(), slug="team-aurora", name="Team Aurora", default_access_base=AccessBase.PUBLIC)
         other_group = Group(
             id=uuid.uuid4(), slug="extern", name="Extern", default_access_base=AccessBase.PUBLIC
         )
@@ -347,7 +347,7 @@ async def test_ci_token_never_lands_in_the_audit_log(environment: Environment) -
     token = environment.ci_token
     async with environment.client() as client:
         await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
-        await client.post("/-/api/v1/sites/nldd/docs/deploys", files=_upload(), headers=_bearer(token))
+        await client.post("/-/api/v1/sites/team-aurora/docs/deploys", files=_upload(), headers=_bearer(token))
 
     async with environment.session_factory() as db:
         rows = (await db.execute(select(AuditLogEntry))).scalars().all()
@@ -419,7 +419,7 @@ async def test_without_live_branch_every_branch_may_go_live(environment: Environ
 async def test_ci_token_for_a_site_without_that_repository_403(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.post(
-            "/-/api/v1/sites/nldd/docs/deploys", files=_upload(), headers=_bearer(environment.ci_token)
+            "/-/api/v1/sites/team-aurora/docs/deploys", files=_upload(), headers=_bearer(environment.ci_token)
         )
     content = _assert_problem(resp, 403)
     assert content["code"] == "CI_REPOSITORY_NOT_TRUSTED"
@@ -587,7 +587,7 @@ async def test_cli_token_of_a_deactivated_member_403(environment: Environment) -
 async def test_cli_token_needs_no_csrf(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/pr-1", headers=_bearer(environment.cli_token)
+            "/-/api/v1/sites/team-aurora/website/previews/pr-1", headers=_bearer(environment.cli_token)
         )
     assert resp.status_code == 204
 
@@ -640,7 +640,7 @@ async def test_refused_bundle_leaves_nothing_behind(environment: Environment) ->
     assert live_id is None
     assert row.result == "refused"
     assert row.reason_code == "NO_INDEX"
-    assert not (environment.settings.content_root / "nldd").exists()
+    assert not (environment.settings.content_root / "team-aurora").exists()
     assert list(_tmp_dir(environment).iterdir()) == []
 
 
@@ -922,7 +922,7 @@ async def test_bearer_outside_deploy_endpoints_401(environment: Environment) -> 
 
         # On arbitrary non-API paths, and on the deploy path with the wrong
         # method, bearer is refused too.
-        resp = await client.get("/nldd/website/", headers=_bearer(environment.ci_token))
+        resp = await client.get("/team-aurora/website/", headers=_bearer(environment.ci_token))
         _assert_problem(resp, 401)
 
         resp = await client.get(DEPLOY_PATH, headers=_bearer(environment.ci_token))
@@ -990,7 +990,7 @@ async def test_expired_cli_token_401_with_www_authenticate(environment: Environm
 async def test_unknown_site_404(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.post(
-            "/-/api/v1/sites/nldd/onbestaand/deploys",
+            "/-/api/v1/sites/team-aurora/onbestaand/deploys",
             files=_upload(),
             headers=_bearer(environment.ci_token),
         )
@@ -1076,18 +1076,18 @@ async def test_teardown_idempotent_204(environment: Environment) -> None:
         assert (environment.settings.content_root / storage_ref).is_dir()
 
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token)
+            "/-/api/v1/sites/team-aurora/website/previews/pr-7", headers=_bearer(environment.ci_token)
         )
         assert resp.status_code == 204
 
         # Idempotent: deleting again stays a 204, also for a ref that has
         # never existed.
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token)
+            "/-/api/v1/sites/team-aurora/website/previews/pr-7", headers=_bearer(environment.ci_token)
         )
         assert resp.status_code == 204
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/nooit-bestaan",
+            "/-/api/v1/sites/team-aurora/website/previews/nooit-bestaan",
             headers=_bearer(environment.ci_token),
         )
         assert resp.status_code == 204
@@ -1106,7 +1106,9 @@ async def test_failed_teardown_still_writes_a_refused_audit_row(
     monkeypatch.setattr(IngestService, "delete_preview", _no_space)
     async with environment.client() as client:
         with pytest.raises(OSError, match="No space left"):
-            await client.delete("/-/api/v1/sites/nldd/website/previews/pr-7", headers=_bearer(environment.ci_token))
+            await client.delete(
+                "/-/api/v1/sites/team-aurora/website/previews/pr-7", headers=_bearer(environment.ci_token)
+            )
 
     async with environment.session_factory() as db:
         row = (
@@ -1122,7 +1124,7 @@ async def test_failed_teardown_still_writes_a_refused_audit_row(
 async def test_teardown_invalid_ref_422(environment: Environment) -> None:
     async with environment.client() as client:
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/PR_7", headers=_bearer(environment.ci_token)
+            "/-/api/v1/sites/team-aurora/website/previews/PR_7", headers=_bearer(environment.ci_token)
         )
     _assert_problem(resp, 422)
 
@@ -1132,7 +1134,7 @@ async def test_teardown_via_session(environment: Environment) -> None:
     async with environment.client() as client:
         client.cookies.update(cookies)
         resp = await client.delete(
-            "/-/api/v1/sites/nldd/website/previews/pr-9", headers=headers
+            "/-/api/v1/sites/team-aurora/website/previews/pr-9", headers=headers
         )
     assert resp.status_code == 204
 
@@ -1495,7 +1497,7 @@ async def test_concurrent_same_ref_deploys_give_one_preview_row(environment: Env
     assert versions[0].id == previews[0].version_id
 
     # Only the file tree of the winning versie is left.
-    sitedir = environment.settings.content_root / "nldd" / "website"
+    sitedir = environment.settings.content_root / "team-aurora" / "website"
     assert {entry.name for entry in sitedir.iterdir()} == {str(previews[0].version_id)}
 
 
@@ -1579,7 +1581,7 @@ async def _assert_storage_refusal(environment: Environment, resp: httpx.Response
     assert row.result == "refused"
     assert row.reason_code == "STORAGE_UNAVAILABLE"
     assert list(_tmp_dir(environment).iterdir()) == []
-    assert not (environment.settings.content_root / "nldd").exists()
+    assert not (environment.settings.content_root / "team-aurora").exists()
 
 
 async def test_a_declared_size_without_room_is_503_before_the_body_is_read(

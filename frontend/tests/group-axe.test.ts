@@ -96,9 +96,9 @@ async function mountGroup(path: string) {
 
 describe('axe: groepspagina', () => {
   it.each([
-    ['Sites', '/nldd'],
-    ['Groepsleden', '/nldd/-/members'],
-    ['Instellingen', '/nldd/-/settings'],
+    ['Sites', '/team-aurora'],
+    ['Groepsleden', '/team-aurora/-/members'],
+    ['Instellingen', '/team-aurora/-/settings'],
   ])('tabblad %s van een gevulde groep is zonder violations', async (_name, path) => {
     const wrapper = await mountGroup(path);
     await flushPromises();

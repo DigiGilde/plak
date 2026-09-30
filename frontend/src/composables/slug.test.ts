@@ -45,8 +45,8 @@ describe('slugifyTyped (normalizing while typing)', () => {
 
 describe('groupPath', () => {
   it('builds the path of a group that the backend could have issued', () => {
-    expect(groupPath('nldd')).toBe('/nldd');
-    expect(groupPath('nldd', '/-/members')).toBe('/nldd/-/members');
+    expect(groupPath('team-aurora')).toBe('/team-aurora');
+    expect(groupPath('team-aurora', '/-/members')).toBe('/team-aurora/-/members');
   });
 
   it.each(['//example.com', '/\\example.com', '/\\/example.com', 'Nldd', 'a b', '-nldd'])(

@@ -20,7 +20,7 @@ const access: Access = { base: 'public', keys: false, invitees: false };
 
 function makeWrapper(props: { access?: Access } = {}) {
   return mount(TabSettings, {
-    props: { group: 'nldd', access: props.access ?? access },
+    props: { group: 'team-aurora', access: props.access ?? access },
     global: { stubs: { teleport: true } },
   });
 }
@@ -36,7 +36,7 @@ describe('group TabSettings', () => {
     await wrapper.find('[data-testid="standaardtoegang-site_team"]').trigger('change');
     await flushPromises();
 
-    expect(backend.data.groups.find((g) => g.slug === 'nldd')?.defaultAccess).toEqual({
+    expect(backend.data.groups.find((g) => g.slug === 'team-aurora')?.defaultAccess).toEqual({
       base: 'site_team',
       keys: false,
       invitees: false,
@@ -50,7 +50,7 @@ describe('group TabSettings', () => {
     await wrapper.find('[data-testid="standaardtoegang-public"]').trigger('change');
     await flushPromises();
 
-    expect(backend.data.groups.find((g) => g.slug === 'nldd')?.defaultAccess).toEqual(access);
+    expect(backend.data.groups.find((g) => g.slug === 'team-aurora')?.defaultAccess).toEqual(access);
     expect(wrapper.emitted('groupChanged')).toBeUndefined();
   });
 
@@ -60,7 +60,7 @@ describe('group TabSettings', () => {
     fireChange(wrapper.find('[data-testid="standaardtoegang-sleutels"]').element, true);
     await flushPromises();
 
-    expect(backend.data.groups.find((g) => g.slug === 'nldd')?.defaultAccess).toEqual({
+    expect(backend.data.groups.find((g) => g.slug === 'team-aurora')?.defaultAccess).toEqual({
       base: 'public',
       keys: true,
       invitees: false,
@@ -73,7 +73,7 @@ describe('group TabSettings', () => {
     fireChange(wrapper.find('[data-testid="standaardtoegang-genodigden"]').element, true);
     await flushPromises();
 
-    expect(backend.data.groups.find((g) => g.slug === 'nldd')?.defaultAccess).toEqual({
+    expect(backend.data.groups.find((g) => g.slug === 'team-aurora')?.defaultAccess).toEqual({
       base: 'public',
       keys: false,
       invitees: true,
@@ -86,7 +86,7 @@ describe('group TabSettings', () => {
     fireChange(wrapper.find('[data-testid="standaardtoegang-sleutels"]').element, false);
     await flushPromises();
 
-    expect(backend.data.groups.find((g) => g.slug === 'nldd')?.defaultAccess).toEqual(access);
+    expect(backend.data.groups.find((g) => g.slug === 'team-aurora')?.defaultAccess).toEqual(access);
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
   });
 

@@ -32,7 +32,7 @@ function setAccess(access: Access): void {
 
 function makeWrapper() {
   return mount(TabAccess, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
     global: { stubs: { teleport: true } },
   });
 }
@@ -396,7 +396,7 @@ describe('TabAccess: states', () => {
     vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
       const response = await realFetch(input, init);
       const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/-/api/v1/groups/nldd') {
+      if (url === '/-/api/v1/groups/team-aurora') {
         const body = await response.clone().json();
         body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
         return new Response(JSON.stringify(body), {
@@ -797,7 +797,7 @@ describe('TabAccess: secret links', () => {
     const secret = wrapper.find('[data-testid="nieuwe-sleutel-link"]');
     expect(secret.exists()).toBe(true);
     // The secret link lives on the content host, not on the admin origin.
-    expect(secret.text()).toContain('https://sites.plak.test/nldd/website/?key=');
+    expect(secret.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
     expect(secret.text()).not.toContain(window.location.origin);
     expect(backend.data.keys).toHaveLength(2);
     const newKey = backend.data.keys[1]!;
@@ -826,7 +826,7 @@ describe('TabAccess: secret links', () => {
 
     const selector = backend.data.keys[1]!.selector;
     const bare = wrapper.find('[data-testid="nieuwe-sleutel-link-zonder-code"]');
-    expect(bare.text()).toBe(`https://sites.plak.test/nldd/website/?key=${selector}`);
+    expect(bare.text()).toBe(`https://sites.plak.test/team-aurora/website/?key=${selector}`);
     const code = wrapper.find('[data-testid="nieuwe-sleutel-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);
@@ -919,7 +919,7 @@ describe('TabAccess: secret links', () => {
   it('leaves an untouched key alone when revoking another one', async () => {
     backend.data.keys.push({
       siteSlug: 'website',
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       label: 'Tweede link',
       selector: 'sel-def456',
       status: 'active',

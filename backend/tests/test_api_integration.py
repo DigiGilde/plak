@@ -63,11 +63,11 @@ async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def _seed_site_with_token(app: FastAPI) -> str:
-    """Active lid, groep nldd, site website; returns a CLI access token of that lid."""
+    """Active lid, groep team-aurora, site website; returns a CLI access token of that lid."""
     factory = app.state.session_factory
     async with factory() as db:
         member = Member(sso_subject="sub-ci", email="ci@example.org", status=MemberStatus.ACTIVE)
-        group = Group(slug="nldd", name="NLDD", default_access_base=AccessBase.PUBLIC)
+        group = Group(slug="team-aurora", name="Team Aurora", default_access_base=AccessBase.PUBLIC)
         db.add_all([member, group])
         await db.flush()
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
@@ -138,7 +138,7 @@ async def test_bearer_deploy_without_origin_header_works(
     token = await _seed_site_with_token(app)
 
     resp = await client.post(
-        f"{BASE}/sites/nldd/website/deploys",
+        f"{BASE}/sites/team-aurora/website/deploys",
         files={"file": ("site.zip", _zip_bytes(), "application/zip")},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -153,7 +153,7 @@ async def test_bearer_preview_teardown_without_origin_is_idempotent_204(
     token = await _seed_site_with_token(app)
 
     resp = await client.delete(
-        f"{BASE}/sites/nldd/website/previews/pr-1",
+        f"{BASE}/sites/team-aurora/website/previews/pr-1",
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -169,7 +169,7 @@ async def test_deploy_with_content_origin_refused(
     token = await _seed_site_with_token(app)
 
     resp = await client.post(
-        f"{BASE}/sites/nldd/website/deploys",
+        f"{BASE}/sites/team-aurora/website/deploys",
         files={"file": ("site.zip", _zip_bytes(), "application/zip")},
         headers={"Authorization": f"Bearer {token}", "Origin": OTHER_ORIGIN},
     )
@@ -233,7 +233,7 @@ async def test_bearer_creation_with_a_content_origin_is_refused(app: FastAPI, cl
 async def test_bearer_on_deleting_a_group_is_still_401(app: FastAPI, client: httpx.AsyncClient) -> None:
     token = await _seed_site_with_token(app)
 
-    resp = await client.delete(f"{BASE}/groups/nldd", headers={"Authorization": f"Bearer {token}"})
+    resp = await client.delete(f"{BASE}/groups/team-aurora", headers={"Authorization": f"Bearer {token}"})
 
     assert resp.status_code == 401
     assert resp.json()["code"] == "BEARER_NOT_ACCEPTED"

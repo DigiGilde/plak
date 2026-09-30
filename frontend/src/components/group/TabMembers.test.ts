@@ -19,9 +19,9 @@ afterEach(() => {
 function makeWrapper() {
   return mount(TabMembers, {
     props: {
-      group: 'nldd',
+      group: 'team-aurora',
       members: backend.data.groupMembers
-        .filter((row) => row.groupSlug === 'nldd')
+        .filter((row) => row.groupSlug === 'team-aurora')
         .map((row) => ({ ...row, siteRoles: [] })),
     },
     global: { stubs: { teleport: true } },

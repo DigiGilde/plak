@@ -9,7 +9,7 @@ import { SEARCH_DEBOUNCE_MS } from '@/composables/memberSearch';
 import GroupMembersManager from './GroupMembersManager.vue';
 
 const member: GroupMember = {
-  groupSlug: 'nldd',
+  groupSlug: 'team-aurora',
   memberId: 'lid-7',
   identifier: 'lid@voorbeeld.nl',
   name: 'lid@voorbeeld.nl',

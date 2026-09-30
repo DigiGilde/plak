@@ -107,9 +107,9 @@ async function expectNoViolations(element: Element): Promise<void> {
 
 describe('axe: the admin in English', () => {
   it.each([
-    ['Sites', '/nldd'],
-    ['Members', '/nldd/-/members'],
-    ['Settings', '/nldd/-/settings'],
+    ['Sites', '/team-aurora'],
+    ['Members', '/team-aurora/-/members'],
+    ['Settings', '/team-aurora/-/settings'],
   ])('the %s tab has no violations in English', async (_name, path) => {
     _setLocaleForTest('en');
     const wrapper = await mountPage(path, GROUP_ROUTES);

@@ -19,7 +19,7 @@ afterEach(() => {
 
 function makeWrapper() {
   return mount(TabMembers, {
-    props: { group: 'nldd', site: 'website' },
+    props: { group: 'team-aurora', site: 'website' },
     global: { stubs: { teleport: true } },
   });
 }
@@ -66,7 +66,7 @@ describe('TabMembers', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="leden-via-groep"]').find('summary').text()).toBe(
-      '2 leden via de groep NLDD',
+      '2 leden via de groep Team Aurora',
     );
     expect(inheritedNames(wrapper)).toEqual(['Bea Heerder', 'Ada Vermeer']);
     // Zoë is reader in the group and admin on this site: admin counts.
@@ -84,7 +84,7 @@ describe('TabMembers', () => {
 
     expect(siteRowTexts(wrapper)).toContainEqual(['Karel Oud', 'Lezer']);
     expect(backend.data.siteRoles).toContainEqual({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'website',
       identifier: 'oud@voorbeeld.nl',
       role: 'reader',
@@ -102,7 +102,7 @@ describe('TabMembers', () => {
     expect(siteRowTexts(wrapper)).toEqual([['Wim Weg', 'Redacteur']]);
     expect(inheritedNames(wrapper)).toContain('Zoë de Wit');
     expect(wrapper.find('[data-testid="leden-via-groep"]').find('summary').text()).toBe(
-      '3 leden via de groep NLDD',
+      '3 leden via de groep Team Aurora',
     );
   });
 
@@ -126,7 +126,7 @@ describe('TabMembers', () => {
 
     expect(siteRowTexts(wrapper)).toContainEqual(['Wim Weg', 'Lezer']);
     expect(backend.data.siteRoles).toContainEqual({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'website',
       identifier: 'weg@voorbeeld.nl',
       role: 'reader',

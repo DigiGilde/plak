@@ -25,22 +25,22 @@ function me(groupRoles: Me['groupRoles']): Me {
 
 describe('mayCreateSiteIn', () => {
   it('refuses without a member at all', () => {
-    expect(mayCreateSiteIn(null, 'nldd')).toBe(false);
-    expect(mayCreateSiteIn(undefined, 'nldd')).toBe(false);
+    expect(mayCreateSiteIn(null, 'team-aurora')).toBe(false);
+    expect(mayCreateSiteIn(undefined, 'team-aurora')).toBe(false);
   });
 
   it('refuses a member without a role in that group', () => {
-    expect(mayCreateSiteIn(me([{ groupSlug: 'andere-groep', role: 'admin' }]), 'nldd')).toBe(
+    expect(mayCreateSiteIn(me([{ groupSlug: 'andere-groep', role: 'admin' }]), 'team-aurora')).toBe(
       false,
     );
   });
 
   it('refuses a reader of the group', () => {
-    expect(mayCreateSiteIn(me([{ groupSlug: 'nldd', role: 'reader' }]), 'nldd')).toBe(false);
+    expect(mayCreateSiteIn(me([{ groupSlug: 'team-aurora', role: 'reader' }]), 'team-aurora')).toBe(false);
   });
 
   it('allows an editor or an admin of the group', () => {
-    expect(mayCreateSiteIn(me([{ groupSlug: 'nldd', role: 'editor' }]), 'nldd')).toBe(true);
-    expect(mayCreateSiteIn(me([{ groupSlug: 'nldd', role: 'admin' }]), 'nldd')).toBe(true);
+    expect(mayCreateSiteIn(me([{ groupSlug: 'team-aurora', role: 'editor' }]), 'team-aurora')).toBe(true);
+    expect(mayCreateSiteIn(me([{ groupSlug: 'team-aurora', role: 'admin' }]), 'team-aurora')).toBe(true);
   });
 });

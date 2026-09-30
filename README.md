@@ -53,7 +53,7 @@ platform is not ruled out.
 
 ## Core concepts
 
-- **Group**: a collaboration unit (for example `nldd`, `fin`). Holds
+- **Group**: a collaboration unit (for example `team-aurora`, `fin`). Holds
   sites and members. Groups do not nest.
 - **Site**: the published thing, with a live version and previews
   (comparable to the GitLab/Vercel model).
@@ -155,8 +155,8 @@ Then log in once and publish:
 
 ```bash
 plak login
-plak publish ./dist --site nldd/website
-plak publish ./dist --site nldd/website --preview pr-42
+plak publish ./dist --site team-aurora/website
+plak publish ./dist --site team-aurora/website --preview pr-42
 ```
 
 Without `--host` the CLI talks to the DigiGilde instance,
@@ -200,7 +200,7 @@ installing anything:
 
 ```bash
 uv run --project cli plak login
-uv run --project cli plak publish ./dist --site nldd/website
+uv run --project cli plak publish ./dist --site team-aurora/website
 ```
 
 `docs/publishing.md` has the full story: the base path contract for
@@ -233,11 +233,11 @@ jobs:
       - uses: actions/checkout@<commit-sha>
       - run: npm ci && npm run build
         env:
-          PLAK_BASE_PATH: /nldd/website/
+          PLAK_BASE_PATH: /team-aurora/website/
       - uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.rijks.app
-          site: nldd/website
+          site: team-aurora/website
           dist-path: ./dist
 ```
 

@@ -48,14 +48,14 @@ describe('ErrorBanner', () => {
   });
 
   it('carries the current path along, so login brings you back where you were', () => {
-    window.history.replaceState({}, '', '/nldd/website/access');
+    window.history.replaceState({}, '', '/team-aurora/website/access');
 
     const wrapper = mount(ErrorBanner, {
       props: { error: problem(401, 'Niet geauthenticeerd', 'Niet ingelogd.') },
     });
 
     expect(prop(wrapper, '[data-testid="opnieuw-inloggen"]', 'href')).toBe(
-      '/-/login?returnTo=%2Fnldd%2Fwebsite%2Faccess',
+      '/-/login?returnTo=%2Fteam-aurora%2Fwebsite%2Faccess',
     );
   });
 

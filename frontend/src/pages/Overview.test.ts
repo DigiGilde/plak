@@ -42,12 +42,12 @@ vi.mock('../api/plak', () => ({
 const filledData: OverviewData = {
   groups: [
     {
-      group: { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } },
+      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
       sites: [
         {
-          groupSlug: 'nldd',
+          groupSlug: 'team-aurora',
           slug: 'website',
-          title: 'NLDD website',
+          title: 'Team Aurora website',
           access: { base: 'public', keys: false, invitees: false },
           externalSources: false,
           sandbox: true,
@@ -110,7 +110,7 @@ describe('Overview', () => {
     const wrapper = mount(Overview, { global: { plugins: [makeRouter()] } });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('NLDD');
+    expect(wrapper.text()).toContain('Team Aurora');
     expect(wrapper.findAll('nldd-table-row:not([slot="header"])')).toHaveLength(1);
     expect(wrapper.find('nldd-banner').exists()).toBe(false);
     // The empty state sits in the list's `empty` slot: the list decides for
@@ -360,7 +360,7 @@ describe('Overview', () => {
 
   describe('publishing from the overview', () => {
     const newSite: Site = {
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       slug: 'handboek',
       title: 'Handboek',
       access: { base: 'public', keys: false, invitees: false },
@@ -474,7 +474,7 @@ describe('Overview', () => {
       vi.mocked(plakApi.upload).mockResolvedValue({ versionId: 'versie-9' });
       mountComponent();
       await flushPromises();
-      expect(titles()).toEqual(['NLDD website']);
+      expect(titles()).toEqual(['Team Aurora website']);
 
       await clickPublish();
 
@@ -483,10 +483,10 @@ describe('Overview', () => {
       submit(form);
       await flushPromises();
 
-      expect(plakApi.createSite).toHaveBeenCalledWith('nldd', 'Handboek', 'handboek');
-      expect(plakApi.upload).toHaveBeenCalledWith('nldd', 'handboek', file, 'handboek.zip');
-      expect(titles()).toEqual(['NLDD website', 'Handboek']);
-      expect(router!.currentRoute.value.fullPath).toBe('/nldd/handboek/done');
+      expect(plakApi.createSite).toHaveBeenCalledWith('team-aurora', 'Handboek', 'handboek');
+      expect(plakApi.upload).toHaveBeenCalledWith('team-aurora', 'handboek', file, 'handboek.zip');
+      expect(titles()).toEqual(['Team Aurora website', 'Handboek']);
+      expect(router!.currentRoute.value.fullPath).toBe('/team-aurora/handboek/done');
       // Marked as the publish flow, so the result screen may make a secret link.
       expect(takePublishedMark(router!)).toBe(true);
     });
@@ -531,7 +531,7 @@ describe('Overview', () => {
 
       await clickPublish();
 
-      expect(groupChoice()).toEqual(['nldd', 'team']);
+      expect(groupChoice()).toEqual(['team-aurora', 'team']);
     });
 
     it('creates a group from the split button menu and adds it to the overview', async () => {
@@ -551,7 +551,7 @@ describe('Overview', () => {
       await flushPromises();
 
       expect(plakApi.createGroup).toHaveBeenCalledWith('Team', 'team');
-      expect(listLabels()).toEqual(['Sites in NLDD', 'Sites in Team']);
+      expect(listLabels()).toEqual(['Sites in Team Aurora', 'Sites in Team']);
     });
   });
 
@@ -596,7 +596,7 @@ describe('Overview', () => {
 
     it('opens the sheet with the file when it is dropped anywhere on the page', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -617,7 +617,7 @@ describe('Overview', () => {
 
     it('does nothing for a member without an editor or admin role in any group', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'reader'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -640,7 +640,7 @@ describe('Overview', () => {
     it('opens the sheet also for someone without groups, who creates one along the way', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
       vi.mocked(plakApi.me).mockResolvedValue({
-        ...meWithGroupRole('nldd', 'editor'),
+        ...meWithGroupRole('team-aurora', 'editor'),
         groupRoles: [],
       });
 
@@ -663,7 +663,7 @@ describe('Overview', () => {
 
     it('shows the drag state on dragenter and hides it again on dragleave', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -684,7 +684,7 @@ describe('Overview', () => {
 
     it('does not intercept dragleave for a member without an editor or admin role in any group', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'reader'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -703,7 +703,7 @@ describe('Overview', () => {
 
     it('prevents the browser default while dragging over the target', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -721,7 +721,7 @@ describe('Overview', () => {
 
     it('does not intercept dragover for a member without an editor or admin role in any group', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'reader'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -739,7 +739,7 @@ describe('Overview', () => {
 
     it('shows a dismissible error for a dropped file of an unsupported type', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -768,7 +768,7 @@ describe('Overview', () => {
 
     it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('nldd', 'editor'));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },

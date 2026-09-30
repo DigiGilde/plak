@@ -6,5 +6,5 @@ allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
 Hier is de link naar ons Plak: https://beheer.plak.example.nl. Ik heb een site
-nldd/website en de gebouwde bestanden staan in ./dist. Kun jij deze site erop
+team-aurora/website en de gebouwde bestanden staan in ./dist. Kun jij deze site erop
 zetten? Schrijf het plan en het publiceercommando op voordat je iets uitvoert.

@@ -9,7 +9,7 @@ import TabSites from './TabSites.vue';
 
 function site(slug: string, title: string): Site {
   return {
-    groupSlug: 'nldd',
+    groupSlug: 'team-aurora',
     slug,
     title,
     access: { base: 'public', keys: false, invitees: false },
@@ -30,18 +30,18 @@ function makeWrapper(sites: Site[] = []) {
 describe('TabSites', () => {
 
   it('links every site of the group as a row to its own site page', () => {
-    const { wrapper } = makeWrapper([site('website', 'NLDD website')]);
+    const { wrapper } = makeWrapper([site('website', 'Team Aurora website')]);
 
     // The link sits in the title cell, as on the site overview: the row is a
     // table row now, not a list item that is itself a link. Unmounted, Lit does
     // not reflect its attributes, so read the property Vue sets.
     const link = wrapper.find('[data-testid="site-website"]').find('nldd-link');
-    expect((link.element as HTMLElement & { href?: string }).href).toBe('/nldd/website');
-    expect(link.text()).toBe('NLDD website');
+    expect((link.element as HTMLElement & { href?: string }).href).toBe('/team-aurora/website');
+    expect(link.text()).toBe('Team Aurora website');
   });
 
   it('offers no publish button of its own: the group page already has one in the header', () => {
-    const { wrapper } = makeWrapper([site('website', 'NLDD website')]);
+    const { wrapper } = makeWrapper([site('website', 'Team Aurora website')]);
 
     // Two buttons for the same task, one blue and one grey, only invite
     // the question of which of the two you need.

@@ -27,7 +27,7 @@ production; the dev stack has a dumb reverse proxy only.
 
 ## 2. Concepts
 
-- **Group**: a collaboration unit (`nldd`, `fin`). Holds sites and members.
+- **Group**: a collaboration unit (`team-aurora`, `fin`). Holds sites and members.
   Groups do not nest.
 - **Site**: the published thing, with one live version and any number of
   previews.
