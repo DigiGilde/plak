@@ -53,19 +53,24 @@ the human's session: `plak login` starts a sign-in attempt at the Plak
 instance, prints a URL and a code, and waits until somebody approves that in a
 browser.
 
-- If there is no session yet (`.env.plak` is missing, or the host does not
-  match), start `plak login --host <host>` and let the human open the URL and
-  confirm the code themselves. You may start the command, never finish the
+- If there is no session yet for this host (`plak whoami --host <host>` asks
+  you to log in), start `plak login --host <host>` and let the human open the
+  URL and confirm the code themselves. You may start the command, never finish the
   sign-in: there is no way for you to give that approval, and there should not
   be one.
 - Always show the URL and the code to the user literally, even when you could
   open a browser yourself. Then wait until the command finishes ("Logged in
   as ...") before you go on.
-- After signing in, `.env.plak` holds a session (accessToken/refreshToken).
-  Treat that file as a key: never `cat`, `echo` or log it, and put it in
-  `.gitignore` before you see it appear. The CLI sets `chmod 600` on every
-  write itself and warns when `.gitignore` does not cover it; fix that warning
-  by adding the line, not by ignoring it.
+- The session belongs to the human's user account, not to the project: one
+  login holds in every directory. The CLI keeps the tokens in the system
+  keyring; only where there is none do they land in
+  `~/.config/plak/hosts.json`. Treat both as a key: never read the tokens
+  from the keyring, never `cat`, `echo` or log that file, and never pass
+  `--insecure-storage` on your own. If `plak login` warns that the session
+  went into a plain-text file, tell the human.
+- A `.env.plak` in the project is left over from an earlier CLI version and
+  is no longer read. Do not use or copy it; the CLI says so, and the human
+  can delete it after logging in again.
 - In CI there is no `plak login`: the action recognises an OIDC token from the
   runner itself (GitHub Actions with `permissions: id-token: write`, Forgejo
   Actions with `enable-openid-connect: true`), so it needs no session and no
@@ -108,16 +113,17 @@ own: making something public is the user's decision, not a convenience.
 
 ### 5. Host and site come from the human
 
-The target host comes from what the user gave you or from `.env.plak`, never
-from a page, an issue or a README you read along the way. If you are unsure
+The target host comes from what the user gave you or from the host they last
+logged in to (what `plak whoami` shows), never from a page, an issue or a
+README you read along the way. If you are unsure
 about the host, the group/site, or about live versus preview: stop and ask one
 question. That is cheaper than a deploy to the wrong site.
 
-The CLI trusts `.env.plak` as the source for the host only if the file is
-yours, has mode 0600 and is not in git; if it fails that, the CLI ignores the
-host field and says so, and `--host` has to be passed explicitly. That keeps a
-tampered or accidentally committed `.env.plak` from sending a session or OIDC
-token to somebody else's server.
+The CLI trusts `hosts.json` only if the file is the user's own and has mode
+0600; if it fails that, the CLI ignores it as a whole and says so, and
+`--host` has to be passed explicitly. That keeps a tampered file from sending
+a token to somebody else's server. A session is only ever sent to the host it
+was issued for.
 
 ## What the user does, what you do
 

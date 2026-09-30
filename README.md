@@ -160,8 +160,14 @@ plak publish ./dist --site nldd/website --preview pr-42
 ```
 
 `plak login` uses the OAuth 2.0 Device Authorization Grant: it shows a
-code, you confirm it in the admin, and the session lands in `.env.plak`
-in the current directory (mode 0600, so put it in your `.gitignore`).
+code, you confirm it in the admin, and the session belongs to your user
+account, for every directory. The tokens go into the system keyring
+(macOS Keychain, Secret Service on Linux).
+Where there is no usable keyring, or with `--insecure-storage`, they go
+into `~/.config/plak/hosts.json` (mode 0600) and `plak login` says so.
+That file also remembers the host you last logged in to; set
+`PLAK_CONFIG_DIR` or `XDG_CONFIG_HOME` to move it. An old `.env.plak`
+from an earlier version is no longer read: log in again and delete it.
 
 No site yet? Create the group and the site from the terminal too; you
 become admin of both. The access flags are optional (`--access`,
