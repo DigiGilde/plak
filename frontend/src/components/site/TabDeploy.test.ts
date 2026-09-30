@@ -491,7 +491,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
 
     expect(bodies[0]).not.toHaveProperty('repositoryId');
     expect(wrapper.html()).toContain('vul dan het repository-id en het eigenaar-id zelf in');
-    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
       "gh api repos/nldd/prive-site --jq '.id, .owner.id'",
     );
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
@@ -576,11 +576,11 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
 
     typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toContain('repos/nldd/prive-site');
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/nldd/prive-site');
 
     typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toContain('repos/nldd/prive-docs');
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/nldd/prive-docs');
   });
 
   it('names the Forgejo API for a Forgejo repository', async () => {
@@ -592,7 +592,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
     await submitForm(wrapper);
 
-    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
       `curl -s -H "Authorization: token <token>" https://code.overheid.nl/api/v1/repos/nldd/prive-site | jq '.id, .owner.id'`,
     );
   });
@@ -712,13 +712,48 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
+    const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-commando"]');
 
-    expect(hint().find('code').text()).toBe('plak site link nldd/website --any-branch');
+    expect(command().text()).toBe('plak site link nldd/website --any-branch');
+    expect(command().attributes('no-copy')).toBeUndefined();
     expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
 
     typeInto(wrapper, 'repository-livebranch-invoer', ' main ');
     await untilIdle();
-    expect(hint().find('code').text()).toBe('plak site link nldd/website --live-branch main');
+    expect(command().text()).toBe('plak site link nldd/website --live-branch main');
+  });
+
+  it('names plak site link first for a private GitHub repository, and only once', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    typeInto(wrapper, 'repository-livebranch-invoer', 'main');
+    await submitForm(wrapper);
+
+    const explanation = wrapper.find('[data-testid="repository-ids-uitleg"]');
+    const blocks = explanation.findAll('nldd-code-viewer').map((block) => block.attributes('data-testid'));
+    expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-commando']);
+    expect(explanation.find('[data-testid="repository-ids-cli"]').text()).toBe(
+      'plak site link nldd/website --live-branch main',
+    );
+    expect(explanation.text()).toContain('Een verkeerd id koppelt niets anders');
+    expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(false);
+  });
+
+  it('keeps the general hint for Forgejo, where the CLI does not fetch the ids', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-ids-cli"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-ids-uitleg"]').text()).toContain('Vul dan de twee ids hieronder zelf in');
+    expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(true);
   });
 
   it('points at plak site link in English too', async () => {
@@ -727,8 +762,10 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       backend.data.repositories = [];
       const wrapper = makeWrapper();
       await openLinkForm(wrapper);
-      expect(wrapper.find('[data-testid="repository-cli-hint"]').text()).toContain(
-        'Rather from the terminal? Run plak site link nldd/website --any-branch in a checkout',
+      const hint = wrapper.find('[data-testid="repository-cli-hint"]');
+      expect(hint.text()).toContain('Rather from the terminal? Run this in a checkout of the repository');
+      expect(hint.find('[data-testid="repository-cli-commando"]').text()).toBe(
+        'plak site link nldd/website --any-branch',
       );
     } finally {
       _setLocaleForTest('nl');
@@ -890,6 +927,19 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const linkCliLink = wrapper.find('[data-testid="cli-link-link"]');
     expect(linkCliLink.attributes('href')).toBe('/cli-link');
     expect(wrapper.html()).toContain('plak login');
+  });
+
+  it('gives the install and upgrade commands as one copyable block', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const install = wrapper.find('nldd-code-viewer[data-testid="cli-install"]');
+    expect(install.text().split('\n')).toEqual([
+      'uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"',
+      'uv tool upgrade plak',
+    ]);
+    expect(install.attributes('no-copy')).toBeUndefined();
+    expect(install.element.parentElement!.textContent).toContain('uv run --project cli plak ...');
   });
 
   it('names the workflow file path and links to the versions tab', async () => {

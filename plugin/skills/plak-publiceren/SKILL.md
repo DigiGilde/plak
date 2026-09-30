@@ -283,7 +283,7 @@ The CLI prints what it linked. Relay it, including the workflow address:
 ```
 Linked github.com/minbzk/website to team-aurora/docs.
 Live: only from 'main', on a push, a manual run or a schedule. Previews: from any branch.
-Ids from gh: repository 123456, owner 7890.
+IDs from gh: repository 123456, owner 7890.
 Set up the workflow: https://beheer.plak.example.nl/team-aurora/docs/deploy
 ```
 

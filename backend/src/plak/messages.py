@@ -411,11 +411,11 @@ EN: Final[dict[str, str]] = {
     "REPOSITORY_INVALID": "Owner or repository is not a valid name.",
     "REPOSITORY_NOT_FOUND": (
         "Repository {owner}/{repo} not found on {host}, or not public. If it is private, enter the "
-        "repository id and the owner id yourself."
+        "repository ID and the owner ID yourself."
     ),
-    "REPOSITORY_IDS_INVALID": "Enter both the repository id and the owner id, as positive whole numbers.",
+    "REPOSITORY_IDS_INVALID": "Enter both the repository ID and the owner ID, as positive whole numbers.",
     "REPOSITORY_IDS_MISMATCH": (
-        "{host} gives {owner}/{repo} other ids than the ones entered. Leave the ids empty, or copy them from "
+        "{host} gives {owner}/{repo} other IDs than the ones entered. Leave the IDs empty, or copy them from "
         "{host}."
     ),
     "LIVE_BRANCH_INVALID": "This live branch is not a valid branch name.",
