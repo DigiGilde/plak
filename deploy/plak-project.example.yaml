@@ -15,7 +15,7 @@
 # WHAT THE PLATFORM TEAM MUST APPROVE (without these two the deployment falls
 # back to the cluster address and neither public hostname appears at all, see
 # the project-level `domains` block below):
-#   1. the domain rijksapp.nl for this project;
+#   1. the domain rijks.app for this project;
 #   2. the subdomain `plak` on that domain.
 #
 # WHAT DIFFERS PER ENVIRONMENT:
@@ -63,7 +63,7 @@ services:
         # not add the root host to that list. The callback on the content
         # origin thus needs to be added here by hand, per environment.
         additional_redirect_uris:
-          - "https://plak.rijksapp.nl/-/oauth2/callback"
+          - "https://plak.rijks.app/-/oauth2/callback"
 
 # Domain/subdomain approval. This is a project-level property in the schema
 # (project_v2.json's `domains`), not nested under a service; opi/connectors/
@@ -76,13 +76,13 @@ services:
 # is, even if the caller does not send it along.
 domains:
   allowed-domains:
-    - domain: rijksapp.nl
+    - domain: rijks.app
       status: requested
       supports-dots: true
       issuer: letsencrypt
       restricted-subdomains: true
   allowed-subdomains:
-    - domain: rijksapp.nl
+    - domain: rijks.app
       subdomains:
         - name: plak
           status: requested
@@ -90,8 +90,8 @@ domains:
 components:
   # The component name is the first label of the hostname
   # ({component}.{subdomain}.{domain}), so this one component is called
-  # `beheer` and not `app`: it serves beheer.plak.rijksapp.nl. It is also
-  # the component that serves plak.rijksapp.nl via `root-component` on the
+  # `beheer` and not `app`: it serves beheer.plak.rijks.app. It is also
+  # the component that serves plak.rijks.app via `root-component` on the
   # deployment. One component is enough because the app itself does content,
   # SPA and host separation (ADR: no nginx sidecar; ZAD knows exactly one
   # container per component).
@@ -150,7 +150,7 @@ deployments:
     # the others the same way.
     #
     # `domain-format: component.subdomain` gives {component}.{subdomain}.
-    # {domain}, i.e. beheer.plak.rijksapp.nl. `domain-mode: nice-url` still
+    # {domain}, i.e. beheer.plak.rijks.app. `domain-mode: nice-url` still
     # exists in the schema (project_v2.json, optional) and is not derived
     # from `domain-format`: opi/manager/project_manager.py reads
     # `deployment.get("domain-mode")` literally, and both the root ingress
@@ -161,10 +161,10 @@ deployments:
     domain-format: component.subdomain
     domain-mode: nice-url
     subdomain: plak
-    base-domain: rijksapp.nl
+    base-domain: rijks.app
     issuer: letsencrypt
     # Lets the same component also serve the address without the first
-    # label: beheer.plak.rijksapp.nl (beheer) and plak.rijksapp.nl (content).
+    # label: beheer.plak.rijks.app (beheer) and plak.rijks.app (content).
     root-component: beheer
     backup:
       # The scheduling happens here; `backup.enabled` at the bottom only
@@ -196,8 +196,8 @@ deployments:
           # root ingress that `root-component` adds, so the content origin
           # stays hand-typed per environment either way. Both are kept
           # literal here for symmetry.
-          PLAK_BASE_URL: "https://beheer.plak.rijksapp.nl"
-          PLAK_CONTENT_BASE_URL: "https://plak.rijksapp.nl"
+          PLAK_BASE_URL: "https://beheer.plak.rijks.app"
+          PLAK_CONTENT_BASE_URL: "https://plak.rijks.app"
           PLAK_OIDC_ISS_REQUIRED: "true"
           # The ZAD Keycloak provides a client-secret client;
           # private_key_jwt cannot be set up via self-service.

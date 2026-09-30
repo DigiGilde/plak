@@ -419,14 +419,14 @@ point, not a prerequisite.
 Checked on 2026-09-29: none of the four ZAD domain families (`rijks.app`,
 `rijksapps.nl`, `rijksapp.nl`, `rijksapp.dev`, see `docs/deploying-on-zad.md`
 §3) appear in the Public Suffix List. Plak's own base domain today is
-`rijksapp.nl` (`beheer.plak.rijksapp.nl`, `plak.rijksapp.nl`).
+`rijks.app` (`beheer.plak.rijks.app`, `plak.rijks.app`).
 
 Because the base domain is not on the list, a browser treats it as an
 ordinary registrable domain rather than as a suffix under which unrelated
 sites are isolated from each other. JavaScript running on the content host
-could therefore set cookies scoped to `Domain=plak.rijksapp.nl` (reaching the
-admin host, `beheer.plak.rijksapp.nl`) and to `Domain=rijksapp.nl` (reaching
-every other application on `*.rijksapp.nl`, ZAD-hosted or not).
+could therefore set cookies scoped to `Domain=plak.rijks.app` (reaching the
+admin host, `beheer.plak.rijks.app`) and to `Domain=rijks.app` (reaching
+every other application on `*.rijks.app`, ZAD-hosted or not).
 
 That exposure is not the default, though. Every site has its own shielding
 switch, "Afschermen van andere sites" (`Site.sandbox`, `serving/response.py`,
@@ -438,7 +438,7 @@ level plays no part in it). With it on, the page is served under
 document with an opaque origin cannot read or write `document.cookie` or use
 `cookieStore` at all (throws in Chromium, Firefox and WebKit). So a script on
 a shielded site cannot reach cookies in the first place, whether its own,
-the admin host's or another `*.rijksapp.nl` application's. The exposure above
+the admin host's or another `*.rijks.app` application's. The exposure above
 is real only for a site whose own administrator switched shielding off (or
 any third-party or DOM-XSS script that runs inside such a site).
 
@@ -446,16 +446,16 @@ The admin session cookie is `__Host-` prefixed (see the cookie row above), so
 even on an unshielded site this cannot fix or overwrite that cookie itself:
 the `__Host-` prefix forbids a `Domain` attribute and requires an exact host
 match, which is exactly why the admin session uses it. What a cookie bomb can
-still do is push the total cookie volume sent to `*.rijksapp.nl` past the
+still do is push the total cookie volume sent to `*.rijks.app` past the
 browser's per-domain limits, which makes the admin host unusable for that
 browser until its cookies for the domain are cleared - a denial of service,
 not a session takeover, and one the admin host cannot defend itself against:
 an oversized `Cookie` header is refused by the router or by uvicorn before
 Plak's own code ever runs, and `Clear-Site-Data: "cookies"` would clear the
-whole registrable domain, every `*.rijksapp.nl` application along with it, not
-only Plak's own cookies. Other applications on `*.rijksapp.nl` that use an
+whole registrable domain, every `*.rijks.app` application along with it, not
+only Plak's own cookies. Other applications on `*.rijks.app` that use an
 ordinary (non-`__Host-`) session cookie do not have the `__Host-` protection
-either and are exposed to cookie tossing: a `Domain=rijksapp.nl` cookie that a
+either and are exposed to cookie tossing: a `Domain=rijks.app` cookie that a
 more specific path match lets substitute for theirs.
 
 Status: open. Options under evaluation: making the per-site shielding
