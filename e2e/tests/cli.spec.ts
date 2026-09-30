@@ -52,10 +52,9 @@ interface CliResult {
 }
 
 /**
- * Runs the CLI as a contributor does. The working directory is a temp dir,
- * not the repo root: the CLI keeps its session in .env.plak next to the
- * working directory, and a run must not overwrite the one a contributor
- * may have lying there.
+ * Runs the CLI as a contributor does, but with PLAK_CONFIG_DIR in a temp
+ * dir: the CLI keeps its session per user account, and a run must not
+ * overwrite the one a contributor may have.
  */
 async function plak(args: string[], extraEnv: Record<string, string> = {}): Promise<CliResult> {
   const env: Record<string, string> = {};
@@ -64,6 +63,7 @@ async function plak(args: string[], extraEnv: Record<string, string> = {}): Prom
       env[key] = value;
     }
   }
+  env.PLAK_CONFIG_DIR = configDir();
   const command = ['run', '--project', path.join(REPO_ROOT, 'cli'), 'plak', ...args];
   try {
     const { stdout, stderr } = await execFileAsync('uv', command, {
@@ -75,6 +75,10 @@ async function plak(args: string[], extraEnv: Record<string, string> = {}): Prom
     const failed = error as { code?: number; stdout?: string; stderr?: string };
     return { code: failed.code ?? 1, stdout: failed.stdout ?? '', stderr: failed.stderr ?? '' };
   }
+}
+
+function configDir(): string {
+  return path.join(workDir, 'config');
 }
 
 function writeDist(name: string, heading: string): string {
@@ -136,11 +140,15 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
       email: ADMIN_EMAIL,
     });
     expect(token).toMatch(/^plakcli_/);
-    // What `plak login` itself writes after the device flow: the host and the
-    // session, only readable by the owner (the CLI refuses a looser file).
-    writeFileSync(path.join(workDir, '.env.plak'), `PLAK_HOST=${ADMIN_URL}\nPLAK_ACCESS_TOKEN=${token}\n`, {
-      mode: 0o600,
-    });
+    // What `plak login --insecure-storage` itself writes after the device
+    // flow: the default host and the session in plain text, only readable by
+    // the owner (the CLI ignores a looser file).
+    mkdirSync(configDir(), { mode: 0o700 });
+    const hosts = {
+      default_host: ADMIN_URL,
+      hosts: { [ADMIN_URL]: { storage: 'file', access_token: token, refresh_token: '' } },
+    };
+    writeFileSync(path.join(configDir(), 'hosts.json'), JSON.stringify(hosts), { mode: 0o600 });
 
     const preview = await plak([
       'publish',

@@ -4,7 +4,7 @@ Install with `uv tool install`, or run it from a checkout without
 installing with `uv run --project cli plak ...`; see README.md.
 
 Usage:
-    plak login [--host <host>] [--no-open]
+    plak login [--host <host>] [--no-open] [--insecure-storage]
     plak logout [--host <host>]
     plak whoami [--host <host>]
     plak publish <dist-dir-or-file> --host <host> \
@@ -18,9 +18,12 @@ Usage:
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
 
-Signing in happens with 'plak login': the session
-(accessToken/refreshToken) is kept in .env.plak in the current directory.
-In CI an OIDC token is used automatically (GitHub Actions with
+Signing in happens with 'plak login': the session belongs to your user
+account, for every directory. The tokens go into the system keyring (macOS
+Keychain, Secret Service on Linux); without a usable keyring, or with
+--insecure-storage, they go into hosts.json in the config directory
+($PLAK_CONFIG_DIR, else $XDG_CONFIG_HOME/plak, else ~/.config/plak) with
+mode 0600. That file also remembers the host you last logged in to. In CI an OIDC token is used automatically (GitHub Actions with
 'id-token: write', Forgejo Actions with 'enable-openid-connect: true'), or
 supply a token yourself through the environment variable
 PLAK_ACCESS_TOKEN.
@@ -37,11 +40,11 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import platform
 import re
 import stat
-import subprocess
 import sys
 import tarfile
 import tempfile
@@ -51,10 +54,16 @@ import webbrowser
 from pathlib import Path
 
 import httpx
+import keyring
+import keyring.core
+import keyring.errors
 
 VERSION = "0.1.0"
 
-ENV_FILENAME = ".env.plak"
+HOSTS_FILENAME = "hosts.json"
+KEYRING_SERVICE_PREFIX = "plak:"
+KEYRING_USERNAME = "session"
+LEGACY_ENV_FILENAME = ".env.plak"
 
 ALLOWED_ARCHIVE_EXTENSIONS = {".html", ".zip", ".tar.gz", ".tgz"}
 
@@ -149,11 +158,11 @@ def _require_https(host: str) -> None:
 
 
 def _resolve_host(args: argparse.Namespace) -> str:
-    """Host from --host, PLAK_HOST in the environment, or PLAK_HOST in
-    .env.plak (only if that file can be trusted, see
-    _stored_host_if_safe)."""
-    host = getattr(args, "host", None) or os.environ.get("PLAK_HOST") or _stored_host_if_safe()
+    """Host from --host, PLAK_HOST in the environment, or the host you last
+    logged in to."""
+    host = getattr(args, "host", None) or os.environ.get("PLAK_HOST") or _stored_default_host()
     if not host:
+        _note_legacy_env_file()
         raise UsageError(
             "No host: pass --host or log in first with 'plak login --host <host>'"
         )
@@ -177,131 +186,225 @@ def _same_origin(url: str, host: str) -> bool:
     return (url_parts.port or default_port) == (host_parts.port or default_port)
 
 
-def _env_path() -> Path:
-    return Path.cwd() / ENV_FILENAME
+def _config_dir() -> Path:
+    explicit = os.environ.get("PLAK_CONFIG_DIR")
+    if explicit:
+        return Path(explicit)
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    return (Path(xdg) if xdg else Path.home() / ".config") / "plak"
 
 
-def _read_env_file() -> dict[str, str]:
-    path = _env_path()
-    if not path.exists():  # pragma: no cover - every caller stats the file first; only a delete in between lands here
+def _hosts_path() -> Path:
+    return _config_dir() / HOSTS_FILENAME
+
+
+def _read_hosts() -> dict:
+    """hosts.json, or an empty config if there is none. A file that anyone
+    other than this user could have written is ignored as a whole: its
+    default host decides where a token goes, and its plain-text sessions
+    could be someone else's."""
+    path = _hosts_path()
+    refusal = (
+        f"Warning: ignoring {path}: it must be a file of yours with mode 0600, in a "
+        "directory only you can write to. Log in again to rewrite it."
+    )
+    try:
+        # No symlink, and the checks below run on the very file that is read:
+        # a path checked first and opened later can be swapped in between.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
         return {}
-    values: dict[str, str] = {}
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("\"'")
-    return values
+    except OSError:
+        print(refusal, file=sys.stderr)
+        return {}
+    uid = os.getuid()
+    try:
+        info = os.fstat(fd)
+        directory = path.parent.stat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != uid
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or directory.st_uid != uid
+            or directory.st_mode & 0o022
+        ):
+            print(refusal, file=sys.stderr)
+            return {}
+        try:
+            data = json.loads(b"".join(iter(lambda: os.read(fd, 65536), b"")))
+        except (OSError, ValueError):
+            print(f"Warning: ignoring {path}: it is not readable JSON.", file=sys.stderr)
+            return {}
+    finally:
+        os.close(fd)
+    return data if isinstance(data, dict) else {}
 
 
-def _write_env_file(updates: dict[str, str | None]) -> Path:
-    """Sets or removes keys in .env.plak, the rest stays. Mode 0600."""
-    for key, value in updates.items():
-        # One key per line, so a newline in a value writes a line of its own:
-        # a token the server chose could set PLAK_HOST and steer every later
-        # call somewhere else.
-        if value is not None and ("\n" in value or "\r" in value):
-            raise UsageError(f"Refusing to store a {key} containing a line break")
-    path = _env_path()
-    lines = path.read_text().splitlines() if path.exists() else []
-    remaining = dict(updates)
-
-    out: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        key = (
-            stripped.partition("=")[0].strip()
-            if "=" in stripped and not stripped.startswith("#")
-            else None
-        )
-        if key in remaining:
-            value = remaining.pop(key)
-            if value is not None:
-                out.append(f"{key}={value}")
-            continue
-        out.append(line)
-
-    for key, value in remaining.items():
-        if value is not None:
-            out.append(f"{key}={value}")
-
-    # Holds tokens: first a 0600 file next to it (mkstemp), then an atomic
+def _write_hosts(config: dict) -> None:
+    path = _hosts_path()
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Can hold tokens: first a 0600 file next to it (mkstemp), then an atomic
     # replace. Writing and chmodding afterwards leaves the file readable to
     # others for a moment, and an existing 0644 file even with fresh tokens.
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".env.plak.")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{HOSTS_FILENAME}.")
     try:
         with os.fdopen(fd, "w") as handle:
-            handle.write("\n".join(out) + "\n" if out else "")
+            json.dump(config, handle, indent=2)
+            handle.write("\n")
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
-    return path
 
 
-def _warn_if_not_gitignored() -> None:
-    path = _env_path()
-    try:
-        result = subprocess.run(
-            ["git", "check-ignore", "-q", str(path)],
-            capture_output=True,
-            cwd=str(Path.cwd()),
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return
-    if result.returncode == 1:
-        print(
-            f"Warning: {ENV_FILENAME} is not in .gitignore. Add it there before you "
-            "commit, or your session ends up in git.",
-            file=sys.stderr,
-        )
+def _host_entries(config: dict) -> dict:
+    hosts = config.get("hosts")
+    return hosts if isinstance(hosts, dict) else {}
 
 
-def _is_git_tracked(path: Path) -> bool:
-    try:
-        result = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", str(path)],
-            capture_output=True,
-            cwd=str(path.parent),
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return result.returncode == 0
+def _host_entry(config: dict, host: str) -> dict:
+    entry = _host_entries(config).get(host)
+    return entry if isinstance(entry, dict) else {}
 
 
-# Not named "trusted": CodeQL's sensitive-data heuristic reads any name with
-# that word in it as a secret, and then flags every message that names the host.
-def _stored_host_if_safe() -> str | None:
-    """PLAK_HOST from .env.plak, but only if nothing other than this CLI can
-    have changed the file: owned by the current user, mode 0600, and not
-    taken along by git. A PLAK_HOST from a file that does not meet those
-    demands is ignored: otherwise a tampered file (or one committed by
-    accident) could send a session or OIDC token to someone else's
-    server."""
-    path = _env_path()
-    try:
-        info = path.stat()
-    except OSError:
-        return None
-    trustworthy = (
-        info.st_uid == os.getuid()
-        and stat.S_IMODE(info.st_mode) == 0o600
-        and not _is_git_tracked(path)
+def _keyring_service(host: str) -> str:
+    return KEYRING_SERVICE_PREFIX + host
+
+
+def _save_session(
+    host: str,
+    access_token: str,
+    refresh_token: str,
+    expires_at: float,
+    *,
+    insecure: bool,
+    make_default: bool,
+) -> str | None:
+    """Stores the session for host: the tokens in the system keyring, or in
+    hosts.json when insecure is set or the keyring fails. Returns None when
+    the keyring took them, else why they went into the file."""
+    config = _read_hosts()
+    previous = _host_entry(config, host)
+    entry: dict[str, object] = {"access_expires_at": expires_at}
+    fallback_reason: str | None = "--insecure-storage"
+    if not insecure and not keyring.core.recommended(keyring.get_keyring()):
+        # PYTHON_KEYRING_BACKEND or keyringrc.cfg can select the null backend,
+        # which drops the secret without an error, or a plain-text one such as
+        # keyrings.alt: neither is a system keyring.
+        fallback_reason = "no system keyring found"
+    elif not insecure:
+        secret = json.dumps({"access_token": access_token, "refresh_token": refresh_token})
+        try:
+            keyring.set_password(_keyring_service(host), KEYRING_USERNAME, secret)
+            fallback_reason = None
+        except keyring.errors.NoKeyringError:
+            # Its message recommends installing keyrings.alt, which only
+            # stores the same plain text somewhere else.
+            fallback_reason = "no system keyring found"
+        except keyring.errors.KeyringError as error:
+            fallback_reason = f"the system keyring refused: {error}"
+    if fallback_reason is None:
+        entry["storage"] = "keyring"
+    else:
+        entry |= {"storage": "file", "access_token": access_token, "refresh_token": refresh_token}
+        if insecure:
+            entry["insecure_storage"] = True
+        # Otherwise the old keyring entry outlives the next logout, which
+        # only looks where the entry says the tokens are.
+        if previous.get("storage") == "keyring":
+            _delete_keyring_entry(host)
+    hosts = _host_entries(config)
+    hosts[host] = entry
+    config["hosts"] = hosts
+    if make_default:
+        config["default_host"] = host
+    _write_hosts(config)
+    return fallback_reason
+
+
+def _session_tokens(host: str, entry: dict) -> tuple[str | None, str | None]:
+    """The access and refresh token of a stored session, from wherever the
+    entry says they live."""
+    if entry.get("storage") == "keyring":
+        try:
+            secret = keyring.get_password(_keyring_service(host), KEYRING_USERNAME)
+        except keyring.errors.KeyringError as error:
+            raise UsageError(
+                f"Could not read the session from the system keyring: {error}"
+            ) from error
+        try:
+            data = json.loads(secret) if secret else {}
+        except ValueError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+    else:
+        data = entry
+    access = data.get("access_token")
+    refresh = data.get("refresh_token")
+    return (
+        access if isinstance(access, str) and access else None,
+        refresh if isinstance(refresh, str) and refresh else None,
     )
-    if not trustworthy:
+
+
+def _delete_keyring_entry(host: str) -> keyring.errors.KeyringError | None:
+    """Removes the keyring entry for host. Returns the error if that failed;
+    an entry that is already gone is no failure."""
+    try:
+        keyring.delete_password(_keyring_service(host), KEYRING_USERNAME)
+    except keyring.errors.PasswordDeleteError as error:
+        # The macOS backend raises this for a refused delete too, not only
+        # for a missing entry: only a read that finds nothing tells them apart.
+        try:
+            gone = keyring.get_password(_keyring_service(host), KEYRING_USERNAME) is None
+        except keyring.errors.KeyringError:
+            gone = False
+        return None if gone else error
+    except keyring.errors.KeyringError as error:
+        return error
+    return None
+
+
+def _warn_plain_text(reason: str) -> None:
+    print(
+        f"Warning: {_clean(reason)}; the session is stored in plain text in {_hosts_path()}.",
+        file=sys.stderr,
+    )
+
+
+def _forget_session(host: str) -> None:
+    config = _read_hosts()
+    entry = _host_entry(config, host)
+    if entry.get("storage") == "keyring":
+        error = _delete_keyring_entry(host)
+        if error is not None:
+            print(
+                f"Warning: could not remove the session from the system keyring: {error}",
+                file=sys.stderr,
+            )
+    hosts = _host_entries(config)
+    if host not in hosts:
+        return
+    # The default host stays, so a later 'plak login' needs no --host.
+    del hosts[host]
+    config["hosts"] = hosts
+    _write_hosts(config)
+
+
+def _stored_default_host() -> str | None:
+    host = _read_hosts().get("default_host")
+    return host if isinstance(host, str) and host else None
+
+
+def _note_legacy_env_file() -> None:
+    if (Path.cwd() / LEGACY_ENV_FILENAME).exists():
         print(
-            f"Warning: {ENV_FILENAME} is not trusted as a source for the host "
-            "(owner, file permissions or git tracking is off); pass --host "
-            "explicitly.",
+            f"Note: plak no longer reads {LEGACY_ENV_FILENAME} in this directory; "
+            "the session now belongs to your user account. Log in again with "
+            f"'plak login' and delete {LEGACY_ENV_FILENAME}.",
             file=sys.stderr,
         )
-        return None
-    return _read_env_file().get("PLAK_HOST")
 
 
 def _problem_data(response: httpx.Response) -> dict:
@@ -312,7 +415,7 @@ def _problem_data(response: httpx.Response) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _refresh_token(host: str, refresh_token: str) -> str:
+def _refresh_token(host: str, refresh_token: str, entry: dict) -> str:
     try:
         response = httpx.post(
             f"{host}/-/api/v1/cli/tokens",
@@ -329,38 +432,44 @@ def _refresh_token(host: str, refresh_token: str) -> str:
         raise UsageError("Unexpected answer while refreshing the session")
     refresh_out = payload.get("refreshToken") or refresh_token
     expires_at = time.time() + float(payload.get("expiresIn") or 0)
-    _write_env_file(
-        {
-            "PLAK_ACCESS_TOKEN": access_token,
-            "PLAK_REFRESH_TOKEN": refresh_out,
-            "PLAK_ACCESS_EXPIRES_AT": str(expires_at),
-        }
+    # Only a choice for --insecure-storage keeps the file; a session that fell
+    # back to it tries the keyring again, so a locked keychain once does not
+    # leave it in plain text for good.
+    fallback_reason = _save_session(
+        host,
+        access_token,
+        refresh_out,
+        expires_at,
+        insecure=entry.get("insecure_storage") is True,
+        make_default=False,
     )
+    # The server has rotated the refresh token, so the new pair has to be kept
+    # somewhere; a session that just left the keyring must not do so silently.
+    if fallback_reason is not None and entry.get("storage") == "keyring":
+        _warn_plain_text(fallback_reason)
     return access_token
 
 
 def _stored_token(host: str) -> str | None:
     """Stored session for this host, refreshed if need be. None if there is none."""
-    stored_host = _stored_host_if_safe()
-    if not stored_host or stored_host.rstrip("/") != host.rstrip("/"):
+    entry = _host_entry(_read_hosts(), host)
+    if not entry:
         return None
-    data = _read_env_file()
-    token = data.get("PLAK_ACCESS_TOKEN")
+    token, refresh = _session_tokens(host, entry)
     if not token:
         return None
-    expires_at = data.get("PLAK_ACCESS_EXPIRES_AT")
-    if expires_at:
-        try:
-            # 60 seconds of slack: a token that expires while the request is
-            # on its way is as useless as one that has already expired.
-            expired = float(expires_at) - 60 <= time.time()
-        except ValueError:
-            expired = False
-        if expired:
-            refresh = data.get("PLAK_REFRESH_TOKEN")
-            if not refresh:
-                raise UsageError("Session expired: log in again with 'plak login'")
-            token = _refresh_token(host, refresh)
+    expires_at = entry.get("access_expires_at")
+    # 60 seconds of slack: a token that expires while the request is on its
+    # way is as useless as one that has already expired. An expiry that is
+    # not a number (bool is an int in Python) counts as none.
+    if (
+        isinstance(expires_at, (int, float))
+        and not isinstance(expires_at, bool)
+        and expires_at - 60 <= time.time()
+    ):
+        if not refresh:
+            raise UsageError("Session expired: log in again with 'plak login'")
+        token = _refresh_token(host, refresh, entry)
     return token
 
 
@@ -429,6 +538,7 @@ def _get_bearer_token(host: str) -> str:
     stored = _stored_token(host)
     if stored:
         return stored
+    _note_legacy_env_file()
     raise UsageError(
         "No token: log in with 'plak login --host <host>', or set "
         "PLAK_ACCESS_TOKEN (for instance an OIDC token in CI, see README)"
@@ -442,6 +552,7 @@ def _get_member_token(host: str) -> str:
     token = os.environ.get("PLAK_ACCESS_TOKEN") or _stored_token(host)
     if token:
         return token
+    _note_legacy_env_file()
     raise UsageError(
         "No session: log in with 'plak login --host <host>', or set PLAK_ACCESS_TOKEN"
     )
@@ -933,16 +1044,22 @@ def cmd_login(args: argparse.Namespace) -> int:
     member = payload.get("member") if isinstance(payload.get("member"), dict) else {}
     email = _clean(member.get("email")) if isinstance(member.get("email"), str) else ""
 
-    _write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": access_token,
-            "PLAK_REFRESH_TOKEN": refresh_token,
-            "PLAK_ACCESS_EXPIRES_AT": str(time.time() + expires_in_seconds),
-        }
+    fallback_reason = _save_session(
+        host,
+        access_token,
+        refresh_token,
+        time.time() + expires_in_seconds,
+        insecure=args.insecure_storage,
+        make_default=True,
     )
-    _warn_if_not_gitignored()
     print(f"Logged in as {email}." if email else "Logged in.")
+    if fallback_reason is None:
+        print("Session stored in the system keyring.", file=sys.stderr)
+    elif args.insecure_storage:
+        print(f"Session stored in plain text in {_hosts_path()}.", file=sys.stderr)
+    else:
+        _warn_plain_text(fallback_reason)
+    _note_legacy_env_file()
     return 0
 
 
@@ -954,20 +1071,14 @@ def cmd_logout(args: argparse.Namespace) -> int:
         print(f"Error: {error}", file=sys.stderr)
         return 2
 
-    # Stored tokens only travel to the host they were issued for, same trust
-    # check as _stored_token: otherwise PLAK_HOST=<other host> could send this
-    # host's session to wherever it points.
-    stored_host = _stored_host_if_safe()
-    host_matches_stored = stored_host is not None and stored_host.rstrip("/") == host
-    if stored_host is not None and not host_matches_stored:
-        print(
-            "Warning: the stored session belongs to another host; "
-            "not revoking it at the server.",
-            file=sys.stderr,
-        )
-    data = _read_env_file() if host_matches_stored else {}
-    access_token = os.environ.get("PLAK_ACCESS_TOKEN") or data.get("PLAK_ACCESS_TOKEN")
-    refresh_token = data.get("PLAK_REFRESH_TOKEN")
+    entry = _host_entry(_read_hosts(), host)
+    try:
+        stored_access, refresh_token = _session_tokens(host, entry)
+    except UsageError as error:
+        # Logging out still has to drop what is stored locally.
+        print(f"Warning: {error}", file=sys.stderr)
+        stored_access, refresh_token = None, None
+    access_token = os.environ.get("PLAK_ACCESS_TOKEN") or stored_access
     revoked = True
     if access_token or refresh_token:
         headers = {"Authorization": f"Bearer {access_token}"} if access_token else {}
@@ -986,13 +1097,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         except httpx.HTTPError:
             revoked = False
 
-    _write_env_file(
-        {
-            "PLAK_ACCESS_TOKEN": None,
-            "PLAK_REFRESH_TOKEN": None,
-            "PLAK_ACCESS_EXPIRES_AT": None,
-        }
-    )
+    _forget_session(host)
     if (access_token or refresh_token) and not revoked:
         print(
             "Warning: could not revoke the session at the server; "
@@ -1043,7 +1148,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login = subparsers.add_parser(
-        "login", help="Log in and store the session in .env.plak."
+        "login", help="Log in and store the session for your user account."
     )
     login.add_argument(
         "--host",
@@ -1054,6 +1159,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-open",
         action="store_true",
         help="Do not open the login URL in the browser automatically",
+    )
+    login.add_argument(
+        "--insecure-storage",
+        action="store_true",
+        help="Store the session in plain text in the config directory instead of the system keyring",
     )
     login.set_defaults(func=cmd_login)
 

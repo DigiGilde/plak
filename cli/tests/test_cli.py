@@ -23,6 +23,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import keyring
+import keyring.backend
+import keyring.backends.fail
+import keyring.backends.null
+import keyring.errors
 
 # The package installed in this project's environment, the same code the
 # `plak` command runs.
@@ -178,9 +183,83 @@ def token_env(monkeypatch) -> str:
 
 @pytest.fixture
 def isolated_cwd(tmp_path, monkeypatch):
-    """.env.plak-tests mogen nooit in de repo-checkout zelf schrijven."""
-    monkeypatch.chdir(tmp_path)
-    return tmp_path
+    """Tests that look at the working directory never run in the checkout itself."""
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    return work
+
+
+class _MemoryKeyring(keyring.backend.KeyringBackend):
+    """A system keyring in memory. `error` set: every call raises it."""
+
+    priority = 1  # type: ignore[assignment]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.secrets: dict[tuple[str, str], str] = {}
+        self.error: Exception | None = None
+        self.get_error: Exception | None = None
+        self.set_error: Exception | None = None
+        self.delete_error: Exception | None = None
+
+    def get_password(self, service: str, username: str) -> str | None:
+        if self.error or self.get_error:
+            raise self.error or self.get_error
+        return self.secrets.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        if self.error or self.set_error:
+            raise self.error or self.set_error
+        self.secrets[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        if self.error or self.delete_error:
+            raise self.error or self.delete_error
+        if (service, username) not in self.secrets:
+            raise keyring.errors.PasswordDeleteError("not found")
+        del self.secrets[(service, username)]
+
+
+@pytest.fixture(autouse=True)
+def memory_keyring(tmp_path, monkeypatch):
+    """No test ever touches the real keyring or the real ~/.config/plak."""
+    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.delenv("PLAK_HOST", raising=False)
+    backend = _MemoryKeyring()
+    previous = keyring.get_keyring()
+    keyring.set_keyring(backend)
+    try:
+        yield backend
+    finally:
+        keyring.set_keyring(previous)
+
+
+def _store_session(
+    host: str,
+    access: str = "access-1",
+    refresh: str = "refresh-1",
+    expires_at: float = 9999999999.0,
+    *,
+    insecure: bool = False,
+) -> None:
+    cli._save_session(host, access, refresh, expires_at, insecure=insecure, make_default=True)
+
+
+def _stored_tokens(host: str) -> tuple[str | None, str | None]:
+    return cli._session_tokens(host, cli._host_entry(cli._read_hosts(), host))
+
+
+def _set_entry_field(host: str, key: str, value: Any) -> None:
+    config = cli._read_hosts()
+    if value is _MISSING:
+        del config["hosts"][host][key]
+    else:
+        config["hosts"][host][key] = value
+    cli._write_hosts(config)
+
+
+_MISSING = object()
 
 
 @pytest.fixture
@@ -728,8 +807,8 @@ def test_publish_without_any_token_source_asks_to_log_in(
 # --- plak login: device flow ------------------------------------------------
 
 
-def test_login_device_flow_success_stores_the_session_with_0600(
-    stub_server, host, isolated_cwd, capsys
+def test_login_device_flow_success_stores_the_tokens_in_the_keyring(
+    stub_server, host, isolated_cwd, memory_keyring, capsys
 ):
     stub_server.responder = _sequence_responder(
         {
@@ -779,16 +858,23 @@ def test_login_device_flow_success_stores_the_session_with_0600(
     # The userCode and the sign-in URL may show on screen, the token never.
     assert "access-1" not in out.out
     assert "access-1" not in out.err
+    assert "Session stored in the system keyring." in out.err
 
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    assert env_path.exists()
-    mode = stat.S_IMODE(env_path.stat().st_mode)
-    assert mode == 0o600
-
-    data = cli._read_env_file()
-    assert data["PLAK_HOST"] == host
-    assert data["PLAK_ACCESS_TOKEN"] == "access-1"
-    assert data["PLAK_REFRESH_TOKEN"] == "refresh-1"
+    assert json.loads(memory_keyring.secrets[(f"plak:{host}", "session")]) == {
+        "access_token": "access-1",
+        "refresh_token": "refresh-1",
+    }
+    hosts_path = cli._hosts_path()
+    assert stat.S_IMODE(hosts_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(hosts_path.parent.stat().st_mode) == 0o700
+    # hosts.json holds where the session lives, never the tokens themselves.
+    assert "access-1" not in hosts_path.read_text()
+    assert "refresh-1" not in hosts_path.read_text()
+    config = cli._read_hosts()
+    assert config["default_host"] == host
+    assert config["hosts"][host]["storage"] == "keyring"
+    # Nothing lands in the working directory any more.
+    assert list(isolated_cwd.iterdir()) == []
 
 
 def test_login_device_flow_handles_slow_down(stub_server, host, isolated_cwd, capsys):
@@ -827,7 +913,7 @@ def test_login_device_flow_handles_slow_down(stub_server, host, isolated_cwd, ca
     code = cli.main(["login", "--host", host, "--no-open"])
 
     assert code == 0
-    assert cli._read_env_file()["PLAK_ACCESS_TOKEN"] == "access-2"
+    assert _stored_tokens(host) == ("access-2", "refresh-2")
 
 
 @pytest.mark.parametrize(
@@ -866,7 +952,7 @@ def test_login_device_flow_stops_on_denial(
     assert exit_code == 1
     error_output = capsys.readouterr().err
     assert expected_words in error_output
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_requires_https(stub_server, isolated_cwd, capsys):
@@ -882,14 +968,7 @@ def test_login_requires_https(stub_server, isolated_cwd, capsys):
 def test_stored_session_is_refreshed_transparently_when_expired(
     stub_server, host, isolated_cwd, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "expired-access",
-            "PLAK_REFRESH_TOKEN": "refresh-old",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
     stub_server.responder = _sequence_responder(
         {
             "/-/api/v1/cli/tokens": [
@@ -926,20 +1005,14 @@ def test_stored_session_is_refreshed_transparently_when_expired(
     whoami_requests = [r for r in stub_server.requests if r["path"] == "/-/api/v1/cli/whoami"]
     assert whoami_requests[0]["headers"]["Authorization"] == "Bearer fresh-access"
 
-    data = cli._read_env_file()
-    assert data["PLAK_ACCESS_TOKEN"] == "fresh-access"
-    assert data["PLAK_REFRESH_TOKEN"] == "refresh-new"
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+    entry = cli._read_hosts()["hosts"][host]
+    assert entry["storage"] == "keyring"
+    assert entry["access_expires_at"] > cli.time.time()
 
 
 def test_refresh_failure_asks_to_log_in_again(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "expired-access",
-            "PLAK_REFRESH_TOKEN": "spent-refresh",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="expired-access", refresh="spent-refresh", expires_at=1.0)
     stub_server.responder = _json_responder(
         400, {"status": 400, "code": "INVALID_GRANT", "detail": "verlopen"}
     )
@@ -958,15 +1031,8 @@ def test_whoami_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd
     assert stub_server.requests == []
 
 
-def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, memory_keyring, capsys):
+    _store_session(host)
     stub_server.responder = _empty_responder(204)
 
     code = cli.main(["logout", "--host", host])
@@ -979,11 +1045,11 @@ def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, capsy
     assert record["path"] == "/-/api/v1/cli/session"
     assert record["headers"]["Authorization"] == "Bearer access-1"
 
-    data = cli._read_env_file()
-    assert "PLAK_ACCESS_TOKEN" not in data
-    assert "PLAK_REFRESH_TOKEN" not in data
-    # The host stays: handy for the next 'plak login --host ...'.
-    assert data["PLAK_HOST"] == host
+    assert memory_keyring.secrets == {}
+    config = cli._read_hosts()
+    assert host not in config["hosts"]
+    # The default host stays: a next 'plak login' needs no --host.
+    assert config["default_host"] == host
 
 
 def test_logout_without_a_session_still_clears_and_succeeds(stub_server, host, isolated_cwd):
@@ -1027,7 +1093,7 @@ def test_publish_fetches_and_masks_an_oidc_token_in_ci(
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
 
     # OIDC mode does not write a session: the token only lives for this run.
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_explicit_plak_access_token_takes_priority_over_oidc(
@@ -1047,20 +1113,20 @@ def test_explicit_plak_access_token_takes_priority_over_oidc(
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer expliciet-token"
 
 
-def test_env_file_is_never_readable_by_others_even_if_it_was(isolated_cwd):
-    """An existing world-readable .env.plak is replaced, never written in place."""
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text("PLAK_HOST=https://beheer.example\n")
-    env_path.chmod(0o644)
+def test_hosts_file_is_never_readable_by_others_even_if_it_was(capsys):
+    """An existing world-readable hosts.json is replaced, never written in
+    place, and what it said is not carried over."""
+    hosts_path = cli._hosts_path()
+    hosts_path.parent.mkdir(parents=True)
+    hosts_path.write_text(json.dumps({"default_host": "https://kwaad.example"}))
+    hosts_path.chmod(0o644)
 
-    cli._write_env_file({"PLAK_ACCESS_TOKEN": "geheim"})
+    _store_session("https://beheer.example", insecure=True)
 
-    assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
-    assert cli._read_env_file() == {
-        "PLAK_HOST": "https://beheer.example",
-        "PLAK_ACCESS_TOKEN": "geheim",
-    }
-    assert [p.name for p in isolated_cwd.iterdir() if p.name.startswith(".env.plak.")] == []
+    assert stat.S_IMODE(hosts_path.stat().st_mode) == 0o600
+    assert cli._read_hosts()["default_host"] == "https://beheer.example"
+    assert [p.name for p in hosts_path.parent.iterdir()] == ["hosts.json"]
+    assert "ignoring" in capsys.readouterr().err
 
 
 # --- action.yml: no stdout capture around publish, --output-file instead ----
@@ -1575,7 +1641,7 @@ def test_login_rejects_a_verification_uri_that_is_not_same_origin(
     assert host in error_output
     assert "evil.example" not in error_output
     assert "/etc/passwd" not in error_output
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_accepts_verification_uri_when_only_the_complete_variant_matches(
@@ -1678,45 +1744,24 @@ def test_whoami_cleans_control_characters_from_server_strings(
     assert "\x1b" not in out
 
 
-# --- .env.plak as a trusted source for PLAK_HOST ----------------------------
+# --- hosts.json: the default host, and when it is trusted --------------------
 
 
-def test_untrusted_env_file_host_is_ignored_when_world_readable(
-    isolated_cwd, monkeypatch, capsys
-):
-    monkeypatch.delenv("PLAK_HOST", raising=False)
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text("PLAK_HOST=https://beheer.example\n")
-    env_path.chmod(0o644)
-
-    code = cli.main(["whoami"])
-
-    assert code == 2
-    error_output = capsys.readouterr().err
-    assert "not trusted" in error_output
-    assert "No host" in error_output
+def _write_raw_hosts(content: str | bytes, mode: int = 0o600) -> Path:
+    hosts_path = cli._hosts_path()
+    hosts_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if isinstance(content, bytes):
+        hosts_path.write_bytes(content)
+        hosts_path.chmod(mode)
+        return hosts_path
+    hosts_path.write_text(content)
+    hosts_path.chmod(mode)
+    return hosts_path
 
 
-def test_untrusted_env_file_host_is_ignored_when_git_tracked(
-    isolated_cwd, monkeypatch, capsys
-):
-    monkeypatch.delenv("PLAK_HOST", raising=False)
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text("PLAK_HOST=https://beheer.example\n")
-    env_path.chmod(0o600)
-    monkeypatch.setattr(cli, "_is_git_tracked", lambda path: True)
-
-    code = cli.main(["whoami"])
-
-    assert code == 2
-    assert "not trusted" in capsys.readouterr().err
-
-
-def test_trusted_env_file_host_is_used_when_no_host_flag_given(
-    stub_server, host, isolated_cwd, monkeypatch
-):
+def test_default_host_is_used_when_no_host_flag_given(stub_server, host, monkeypatch):
     monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
-    cli._write_env_file({"PLAK_HOST": host})
+    _store_session(host)
     stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
 
     code = cli.main(["whoami"])
@@ -1725,17 +1770,642 @@ def test_trusted_env_file_host_is_used_when_no_host_flag_given(
     assert stub_server.requests[0]["path"] == "/-/api/v1/cli/whoami"
 
 
+def test_the_session_holds_in_any_directory(stub_server, host, tmp_path, monkeypatch, capsys):
+    """The point of the whole design: one login, every project."""
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/device-authorizations": [_device_start_step(host)],
+            "/-/api/v1/cli/tokens": [_json_step(200, {"accessToken": "access-1", "expiresIn": 3600})],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "iemand@example.nl"}})],
+        }
+    )
+    first, second = tmp_path / "project-a", tmp_path / "project-b"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    assert cli.main(["login", "--host", host, "--no-open"]) == 0
+
+    monkeypatch.chdir(second)
+    code = cli.main(["whoami"])
+
+    assert code == 0
+    assert stub_server.requests[-1]["headers"]["Authorization"] == "Bearer access-1"
+    assert list(first.iterdir()) == [] and list(second.iterdir()) == []
+
+
+@pytest.mark.parametrize("mode", [0o644, 0o640, 0o604, 0o660])
+def test_hosts_file_readable_or_writable_by_others_is_ignored(stub_server, mode, capsys):
+    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://beheer.example"}), mode)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    error_output = capsys.readouterr().err
+    assert f"ignoring {hosts_path}" in error_output
+    assert "No host" in error_output
+    assert stub_server.requests == []
+
+
+def test_hosts_file_owned_by_someone_else_is_ignored(stub_server, monkeypatch, capsys):
+    _write_raw_hosts(json.dumps({"default_host": "https://beheer.example"}))
+    real_uid = os.getuid()
+    monkeypatch.setattr(cli.os, "getuid", lambda: real_uid + 1)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert "it must be a file of yours with mode 0600" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_hosts_file_behind_a_symlink_is_ignored(stub_server, tmp_path, capsys):
+    """A symlink could point hosts.json at another 0600 file of the user's."""
+    elsewhere = tmp_path / "elders.json"
+    elsewhere.write_text(json.dumps({"default_host": "https://kwaad.example"}))
+    elsewhere.chmod(0o600)
+    hosts_path = cli._hosts_path()
+    hosts_path.parent.mkdir(mode=0o700, parents=True)
+    hosts_path.symlink_to(elsewhere)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    error_output = capsys.readouterr().err
+    assert f"ignoring {hosts_path}" in error_output
+    assert "No host" in error_output
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize("mode", [0o770, 0o707, 0o777])
+def test_hosts_file_in_a_directory_others_can_write_to_is_ignored(stub_server, mode, capsys):
+    """Whoever can write the directory can swap the file for one of their own."""
+    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
+    hosts_path.parent.chmod(mode)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert "in a directory only you can write to" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_hosts_file_in_a_directory_of_someone_else_is_ignored(stub_server, monkeypatch, capsys):
+    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
+    real_stat = Path.stat
+    directory_uid = os.getuid() + 1
+
+    def stat_with_foreign_directory(self, *args, **kwargs):
+        result = real_stat(self, *args, **kwargs)
+        if self == hosts_path.parent:
+            fields = list(result)
+            fields[stat.ST_UID] = directory_uid
+            return os.stat_result(fields)
+        return result
+
+    monkeypatch.setattr(Path, "stat", stat_with_foreign_directory)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert "in a directory only you can write to" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_hosts_path_that_cannot_be_opened_is_ignored(stub_server, capsys):
+    hosts_path = _write_raw_hosts("{}", 0o000)
+
+    code = cli.main(["whoami"])
+
+    hosts_path.chmod(0o600)
+    assert code == 2
+    assert f"ignoring {hosts_path}" in capsys.readouterr().err
+
+
+def test_plain_text_session_in_an_untrusted_hosts_file_is_never_sent(
+    stub_server, host, capsys
+):
+    """Whoever could write the file could have planted a session there, or
+    read the one that was in it: neither gets used."""
+    _write_raw_hosts(
+        json.dumps(
+            {
+                "default_host": host,
+                "hosts": {host: {"storage": "file", "access_token": "geplant", "refresh_token": "r"}},
+            }
+        ),
+        0o644,
+    )
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize("content", ["{niet json", "[]", '"tekst"'])
+def test_hosts_file_that_is_not_a_json_object_is_ignored(stub_server, content, capsys):
+    _write_raw_hosts(content)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert "No host" in capsys.readouterr().err
+
+
+def test_hosts_file_that_is_not_utf8_is_ignored_with_a_warning(stub_server, capsys):
+    _write_raw_hosts(b'{"default_host": "\xff\xfe"}')
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert "not readable JSON" in capsys.readouterr().err
+
+
+def test_a_directory_in_place_of_the_hosts_file_is_ignored(stub_server, capsys):
+    hosts_path = cli._hosts_path()
+    hosts_path.mkdir(parents=True, mode=0o700)
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    assert f"ignoring {hosts_path}: it must be a file of yours" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"default_host": 42},
+        {"default_host": ""},
+        {"hosts": ["niet", "een", "object"]},
+        {"hosts": {"HOST": "geen object"}},
+    ],
+)
+def test_odd_shapes_in_the_hosts_file_count_as_no_session(stub_server, host, config, capsys):
+    raw = json.dumps(config).replace("HOST", host)
+    _write_raw_hosts(raw)
+
+    code = cli.main(["whoami", "--host", host] if "hosts" in config else ["whoami"])
+
+    assert code == 2
+    error_output = capsys.readouterr().err
+    assert "plak login" in error_output
+    assert stub_server.requests == []
+
+
+def test_config_dir_follows_plak_config_dir_then_xdg_then_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "eigen"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("HOME", str(tmp_path / "thuis"))
+    assert cli._hosts_path() == tmp_path / "eigen" / "hosts.json"
+
+    monkeypatch.delenv("PLAK_CONFIG_DIR")
+    assert cli._hosts_path() == tmp_path / "xdg" / "plak" / "hosts.json"
+
+    monkeypatch.delenv("XDG_CONFIG_HOME")
+    assert cli._hosts_path() == tmp_path / "thuis" / ".config" / "plak" / "hosts.json"
+
+
+def test_sessions_for_two_hosts_live_side_by_side(memory_keyring):
+    _store_session("https://een.example", access="access-een")
+    _store_session("https://twee.example", access="access-twee")
+
+    assert _stored_tokens("https://een.example") == ("access-een", "refresh-1")
+    assert _stored_tokens("https://twee.example") == ("access-twee", "refresh-1")
+    # The host logged in to last is the default.
+    assert cli._read_hosts()["default_host"] == "https://twee.example"
+    assert set(memory_keyring.secrets) == {
+        ("plak:https://een.example", "session"),
+        ("plak:https://twee.example", "session"),
+    }
+
+
+# --- the system keyring: missing, refusing, emptied ------------------------------
+
+
+def _login_answers(stub_server, host: str) -> None:
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/device-authorizations": [_device_start_step(host)],
+            "/-/api/v1/cli/tokens": [
+                _json_step(
+                    200, {"accessToken": "access-1", "refreshToken": "refresh-1", "expiresIn": 3600}
+                )
+            ],
+        }
+    )
+
+
+def test_login_without_a_system_keyring_falls_back_to_the_file_and_says_so(
+    stub_server, host, memory_keyring, capsys
+):
+    memory_keyring.error = keyring.errors.NoKeyringError("install keyrings.alt")
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open"])
+
+    assert code == 0
+    error_output = capsys.readouterr().err
+    assert (
+        f"Warning: no system keyring found; the session is stored in plain text in "
+        f"{cli._hosts_path()}." in error_output
+    )
+    # Its advice to install keyrings.alt is not passed on.
+    assert "keyrings.alt" not in error_output
+    entry = cli._read_hosts()["hosts"][host]
+    assert entry["storage"] == "file"
+    assert stat.S_IMODE(cli._hosts_path().stat().st_mode) == 0o600
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
+
+
+def test_login_with_a_refusing_keyring_falls_back_to_the_file_and_names_why(
+    stub_server, host, memory_keyring, capsys
+):
+    memory_keyring.error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open"])
+
+    assert code == 0
+    assert (
+        "Warning: the system keyring refused: keychain is vergrendeld; the session is "
+        "stored in plain text" in capsys.readouterr().err
+    )
+    assert cli._read_hosts()["hosts"][host]["storage"] == "file"
+
+
+def test_login_with_insecure_storage_skips_the_keyring(stub_server, host, memory_keyring, capsys):
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open", "--insecure-storage"])
+
+    assert code == 0
+    error_output = capsys.readouterr().err
+    assert f"Session stored in plain text in {cli._hosts_path()}." in error_output
+    assert "Warning" not in error_output
+    assert memory_keyring.secrets == {}
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
+
+
+def test_a_plain_text_session_is_refreshed_into_the_file_again(stub_server, host, memory_keyring):
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0, insecure=True)
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/tokens": [
+                _json_step(200, {"accessToken": "fresh-access", "refreshToken": "refresh-new", "expiresIn": 3600})
+            ],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "iemand@example.nl"}})],
+        }
+    )
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 0
+    assert memory_keyring.secrets == {}
+    assert cli._read_hosts()["hosts"][host]["storage"] == "file"
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+
+
+def test_a_refresh_the_keyring_refuses_to_store_warns_that_it_went_to_the_file(
+    stub_server, host, memory_keyring, capsys
+):
+    """The server has already rotated the refresh token, so the new pair is
+    kept in the file; the move out of the keyring is never silent, and the
+    stale keyring entry does not stay behind."""
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
+    memory_keyring.set_error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/tokens": [
+                _json_step(200, {"accessToken": "fresh-access", "refreshToken": "refresh-new", "expiresIn": 3600})
+            ],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "iemand@example.nl"}})],
+        }
+    )
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 0
+    assert (
+        "Warning: the system keyring refused: keychain is vergrendeld; the session is "
+        f"stored in plain text in {cli._hosts_path()}." in capsys.readouterr().err
+    )
+    assert cli._read_hosts()["hosts"][host]["storage"] == "file"
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+    assert memory_keyring.secrets == {}
+
+
+def test_login_with_insecure_storage_removes_an_earlier_keyring_entry(
+    stub_server, host, memory_keyring
+):
+    _store_session(host, access="oud-access", refresh="oud-refresh")
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open", "--insecure-storage"])
+
+    assert code == 0
+    assert memory_keyring.secrets == {}
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [keyring.backends.null.Keyring, keyring.backends.fail.Keyring],
+    ids=["null", "fail"],
+)
+def test_a_backend_that_is_no_system_keyring_is_not_trusted_with_the_session(
+    stub_server, host, backend, capsys
+):
+    """PYTHON_KEYRING_BACKEND can select the null backend, which drops a
+    secret without an error: 'stored in the keyring' would be a lie."""
+    keyring.set_keyring(backend())
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open"])
+
+    assert code == 0
+    error_output = capsys.readouterr().err
+    assert "Warning: no system keyring found; the session is stored in plain text" in error_output
+    assert "system keyring." not in error_output
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
+
+
+def test_a_session_that_fell_back_to_the_file_returns_to_the_keyring_on_refresh(
+    stub_server, host, memory_keyring, capsys
+):
+    memory_keyring.set_error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
+    assert cli._read_hosts()["hosts"][host]["storage"] == "file"
+    memory_keyring.set_error = None
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/tokens": [
+                _json_step(200, {"accessToken": "fresh-access", "refreshToken": "refresh-new", "expiresIn": 3600})
+            ],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "iemand@example.nl"}})],
+        }
+    )
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 0
+    assert "Warning" not in capsys.readouterr().err
+    assert cli._read_hosts()["hosts"][host]["storage"] == "keyring"
+    assert "fresh-access" not in cli._hosts_path().read_text()
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+
+
+def test_a_file_session_whose_refresh_still_finds_no_keyring_stays_quiet(
+    stub_server, host, memory_keyring, capsys
+):
+    """Not a move out of the keyring, so no warning on every hourly refresh."""
+    memory_keyring.set_error = keyring.errors.NoKeyringError("geen")
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/tokens": [
+                _json_step(200, {"accessToken": "fresh-access", "refreshToken": "refresh-new", "expiresIn": 3600})
+            ],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "iemand@example.nl"}})],
+        }
+    )
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 0
+    assert "Warning" not in capsys.readouterr().err
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+
+
+def test_logout_warns_when_the_keyring_refuses_the_delete_and_keeps_the_entry(
+    stub_server, host, memory_keyring, capsys
+):
+    """The macOS backend raises PasswordDeleteError for a refused delete as
+    well as for a missing entry; an entry that is still there is a failure."""
+    _store_session(host)
+    memory_keyring.delete_error = keyring.errors.PasswordDeleteError("User canceled the operation")
+    stub_server.responder = _empty_responder(204)
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert (
+        "Warning: could not remove the session from the system keyring: User canceled the operation"
+        in capsys.readouterr().err
+    )
+
+
+def test_logout_warns_when_a_refused_delete_cannot_be_checked_either(
+    stub_server, host, memory_keyring, capsys
+):
+    _store_session(host)
+    memory_keyring.delete_error = keyring.errors.PasswordDeleteError("User canceled the operation")
+    memory_keyring.get_error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert "could not remove the session from the system keyring" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["whoami"],
+        ["publish", "DIST", "--site", "nldd/website"],
+        ["preview-remove", "pr-1", "--site", "nldd/website"],
+        ["group", "create", "team", "--name", "Team"],
+        ["site", "create", "team/docs", "--title", "Docs"],
+    ],
+    ids=["whoami", "publish", "preview-remove", "group-create", "site-create"],
+)
+def test_a_session_is_never_sent_to_another_host(stub_server, host, dist_folder, command, capsys):
+    """localhost and 127.0.0.1 reach the same stub, but are different hosts:
+    the session stored for one never goes to the other."""
+    _store_session(host)
+    other_host = host.replace("127.0.0.1", "localhost")
+    argv = [str(dist_folder) if part == "DIST" else part for part in command]
+
+    code = cli.main([*argv, "--host", other_host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_a_trailing_slash_on_the_host_finds_the_same_session(stub_server, host):
+    _login_answers(stub_server, host)
+    assert cli.main(["login", "--host", f"{host}/", "--no-open"]) == 0
+    stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
+
+    assert cli.main(["whoami", "--host", host]) == 0
+    assert cli.main(["whoami", "--host", f"{host}/"]) == 0
+    assert cli._read_hosts()["default_host"] == host
+    assert [r["headers"]["Authorization"] for r in stub_server.requests[-2:]] == [
+        "Bearer access-1",
+        "Bearer access-1",
+    ]
+
+
+def test_a_keyring_that_fails_on_reading_gives_exit_2_and_sends_nothing(
+    stub_server, host, memory_keyring, capsys
+):
+    _store_session(host)
+    memory_keyring.error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert (
+        "Could not read the session from the system keyring: keychain is vergrendeld"
+        in capsys.readouterr().err
+    )
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize("secret", [None, "{kapot", '["geen", "object"]', '{"access_token": 42}'])
+def test_a_keyring_entry_that_is_gone_or_garbled_counts_as_no_session(
+    stub_server, host, memory_keyring, secret, capsys
+):
+    _store_session(host)
+    service = (f"plak:{host}", "session")
+    if secret is None:
+        del memory_keyring.secrets[service]
+    else:
+        memory_keyring.secrets[service] = secret
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_logout_with_an_unreadable_keyring_still_forgets_locally(
+    stub_server, host, memory_keyring, capsys
+):
+    _store_session(host)
+    memory_keyring.error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    out = capsys.readouterr()
+    assert "Warning: Could not read the session from the system keyring" in out.err
+    assert "Warning: could not remove the session from the system keyring" in out.err
+    assert "Logged out." in out.out
+    assert stub_server.requests == []
+    assert host not in cli._read_hosts()["hosts"]
+
+
+def test_logout_when_the_keyring_entry_is_already_gone_stays_quiet(
+    stub_server, host, memory_keyring, capsys
+):
+    _store_session(host)
+    memory_keyring.secrets.clear()
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert "Warning" not in capsys.readouterr().err
+    assert stub_server.requests == []
+    assert host not in cli._read_hosts()["hosts"]
+
+
+def test_logout_when_the_keyring_errors_on_delete_warns_and_forgets_locally(
+    stub_server, host, memory_keyring, capsys
+):
+    _store_session(host)
+    memory_keyring.delete_error = keyring.errors.KeyringLocked("keychain is vergrendeld")
+    stub_server.responder = _empty_responder(204)
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert (
+        "Warning: could not remove the session from the system keyring: keychain is vergrendeld"
+        in capsys.readouterr().err
+    )
+    assert host not in cli._read_hosts()["hosts"]
+
+
+def test_logout_of_a_plain_text_session_removes_the_tokens_from_the_file(stub_server, host):
+    _store_session(host, insecure=True)
+    stub_server.responder = _empty_responder(204)
+
+    code = cli.main(["logout", "--host", host])
+
+    assert code == 0
+    assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer access-1"
+    assert "access-1" not in cli._hosts_path().read_text()
+
+
+# --- a leftover .env.plak -----------------------------------------------------------
+
+
+LEGACY_NOTE = "plak no longer reads .env.plak in this directory"
+
+
+def test_login_points_at_a_leftover_env_file(stub_server, host, isolated_cwd, capsys):
+    (isolated_cwd / ".env.plak").write_text("PLAK_ACCESS_TOKEN=oud\n")
+    _login_answers(stub_server, host)
+
+    code = cli.main(["login", "--host", host, "--no-open"])
+
+    assert code == 0
+    assert LEGACY_NOTE in capsys.readouterr().err
+
+
+def test_a_leftover_env_file_is_named_when_there_is_no_host(stub_server, isolated_cwd, capsys):
+    (isolated_cwd / ".env.plak").write_text("PLAK_HOST=https://beheer.example\n")
+
+    code = cli.main(["whoami"])
+
+    assert code == 2
+    error_output = capsys.readouterr().err
+    assert LEGACY_NOTE in error_output
+    assert "No host" in error_output
+    # Its contents are never used.
+    assert stub_server.requests == []
+
+
+def test_a_leftover_env_file_is_named_when_there_is_no_token(
+    stub_server, host, isolated_cwd, capsys
+):
+    (isolated_cwd / ".env.plak").write_text(f"PLAK_HOST={host}\nPLAK_ACCESS_TOKEN=oud\n")
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert LEGACY_NOTE in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_a_leftover_env_file_is_named_when_there_is_no_member_session(
+    stub_server, host, isolated_cwd, capsys
+):
+    (isolated_cwd / ".env.plak").write_text(f"PLAK_HOST={host}\nPLAK_ACCESS_TOKEN=oud\n")
+
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
+
+    assert code == 2
+    assert LEGACY_NOTE in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_without_a_leftover_env_file_there_is_no_note(stub_server, host, isolated_cwd, capsys):
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert LEGACY_NOTE not in capsys.readouterr().err
+
+
 # --- plak logout: refresh token in the body, clear reporting ----------------
 
 
 def test_logout_sends_the_refresh_token_in_the_body(stub_server, host, isolated_cwd):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_REFRESH_TOKEN": "refresh-only",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="", refresh="refresh-only", expires_at=1.0)
     stub_server.responder = _empty_responder(204)
 
     code = cli.main(["logout", "--host", host])
@@ -1751,14 +2421,7 @@ def test_logout_sends_the_refresh_token_in_the_body(stub_server, host, isolated_
 def test_logout_sends_both_the_bearer_and_the_refresh_token_when_both_are_present(
     stub_server, host, isolated_cwd
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+    _store_session(host)
     stub_server.responder = _empty_responder(204)
 
     code = cli.main(["logout", "--host", host])
@@ -1772,14 +2435,7 @@ def test_logout_sends_both_the_bearer_and_the_refresh_token_when_both_are_presen
 def test_logout_reports_a_failed_server_revoke_but_still_clears_locally(
     stub_server, host, isolated_cwd, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+    _store_session(host)
     stub_server.responder = _json_responder(401, {"status": 401, "detail": "ongeldig"})
 
     code = cli.main(["logout", "--host", host])
@@ -1788,51 +2444,40 @@ def test_logout_reports_a_failed_server_revoke_but_still_clears_locally(
     out = capsys.readouterr()
     assert "could not revoke the session" in out.err
     assert "Logged out." in out.out
-    data = cli._read_env_file()
-    assert "PLAK_ACCESS_TOKEN" not in data
-    assert "PLAK_REFRESH_TOKEN" not in data
+    assert _stored_tokens(host) == (None, None)
 
 
-def test_logout_with_a_mismatched_host_sends_nothing(stub_server, host, isolated_cwd, capsys):
-    """PLAK_HOST=<other host> must not make logout send this host's stored
-    tokens to that other host."""
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+def test_logout_of_another_host_leaves_this_session_alone_and_sends_nothing(
+    stub_server, host, isolated_cwd, memory_keyring, capsys
+):
+    """A session is only ever sent to the host it was issued for: logging out
+    of another host never sends this host's tokens there."""
+    _store_session(host)
 
     code = cli.main(["logout", "--host", "https://evil.example"])
 
     assert code == 0
     assert stub_server.requests == []
-    out = capsys.readouterr()
-    assert "not revoking it at the server" in out.err
-    # The stored host comes from the file that holds the tokens; it is not echoed.
-    assert host not in out.err
-    assert "Logged out." in out.out
-    data = cli._read_env_file()
-    assert "PLAK_ACCESS_TOKEN" not in data
-    assert "PLAK_REFRESH_TOKEN" not in data
+    assert "Logged out." in capsys.readouterr().out
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
 
 
-def test_logout_with_an_untrusted_stored_host_sends_nothing(
-    stub_server, host, isolated_cwd, capsys
-):
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text(
-        f"PLAK_HOST={host}\nPLAK_ACCESS_TOKEN=access-1\nPLAK_REFRESH_TOKEN=refresh-1\n"
+def test_logout_with_an_untrusted_hosts_file_sends_nothing(stub_server, host, capsys):
+    _write_raw_hosts(
+        json.dumps(
+            {
+                "default_host": host,
+                "hosts": {host: {"storage": "file", "access_token": "a", "refresh_token": "r"}},
+            }
+        ),
+        0o644,
     )
-    env_path.chmod(0o644)
 
     code = cli.main(["logout", "--host", host])
 
     assert code == 0
     assert stub_server.requests == []
-    assert "not trusted" in capsys.readouterr().err
+    assert "ignoring" in capsys.readouterr().err
 
 
 # --- error paths: network failures, odd server answers, refusals ------------
@@ -2034,7 +2679,7 @@ def test_whoami_with_a_rejected_token_shows_the_detail_and_gives_exit_1(
 
 
 def test_stored_host_without_a_token_asks_to_log_in(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file({"PLAK_HOST": host})
+    _store_session(host, access="", refresh="")
 
     code = cli.main(["whoami", "--host", host])
 
@@ -2043,34 +2688,12 @@ def test_stored_host_without_a_token_asks_to_log_in(stub_server, host, isolated_
     assert stub_server.requests == []
 
 
-def test_stored_session_with_unreadable_expiry_is_used_as_is(
-    stub_server, host, isolated_cwd, capsys
+@pytest.mark.parametrize("expiry", ["onbekend", True, None, _MISSING])
+def test_stored_session_with_an_expiry_that_is_not_a_number_is_used_as_is(
+    stub_server, host, isolated_cwd, expiry, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "onbekend",
-        }
-    )
-    stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
-
-    code = cli.main(["whoami", "--host", host])
-
-    assert code == 0
-    assert [r["path"] for r in stub_server.requests] == ["/-/api/v1/cli/whoami"]
-    assert stub_server.requests[0]["headers"]["Authorization"] == "Bearer access-1"
-
-
-def test_stored_session_without_an_expiry_is_used_as_is(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-        }
-    )
+    _store_session(host)
+    _set_entry_field(host, "access_expires_at", expiry)
     stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
 
     code = cli.main(["whoami", "--host", host])
@@ -2083,13 +2706,7 @@ def test_stored_session_without_an_expiry_is_used_as_is(stub_server, host, isola
 def test_expired_session_without_a_refresh_token_asks_to_log_in(
     stub_server, host, isolated_cwd, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "expired-access",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="expired-access", refresh="", expires_at=1.0)
 
     code = cli.main(["whoami", "--host", host])
 
@@ -2101,14 +2718,7 @@ def test_expired_session_without_a_refresh_token_asks_to_log_in(
 def test_refresh_connection_failure_gives_exit_2(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "expired-access",
-            "PLAK_REFRESH_TOKEN": "refresh-old",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
     monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
 
     code = cli.main(["whoami", "--host", host])
@@ -2117,18 +2727,11 @@ def test_refresh_connection_failure_gives_exit_2(
     assert "Could not refresh the session" in capsys.readouterr().err
     assert stub_server.requests == []
     # The old session stays put: nothing was exchanged, nothing gets clobbered.
-    assert cli._read_env_file()["PLAK_ACCESS_TOKEN"] == "expired-access"
+    assert _stored_tokens(host) == ("expired-access", "refresh-old")
 
 
 def test_refresh_with_a_non_json_answer_gives_exit_2(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "expired-access",
-            "PLAK_REFRESH_TOKEN": "refresh-old",
-            "PLAK_ACCESS_EXPIRES_AT": "1",
-        }
-    )
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
     stub_server.responder = lambda _record: (200, b"<html>geen json</html>", "text/html")
 
     code = cli.main(["whoami", "--host", host])
@@ -2136,7 +2739,7 @@ def test_refresh_with_a_non_json_answer_gives_exit_2(stub_server, host, isolated
     assert code == 2
     assert "Unexpected answer while refreshing" in capsys.readouterr().err
     assert [r["path"] for r in stub_server.requests] == ["/-/api/v1/cli/tokens"]
-    assert cli._read_env_file()["PLAK_ACCESS_TOKEN"] == "expired-access"
+    assert _stored_tokens(host) == ("expired-access", "refresh-old")
 
 
 # --- OIDC in CI: the runner endpoint misbehaves ------------------------------
@@ -2203,7 +2806,7 @@ def test_login_connection_failure_at_the_start_gives_exit_1(
 
     assert code == 1
     assert "could not connect to" in capsys.readouterr().err
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_refused_start_shows_the_detail_and_gives_exit_1(
@@ -2299,7 +2902,7 @@ def test_login_gives_up_when_the_device_code_expires(
     assert "expired before it was approved" in capsys.readouterr().err
     tokens_requests = [r for r in stub_server.requests if r["path"] == "/-/api/v1/cli/tokens"]
     assert len(tokens_requests) == 1
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_connection_failure_while_polling_gives_exit_1(
@@ -2321,7 +2924,7 @@ def test_login_connection_failure_while_polling_gives_exit_1(
 
     assert code == 1
     assert "could not connect to" in capsys.readouterr().err
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_token_answer_without_an_access_token_gives_exit_1(
@@ -2338,7 +2941,7 @@ def test_login_token_answer_without_an_access_token_gives_exit_1(
 
     assert code == 1
     assert "unexpected answer while fetching the token" in capsys.readouterr().err
-    assert not (isolated_cwd / cli.ENV_FILENAME).exists()
+    assert not cli._hosts_path().exists()
 
 
 def test_login_unreadable_expires_in_stores_a_session_that_is_already_due(
@@ -2360,9 +2963,8 @@ def test_login_unreadable_expires_in_stores_a_session_that_is_already_due(
 
     assert code == 0
     assert "Logged in." in capsys.readouterr().out
-    data = cli._read_env_file()
-    assert data["PLAK_ACCESS_TOKEN"] == "access-1"
-    assert float(data["PLAK_ACCESS_EXPIRES_AT"]) <= cli.time.time()
+    assert _stored_tokens(host) == ("access-1", "refresh-1")
+    assert cli._read_hosts()["hosts"][host]["access_expires_at"] <= cli.time.time()
 
 
 def test_login_opens_the_browser_on_a_terminal(
@@ -2428,80 +3030,13 @@ def test_login_does_not_open_a_browser_with_no_open_even_on_a_terminal(
     assert cli.main(["login", "--host", host, "--no-open"]) == 0
 
 
-def test_login_warns_when_the_env_file_is_not_gitignored(
-    stub_server, host, isolated_cwd, capsys
-):
-    subprocess.run(["git", "init", "-q", str(isolated_cwd)], check=True, timeout=30)
-    stub_server.responder = _sequence_responder(
-        {
-            "/-/api/v1/cli/device-authorizations": [_device_start_step(host)],
-            "/-/api/v1/cli/tokens": [
-                _json_step(200, {"accessToken": "access-1", "expiresIn": 3600})
-            ],
-        }
-    )
-
-    code = cli.main(["login", "--host", host, "--no-open"])
-
-    assert code == 0
-    assert "is not in .gitignore" in capsys.readouterr().err
+# --- hosts.json: writing it --------------------------------------------------
 
 
-def test_login_stays_quiet_about_gitignore_when_git_is_missing(
-    stub_server, host, isolated_cwd, monkeypatch, capsys
-):
-    def no_git(*_args, **_kwargs):
-        raise FileNotFoundError("git")
-
-    monkeypatch.setattr(cli.subprocess, "run", no_git)
-    stub_server.responder = _sequence_responder(
-        {
-            "/-/api/v1/cli/device-authorizations": [_device_start_step(host)],
-            "/-/api/v1/cli/tokens": [
-                _json_step(200, {"accessToken": "access-1", "expiresIn": 3600})
-            ],
-        }
-    )
-
-    code = cli.main(["login", "--host", host, "--no-open"])
-
-    assert code == 0
-    assert "gitignore" not in capsys.readouterr().err
-    assert cli._read_env_file()["PLAK_ACCESS_TOKEN"] == "access-1"
-
-
-# --- .env.plak: reading, writing and trusting it -----------------------------
-
-
-def test_env_file_comments_and_odd_lines_survive_a_logout(stub_server, host, isolated_cwd):
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text(
-        "# sessie van plak\n"
-        "\n"
-        "regel-zonder-gelijkteken\n"
-        f"PLAK_HOST={host}\n"
-        "PLAK_ACCESS_TOKEN = 'access-1'\n"
-        "PLAK_REFRESH_TOKEN=\"refresh-1\"\n"
-    )
-    env_path.chmod(0o600)
-    stub_server.responder = _empty_responder(204)
-
-    code = cli.main(["logout", "--host", host])
-
-    assert code == 0
-    record = stub_server.requests[0]
-    assert record["headers"]["Authorization"] == "Bearer access-1"
-    assert json.loads(record["body"]) == {"refreshToken": "refresh-1"}
-    assert env_path.read_text() == (
-        f"# sessie van plak\n\nregel-zonder-gelijkteken\nPLAK_HOST={host}\n"
-    )
-
-
-def test_env_file_write_failure_leaves_the_old_file_and_no_temp_file(
-    isolated_cwd, monkeypatch
-):
-    env_path = isolated_cwd / cli.ENV_FILENAME
-    env_path.write_text("PLAK_HOST=https://beheer.example\n")
+def test_hosts_file_write_failure_leaves_the_old_file_and_no_temp_file(monkeypatch):
+    _store_session("https://beheer.example")
+    hosts_path = cli._hosts_path()
+    before = hosts_path.read_text()
 
     def failing_replace(_src, _dst):
         raise OSError("schijf vol")
@@ -2509,29 +3044,20 @@ def test_env_file_write_failure_leaves_the_old_file_and_no_temp_file(
     monkeypatch.setattr(cli.os, "replace", failing_replace)
 
     with pytest.raises(OSError, match="schijf vol"):
-        cli._write_env_file({"PLAK_ACCESS_TOKEN": "geheim"})
+        _store_session("https://ander.example")
 
-    assert env_path.read_text() == "PLAK_HOST=https://beheer.example\n"
-    assert [p.name for p in isolated_cwd.iterdir()] == [cli.ENV_FILENAME]
+    assert hosts_path.read_text() == before
+    assert [p.name for p in hosts_path.parent.iterdir()] == ["hosts.json"]
 
 
-def test_env_file_host_is_still_trusted_when_git_is_missing(
-    stub_server, host, isolated_cwd, monkeypatch
-):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
-    monkeypatch.delenv("PLAK_HOST", raising=False)
-    cli._write_env_file({"PLAK_HOST": host})
+def test_a_token_with_a_line_break_cannot_change_the_default_host():
+    """A server chooses the tokens. Stored as JSON, a line break or quote in
+    one stays inside its own value and never becomes a key of its own."""
+    token = 'geldig\n"default_host": "https://kwaad.example",\r'
+    _store_session("https://beheer.example", access=token, refresh=token, insecure=True)
 
-    def no_git(*_args, **_kwargs):
-        raise FileNotFoundError("git")
-
-    monkeypatch.setattr(cli.subprocess, "run", no_git)
-    stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
-
-    code = cli.main(["whoami"])
-
-    assert code == 0
-    assert stub_server.requests[0]["path"] == "/-/api/v1/cli/whoami"
+    assert cli._read_hosts()["default_host"] == "https://beheer.example"
+    assert _stored_tokens("https://beheer.example") == (token, token)
 
 
 # --- plak logout: no host, server unreachable --------------------------------
@@ -2550,14 +3076,7 @@ def test_logout_without_any_host_gives_exit_2(stub_server, isolated_cwd, monkeyp
 def test_logout_with_an_unreachable_server_still_clears_locally(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": "access-1",
-            "PLAK_REFRESH_TOKEN": "refresh-1",
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+    _store_session(host)
     monkeypatch.setattr(cli.httpx, "request", _raise_connect_error)
 
     code = cli.main(["logout", "--host", host])
@@ -2566,22 +3085,8 @@ def test_logout_with_an_unreachable_server_still_clears_locally(
     out = capsys.readouterr()
     assert "could not revoke the session at the server" in out.err
     assert "Logged out." in out.out
-    data = cli._read_env_file()
-    assert "PLAK_ACCESS_TOKEN" not in data
-    assert "PLAK_REFRESH_TOKEN" not in data
-    assert data["PLAK_HOST"] == host
-
-
-def test_a_token_with_a_line_break_is_not_stored(tmp_path, monkeypatch):
-    """.env.plak is one key per line, so a newline in a value writes a line of
-    its own. A server that chooses the token could set PLAK_HOST that way and
-    steer every later call somewhere else."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.chdir(tmp_path)
-    with pytest.raises(cli.UsageError):
-        cli._write_env_file({"PLAK_ACCESS_TOKEN": "geldig\nPLAK_HOST=https://kwaad.example"})
-    with pytest.raises(cli.UsageError):
-        cli._write_env_file({"PLAK_REFRESH_TOKEN": "geldig\rPLAK_HOST=https://kwaad.example"})
+    assert _stored_tokens(host) == (None, None)
+    assert cli._read_hosts()["default_host"] == host
 
 
 def test_the_mask_is_skipped_when_stdout_is_a_file(tmp_path, capfd):
@@ -2671,9 +3176,7 @@ def test_group_create_sends_the_access_flags_that_were_given(stub_server, host, 
 
 
 def test_group_create_uses_the_stored_session_and_host(stub_server, host, isolated_cwd, capsys):
-    cli._write_env_file(
-        {"PLAK_HOST": host, "PLAK_ACCESS_TOKEN": "stored", "PLAK_ACCESS_EXPIRES_AT": "9999999999"}
-    )
+    _store_session(host, access="stored")
     stub_server.responder = _json_responder(201, _group_answer())
 
     code = cli.main(["group", "create", "team", "--name", "Team"])
@@ -2921,18 +3424,11 @@ _STORED_REFRESH = "stored-refresh-token-must-never-be-printed"
 def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_are(
     stub_server, host, isolated_cwd, monkeypatch, capsys, argv, answer, unreachable, expected
 ):
-    """The host and the tokens share .env.plak; a message naming the host must
-    carry the host alone."""
+    """With --insecure-storage the host and the tokens share hosts.json; a
+    message naming the host must carry the host alone."""
     for name in ("PLAK_HOST", "PLAK_ACCESS_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"):
         monkeypatch.delenv(name, raising=False)
-    cli._write_env_file(
-        {
-            "PLAK_HOST": host,
-            "PLAK_ACCESS_TOKEN": _STORED_ACCESS,
-            "PLAK_REFRESH_TOKEN": _STORED_REFRESH,
-            "PLAK_ACCESS_EXPIRES_AT": "9999999999",
-        }
-    )
+    _store_session(host, access=_STORED_ACCESS, refresh=_STORED_REFRESH, insecure=True)
     if answer is not None:
         stub_server.responder = _json_responder(200 if argv[0] == "whoami" else 201, answer)
     if unreachable is not None:

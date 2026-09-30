@@ -8,6 +8,7 @@ description = "Plak CLI - publish static sites and clean up previews"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28,<0.29",
+    "keyring>=25.7,<26",
 ]
 
 [project.scripts]

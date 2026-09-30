@@ -60,9 +60,9 @@ and on the usual Linux setups).
 - `tests/plak.spec.ts`: the scenarios, built up serially.
 - `tests/cli.spec.ts`: the real CLI (`uv run --project cli plak ...`)
   against the same stack: publishing a preview and a live version,
-  removing the preview and logging out. It runs from a temp working
-  directory, because the CLI keeps its session in `.env.plak` next to
-  the working directory.
+  removing the preview and logging out. It points `PLAK_CONFIG_DIR` at
+  a temp directory, because the CLI keeps its session per user account
+  and a run must not touch a contributor's own.
 
 Scenarios that need the content origin login handoff (spec §4a, task
 6.3) detect whether it is present in the stack and otherwise skip with a
