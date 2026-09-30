@@ -100,7 +100,7 @@ async function expectNoViolationsIn(element: Element): Promise<void> {
 
 async function expectNoViolations(component: Component): Promise<void> {
   const wrapper = mount(component, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
     attachTo: document.body,
     // Stubbed teleports keep the edit sheets inside the checked fragment, so
     // axe sees the forms in them too.
@@ -142,7 +142,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
         },
       ],
     });
-    await router.push('/nldd/website');
+    await router.push('/team-aurora/website');
     await router.isReady();
 
     const Host = defineComponent({ render: () => h(RouterView) });

@@ -10,7 +10,7 @@ import SiteMembersManager from './SiteMembersManager.vue';
 
 function memberWith(overrides: Partial<SiteMember>): SiteMember {
   return {
-    groupSlug: 'nldd',
+    groupSlug: 'team-aurora',
     siteSlug: 'website',
     memberId: 'lid-7',
     identifier: 'lid@voorbeeld.nl',
@@ -75,8 +75,8 @@ function mountComponent(props: {
   return mount(SiteMembersManager, {
     props: {
       members: props.members ?? [],
-      group: 'nldd',
-      groupName: 'NLDD',
+      group: 'team-aurora',
+      groupName: 'Team Aurora',
       add: props.add ?? vi.fn(),
       remove: props.remove ?? vi.fn(),
       setRole: props.setRole ?? vi.fn(),
@@ -223,7 +223,7 @@ describe('SiteMembersManager (two blocks)', () => {
     expect(block.element.tagName.toLowerCase()).toBe('details');
     // Closed on load: open is not set on it.
     expect(block.attributes('open')).toBeUndefined();
-    expect(block.find('summary').text()).toBe('1 lid via de groep NLDD');
+    expect(block.find('summary').text()).toBe('1 lid via de groep Team Aurora');
   });
 
   it('counts in the plural once more than one member comes in via the group', () => {
@@ -231,7 +231,7 @@ describe('SiteMembersManager (two blocks)', () => {
       members: [viaGroup, memberWith({ identifier: 'bea@voorbeeld.nl', groupRole: 'admin' })],
     });
 
-    expect(details(wrapper).find('summary').text()).toBe('2 leden via de groep NLDD');
+    expect(details(wrapper).find('summary').text()).toBe('2 leden via de groep Team Aurora');
   });
 
   it('omits the block as long as no one comes in via the group', () => {
@@ -245,8 +245,8 @@ describe('SiteMembersManager (two blocks)', () => {
 
     expect(inheritedRows(wrapper)[0]!.find('nldd-icon-button').exists()).toBe(false);
     const link = wrapper.find('[data-testid="leden-naar-groep"]');
-    expect(link.attributes('href')).toBe('/nldd/-/members');
-    expect(link.text()).toBe('leden van de groep NLDD');
+    expect(link.attributes('href')).toBe('/team-aurora/-/members');
+    expect(link.text()).toBe('leden van de groep Team Aurora');
   });
 });
 

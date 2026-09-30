@@ -124,13 +124,13 @@ describe('NewGroupSheet', () => {
         type: 'about:blank',
         title: 'Groep bestaat al',
         status: 409,
-        detail: 'Er bestaat al een groep met slug "nldd".',
+        detail: 'Er bestaat al een groep met slug "team-aurora".',
       }),
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'NLDD');
-    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'nldd');
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Aurora');
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team-aurora');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
 
@@ -227,8 +227,8 @@ describe('NewGroupSheet', () => {
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'NLDD');
-    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'nldd');
+    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Aurora');
+    typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team-aurora');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
 

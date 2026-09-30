@@ -126,7 +126,7 @@ async def test_write_stores_audit_row_on(
         Actor(kind=ActorKind.MEMBER, identifier="sub-abc"),
         "refused",
         reason_code="UNKNOWN_SITE",
-        refs={"group_slug": "nldd", "site_slug": "website"},
+        refs={"group_slug": "team-aurora", "site_slug": "website"},
         ip="203.0.113.42",
     )
 
@@ -175,13 +175,13 @@ async def test_an_unvouched_ip_is_marked_in_the_refs(
         action,
         ANONYMOUS,
         "allowed",
-        refs={"group_slug": "nldd"},
+        refs={"group_slug": "team-aurora"},
         ip=ClientAddress("203.0.113.42", vouched=False),
     )
 
     row = await _read_audit_row(db_connection, action)
     assert row is not None
-    assert json.loads(row["refs"]) == {"group_slug": "nldd", vocabulary.IP_UNVOUCHED: True}
+    assert json.loads(row["refs"]) == {"group_slug": "team-aurora", vocabulary.IP_UNVOUCHED: True}
     assert row["ip_truncated"] == "203.0.113.0/24"
     assert decrypt_ip(_IP_KEY_A, row["id"], row["ip_encrypted"]) == "203.0.113.42"
 
@@ -205,10 +205,10 @@ async def test_a_vouched_ip_leaves_the_refs_alone(
     action = f"test_actie_{uuid.uuid4().hex}"
     await audit_log.write(action, ANONYMOUS, "allowed", ip=ClientAddress("203.0.113.42", vouched=True))
     plain = f"test_actie_{uuid.uuid4().hex}"
-    await audit_log.write(plain, ANONYMOUS, "allowed", refs={"group_slug": "nldd"}, ip="203.0.113.42")
+    await audit_log.write(plain, ANONYMOUS, "allowed", refs={"group_slug": "team-aurora"}, ip="203.0.113.42")
 
     assert json.loads((await _read_audit_row(db_connection, action))["refs"]) is None
-    assert json.loads((await _read_audit_row(db_connection, plain))["refs"]) == {"group_slug": "nldd"}
+    assert json.loads((await _read_audit_row(db_connection, plain))["refs"]) == {"group_slug": "team-aurora"}
 
 
 async def test_an_unvouched_ip_is_marked_on_the_limited_write_too(

@@ -256,10 +256,10 @@ function defaultData(): MockData {
         lastLoginAt: '2026-07-30T10:10:00Z',
       },
     ],
-    groups: [{ slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } }],
+    groups: [{ slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } }],
     groupMembers: [
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         memberId: 'lid-1',
         identifier: 'dev-beheerder',
         name: 'Bea Heerder',
@@ -269,7 +269,7 @@ function defaultData(): MockData {
       // The three roles side by side, so a members list in dev shows what the
       // column is for.
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         memberId: 'lid-3',
         identifier: 'ada@voorbeeld.nl',
         name: 'Ada Vermeer',
@@ -277,7 +277,7 @@ function defaultData(): MockData {
         role: 'editor',
       },
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         memberId: 'lid-4',
         identifier: 'zoe@voorbeeld.nl',
         name: 'Zoë de Wit',
@@ -290,13 +290,13 @@ function defaultData(): MockData {
       // this one site without being in the group, and a group member whose
       // site role widens what the group gives them.
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         siteSlug: 'website',
         identifier: 'weg@voorbeeld.nl',
         role: 'editor',
       },
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         siteSlug: 'website',
         identifier: 'zoe@voorbeeld.nl',
         role: 'admin',
@@ -304,9 +304,9 @@ function defaultData(): MockData {
     ],
     sites: [
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         slug: 'website',
-        title: 'NLDD website',
+        title: 'Team Aurora website',
         access: { base: 'public', keys: false, invitees: false },
         externalSources: true,
         sandbox: true,
@@ -321,22 +321,22 @@ function defaultData(): MockData {
       {
         id: 'versie-1',
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         target: 'live',
-        storageRef: 'nldd/website/versie-1',
+        storageRef: 'team-aurora/website/versie-1',
         origin: 'action',
         createdByMember: null,
         createdByName: null,
-        createdByRepository: 'github.com/nldd/website',
+        createdByRepository: 'github.com/team-aurora/website',
         createdAt: lastPublishedAt,
         isLive: true,
       },
       {
         id: 'versie-0',
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         target: 'live',
-        storageRef: 'nldd/website/versie-0',
+        storageRef: 'team-aurora/website/versie-0',
         origin: 'upload',
         createdByMember: 'dev-beheerder',
         createdByName: 'Bea Heerder',
@@ -347,13 +347,13 @@ function defaultData(): MockData {
       {
         id: 'versie-preview-42',
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         target: 'preview',
-        storageRef: 'nldd/website/_preview/pr-42',
+        storageRef: 'team-aurora/website/_preview/pr-42',
         origin: 'action',
         createdByMember: null,
         createdByName: null,
-        createdByRepository: 'github.com/nldd/website',
+        createdByRepository: 'github.com/team-aurora/website',
         createdAt: lastPublishedAt,
         isLive: false,
       },
@@ -361,20 +361,20 @@ function defaultData(): MockData {
     previews: [
       {
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         ref: 'pr-42',
         versionId: 'versie-preview-42',
         accessOverride: { base: 'nobody', keys: false, invitees: true },
         lastUpdatedAt: lastPublishedAt,
         expiresAt: '2026-08-16T14:32:00.000Z',
-        url: '/nldd/website/_preview/pr-42/',
+        url: '/team-aurora/website/_preview/pr-42/',
       },
     ],
     invitees: [
       {
         id: 'genodigde-1',
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         identifier: 'reviewer@voorbeeld.nl',
         addedBy: 'dev-beheerder',
         addedAt: firstDeploy,
@@ -383,7 +383,7 @@ function defaultData(): MockData {
     keys: [
       {
         siteSlug: 'website',
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         label: 'Demo voor stakeholders',
         selector: 'sel-abc123',
         status: 'active',
@@ -393,11 +393,11 @@ function defaultData(): MockData {
     ],
     repositories: [
       {
-        groupSlug: 'nldd',
+        groupSlug: 'team-aurora',
         siteSlug: 'website',
         provider: 'github',
         host: 'https://github.com',
-        owner: 'nldd',
+        owner: 'team-aurora',
         repo: 'website',
         repositoryId: 123456,
         ownerId: 654321,

@@ -62,34 +62,34 @@ afterEach(() => {
 
 describe('Done (the address is the answer)', () => {
   it("shows the site's address on the content host, not on the admin origin", async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('h1').text()).toBe('Je site staat online');
     const link = wrapper.find('[data-testid="klaar-adres-link-site"]');
-    expect(link.attributes('href')).toBe('https://sites.plak.test/nldd/website/');
-    expect(link.text()).toBe('https://sites.plak.test/nldd/website/');
+    expect(link.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
+    expect(link.text()).toBe('https://sites.plak.test/team-aurora/website/');
     expect(link.attributes('target')).toBe('_blank');
 
     wrapper.unmount();
   });
 
   it('puts copy and open next to the address, both with a text label', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     const copy = wrapper.find('[data-testid="klaar-kopieer-site"]');
     expect(copy.attributes('text')).toBe('Kopieer adres');
     const openButtons = wrapper.find('[data-testid="klaar-open-site"]');
     expect(openButtons.attributes('text')).toBe('Open site');
-    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/nldd/website/');
+    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
 
     wrapper.unmount();
   });
 
   it('leaves room for a second address: the rows come from a list, not fixed markup', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     // Today there is one address; the structure is the one for more.
@@ -101,7 +101,7 @@ describe('Done (the address is the answer)', () => {
 
   it('copies the address and confirms it in the page, not in a toast', async () => {
     const write = writeClipboard();
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('[data-testid="klaar-kopieermelding-site"]').text()).toBe('');
@@ -109,7 +109,7 @@ describe('Done (the address is the answer)', () => {
     await wrapper.find('[data-testid="klaar-kopieer-site"]').trigger('click');
     await flushPromises();
 
-    expect(write).toHaveBeenCalledWith('https://sites.plak.test/nldd/website/');
+    expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
     const notice = wrapper.find('[data-testid="klaar-kopieermelding-site"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line, so a screen reader gets the confirmation too.
@@ -124,7 +124,7 @@ describe('Done (the address is the answer)', () => {
       value: { writeText: vi.fn().mockRejectedValue(new Error('geen toestemming')) },
       configurable: true,
     });
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     await wrapper.find('[data-testid="klaar-kopieer-site"]').trigger('click');
@@ -140,7 +140,7 @@ describe('Done (the address is the answer)', () => {
 
 describe('Done (who can see this)', () => {
   it('names the level and explains it, instead of claiming "Publieke URL"', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.text()).not.toContain('Publieke URL');
@@ -148,7 +148,7 @@ describe('Done (who can see this)', () => {
       'Iedereen kan de site bekijken',
     );
     expect(wrapper.find('[data-testid="klaar-zichtbaarheid-wijzigen"]').attributes('href')).toBe(
-      '/nldd/website/access',
+      '/team-aurora/website/access',
     );
 
     wrapper.unmount();
@@ -156,7 +156,7 @@ describe('Done (who can see this)', () => {
 
   it("tells what actually applies, even when it isn't public", async () => {
     backend.data.sites[0]!.access = { base: 'site_team', keys: false, invitees: false };
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     const row = wrapper.find('[data-testid="klaar-zichtbaarheid"]').text();
@@ -166,11 +166,11 @@ describe('Done (who can see this)', () => {
   });
 
   it('links through to admin and to the overview', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('[data-testid="klaar-naar-site"]').attributes('href')).toBe(
-      '/nldd/website',
+      '/team-aurora/website',
     );
     expect(wrapper.find('[data-testid="klaar-naar-overzicht"]').attributes('href')).toBe('/');
 
@@ -191,7 +191,7 @@ describe('Done (reload and share)', () => {
   });
 
   it('loads its own data, so a reload shows the same thing', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
 
     expect(wrapper.find('nldd-inline-dialog[variant="loading"]').exists()).toBe(true);
 
@@ -204,13 +204,13 @@ describe('Done (reload and share)', () => {
   });
 
   it('supplies the breadcrumb path to the app shell', async () => {
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    expect(breadcrumbsFor('/nldd/website/done')).toEqual([
+    expect(breadcrumbsFor('/team-aurora/website/done')).toEqual([
       { text: 'Overzicht', href: '/' },
-      { text: 'NLDD', href: '/nldd' },
-      { text: 'NLDD website' },
+      { text: 'Team Aurora', href: '/team-aurora' },
+      { text: 'Team Aurora website' },
     ]);
 
     wrapper.unmount();
@@ -233,7 +233,7 @@ describe('Done (reload and share)', () => {
 
   it('fetches again as soon as the route points to a different site', async () => {
     backend.data.sites.push({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       slug: 'tweede',
       title: 'Tweede site',
       access: { base: 'public', keys: false, invitees: false },
@@ -245,14 +245,14 @@ describe('Done (reload and share)', () => {
       lastPublishedAt: '2026-07-17T14:32:00.000Z',
       previewCount: 0,
     });
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    await router.push('/nldd/tweede/done');
+    await router.push('/team-aurora/tweede/done');
     await flushPromises();
 
     expect(wrapper.find('[data-testid="klaar-adres-link-site"]').attributes('href')).toBe(
-      'https://sites.plak.test/nldd/tweede/',
+      'https://sites.plak.test/team-aurora/tweede/',
     );
 
     wrapper.unmount();
@@ -261,7 +261,7 @@ describe('Done (reload and share)', () => {
 
 describe('Done (what goes wrong)', () => {
   it("reports a site that doesn't exist, instead of a blank screen", async () => {
-    const wrapper = await mountComponent('/nldd/bestaat-niet/done');
+    const wrapper = await mountComponent('/team-aurora/bestaat-niet/done');
     await flushPromises();
 
     const banner = wrapper.find('nldd-banner[variant="critical"]');
@@ -288,7 +288,7 @@ describe('Done (what goes wrong)', () => {
 
   it('reports a failed fetch as an error, not an empty page', async () => {
     vi.stubGlobal('fetch', () => Promise.reject(new Error('netwerk weg')));
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('nldd-banner[variant="critical"]').exists()).toBe(true);
@@ -299,7 +299,7 @@ describe('Done (what goes wrong)', () => {
   it('says so honestly when no version is online yet', async () => {
     backend.data.sites[0]!.liveVersionId = null;
     backend.data.sites[0]!.hasLiveVersion = false;
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('h1').text()).toBe('Je site staat nog niet online');
@@ -313,11 +313,11 @@ describe('Done (what goes wrong)', () => {
 
   it("shows the path instead of a half address when there's no content origin", async () => {
     backend.data.loggedInMemberId = null;
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
     expect(wrapper.find('[data-testid="klaar-adres-link-site"]').attributes('href')).toBe(
-      '/nldd/website/',
+      '/team-aurora/website/',
     );
 
     wrapper.unmount();
@@ -341,7 +341,7 @@ describe('Done (secret link)', () => {
     const spy = vi.fn(backend.fetch);
     vi.stubGlobal('fetch', spy);
 
-    const wrapper = await mountComponent('/nldd/website/done');
+    const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
     await flushPromises();
 
@@ -360,7 +360,7 @@ describe('Done (secret link)', () => {
     const spy = vi.fn(backend.fetch);
     vi.stubGlobal('fetch', spy);
 
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -371,7 +371,7 @@ describe('Done (secret link)', () => {
     expect(banner.attributes('supporting-text')).toContain('Toegang');
     const link = wrapper.find('[data-testid="klaar-sleutel-link"]');
     expect(link.text()).toContain('?key=');
-    expect(link.text()).toContain('https://sites.plak.test/nldd/website/');
+    expect(link.text()).toContain('https://sites.plak.test/team-aurora/website/');
 
     wrapper.unmount();
   });
@@ -380,7 +380,7 @@ describe('Done (secret link)', () => {
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
     const write = writeClipboard();
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -396,12 +396,12 @@ describe('Done (secret link)', () => {
   it('shows the link without the code and the code itself next to the full link', async () => {
     backend.data.sites[0]!.access = { base: 'nobody', keys: true, invitees: false };
     backend.data.keys = backend.data.keys.filter((k) => k.siteSlug !== 'website');
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
     const bare = wrapper.find('[data-testid="klaar-sleutel-link-zonder-code"]');
-    expect(bare.text()).toContain('https://sites.plak.test/nldd/website/?key=');
+    expect(bare.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
     const code = wrapper.find('[data-testid="klaar-sleutel-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);
@@ -416,7 +416,7 @@ describe('Done (secret link)', () => {
     const spy = vi.fn(backend.fetch);
     vi.stubGlobal('fetch', spy);
 
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -424,8 +424,8 @@ describe('Done (secret link)', () => {
     expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
 
     // Simulate navigating away and back to the same site's Done screen.
-    await router.push('/nldd/website');
-    await router.push('/nldd/website/done');
+    await router.push('/team-aurora/website');
+    await router.push('/team-aurora/website/done');
     await flushPromises();
     await flushPromises();
 
@@ -441,7 +441,7 @@ describe('Done (secret link)', () => {
       const spy = vi.fn(backend.fetch);
       vi.stubGlobal('fetch', spy);
 
-      const wrapper = await mountFromPublish('nldd', 'website');
+      const wrapper = await mountFromPublish('team-aurora', 'website');
       await flushPromises();
       await flushPromises();
 
@@ -474,7 +474,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -502,7 +502,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -525,7 +525,7 @@ describe('Done (secret link)', () => {
       return realFetch(input, init);
     }) as typeof fetch);
 
-    const wrapper = await mountFromPublish('nldd', 'website');
+    const wrapper = await mountFromPublish('team-aurora', 'website');
     await flushPromises();
     await flushPromises();
 
@@ -534,7 +534,7 @@ describe('Done (secret link)', () => {
     expect(fallback.exists()).toBe(true);
     expect(
       wrapper.find('[data-testid="klaar-sleutel-naar-toegang"]').attributes('href'),
-    ).toBe('/nldd/website/access');
+    ).toBe('/team-aurora/website/access');
 
     wrapper.unmount();
   });

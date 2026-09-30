@@ -18,7 +18,7 @@ afterEach(() => {
 
 function makeWrapper() {
   return mount(TabPreviews, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
   });
 }
 
@@ -40,7 +40,7 @@ describe('TabPreviews: states', () => {
     expect(row.html()).toContain('pr-42');
     // The API returns a content path; the link belongs absolute on the content host.
     expect(row.find('nldd-link').attributes('href')).toBe(
-      'https://sites.plak.test/nldd/website/_preview/pr-42/',
+      'https://sites.plak.test/team-aurora/website/_preview/pr-42/',
     );
     expect(row.html()).toContain('Bijgewerkt');
     expect(row.html()).toContain('Vervalt');

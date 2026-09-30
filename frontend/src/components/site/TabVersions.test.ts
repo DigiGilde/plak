@@ -18,7 +18,7 @@ afterEach(() => {
 
 function makeWrapper() {
   return mount(TabVersions, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
   });
 }
 
@@ -64,7 +64,7 @@ describe('TabVersions: states', () => {
     await runAction(wrapper, 'bekijk-versie-0');
 
     expect(open).toHaveBeenCalledWith(
-      'https://sites.plak.test/nldd/website/_version/versie-0/',
+      'https://sites.plak.test/team-aurora/website/_version/versie-0/',
       '_blank',
       'noopener',
     );
@@ -166,7 +166,7 @@ describe('TabVersions: states', () => {
 
     const row = wrapper.find('[data-testid="versie-versie-1"]');
     expect(row.find('nldd-text-cell').attributes('supporting-text')).toBe(
-      'Gepubliceerd door github.com/nldd/website',
+      'Gepubliceerd door github.com/team-aurora/website',
     );
   });
 

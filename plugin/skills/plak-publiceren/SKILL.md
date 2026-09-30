@@ -214,7 +214,7 @@ Then do not go on until the terminal shows "Logged in as ...".
    ```bash
    plak publish ./dist \
      --host https://beheer.plak.example.nl \
-     --site nldd/website \
+     --site team-aurora/website \
      --preview proef-1
    ```
 
@@ -224,7 +224,7 @@ Then do not go on until the terminal shows "Logged in as ...".
 
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" \
-     https://plak.example.nl/nldd/website/_preview/proef-1/
+     https://plak.example.nl/team-aurora/website/_preview/proef-1/
    ```
 
    A 404 need not be a deploy error: on a protected site, 404 is the normal
@@ -238,7 +238,7 @@ Then do not go on until the terminal shows "Logged in as ...".
 
    ```bash
    plak preview-remove proef-1 \
-     --host https://beheer.plak.example.nl --site nldd/website
+     --host https://beheer.plak.example.nl --site team-aurora/website
    ```
 
    Idempotent: a preview that is gone already is a successful call too. If you
@@ -328,21 +328,21 @@ session-only: send the user to the same page.
 ## Example from start to finish
 
 The user says: "Hier is de link naar ons Plak: https://beheer.plak.example.nl.
-Ik heb een site nldd/website. Kun jij deze site erop zetten?"
+Ik heb een site team-aurora/website. Kun jij deze site erop zetten?"
 
 1. You start `plak login --host https://beheer.plak.example.nl`, show the URL
    and the code, and wait until the user confirms in the browser and the
    terminal shows "Logged in as ...".
 2. You build (`npm run build`) with
-   `PLAK_BASE_PATH=/nldd/website/_preview/proef-1/` and walk through `dist/`:
+   `PLAK_BASE_PATH=/team-aurora/website/_preview/proef-1/` and walk through `dist/`:
    only HTML, CSS, JS and images, no `.env`, no `node_modules`.
 3. You publish with `--preview proef-1`, get a version id back, and check
-   `https://plak.example.nl/nldd/website/_preview/proef-1/` plus one
+   `https://plak.example.nl/team-aurora/website/_preview/proef-1/` plus one
    stylesheet.
 4. You report: "Preview staat op ..., de live site is ongewijzigd. Zeg het als
    hij live mag, dan bouw ik opnieuw met het live base-path en publiceer ik
    zonder preview-ref."
-5. The user says "ja, live". You build with `PLAK_BASE_PATH=/nldd/website/`,
+5. The user says "ja, live". You build with `PLAK_BASE_PATH=/team-aurora/website/`,
    publish without `--preview`, check the live address and then clean up the
    preview.
 

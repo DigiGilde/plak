@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Group } from '../api/types';
 import GroupHeading from './GroupHeading.vue';
 
-const group: Group = { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } };
+const group: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } };
 
 describe('GroupHeading', () => {
   it('links the group name as a heading to the group page', async () => {
@@ -15,8 +15,8 @@ describe('GroupHeading', () => {
 
     const nameLink = wrapper.find('h2 nldd-link');
     expect(nameLink.exists()).toBe(true);
-    expect(nameLink.attributes('href')).toBe('/nldd');
-    expect(nameLink.text()).toBe('NLDD');
+    expect(nameLink.attributes('href')).toBe('/team-aurora');
+    expect(nameLink.text()).toBe('Team Aurora');
 
     wrapper.unmount();
   });

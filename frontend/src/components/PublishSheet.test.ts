@@ -7,7 +7,7 @@ import type { Group, Me, MyGroupRole, Site } from '@/api/types';
 
 import PublishSheet from './PublishSheet.vue';
 
-const NLDD: Group = { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } };
+const AURORA: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } };
 const TEAM: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false } };
 const FRESH: Group = { slug: 'mijn-team', name: 'Mijn team', defaultAccess: { base: 'site_team', keys: false, invitees: false } };
 
@@ -32,7 +32,7 @@ function meWith(groupRoles: MyGroupRole[]): Me {
 }
 
 const site: Site = {
-  groupSlug: 'nldd',
+  groupSlug: 'team-aurora',
   slug: 'mijn-site',
   title: 'Mijn site',
   access: { base: 'public', keys: false, invitees: false },
@@ -72,7 +72,7 @@ function flow(override: Partial<Flow> = {}): Flow {
 function mountComponent(
   options: { groups?: Group[]; me?: Me | null; contentBase?: string; open?: boolean } & Partial<Flow> = {},
 ): { wrapper: Wrapper; actions: Flow } {
-  const { groups = [NLDD], me = null, contentBase = 'https://sites.plak.test', open = true, ...rest } =
+  const { groups = [AURORA], me = null, contentBase = 'https://sites.plak.test', open = true, ...rest } =
     options;
   const actions = flow(rest);
   const wrapper = mount(PublishSheet, {
@@ -133,7 +133,7 @@ describe('PublishSheet (the file drives the rest)', () => {
 
     expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Mijn site');
     expect(textOf(wrapper, 'publiceer-adres')).toContain(
-      'https://sites.plak.test/nldd/mijn-site/',
+      'https://sites.plak.test/team-aurora/mijn-site/',
     );
   });
 
@@ -230,7 +230,7 @@ describe('PublishSheet (the address is always visible and editable)', () => {
       'mijn-nieuwe-site',
     );
     expect(textOf(wrapper, 'publiceer-adres')).toContain(
-      'https://sites.plak.test/nldd/mijn-nieuwe-site/',
+      'https://sites.plak.test/team-aurora/mijn-nieuwe-site/',
     );
   });
 
@@ -246,7 +246,7 @@ describe('PublishSheet (the address is always visible and editable)', () => {
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('eigen-adres');
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/nldd/eigen-adres/');
+    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team-aurora/eigen-adres/');
   });
 
   it('follows the title again once the address is cleared', async () => {
@@ -282,7 +282,7 @@ describe('PublishSheet (the address is always visible and editable)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.createSite).toHaveBeenCalledWith('nldd', 'Iets', 'mijn-rapport-2026');
+    expect(actions.createSite).toHaveBeenCalledWith('team-aurora', 'Iets', 'mijn-rapport-2026');
   });
 
   it('shows the path without a content origin, not a half address with an empty host', async () => {
@@ -291,7 +291,7 @@ describe('PublishSheet (the address is always visible and editable)', () => {
     typeIn(wrapper, 'titel', 'Site');
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/nldd/site/');
+    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team-aurora/site/');
   });
 });
 
@@ -317,18 +317,18 @@ describe('PublishSheet (input without a detail event)', () => {
 
 describe('PublishSheet (the group)', () => {
   it('asks nothing with exactly one group', () => {
-    const { wrapper } = mountComponent({ groups: [NLDD] });
+    const { wrapper } = mountComponent({ groups: [AURORA] });
 
     expect(wrapper.find('nldd-dropdown').exists()).toBe(false);
     expect(wrapper.find('nldd-text-field[name="groepnaam"]').exists()).toBe(false);
   });
 
   it('offers the choice with more than one group and lets the address move along', async () => {
-    const { wrapper, actions } = mountComponent({ groups: [NLDD, TEAM] });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA, TEAM] });
 
     const select = wrapper.find('nldd-dropdown select');
-    expect(select.findAll('option').map((o) => o.attributes('value'))).toEqual(['nldd', 'team']);
-    expect((select.element as HTMLSelectElement).value).toBe('nldd');
+    expect(select.findAll('option').map((o) => o.attributes('value'))).toEqual(['team-aurora', 'team']);
+    expect((select.element as HTMLSelectElement).value).toBe('team-aurora');
 
     (select.element as HTMLSelectElement).value = 'team';
     await select.trigger('change');
@@ -357,13 +357,13 @@ describe('PublishSheet (the group)', () => {
   });
 
   it('keeps the chosen group when the running list still contains it', async () => {
-    const { wrapper } = mountComponent({ groups: [NLDD, TEAM] });
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM] });
 
     const select = wrapper.find('nldd-dropdown select');
     (select.element as HTMLSelectElement).value = 'team';
     await select.trigger('change');
 
-    await wrapper.setProps({ groups: [NLDD, TEAM, FRESH] });
+    await wrapper.setProps({ groups: [AURORA, TEAM, FRESH] });
     choose(wrapper, file('site.zip'));
     await flushPromises();
 
@@ -402,10 +402,10 @@ describe('PublishSheet (the group, filtered by role)', () => {
 
   it('asks nothing when the user may only publish in one of the groups', () => {
     const me = meWith([
-      { groupSlug: 'nldd', role: 'editor' },
+      { groupSlug: 'team-aurora', role: 'editor' },
       { groupSlug: 'lezers', role: 'reader' },
     ]);
-    const { wrapper } = mountComponent({ groups: [NLDD, READERS], me });
+    const { wrapper } = mountComponent({ groups: [AURORA, READERS], me });
 
     expect(wrapper.find('nldd-dropdown').exists()).toBe(false);
     expect(wrapper.find('nldd-text-field[name="groepnaam"]').exists()).toBe(false);
@@ -413,25 +413,25 @@ describe('PublishSheet (the group, filtered by role)', () => {
 
   it('offers in the choice list only the groups where editor or admin applies', async () => {
     const me = meWith([
-      { groupSlug: 'nldd', role: 'editor' },
+      { groupSlug: 'team-aurora', role: 'editor' },
       { groupSlug: 'team', role: 'admin' },
       { groupSlug: 'lezers', role: 'reader' },
     ]);
-    const { wrapper, actions } = mountComponent({ groups: [NLDD, TEAM, READERS], me });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA, TEAM, READERS], me });
 
     const select = wrapper.find('nldd-dropdown select');
-    expect(select.findAll('option').map((o) => o.attributes('value'))).toEqual(['nldd', 'team']);
+    expect(select.findAll('option').map((o) => o.attributes('value'))).toEqual(['team-aurora', 'team']);
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.createSite).toHaveBeenCalledWith('nldd', 'Site', 'site');
+    expect(actions.createSite).toHaveBeenCalledWith('team-aurora', 'Site', 'site');
   });
 
   it('leaves no group without an editor or admin role in the choice list, not even for a platform admin', () => {
     const me = { ...meWith([]), platformRole: 'admin' as const };
-    const { wrapper } = mountComponent({ groups: [NLDD, TEAM], me });
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM], me });
 
     // A platform admin gets no bypass here (backend `create_site` demands an
     // actual group role): with none, this is the "no eligible group" case.
@@ -475,8 +475,8 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.createSite).toHaveBeenCalledWith('nldd', 'Mijn site', 'mijn-site');
-    expect(actions.publish).toHaveBeenCalledWith('nldd', 'mijn-site', zip);
+    expect(actions.createSite).toHaveBeenCalledWith('team-aurora', 'Mijn site', 'mijn-site');
+    expect(actions.publish).toHaveBeenCalledWith('team-aurora', 'mijn-site', zip);
     expect(wrapper.emitted('created')?.[0]).toEqual([site]);
     expect(wrapper.emitted('published')?.[0]).toEqual([site]);
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
@@ -517,7 +517,7 @@ describe('PublishSheet (publishing)', () => {
   });
 
   it('leaves the default visibility alone when nothing else is chosen', async () => {
-    const { wrapper, actions } = mountComponent({ groups: [NLDD] });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA] });
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
@@ -527,7 +527,7 @@ describe('PublishSheet (publishing)', () => {
   });
 
   it('sets a chosen base before the upload, so the first version is never more widely visible', async () => {
-    const { wrapper, actions } = mountComponent({ groups: [NLDD] });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA] });
     const zip = file('site.zip');
 
     await wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').trigger('change');
@@ -535,7 +535,7 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.setAccess).toHaveBeenCalledWith('nldd', 'mijn-site', {
+    expect(actions.setAccess).toHaveBeenCalledWith('team-aurora', 'mijn-site', {
       base: 'site_team',
       keys: false,
       invitees: false,
@@ -549,7 +549,7 @@ describe('PublishSheet (publishing)', () => {
     const setAccess = vi.fn().mockRejectedValue(
       new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }),
     );
-    const { wrapper, actions } = mountComponent({ groups: [NLDD], setAccess });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA], setAccess });
 
     await wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').trigger('change');
     choose(wrapper, file('site.zip'));
@@ -561,7 +561,7 @@ describe('PublishSheet (publishing)', () => {
   });
 
   it('publishes with a secret link in one go, without a detour via the Toegang tab', async () => {
-    const { wrapper, actions } = mountComponent({ groups: [NLDD] });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA] });
 
     await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
     wrapper
@@ -571,7 +571,7 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.setAccess).toHaveBeenCalledWith('nldd', 'mijn-site', {
+    expect(actions.setAccess).toHaveBeenCalledWith('team-aurora', 'mijn-site', {
       base: 'nobody',
       keys: true,
       invitees: false,
@@ -579,7 +579,7 @@ describe('PublishSheet (publishing)', () => {
   });
 
   it('turns on invitees from the same sheet', async () => {
-    const { wrapper, actions } = mountComponent({ groups: [NLDD] });
+    const { wrapper, actions } = mountComponent({ groups: [AURORA] });
 
     await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
     wrapper
@@ -589,7 +589,7 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.setAccess).toHaveBeenCalledWith('nldd', 'mijn-site', {
+    expect(actions.setAccess).toHaveBeenCalledWith('team-aurora', 'mijn-site', {
       base: 'nobody',
       keys: false,
       invitees: true,
@@ -597,7 +597,7 @@ describe('PublishSheet (publishing)', () => {
   });
 
   it('tells at the choice who can actually see the site then', async () => {
-    const { wrapper } = mountComponent({ groups: [NLDD] });
+    const { wrapper } = mountComponent({ groups: [AURORA] });
 
     await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
     await flushPromises();
@@ -615,8 +615,8 @@ describe('PublishSheet (publishing)', () => {
 
   it('starts from the group default access, exceptions included', async () => {
     const WITH_EXTRAS: Group = {
-      slug: 'nldd',
-      name: 'NLDD',
+      slug: 'team-aurora',
+      name: 'Team Aurora',
       defaultAccess: { base: 'nobody', keys: true, invitees: false },
     };
     const { wrapper } = mountComponent({ groups: [WITH_EXTRAS] });
@@ -631,8 +631,8 @@ describe('PublishSheet (publishing)', () => {
 
   it('also turns an exception to the group default back off', async () => {
     const WITH_EXTRAS: Group = {
-      slug: 'nldd',
-      name: 'NLDD',
+      slug: 'team-aurora',
+      name: 'Team Aurora',
       defaultAccess: { base: 'public', keys: true, invitees: false },
     };
     // The site is created on the group default, so turning the switch off is
@@ -649,7 +649,7 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.setAccess).toHaveBeenCalledWith('nldd', 'mijn-site', {
+    expect(actions.setAccess).toHaveBeenCalledWith('team-aurora', 'mijn-site', {
       base: 'public',
       keys: false,
       invitees: false,
@@ -659,8 +659,8 @@ describe('PublishSheet (publishing)', () => {
   it('carries the exceptions of the group default along with a different base', async () => {
     // Untouched switches keep whatever the group default said.
     const WITH_KEYS: Group = {
-      slug: 'nldd',
-      name: 'NLDD',
+      slug: 'team-aurora',
+      name: 'Team Aurora',
       defaultAccess: { base: 'public', keys: true, invitees: false },
     };
     const { wrapper, actions } = mountComponent({ groups: [WITH_KEYS] });
@@ -670,7 +670,7 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(actions.setAccess).toHaveBeenCalledWith('nldd', 'mijn-site', {
+    expect(actions.setAccess).toHaveBeenCalledWith('team-aurora', 'mijn-site', {
       base: 'sso',
       keys: true,
       invitees: false,
@@ -921,7 +921,7 @@ describe('PublishSheet (closing and showing)', () => {
   it('teleports the sheet to document.body and cleans it up on unmount', () => {
     const actions = flow();
     const wrapper = mount(PublishSheet, {
-      props: { open: false, groups: [NLDD], contentBase: '', ...actions },
+      props: { open: false, groups: [AURORA], contentBase: '', ...actions },
     });
 
     const sheet = document.body.querySelector('nldd-sheet');
@@ -1130,7 +1130,7 @@ describe('PublishSheet (dragging)', () => {
     const wrapper = mount(PublishSheet, {
       props: {
         open: false,
-        groups: [NLDD],
+        groups: [AURORA],
         contentBase: 'https://sites.plak.test',
         initialFile: file('gedropt.zip'),
         ...actions,

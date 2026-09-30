@@ -246,9 +246,9 @@ jobs:
       - name: Bepaal base-path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "PLAK_BASE_PATH=/nldd/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
+            echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
           else
-            echo "PLAK_BASE_PATH=/nldd/website/" >> "$GITHUB_ENV"
+            echo "PLAK_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
           fi
 
       - name: Build site
@@ -261,7 +261,7 @@ jobs:
         uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           dist-path: ./dist
 
       - name: Publiceer preview
@@ -269,7 +269,7 @@ jobs:
         uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           dist-path: ./dist
           preview-ref: pr-${{ github.event.pull_request.number }}
 
@@ -281,7 +281,7 @@ jobs:
         uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           preview-ref: pr-${{ github.event.pull_request.number }}
           teardown: "true"
 ```
@@ -331,9 +331,9 @@ jobs:
       - name: Bepaal base-path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "PLAK_BASE_PATH=/nldd/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
+            echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
           else
-            echo "PLAK_BASE_PATH=/nldd/website/" >> "$GITHUB_ENV"
+            echo "PLAK_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
           fi
 
       - name: Build site
@@ -346,7 +346,7 @@ jobs:
         uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           dist-path: ./dist
 
       - name: Publiceer preview
@@ -354,7 +354,7 @@ jobs:
         uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           dist-path: ./dist
           preview-ref: pr-${{ github.event.pull_request.number }}
 
@@ -367,7 +367,7 @@ jobs:
         uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           preview-ref: pr-${{ github.event.pull_request.number }}
           teardown: "true"
 ```
@@ -414,7 +414,7 @@ jobs:
         uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
           host: https://beheer.plak.example.org
-          site: nldd/website
+          site: team-aurora/website
           preview-ref: rooktest
           teardown: "true"
 ```
@@ -822,14 +822,14 @@ without you having to link again. A linked session works at most
 the linking itself, and acts with exactly the roles of the member who linked.
 
 ```bash
-plak publish ./dist --site nldd/website --preview pr-42
+plak publish ./dist --site team-aurora/website --preview pr-42
 ```
 
 Leave `--preview` out for a live deploy. You purge a preview with the
 subcommand `preview-remove`:
 
 ```bash
-plak preview-remove pr-42 --site nldd/website
+plak preview-remove pr-42 --site team-aurora/website
 ```
 
 ### Creating a group or a site

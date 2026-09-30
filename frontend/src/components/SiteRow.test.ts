@@ -11,9 +11,9 @@ import SiteRow from './SiteRow.vue';
 const ACCESS_BASES: AccessBase[] = ['public', 'sso', 'site_team', 'nobody'];
 
 const site: Site = {
-  groupSlug: 'nldd',
+  groupSlug: 'team-aurora',
   slug: 'website',
-  title: 'NLDD website',
+  title: 'Team Aurora website',
   access: { base: 'public', keys: false, invitees: false },
   externalSources: false,
   sandbox: true,
@@ -33,8 +33,8 @@ describe('SiteRow', () => {
     // A table row is not a link itself (nldd-table-row has no href), so the
     // title carries the navigation.
     const link = wrapper.find('nldd-title-cell nldd-link');
-    expect(link.attributes('href')).toBe('/nldd/website');
-    expect(link.text()).toBe('NLDD website');
+    expect(link.attributes('href')).toBe('/team-aurora/website');
+    expect(link.text()).toBe('Team Aurora website');
 
     wrapper.unmount();
   });

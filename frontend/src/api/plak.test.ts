@@ -65,7 +65,7 @@ describe('overview (filled and empty)', () => {
     const result = await plak.overview();
 
     expect(result.groups).toHaveLength(1);
-    expect(result.groups[0]!.group.slug).toBe('nldd');
+    expect(result.groups[0]!.group.slug).toBe('team-aurora');
     expect(result.groups[0]!.sites).toHaveLength(1);
     expect(result.groups[0]!.sites[0]!.slug).toBe('website');
   });
@@ -119,11 +119,11 @@ describe('error handling', () => {
 
 describe('groups', () => {
   it('fetches group detail including members', async () => {
-    const detail = await plak.group('nldd');
+    const detail = await plak.group('team-aurora');
 
-    expect(detail.group.name).toBe('NLDD');
+    expect(detail.group.name).toBe('Team Aurora');
     expect(detail.members.map((l) => l.identifier)).toContain('dev-beheerder');
-    expect(detail.members.every((l) => l.groupSlug === 'nldd')).toBe(true);
+    expect(detail.members.every((l) => l.groupSlug === 'team-aurora')).toBe(true);
   });
 
   it('returns 404 problem+json for an unknown group', async () => {
@@ -132,7 +132,7 @@ describe('groups', () => {
   });
 
   it('refuses a duplicate group slug with 409', async () => {
-    const error = await refusedWith(plak.createGroup('NLDD nogmaals', 'nldd'));
+    const error = await refusedWith(plak.createGroup('Team Aurora nogmaals', 'team-aurora'));
     expect(error.problem.status).toBe(409);
   });
 
@@ -144,29 +144,29 @@ describe('groups', () => {
 
 describe('sites', () => {
   it('creates a site and deletes it again', async () => {
-    const site = await plak.createSite('nldd', 'Nieuw site', 'nieuw');
+    const site = await plak.createSite('team-aurora', 'Nieuw site', 'nieuw');
     expect(site.access).toEqual({ base: 'public', keys: false, invitees: false });
     expect(site.hasLiveVersion).toBe(false);
 
-    await plak.deleteSite('nldd', 'nieuw');
+    await plak.deleteSite('team-aurora', 'nieuw');
 
     const error = await refusedWith(
-      plak.setAccess('nldd', 'nieuw', { base: 'sso', keys: false, invitees: false }),
+      plak.setAccess('team-aurora', 'nieuw', { base: 'sso', keys: false, invitees: false }),
     );
     expect(error.problem.status).toBe(404);
   });
 
   it('sets base and exceptions of an existing site in one go', async () => {
     const access = { base: 'sso', keys: true, invitees: true } as const;
-    const site = await plak.setAccess('nldd', 'website', access);
+    const site = await plak.setAccess('team-aurora', 'website', access);
     expect(site.access).toEqual(access);
   });
 
   it('turns off an exception by leaving it out', async () => {
     // A PUT sets access as a whole, so a missing field is a choice, not
     // "leave what was there".
-    await plak.setAccess('nldd', 'website', { base: 'sso', keys: true, invitees: true });
-    const site = await plak.setAccess('nldd', 'website', {
+    await plak.setAccess('team-aurora', 'website', { base: 'sso', keys: true, invitees: true });
+    const site = await plak.setAccess('team-aurora', 'website', {
       base: 'sso',
       keys: false,
       invitees: false,
@@ -175,51 +175,51 @@ describe('sites', () => {
   });
 
   it('refuses an invalid slug with 422', async () => {
-    const error = await refusedWith(plak.createSite('nldd', 'Hoofdletters', 'Niet-Geldig'));
+    const error = await refusedWith(plak.createSite('team-aurora', 'Hoofdletters', 'Niet-Geldig'));
     expect(error.problem.status).toBe(422);
   });
 
   it('refuses a duplicate slug within the same group with 409', async () => {
-    const error = await refusedWith(plak.createSite('nldd', 'Website nogmaals', 'website'));
+    const error = await refusedWith(plak.createSite('team-aurora', 'Website nogmaals', 'website'));
     expect(error.problem.status).toBe(409);
   });
 });
 
 describe('invitees (empty, filled, error)', () => {
   it('starts empty for a fresh site', async () => {
-    await plak.createSite('nldd', 'Vers site', 'vers');
-    const list = await plak.invitees('nldd', 'vers');
+    await plak.createSite('team-aurora', 'Vers site', 'vers');
+    const list = await plak.invitees('team-aurora', 'vers');
     expect(list).toEqual([]);
   });
 
   it('contains the seeded invitee for the existing site', async () => {
-    const list = await plak.invitees('nldd', 'website');
+    const list = await plak.invitees('team-aurora', 'website');
     expect(list).toHaveLength(1);
     expect(list[0]!.identifier).toBe('reviewer@voorbeeld.nl');
   });
 
   it('refuses an invalid email address with 422', async () => {
-    const error = await refusedWith(plak.addInvitee('nldd', 'website', 'niet-een-email'));
+    const error = await refusedWith(plak.addInvitee('team-aurora', 'website', 'niet-een-email'));
     expect(error.problem.status).toBe(422);
   });
 
   it('adds and removes again, by id and not by address', async () => {
-    const added = await plak.addInvitee('nldd', 'website', 'extra@voorbeeld.nl');
-    let list = await plak.invitees('nldd', 'website');
+    const added = await plak.addInvitee('team-aurora', 'website', 'extra@voorbeeld.nl');
+    let list = await plak.invitees('team-aurora', 'website');
     expect(list.map((g) => g.identifier)).toContain('extra@voorbeeld.nl');
 
-    await plak.removeInvitee('nldd', 'website', added.id);
-    list = await plak.invitees('nldd', 'website');
+    await plak.removeInvitee('team-aurora', 'website', added.id);
+    list = await plak.invitees('team-aurora', 'website');
     expect(list.map((g) => g.identifier)).not.toContain('extra@voorbeeld.nl');
   });
 });
 
 describe('keys (shown once)', () => {
   it('shows the full value only on creation', async () => {
-    const created = await plak.createKey('nldd', 'website', 'Nieuwe demo', null);
+    const created = await plak.createKey('team-aurora', 'website', 'Nieuwe demo', null);
     expect(created.value).toContain(created.key.selector);
 
-    const list = await plak.keys('nldd', 'website');
+    const list = await plak.keys('team-aurora', 'website');
     const found = list.find((s) => s.selector === created.key.selector);
     expect(found).toBeDefined();
     expect((found as unknown as { value?: string }).value).toBeUndefined();
@@ -227,21 +227,21 @@ describe('keys (shown once)', () => {
 
   it('refuses an expiry date that already lies in the past', async () => {
     const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const error = await refusedWith(plak.createKey('nldd', 'website', 'Verlopen', past));
+    const error = await refusedWith(plak.createKey('team-aurora', 'website', 'Verlopen', past));
     expect(error.problem.status).toBe(422);
     expect(error.problem.code).toBe('EXPIRY_IN_PAST');
   });
 
   it('refuses an expiry date too far in the future', async () => {
     const farFuture = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString();
-    const error = await refusedWith(plak.createKey('nldd', 'website', 'Te ver', farFuture));
+    const error = await refusedWith(plak.createKey('team-aurora', 'website', 'Te ver', farFuture));
     expect(error.problem.status).toBe(422);
     expect(error.problem.code).toBe('EXPIRY_TOO_FAR');
   });
 
   it('revokes a key', async () => {
-    await plak.revokeKey('nldd', 'website', 'sel-abc123');
-    const list = await plak.keys('nldd', 'website');
+    await plak.revokeKey('team-aurora', 'website', 'sel-abc123');
+    const list = await plak.keys('team-aurora', 'website');
     const revoked = list.find((s) => s.selector === 'sel-abc123');
     expect(revoked?.status).toBe('revoked');
   });
@@ -249,15 +249,15 @@ describe('keys (shown once)', () => {
 
 describe('site repository (trusted publishing)', () => {
   it('returns the linked repository', async () => {
-    const repository = await plak.siteRepository('nldd', 'website');
+    const repository = await plak.siteRepository('team-aurora', 'website');
     expect(repository).not.toBeNull();
-    expect(repository?.owner).toBe('nldd');
+    expect(repository?.owner).toBe('team-aurora');
     expect(repository?.repo).toBe('website');
   });
 
   it('returns null instead of an error when nothing is linked', async () => {
-    await plak.deleteSiteRepository('nldd', 'website');
-    const repository = await plak.siteRepository('nldd', 'website');
+    await plak.deleteSiteRepository('team-aurora', 'website');
+    const repository = await plak.siteRepository('team-aurora', 'website');
     expect(repository).toBeNull();
   });
 
@@ -267,8 +267,8 @@ describe('site repository (trusted publishing)', () => {
   });
 
   it('links and unlinks a repository', async () => {
-    await plak.deleteSiteRepository('nldd', 'website');
-    const linked = await plak.setSiteRepository('nldd', 'website', {
+    await plak.deleteSiteRepository('team-aurora', 'website');
+    const linked = await plak.setSiteRepository('team-aurora', 'website', {
       provider: 'forgejo',
       host: 'https://code.overheid.nl',
       owner: 'robbertbos',
@@ -278,14 +278,14 @@ describe('site repository (trusted publishing)', () => {
     expect(linked.provider).toBe('forgejo');
     expect(linked.liveBranch).toBeNull();
 
-    await plak.deleteSiteRepository('nldd', 'website');
-    const error = await refusedWith(plak.deleteSiteRepository('nldd', 'website'));
+    await plak.deleteSiteRepository('team-aurora', 'website');
+    const error = await refusedWith(plak.deleteSiteRepository('team-aurora', 'website'));
     expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
   });
 
   it('refuses to link a repository without an owner or a repo name', async () => {
     const error = await refusedWith(
-      plak.setSiteRepository('nldd', 'website', {
+      plak.setSiteRepository('team-aurora', 'website', {
         provider: 'github',
         host: 'https://github.com',
         owner: '',
@@ -298,10 +298,10 @@ describe('site repository (trusted publishing)', () => {
 
   it('refuses a Forgejo host that is not on the allowlist', async () => {
     const error = await refusedWith(
-      plak.setSiteRepository('nldd', 'website', {
+      plak.setSiteRepository('team-aurora', 'website', {
         provider: 'forgejo',
         host: 'https://onbekende-forge.example',
-        owner: 'nldd',
+        owner: 'team-aurora',
         repo: 'website',
         liveBranch: null,
       }),
@@ -359,68 +359,68 @@ describe('linked sessions', () => {
 
 describe('group members and platform members', () => {
   it('adds a group member and removes it again', async () => {
-    const added = await plak.addGroupMember('nldd', 'collega@voorbeeld.nl');
+    const added = await plak.addGroupMember('team-aurora', 'collega@voorbeeld.nl');
     // Without a role given the wire carries reader: adding someone grants no
     // more than looking on.
     expect(added.role).toBe('reader');
-    let members = await plak.groupMembers('nldd');
+    let members = await plak.groupMembers('team-aurora');
     expect(members.map((l) => l.identifier)).toContain('collega@voorbeeld.nl');
 
-    await plak.removeGroupMember('nldd', added.memberId);
-    members = await plak.groupMembers('nldd');
+    await plak.removeGroupMember('team-aurora', added.memberId);
+    members = await plak.groupMembers('team-aurora');
     expect(members.map((l) => l.identifier)).not.toContain('collega@voorbeeld.nl');
   });
 
   it('refuses to add a group member with an invalid identifier', async () => {
-    const error = await refusedWith(plak.addGroupMember('nldd', 'niet-een-email'));
+    const error = await refusedWith(plak.addGroupMember('team-aurora', 'niet-een-email'));
     expect(error.problem.status).toBe(422);
   });
 
   it('reports the site roles a group member holds in this group', async () => {
-    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    const zoe = (await plak.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
     expect(zoe.siteRoles).toEqual([
-      { siteSlug: 'website', siteTitle: 'NLDD website', role: 'admin' },
+      { siteSlug: 'website', siteTitle: 'Team Aurora website', role: 'admin' },
     ]);
   });
 
   it('sorts several site roles for the same member by site slug', async () => {
-    await plak.createSite('nldd', 'Alpha', 'alpha');
+    await plak.createSite('team-aurora', 'Alpha', 'alpha');
     backend.data.siteRoles.push({
-      groupSlug: 'nldd',
+      groupSlug: 'team-aurora',
       siteSlug: 'alpha',
       identifier: 'zoe@voorbeeld.nl',
       role: 'reader',
     });
 
-    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    const zoe = (await plak.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
 
     expect(zoe.siteRoles.map((r) => r.siteSlug)).toEqual(['alpha', 'website']);
   });
 
   it('leaves the site roles standing unless the removal asks for them', async () => {
-    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    const zoe = (await plak.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
 
-    await plak.removeGroupMember('nldd', zoe.memberId);
+    await plak.removeGroupMember('team-aurora', zoe.memberId);
 
-    const site = await plak.siteMembers('nldd', 'website');
+    const site = await plak.siteMembers('team-aurora', 'website');
     expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')?.siteRole).toBe('admin');
   });
 
   it('takes the site roles along when the removal asks for them', async () => {
-    const zoe = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    const zoe = (await plak.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
 
-    await plak.removeGroupMember('nldd', zoe.memberId, 'remove');
+    await plak.removeGroupMember('team-aurora', zoe.memberId, 'remove');
 
-    const site = await plak.siteMembers('nldd', 'website');
+    const site = await plak.siteMembers('team-aurora', 'website');
     expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')).toBeUndefined();
   });
 
   it('changes the role of a group member', async () => {
-    const ada = (await plak.groupMembers('nldd')).find((l) => l.identifier === 'ada@voorbeeld.nl')!;
-    const changed = await plak.setGroupRole('nldd', ada.memberId, 'admin');
+    const ada = (await plak.groupMembers('team-aurora')).find((l) => l.identifier === 'ada@voorbeeld.nl')!;
+    const changed = await plak.setGroupRole('team-aurora', ada.memberId, 'admin');
     expect(changed.role).toBe('admin');
 
-    const members = await plak.groupMembers('nldd');
+    const members = await plak.groupMembers('team-aurora');
     expect(members.find((l) => l.identifier === 'ada@voorbeeld.nl')?.role).toBe('admin');
   });
 
@@ -435,48 +435,48 @@ describe('group members and platform members', () => {
 
 describe('site members', () => {
   it('refuses an invalid identifier with 422', async () => {
-    const error = await refusedWith(plak.addSiteMember('nldd', 'website', 'niet-een-email', 'reader'));
+    const error = await refusedWith(plak.addSiteMember('team-aurora', 'website', 'niet-een-email', 'reader'));
     expect(error.problem.status).toBe(422);
   });
 
   it('refuses a member who already has a role on the site, with 409', async () => {
-    await plak.addSiteMember('nldd', 'website', 'ada@voorbeeld.nl', 'reader');
+    await plak.addSiteMember('team-aurora', 'website', 'ada@voorbeeld.nl', 'reader');
     const error = await refusedWith(
-      plak.addSiteMember('nldd', 'website', 'ada@voorbeeld.nl', 'editor'),
+      plak.addSiteMember('team-aurora', 'website', 'ada@voorbeeld.nl', 'editor'),
     );
     expect(error.problem.status).toBe(409);
   });
 
   it('refuses to change the role of a member who has none on the site, with 404', async () => {
     const error = await refusedWith(
-      plak.setSiteRole('nldd', 'website', 'onbekend-lid-id', 'editor'),
+      plak.setSiteRole('team-aurora', 'website', 'onbekend-lid-id', 'editor'),
     );
     expect(error.problem.status).toBe(404);
   });
 
   it('refuses to remove a member who has no role on the site, with 404', async () => {
-    const error = await refusedWith(plak.removeSiteMember('nldd', 'website', 'onbekend-lid-id'));
+    const error = await refusedWith(plak.removeSiteMember('team-aurora', 'website', 'onbekend-lid-id'));
     expect(error.problem.status).toBe(404);
   });
 });
 
 describe('searching members', () => {
   it('searches by name and by email address, regardless of case', async () => {
-    const byName = await plak.searchGroupMembers('nldd', 'VERMEULEN');
+    const byName = await plak.searchGroupMembers('team-aurora', 'VERMEULEN');
     expect(byName.map((hit) => hit.identifier)).toEqual(['sanne@voorbeeld.nl']);
 
-    const byEmail = await plak.searchGroupMembers('nldd', 'jamal@');
+    const byEmail = await plak.searchGroupMembers('team-aurora', 'jamal@');
     expect(byEmail.map((hit) => hit.name)).toEqual(['Jamal Verhoeven']);
   });
 
   it('refuses a single character, so the field does not spill the whole address list', async () => {
-    const error = await refusedWith(plak.searchGroupMembers('nldd', 'a'));
+    const error = await refusedWith(plak.searchGroupMembers('team-aurora', 'a'));
     expect(error.problem.status).toBe(422);
     expect(error.problem.code).toBe('SEARCH_TOO_SHORT');
   });
 
   it('marks who is already in the group instead of leaving them out', async () => {
-    const hits = await plak.searchGroupMembers('nldd', 'ver');
+    const hits = await plak.searchGroupMembers('team-aurora', 'ver');
 
     // Ordered by name, with Ada in the list although she is a group member.
     expect(hits.map((hit) => hit.name)).toEqual([
@@ -490,23 +490,23 @@ describe('searching members', () => {
   it('leaves whoever no longer has access out of the suggestions', async () => {
     // Karel Oud and Wim Weg are both deactivated: neither is someone you add
     // to a group.
-    expect(await plak.searchGroupMembers('nldd', 'oud')).toEqual([]);
-    expect(await plak.searchGroupMembers('nldd', 'weg')).toEqual([]);
+    expect(await plak.searchGroupMembers('team-aurora', 'oud')).toEqual([]);
+    expect(await plak.searchGroupMembers('team-aurora', 'weg')).toEqual([]);
   });
 
   it('looks at the roles of that site at the site level', async () => {
-    const hits = await plak.searchSiteMembers('nldd', 'website', 'de wit');
+    const hits = await plak.searchSiteMembers('team-aurora', 'website', 'de wit');
     // Zoe holds a role of her own on this site, so here she counts as a member.
     expect(hits.map((hit) => hit.alreadyMember)).toEqual([true]);
 
-    const outsider = await plak.searchSiteMembers('nldd', 'website', 'bakker');
+    const outsider = await plak.searchSiteMembers('team-aurora', 'website', 'bakker');
     expect(outsider.map((hit) => hit.identifier)).toEqual(['iris@voorbeeld.nl']);
     expect(outsider[0]!.alreadyMember).toBe(false);
     expect(outsider[0]!.groupRole).toBeNull();
   });
 
   it('offers a group member on a site, with the role the group gives them', async () => {
-    const hits = await plak.searchSiteMembers('nldd', 'website', 'ada');
+    const hits = await plak.searchSiteMembers('team-aurora', 'website', 'ada');
 
     // Ada is redacteur in the group and has no role of her own on this site:
     // a site role would still widen what she may here.
@@ -517,50 +517,50 @@ describe('searching members', () => {
 
 describe('versions and rollback', () => {
   it('puts an older live version back live (rollback)', async () => {
-    const before = await plak.versions('nldd', 'website');
+    const before = await plak.versions('team-aurora', 'website');
     const parentVersion = before.find((v) => v.id === 'versie-0');
     expect(parentVersion?.isLive).toBe(false);
 
-    const site = await plak.setVersionLive('nldd', 'website', 'versie-0');
+    const site = await plak.setVersionLive('team-aurora', 'website', 'versie-0');
     expect(site.liveVersionId).toBe('versie-0');
 
-    const after = await plak.versions('nldd', 'website');
+    const after = await plak.versions('team-aurora', 'website');
     expect(after.find((v) => v.id === 'versie-0')?.isLive).toBe(true);
     expect(after.find((v) => v.id === 'versie-1')?.isLive).toBe(false);
   });
 
   it('refuses a preview version as a rollback target', async () => {
-    const error = await refusedWith(plak.setVersionLive('nldd', 'website', 'versie-preview-42'));
+    const error = await refusedWith(plak.setVersionLive('team-aurora', 'website', 'versie-preview-42'));
     expect(error.problem.status).toBe(422);
   });
 
   it('returns 404 for setting an unknown version live', async () => {
-    const error = await refusedWith(plak.setVersionLive('nldd', 'website', 'onbekend'));
+    const error = await refusedWith(plak.setVersionLive('team-aurora', 'website', 'onbekend'));
     expect(error.problem.status).toBe(404);
   });
 
   it('returns 404 for setting a version live on an unknown site', async () => {
-    const error = await refusedWith(plak.setVersionLive('nldd', 'onbekend', 'versie-0'));
+    const error = await refusedWith(plak.setVersionLive('team-aurora', 'onbekend', 'versie-0'));
     expect(error.problem.status).toBe(404);
   });
 });
 
 describe('previews and override', () => {
   it('contains the seeded preview and can override its access', async () => {
-    const voor = await plak.previews('nldd', 'website');
+    const voor = await plak.previews('team-aurora', 'website');
     expect(voor).toHaveLength(1);
 
     const override = { base: 'public', keys: false, invitees: false } as const;
-    const updated = await plak.setPreviewAccess('nldd', 'website', 'pr-42', override);
+    const updated = await plak.setPreviewAccess('team-aurora', 'website', 'pr-42', override);
     expect(updated.accessOverride).toEqual(override);
 
-    const back = await plak.setPreviewAccess('nldd', 'website', 'pr-42', null);
+    const back = await plak.setPreviewAccess('team-aurora', 'website', 'pr-42', null);
     expect(back.accessOverride).toBeNull();
   });
 
   it('defaults the base to public when the override leaves it out', async () => {
     const updated = await plak.setPreviewAccess(
-      'nldd',
+      'team-aurora',
       'website',
       'pr-42',
       { keys: true, invitees: false } as unknown as import('@/api/types').Access,
@@ -569,34 +569,34 @@ describe('previews and override', () => {
   });
 
   it('returns 404 for listing previews of an unknown site', async () => {
-    const error = await refusedWith(plak.previews('nldd', 'onbekend'));
+    const error = await refusedWith(plak.previews('team-aurora', 'onbekend'));
     expect(error.problem.status).toBe(404);
   });
 
   it('returns 404 for overriding preview access on an unknown site', async () => {
     const error = await refusedWith(
-      plak.setPreviewAccess('nldd', 'onbekend', 'pr-42', { base: 'public', keys: false, invitees: false }),
+      plak.setPreviewAccess('team-aurora', 'onbekend', 'pr-42', { base: 'public', keys: false, invitees: false }),
     );
     expect(error.problem.status).toBe(404);
   });
 
   it('returns 404 for overriding access on an unknown preview', async () => {
     const error = await refusedWith(
-      plak.setPreviewAccess('nldd', 'website', 'onbekend-ref', { base: 'public', keys: false, invitees: false }),
+      plak.setPreviewAccess('team-aurora', 'website', 'onbekend-ref', { base: 'public', keys: false, invitees: false }),
     );
     expect(error.problem.status).toBe(404);
   });
 
   it('deletes a preview idempotently (204 twice)', async () => {
-    await plak.deletePreview('nldd', 'website', 'pr-42');
-    await expect(plak.deletePreview('nldd', 'website', 'pr-42')).resolves.toBeUndefined();
+    await plak.deletePreview('team-aurora', 'website', 'pr-42');
+    await expect(plak.deletePreview('team-aurora', 'website', 'pr-42')).resolves.toBeUndefined();
 
-    const list = await plak.previews('nldd', 'website');
+    const list = await plak.previews('team-aurora', 'website');
     expect(list).toEqual([]);
   });
 
   it('returns 404 for deleting a preview on an unknown site', async () => {
-    const error = await refusedWith(plak.deletePreview('nldd', 'onbekend', 'pr-42'));
+    const error = await refusedWith(plak.deletePreview('team-aurora', 'onbekend', 'pr-42'));
     expect(error.problem.status).toBe(404);
   });
 });
@@ -604,19 +604,19 @@ describe('previews and override', () => {
 describe('upload', () => {
   it('does a live deploy and puts the new version live', async () => {
     const file = new Blob(['<html></html>'], { type: 'text/html' });
-    const result = await plak.upload('nldd', 'website', file, 'index.html');
+    const result = await plak.upload('team-aurora', 'website', file, 'index.html');
 
     expect(result.versionId).toBeTruthy();
-    const detail = await plak.group('nldd');
+    const detail = await plak.group('team-aurora');
     const site = detail.sites.find((p) => p.slug === 'website');
     expect(site?.liveVersionId).toBe(result.versionId);
   });
 
   it('does a preview deploy and counts the preview in the overview', async () => {
     const file = new Blob(['<html></html>'], { type: 'text/html' });
-    await plak.upload('nldd', 'website', file, 'index.html', 'pr-99');
+    await plak.upload('team-aurora', 'website', file, 'index.html', 'pr-99');
 
-    const previews = await plak.previews('nldd', 'website');
+    const previews = await plak.previews('team-aurora', 'website');
     expect(previews.some((p) => p.ref === 'pr-99')).toBe(true);
 
     const overview = await plak.overview();
@@ -626,11 +626,11 @@ describe('upload', () => {
 
   it('replaces the previous preview version on a second deploy to the same ref', async () => {
     const file = new Blob(['<html></html>'], { type: 'text/html' });
-    const first = await plak.upload('nldd', 'website', file, 'index.html', 'pr-42');
-    const second = await plak.upload('nldd', 'website', file, 'index.html', 'pr-42');
+    const first = await plak.upload('team-aurora', 'website', file, 'index.html', 'pr-42');
+    const second = await plak.upload('team-aurora', 'website', file, 'index.html', 'pr-42');
 
     expect(second.versionId).not.toBe(first.versionId);
-    const previews = await plak.previews('nldd', 'website');
+    const previews = await plak.previews('team-aurora', 'website');
     const preview = previews.find((p) => p.ref === 'pr-42');
     expect(preview?.versionId).toBe(second.versionId);
   });
@@ -641,12 +641,12 @@ describe('upload', () => {
   // malformed request from outside the SPA would.
   it('returns 404 for a deploy to an unknown site', async () => {
     const file = new Blob(['<html></html>'], { type: 'text/html' });
-    const error = await refusedWith(plak.upload('nldd', 'onbekend', file, 'index.html'));
+    const error = await refusedWith(plak.upload('team-aurora', 'onbekend', file, 'index.html'));
     expect(error.problem.status).toBe(404);
   });
 
   it('refuses a deploy whose body is not multipart/form-data', async () => {
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/deploys', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/deploys', {
       method: 'POST',
       body: JSON.stringify({ not: 'a form' }),
     });
@@ -654,7 +654,7 @@ describe('upload', () => {
   });
 
   it('refuses a deploy whose form carries no file field', async () => {
-    const response = await backend.fetch('/-/api/v1/sites/nldd/website/deploys', {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/deploys', {
       method: 'POST',
       body: new FormData(),
     });

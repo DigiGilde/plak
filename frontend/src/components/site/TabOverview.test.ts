@@ -19,7 +19,7 @@ afterEach(() => {
 
 function makeWrapper() {
   return mount(TabOverview, {
-    props: { group: 'nldd', site: 'website', contentBase: MOCK_CONTENT_BASE },
+    props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
     global: { stubs: { teleport: true } },
   });
 }
@@ -39,7 +39,7 @@ describe('TabOverview: states', () => {
     expect(wrapper.text()).toContain('Status');
     // On the content host, not on the admin origin the SPA itself runs on.
     const url = wrapper.find('[data-testid="publieke-url"]');
-    expect(url.attributes('href')).toBe('https://sites.plak.test/nldd/website/');
+    expect(url.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(url.attributes('href')).not.toContain(window.location.origin);
     expect(wrapper.html()).toContain('Laatste deploy:');
 
@@ -65,7 +65,7 @@ describe('TabOverview: states', () => {
 
     expect(wrapper.find('[data-testid="kopieer-adres"]').attributes('text')).toBe('Kopieer adres');
     const openButtons = wrapper.find('[data-testid="open-site"]');
-    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/nldd/website/');
+    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
     // The address sits in a block of its own, not as a line among the rest.
     expect(wrapper.find('nldd-box[background=\'critical\']').exists()).toBe(true);
@@ -101,7 +101,7 @@ describe('TabOverview: states', () => {
     await wrapper.find('[data-testid="kopieer-adres"]').trigger('click');
     await untilIdle();
 
-    expect(write).toHaveBeenCalledWith('https://sites.plak.test/nldd/website/');
+    expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
     const notice = wrapper.find('[data-testid="kopieermelding"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line in the page, so no remount swallows the confirmation.
@@ -152,7 +152,7 @@ describe('TabOverview: states', () => {
     vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
       const response = await realFetch(input, init);
       const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/-/api/v1/groups/nldd') {
+      if (url === '/-/api/v1/groups/team-aurora') {
         const body = await response.clone().json();
         body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
         return new Response(JSON.stringify(body), {
@@ -171,7 +171,7 @@ describe('TabOverview: states', () => {
 
   it('shows a 404 message for an unknown site', async () => {
     const wrapper = mount(TabOverview, {
-      props: { group: 'nldd', site: 'bestaat-niet', contentBase: MOCK_CONTENT_BASE },
+      props: { group: 'team-aurora', site: 'bestaat-niet', contentBase: MOCK_CONTENT_BASE },
     });
     await untilIdle();
 

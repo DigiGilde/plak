@@ -33,7 +33,7 @@ vi.mock('../api/plak', () => ({
 
 function site(slug: string, live: boolean): Site {
   return {
-    groupSlug: 'nldd',
+    groupSlug: 'team-aurora',
     slug,
     title: slug,
     access: { base: 'public', keys: false, invitees: false },
@@ -50,7 +50,7 @@ function site(slug: string, live: boolean): Site {
 const filledData: OverviewData = {
   groups: [
     {
-      group: { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } },
+      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
       sites: [site('website', true), site('handboek', false)],
     },
     {
@@ -133,9 +133,9 @@ describe('Groups', () => {
 
     const wrapper = await mountComponent();
 
-    expect(cellTexts(wrapper, 'nldd-title-cell')).toEqual(['NLDD', 'Lege groep']);
+    expect(cellTexts(wrapper, 'nldd-title-cell')).toEqual(['Team Aurora', 'Lege groep']);
     expect(wrapper.findAll('nldd-title-cell').map((c) => property(c.element, 'supportingText')))
-      .toEqual(['nldd', 'leeg']);
+      .toEqual(['team-aurora', 'leeg']);
     // Both counts come out of the same response; no second request goes out
     // per group.
     expect(cellTexts(wrapper, 'nldd-text-cell')).toEqual([
@@ -153,7 +153,7 @@ describe('Groups', () => {
     vi.mocked(plakApi.overview).mockResolvedValue({
       groups: [
         {
-          group: { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
           sites: [site('website', true)],
         },
       ],
@@ -170,7 +170,7 @@ describe('Groups', () => {
     vi.mocked(plakApi.overview).mockResolvedValue({
       groups: [
         {
-          group: { slug: 'nldd', name: 'NLDD', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
           sites: [site('website', true), site('handboek', true), site('intranet', false)],
         },
       ],
@@ -189,7 +189,7 @@ describe('Groups', () => {
     const wrapper = await mountComponent();
 
     expect(wrapper.findAll('nldd-list-item').map((row) => property(row.element, 'href'))).toEqual(
-      ['/nldd', '/leeg'],
+      ['/team-aurora', '/leeg'],
     );
 
     wrapper.unmount();
@@ -265,7 +265,7 @@ describe('Groups', () => {
     await flushPromises();
 
     expect(plakApi.createGroup).toHaveBeenCalledWith('Team', 'team');
-    expect(cellTexts(wrapper, 'nldd-title-cell')).toEqual(['NLDD', 'Lege groep', 'Team']);
+    expect(cellTexts(wrapper, 'nldd-title-cell')).toEqual(['Team Aurora', 'Lege groep', 'Team']);
     // A fresh group has nothing yet; the counts should say so.
     expect(cellTexts(wrapper, 'nldd-text-cell').slice(-2)).toEqual([
       'Nog geen sites',

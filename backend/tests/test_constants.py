@@ -13,7 +13,7 @@ from plak.constants import (
 
 
 def test_slug_re_accepts_valid_slug():
-    assert SLUG_RE.match("nldd")
+    assert SLUG_RE.match("team-aurora")
     assert SLUG_RE.match("moza-publiceer")
     assert SLUG_RE.match("a")
     assert SLUG_RE.match("a" * 63)

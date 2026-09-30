@@ -47,16 +47,16 @@ describe('router: every configured route resolves and mounts its component', () 
     ['/-/profile', 'profile'],
     ['/-/sessions', 'sessions'],
     ['/cli-link', 'cli-link'],
-    ['/nldd', 'group-sites'],
-    ['/nldd/-/members', 'group-members'],
-    ['/nldd/-/settings', 'group-settings'],
-    ['/nldd/website/done', 'site-done'],
-    ['/nldd/website', 'site-overview'],
-    ['/nldd/website/previews', 'site-previews'],
-    ['/nldd/website/versions', 'site-versions'],
-    ['/nldd/website/access', 'site-access'],
-    ['/nldd/website/members', 'site-members'],
-    ['/nldd/website/deploy', 'site-deploy'],
+    ['/team-aurora', 'group-sites'],
+    ['/team-aurora/-/members', 'group-members'],
+    ['/team-aurora/-/settings', 'group-settings'],
+    ['/team-aurora/website/done', 'site-done'],
+    ['/team-aurora/website', 'site-overview'],
+    ['/team-aurora/website/previews', 'site-previews'],
+    ['/team-aurora/website/versions', 'site-versions'],
+    ['/team-aurora/website/access', 'site-access'],
+    ['/team-aurora/website/members', 'site-members'],
+    ['/team-aurora/website/deploy', 'site-deploy'],
   ])('mounts %s as %s', async (path, name) => {
     const { wrapper, testRouter } = mountRouterView();
     await testRouter.push(path);
@@ -84,14 +84,14 @@ describe('router: document title', () => {
   });
 
   it('falls back to the site slug for a route without a titleKey', async () => {
-    await router.push('/nldd/website');
+    await router.push('/team-aurora/website');
 
     expect(document.title).toBe('website - Plak');
   });
 
   it('falls back to the group slug for a group route without a titleKey', async () => {
-    await router.push('/nldd');
+    await router.push('/team-aurora');
 
-    expect(document.title).toBe('nldd - Plak');
+    expect(document.title).toBe('team-aurora - Plak');
   });
 });

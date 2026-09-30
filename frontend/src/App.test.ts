@@ -563,7 +563,7 @@ describe('App', () => {
 
     expect(app.find('nldd-breadcrumbs').exists()).toBe(false);
 
-    setBreadcrumbs('/', [{ text: 'Overzicht', href: '/' }, { text: 'NLDD' }]);
+    setBreadcrumbs('/', [{ text: 'Overzicht', href: '/' }, { text: 'Team Aurora' }]);
     await flushPromises();
 
     const breadcrumbs = app.find('nldd-page-footer nldd-breadcrumbs[slot="breadcrumbs"]');
@@ -571,7 +571,7 @@ describe('App', () => {
     const items = breadcrumbs.findAll('nldd-breadcrumbs-item');
     expect(items.map((item) => property<string>(item.element, 'text'))).toEqual([
       'Overzicht',
-      'NLDD',
+      'Team Aurora',
     ]);
     expect(property<boolean>(items[1].element, 'current')).toBe(true);
   });
@@ -597,7 +597,7 @@ describe('App', () => {
     });
 
     it('is without violations in the logged-in shell, breadcrumbs included', async () => {
-      setBreadcrumbs('/', [{ text: 'Overzicht', href: '/' }, { text: 'NLDD' }]);
+      setBreadcrumbs('/', [{ text: 'Overzicht', href: '/' }, { text: 'Team Aurora' }]);
       await mountAppForAxe();
 
       await expectNoAxeViolations();

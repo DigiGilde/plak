@@ -218,10 +218,10 @@ async def test_ratelimit_headers_on_429_on_content_path(tmp_path: Path) -> None:
         # Purely lexical slash redirect (spec §5, behaviour requirement 2):
         # no DB call, so it is suited to hammering the rate limit layer alone.
         for _ in range(2):
-            resp = await client.get("/nldd/website")
+            resp = await client.get("/team-aurora/website")
             assert resp.status_code == 301
 
-        resp = await client.get("/nldd/website")
+        resp = await client.get("/team-aurora/website")
 
     assert resp.status_code == 429
     assert "retry-after" in resp.headers
@@ -240,14 +240,14 @@ async def test_ratelimit_counts_content_session_per_viewer_not_per_ip(tmp_path: 
         # The lexical 301 of a preview root: no DB call either, and unlike
         # /{group}/{site} it sits inside the site, so the site-scoped content
         # session cookie comes along and can key the limit.
-        path = "/nldd/website/_preview/pr-1"
+        path = "/team-aurora/website/_preview/pr-1"
         async with _client_for(app) as anonymous:
             for _ in range(2):
                 assert (await anonymous.get(path)).status_code == 301
             assert (await anonymous.get(path)).status_code == 429
 
         async with _client_for(app) as watcher:
-            set_content_session_cookie(watcher, app, sub="kijker-1", sites=("/nldd/website/",))
+            set_content_session_cookie(watcher, app, sub="kijker-1", sites=("/team-aurora/website/",))
             for _ in range(2):
                 assert (await watcher.get(path)).status_code == 301
             resp = await watcher.get(path)

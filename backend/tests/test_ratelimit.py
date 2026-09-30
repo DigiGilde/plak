@@ -100,8 +100,8 @@ def _make_client(
         ("/assets/app-abc123.js", RateLimitClass.CONTENT),
         ("/-/onbekend", RateLimitClass.CONTENT),
         ("/admin/", RateLimitClass.CONTENT),
-        ("/nldd/website/", RateLimitClass.CONTENT),
-        ("/nldd/website/_preview/pr-1/", RateLimitClass.CONTENT),
+        ("/team-aurora/website/", RateLimitClass.CONTENT),
+        ("/team-aurora/website/_preview/pr-1/", RateLimitClass.CONTENT),
         ("/", RateLimitClass.CONTENT),
     ],
 )
@@ -245,7 +245,7 @@ async def test_content_login_falls_under_login_limit_not_content() -> None:
     async with _make_client(settings) as client:
         r1 = await client.get("/-/login")
         r2 = await client.get("/-/oauth2/callback?code=x&state=y")
-        r3 = await client.get("/nldd/website/")
+        r3 = await client.get("/team-aurora/website/")
 
     # login and callback share the login budget (1); content has its own, roomy budget.
     assert [r1.status_code, r2.status_code] == [200, 429]
@@ -400,8 +400,8 @@ async def test_the_header_is_read_at_zero_hops_never() -> None:
         ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=False
     )
     async with _make_client(settings, client_ip="203.0.113.99") as client:
-        r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "1.1.1.1"})
-        r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "2.2.2.2"})
+        r1 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "1.1.1.1"})
+        r2 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "2.2.2.2"})
     assert [r1.status_code, r2.status_code] == [200, 429]
 
 
@@ -415,8 +415,8 @@ async def test_at_one_hop_the_peer_address_does_not_matter() -> None:
     )
     for peer in ("10.0.0.1", "203.0.113.99"):
         async with _make_client(settings, client_ip=peer) as client:
-            r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "1.1.1.1"})
-            r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "2.2.2.2"})
+            r1 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "1.1.1.1"})
+            r2 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "2.2.2.2"})
         assert [r1.status_code, r2.status_code] == [200, 200], peer
 
 
@@ -428,12 +428,12 @@ async def test_spoofed_leftmost_xff_does_not_become_the_key() -> None:
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
         r1 = await client.get(
-            "/nldd/website/", headers={"x-forwarded-for": "6.6.6.6, 203.0.113.7"}
+            "/team-aurora/website/", headers={"x-forwarded-for": "6.6.6.6, 203.0.113.7"}
         )
         # same real client (203.0.113.7), a different spoofed leftmost value:
         # must count on the same key and therefore give a 429.
         r2 = await client.get(
-            "/nldd/website/", headers={"x-forwarded-for": "7.7.7.7, 203.0.113.7"}
+            "/team-aurora/website/", headers={"x-forwarded-for": "7.7.7.7, 203.0.113.7"}
         )
     assert [r1.status_code, r2.status_code] == [200, 429]
 
@@ -446,7 +446,7 @@ async def test_rotating_leftmost_xff_does_not_evade_the_limit() -> None:
         statuses = []
         for i in range(4):
             resp = await client.get(
-                "/nldd/website/", headers={"x-forwarded-for": f"1.1.1.{i}, 203.0.113.7"}
+                "/team-aurora/website/", headers={"x-forwarded-for": f"1.1.1.{i}, 203.0.113.7"}
             )
             statuses.append(resp.status_code)
     assert statuses == [200, 200, 429, 429]
@@ -459,8 +459,8 @@ async def test_a_private_entry_is_a_key_like_any_other() -> None:
         ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=True
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
-        r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "10.0.0.2, 10.0.0.3"})
-        r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "9.9.9.9, 10.0.0.3"})
+        r1 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "10.0.0.2, 10.0.0.3"})
+        r2 = await client.get("/team-aurora/website/", headers={"x-forwarded-for": "9.9.9.9, 10.0.0.3"})
     # Both read 10.0.0.3 at the hop position, so they share one budget.
     assert [r1.status_code, r2.status_code] == [200, 429]
 
@@ -475,10 +475,10 @@ async def test_the_entry_the_router_wrote_is_the_key() -> None:
         # The router wrote 10.0.0.9 about the peer it saw; 203.0.113.7 is
         # what the client claimed and sits a place further left.
         r1 = await client.get(
-            "/nldd/website/", headers={"x-forwarded-for": "203.0.113.7, 10.0.0.9"}
+            "/team-aurora/website/", headers={"x-forwarded-for": "203.0.113.7, 10.0.0.9"}
         )
         r2 = await client.get(
-            "/nldd/website/", headers={"x-forwarded-for": "198.51.100.4, 10.0.0.9"}
+            "/team-aurora/website/", headers={"x-forwarded-for": "198.51.100.4, 10.0.0.9"}
         )
     assert [r1.status_code, r2.status_code] == [200, 429]
 
@@ -515,11 +515,11 @@ async def test_normal_click_behaviour_stays_under_content_limit() -> None:
     settings = _make_settings()
     clock = _FakeClock()
     async with _make_client(settings, clock=clock) as client:
-        assert (await client.get("/nldd/website/")).status_code == 200
+        assert (await client.get("/team-aurora/website/")).status_code == 200
 
         clock.now_ = 10.0
         for i in range(30):
-            resp = await client.get(f"/nldd/website/assets/bestand-{i}.js")
+            resp = await client.get(f"/team-aurora/website/assets/bestand-{i}.js")
             assert resp.status_code == 200
 
 
