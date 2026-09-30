@@ -7,10 +7,9 @@ Usage:
     plak login [--host <host>] [--no-open] [--insecure-storage]
     plak logout [--host <host>]
     plak whoami [--host <host>]
-    plak publish <dist-dir-or-file> --host <host> \
-        --site <group/site> [--preview <ref>] [--base-path <dir>] \
-        [--output-file <path>]
-    plak preview-remove <ref> --host <host> --site <group/site>
+    plak publish <dist-dir-or-file> --site <group/site> [--host <host>] \
+        [--preview <ref>] [--base-path <dir>] [--output-file <path>]
+    plak preview-remove <ref> --site <group/site> [--host <host>]
     plak group create <group> --name <name> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
@@ -23,10 +22,14 @@ account, for every directory. The tokens go into the system keyring (macOS
 Keychain, Secret Service on Linux); without a usable keyring, or with
 --insecure-storage, they go into hosts.json in the config directory
 ($PLAK_CONFIG_DIR, else $XDG_CONFIG_HOME/plak, else ~/.config/plak) with
-mode 0600. That file also remembers the host you last logged in to. In CI an OIDC token is used automatically (GitHub Actions with
-'id-token: write', Forgejo Actions with 'enable-openid-connect: true'), or
-supply a token yourself through the environment variable
-PLAK_ACCESS_TOKEN.
+mode 0600. That file also remembers the host you last logged in to. In CI
+an OIDC token is used automatically (GitHub Actions with 'id-token:
+write', Forgejo Actions with 'enable-openid-connect: true'), or supply a
+token yourself through the environment variable PLAK_ACCESS_TOKEN.
+
+Every command finds its host in this order: --host, PLAK_HOST in the
+environment, the host you last logged in to, then DEFAULT_HOST, the
+DigiGilde instance.
 
 Exit codes:
     0 - success
@@ -59,6 +62,12 @@ import keyring.core
 import keyring.errors
 
 VERSION = "0.1.0"
+
+DEFAULT_HOST = "https://beheer.plak.rijks.app"
+HOST_HELP = (
+    "Admin origin of Plak; defaults to PLAK_HOST, then the host you last "
+    f"logged in to, then {DEFAULT_HOST}"
+)
 
 HOSTS_FILENAME = "hosts.json"
 KEYRING_SERVICE_PREFIX = "plak:"
@@ -158,14 +167,14 @@ def _require_https(host: str) -> None:
 
 
 def _resolve_host(args: argparse.Namespace) -> str:
-    """Host from --host, PLAK_HOST in the environment, or the host you last
-    logged in to."""
-    host = getattr(args, "host", None) or os.environ.get("PLAK_HOST") or _stored_default_host()
-    if not host:
-        _note_legacy_env_file()
-        raise UsageError(
-            "No host: pass --host or log in first with 'plak login --host <host>'"
-        )
+    """Host from --host, PLAK_HOST in the environment, the host you last
+    logged in to, or DEFAULT_HOST."""
+    host = (
+        getattr(args, "host", None)
+        or os.environ.get("PLAK_HOST")
+        or _stored_default_host()
+        or DEFAULT_HOST
+    )
     return host.rstrip("/")
 
 
@@ -671,7 +680,7 @@ def _print_problem_detail(response: httpx.Response) -> None:
 def cmd_publish(args: argparse.Namespace) -> int:
     dist_path = Path(args.dist_path)
     try:
-        host = args.host.rstrip("/")
+        host = _resolve_host(args)
         _require_https(host)
         token = _get_bearer_token(host)
         group, site = _split_site(args.site)
@@ -740,7 +749,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
 def cmd_preview_remove(args: argparse.Namespace) -> int:
     try:
-        host = args.host.rstrip("/")
+        host = _resolve_host(args)
         _require_https(host)
         token = _get_bearer_token(host)
         group, site = _split_site(args.site)
@@ -923,7 +932,7 @@ def _add_access_flags(parser: argparse.ArgumentParser, defaults: tuple[str, str,
         help=f"Whether invitees get in after signing in with SSO Rijk. Left out: {invitees_default}",
     )
     parser.add_argument(
-        "--host", default=None, help="Admin origin of Plak; defaults to the host you logged in to"
+        "--host", default=None, help=HOST_HELP
     )
 
 
@@ -1150,11 +1159,7 @@ def _build_parser() -> argparse.ArgumentParser:
     login = subparsers.add_parser(
         "login", help="Log in and store the session for your user account."
     )
-    login.add_argument(
-        "--host",
-        default=None,
-        help="Admin origin of Plak, for instance https://beheer.plak.example.nl",
-    )
+    login.add_argument("--host", default=None, help=HOST_HELP)
     login.add_argument(
         "--no-open",
         action="store_true",
@@ -1168,11 +1173,11 @@ def _build_parser() -> argparse.ArgumentParser:
     login.set_defaults(func=cmd_login)
 
     logout = subparsers.add_parser("logout", help="Log out and wipe the session.")
-    logout.add_argument("--host", default=None)
+    logout.add_argument("--host", default=None, help=HOST_HELP)
     logout.set_defaults(func=cmd_logout)
 
     whoami = subparsers.add_parser("whoami", help="Show who is logged in.")
-    whoami.add_argument("--host", default=None)
+    whoami.add_argument("--host", default=None, help=HOST_HELP)
     whoami.set_defaults(func=cmd_whoami)
 
     publish = subparsers.add_parser(
@@ -1182,9 +1187,7 @@ def _build_parser() -> argparse.ArgumentParser:
     publish.add_argument(
         "dist_path", help="Path to the dist folder or the file to publish"
     )
-    publish.add_argument(
-        "--host", required=True, help="Admin origin of Plak, for instance https://beheer.plak.example.nl"
-    )
+    publish.add_argument("--host", default=None, help=HOST_HELP)
     publish.add_argument("--site", required=True, help="group/site")
     publish.add_argument(
         "--preview",
@@ -1213,7 +1216,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "preview-remove", help="Remove a preview (idempotent)."
     )
     remove.add_argument("ref", help="Preview ref to remove")
-    remove.add_argument("--host", required=True)
+    remove.add_argument("--host", default=None, help=HOST_HELP)
     remove.add_argument("--site", required=True, help="group/site")
     remove.set_defaults(func=cmd_preview_remove)
 

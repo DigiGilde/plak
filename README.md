@@ -151,13 +151,19 @@ gives up is the guarantee that tomorrow installs what you tested today.
 
 The repository is public, so either form clones without credentials.
 
-Then log in once per instance and publish:
+Then log in once and publish:
 
 ```bash
-plak login --host https://beheer.plak.example.org
+plak login
 plak publish ./dist --site nldd/website
 plak publish ./dist --site nldd/website --preview pr-42
 ```
+
+Without `--host` the CLI talks to the DigiGilde instance,
+`https://beheer.plak.rijks.app`. For another instance, log in once with
+`plak login --host <admin origin>`: every command then uses that host
+until you log in somewhere else. `--host` or `PLAK_HOST` overrides it
+for a single command.
 
 `plak login` uses the OAuth 2.0 Device Authorization Grant: it shows a
 code, you confirm it in the admin, and the session belongs to your user
@@ -185,7 +191,7 @@ From a checkout of this repository the same commands run without
 installing anything:
 
 ```bash
-uv run --project cli plak login --host https://beheer.plak.example.org
+uv run --project cli plak login
 uv run --project cli plak publish ./dist --site nldd/website
 ```
 
