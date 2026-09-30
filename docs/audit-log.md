@@ -47,7 +47,7 @@ always stays usable to find someone again, verified email address or not.
 |---|---|---|
 | `content_access` | `allowed` | an HTML page on non-public content (key, SSO, site team, invitees) has been served, and every `_version` view. Individual files (css, images, scripts) not: a page with fifty parts is one view, not fifty |
 | `content_access` | `refused` | a request was refused; the visitor got the neutral 404 |
-| `content_access` | `login_redirect` | an anonymous visitor was sent to log in |
+| `content_access` | `login_redirect` | an anonymous visitor was sent to log in. On live content the reason is `LOGIN_REQUIRED`; on a preview or `_version` view, where every anonymous refusal becomes this redirect, it is the reason that refused (`NO_ACCESS`, `UNKNOWN_PREVIEW` and so on) |
 
 Public content is never logged.
 
