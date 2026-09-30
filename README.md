@@ -207,6 +207,64 @@ uv run --project cli plak publish ./dist --site nldd/website
 your build, publishing from CI with the `publiceer` action, the curl
 fallback and the error codes.
 
+## Publishing from CI
+
+The composite action in `actions/publiceer/` publishes from GitHub
+Actions or Forgejo Actions without a secret: the workflow proves who it
+is with an OIDC ID token, and Plak checks that token against the
+repository linked to the site. Link the repository first, on the
+**Deploy** tab of the site in the admin; that tab also shows a
+ready-made workflow for the site. The core of it, a live deploy on every
+push to `main`:
+
+```yaml
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publiceer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@<commit-sha>
+      - run: npm ci && npm run build
+        env:
+          PLAK_BASE_PATH: /nldd/website/
+      - uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        with:
+          host: https://beheer.plak.rijks.app
+          site: nldd/website
+          dist-path: ./dist
+```
+
+Pin the action to a commit SHA, not to a branch or a tag. The full
+workflow in `docs/publishing.md` adds a preview per pull request and its
+clean-up, and shows the Forgejo variant.
+
+## Publishing with Claude Code
+
+The Claude Code plugin in `plugin/` lets Claude do the publishing with
+the rules of this project in hand: a preview by default, live only when
+you ask for it, and a `plak login` that you approve yourself. It uses
+the `plak` CLI above, so install that first. Then, in Claude Code:
+
+```text
+/plugin marketplace add DigiGilde/plak
+/plugin install plak@plak
+```
+
+Ask for it in the directory of your site, for instance "zet deze map
+online op Plak". Auto-update is off for this marketplace unless you turn
+it on (`/plugin`, tab **Marketplaces**). To get a newer version by hand,
+refresh the marketplace with `/plugin marketplace update plak`, then pick
+**Update now** on the plugin in the **Installed** tab of `/plugin`, or
+run `claude plugin update plak@plak` in your shell. `docs/skill.md`
+covers what the skill does and how to run its evals.
+
 ## Deploying on ZAD
 
 Plak is not running in production yet; the rollout is prepared, not
