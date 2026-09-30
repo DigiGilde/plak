@@ -119,7 +119,7 @@ admin. From a checkout of the repository, with a CLI token from
 `plak login`:
 
 ```bash
-plak site link team-aurora/docs --live-branch main   # or --any-branch
+plak site link team-aurora/docs --live-branch main   # left out: every branch
 ```
 
 Without a repository argument the CLI takes the remote `origin`; pass

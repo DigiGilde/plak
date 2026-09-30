@@ -3569,7 +3569,7 @@ def test_site_link_takes_the_origin_of_the_checkout_without_a_repository(
 ):
     stub_server.responder = _json_responder(200, _link_answer(liveBranch=None))
 
-    code = cli.main(["site", "link", "team/docs", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "--host", host])
 
     assert code == 0
     assert fake_run.calls[0] == ["git", "remote", "get-url", "origin"]
@@ -3623,7 +3623,7 @@ def test_site_link_sends_given_ids_without_asking_gh(stub_server, host, token_en
 def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token_env, fake_run, capsys):
     stub_server.responder = _json_responder(200, _link_answer())
 
-    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--any-branch", "--no-gh", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--no-gh", "--host", host])
 
     assert code == 0
     assert fake_run.calls == []
@@ -3655,7 +3655,7 @@ def test_site_link_without_a_usable_gh_answer_sends_no_ids(stub_server, host, to
     fake_run.outcomes["gh"] = gh
     stub_server.responder = _json_responder(200, _link_answer(owner="minbzk", repo="website"))
 
-    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--host", host])
 
     assert code == 0
     body = json.loads(stub_server.requests[0]["body"])
@@ -3699,7 +3699,7 @@ def test_site_link_understands_the_usual_ways_to_name_a_repository(reference, ex
 def test_site_link_refuses_what_is_not_a_repository(
     stub_server, host, token_env, fake_run, capsys, reference, message
 ):
-    code = cli.main(["site", "link", "team/docs", reference, "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", reference, "--host", host])
 
     assert code == 2
     assert message in capsys.readouterr().err
@@ -3721,7 +3721,7 @@ def test_site_link_without_a_repository_and_no_origin_says_what_to_pass(
 ):
     fake_run.outcomes["git"] = origin
 
-    code = cli.main(["site", "link", "team/docs", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "--host", host])
 
     assert code == 2
     assert "no git remote 'origin' here" in capsys.readouterr().err
@@ -3738,7 +3738,7 @@ def test_site_link_without_a_repository_and_no_origin_says_what_to_pass(
     ],
 )
 def test_site_link_refuses_half_or_impossible_ids(stub_server, host, token_env, fake_run, capsys, ids, message):
-    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", *ids, "--host", host])
+    code = cli.main(["site", "link", "team/docs", "o/r", *ids, "--host", host])
 
     assert code == 2
     assert message in capsys.readouterr().err
@@ -3746,21 +3746,30 @@ def test_site_link_refuses_half_or_impossible_ids(stub_server, host, token_env, 
     assert fake_run.calls == []
 
 
-def test_site_link_needs_a_choice_about_the_live_branch(stub_server, host, token_env, fake_run):
-    assert cli.main(["site", "link", "team/docs", "o/r", "--host", host]) == 2
-    assert cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--live-branch", "main", "--host", host]) == 2
-    assert stub_server.requests == []
+def test_site_link_without_a_live_branch_lets_every_branch_publish_live(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(200, _link_answer(liveBranch=None))
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
+
+    assert code == 0
+    assert json.loads(stub_server.requests[0]["body"])["liveBranch"] is None
+    assert (
+        "Live: from any branch, on a push, a manual run or a schedule. Previews: from any branch."
+        in capsys.readouterr().out.splitlines()
+    )
 
 
 def test_site_link_refuses_a_site_that_is_not_group_slash_site(stub_server, host, token_env, fake_run, capsys):
-    code = cli.main(["site", "link", "docs", "o/r", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "docs", "o/r", "--host", host])
 
     assert code == 2
     assert "The site must have the form 'group/site'" in capsys.readouterr().err
 
 
 def test_site_link_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd, fake_run, capsys):
-    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 2
     assert "plak login" in capsys.readouterr().err
@@ -3775,7 +3784,7 @@ def test_site_link_explains_a_private_repository_plak_could_not_find(
         422, {"status": 422, "code": "REPOSITORY_NOT_FOUND", "detail": "Repository o/r not found on github.com."}
     )
 
-    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 1
     assert capsys.readouterr().err.splitlines() == [
@@ -3792,7 +3801,7 @@ def test_site_link_shows_any_other_refusal_on_its_own(stub_server, host, token_e
         403, {"status": 403, "code": "INSUFFICIENT_ROLE", "detail": "This needs at least the role admin."}
     )
 
-    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 1
     assert capsys.readouterr().err.strip() == "Error: This needs at least the role admin."
@@ -3801,7 +3810,7 @@ def test_site_link_shows_any_other_refusal_on_its_own(stub_server, host, token_e
 def test_site_link_connection_failure_gives_exit_1(stub_server, host, token_env, fake_run, monkeypatch, capsys):
     monkeypatch.setattr(cli.httpx, "put", _raise_connect_error)
 
-    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 1
     assert "could not connect to" in capsys.readouterr().err
@@ -3811,9 +3820,9 @@ def test_site_link_names_the_repository_as_sent_without_one_in_the_answer_and_cl
     stub_server, host, token_env, fake_run, capsys
 ):
     stub_server.responder = _json_responder(200, {"owner": 7})
-    cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    cli.main(["site", "link", "team/docs", "o/r", "--host", host])
     assert capsys.readouterr().out.splitlines()[0] == "Linked github.com/MinBZK/Prive to team/docs."
 
     stub_server.responder = _json_responder(200, _link_answer(repo="Prive\x1b[31m"))
-    cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    cli.main(["site", "link", "team/docs", "o/r", "--host", host])
     assert capsys.readouterr().out.splitlines()[0] == "Linked github.com/MinBZK/Prive [31m to team/docs."
