@@ -4,9 +4,10 @@ Claude Code keeps an installed plugin until the `version` in its manifest
 changes, however many commits land (docs/skill.md), so a change under
 `plugin/` that keeps the version never reaches an existing install. The
 evals under `plugin/evals/` do not change what the plugin does and need no
-new version. Both manifests also have to name the same version: the
-plugin's own comes first, and a marketplace entry that says otherwise only
-misleads.
+new version. The version lives in the plugin's own manifest only: that one
+wins, and a second copy in the marketplace entry could only disagree with
+it. A release writes a CalVer version there (docs/releasing.md), which has
+a fourth number for a second release on the same day.
 
 Usage: check_plugin_version.py <base-ref>
 """
@@ -23,12 +24,12 @@ PLUGIN_MANIFEST = "plugin/.claude-plugin/plugin.json"
 MARKETPLACE = ".claude-plugin/marketplace.json"
 PLUGIN_NAME = "plak"
 EXEMPT = ("plugin/evals/",)
-VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.([1-9]\d*))?$")
 
 
-def parse(version: object) -> tuple[int, int, int] | None:
+def parse(version: object) -> tuple[int, ...] | None:
     match = VERSION_RE.match(version) if isinstance(version, str) else None
-    return (int(match[1]), int(match[2]), int(match[3])) if match else None
+    return tuple(int(part) for part in match.groups() if part is not None) if match else None
 
 
 def ships(changed: list[str]) -> bool:
@@ -43,7 +44,7 @@ def problems(
     head_parsed = parse(head_version)
     found = []
     if head_parsed is None:
-        found.append(f"{PLUGIN_MANIFEST}: version {head_version!r} is not MAJOR.MINOR.PATCH.")
+        found.append(f"{PLUGIN_MANIFEST}: version {head_version!r} is not MAJOR.MINOR.PATCH[.N].")
     entries = [
         entry
         for entry in head_marketplace.get("plugins", [])
@@ -51,17 +52,14 @@ def problems(
     ]
     if len(entries) != 1:
         found.append(f"{MARKETPLACE}: expected exactly one entry for the plugin '{PLUGIN_NAME}'.")
-    elif entries[0].get("version") != head_version:
-        found.append(
-            f"{MARKETPLACE}: version {entries[0].get('version')!r} differs from {head_version!r} "
-            f"in {PLUGIN_MANIFEST}."
-        )
+    elif "version" in entries[0]:
+        found.append(f"{MARKETPLACE}: drop the version of '{PLUGIN_NAME}'; it lives in {PLUGIN_MANIFEST} only.")
     base_version = base_plugin.get("version") if base_plugin is not None else None
     base_parsed = parse(base_version)
     if ships(changed) and head_parsed is not None and base_parsed is not None and head_parsed <= base_parsed:
         found.append(
-            f"plugin/ changed, so raise the version above {base_version} in {PLUGIN_MANIFEST} and "
-            f"{MARKETPLACE}: Claude Code keeps an installed copy until the version changes."
+            f"plugin/ changed, so raise the version above {base_version} in {PLUGIN_MANIFEST}: "
+            f"Claude Code keeps an installed copy until the version changes."
         )
     return found
 
