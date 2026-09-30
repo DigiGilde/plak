@@ -309,6 +309,24 @@ describe('site repository: defaults', () => {
     const body = (await response.json()) as { code: string };
     expect(body.code).toBe('HOST_NOT_ALLOWED');
   });
+
+  it('allows a Forgejo host only when it is exactly an allowed one', async () => {
+    const link = (host: string) =>
+      makeMockBackend().fetch('/-/api/v1/sites/nldd/website/repository', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'forgejo', host, owner: 'nldd', repo: 'website' }),
+      });
+
+    expect((await link('https://code.overheid.nl')).status).toBe(200);
+    for (const nearMiss of [
+      'https://code.overheid.nl.evil.example',
+      'https://evil.example/https://code.overheid.nl',
+      'https://code.overheid',
+      'https://github.com',
+    ]) {
+      expect((await link(nearMiss)).status, nearMiss).toBe(422);
+    }
+  });
 });
 
 describe('derived member rows: edge cases', () => {
