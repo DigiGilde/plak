@@ -103,6 +103,69 @@ With this, Vite automatically rewrites the asset URLs in the built
 `index.html`; for hand-written internal links in your source code use
 `import.meta.env.BASE_URL` the same way as in the Astro example.
 
+### Shielding: what a build tool has to know
+
+Every site is shielded from the other sites by default: the switch
+"Afschermen van andere sites" (shield from other sites) on the tab
+"Toegang" (access) of the site is on unless its admin turns it off. The
+page then runs in a CSP sandbox with an opaque origin, `null` (the why is
+in `docs/security.md`, "Shielding from other sites"). For a site built with
+Astro, Vite, Vue, React or Svelte that has consequences you need to know
+before you publish, because the page comes online without an error and
+only the browser console tells you what is missing.
+
+Under the shielding the browser fetches some files in CORS mode, and from
+an opaque origin those requests reach Plak as `Origin: null` without the
+visitor's cookie. Plak sends no CORS headers, so the browser refuses them:
+
+| What | Under the shielding |
+| --- | --- |
+| Stylesheets, images, video, `<script src>` without `type="module"`, inline scripts | Load |
+| A module script from your own site: `<script type="module" src>`, `<link rel="modulepreload">`, a dynamic `import()` | **Refused** |
+| A web font from your own site (`@font-face` with a `url()` into your dist, including fonts bundled from `@fontsource`) | **Refused** |
+| `fetch` or XHR to a file of your own site (JSON data, a search index such as Pagefind's) | **Refused** |
+| `localStorage`, `sessionStorage`, `document.cookie` | Throw a `SecurityError` |
+| Scripts and fonts from cdnjs, jsDelivr, unpkg and Google Fonts (with "Externe bronnen toestaan" on) | Load: those hosts send `Access-Control-Allow-Origin: *` |
+
+In the console a refused module script looks like this:
+
+```text
+Access to script at 'https://plak.example.nl/team-aurora/docs/_astro/Menu.astro_astro_type_script_index_0_lang.D4k2x9Qa.js'
+from origin 'null' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'
+header is present on the requested resource.
+```
+
+`from origin 'null'` is the sign: that is the shielding, not a CORS setting
+you can fix in your build.
+
+**Astro.** A `<script>` in a component is processed by default: Astro
+bundles it and emits it as `type="module"`. A small one it inlines into
+the HTML, and that runs; a larger one lands in `_astro/*.js`, and that is
+refused. So on one page one script can work and the next not. Islands
+(`client:load`, `client:visible` and the like) always load their component
+as a module and stay dead. The HTML and styling are complete, so the page
+looks right; menus, toggles and islands do nothing.
+
+**Vite, and so Vue, React and Svelte.** A Vite build loads its whole
+application through `<script type="module" crossorigin src="…/assets/index-….js">`.
+Under the shielding that one file is refused, and a single-page app shows
+a blank page. A Vue app that keeps state in `localStorage` (a theme choice,
+a persisted Pinia store) stops at the first read even when it loads.
+
+What you can do:
+
+- **Keep the shielding and stay within it.** For a few small scripts in
+  Astro, `<script is:inline>` leaves the script as written: a classic inline
+  script that runs, but without TypeScript, imports or deduplication. Load
+  a font from Google Fonts or a library from one of the CDNs above instead
+  of from your dist. This does not stretch to a Vite application.
+- **Turn the shielding off** for the site on the tab "Toegang". Module
+  scripts, own fonts, `fetch` and storage then work. The price: your site
+  shares its origin again with every other site whose shielding is off,
+  and the code on your pages can reach what the visitor may see there. Do
+  that only for a site whose content you trust. The CLI does not offer this
+  switch; it is a decision for the site's admin in the admin environment.
+
 ## 3. Publishing from CI with an OIDC ID token
 
 CI publishes without a secret ("trusted publishing"): a GitHub or
@@ -699,8 +762,14 @@ no half upload. The live site stays as it was.
   it. Blocked in both positions: fetching data from or sending it to other
   hosts (`connect-src` stays `'self'`), images from elsewhere, an iframe
   around the page, and a form that posts somewhere else. What you know for
-  sure you bundle into your dist; that always works and lets nobody watch
-  along.
+  sure you bundle into your dist; that needs no external source and lets
+  nobody watch along (with the shielding on, mind what §2 says about
+  module scripts and fonts from your dist).
+- **Shielding from other sites is on unless you turn it off**: module
+  scripts, web fonts and `fetch` from your own site are refused and
+  browser storage throws, which a build from Astro or Vite (Vue, React,
+  Svelte) runs into straight away. What breaks, how it shows and what to do
+  is in §2, "Shielding: what a build tool has to know".
 - **Absolute base under `_version`**: if your site was built with an
   absolute base (for example hardcoded `https://voorbeeld.nl/pad/`), then
   that absolute base inside a `_version/{version-id}/` view still

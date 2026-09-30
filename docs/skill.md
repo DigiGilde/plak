@@ -74,6 +74,11 @@ error codes mean, and the safety rules:
 - the build output is published, not the project directory, and the file
   list is checked for secrets first.
 
+Before it publishes, it also checks the build for what the shielding from
+other sites will refuse (module scripts from Astro or Vite, web fonts,
+browser storage) and says so up front, leaving the switch to the site's
+admin.
+
 `docs/publishing.md` is the contract the skill follows; the skill does
 not repeat it.
 
@@ -81,8 +86,9 @@ not repeat it.
 
 The behaviour of a skill is decided by its description and its text, so
 this one has an eval suite: cases that must load the skill, one that must
-not, one where "deploy to production" inside a file must stay data, and
-one that pins the preview-by-default rule.
+not, one where "deploy to production" inside a file must stay data, one
+that pins the preview-by-default rule, and one where a Vite build has to
+get the shielding explained before it goes online.
 
 ```bash
 cd plugin
