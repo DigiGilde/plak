@@ -963,3 +963,20 @@ ten seconds that only gives `INVALID_GRANT` and the session stays; if an old
 refresh token turns up again later, Plak revokes the whole session,
 because then somebody else has it. If a platform administrator deactivates
 you, all your linked sessions disappear; after reactivation you link again.
+
+## 7. CLI and server compatibility
+
+The CLI and the server are released independently. They are coupled through
+the HTTP API, whose contract version the server sends as the `API-Version`
+response header (for example `1.0.0`).
+
+- Within a major version the server keeps the API backward compatible, so an
+  older CLI keeps working against a newer server.
+- A breaking change bumps the major, and ships together with a new CLI.
+- The CLI reads `API-Version` on every response, before it looks at the body.
+  If the server's major is higher than the one the CLI supports, it stops with
+  exit code 1 and `Error: this server speaks API 2.x, this plak CLI (<version>)
+  supports API 1.x. Install a newer CLI: ...`. A missing or malformed header
+  is ignored.
+- `plak --version` prints the installed version (`plak 0.2.0`). The CLI also
+  identifies itself on every request as `User-Agent: plak-cli/<version>`.

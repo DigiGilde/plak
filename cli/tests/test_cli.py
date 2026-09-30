@@ -9,6 +9,8 @@ of rechtstreeks:
 from __future__ import annotations
 
 import argparse
+import ast
+import importlib.metadata
 import io
 import json
 import os
@@ -95,6 +97,8 @@ class _StubHandler(BaseHTTPRequestHandler):
         self.server.requests.append(record)  # type: ignore[attr-defined]
         status, payload, content_type = self.server.responder(record)  # type: ignore[attr-defined]
         self.send_response(status)
+        for name, value in self.server.extra_headers.items():  # type: ignore[attr-defined]
+            self.send_header(name, value)
         if payload is not None:
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
@@ -161,6 +165,7 @@ def _no_real_sleep(monkeypatch):
 def stub_server():
     server = HTTPServer(("127.0.0.1", 0), _StubHandler)
     server.requests = []  # type: ignore[attr-defined]
+    server.extra_headers = {}  # type: ignore[attr-defined]
     server.responder = _json_responder(  # type: ignore[attr-defined]
         201, {"versionId": "00000000-0000-0000-0000-000000000000"}
     )
@@ -171,6 +176,10 @@ def stub_server():
     finally:
         server.shutdown()
         thread.join()
+    # Every request of every test that goes through the stub carries the
+    # User-Agent, so a call that bypasses the shared helper fails here.
+    for record in server.requests:  # type: ignore[attr-defined]
+        assert record["headers"].get("User-Agent") == f"plak-cli/{cli.VERSION}"
 
 
 @pytest.fixture
@@ -1038,6 +1047,95 @@ def test_whoami_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd
     assert code == 2
     assert "plak login" in capsys.readouterr().err
     assert stub_server.requests == []
+
+
+def test_version_flag_prints_the_installed_version(capsys):
+    code = cli.main(["--version"])
+
+    assert code == 0
+    assert capsys.readouterr().out == f"plak {importlib.metadata.version('plak')}\n"
+
+
+def test_every_http_call_goes_through_the_shared_helper():
+    tree = ast.parse(Path(cli.__file__).read_text())
+    helper = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_http"
+    )
+    inside_helper = {id(node) for node in ast.walk(helper)}
+    direct = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "httpx"
+        and node.attr in {"get", "post", "put", "patch", "delete", "request", "stream", "Client"}
+        and id(node) not in inside_helper
+    ]
+    assert direct == []
+
+
+def test_requests_carry_the_user_agent(stub_server, host, isolated_cwd, monkeypatch):
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    stub_server.responder = _json_responder(200, {"member": {"email": "a@b.nl"}})
+
+    assert cli.main(["whoami", "--host", host]) == 0
+
+    agent = stub_server.requests[0]["headers"]["User-Agent"]
+    assert agent == f"plak-cli/{importlib.metadata.version('plak')}"
+
+
+@pytest.mark.parametrize(
+    ("header", "code"),
+    [
+        (None, 0),
+        ("1.0.0", 0),
+        ("1.7.3", 0),
+        ("0.9.0", 0),
+        ("2", 0),
+        ("two.0.0", 0),
+        ("", 0),
+        ("2.0.0", 1),
+        ("3.1.4", 1),
+    ],
+)
+def test_api_major_check(stub_server, host, isolated_cwd, monkeypatch, capsys, header, code):
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    if header is not None:
+        stub_server.extra_headers["API-Version"] = header
+    stub_server.responder = _json_responder(200, {"member": {"email": "a@b.nl"}})
+
+    assert cli.main(["whoami", "--host", host]) == code
+
+    captured = capsys.readouterr()
+    if code == 0:
+        assert "a@b.nl" in captured.out
+        assert captured.err == ""
+    else:
+        assert captured.out == ""
+        major = header.split(".")[0]
+        assert f"Error: this server speaks API {major}.x" in captured.err
+        assert f"supports API {cli.SUPPORTED_API_MAJOR}.x" in captured.err
+        assert "<tag>#subdirectory=cli" in captured.err
+
+
+def test_a_newer_api_major_is_refused_before_the_body_is_read(
+    stub_server, host, dist_folder, token_env, capsys
+):
+    stub_server.extra_headers["API-Version"] = "2.0.0"
+    stub_server.responder = _json_responder(
+        201, {"versionId": "00000000-0000-0000-0000-000000000000"}
+    )
+
+    code = cli.main(
+        ["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]
+    )
+
+    assert code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "API 2.x" in captured.err
 
 
 def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, memory_keyring, capsys):
