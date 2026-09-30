@@ -64,6 +64,15 @@ class TestTheCheckGate:
             "github.event_name == 'pull_request'"
         )
 
+    def test_the_merge_queue_gets_the_checks_and_nothing_else(self, deploy) -> None:
+        """beta merges through a merge queue, which waits for the required
+        checks on its own commit: without the trigger they never report and
+        nothing merges. That commit is throwaway, so no image gets built for
+        it, and preview and production stay bound to their own events."""
+        assert "merge_group" in deploy[True]
+        assert "github.event_name != 'merge_group'" in deploy["jobs"]["bouw"]["if"]
+        assert "github.event_name == 'pull_request'" in deploy["jobs"]["opruimen"]["if"]
+
     def test_the_checks_are_called_rather_than_triggered(self, ci, deploy) -> None:
         """You cannot pass a standalone workflow as `needs`. Calling it is
         the only form in which the gate is technically enforceable, and it
@@ -209,7 +218,7 @@ class TestCodeQL:
         schedule of its own. CodeQL needs one: the queries and the
         advisories move while the code stands still."""
         triggers = codeql[True]
-        assert set(triggers) == {"pull_request", "push", "schedule"}
+        assert set(triggers) == {"pull_request", "merge_group", "push", "schedule"}
         assert triggers["push"]["branches"] == ["beta"]
         assert len(triggers["schedule"]) == 1
         assert triggers["schedule"][0]["cron"].endswith(" * * 0")
