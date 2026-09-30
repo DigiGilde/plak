@@ -618,12 +618,15 @@ in Settings and not a change in this repository.
   `secret_scanning_validity_checks`, Settings, Code security). The first
   catches keys of providers GitHub has no partner pattern for, the second says
   whether a leaked token is still live.
-- [ ] **Branch protection on `beta`**, which is the default branch, with the
-  required checks `ci / backend-coverage`, `ci / cli`, `ci / frontend`, `ci / e2e`,
-  `ci / pre-commit`, `ci / secret-scan`, `ci / containers`,
-  `ci / vulnerabilities` and `CodeQL / Analyse (actions)`,
-  `CodeQL / Analyse (javascript-typescript)`, `CodeQL / Analyse (python)`.
-  Only then is the test gate in `deploy.yml` also closed for a direct push.
+- [x] **Branch protection on `beta`**, which is the default branch, is on
+  (checked on 2026-09-30) with the required checks `ci / backend-coverage`,
+  `ci / cli`, `ci / frontend`, `ci / e2e`, `ci / pre-commit`,
+  `ci / secret-scan`, `ci / containers`, `ci / vulnerabilities` and
+  `CodeQL / Analyse (actions)`, `CodeQL / Analyse (javascript-typescript)`,
+  `CodeQL / Analyse (python)`, enforced for administrators too, so the test
+  gate in `deploy.yml` is also closed for a direct push. Signed commits are
+  deliberately not required: GitHub cannot sign the commits a rebase merge
+  creates.
   The rule moves along to `main` on the day production exists. Merging goes
   through a merge queue (rebase), which runs the same required checks on the
   queued commit; that is why `deploy.yml` and `codeql.yml` also trigger on
