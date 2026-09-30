@@ -344,7 +344,7 @@ class TestSecurity:
             for method_, operation in path_part.items():
                 assert operation["security"], f"{method_} {path}"
 
-    def test_only_the_deploy_cli_session_and_creation_endpoints_accept_a_token(self, schema) -> None:
+    def test_only_the_deploy_cli_session_creation_and_link_endpoints_accept_a_token(self, schema) -> None:
         with_token = {
             (path, method_)
             for path, path_part in schema["paths"].items()
@@ -358,6 +358,7 @@ class TestSecurity:
             ("/-/api/v1/cli/whoami", "get"),
             ("/-/api/v1/groups", "post"),
             ("/-/api/v1/groups/{group_slug}/sites", "post"),
+            ("/-/api/v1/sites/{group_slug}/{site_slug}/repository", "put"),
         }
 
     def test_the_documented_token_endpoints_are_exactly_the_ones_the_middleware_lets_through(

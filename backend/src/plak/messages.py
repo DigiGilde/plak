@@ -79,8 +79,8 @@ NL: Final[dict[str, str]] = {
     "INSUFFICIENT_ROLE": "Hiervoor heb je minimaal de rol {role} nodig.",
     "NO_AUTHENTICATION": "Geen geldige sessie of bearer-token.",
     "BEARER_NOT_ACCEPTED": (
-        "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints en bij het aanmaken van "
-        "een groep of site geaccepteerd."
+        "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints, bij het aanmaken van "
+        "een groep of site en bij het koppelen van een repository geaccepteerd."
     ),
     # -- Groups, sites, members ----------------------------------------------
     "UNKNOWN_GROUP": "Onbekende groep.",
@@ -346,8 +346,8 @@ EN: Final[dict[str, str]] = {
     "INSUFFICIENT_ROLE": "This needs at least the role {role}.",
     "NO_AUTHENTICATION": "No valid session or bearer token.",
     "BEARER_NOT_ACCEPTED": (
-        "Bearer authentication is accepted on the deploy and CLI endpoints and for creating a "
-        "group or site only."
+        "Bearer authentication is accepted on the deploy and CLI endpoints, for creating a group or "
+        "site and for linking a repository only."
     ),
     # -- Groups, sites, members ----------------------------------------------
     "UNKNOWN_GROUP": "Unknown group.",

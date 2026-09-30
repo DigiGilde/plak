@@ -252,8 +252,9 @@ _SECURITY_SCHEMES: dict[str, dict[str, Any]] = {
         "description": (
             "Een CI-ID-token (JWT van GitHub of Forgejo Actions, audience de beheer-URL) of een CLI-token "
             "`plakcli_...` uit `plak login`. Plak het hele token achter Authorize. Alleen de deploy-endpoints, "
-            "de CLI-sessie-endpoints en het aanmaken van een groep of site (die laatste twee alleen met het "
-            "CLI-token) accepteren het; elders levert een Bearer-header 401, ook als het token geldig is."
+            "de CLI-sessie-endpoints, het aanmaken van een groep of site en het koppelen van een repository "
+            "(die laatste drie alleen met het CLI-token) accepteren het; elders levert een Bearer-header 401, "
+            "ook als het token geldig is."
         ),
     },
 }
@@ -266,6 +267,7 @@ _TOKEN_ENDPOINTS = (
     ("delete", "/previews/{ref}"),
     ("post", "/-/api/v1/groups"),
     ("post", "/groups/{group_slug}/sites"),
+    ("put", "/repository"),
 )
 
 

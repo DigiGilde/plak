@@ -123,7 +123,9 @@ linked to a site so that it may publish from there with a CI ID token
 host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed` and
 `live_branch`, and on unlinking only group and site. `ids_confirmed` is
 `false` when the admin entered the ids and the provider could not confirm
-them (a private repository, or the provider was unavailable).
+them (a private repository, or the provider was unavailable). Linked with the
+CLI token (`plak site link`), the row carries `refs.via` and
+`refs.cli_session` as a creation does.
 
 `site_external_sources` is about the site toggle "Externe bronnen
 toestaan": `refs.external_sources` is the new state (`true` or `false`),

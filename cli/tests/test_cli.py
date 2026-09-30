@@ -111,6 +111,9 @@ class _StubHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         self._handle()
 
+    def do_PUT(self) -> None:
+        self._handle()
+
 
 def _json_responder(status: int, data: dict[str, Any]):
     payload = json.dumps(data).encode()
@@ -3480,3 +3483,337 @@ def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_ar
     assert expected.format(host=host) in printed
     assert _STORED_ACCESS not in printed
     assert _STORED_REFRESH not in printed
+
+
+# -- plak site link ---------------------------------------------------------------
+
+
+def _completed(stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+
+
+def _gh_repository(owner: str = "MinBZK", repo: str = "Prive", repository_id: Any = 5005, owner_id: Any = 6006) -> str:
+    return json.dumps({"id": repository_id, "name": repo, "owner": {"id": owner_id, "login": owner}})
+
+
+class _FakeRun:
+    """Stands in for subprocess.run: per program (git, gh) a result or an
+    exception to raise; every call is recorded."""
+
+    def __init__(self, **outcomes: Any) -> None:
+        self.outcomes = outcomes
+        self.calls: list[list[str]] = []
+
+    def __call__(self, argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess:
+        self.calls.append(argv)
+        outcome = self.outcomes[argv[0]]
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    def programs(self) -> list[str]:
+        return [argv[0] for argv in self.calls]
+
+
+def _link_answer(**extra: Any) -> dict:
+    return {
+        "groupSlug": "team",
+        "siteSlug": "docs",
+        "provider": "github",
+        "host": "https://github.com",
+        "owner": "MinBZK",
+        "repo": "Prive",
+        "repositoryId": 5005,
+        "ownerId": 6006,
+        "liveBranch": "main",
+    } | extra
+
+
+@pytest.fixture
+def fake_run(monkeypatch) -> _FakeRun:
+    fake = _FakeRun(gh=_completed(_gh_repository()), git=_completed("git@github.com:minbzk/prive.git\n"))
+    monkeypatch.setattr(cli.subprocess, "run", fake)
+    return fake
+
+
+def test_site_link_asks_gh_for_the_ids_so_a_private_repository_links(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(200, _link_answer())
+
+    code = cli.main(["site", "link", "team/docs", "minbzk/prive", "--live-branch", "main", "--host", host])
+
+    assert code == 0
+    assert fake_run.calls == [["gh", "api", "--hostname", "github.com", "repos/minbzk/prive"]]
+    record = stub_server.requests[0]
+    assert (record["method"], record["path"]) == ("PUT", "/-/api/v1/sites/team/docs/repository")
+    assert record["headers"]["Authorization"] == "Bearer tok"
+    assert json.loads(record["body"]) == {
+        "provider": "github",
+        "owner": "MinBZK",
+        "repo": "Prive",
+        "liveBranch": "main",
+        "repositoryId": 5005,
+        "ownerId": 6006,
+    }
+    assert capsys.readouterr().out.splitlines() == [
+        "Linked github.com/MinBZK/Prive to team/docs.",
+        "Live: only from 'main', on a push, a manual run or a schedule. Previews: from any branch.",
+        "Ids from gh: repository 5005, owner 6006.",
+        f"Set up the workflow: {host}/team/docs/deploy",
+    ]
+
+
+def test_site_link_takes_the_origin_of_the_checkout_without_a_repository(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(200, _link_answer(liveBranch=None))
+
+    code = cli.main(["site", "link", "team/docs", "--any-branch", "--host", host])
+
+    assert code == 0
+    assert fake_run.calls[0] == ["git", "remote", "get-url", "origin"]
+    assert fake_run.calls[1][-1] == "repos/minbzk/prive"
+    assert json.loads(stub_server.requests[0]["body"])["liveBranch"] is None
+    assert (
+        "Live: from any branch, on a push, a manual run or a schedule. Previews: from any branch."
+        in capsys.readouterr().out.splitlines()
+    )
+
+
+def test_site_link_sends_a_forgejo_repository_with_its_host_and_does_not_ask_gh(
+    stub_server, host, token_env, fake_run, capsys
+):
+    fake_run.outcomes["git"] = _completed("https://Code.Overheid.nl/minbzk/website.git\n")
+    stub_server.responder = _json_responder(200, _link_answer(owner="minbzk", repo="website"))
+
+    code = cli.main(["site", "link", "team/docs", "--live-branch", "main", "--host", host])
+
+    assert code == 0
+    assert fake_run.programs() == ["git"]
+    assert json.loads(stub_server.requests[0]["body"]) == {
+        "provider": "forgejo",
+        "host": "https://code.overheid.nl",
+        "owner": "minbzk",
+        "repo": "website",
+        "liveBranch": "main",
+    }
+    output = capsys.readouterr().out
+    assert "Linked code.overheid.nl/minbzk/website to team/docs." in output
+    assert "Ids" not in output
+
+
+def test_site_link_sends_given_ids_without_asking_gh(stub_server, host, token_env, fake_run, capsys):
+    stub_server.responder = _json_responder(200, _link_answer(owner="minbzk", repo="prive"))
+
+    code = cli.main(
+        [
+            "site", "link", "team/docs", "minbzk/prive", "--live-branch", "main",
+            "--repository-id", "7007", "--owner-id", "8008", "--host", host,
+        ]
+    )
+
+    assert code == 0
+    assert fake_run.calls == []
+    body = json.loads(stub_server.requests[0]["body"])
+    assert (body["owner"], body["repo"], body["repositoryId"], body["ownerId"]) == ("minbzk", "prive", 7007, 8008)
+    assert "Ids as given: repository 7007, owner 8008." in capsys.readouterr().out
+
+
+def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token_env, fake_run, capsys):
+    stub_server.responder = _json_responder(200, _link_answer())
+
+    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--any-branch", "--no-gh", "--host", host])
+
+    assert code == 0
+    assert fake_run.calls == []
+    assert "repositoryId" not in json.loads(stub_server.requests[0]["body"])
+
+
+@pytest.mark.parametrize(
+    "gh",
+    [
+        FileNotFoundError("gh"),
+        subprocess.TimeoutExpired(["gh"], 30),
+        _completed("", returncode=1),
+        _completed("geen json"),
+        _completed("[]"),
+        _completed(json.dumps({"id": 5005, "name": "Prive", "owner": "MinBZK"})),
+        _completed(_gh_repository(repository_id=True)),
+        _completed(_gh_repository(repository_id=0)),
+        _completed(_gh_repository(owner_id="6006")),
+        _completed(_gh_repository(owner_id=2**63)),
+        _completed(_gh_repository(owner="min bzk")),
+        _completed(_gh_repository(repo="..")),
+    ],
+    ids=[
+        "missing", "timeout", "failed", "not-json", "not-an-object", "owner-not-an-object", "bool-id",
+        "zero-id", "string-id", "id-too-large", "bad-owner", "bad-repo",
+    ],
+)
+def test_site_link_without_a_usable_gh_answer_sends_no_ids(stub_server, host, token_env, fake_run, capsys, gh):
+    fake_run.outcomes["gh"] = gh
+    stub_server.responder = _json_responder(200, _link_answer(owner="minbzk", repo="website"))
+
+    code = cli.main(["site", "link", "team/docs", "minbzk/website", "--any-branch", "--host", host])
+
+    assert code == 0
+    body = json.loads(stub_server.requests[0]["body"])
+    assert "repositoryId" not in body and "ownerId" not in body
+    assert (body["owner"], body["repo"]) == ("minbzk", "website")
+    assert "Ids" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("reference", "expected"),
+    [
+        ("o/r", ("github.com", "o", "r")),
+        ("https://github.com/O/R.git", ("github.com", "O", "R")),
+        ("https://github.com/o/r/tree/main", ("github.com", "o", "r")),
+        ("ssh://git@github.com/o/r.git", ("github.com", "o", "r")),
+        ("git@code.overheid.nl:o/r.git", ("code.overheid.nl", "o", "r")),
+        ("https://Code.Overheid.nl/o/r", ("code.overheid.nl", "o", "r")),
+        ("https://forge.example:3000/o/r", ("forge.example:3000", "o", "r")),
+        ("ssh://forge.example:2222/o/r.tar", ("forge.example", "o", "r.tar")),
+    ],
+)
+def test_site_link_understands_the_usual_ways_to_name_a_repository(reference, expected):
+    assert cli._parse_repository(reference) == expected
+
+
+@pytest.mark.parametrize(
+    ("reference", "message"),
+    [
+        ("o/r/x", "must be 'owner/repo' or a URL"),
+        ("websiteonly", "must be 'owner/repo' or a URL"),
+        ("http://github.com/o/r", "Not a repository URL"),
+        ("https:///o/r", "Not a repository URL"),
+        ("https://forge.example:poort/o/r", "Not a repository URL"),
+        ("x@bad\x1bhost:o/r", "Not a valid host"),
+        ("https://-forge.example/o/r", "Not a valid host"),
+        ("https://github.com/o", "names no owner and repository"),
+        ("o/..", "Not a valid owner or repository name"),
+        ("git@github.com:o/re po", "Not a valid owner or repository name"),
+    ],
+)
+def test_site_link_refuses_what_is_not_a_repository(
+    stub_server, host, token_env, fake_run, capsys, reference, message
+):
+    code = cli.main(["site", "link", "team/docs", reference, "--any-branch", "--host", host])
+
+    assert code == 2
+    assert message in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        _completed("", returncode=128),
+        _completed("\n"),
+        FileNotFoundError("git"),
+        subprocess.TimeoutExpired(["git"], 30),
+    ],
+    ids=["no-remote", "empty", "not-installed", "timeout"],
+)
+def test_site_link_without_a_repository_and_no_origin_says_what_to_pass(
+    stub_server, host, token_env, fake_run, capsys, origin
+):
+    fake_run.outcomes["git"] = origin
+
+    code = cli.main(["site", "link", "team/docs", "--any-branch", "--host", host])
+
+    assert code == 2
+    assert "no git remote 'origin' here" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize(
+    ("ids", "message"),
+    [
+        (["--repository-id", "7007"], "together, or neither"),
+        (["--owner-id", "8008"], "together, or neither"),
+        (["--repository-id", "0", "--owner-id", "8008"], "positive whole numbers"),
+        (["--repository-id", "7007", "--owner-id", "-1"], "positive whole numbers"),
+    ],
+)
+def test_site_link_refuses_half_or_impossible_ids(stub_server, host, token_env, fake_run, capsys, ids, message):
+    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", *ids, "--host", host])
+
+    assert code == 2
+    assert message in capsys.readouterr().err
+    assert stub_server.requests == []
+    assert fake_run.calls == []
+
+
+def test_site_link_needs_a_choice_about_the_live_branch(stub_server, host, token_env, fake_run):
+    assert cli.main(["site", "link", "team/docs", "o/r", "--host", host]) == 2
+    assert cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--live-branch", "main", "--host", host]) == 2
+    assert stub_server.requests == []
+
+
+def test_site_link_refuses_a_site_that_is_not_group_slash_site(stub_server, host, token_env, fake_run, capsys):
+    code = cli.main(["site", "link", "docs", "o/r", "--any-branch", "--host", host])
+
+    assert code == 2
+    assert "The site must have the form 'group/site'" in capsys.readouterr().err
+
+
+def test_site_link_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd, fake_run, capsys):
+    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+
+    assert code == 2
+    assert "plak login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_site_link_explains_a_private_repository_plak_could_not_find(
+    stub_server, host, token_env, fake_run, capsys
+):
+    fake_run.outcomes["gh"] = _completed("", returncode=1)
+    stub_server.responder = _json_responder(
+        422, {"status": 422, "code": "REPOSITORY_NOT_FOUND", "detail": "Repository o/r not found on github.com."}
+    )
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.splitlines() == [
+        "Error: Repository o/r not found on github.com.",
+        (
+            "A private repository: log in to GitHub with 'gh auth login' and run this again, "
+            "or pass --repository-id and --owner-id."
+        ),
+    ]
+
+
+def test_site_link_shows_any_other_refusal_on_its_own(stub_server, host, token_env, fake_run, capsys):
+    stub_server.responder = _json_responder(
+        403, {"status": 403, "code": "INSUFFICIENT_ROLE", "detail": "This needs at least the role admin."}
+    )
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.strip() == "Error: This needs at least the role admin."
+
+
+def test_site_link_connection_failure_gives_exit_1(stub_server, host, token_env, fake_run, monkeypatch, capsys):
+    monkeypatch.setattr(cli.httpx, "put", _raise_connect_error)
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+
+    assert code == 1
+    assert "could not connect to" in capsys.readouterr().err
+
+
+def test_site_link_names_the_repository_as_sent_without_one_in_the_answer_and_cleans_the_one_there(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(200, {"owner": 7})
+    cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    assert capsys.readouterr().out.splitlines()[0] == "Linked github.com/MinBZK/Prive to team/docs."
+
+    stub_server.responder = _json_responder(200, _link_answer(repo="Prive\x1b[31m"))
+    cli.main(["site", "link", "team/docs", "o/r", "--any-branch", "--host", host])
+    assert capsys.readouterr().out.splitlines()[0] == "Linked github.com/MinBZK/Prive [31m to team/docs."

@@ -1,6 +1,7 @@
-"""Creating a group or a site with the CLI token (`plak group create`,
-`plak site create`), and the edge of that: the two creation routes of
-api/admin.py take a bearer, no other admin route does.
+"""Creating a group or a site and linking a repository with the CLI token
+(`plak group create`, `plak site create`, `plak site link`), and the edge of
+that: those three routes of api/admin.py take a bearer, no other admin
+route does.
 
 The app under test wires the admin router, the CLI router and
 BearerOutsideDeploysMiddleware the way main.py does. The full stack (origin
@@ -17,6 +18,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from helpers_ci import MockCi
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_test_client, set_session_cookie
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -30,12 +32,14 @@ from plak.api.errors import register_error_handlers
 from plak.audit.log import AuditLog
 from plak.audit.pseudonymisation import pseudonymise
 from plak.auth.sessions import CSRF_COOKIE, CSRF_HEADER, SessionStore
+from plak.ci.providers import ProviderClient
 from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_session_factory
 from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
+from plak.models.ci import SiteRepository
 from plak.models.cli import CliSession
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
 from plak.models.publication import Site
@@ -83,6 +87,9 @@ def app(factory, tmp_path) -> FastAPI:
     app.state.session_factory = factory
     app.state.content_store = ContentStore(content_root)
     app.state.audit_log = AuditLog(factory, settings.audit_pepper, settings.audit_ip_key_bytes)
+    ci = MockCi()
+    ci.add_github("MinBZK", "Website", 1001, 2002)
+    app.state.ci_providers = ProviderClient(ci.client())
     register_error_handlers(app)
     app.add_middleware(BearerOutsideDeploysMiddleware)
     app.include_router(cli_api.router)
@@ -556,6 +563,127 @@ class TestCreationRefusals:
         _problem(response, 404, "UNKNOWN_GROUP")
 
 
+# -- Linking a repository with the CLI token -------------------------------------
+
+
+REPOSITORY = f"{BASE}/sites/team/docs/repository"
+PRIVATE = {"provider": "github", "owner": "minbzk", "repo": "prive", "liveBranch": "main",
+           "repositoryId": 5005, "ownerId": 6006}
+
+
+async def _site_with(factory, members: dict[Member, Role]) -> None:
+    group = await _group(factory, "team", members=members)
+    async with factory() as db:
+        db.add(Site(group_id=group.id, slug="docs", title="Docs", access_base=AccessBase.SITE_TEAM))
+        await db.commit()
+
+
+async def _linked(factory) -> SiteRepository | None:
+    async with factory() as db:
+        return await db.scalar(select(SiteRepository))
+
+
+class TestLinkRepositoryWithTheCliToken:
+    async def test_a_site_admin_links_a_private_repository_without_csrf(self, client, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        token = await _token(factory, member)
+
+        response = await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(token))
+
+        assert response.status_code == 200, response.text
+        assert (response.json()["repositoryId"], response.json()["ownerId"]) == (5005, 6006)
+        linked = await _linked(factory)
+        assert (linked.owner, linked.repo, linked.created_by) == ("minbzk", "prive", member.id)
+
+    async def test_the_audit_row_says_cli(self, client, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        token = await _token(factory, member)
+
+        await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(token))
+
+        [row] = await _rows(factory, "site_repository_set")
+        assert row.actor_pseudonym == pseudonymise(PEPPER, "beheerder")
+        assert row.refs["via"] == "cli"
+        assert row.refs["cli_session"] == await _cli_session_id(factory, member)
+        assert row.refs["ids_confirmed"] is False
+
+    async def test_a_public_repository_is_looked_up_as_with_a_session(self, client, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        token = await _token(factory, member)
+
+        response = await client.put(
+            REPOSITORY, json={"provider": "github", "owner": "minbzk", "repo": "website", "liveBranch": None},
+            headers=_bearer(token),
+        )
+
+        assert response.status_code == 200, response.text
+        assert (response.json()["owner"], response.json()["repositoryId"]) == ("MinBZK", 1001)
+
+    async def test_a_group_editor_may_not_link_and_the_refusal_is_audited_as_the_cli_member(self, client, factory):
+        member = await _member(factory, "redacteur")
+        await _site_with(factory, {member: Role.EDITOR})
+        token = await _token(factory, member)
+
+        response = await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(token))
+
+        _problem(response, 403, "INSUFFICIENT_ROLE")
+        assert await _linked(factory) is None
+        [row] = await _rows(factory, "admin_access")
+        assert row.result == "refused"
+        assert row.actor_pseudonym == pseudonymise(PEPPER, "redacteur")
+        assert row.refs["via"] == "cli"
+
+    async def test_a_ci_id_token_links_nothing(self, client, factory):
+        await _site_with(factory, {})
+        jwt_shaped = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2ln"
+
+        response = await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(jwt_shaped))
+
+        _problem(response, 401, "TOKEN_INVALID")
+        assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE
+        assert await _linked(factory) is None
+
+    async def test_a_revoked_cli_token_links_nothing(self, client, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        token = await _token(factory, member)
+        async with factory() as db:
+            await cli.revoke(db, uuid.UUID(await _cli_session_id(factory, member)))
+
+        response = await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(token))
+
+        _problem(response, 401, "TOKEN_INVALID")
+        assert await _linked(factory) is None
+
+    async def test_a_deactivated_admin_links_nothing(self, client, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        token = await _token(factory, member)
+        async with factory() as db:
+            await db.execute(update(Member).where(Member.id == member.id).values(status=MemberStatus.DEACTIVATED))
+            await db.commit()
+
+        response = await client.put(REPOSITORY, json=PRIVATE, headers=_bearer(token))
+
+        _problem(response, 403, "MEMBER_NOT_ACTIVE")
+        assert await _linked(factory) is None
+
+    async def test_a_valid_session_does_not_rescue_a_bad_token(self, client, app, factory):
+        member = await _member(factory, "beheerder")
+        await _site_with(factory, {member: Role.ADMIN})
+        headers = _login(client, app, "beheerder")
+
+        response = await client.put(
+            REPOSITORY, json=PRIVATE, headers={**headers, "Authorization": "Bearer plakcli_abc_def"}
+        )
+
+        _problem(response, 401, "TOKEN_INVALID")
+        assert await _linked(factory) is None
+
+
 # -- The creation budget ---------------------------------------------------------
 
 
@@ -636,7 +764,7 @@ class TestCreationBudget:
 
 def _admin_routes() -> list[tuple[str, str]]:
     """Every (method, concrete path) the admin router serves, apart from the
-    two creation routes."""
+    two creation routes and the repository link."""
     router = make_admin_router()
     routes = []
     for route in router.routes:
@@ -644,6 +772,8 @@ def _admin_routes() -> list[tuple[str, str]]:
         path = re.sub(r"\{[^}]+\}", "x", route.path)
         for method_ in sorted(route.methods):
             if method_ == "POST" and (path == f"{BASE}/groups" or path == f"{BASE}/groups/x/sites"):
+                continue
+            if method_ == "PUT" and path == f"{BASE}/sites/x/x/repository":
                 continue
             routes.append((method_, path))
     return routes
@@ -662,7 +792,8 @@ async def test_a_valid_cli_token_on_any_other_admin_route_is_refused(client, fac
     body = _problem(response, 401, "BEARER_NOT_ACCEPTED")
     assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE
     assert body["detail"] == (
-        "Bearer authentication is accepted on the deploy and CLI endpoints and for creating a group or site only."
+        "Bearer authentication is accepted on the deploy and CLI endpoints, for creating a group or site and "
+        "for linking a repository only."
     )
 
 
@@ -727,6 +858,20 @@ class TestNeighbouringRoutesStayShut:
         async with factory() as db:
             assert await db.scalar(select(SiteMember).where(SiteMember.member_id == other.id)) is None
 
+    async def test_unlink_a_repository(self, client, factory, owner):
+        async with factory() as db:
+            site = await db.scalar(select(Site).where(Site.slug == "docs"))
+            db.add(SiteRepository(site_id=site.id, provider="github", host="https://github.com", owner="minbzk",
+                                  repo="website", repository_id=1001, owner_id=2002))
+            await db.commit()
+        response = await client.delete(f"{BASE}/sites/team/docs/repository", headers=_bearer(owner[1]))
+        _problem(response, 401, "BEARER_NOT_ACCEPTED")
+        assert await _linked(factory) is not None
+
+    async def test_read_the_linked_repository(self, client, owner):
+        response = await client.get(f"{BASE}/sites/team/docs/repository", headers=_bearer(owner[1]))
+        _problem(response, 401, "BEARER_NOT_ACCEPTED")
+
     async def test_get_group(self, client, owner):
         response = await client.get(f"{BASE}/groups/team", headers=_bearer(owner[1]))
         _problem(response, 401, "BEARER_NOT_ACCEPTED")
@@ -746,9 +891,13 @@ class TestNeighbouringRoutesStayShut:
             ("PUT", f"{BASE}/groups/team/sites"),
             ("GET", f"{BASE}/groups"),
             ("POST", f"{BASE}/groups/team/extra/sites"),
+            ("POST", f"{BASE}/sites/team/docs/repository"),
+            ("PUT", f"{BASE}/sites/team/docs/repository/"),
+            ("PUT", f"{BASE}/sites/team/repository"),
+            ("PUT", f"{BASE}/sites/team/docs/extra/repository"),
         ],
     )
-    async def test_the_creation_paths_open_only_for_their_exact_method_and_shape(
+    async def test_the_opened_paths_open_only_for_their_exact_method_and_shape(
         self, client, owner, method_, path
     ):
         response = await client.request(method_, path, headers=_bearer(owner[1]), json={"title": "X", "slug": "x"})

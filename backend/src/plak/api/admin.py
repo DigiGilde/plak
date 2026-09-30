@@ -16,11 +16,11 @@ for bearer and session at once. main.py puts `require_admin_origin` on that
 router too (bearer CI sends no Origin/Sec-Fetch-Site and passes it
 unhindered).
 
-Two routes here do take a bearer as well: creating a group and creating a
-site accept the CLI token from `plak login` (`require_creator`), with the
-same role checks as the session. A bearer request carries no ambient
-credentials, so it skips the CSRF check; the origin guard stays on it, as on
-the deploy router. Every other route in this router is session only, which
+Three routes here do take a bearer as well: creating a group, creating a
+site and linking a repository accept the CLI token from `plak login`
+(`require_creator`), with the same role checks as the session. A bearer
+request carries no ambient credentials, so it skips the CSRF check; the
+origin guard stays on it, as on the deploy router. Every other route in this router is session only, which
 `BearerOutsideDeploysMiddleware` enforces before the request gets here.
 """
 
@@ -2492,8 +2492,9 @@ CREATION_WINDOW_S = 3600
 
 @dataclass(frozen=True)
 class Creator:
-    """Who creates a group or a site: the member, plus the CLI session when the
-    request came with a CLI token instead of an admin session."""
+    """Who creates a group or a site, or links a repository: the member, plus
+    the CLI session when the request came with a CLI token instead of an admin
+    session."""
 
     member: Member
     cli_session_id: uuid.UUID | None = None
@@ -2505,10 +2506,11 @@ class Creator:
 
 
 async def require_creator(request: Request) -> Creator:
-    """The two creation routes take an admin session with CSRF, exactly as
-    before, or a CLI access token. A bearer header decides: with one, the
-    session cookie is not looked at, and neither is CSRF, since nothing
-    ambient came along. A CI ID token is site-bound and creates nothing."""
+    """The two creation routes and the repository link take an admin session
+    with CSRF, exactly as before, or a CLI access token. A bearer header
+    decides: with one, the session cookie is not looked at, and neither is
+    CSRF, since nothing ambient came along. A CI ID token is site-bound and
+    creates or links nothing."""
     plaintext = bearer_from_request(request)
     if plaintext is None:
         await require_csrf(request)
@@ -3324,10 +3326,13 @@ def make_admin_router() -> APIRouter:
             "`repositoryId` en `ownerId` mee (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): Plak "
             "bewaart ze zonder opzoeking als die faalt. Een verkeerd id koppelt niets anders, het weigert "
             "alleen elke deploy. Vindt Plak de repository wel, dan moeten de ids kloppen.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Ook met het CLI-token uit `plak login` (`plak site link`), dan zonder CSRF-header. Een "
+            "CI-ID-token koppelt niets.\n\n"
+            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header of het CLI-token."
         ),
         responses=_errors(
             _ERROR_CSRF,
+            _ERROR_CLI_TOKEN,
             _ERROR_SITE_ROLE,
             _ERROR_SITE,
             {
@@ -3354,10 +3359,10 @@ def make_admin_router() -> APIRouter:
         group_slug: str,
         site_slug: str,
         body: SiteRepositoryBody,
-        _csrf: Csrf,
-        member: ActiveMember,
+        creator: Annotated[Creator, Depends(require_creator)],
         db: Db,
     ) -> SiteRepositoryOut:
+        member = creator.member
         group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
         host = _repository_host(request, body.provider, body.host)
         owner, repo = body.owner.strip(), body.repo.strip()
@@ -3409,6 +3414,7 @@ def make_admin_router() -> APIRouter:
                 "repository_id": resolved.repository_id,
                 "ids_confirmed": ids_confirmed,
                 "live_branch": live_branch,
+                **creator.audit_refs(),
             },
         )
         return await _repository_json(db, repository, group.slug, site.slug)

@@ -114,7 +114,23 @@ rotate.
 
 ### Linking a repository
 
-First link the repository to the site: **admin, site detail, tab
+First link the repository to the site, from the terminal or in the
+admin. From a checkout of the repository, with a CLI token from
+`plak login`:
+
+```bash
+plak site link team-aurora/docs --live-branch main   # or --any-branch
+```
+
+Without a repository argument the CLI takes the remote `origin`; pass
+`owner/repo` (GitHub) or the repository URL (GitHub or Forgejo) to name
+another. For a GitHub repository the CLI asks your own `gh` login for the
+ids and sends them along, so a private repository links without further
+ado; `--no-gh` leaves the lookup to Plak, and `--repository-id` with
+`--owner-id` gives the ids by hand. Exit codes as for every command: `0`
+linked, `1` refused or unreachable, `2` wrong usage.
+
+In the admin: **site detail, tab
 Deploy** ("Publiceren vanuit GitHub of Forgejo"), button "Repository
 koppelen". Fill in the provider (GitHub or Forgejo, with for Forgejo the host
 from `PLAK_CI_FORGEJO_HOSTS`), `eigenaar/repo` (owner/repo) and optionally
@@ -137,7 +153,8 @@ without an `event_name` or with another event (`pull_request`,
 not even without a live branch. Without a live branch any branch may publish
 live; with a live branch only that one. Previews (and purging them) are
 always allowed, from any event and from any branch. A site role of `admin`
-can link and unlink, `editor` can view the link (to set up the workflow).
+can link (in the admin or with the CLI) and unlink (in the admin only),
+`editor` can view the link (to set up the workflow).
 
 ### GitHub Actions
 
