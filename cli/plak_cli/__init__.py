@@ -1071,7 +1071,7 @@ def cmd_site_link(args: argparse.Namespace) -> int:
         print(f"Live: only from '{args.live_branch}', on a push, a manual run or a schedule. "
               "Previews: from any branch.")
     if ids_from is not None:
-        print(f"Ids {ids_from}: repository {body['repositoryId']}, owner {body['ownerId']}.")
+        print(f"IDs {ids_from}: repository {body['repositoryId']}, owner {body['ownerId']}.")
     print(f"Set up the workflow: {host}/{group}/{site}/deploy")
     return 0
 
@@ -1428,7 +1428,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "Link a GitHub or Forgejo repository to a site where you are admin, so "
             "its workflows may publish with an OIDC ID token, without a secret. "
             "Without a repository argument it takes the remote 'origin' of the "
-            "git checkout you are in. For a GitHub repository the ids come from "
+            "git checkout you are in. For a GitHub repository the IDs come from "
             "your own 'gh' login, so a private repository links too."
         ),
     )
@@ -1457,16 +1457,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--repository-id",
         type=int,
         default=None,
-        help="Numeric id of the repository, for one Plak and gh cannot look up (with --owner-id)",
+        help="Numeric ID of the repository, for one Plak and gh cannot look up (with --owner-id)",
     )
     site_link.add_argument(
-        "--owner-id", type=int, default=None, help="Numeric id of the repository's owner (with --repository-id)"
+        "--owner-id", type=int, default=None, help="Numeric ID of the repository's owner (with --repository-id)"
     )
     site_link.add_argument(
         "--no-gh",
         dest="gh",
         action="store_false",
-        help="Do not ask gh for the ids; Plak looks the repository up itself, which finds a public one only",
+        help="Do not ask gh for the IDs; Plak looks the repository up itself, which finds a public one only",
     )
     site_link.add_argument("--host", default=None, help=HOST_HELP)
     site_link.set_defaults(func=cmd_site_link)

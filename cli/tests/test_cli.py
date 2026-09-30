@@ -3559,7 +3559,7 @@ def test_site_link_asks_gh_for_the_ids_so_a_private_repository_links(
     assert capsys.readouterr().out.splitlines() == [
         "Linked github.com/MinBZK/Prive to team/docs.",
         "Live: only from 'main', on a push, a manual run or a schedule. Previews: from any branch.",
-        "Ids from gh: repository 5005, owner 6006.",
+        "IDs from gh: repository 5005, owner 6006.",
         f"Set up the workflow: {host}/team/docs/deploy",
     ]
 
@@ -3600,7 +3600,7 @@ def test_site_link_sends_a_forgejo_repository_with_its_host_and_does_not_ask_gh(
     }
     output = capsys.readouterr().out
     assert "Linked code.overheid.nl/minbzk/website to team/docs." in output
-    assert "Ids" not in output
+    assert "IDs" not in output
 
 
 def test_site_link_sends_given_ids_without_asking_gh(stub_server, host, token_env, fake_run, capsys):
@@ -3617,7 +3617,7 @@ def test_site_link_sends_given_ids_without_asking_gh(stub_server, host, token_en
     assert fake_run.calls == []
     body = json.loads(stub_server.requests[0]["body"])
     assert (body["owner"], body["repo"], body["repositoryId"], body["ownerId"]) == ("minbzk", "prive", 7007, 8008)
-    assert "Ids as given: repository 7007, owner 8008." in capsys.readouterr().out
+    assert "IDs as given: repository 7007, owner 8008." in capsys.readouterr().out
 
 
 def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token_env, fake_run, capsys):
@@ -3661,7 +3661,7 @@ def test_site_link_without_a_usable_gh_answer_sends_no_ids(stub_server, host, to
     body = json.loads(stub_server.requests[0]["body"])
     assert "repositoryId" not in body and "ownerId" not in body
     assert (body["owner"], body["repo"]) == ("minbzk", "website")
-    assert "Ids" not in capsys.readouterr().out
+    assert "IDs" not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

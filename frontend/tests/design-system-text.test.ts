@@ -42,9 +42,6 @@ const UNREACHED: Record<string, string> = {
   'components.icon-button.opens-in-new-tab-label':
     'no nldd-icon-button here is a link to a new tab',
   'components.list-item.opens-in-new-tab-label': 'no nldd-list-item here is a link',
-  'components.code-viewer.copy-action': 'every code viewer here sets no-copy',
-  'components.code-viewer.copy-success-text': 'every code viewer here sets no-copy',
-  'components.code-viewer.copy-failure-text': 'every code viewer here sets no-copy',
   'components.file-field.to-choose-files-action': 'no file field here takes more than one file',
   'components.file-field.file-count-text': 'no file field here takes more than one file',
   'components.menu.empty-text':

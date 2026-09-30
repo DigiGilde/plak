@@ -313,15 +313,12 @@ const idsCommand = computed(() => {
     : `gh api repos/${path} --jq '.id, .owner.id'`;
 });
 
-const idsIntro = computed(() => segments('publish.deploy.form.idsIntro', ['command']));
-
 // The same link from a checkout; an empty live branch means --any-branch, as in the form.
 const cliLinkCommand = computed(() => {
   const branch = formLiveBranch.value.trim();
   return `plak site link ${props.group}/${props.site} ${branch ? `--live-branch ${branch}` : '--any-branch'}`;
 });
 
-const cliLinkHint = computed(() => segments('publish.deploy.form.cliHint', ['command']));
 
 async function submitRepository(): Promise<void> {
   formError.value = null;
@@ -538,9 +535,12 @@ const workflowPath = computed(() =>
 
 const workflowPathHint = computed(() => segments('publish.deploy.workflow.path', ['path', 'link']));
 
-const cliInstall = computed(() =>
-  segments('publish.deploy.cli.install', ['repo', 'folder', 'install', 'upgrade', 'run']),
-);
+const cliInstall = computed(() => segments('publish.deploy.cli.install', ['repo', 'folder']));
+
+const cliInstallCommands = `uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
+uv tool upgrade plak`;
+
+const cliRun = computed(() => segments('publish.deploy.cli.run', ['run']));
 
 const cliLogin = computed(() =>
   segments('publish.deploy.cli.login', ['login', 'link', 'publish']),
@@ -736,9 +736,18 @@ plak logout
 
             <template v-if="idsVisible">
               <nldd-rich-text data-testid="repository-ids-uitleg">
-                <p>
-                  {{ idsIntro[0] }}<code>{{ idsCommand }}</code>{{ idsIntro[1] }}
-                </p>
+                <template v-if="formProvider === 'github'">
+                  <p>{{ t('publish.deploy.form.idsIntroGithub') }}</p>
+                  <nldd-code-viewer language="bash" data-testid="repository-ids-cli">{{
+                    cliLinkCommand
+                  }}</nldd-code-viewer>
+                  <p>{{ t('publish.deploy.form.idsManual') }}</p>
+                </template>
+                <p v-else>{{ t('publish.deploy.form.idsIntro') }}</p>
+                <nldd-code-viewer language="bash" data-testid="repository-ids-commando">{{
+                  idsCommand
+                }}</nldd-code-viewer>
+                <p>{{ t('publish.deploy.form.idsWrong') }}</p>
               </nldd-rich-text>
               <nldd-form-field :label="t('publish.deploy.form.repositoryId')">
                 <nldd-text-field
@@ -787,8 +796,12 @@ plak logout
               </nldd-form-field-help-text>
             </nldd-form-field>
 
-            <nldd-rich-text data-testid="repository-cli-hint">
-              <p>{{ cliLinkHint[0] }}<code>{{ cliLinkCommand }}</code>{{ cliLinkHint[1] }}</p>
+            <!-- The GitHub id explanation above names the same command already. -->
+            <nldd-rich-text v-if="!(idsVisible && formProvider === 'github')" data-testid="repository-cli-hint">
+              <p>{{ t('publish.deploy.form.cliHint') }}</p>
+              <nldd-code-viewer language="bash" data-testid="repository-cli-commando">{{
+                cliLinkCommand
+              }}</nldd-code-viewer>
             </nldd-rich-text>
 
             <nldd-form-actions>
@@ -840,11 +853,10 @@ plak logout
             {{ cliInstall[0]
             }}<nldd-link href="https://github.com/DigiGilde/plak" data-testid="plak-cli-repo-link"
               >github.com/DigiGilde/plak</nldd-link
-            >{{ cliInstall[1] }}<code>cli/</code>{{ cliInstall[2]
-            }}<code>uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"</code
-            >{{ cliInstall[3] }}<code>uv tool upgrade plak</code>{{ cliInstall[4]
-            }}<code>uv run --project cli plak ...</code>{{ cliInstall[5] }}
+            >{{ cliInstall[1] }}<code>cli/</code>{{ cliInstall[2] }}
           </p>
+          <nldd-code-viewer language="bash" data-testid="cli-install">{{ cliInstallCommands }}</nldd-code-viewer>
+          <p>{{ cliRun[0] }}<code>uv run --project cli plak ...</code>{{ cliRun[1] }}</p>
           <p>
             {{ cliLogin[0] }}<code>plak login</code>{{ cliLogin[1]
             }}<nldd-link href="/cli-link" data-testid="cli-link-link">/cli-link</nldd-link

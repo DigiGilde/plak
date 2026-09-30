@@ -137,9 +137,15 @@ export const publishNl = {
   'publish.deploy.form.invalidReference':
     'Eigenaar en repository gescheiden door een schuine streep (bijvoorbeeld "minbzk/website"), of een repository-URL.',
   'publish.deploy.form.idsIntro':
-    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Vul dan de twee ids zelf in. Vraag ze op met {command}: de eerste regel is het repository-id, de tweede het eigenaar-id. Een verkeerd id koppelt niets anders, het weigert alleen elke deploy.',
+    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Vul dan de twee ids hieronder zelf in. Dit geeft eerst het repository-id, dan het eigenaar-id:',
   'publish.deploy.form.cliHint':
-    'Liever vanuit de terminal? Draai {command} in een checkout van de repository, na plak login. Bij een privé GitHub-repository haalt de CLI de ids zelf op via gh.',
+    'Liever vanuit de terminal? Draai dit in een checkout van de repository, na plak login. Bij een privé GitHub-repository haalt de CLI de ids zelf op via gh.',
+  'publish.deploy.form.idsIntroGithub':
+    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Het makkelijkst koppel je haar vanuit een checkout, na plak login: de CLI haalt de ids dan zelf op met je eigen gh-login.',
+  'publish.deploy.form.idsManual':
+    'Of vul de ids hieronder zelf in. Dit geeft eerst het repository-id, dan het eigenaar-id:',
+  'publish.deploy.form.idsWrong':
+    'Een verkeerd id koppelt niets anders, het weigert alleen elke deploy.',
   'publish.deploy.form.repositoryId': 'Repository-id',
   'publish.deploy.form.ownerId': 'Eigenaar-id',
   'publish.deploy.form.idsInvalid': 'Vul het repository-id en het eigenaar-id allebei in, alleen met cijfers.',
@@ -167,7 +173,9 @@ export const publishNl = {
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'Vanaf je eigen computer',
   'publish.deploy.cli.install':
-    'Met de plak-cli publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren met {install}, bijwerken met {upgrade}. Werk je uit een checkout, dan draait {run} hem zonder installatie.',
+    'Met de plak-cli publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren en later bijwerken:',
+  'publish.deploy.cli.run':
+    'Werk je uit een checkout, dan draait {run} hem zonder installatie.',
   'publish.deploy.cli.login':
     '{login} opent je browser op {link} om de CLI-sessie te koppelen; daarna bewaart de cli die sessie voor volgende {publish}-aanroepen.',
 

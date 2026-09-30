@@ -137,12 +137,18 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.form.invalidReference':
     'Owner and repository separated by a slash (for example "minbzk/website"), or a repository URL.',
   'publish.deploy.form.idsIntro':
-    'Plak cannot look this repository up itself, for instance because it is private. Enter the two ids yourself, then. Get them with {command}: the first line is the repository id, the second the owner id. A wrong id links nothing else, it only refuses every deploy.',
+    'Plak cannot look this repository up itself, for instance because it is private. Enter the two IDs below yourself, then. This gives the repository ID first, then the owner ID:',
   'publish.deploy.form.cliHint':
-    'Rather from the terminal? Run {command} in a checkout of the repository, after plak login. For a private GitHub repository the CLI gets the ids itself through gh.',
-  'publish.deploy.form.repositoryId': 'Repository id',
-  'publish.deploy.form.ownerId': 'Owner id',
-  'publish.deploy.form.idsInvalid': 'Enter both the repository id and the owner id, in digits only.',
+    'Rather from the terminal? Run this in a checkout of the repository, after plak login. For a private GitHub repository the CLI gets the IDs itself through gh.',
+  'publish.deploy.form.idsIntroGithub':
+    'Plak cannot look this repository up itself, for instance because it is private. The easiest way is to link it from a checkout, after plak login: the CLI then gets the IDs itself with your own gh login.',
+  'publish.deploy.form.idsManual':
+    'Or enter the IDs below yourself. This gives the repository ID first, then the owner ID:',
+  'publish.deploy.form.idsWrong':
+    'A wrong ID links nothing else, it only refuses every deploy.',
+  'publish.deploy.form.repositoryId': 'Repository ID',
+  'publish.deploy.form.ownerId': 'Owner ID',
+  'publish.deploy.form.idsInvalid': 'Enter both the repository ID and the owner ID, in digits only.',
 
   // -- Deploy tab: the ready-made workflow ---------------------------------------
   'publish.deploy.workflow.hint':
@@ -167,7 +173,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'From your own computer',
   'publish.deploy.cli.install':
-    'With the plak cli you publish without CI, with your own access. If you do not have it yet: {repo} holds it in {folder}. Install it with {install}, update it with {upgrade}. If you work from a checkout, {run} runs it without installing.',
+    'With the plak cli you publish without CI, with your own access. If you do not have it yet: {repo} holds it in {folder}. Install it, and update it later:',
+  'publish.deploy.cli.run':
+    'If you work from a checkout, {run} runs it without installing.',
   'publish.deploy.cli.login':
     '{login} opens your browser at {link} to link the CLI session; after that the cli keeps that session for later {publish} calls.',
 

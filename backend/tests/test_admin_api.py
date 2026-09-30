@@ -2554,7 +2554,7 @@ class TestSiteRepository:
         assert response.status_code == 422
         assert response.json()["code"] == "REPOSITORY_NOT_FOUND"
         assert "not public" in response.json()["detail"]
-        assert "enter the repository id and the owner id" in response.json()["detail"]
+        assert "enter the repository ID and the owner ID" in response.json()["detail"]
 
     async def test_a_rate_limited_provider_is_503(self, client, app, data, mock_ci):
         mock_ci.failures["https://api.github.com/repos/minbzk/website"] = 429

@@ -42,6 +42,9 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
     },
     'nldd-code-viewer': {
       'components.code-viewer.region-label': t('designSystem.codeViewer.region'),
+      'components.code-viewer.copy-action': t('designSystem.codeViewer.copy'),
+      'components.code-viewer.copy-success-text': t('designSystem.codeViewer.copied'),
+      'components.code-viewer.copy-failure-text': t('designSystem.codeViewer.copyFailed'),
     },
     'nldd-combo-box': {
       'components.combo-box.open-menu-action': t('designSystem.comboBox.openMenu'),
