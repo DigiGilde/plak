@@ -319,4 +319,17 @@ class TestThePluginManifests:
             "plugin/**",
             ".claude-plugin/**",
             ".github/workflows/plugin.yml",
+            ".github/scripts/check_plugin_version.py",
         }
+
+    def test_a_pull_request_needs_a_higher_version_for_a_plugin_change(self, plugin) -> None:
+        """The rule itself is tested in test_plugin_version.py; here only
+        that it runs, against the base of the pull request, with the history
+        it needs, and without putting the ref into the shell line itself."""
+        job = plugin["jobs"]["version"]
+        assert job["if"] == "github.event_name == 'pull_request'"
+        checkout, check = job["steps"]
+        assert checkout["with"]["fetch-depth"] == 0
+        assert check["env"] == {"BASE_REF": "${{ github.base_ref }}"}
+        assert check["run"] == 'python3 .github/scripts/check_plugin_version.py "origin/${BASE_REF}"'
+        assert "${{" not in check["run"]
