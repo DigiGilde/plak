@@ -286,6 +286,34 @@ describe('sites: not found', () => {
 });
 
 describe('site repository: defaults', () => {
+  it('does not find a "prive" repository without ids, and links it with them', async () => {
+    const backend = makeMockBackend();
+    const link = (extra: Record<string, unknown>) =>
+      backend.fetch('/-/api/v1/sites/nldd/website/repository', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'github', owner: 'nldd', repo: 'prive-site', ...extra }),
+      });
+
+    const notFound = await link({});
+    expect(notFound.status).toBe(422);
+    expect(((await notFound.json()) as { code: string }).code).toBe('REPOSITORY_NOT_FOUND');
+
+    const linked = await link({ repositoryId: 5005, ownerId: 6006 });
+    expect(linked.status).toBe(200);
+    expect(await linked.json()).toMatchObject({ repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
+  });
+
+  it('refuses ids that are incomplete or not positive whole numbers', async () => {
+    for (const ids of [{ repositoryId: 5005 }, { ownerId: 6006 }, { repositoryId: 0, ownerId: 6006 }, { repositoryId: 1.5, ownerId: 6006 }]) {
+      const response = await makeMockBackend().fetch('/-/api/v1/sites/nldd/website/repository', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: 'github', owner: 'nldd', repo: 'prive-site', ...ids }),
+      });
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { code: string }).code).toBe('REPOSITORY_IDS_INVALID');
+    }
+  });
+
   it('refuses linking a repository without owner or repo', async () => {
     const backend = makeMockBackend();
 

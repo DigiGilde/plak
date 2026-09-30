@@ -2487,6 +2487,7 @@ class TestSiteRepository:
             "host": "https://github.com",
             "repository": "MinBZK/Website",
             "repository_id": 1001,
+            "ids_confirmed": True,
             "live_branch": "main",
         }
 
@@ -2553,6 +2554,7 @@ class TestSiteRepository:
         assert response.status_code == 422
         assert response.json()["code"] == "REPOSITORY_NOT_FOUND"
         assert "not public" in response.json()["detail"]
+        assert "enter the repository id and the owner id" in response.json()["detail"]
 
     async def test_a_rate_limited_provider_is_503(self, client, app, data, mock_ci):
         mock_ci.failures["https://api.github.com/repos/minbzk/website"] = 429
@@ -2567,6 +2569,106 @@ class TestSiteRepository:
         response = await client.put(REPOSITORY, json=_github(), headers=headers)
         assert response.status_code == 503
         assert response.json()["code"] == "CI_PROVIDER_UNREACHABLE"
+
+    async def test_a_private_repository_links_with_the_entered_ids(self, client, app, data, factory, mock_ci):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(
+            REPOSITORY, json=_github(repo="Prive", repositoryId=5005, ownerId=6006), headers=headers
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert (body["owner"], body["repo"]) == ("minbzk", "Prive")
+        assert (body["repositoryId"], body["ownerId"]) == (5005, 6006)
+        assert mock_ci.requests == ["https://api.github.com/repos/minbzk/Prive"]
+
+        async with factory() as db:
+            row = await db.scalar(select(SiteRepository).where(SiteRepository.site_id == data.site.id))
+            audit = (
+                await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_set"))
+            ).scalar_one()
+        assert (row.repository_id, row.owner_id) == (5005, 6006)
+        assert audit.refs["repository"] == "minbzk/Prive"
+        assert audit.refs["repository_id"] == 5005
+        assert audit.refs["ids_confirmed"] is False
+
+    async def test_a_forgejo_repository_links_with_the_entered_ids(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(
+            REPOSITORY,
+            json={"provider": "forgejo", "host": FORGEJO_HOST, "owner": "minbzk", "repo": "prive",
+                  "liveBranch": None, "repositoryId": 7007, "ownerId": 4004},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert (response.json()["repositoryId"], response.json()["ownerId"]) == (7007, 4004)
+
+    @pytest.mark.parametrize("failure", [429, 500])
+    async def test_entered_ids_do_not_wait_for_an_unavailable_provider(
+        self, client, app, data, factory, mock_ci, failure
+    ):
+        mock_ci.failures["https://api.github.com/repos/minbzk/website"] = failure
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(REPOSITORY, json=_github(repositoryId=1001, ownerId=2002), headers=headers)
+        assert response.status_code == 200
+        assert (response.json()["owner"], response.json()["repo"]) == ("minbzk", "website")
+        async with factory() as db:
+            audit = (
+                await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_set"))
+            ).scalar_one()
+        assert audit.refs["ids_confirmed"] is False
+
+    async def test_entered_ids_that_match_the_provider_are_confirmed(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(REPOSITORY, json=_github(repositoryId=1001, ownerId=2002), headers=headers)
+        assert response.status_code == 200
+        assert (response.json()["owner"], response.json()["repo"]) == ("MinBZK", "Website")
+        async with factory() as db:
+            audit = (
+                await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_set"))
+            ).scalar_one()
+        assert audit.refs["ids_confirmed"] is True
+
+    @pytest.mark.parametrize(("repository_id", "owner_id"), [(1001, 9999), (9999, 2002)])
+    async def test_entered_ids_that_contradict_the_provider_are_422(
+        self, client, app, data, factory, repository_id, owner_id
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(
+            REPOSITORY, json=_github(repositoryId=repository_id, ownerId=owner_id), headers=headers
+        )
+        assert response.status_code == 422
+        assert response.json()["code"] == "REPOSITORY_IDS_MISMATCH"
+        assert "minbzk/website" in response.json()["detail"]
+        assert await _count(factory, SiteRepository, site_id=data.site.id) == 0
+
+    async def test_a_refused_relink_leaves_the_existing_link_alone(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        before = (await client.put(REPOSITORY, json=_github(), headers=headers)).json()
+        response = await client.put(REPOSITORY, json=_github(repositoryId=9999, ownerId=2002), headers=headers)
+        assert response.json()["code"] == "REPOSITORY_IDS_MISMATCH"
+        assert (await client.get(REPOSITORY)).json() == before
+        async with factory() as db:
+            actions = list(await db.scalars(select(AuditLogEntry.action)))
+        assert actions.count("site_repository_set") == 1
+
+    @pytest.mark.parametrize(
+        "ids",
+        [
+            {"repositoryId": 5005},
+            {"ownerId": 6006},
+            {"repositoryId": 5005, "ownerId": None},
+            {"repositoryId": 0, "ownerId": 6006},
+            {"repositoryId": 5005, "ownerId": -1},
+            {"repositoryId": 2**63, "ownerId": 6006},
+        ],
+    )
+    async def test_incomplete_or_impossible_ids_are_422(self, client, app, data, factory, mock_ci, ids):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(REPOSITORY, json=_github(repo="Prive", **ids), headers=headers)
+        assert response.status_code == 422
+        assert response.json()["code"] == "REPOSITORY_IDS_INVALID"
+        assert mock_ci.requests == []
+        assert await _count(factory, SiteRepository, site_id=data.site.id) == 0
 
     async def test_unlink(self, client, app, data, factory):
         headers = login(client, app, sub="lid-a", email="a@example.nl")

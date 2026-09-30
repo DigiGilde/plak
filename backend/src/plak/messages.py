@@ -137,7 +137,14 @@ NL: Final[dict[str, str]] = {
     # -- Repositories and CI --------------------------------------------------
     "REPOSITORY_NOT_SET": "Aan deze site is geen repository gekoppeld.",
     "REPOSITORY_INVALID": "Eigenaar of repository is geen geldige naam.",
-    "REPOSITORY_NOT_FOUND": "Repository {owner}/{repo} niet gevonden op {host}, of niet openbaar.",
+    "REPOSITORY_NOT_FOUND": (
+        "Repository {owner}/{repo} niet gevonden op {host}, of niet openbaar. Is ze privé, vul dan het "
+        "repository-id en het eigenaar-id zelf in."
+    ),
+    "REPOSITORY_IDS_INVALID": "Vul het repository-id en het eigenaar-id allebei in, als positief geheel getal.",
+    "REPOSITORY_IDS_MISMATCH": (
+        "{host} geeft {owner}/{repo} andere ids dan ingevuld. Laat de ids leeg, of neem ze over van {host}."
+    ),
     "LIVE_BRANCH_INVALID": "Deze live-branch is geen geldige branchnaam.",
     "HOST_NOT_ALLOWED": "Deze Forgejo-instantie staat niet in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "Bij GitHub hoort geen andere host.",
@@ -402,7 +409,15 @@ EN: Final[dict[str, str]] = {
     # -- Repositories and CI --------------------------------------------------
     "REPOSITORY_NOT_SET": "No repository is linked to this site.",
     "REPOSITORY_INVALID": "Owner or repository is not a valid name.",
-    "REPOSITORY_NOT_FOUND": "Repository {owner}/{repo} not found on {host}, or not public.",
+    "REPOSITORY_NOT_FOUND": (
+        "Repository {owner}/{repo} not found on {host}, or not public. If it is private, enter the "
+        "repository id and the owner id yourself."
+    ),
+    "REPOSITORY_IDS_INVALID": "Enter both the repository id and the owner id, as positive whole numbers.",
+    "REPOSITORY_IDS_MISMATCH": (
+        "{host} gives {owner}/{repo} other ids than the ones entered. Leave the ids empty, or copy them from "
+        "{host}."
+    ),
     "LIVE_BRANCH_INVALID": "This live branch is not a valid branch name.",
     "HOST_NOT_ALLOWED": "This Forgejo instance is not in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "GitHub does not come with another host.",

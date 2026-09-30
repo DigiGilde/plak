@@ -209,6 +209,12 @@ export interface SiteRepositoryInput {
   owner: string;
   repo: string;
   liveBranch: string | null;
+  /**
+   * Both or neither: the provider's ids, for a repository Plak cannot look up
+   * without credentials (a private one).
+   */
+  repositoryId?: number;
+  ownerId?: number;
 }
 
 /** The CLI device flow's lookup response: what a human approves or denies. */

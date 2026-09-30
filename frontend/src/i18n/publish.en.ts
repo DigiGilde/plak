@@ -136,6 +136,11 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.form.invalidUrl': 'This is not a valid URL.',
   'publish.deploy.form.invalidReference':
     'Owner and repository separated by a slash (for example "minbzk/website"), or a repository URL.',
+  'publish.deploy.form.idsIntro':
+    'Plak cannot look this repository up itself, for instance because it is private. Enter the two ids yourself, then. Get them with {command}: the first line is the repository id, the second the owner id. A wrong id links nothing else, it only refuses every deploy.',
+  'publish.deploy.form.repositoryId': 'Repository id',
+  'publish.deploy.form.ownerId': 'Owner id',
+  'publish.deploy.form.idsInvalid': 'Enter both the repository id and the owner id, in digits only.',
 
   // -- Deploy tab: the ready-made workflow ---------------------------------------
   'publish.deploy.workflow.hint':
