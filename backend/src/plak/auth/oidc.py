@@ -585,7 +585,9 @@ class OidcClient:
             raise
         except OidcError:
             raise
-        except (JoseError, ValueError) as error:
+        # TypeError: joserfc walks a `crit` header before it type-checks it,
+        # so `"crit": 5` escapes as a bare TypeError ahead of any signature.
+        except (JoseError, ValueError, TypeError) as error:
             raise OidcError(f"id-token ongeldig: {error}") from error
         return claims
 
