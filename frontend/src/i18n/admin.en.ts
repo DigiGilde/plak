@@ -14,6 +14,8 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   // -- Shared controls ------------------------------------------------------
   'admin.retry': 'Try again',
   'admin.confirm.keep': 'Keep',
+  'admin.confirm.phrase.label': 'Type {phrase} to confirm',
+  'admin.confirm.phrase.mismatch': 'Exactly {phrase}',
   'admin.rowActions.label': 'Actions for {label}',
   'admin.notice.unknownError': 'Unknown error.',
   'admin.errorBanner.status': 'Error code {status}.',

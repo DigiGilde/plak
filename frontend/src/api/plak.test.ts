@@ -140,6 +140,23 @@ describe('groups', () => {
     const error = await refusedWith(plak.createGroup('Hoofdletters', 'Niet-Geldig'));
     expect(error.problem.status).toBe(422);
   });
+
+  it('deletes a group along with its members, sites and everything on them', async () => {
+    await plak.createGroup('Ander', 'ander');
+    await plak.createSite('ander', 'Blijft', 'blijft');
+
+    await plak.deleteGroup('team-aurora');
+
+    expect((await refusedWith(plak.group('team-aurora'))).problem.status).toBe(404);
+    expect((await refusedWith(plak.groupMembers('team-aurora'))).problem.status).toBe(404);
+    expect((await refusedWith(plak.versions('team-aurora', 'website'))).problem.status).toBe(404);
+    expect((await plak.group('ander')).sites.map((s) => s.slug)).toEqual(['blijft']);
+  });
+
+  it('returns 404 when deleting an unknown group', async () => {
+    const error = await refusedWith(plak.deleteGroup('onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
 });
 
 describe('sites', () => {

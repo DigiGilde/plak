@@ -741,9 +741,12 @@ class TestGroupsAndSites:
         assert duplicate.json()["type"] == "about:blank"
         assert duplicate.json()["code"] == "SLUG_EXISTS"
 
-        not_empty = await client.delete(f"{BASE}/groups/team", headers=headers)
-        assert not_empty.status_code == 409
-        assert not_empty.json()["code"] == "GROUP_NOT_EMPTY"
+        headers_group_admin = login(client, app, sub="lid-a", email="a@example.nl")
+        already = await client.post(
+            f"{BASE}/groups/team/members", json={"identifier": "a@example.nl"}, headers=headers_group_admin
+        )
+        assert already.status_code == 409
+        assert already.json()["code"] == "ALREADY_GROUP_MEMBER"
 
     async def test_overview_shows_only_own_groups(self, client, app, data):
         login(client, app, sub="lid-a", email="a@example.nl")
@@ -961,24 +964,6 @@ class TestGroupsAndSites:
             f"{BASE}/groups/team/sites", json={"title": "Dubbel", "slug": "site"}, headers=headers
         )
         assert response.status_code == 409
-
-    async def test_group_delete_only_empty_and_only_admin(self, client, app, data):
-        headers_member = login(client, app, sub="lid-a", email="a@example.nl")
-        assert (
-            await client.delete(f"{BASE}/groups/team", headers=headers_member)
-        ).status_code == 403
-
-        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
-        assert (await client.delete(f"{BASE}/groups/team", headers=headers)).status_code == 409
-
-        headers_member = login(client, app, sub="lid-a", email="a@example.nl")
-        assert (
-            await client.delete(f"{BASE}/sites/team/site", headers=headers_member)
-        ).status_code == 204
-
-        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
-        assert (await client.delete(f"{BASE}/groups/team", headers=headers)).status_code == 204
-        assert (await client.get(f"{BASE}/groups/team")).status_code == 404
 
 
 # -- Group members ----------------------------------------------------------
@@ -2902,6 +2887,117 @@ class TestSiteDeletion:
         response = await client.delete(f"{BASE}/sites/team/site", headers=headers)
         assert response.status_code == 404
         assert response.json()["code"] == "UNKNOWN_SITE"
+
+
+class TestGroupDeletion:
+    async def test_group_admin_deletes_the_group_with_its_sites_and_file_trees(
+        self, client, app, factory, data, content_root
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        await client.post(
+            f"{BASE}/groups/team/sites", json={"title": "Docs", "slug": "docs"}, headers=headers
+        )
+        await client.post(f"{BASE}/sites/team/site/deploys", files=_upload(), headers=headers)
+        await client.post(
+            f"{BASE}/sites/team/docs/deploys",
+            files=_upload(),
+            data={"preview": "pr-1"},
+            headers=headers,
+        )
+        await _join_group(factory, data.group, data.member_b, Role.READER)
+        storage_refs = [
+            version["storageRef"]
+            for site in ("site", "docs")
+            for version in (await client.get(f"{BASE}/sites/team/{site}/versions")).json()
+        ]
+        assert len(storage_refs) == 2
+        recorder = install_audit_recorder(app)
+
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+
+        assert response.status_code == 204
+        assert await _count(factory, Group, id=data.group.id) == 0
+        assert await _count(factory, GroupMember, group_id=data.group.id) == 0
+        assert await _count(factory, Site, group_id=data.group.id) == 0
+        assert await _count(factory, Version) == 0
+        assert await _count(factory, Preview) == 0
+        for storage_ref in storage_refs:
+            assert not (content_root / storage_ref).exists()
+        record = recorder.only()
+        assert record.action == "group_delete"
+        assert record.refs == {"group": "team", "sites": ["docs", "site"]}
+        assert (await client.get(f"{BASE}/groups/team")).status_code == 404
+
+    async def test_an_empty_group_goes_too(self, client, app, factory, data):
+        async with factory() as db:
+            await db.execute(Site.__table__.delete())
+            await db.commit()
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        recorder = install_audit_recorder(app)
+
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+
+        assert response.status_code == 204
+        assert await _count(factory, Group, id=data.group.id) == 0
+        assert recorder.only().refs == {"group": "team", "sites": []}
+
+    async def test_other_groups_and_their_sites_stay(self, client, app, factory, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        await client.post(f"{BASE}/groups", json={"name": "Ander", "slug": "ander"}, headers=headers)
+        await client.post(
+            f"{BASE}/groups/ander/sites", json={"title": "Blijft", "slug": "blijft"}, headers=headers
+        )
+
+        assert (await client.delete(f"{BASE}/groups/team", headers=headers)).status_code == 204
+
+        assert (await client.get(f"{BASE}/groups/ander")).json()["sites"][0]["slug"] == "blijft"
+
+    @pytest.mark.parametrize("role", [Role.EDITOR, Role.READER])
+    async def test_a_narrower_group_role_is_refused(self, client, app, factory, data, role):
+        await _join_group(factory, data.group, data.member_b, role)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert await _count(factory, Group, id=data.group.id) == 1
+        assert await _count(factory, Site, id=data.site.id) == 1
+
+    async def test_a_site_admin_without_a_group_role_is_refused(self, client, app, factory, data):
+        await _join_site(factory, data.site, data.member_b, Role.ADMIN)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert await _count(factory, Site, id=data.site.id) == 1
+
+    async def test_a_member_without_any_role_is_refused(self, client, app, factory, data):
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert await _count(factory, Site, id=data.site.id) == 1
+
+    async def test_a_platform_admin_without_a_group_role_is_refused(
+        self, client, app, factory, data
+    ):
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
+        response = await client.delete(f"{BASE}/groups/team", headers=headers)
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert await _count(factory, Group, id=data.group.id) == 1
+        assert await _count(factory, Site, id=data.site.id) == 1
+
+    async def test_without_csrf_header_nothing_is_deleted(self, client, app, factory, data):
+        login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.delete(f"{BASE}/groups/team")
+        assert response.status_code == 403
+        assert await _count(factory, Group, id=data.group.id) == 1
+        assert await _count(factory, Site, id=data.site.id) == 1
+
+    async def test_an_unknown_group_is_404(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.delete(f"{BASE}/groups/bestaat-niet", headers=headers)
+        assert response.status_code == 404
 
 
 # -- Audit ------------------------------------------------------------------

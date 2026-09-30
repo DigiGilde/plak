@@ -127,6 +127,9 @@ them (a private repository, or the provider was unavailable). Linked with the
 CLI token (`plak site link`), the row carries `refs.via` and
 `refs.cli_session` as a creation does.
 
+`group_delete` carries the group and, in `refs.sites`, the slugs of the sites
+that went with it. Those sites get no `site_delete` row of their own.
+
 `site_external_sources` is about the site toggle "Externe bronnen
 toestaan": `refs.external_sources` is the new state (`true` or `false`),
 alongside group and site. The toggle is on by default; a row with `false`

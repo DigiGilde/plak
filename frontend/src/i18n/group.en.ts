@@ -128,4 +128,20 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.settings.saved': 'Default access saved',
   'group.settings.saveFailed': 'Default access not saved',
   'group.settings.saveFailed.detail': 'Saving did not work.',
+  'group.settings.danger.heading': 'Danger zone',
+  'group.settings.danger.body':
+    'Deleting the group permanently removes the group, its members and all of its sites, with every version, preview, invitee, secret link and the files on the server.',
+  'group.settings.danger.action': 'Delete group',
+  'group.settings.danger.confirm.title': 'Delete group {group}?',
+  'group.settings.danger.confirm.text':
+    'This cannot be undone. The group and every membership disappear for good.',
+  'group.settings.danger.confirm.text.withSites':
+    'This cannot be undone. The group, every membership and these sites disappear for good, with everything on them:',
+  'group.settings.danger.confirm.sites.list': 'Sites that go along',
+  'group.settings.danger.confirm.sites.more.one': 'And 1 more site',
+  'group.settings.danger.confirm.sites.more.many': 'And {count} more sites',
+  'group.settings.danger.confirm.keep': 'Keep group',
+  'group.settings.danger.confirm.confirm': 'Delete this group',
+  'group.settings.delete.failed': 'Group not deleted',
+  'group.settings.delete.failed.detail': 'Deleting did not work.',
 };

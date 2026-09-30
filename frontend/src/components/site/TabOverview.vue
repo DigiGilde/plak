@@ -274,6 +274,7 @@ function errorText(f: unknown, fallback: string): string {
         :text="t('site.overview.danger.confirm.text')"
         :keep-label="t('site.overview.danger.confirm.keep')"
         :confirm-label="t('site.overview.danger.confirm.confirm')"
+        :confirm-phrase="`${props.group}/${props.site}`"
         :busy="deleteBusy"
         @confirm="deleteSite"
         @close="deleteOpen = false"

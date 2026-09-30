@@ -273,6 +273,9 @@ describe('Site: deleting', () => {
     const { wrapper, router } = await makeWrapper('/team-aurora/website');
 
     await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', {
+      value: 'team-aurora/website',
+    });
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
     await untilIdle();
 

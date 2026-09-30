@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import ConfirmModal from './ConfirmModal.vue';
+import { fireDetailEvent } from './site/testHelpers';
 
 const props = {
   open: false,
@@ -60,5 +61,161 @@ describe('ConfirmModal (teleport)', () => {
     // Action in flight: a loading state on the button, not a disabled one.
     expect(actions[1]!.attributes('loading')).toBeDefined();
     expect(actions[1]!.attributes('disabled')).toBeUndefined();
+  });
+});
+
+describe('ConfirmModal (typed confirmation)', () => {
+  function makeWrapper(open = true) {
+    return mount(ConfirmModal, {
+      props: { ...props, open, confirmPhrase: 'team-aurora/website' },
+      global: { stubs: { teleport: true } },
+    });
+  }
+
+  function type(wrapper: ReturnType<typeof makeWrapper>, value: string): void {
+    fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', { value });
+  }
+
+  const field = (wrapper: ReturnType<typeof makeWrapper>) =>
+    wrapper.find('[data-testid="bevestig-zin"]');
+
+  it('asks for no text without a phrase', () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true },
+      global: { stubs: { teleport: true } },
+    });
+    expect(wrapper.find('[data-testid="bevestig-zin"]').exists()).toBe(false);
+  });
+
+  it('stacks slotted content and the field in one container, for an even gap', () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true, confirmPhrase: 'team-aurora' },
+      slots: { default: '<p data-testid="extra">Sites</p>' },
+      global: { stubs: { teleport: true } },
+    });
+
+    const stack = wrapper.find('[data-testid="bevestig-inhoud"]');
+    expect(stack.attributes('gap')).toBe('16');
+    expect(stack.find('[data-testid="extra"]').exists()).toBe(true);
+    expect(stack.find('[data-testid="bevestig-zin"]').exists()).toBe(true);
+  });
+
+  it('adds no container without a phrase, so a bare message keeps its layout', () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true },
+      slots: { default: '<p data-testid="extra">Meer</p>' },
+      global: { stubs: { teleport: true } },
+    });
+
+    expect(wrapper.find('[data-testid="bevestig-inhoud"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-modal-dialog > [data-testid="extra"]').exists()).toBe(true);
+  });
+
+  it('names the phrase to type in the label', () => {
+    const wrapper = makeWrapper();
+    expect(wrapper.find('nldd-form-field').attributes('label')).toBe(
+      'Typ team-aurora/website om te bevestigen',
+    );
+  });
+
+  it('refuses an empty field and marks it, without confirming', async () => {
+    const wrapper = makeWrapper();
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    expect(wrapper.emitted('confirm')).toBeFalsy();
+    expect(field(wrapper).attributes('invalid')).toBeDefined();
+    const unmet = field(wrapper).attributes('unmet');
+    expect(unmet).toBeTruthy();
+    expect(wrapper.find(`nldd-validation-item[id="${unmet}"]`).text()).toBe('Precies team-aurora/website');
+  });
+
+  it('refuses only part of the phrase, such as the site without its group', async () => {
+    const wrapper = makeWrapper();
+
+    type(wrapper, 'website');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    expect(wrapper.emitted('confirm')).toBeFalsy();
+    expect(field(wrapper).attributes('invalid')).toBeDefined();
+  });
+
+  it('refuses the phrase in another case', async () => {
+    const wrapper = makeWrapper();
+
+    type(wrapper, 'TEAM-AURORA/website');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    expect(wrapper.emitted('confirm')).toBeFalsy();
+  });
+
+  it('confirms once the phrase is typed, surrounding spaces aside', async () => {
+    const wrapper = makeWrapper();
+
+    type(wrapper, '  team-aurora/website ');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    expect(wrapper.emitted('confirm')).toHaveLength(1);
+    expect(field(wrapper).attributes('invalid')).toBeUndefined();
+  });
+
+  it('keeps the mark while the value is still wrong, and drops it once it is right', async () => {
+    const wrapper = makeWrapper();
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    type(wrapper, 'team-aurora/web');
+    await wrapper.vm.$nextTick();
+    expect(field(wrapper).attributes('invalid')).toBeDefined();
+
+    type(wrapper, 'team-aurora/website');
+    await wrapper.vm.$nextTick();
+    expect(field(wrapper).attributes('invalid')).toBeUndefined();
+    expect(field(wrapper).attributes('unmet')).toBeUndefined();
+    expect(wrapper.emitted('confirm')).toBeFalsy();
+  });
+
+  it('does not judge while typing before a first attempt', async () => {
+    const wrapper = makeWrapper();
+
+    type(wrapper, 'nl');
+    await wrapper.vm.$nextTick();
+
+    expect(field(wrapper).attributes('invalid')).toBeUndefined();
+  });
+
+  it('confirms with Enter in the field, under the same condition', async () => {
+    const wrapper = makeWrapper();
+
+    await field(wrapper).trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('confirm')).toBeFalsy();
+
+    type(wrapper, 'team-aurora/website');
+    await field(wrapper).trigger('keydown', { key: 'Enter' });
+    expect(wrapper.emitted('confirm')).toHaveLength(1);
+  });
+
+  it('reads the value off the input when the event carries no detail', async () => {
+    const wrapper = makeWrapper();
+    const input = field(wrapper).element as HTMLElement & { value: string };
+    input.value = 'team-aurora/website';
+    input.dispatchEvent(new Event('input'));
+
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    expect(wrapper.emitted('confirm')).toHaveLength(1);
+  });
+
+  it('starts empty and unjudged every time the dialog opens again', async () => {
+    const wrapper = makeWrapper();
+    type(wrapper, 'team-aurora/webs');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+
+    await wrapper.setProps({ open: false });
+    await wrapper.setProps({ open: true });
+
+    expect(field(wrapper).attributes('value')).toBe('');
+    expect(field(wrapper).attributes('invalid')).toBeUndefined();
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    expect(wrapper.emitted('confirm')).toBeFalsy();
   });
 });

@@ -739,6 +739,20 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         return json(200, detail);
       }
 
+      // DELETE /groups/{group}
+      if (method === 'DELETE' && rest.length === 2) {
+        if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
+        data.groups = data.groups.filter((g) => g.slug !== groupSlug);
+        data.groupMembers = data.groupMembers.filter((l) => l.groupSlug !== groupSlug);
+        data.sites = data.sites.filter((p) => p.groupSlug !== groupSlug);
+        data.versions = data.versions.filter((v) => v.groupSlug !== groupSlug);
+        data.previews = data.previews.filter((p) => p.groupSlug !== groupSlug);
+        data.invitees = data.invitees.filter((g) => g.groupSlug !== groupSlug);
+        data.keys = data.keys.filter((k) => k.groupSlug !== groupSlug);
+        data.siteRoles = data.siteRoles.filter((r) => r.groupSlug !== groupSlug);
+        return empty(204);
+      }
+
       // PUT /groups/{group}/default-access
       if (method === 'PUT' && rest.length === 3 && rest[2] === 'default-access') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);

@@ -128,4 +128,20 @@ export const groupNl = {
   'group.settings.saved': 'Standaardtoegang opgeslagen',
   'group.settings.saveFailed': 'Standaardtoegang niet opgeslagen',
   'group.settings.saveFailed.detail': 'Opslaan is niet gelukt.',
+  'group.settings.danger.heading': 'Gevarenzone',
+  'group.settings.danger.body':
+    'Groep verwijderen haalt de groep, haar leden en al haar sites definitief weg, met alle versies, previews, genodigden, geheime links en de bestanden op de server.',
+  'group.settings.danger.action': 'Groep verwijderen',
+  'group.settings.danger.confirm.title': 'Groep {group} verwijderen?',
+  'group.settings.danger.confirm.text':
+    'Dit kan niet ongedaan gemaakt worden. De groep en alle lidmaatschappen verdwijnen definitief.',
+  'group.settings.danger.confirm.text.withSites':
+    'Dit kan niet ongedaan gemaakt worden. De groep, alle lidmaatschappen en deze sites verdwijnen definitief, met alles wat erop staat:',
+  'group.settings.danger.confirm.sites.list': 'Sites die meegaan',
+  'group.settings.danger.confirm.sites.more.one': 'En nog 1 site',
+  'group.settings.danger.confirm.sites.more.many': 'En nog {count} sites',
+  'group.settings.danger.confirm.keep': 'Behoud groep',
+  'group.settings.danger.confirm.confirm': 'Verwijder deze groep',
+  'group.settings.delete.failed': 'Groep niet verwijderd',
+  'group.settings.delete.failed.detail': 'Verwijderen is niet gelukt.',
 } as const;

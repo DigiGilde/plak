@@ -2781,31 +2781,37 @@ def make_admin_router() -> APIRouter:
         "/groups/{group_slug}",
         status_code=204,
         tags=[TAG_GROUPS],
-        summary="Lege groep verwijderen",
+        summary="Groep verwijderen",
         description=(
-            "Verwijdert een groep die geen sites meer heeft. Een groep met sites wordt geweigerd: "
-            "verwijder eerst de sites, zodat niemand per ongeluk gepubliceerde content weggooit.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header."
+            "Verwijdert de groep met al haar sites, en per site alles wat `DELETE /sites/{group}/{site}` "
+            "ook weghaalt: versies, previews, genodigden, geheime links, de gekoppelde repository en de "
+            "uitgepakte bestanden op schijf. Onomkeerbaar; elke URL van de groep geeft daarna 404.\n\n"
+            "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Een platformbeheerder die geen "
+            "groepsrol heeft mag het niet."
         ),
-        responses=_deleted("De groep is verwijderd.")
-        | _errors(
-            _ERROR_CSRF,
-            _ERROR_ADMIN,
-            _ERROR_GROUP,
-            {409: "De groep bevat nog sites (`GROUP_NOT_EMPTY`)."},
-        ),
+        responses=_deleted("De groep en al haar sites zijn verwijderd.")
+        | _errors(_ERROR_CSRF, _ERROR_GROUP_ROLE, _ERROR_GROUP),
     )
     async def delete_group(
         request: Request, group_slug: str, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
-        _require_admin(member)
-        group = await _group_or_404(db, group_slug)
-        count = await db.scalar(select(func.count()).where(Site.group_id == group.id))
-        if count:
-            raise ApiError(409, "GROUP_NOT_EMPTY")
+        group = await _group_with_role(db, member, group_slug, Role.ADMIN)
+        site_slugs = list(
+            await db.scalars(select(Site.slug).where(Site.group_id == group.id).order_by(Site.slug))
+        )
+        storage_refs = list(
+            await db.scalars(
+                select(Version.storage_ref)
+                .join(Site, Version.site_id == Site.id)
+                .where(Site.group_id == group.id)
+            )
+        )
         await db.delete(group)
         await db.commit()
-        await _audit(request, member, "group_delete", {"group": group_slug})
+        store = request.app.state.content_store
+        for storage_ref in storage_refs:
+            store.delete_version(storage_ref)
+        await _audit(request, member, "group_delete", {"group": group_slug, "sites": site_slugs})
         return Response(status_code=204)
 
     @router.put(

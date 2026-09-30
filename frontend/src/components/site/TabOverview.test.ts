@@ -24,6 +24,11 @@ function makeWrapper() {
   });
 }
 
+/** Types the site's address, which the delete dialog asks for. */
+function typeAddress(wrapper: ReturnType<typeof makeWrapper>, value = 'team-aurora/website'): void {
+  fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', { value });
+}
+
 /** Picks a file in nldd-file-field: the value arrives in `event.detail`. */
 function chooseFile(wrapper: ReturnType<typeof makeWrapper>, file: File): void {
   fireDetailEvent(wrapper.find('[data-testid="upload-invoer"]').element, 'change', {
@@ -251,8 +256,10 @@ describe('TabOverview: danger zone', () => {
     expect(backend.data.sites).toHaveLength(1);
     expect(wrapper.emitted('removed')).toBeFalsy();
 
-    // Open the dialog and confirm: now the site really disappears.
+    // Open the dialog, type the address and confirm: now the site really
+    // disappears.
     await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    typeAddress(wrapper);
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
     await untilIdle();
 
@@ -260,6 +267,22 @@ describe('TabOverview: danger zone', () => {
     expect(backend.data.versions).toHaveLength(0);
     expect(backend.data.previews).toHaveLength(0);
     expect(wrapper.emitted('removed')).toBeTruthy();
+  });
+
+  it('asks for the address of the site and deletes nothing on a click alone', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    expect(wrapper.findComponent(ConfirmModal).props('confirmPhrase')).toBe('team-aurora/website');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    typeAddress(wrapper, 'website');
+    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await untilIdle();
+
+    expect(backend.data.sites).toHaveLength(1);
+    expect(wrapper.emitted('removed')).toBeFalsy();
+    expect(wrapper.find('[data-testid="bevestig-zin"]').attributes('invalid')).toBeDefined();
   });
 
   it('the safe way out is at the top and is the primary button', async () => {
@@ -294,6 +317,7 @@ describe('TabOverview: danger zone', () => {
 
     await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
+    typeAddress(wrapper);
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
     await untilIdle();
 
@@ -314,6 +338,7 @@ describe('TabOverview: danger zone', () => {
 
     await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    typeAddress(wrapper);
     await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
     await untilIdle();
 
