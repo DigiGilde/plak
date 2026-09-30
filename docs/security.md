@@ -624,7 +624,10 @@ in Settings and not a change in this repository.
   `ci / vulnerabilities` and `CodeQL / Analyse (actions)`,
   `CodeQL / Analyse (javascript-typescript)`, `CodeQL / Analyse (python)`.
   Only then is the test gate in `deploy.yml` also closed for a direct push.
-  The rule moves along to `main` on the day production exists.
+  The rule moves along to `main` on the day production exists. Merging goes
+  through a merge queue (rebase), which runs the same required checks on the
+  queued commit; that is why `deploy.yml` and `codeql.yml` also trigger on
+  `merge_group`, and why `bouw` skips it.
 - [x] **`security.txt` is complete.**
   `Contact: https://github.com/DigiGilde/plak/security/advisories/new` leads the
   `Contact` lines and `Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md`
