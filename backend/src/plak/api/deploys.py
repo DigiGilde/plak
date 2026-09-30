@@ -64,7 +64,7 @@ from plak.ci.providers import ProviderClient
 from plak.ci.tokens import CiTokenError, CiTokenVerifier, VerifiedCiToken, looks_like_jwt
 from plak.cli import service as cli
 from plak.constants import SLUG_RE, Role
-from plak.ingest.service import Deployer, IngestError, IngestService
+from plak.ingest.service import Deployer, IngestError, IngestService, RoomGuard
 from plak.ingest.store import ContentStore
 from plak.ingest.unpacker import BundleError
 from plak.messages import Msg
@@ -383,11 +383,14 @@ def _invalid_multipart(error: Exception) -> ApiError:
     return ApiError(422, "MULTIPART_INVALID")
 
 
-async def _spool_upload(request: Request, store: ContentStore, max_body: int) -> _Upload:
+async def _spool_upload(
+    request: Request, store: ContentStore, max_body: int, room: RoomGuard
+) -> _Upload:
     """Streams the request body into a spool file in the store's tempdir. A
     Content-Length above the limit is rejected without reading; without (or
     with a matching) Content-Length, reading stops at the first chunk that
-    crosses the limit. On any error the spool file is gone."""
+    crosses the limit, or that `room` refuses. On any error the spool file is
+    gone."""
     length = request.headers.get("content-length", "")
     if length.isdigit() and int(length) > max_body:
         raise _too_large(max_body)
@@ -428,6 +431,7 @@ async def _spool_upload(request: Request, store: ContentStore, max_body: int) ->
             except FormParserError as error:
                 raise _invalid_multipart(error) from error
             if spooler.to_write:
+                room.reserve(sum(map(len, spooler.to_write)))
                 await run_in_threadpool(spool.writelines, spooler.to_write)
                 spooler.to_write = []
         parser.finalize()
@@ -630,9 +634,9 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "stilzwijgend bestanden weglaten die je dacht te publiceren. Het `basePath` staat relatief aan de "
         "wortel ná het afpellen, maar de spelling mét het afgepelde voorvoegsel werkt net zo goed, en een "
         "vaste waarde blijft werken als het afpellen die map al weggenomen heeft.\n\n"
-        "**Limieten** (instelbaar; dit zijn de standaardwaarden): het verzoeklichaam is hoogstens 550 MB "
-        "(`PLAK_INGEST_MAX_BODY`), een los uitgepakt bestand 100 MB (`PLAK_INGEST_MAX_FILE`), de hele "
-        "uitgepakte site 500 MB (`PLAK_INGEST_MAX_TOTAL`), met hoogstens 1000 entries "
+        "**Limieten** (instelbaar; dit zijn de standaardwaarden): het verzoeklichaam is hoogstens 100 MB "
+        "(`PLAK_INGEST_MAX_BODY`), een los uitgepakt bestand 50 MB (`PLAK_INGEST_MAX_FILE`), de hele "
+        "uitgepakte site 200 MB (`PLAK_INGEST_MAX_TOTAL`), met hoogstens 1000 entries "
         "(`PLAK_INGEST_MAX_FILES`) en 10 niveaus mapdiepte (`PLAK_INGEST_MAX_DEPTH`). Die gelden op "
         "wat gepubliceerd wordt: wat buiten het `basePath` valt telt niet mee. Het archief als geheel mag "
         "hoogstens vijftig keer zoveel entries bevatten, en bij een `.tar.gz` telt de uitgepakte omvang van "
@@ -654,6 +658,12 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         {
             **_DEPLOY_ERRORS,
             400: "De client brak de upload af voordat het lichaam compleet was (`CLIENT_ABORTED`).",
+            503: (
+                f"{_DEPLOY_ERRORS[503]} Of het contentvolume heeft te weinig vrije ruimte voor deze upload "
+                "(`STORAGE_UNAVAILABLE`): vooraf gemeten op de opgegeven `Content-Length`, en tijdens het "
+                "ontvangen en uitpakken opnieuw, zodat het volume nooit onder de ingestelde marge vrije "
+                "ruimte zakt. Wat al geschreven was wordt dan opgeruimd; probeer het later opnieuw."
+            ),
             413: (
                 "De upload is groter dan de bodylimiet (`BODY_TOO_LARGE`), of de bundel wordt uitgepakt te "
                 "groot: `FILE_TOO_LARGE`, `TOTAL_TOO_LARGE` of `TOO_MANY_FILES` (die laatste ook "
@@ -698,10 +708,13 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
             actor = auth.actor
 
         service = IngestService(store, settings)
-        # Before the body is read: a volume without room costs no upload.
-        service.check_room()
+        # Before the body is read: a volume without room costs no upload. A
+        # declared size above the body limit is the spool's 413 to give.
+        length = request.headers.get("content-length", "")
+        declared = int(length) if length.isdigit() else 0
+        service.check_room(min(declared, settings.ingest_max_body))
 
-        upload = await _spool_upload(request, store, settings.ingest_max_body)
+        upload = await _spool_upload(request, store, settings.ingest_max_body, service.room_guard())
         preview = upload.fields.get(PREVIEW_FIELD)
         base_path = upload.fields.get(BASE_PATH_FIELD)
         # Both fields are attacker-controlled up to MAX_FIELD_BYTES, so they

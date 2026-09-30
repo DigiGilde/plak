@@ -580,7 +580,7 @@ If it does not check out, a `422` follows; there is no silent fallback to
 another root.
 
 Limits (defaults, configurable per environment): request body at most
-550 MB, 100 MB per unpacked file, 500 MB unpacked cumulative, 1000
+100 MiB, 50 MiB per unpacked file, 200 MiB unpacked cumulative, 1000
 files, directory depth 10. Those limits apply to the paths as they are in
 the archive, so an enclosing directory counts towards the directory depth.
 What falls outside the `basePath` and is therefore not published does not
@@ -604,15 +604,16 @@ The check on unsafe paths applies to every entry in the archive,
 published or not.
 
 Beyond the one bundle, the site itself has a ceiling: every version of it
-together may occupy at most 20 GB by default. A deploy that would cross it is
+together may occupy at most 500 MiB by default. A deploy that would cross it is
 refused with a `413` and the code `SITE_QUOTA_EXCEEDED`, naming what the site
 uses now and what this version would add. Live versions are kept forever, so
 the room usually comes back by removing previews you no longer need; your
 platform administrator can also raise the ceiling.
 
-If the volume itself is nearly full, a deploy answers `503` with
-`STORAGE_UNAVAILABLE` before the body is read. Nothing is wrong with your
-request then: try again later.
+If the volume itself has no room for your deploy, it answers `503` with
+`STORAGE_UNAVAILABLE`: before the body is read when the declared size does
+not fit, or midway through the upload or the unpacking, in which case nothing
+of it is kept. Nothing is wrong with your request then: try again later.
 
 ### Error contract
 

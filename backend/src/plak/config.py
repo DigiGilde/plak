@@ -140,9 +140,13 @@ class Settings(BaseSettings):
     # working directory of `just dev` (backend/). The app image sets this to
     # /app/spa.
     spa_path: Path = Path("../frontend/dist")
-    ingest_max_body: int = Field(default=550 * 1024 * 1024)
-    ingest_max_file: int = Field(default=100 * 1024 * 1024)
-    ingest_max_total: int = Field(default=500 * 1024 * 1024)
+    # Per-bundle limits, sized for static sites on a small (1 GiB) content
+    # volume. containers/nginx-dev/nginx.conf and the frontend's packing.ts
+    # mirror them; the nginx body limit stays a little above ingest_max_body so
+    # an oversized upload gets the app's 413 rather than nginx's.
+    ingest_max_body: int = Field(default=100 * 1024 * 1024)
+    ingest_max_file: int = Field(default=50 * 1024 * 1024)
+    ingest_max_total: int = Field(default=200 * 1024 * 1024)
     ingest_max_files: int = Field(default=1000)
     ingest_max_depth: int = Field(default=10)
     # What every version of one site together may occupy on the content
@@ -150,12 +154,13 @@ class Settings(BaseSettings):
     # deploy, this one bounds the history they leave behind: live versions are
     # kept forever, so without it a single site fills the volume by publishing
     # often enough.
-    site_max_bytes: int = Field(default=20 * 1024 * 1024 * 1024)
-    # Free space the content volume must keep beyond what one deploy may add
-    # (ingest_max_body plus ingest_max_total). Below it a deploy is refused
-    # with a 503 rather than running the volume dry, which would take the
-    # serving of every other site down with it. 0 turns the check off.
-    storage_min_free_bytes: int = Field(default=2 * 1024 * 1024 * 1024)
+    site_max_bytes: int = Field(default=500 * 1024 * 1024)
+    # Free space the content volume must keep. A deploy is refused with a 503
+    # before spooling when its declared size would cross it, and stopped (its
+    # spool and work directory cleaned up) as soon as spooling or unpacking
+    # would, rather than running the volume dry, which would take the serving
+    # of every other site down with it. 0 turns the check off.
+    storage_min_free_bytes: int = Field(default=100 * 1024 * 1024)
 
     # Forgejo instances whose Actions ID tokens are accepted for CI deploys,
     # comma-separated base URLs (https only). GitHub is always accepted.

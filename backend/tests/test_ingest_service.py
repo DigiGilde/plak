@@ -23,7 +23,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from plak.config import Settings
 from plak.constants import AccessBase
-from plak.ingest.service import PREVIEW_VALIDITY, Deployer, IngestError, IngestService
+from plak.ingest.service import (
+    PREVIEW_VALIDITY,
+    ROOM_CHECK_STRIDE,
+    Deployer,
+    IngestError,
+    IngestService,
+    RoomGuard,
+)
 from plak.ingest.store import ContentStore
 from plak.ingest.unpacker import BundleError
 from plak.models.identity import Group, Member
@@ -573,7 +580,160 @@ class TestStorageRoom:
             service.check_room()
         assert error.value.reason == "STORAGE_UNAVAILABLE"
 
-    async def test_check_room_passes_with_room_and_is_off_at_zero(self, environment: Environment):
-        self._service(environment).check_room()
-        # 0 turns the floor off, but the per-deploy headroom still stands.
-        self._service(environment, storage_min_free_bytes=0).check_room()
+    async def test_check_room_passes_on_a_real_volume_with_room(self, environment: Environment):
+        self._service(environment, storage_min_free_bytes=1).check_room()
+
+    async def test_check_room_counts_the_declared_size_against_the_floor(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch
+    ):
+        _fake_volume(monkeypatch, environment.store, free=FLOOR + 1000)
+        service = self._service(environment, storage_min_free_bytes=FLOOR)
+        service.check_room(1000)
+        with pytest.raises(IngestError) as error:
+            service.check_room(1001)
+        assert error.value.reason == "STORAGE_UNAVAILABLE"
+
+    async def test_check_room_is_off_at_zero(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch
+    ):
+        _fake_volume(monkeypatch, environment.store, free=0)
+        self._service(environment, storage_min_free_bytes=0).check_room(10**12)
+
+    async def test_a_small_deploy_passes_on_a_nearly_full_volume(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The production failure: a 349-byte page refused on a 1 GiB volume
+        because the check asked for room for the largest deploy allowed."""
+        settings = _settings(environment.content_root)
+        free = settings.storage_min_free_bytes + 64 * 1024
+        assert free < (
+            settings.storage_min_free_bytes + settings.ingest_max_body + settings.ingest_max_total
+        )
+        _fake_volume(monkeypatch, environment.store, free=free)
+        service = IngestService(environment.store, settings)
+        service.check_room(349)
+        async with environment.session_factory() as session:
+            version_id = await service.deploy(
+                session, environment.group, environment.site, "index.html",
+                environment.source(b"x" * 349), environment.deployer,
+            )
+        assert environment.version_dirs() == {str(version_id)}
+
+    @pytest.mark.parametrize("preview", [False, True])
+    async def test_unpacking_past_the_floor_is_refused_and_leaves_nothing_behind(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch, preview: bool
+    ):
+        """The upload itself is small, so the check before spooling lets it
+        in; what it unpacks to does not fit above the floor."""
+        _fake_volume(monkeypatch, environment.store, free=FLOOR + 256 * 1024)
+        service = self._service(environment, storage_min_free_bytes=FLOOR)
+        source = environment.source(_compressible_zip(1024 * 1024))
+        assert source.stat().st_size < 64 * 1024
+        async with environment.session_factory() as session:
+            with pytest.raises(IngestError) as error:
+                if preview:
+                    await service.preview_deploy(
+                        session, environment.group, environment.site, "pr-1", "site.zip",
+                        source, environment.deployer,
+                    )
+                else:
+                    await service.deploy(
+                        session, environment.group, environment.site, "site.zip",
+                        source, environment.deployer,
+                    )
+        assert error.value.reason == "STORAGE_UNAVAILABLE"
+        assert environment.version_dirs() == set()
+        assert list((environment.content_root / "_tmp").iterdir()) == []
+        assert await _versions(environment) == []
+        assert await _previews(environment) == []
+        assert await _live_pointer(environment) is None
+
+
+FLOOR = 1024 * 1024
+
+
+def _tree_size(root: Path) -> int:
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+
+
+def _fake_volume(monkeypatch: pytest.MonkeyPatch, store: ContentStore, *, free: int) -> None:
+    """A content volume with `free` bytes free now, that fills up with what
+    lands under the content root from here on and empties with what leaves."""
+    baseline = _tree_size(store.root)
+    monkeypatch.setattr(store, "free_bytes", lambda: free - (_tree_size(store.root) - baseline))
+
+
+def _compressible_zip(unpacked: int) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("index.html", b"<h1>hoi</h1>")
+        archive.writestr("big.bin", b"\0" * unpacked)
+    return buffer.getvalue()
+
+
+class _Volume:
+    """Stands in for the ContentStore: free space the test sets, and a count
+    of how often the guard measured it."""
+
+    def __init__(self, free: int) -> None:
+        self.free = free
+        self.measured = 0
+
+    def free_bytes(self) -> int:
+        self.measured += 1
+        return self.free
+
+
+class TestRoomGuard:
+    def _guard(self, volume: _Volume, min_free: int = FLOOR) -> RoomGuard:
+        return RoomGuard(volume, min_free)
+
+    def test_a_chunk_that_would_cross_the_floor_is_refused(self):
+        self._guard(_Volume(FLOOR + 100)).reserve(100)
+        with pytest.raises(IngestError) as error:
+            self._guard(_Volume(FLOOR + 100)).reserve(101)
+        assert error.value.reason == "STORAGE_UNAVAILABLE"
+
+    def test_it_counts_down_between_measurements(self):
+        volume = _Volume(FLOOR + 1024 * 1024)
+        guard = self._guard(volume)
+        for _ in range(10):
+            guard.reserve(4096)
+        assert volume.measured == 1
+
+    def test_the_writes_it_counted_down_are_refused_once_they_show_on_the_volume(self):
+        volume = _Volume(FLOOR + 64 * 1024)
+        guard = self._guard(volume)
+        guard.reserve(64 * 1024)
+        # The volume now shows those bytes; the next chunk has no room left.
+        volume.free = FLOOR
+        with pytest.raises(IngestError):
+            guard.reserve(1)
+        assert volume.measured == 2
+
+    def test_it_measures_again_before_refusing_on_the_countdown(self):
+        """Other writers free space too (a replaced preview, the cleanup job):
+        the countdown alone never refuses."""
+        volume = _Volume(FLOOR + 10)
+        guard = self._guard(volume)
+        guard.reserve(10)
+        volume.free = FLOOR + 20
+        guard.reserve(15)
+        assert volume.measured == 2
+
+    def test_it_measures_again_after_every_stride(self):
+        """Another writer can take the room between measurements; the stride
+        bounds how far this deploy writes on a stale reading."""
+        volume = _Volume(FLOOR + 10 * ROOM_CHECK_STRIDE)
+        guard = self._guard(volume)
+        guard.reserve(ROOM_CHECK_STRIDE)
+        assert volume.measured == 1
+        volume.free = FLOOR
+        with pytest.raises(IngestError):
+            guard.reserve(1)
+        assert volume.measured == 2
+
+    def test_a_floor_of_zero_turns_it_off(self):
+        volume = _Volume(0)
+        self._guard(volume, min_free=0).reserve(10**12)
+        assert volume.measured == 0

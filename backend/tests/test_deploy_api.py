@@ -32,6 +32,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import Request
 
+from plak import i18n, messages
 from plak.api import deploys
 from plak.api.deploys import BearerOutsideDeploysMiddleware
 from plak.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
@@ -45,8 +46,9 @@ from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
-from plak.ingest.service import IngestService
+from plak.ingest.service import IngestService, RoomGuard
 from plak.ingest.store import ContentStore
+from plak.messages import Msg
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.cli import CliSession
@@ -1366,7 +1368,7 @@ async def test_a_client_disconnect_during_the_upload_is_a_400(tmp_path: Path) ->
     request = Request(scope, receive)
 
     with pytest.raises(ApiError) as excinfo:
-        await deploys._spool_upload(request, store, 10 * 1024 * 1024)
+        await deploys._spool_upload(request, store, 10 * 1024 * 1024, RoomGuard(store, 0))
     assert excinfo.value.status == 400
     assert excinfo.value.reason == "CLIENT_ABORTED"
 
@@ -1407,7 +1409,8 @@ async def test_upload_streams_without_the_body_in_memory_too_keep(
             yield chunk
         yield f"\r\n--{BOUNDARY}--\r\n".encode()
 
-    async with _environment(tmp_path, migrated_dsn) as environment:
+    # A single 64 MB page is above the default per-file limit.
+    async with _environment(tmp_path, migrated_dsn, ingest_max_file=2 * size) as environment:
         tracemalloc.start()
         try:
             async with environment.client() as client:
@@ -1537,3 +1540,140 @@ async def test_a_volume_without_room_is_503(tmp_path: Path, migrated_dsn: str) -
             ).scalar_one()
         assert row.reason_code == "STORAGE_UNAVAILABLE"
         assert list((environment.settings.content_root / "_tmp").iterdir()) == []
+
+
+FLOOR = 1024 * 1024
+STORAGE_UNAVAILABLE_BODY = {
+    "type": "about:blank",
+    "title": messages.title(i18n.API_DEFAULT, 503),
+    "status": 503,
+    "detail": messages.render(i18n.API_DEFAULT, Msg("STORAGE_UNAVAILABLE")),
+    "code": "STORAGE_UNAVAILABLE",
+}
+
+
+def _tree_size(root: Path) -> int:
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+
+
+def _fake_volume(monkeypatch: pytest.MonkeyPatch, environment: Environment, *, free: int) -> None:
+    """A content volume with `free` bytes free now, that fills up with what
+    lands under the content root from here on (spool and work directory)."""
+    store: ContentStore = environment.app.state.content_store
+    baseline = _tree_size(store.root)
+    monkeypatch.setattr(store, "free_bytes", lambda: free - (_tree_size(store.root) - baseline))
+
+
+async def _assert_storage_refusal(environment: Environment, resp: httpx.Response) -> None:
+    """The same 503 whichever moment the room ran out, the audit row with it,
+    and nothing left on the volume: no spool, no work directory, no version."""
+    _assert_problem(resp, 503)
+    assert resp.json() == STORAGE_UNAVAILABLE_BODY
+    async with environment.session_factory() as db:
+        row = (
+            await db.execute(
+                select(AuditLogEntry).where(AuditLogEntry.action == deploys.AUDIT_ACTION_DEPLOY)
+            )
+        ).scalar_one()
+        assert await db.scalar(select(func.count()).select_from(Version)) == 0
+    assert row.result == "refused"
+    assert row.reason_code == "STORAGE_UNAVAILABLE"
+    assert list(_tmp_dir(environment).iterdir()) == []
+    assert not (environment.settings.content_root / "nldd").exists()
+
+
+async def test_a_declared_size_without_room_is_503_before_the_body_is_read(
+    tmp_path: Path, migrated_dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with _environment(tmp_path, migrated_dsn, storage_min_free_bytes=FLOOR) as environment:
+        _fake_volume(monkeypatch, environment, free=FLOOR + 1000)
+        parts_ = _multipart_parts("site.zip", [b"\0" * 4096])
+        counter = _Counter(parts_)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                content=counter,
+                headers={
+                    **_bearer(environment.ci_token),
+                    **MULTIPART_HEADERS,
+                    "Content-Length": str(sum(len(s) for s in parts_)),
+                },
+            )
+        assert counter.delivered == 0
+        await _assert_storage_refusal(environment, resp)
+
+
+async def test_a_declared_size_above_the_body_limit_stays_a_413(
+    tmp_path: Path, migrated_dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The room check asks for no more than the body limit: a declared size
+    above it is the client's to fix, not a state of the platform."""
+    async with _environment(
+        tmp_path, migrated_dsn, storage_min_free_bytes=FLOOR, ingest_max_body=64 * 1024
+    ) as environment:
+        _fake_volume(monkeypatch, environment, free=FLOOR + 64 * 1024)
+        parts_ = _multipart_parts("site.zip", [b"\0" * 4096] * 32)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                content=_Counter(parts_),
+                headers={
+                    **_bearer(environment.ci_token),
+                    **MULTIPART_HEADERS,
+                    "Content-Length": str(sum(len(s) for s in parts_)),
+                },
+            )
+        assert _assert_problem(resp, 413)["code"] == "BODY_TOO_LARGE"
+
+
+async def test_the_spool_stops_when_the_volume_fills_up(
+    tmp_path: Path, migrated_dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a Content-Length nothing is known up front: the spool is
+    watched as it is written, and reading stops well before the end."""
+    async with _environment(tmp_path, migrated_dsn, storage_min_free_bytes=FLOOR) as environment:
+        _fake_volume(monkeypatch, environment, free=FLOOR + 64 * 1024)
+        parts_ = _multipart_parts("site.zip", [b"\0" * 4096] * 256)  # ~1 MB
+        counter = _Counter(parts_)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH,
+                content=counter,
+                headers={**_bearer(environment.ci_token), **MULTIPART_HEADERS},
+            )
+        assert counter.delivered < len(parts_) // 2
+        await _assert_storage_refusal(environment, resp)
+
+
+async def test_unpacking_past_the_floor_is_503_and_leaves_nothing_behind(
+    tmp_path: Path, migrated_dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A small upload that unpacks big: it passes the check before spooling,
+    and is stopped while it unpacks."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("index.html", b"<h1>hoi</h1>")
+        archive.writestr("big.bin", b"\0" * (1024 * 1024))
+    async with _environment(tmp_path, migrated_dsn, storage_min_free_bytes=FLOOR) as environment:
+        _fake_volume(monkeypatch, environment, free=FLOOR + 256 * 1024)
+        async with environment.client() as client:
+            resp = await client.post(
+                DEPLOY_PATH, files=_upload(buffer.getvalue()), headers=_bearer(environment.ci_token)
+            )
+        await _assert_storage_refusal(environment, resp)
+
+
+async def test_a_small_deploy_passes_on_a_nearly_full_volume(
+    environment: Environment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The production failure: a small page refused on a 1 GiB volume because
+    the check asked for room for the largest deploy allowed."""
+    settings = environment.settings
+    free = settings.storage_min_free_bytes + 64 * 1024
+    assert free < (
+        settings.storage_min_free_bytes + settings.ingest_max_body + settings.ingest_max_total
+    )
+    _fake_volume(monkeypatch, environment, free=free)
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+    assert resp.status_code == 201, resp.text

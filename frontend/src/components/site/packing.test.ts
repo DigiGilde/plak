@@ -264,15 +264,15 @@ describe('packing: checks before sending', () => {
   it('refuses a bundle that is too large in total', () => {
     const files = [
       large('index.html', 1),
-      large('a.bin', 90 * 1024 * 1024),
-      large('b.bin', 90 * 1024 * 1024),
-      large('c.bin', 90 * 1024 * 1024),
-      large('d.bin', 90 * 1024 * 1024),
-      large('e.bin', 90 * 1024 * 1024),
-      large('f.bin', 90 * 1024 * 1024),
+      large('a.bin', 40 * 1024 * 1024),
+      large('b.bin', 40 * 1024 * 1024),
+      large('c.bin', 40 * 1024 * 1024),
+      large('d.bin', 40 * 1024 * 1024),
+      large('e.bin', 40 * 1024 * 1024),
+      large('f.bin', 40 * 1024 * 1024),
     ];
 
-    expect(checkBundle('site', files)).toContain('hoogstens 500 MB');
+    expect(checkBundle('site', files)).toContain('hoogstens 200 MB');
   });
 
   it('points out the capital letter in the homepage filename', () => {
