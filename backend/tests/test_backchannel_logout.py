@@ -127,6 +127,37 @@ async def test_a_forged_signature_is_refused() -> None:
     assert app.state.session_store.get_session(session.id) is not None
 
 
+def _b64(obj) -> str:
+    return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
+
+
+@pytest.mark.parametrize("crit", [5, None, True, [[1]], [{}]])
+async def test_a_crit_header_of_the_wrong_type_is_refused_like_any_other(crit) -> None:
+    """joserfc walks `crit` before it type-checks it and raises a bare
+    TypeError, before any signature is checked, so no key is needed to send
+    one. It has to end as the same refusal as a forged signature, not a 500."""
+    idp, app = _make()
+    now = int(time.time())
+    header = {"alg": "RS256", "kid": idp.kid, "crit": crit}
+    payload = {
+        "iss": idp.issuer,
+        "aud": idp.client_id,
+        "iat": now,
+        "exp": now + 120,
+        "jti": f"crit-{crit!r}",
+        "sid": idp.sid,
+        "events": {"http://schemas.openid.net/event/backchannel-logout": {}},
+    }
+    forged = f"{_b64(header)}.{_b64(payload)}.{_b64('x' * 256)}"
+    async with make_test_client(app) as client:
+        response = await _post(client, forged)
+        reference = await _post(client, idp.make_logout_token(sid=idp.sid, key=RSAKey.generate_key(2048)))
+
+    assert response.status_code == 400
+    assert response.content == reference.content
+    assert response.headers["cache-control"] == "no-store"
+
+
 async def test_an_expired_token_is_refused() -> None:
     idp, app = _make()
     session = _session(app)
