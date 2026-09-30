@@ -1,9 +1,28 @@
-"""Client IP determination behind trusted proxies.
+"""Client IP determination behind one proxy.
 
-One derivation point for both rate limiting and audit: walking
-X-Forwarded-For from the right, trusted proxy hops are skipped and the first
-untrusted address counts as the client. The leftmost value is the client's
-own to set and is therefore never usable as an identity.
+One derivation point for both rate limiting and audit. PLAK_BEHIND_PROXY says
+whether a proxy stands in front of the pod. With one, the last X-Forwarded-For
+entry is the one that proxy wrote about the peer it accepted, and everything
+to the left of it is the client's to invent. Without one, the socket decides
+and the header is not read at all -- which is what the dev stack and the e2e
+suite run on, and what keeps a client from naming itself there.
+
+Position rather than recognition, because the alternative does not work here.
+Skipping entries that fall inside a list of trusted ranges needs that list to
+name the proxies; on ZAD the router pods sit on the cluster pod network, whose
+range the platform cannot hand out, so the list had to be all of RFC1918 --
+wide enough that a client on a private address could write an entry that the
+walk would skip.
+
+One proxy, not a number of them: ZAD puts exactly the HAProxy router in front
+of the pod. A second layer (a CDN, an nginx in the pod) would move the entry
+and this setting would have to grow a count with it.
+
+Two X-Forwarded-For header LINES, not one value: the OpenShift router runs
+`option forwardfor` under its Append policy, which adds a line of its own
+after the client's rather than extending it. `headers.get` returns the first
+line, which is the client's, so every entry has to be gathered with
+`getlist` first.
 
 The derived value carries whether it can be vouched for; see `ClientAddress`.
 """
@@ -11,11 +30,8 @@ The derived value carries whether it can be vouched for; see `ClientAddress`.
 from __future__ import annotations
 
 import ipaddress
-from functools import lru_cache
 
 from starlette.requests import Request
-
-Network = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 UNKNOWN = "unknown"
 
@@ -29,14 +45,13 @@ class ClientAddress(str):
     arrived at. That keeps the derivation in one place without every call site
     having to carry a second value.
 
-    `vouched` is false for an address that came out of X-Forwarded-For with at
-    least one trusted entry to its right. That entry was skipped because it
-    falls inside PLAK_TRUSTED_PROXIES, and with a list as wide as all of
-    RFC1918 that is not proof it was written by a proxy of ours: a client on a
-    private address can write both values itself. The address we return is then
-    a claim, not an observation. Every other outcome is one: the direct peer is
-    what the socket says, and the rightmost X-Forwarded-For entry was appended
-    by the peer, which we did see connect.
+    `vouched` is false where the proxy the deployment promises did not write
+    anything usable: no X-Forwarded-For arrived, or its last entry is not an
+    address. What stands in front of the pod is then not what the deployment
+    says, and the peer we fall back to is a proxy's address rather than a
+    client's. Every other outcome is an observation: the peer is what the
+    socket says, and the last entry was written by the proxy about the
+    connection it accepted.
     """
 
     __slots__ = ("vouched",)
@@ -49,18 +64,6 @@ class ClientAddress(str):
         return address
 
 
-@lru_cache(maxsize=16)
-def parse_trusted_proxies(value: str) -> tuple[Network, ...]:
-    """Parses a comma-separated list of CIDRs (PLAK_TRUSTED_PROXIES)."""
-    networks = []
-    for part in value.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        networks.append(ipaddress.ip_network(part, strict=False))
-    return tuple(networks)
-
-
 def _parse(ip: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
         return ipaddress.ip_address(ip)
@@ -68,46 +71,42 @@ def _parse(ip: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
         return None
 
 
-def _is_trusted(ip: str, networks: tuple[Network, ...]) -> bool:
-    address = _parse(ip)
-    if address is None:
-        return False
-    return any(address in network for network in networks)
+def forwarded_entries(request: Request) -> list[str]:
+    """Every X-Forwarded-For entry, in order, across all header lines."""
+    entries = []
+    for line in request.headers.getlist("x-forwarded-for"):
+        for part in line.split(","):
+            candidate = part.strip()
+            if candidate:
+                entries.append(candidate)
+    return entries
 
 
-def client_ip(request: Request, trusted_networks: tuple[Network, ...]) -> ClientAddress:
-    """Derives the client IP: rightmost-after-trusted.
+def client_ip(request: Request, behind_proxy: bool) -> ClientAddress:
+    """Derives the client IP: the last X-Forwarded-For entry, or the socket.
 
-    X-Forwarded-For is consulted only when the direct peer is a trusted proxy,
-    and then from right to left: trusted hops are skipped, the first untrusted
-    address is the client. When every entry is trusted (or there is no XFF),
-    the peer itself counts.
-
-    An entry that is not a parseable IP address ends the walk and the peer
-    counts: the value is the client's own to write, and returning it would
-    hand an unparseable "address" to callers that must truncate or encrypt it.
-
-    Skipping is what costs the vouch: an entry only reached over a skipped one
-    is as trustworthy as the assumption that the skipped hop is a proxy.
+    A client can put anything in X-Forwarded-For, and does not have to send one
+    at all. Neither moves the entry we read: the proxy appends its own to
+    whatever arrived, so the last one is always the proxy's and everything
+    before it is the client's to invent.
     """
     remote = request.client.host if request.client else UNKNOWN
-    if not _is_trusted(remote, trusted_networks):
+    if not behind_proxy:
         return ClientAddress(remote, vouched=True)
 
-    xff = request.headers.get("x-forwarded-for", "")
-    skipped = False
-    for part in reversed(xff.split(",")):
-        candidate = part.strip()
-        if not candidate:
-            continue
-        address = _parse(candidate)
-        if address is None:
-            return ClientAddress(remote, vouched=True)
-        if any(address in network for network in trusted_networks):
-            skipped = True
-            continue
-        return ClientAddress(candidate, vouched=not skipped)
-    return ClientAddress(remote, vouched=True)
+    entries = forwarded_entries(request)
+    if not entries:
+        # A proxy that writes no X-Forwarded-For is not the proxy this
+        # deployment says it has, so the peer is all we have seen ourselves.
+        return ClientAddress(remote, vouched=False)
+
+    candidate = entries[-1]
+    if _parse(candidate) is None:
+        # A proxy writes an address. Anything else means the entry came from
+        # somewhere else, and handing it on would give callers that must
+        # truncate or encrypt it something that is not an address.
+        return ClientAddress(remote, vouched=False)
+    return ClientAddress(candidate, vouched=True)
 
 
 def rate_limit_key(address: str) -> str:
@@ -124,9 +123,9 @@ def rate_limit_key(address: str) -> str:
 
 
 def client_ip_from_request(request: Request) -> ClientAddress | None:
-    """Convenience variant for audit call sites: reads the trusted proxies from
+    """Convenience variant for audit call sites: reads the setting from
     `request.app.state.settings` and returns None without a connected peer."""
     if request.client is None:
         return None
     settings = request.app.state.settings
-    return client_ip(request, parse_trusted_proxies(settings.trusted_proxies))
+    return client_ip(request, bool(settings.behind_proxy))

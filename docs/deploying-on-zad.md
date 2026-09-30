@@ -165,7 +165,7 @@ anybody an administrator.
 | `PLAK_ENVIRONMENT` | env-vars | `productie` |
 | `PLAK_BASE_URL` | env-vars | `https://beheer.plak.<domein>` |
 | `PLAK_CONTENT_BASE_URL` | env-vars | `https://plak.<domein>` |
-| `PLAK_TRUSTED_PROXIES` | env-vars | CIDRs of the router pods (see §10) |
+| `PLAK_BEHIND_PROXY` | env-vars | `true`: the HAProxy router stands in front of the pod |
 | `PLAK_OIDC_ISS_REQUIRED` | env-vars | `true` |
 | `PLAK_IDP_RECHECK_SECONDS` | env-vars | optional, default `900`; how often at most a session is checked again at Keycloak, `0` turns it off |
 | `PLAK_OIDC_RP_LOGOUT` | env-vars | `false` until `{PLAK_CONTENT_BASE_URL}/-/logout?from=beheer` is registered as post-logout redirect at the IdP |
@@ -522,11 +522,16 @@ is not there:
 3. **Can the realm pass on an `acr` value that belongs to SSO Rijk?** SSO Rijk
    is SAML and delivers no acr; the ZAD Keycloak advertises `0` and `1`. For
    now: no acr check, logged explicitly at startup.
-4. **What is the CIDR of the router pods, and does the HAProxy router set
-   X-Forwarded-For in append or replace mode?** Plak takes the last untrusted
-   hop from the right. For now: the RFC1918 ranges in
-   `PLAK_TRUSTED_PROXIES`, which works as long as visitors have a public IP,
-   but is too coarse to lean on.
+4. **Answered, by measuring.** The HAProxy router runs `option forwardfor`
+   under its Append policy, and adds an `X-Forwarded-For` line of its own
+   behind whatever the client sent rather than extending it. A client-supplied
+   header therefore arrives untouched, one line earlier. Measured on
+   2026-09-30 against `plak.rijks.app`: a plain request was recorded under the
+   real address, one carrying `X-Forwarded-For: 203.0.113.99` under that
+   invented one, because the derivation read the header with `headers.get`,
+   which returns the first line only. `PLAK_BEHIND_PROXY` replaced the
+   CIDR list: which entry to read is known, the router's range is not and
+   cannot be had, because the router pods sit on the cluster pod network.
 5. **What does the router log at the edge, and can a tenant request that?**
    `zadctl logs` delivers container logs only. For now: the app itself logs no
    query strings (`--no-access-log`, because a secret link is in `?key=`), so

@@ -342,7 +342,7 @@ unnecessary at once.
 | Limits per endpoint class (login strict, API mutations moderate, content generous) | implemented: `ratelimit.py`, `backend/tests/test_ratelimit.py` |
 | Global backstop limit per class | implemented: `ratelimit.py`, `backend/tests/test_ratelimit.py` |
 | Fail-closed on a broken counter | implemented: `ratelimit.py`, `backend/tests/test_ratelimit.py` |
-| Trusted proxy configuration mandatory in production mode (startup refused without it) | implemented: `config.py` (`PLAK_TRUSTED_PROXIES` mandatory with `PLAK_ENVIRONMENT=productie`), `net.py`, `backend/tests/test_config.py` |
+| Trusted proxy configuration mandatory in production mode (startup refused without it) | implemented: `config.py` (`PLAK_BEHIND_PROXY` mandatory with `PLAK_ENVIRONMENT=productie`; both answers are valid, so unset cannot be one), `net.py`, `backend/tests/test_config.py` |
 | Code of a secret link: its own class `code`, ten attempts per quarter of an hour per client IP and on top of that ten per quarter of an hour per selector | implemented: `ratelimit.py` (`RateLimitClass.CODE`), `serving/code_page.py`, `config.py` (`PLAK_RATELIMIT_CODE_*`), `backend/tests/test_code_page.py`, `backend/tests/test_ratelimit.py` |
 | 429 with `Retry-After`, no escalating penalties | implemented: `ratelimit.py`, `backend/tests/test_ratelimit.py` |
 | Creation budget: per member at most 20 new groups and sites together per hour, through the admin and the CLI together; every attempt that passes the role check and the input validation counts, a slug collision included. Over budget: 429 `TOO_MANY_CREATIONS` with `Retry-After`, audited as `admin_access`/`refused`. It bounds what a stolen CLI token can litter the platform with; the counter lives in process memory, like the other per-member limits | implemented: `api/admin.py` (`_require_creation_budget`), `backend/tests/test_cli_creation.py` (`TestCreationBudget`) |
@@ -366,7 +366,7 @@ unnecessary at once.
 | Full IP address encrypted separately (`ip_encrypted`), own key, bound to the row | implemented: AES-256-GCM under `PLAK_AUDIT_IP_KEY` (32 bytes, separate from `PLAK_AUDIT_PEPPER` and `PLAK_SESSION_SECRET`); the AAD contains the row id, so a ciphertext copied to another row does not decrypt there; decryptable only via `POST /platform/audit/entries/{id}/ip`, never via `GET /platform/audit`, and that disclosure itself also counts towards the daily limit; `audit/ip_crypto.py`, `backend/tests/test_ip_crypto.py`, `backend/tests/test_audit.py`, `backend/tests/test_audit_ip.py` |
 | Key rotation for `PLAK_AUDIT_IP_KEY` | implemented: every encrypted value carries a key id (derived from the key, not a secret); `PLAK_AUDIT_IP_KEY_PREVIOUS` keeps the previous key around as long as older rows still have to be disclosable. Without that variable, rows from before the rotation become unreadable, while `ip_truncated` and the row itself are preserved; `config.py`, `audit/ip_crypto.py`, `backend/tests/test_audit_ip.py` |
 | Chain head published outside the database | implemented: `just publish-audit-head` (`audit/checkpoint.py`) writes both ends of every chain, with their hashes and retention deadlines, to the application log, `just verify-audit-head <bestand>` holds a line published earlier against the database. A shipped line cannot be retracted, so what the walk itself cannot catch - a rewrite with the chain and its head recomputed, rows removed from the newest end with the head moved back, a row gone before its published retention deadline - shows up against it. Which check catches what is tabled in the audit log doc; the walk alone is not enough. It prevents nothing and proves nothing if nobody kept a line; `backend/tests/test_audit_checkpoint.py`, `docs/audit-log.md` |
-| An IP address we cannot vouch for is marked as such | implemented: `refs.ip_unvouched` is `true` on a row whose address was derived over a skipped `X-Forwarded-For` entry, which with `PLAK_TRUSTED_PROXIES` as wide as all of RFC1918 is a value a privately addressed client can write itself. The address is stored unchanged and nothing is refused over it; `net.py` (`ClientAddress`), `audit/log.py`, `backend/tests/test_net.py`, `backend/tests/test_audit.py`. Disappears as a concern once the setting names the routers' own range |
+| An IP address we cannot vouch for is marked as such | implemented: `refs.ip_unvouched` is `true` on a row that arrived with `PLAK_BEHIND_PROXY` set and no usable `X-Forwarded-For` entry behind it; the row then carries the direct peer, which is a proxy rather than a visitor. The address is stored unchanged and nothing is refused over it; `net.py` (`ClientAddress`), `audit/log.py`, `backend/tests/test_net.py`, `backend/tests/test_audit.py` |
 | Database errors do not log bind parameters | implemented: `hide_parameters=True` on the SQLAlchemy engine of the app and of the purge job, so that a failed statement never puts a sub, email address or `reason` in the log; `db.py`, `audit/retention.py` |
 
 ## Database
@@ -760,15 +760,15 @@ stands today.
 
 Other points:
 
-- `PLAK_TRUSTED_PROXIES` has to contain the CIDR of the HAProxy router pods on
-  ZAD (the router adds `X-Forwarded-For` in append mode; the app
-  takes the last untrusted hop), otherwise the
-  client IP derivation ends up on the router IP. The range can be read off in
-  production from the direct peer address the app sees. As long as the setting
-  is wider than that (today: all of RFC1918), a privately addressed client can
-  write its own address into the header and have it stick; such a row is marked
-  with `refs.ip_unvouched` (`docs/audit-log.md`), and naming the real range
-  makes that concern go away.
+- `PLAK_BEHIND_PROXY` says whether a proxy stands in front of the pod; on ZAD
+  the HAProxy router does, so `true`. The app then reads the last
+  `X-Forwarded-For` entry, which is the one that proxy wrote about the peer it
+  accepted. `false` where there is none, and the socket decides: reading the
+  header there would let a client name itself. The predecessor named the
+  routers' own range instead, which on ZAD cannot be had -- the router pods sit
+  on the cluster pod network -- and named all of RFC1918 in its place. A second
+  proxy (a CDN, an nginx in the pod) would move the entry and this setting
+  would have to become a count.
 - `/healthz` exists only internally (spec §4a/§11): on both public hosts
   `host_separation.py` gives the path a neutral 404, and a probe with a
   different `Host` already strands on `TrustedHostMiddleware` before that. The

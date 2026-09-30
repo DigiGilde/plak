@@ -213,18 +213,32 @@ def test_message_of_type_error_shows_no_value(monkeypatch):
     assert "GEHEIME-WAARDE" not in text
 
 
-def test_production_without_trusted_proxies_refused(monkeypatch):
+def test_production_without_the_proxy_setting_refused(monkeypatch):
+    """Both answers are valid, so neither can be the default: unset has to be
+    refused, or a deployment behind a proxy silently records the proxy's
+    address for every visitor."""
     _set_required_env(monkeypatch, PLAK_ENVIRONMENT="productie")
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
-    assert "TRUSTED_PROXIES" in str(excinfo.value)
+    assert "BEHIND_PROXY" in str(excinfo.value)
+
+
+def test_production_without_a_proxy_is_accepted(monkeypatch):
+    _set_required_env(
+        monkeypatch,
+        PLAK_ENVIRONMENT="productie",
+        PLAK_BEHIND_PROXY="false",
+        PLAK_OIDC_ISS_REQUIRED="true",
+        PLAK_BASE_URL="https://beheer.example.nl",
+    )
+    assert load_settings().behind_proxy is False
 
 
 def test_production_without_iss_required_refused(monkeypatch):
     _set_required_env(
         monkeypatch,
         PLAK_ENVIRONMENT="productie",
-        PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+        PLAK_BEHIND_PROXY="true",
     )
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
@@ -235,7 +249,7 @@ def test_production_without_base_url_refused(monkeypatch):
     _set_required_env(
         monkeypatch,
         PLAK_ENVIRONMENT="productie",
-        PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+        PLAK_BEHIND_PROXY="true",
         PLAK_OIDC_ISS_REQUIRED="true",
     )
     with pytest.raises(ConfigurationError) as excinfo:
@@ -310,7 +324,7 @@ def test_production_full_configured_loads(monkeypatch):
     _set_required_env(
         monkeypatch,
         PLAK_ENVIRONMENT="productie",
-        PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+        PLAK_BEHIND_PROXY="true",
         PLAK_OIDC_ISS_REQUIRED="true",
         PLAK_BASE_URL="https://beheer.plak.example",
         PLAK_CONTENT_BASE_URL="https://plak.example",
@@ -325,7 +339,7 @@ def _production_env(monkeypatch, **overrides):
     _set_required_env(
         monkeypatch,
         PLAK_ENVIRONMENT="productie",
-        PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+        PLAK_BEHIND_PROXY="true",
         PLAK_OIDC_ISS_REQUIRED="true",
         PLAK_BASE_URL="https://beheer.plak.example",
         **overrides,
@@ -482,7 +496,7 @@ class TestRequiredAcr:
             monkeypatch,
             PLAK_OIDC_REQUIRED_ACR="",
             PLAK_ENVIRONMENT="productie",
-            PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+            PLAK_BEHIND_PROXY="true",
             PLAK_OIDC_ISS_REQUIRED="true",
             PLAK_BASE_URL="https://beheer.plak.example",
             PLAK_CONTENT_BASE_URL="https://plak.example",
@@ -496,7 +510,7 @@ class TestRequiredAcr:
             monkeypatch,
             PLAK_OIDC_REQUIRED_ACR="",
             PLAK_ENVIRONMENT="productie",
-            PLAK_TRUSTED_PROXIES="10.0.0.0/8",
+            PLAK_BEHIND_PROXY="true",
             PLAK_BASE_URL="https://beheer.plak.example",
             PLAK_CONTENT_BASE_URL="https://plak.example",
         )

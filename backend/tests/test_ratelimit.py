@@ -43,7 +43,7 @@ def _make_settings(**overrides: object) -> Settings:
         "audit_pepper": "p" * 32,
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         "environment": "dev",
-        "trusted_proxies": "",
+        "behind_proxy": False,
         "content_base_url": "https://plak.example",
     }
     base.update(overrides)
@@ -269,7 +269,7 @@ async def test_global_backstop_stores_to_about_all_keys() -> None:
         ratelimit_api_max=1000,
         ratelimit_api_window_s=60,
         ratelimit_api_global_max=3,
-        trusted_proxies="127.0.0.1/32",
+        behind_proxy=True,
     )
     async with _make_client(settings, client_ip="127.0.0.1") as client:
         statuses = []
@@ -292,7 +292,7 @@ async def test_evicting_per_key_buckets_leaves_the_backstop_standing() -> None:
         ratelimit_api_max=1000,
         ratelimit_api_window_s=60,
         ratelimit_api_global_max=5,
-        trusted_proxies="127.0.0.1/32",
+        behind_proxy=True,
     )
     counter = InMemoryCounter(max_keys=2)
     async with _make_client(settings, clock=_FakeClock(), counter=counter, client_ip="127.0.0.1") as client:
@@ -309,7 +309,7 @@ async def test_ipv6_addresses_in_one_slash_64_share_a_budget() -> None:
     settings = _make_settings(
         ratelimit_login_max=2,
         ratelimit_login_window_s=60,
-        trusted_proxies="127.0.0.1/32",
+        behind_proxy=True,
     )
     async with _make_client(settings, clock=_FakeClock(), client_ip="127.0.0.1") as client:
         rotating = [
@@ -334,7 +334,7 @@ async def test_refused_key_does_not_spend_the_global_backstop() -> None:
         ratelimit_api_max=2,
         ratelimit_api_window_s=60,
         ratelimit_api_global_max=5,
-        trusted_proxies="127.0.0.1/32",
+        behind_proxy=True,
     )
     async with _make_client(settings, clock=_FakeClock(), client_ip="127.0.0.1") as client:
         attacker = [
@@ -393,29 +393,38 @@ async def test_a_ci_id_token_counts_per_ip() -> None:
     assert [r1.status_code, r2.status_code] == [200, 429]
 
 
-async def test_xff_only_honoured_from_trusted_proxy() -> None:
+async def test_the_header_is_read_at_zero_hops_never() -> None:
+    """Without a proxy the socket is the key, whatever the client sends, so
+    the budget cannot be spread over invented addresses."""
     settings = _make_settings(
-        ratelimit_content_max=1, ratelimit_content_window_s=60, trusted_proxies="10.0.0.1/32"
+        ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=False
     )
-
-    # untrusted remote: XFF is ignored, every client shares the remote's budget.
     async with _make_client(settings, client_ip="203.0.113.99") as client:
         r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "1.1.1.1"})
         r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "2.2.2.2"})
     assert [r1.status_code, r2.status_code] == [200, 429]
 
-    # trusted remote: XFF decides the key, so every client gets its own budget.
-    async with _make_client(settings, client_ip="10.0.0.1") as client:
-        r3 = await client.get("/nldd/website/", headers={"x-forwarded-for": "1.1.1.1"})
-        r4 = await client.get("/nldd/website/", headers={"x-forwarded-for": "2.2.2.2"})
-    assert [r3.status_code, r4.status_code] == [200, 200]
+
+async def test_at_one_hop_the_peer_address_does_not_matter() -> None:
+    """Position decides, not what the peer looks like: the router range is not
+    something the platform can hand out, so recognising it was never possible.
+    Reaching the pod without going through the router is what the deployment
+    rules out, not this code."""
+    settings = _make_settings(
+        ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=True
+    )
+    for peer in ("10.0.0.1", "203.0.113.99"):
+        async with _make_client(settings, client_ip=peer) as client:
+            r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "1.1.1.1"})
+            r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "2.2.2.2"})
+        assert [r1.status_code, r2.status_code] == [200, 200], peer
 
 
 async def test_spoofed_leftmost_xff_does_not_become_the_key() -> None:
     """The leftmost XFF entry is one the client can set itself; the key has to
     be the rightmost untrusted address (rightmost-after-trusted)."""
     settings = _make_settings(
-        ratelimit_content_max=1, ratelimit_content_window_s=60, trusted_proxies="10.0.0.1/32"
+        ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=True
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
         r1 = await client.get(
@@ -431,7 +440,7 @@ async def test_spoofed_leftmost_xff_does_not_become_the_key() -> None:
 
 async def test_rotating_leftmost_xff_does_not_evade_the_limit() -> None:
     settings = _make_settings(
-        ratelimit_content_max=2, ratelimit_content_window_s=60, trusted_proxies="10.0.0.1/32"
+        ratelimit_content_max=2, ratelimit_content_window_s=60, behind_proxy=True
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
         statuses = []
@@ -443,31 +452,33 @@ async def test_rotating_leftmost_xff_does_not_evade_the_limit() -> None:
     assert statuses == [200, 200, 429, 429]
 
 
-async def test_xff_with_only_trusted_hops_falls_back_to_peer() -> None:
+async def test_a_private_entry_is_a_key_like_any_other() -> None:
+    """The old walk skipped a private address as a proxy hop and read on into
+    what the client wrote. At a fixed position it is simply the address."""
     settings = _make_settings(
-        ratelimit_content_max=1, ratelimit_content_window_s=60, trusted_proxies="10.0.0.0/8"
+        ratelimit_content_max=1, ratelimit_content_window_s=60, behind_proxy=True
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
         r1 = await client.get("/nldd/website/", headers={"x-forwarded-for": "10.0.0.2, 10.0.0.3"})
-        r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "10.0.0.4"})
-    # every entry trusted: both requests count on the peer (10.0.0.1) itself.
+        r2 = await client.get("/nldd/website/", headers={"x-forwarded-for": "9.9.9.9, 10.0.0.3"})
+    # Both read 10.0.0.3 at the hop position, so they share one budget.
     assert [r1.status_code, r2.status_code] == [200, 429]
 
 
-async def test_trusted_hop_right_becomes_skipped() -> None:
+async def test_the_entry_the_router_wrote_is_the_key() -> None:
     settings = _make_settings(
         ratelimit_content_max=1,
         ratelimit_content_window_s=60,
-        trusted_proxies="10.0.0.0/8",
+        behind_proxy=True,
     )
     async with _make_client(settings, client_ip="10.0.0.1") as client:
-        # chain client -> proxy 10.0.0.9 -> peer: the trusted hop on the right
-        # does not count, the real client (203.0.113.7) does.
+        # The router wrote 10.0.0.9 about the peer it saw; 203.0.113.7 is
+        # what the client claimed and sits a place further left.
         r1 = await client.get(
             "/nldd/website/", headers={"x-forwarded-for": "203.0.113.7, 10.0.0.9"}
         )
         r2 = await client.get(
-            "/nldd/website/", headers={"x-forwarded-for": "203.0.113.7, 10.0.0.9"}
+            "/nldd/website/", headers={"x-forwarded-for": "198.51.100.4, 10.0.0.9"}
         )
     assert [r1.status_code, r2.status_code] == [200, 429]
 
