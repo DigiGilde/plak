@@ -76,7 +76,7 @@ const shared = {
   'access.label.only': 'Alleen {extras}',
   'access.label.plus': '{base} plus {extras}',
   'access.keys.hint':
-    'Wie de volledige link heeft, kan de site bekijken zonder in te loggen. Je ziet elke link maar een keer, direct na het aanmaken.',
+    'Wie de volledige link heeft, kan de site bekijken zonder in te loggen. Je ziet elke link maar één keer, direct na het aanmaken.',
   'access.invitees.hint':
     'Adressen op de lijst hieronder kunnen de site bekijken na inloggen met SSO Rijk. Hun geverifieerde e-mailadres moet op de lijst staan.',
   'access.summary.public': 'Iedereen kan de site bekijken, ook zonder in te loggen.',

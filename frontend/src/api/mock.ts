@@ -958,7 +958,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       const siteSlug = rest[2]!;
       const siteRow = findSite(groupSlug, siteSlug);
       const siteNotFound = (): Response =>
-        problem(404, 'Onbekend site', `Geen site "${siteSlug}" in groep "${groupSlug}".`);
+        problem(404, 'Onbekende site', `Geen site "${siteSlug}" in groep "${groupSlug}".`);
 
       if (method === 'DELETE' && rest.length === 3) {
         if (!siteRow) return siteNotFound();
@@ -1179,7 +1179,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           if (!existing) {
             return problem(
               404,
-              'Geen gekoppeld repository',
+              'Geen gekoppelde repository',
               'Er is nog geen repository aan deze site gekoppeld.',
               'REPOSITORY_NOT_SET',
             );
@@ -1242,7 +1242,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           if (!existing) {
             return problem(
               404,
-              'Geen gekoppeld repository',
+              'Geen gekoppelde repository',
               'Er is nog geen repository aan deze site gekoppeld.',
               'REPOSITORY_NOT_SET',
             );

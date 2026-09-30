@@ -171,7 +171,7 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.html()).toContain('Onbekend site');
+    expect(wrapper.html()).toContain('Onbekende site');
   });
 
   it('shows a 404 message for an unknown site', async () => {
@@ -180,7 +180,7 @@ describe('TabOverview: states', () => {
     });
     await untilIdle();
 
-    expect(wrapper.html()).toContain('Onbekend site');
+    expect(wrapper.html()).toContain('Onbekende site');
   });
 });
 

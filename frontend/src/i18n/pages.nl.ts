@@ -50,7 +50,7 @@ export const pagesNl = {
     'Een nieuwe versie komt over de vorige heen; iedereen met de link ziet vanzelf de laatste. Oudere versies blijven bewaard.',
   'page.about.features.audience.term': 'Zelf bepalen wie meekijkt.',
   'page.about.features.audience.body':
-    'Van openbaar tot alleen genodigden, en alles ertussenin. Een geheime link kun je in een keer delen, of de link en de code los van elkaar sturen.',
+    'Van openbaar tot alleen genodigden, en alles ertussenin. Een geheime link kun je in één keer delen, of de link en de code los van elkaar sturen.',
   'page.about.features.revoke.term': 'Intrekken.',
   'page.about.features.revoke.body':
     'Een link die te ver is rondgestuurd, trek je in. Daarna doet hij niets meer.',
@@ -157,7 +157,7 @@ export const pagesNl = {
   'page.done.loading': 'Resultaat wordt geladen…',
   'page.done.heading.online': 'Je site staat online',
   'page.done.heading.offline': 'Je site staat nog niet online',
-  'page.done.error.unknownSite.title': 'Onbekend site',
+  'page.done.error.unknownSite.title': 'Onbekende site',
   'page.done.error.unknownSite.detail': 'Geen site "{site}" in groep "{group}".',
   'page.done.address.site': 'Adres van je site',
   'page.done.copy.button': 'Kopieer adres',

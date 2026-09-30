@@ -54,7 +54,7 @@ Deze API bedient twee soorten clients: de beheer-SPA op de beheer-host en de CI 
 
 ## Authenticatie
 
-Er zijn twee manieren om je te identificeren, en elk endpoint accepteert er precies een of twee van:
+Er zijn twee manieren om je te identificeren, en elk endpoint accepteert er precies één of twee van:
 
 * **Beheersessie** - een `Secure`/`HttpOnly`/`SameSite=Strict`-cookie die je na SSO-login op de beheer-host
   krijgt. Elke sessieroute eist daarnaast een **actief** lid: een nieuw of gedeactiveerd lid krijgt 403.

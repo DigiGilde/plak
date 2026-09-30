@@ -131,7 +131,7 @@ NL: Final[dict[str, str]] = {
     "IDENTIFIER_AMBIGUOUS.member_email": "Meerdere leden met dit e-mailadres; gebruik het SSO-subject.",
     "IDENTIFIER_AMBIGUOUS.member_name": "Meerdere leden met deze naam; gebruik het e-mailadres.",
     "IDENTIFIER_AMBIGUOUS.repository": (
-        "Deze repository is op meer dan een provider gekoppeld; noem de host erbij."
+        "Deze repository is op meer dan één provider gekoppeld; noem de host erbij."
     ),
     # -- Repositories and CI --------------------------------------------------
     "REPOSITORY_NOT_SET": "Aan deze site is geen repository gekoppeld.",
@@ -218,7 +218,7 @@ NL: Final[dict[str, str]] = {
     "MULTIPART_INVALID": "Ongeldig multipart-verzoek.",
     "MULTIPART_INVALID.no_field_name": "Multipart-deel zonder veldnaam.",
     "MULTIPART_INVALID.unexpected_file_field": "Onverwacht bestandsveld {field!r}.",
-    "MULTIPART_INVALID.more_than_one_file": "Meer dan een bestand in de upload.",
+    "MULTIPART_INVALID.more_than_one_file": "Meer dan één bestand in de upload.",
     "MULTIPART_INVALID.too_many_fields": "Te veel formuliervelden.",
     "MULTIPART_INVALID.field_too_large": "Formulierveld {field!r} is te groot.",
     "MULTIPART_INVALID.incomplete": "Multipart-verzoek is onvolledig.",
@@ -249,13 +249,13 @@ NL: Final[dict[str, str]] = {
         "of publiceer een andere map"
     ),
     "RESERVED_SEGMENT.base_path": "'{segment}' is een gereserveerd segment",
-    "where.base_path": "in de wortel van basispad '{base}'",
-    "where.peeled": "na het afpellen van '{peeled}' in de wortel van de site",
-    "where.bundle_root": "in de wortel van de bundel",
+    "where.base_path": "in de hoofdmap van basispad '{base}'",
+    "where.peeled": "na het afpellen van '{peeled}' in de hoofdmap van de site",
+    "where.bundle_root": "in de hoofdmap van de bundel",
     # -- Bundles: limits and archives -----------------------------------------
     "TOO_MANY_FILES": "Bundel bevat meer dan {limit} bestanden of mappen.",
     "TOO_MANY_FILES.archive_entries": (
-        "Archief bevat meer dan {limit} entries; ook wat buiten de wortel van de site valt telt "
+        "Archief bevat meer dan {limit} entries; ook wat buiten de hoofdmap van de site valt telt "
         "daarvoor mee."
     ),
     "FILE_TOO_LARGE": "Bestand '{path}' is uitgepakt groter dan {max_file} bytes.",
@@ -306,16 +306,16 @@ NL: Final[dict[str, str]] = {
     "BASE_PATH_WITHOUT_INDEX.no_index_with_suggestion": (
         "Basispad '{base_path}' bevat geen {index}; {suggestion}"
     ),
-    "suggestion.in_root": "de {index} staat in de wortel van de bundel; laat het veld basispad weg",
+    "suggestion.in_root": "de {index} staat in de hoofdmap van de bundel; laat het veld basispad weg",
     "suggestion.nearest": "de dichtstbijzijnde staat op '{path}'",
-    "NO_INDEX": "De bundel bevat nergens een {index}; de wortel van de bundel heeft er een nodig",
+    "NO_INDEX": "De bundel bevat nergens een {index}; de hoofdmap van de bundel heeft er een nodig",
     "NO_INDEX.case_variant": (
-        "De bundel bevat nergens een {index}; de wortel van de bundel heeft er een nodig. Let op: "
+        "De bundel bevat nergens een {index}; de hoofdmap van de bundel heeft er een nodig. Let op: "
         "'{variant}' telt niet mee, want de server is hoofdlettergevoelig; hernoem het bestand "
         "naar '{index}'"
     ),
     "NO_INDEX.nearest": (
-        "Geen {index} in de wortel van de bundel; de dichtstbijzijnde staat op '{shortest}'. "
+        "Geen {index} in de hoofdmap van de bundel; de dichtstbijzijnde staat op '{shortest}'. "
         "Publiceer de map '{directory}' zelf, of stuur het veld basispad mee met de waarde "
         "'{directory}'"
     ),

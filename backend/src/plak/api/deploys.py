@@ -119,7 +119,7 @@ _DEPLOY_OPENAPI = {
                             "type": "string",
                             "format": "binary",
                             "description": (
-                                "Het bestandsveld, verplicht en precies een keer. Geaccepteerd worden een los "
+                                "Het bestandsveld, verplicht en precies één keer. Geaccepteerd worden een los "
                                 "`.html`-bestand (dat wordt de `index.html` van de site) of een archief "
                                 "`.zip`, `.tar.gz` of `.tgz`. De vorm wordt aan de bestandsnaam herkend; iets "
                                 "anders levert 422 `UNKNOWN_FORMAT`. Paden in het archief moeten relatief en "
@@ -143,12 +143,12 @@ _DEPLOY_OPENAPI = {
                             "type": "string",
                             "examples": ["dist"],
                             "description": (
-                                "Optioneel. De map binnen het archief die de wortel van de site wordt; alles "
-                                "wat ernaast staat wordt niet gepubliceerd. Het pad is relatief aan de wortel "
+                                "Optioneel. De map binnen het archief die de hoofdmap van de site wordt; alles "
+                                "wat ernaast staat wordt niet gepubliceerd. Het pad is relatief aan de hoofdmap "
                                 "na het afpellen van omhullende mappen en moet een bestaande map met een "
                                 "`index.html` erin zijn. Bedoeld als bevestiging van het voorstel dat een "
                                 "geweigerde deploy meegeeft in `indexCandidates`; zonder dit veld bepaalt "
-                                "Plak de wortel zelf."
+                                "Plak de hoofdmap zelf."
                             ),
                         },
                     },
@@ -192,7 +192,7 @@ _DEPLOY_ERRORS = {
         "Een verzoek van een andere origin dan de beheer-host wordt eveneens geweigerd; CI en de CLI sturen "
         "geen `Origin` en passeren die bewaking."
     ),
-    404: "Onbekende groep of onbekend site (`UNKNOWN_SITE`).",
+    404: "Onbekende groep of onbekende site (`UNKNOWN_SITE`).",
     429: "Het ratelimit-budget is op; probeer het later opnieuw.",
     503: (
         "De CI-provider is niet bereikbaar om de sleutels op te halen of de repository te controleren "
@@ -631,17 +631,17 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "**Verloop:** eerst wordt geautoriseerd, pas daarna wordt het lichaam gelezen, zodat een geweigerd "
         "verzoek geen upload kost. De upload streamt naar schijf en wordt uitgepakt tegen de limieten "
         "hieronder. Elke deploy, geslaagd of geweigerd, komt in het auditlogboek.\n\n"
-        "**Wortel van de site:** omhullende mappen worden afgepeld zolang de wortel precies een map bevat "
+        "**Hoofdmap van de site:** omhullende mappen worden afgepeld zolang de hoofdmap precies één map bevat "
         "en verder niets, dus een archief met alleen `mijnsite/dist/index.html` landt gewoon op de "
         "siteroot. Metadata van het besturingssysteem telt daarbij niet mee en wordt ook niet "
         "gepubliceerd: de map `__MACOSX`, `.DS_Store` en de AppleDouble-bestanden die met `._` "
         "beginnen. Een zip die je met rechtsklik in de Finder maakt werkt daardoor gewoon. "
-        "Daarna moet er een `index.html` in de wortel staan; zo niet, dan volgt 422 "
+        "Daarna moet er een `index.html` in de hoofdmap staan; zo niet, dan volgt 422 "
         "`NO_INDEX` met de gevonden index-paden in `indexCandidates`. Staat de site in een map naast "
         "andere dingen (een gezipte projectmap), stuur die map dan als veld `basePath` mee: dat is de "
         "bevestiging van het voorstel. Plak kiest nooit zelf een van meerdere kandidaten, want dan zou het "
         "stilzwijgend bestanden weglaten die je dacht te publiceren. Het `basePath` staat relatief aan de "
-        "wortel ná het afpellen, maar de spelling mét het afgepelde voorvoegsel werkt net zo goed, en een "
+        "hoofdmap ná het afpellen, maar de spelling mét het afgepelde voorvoegsel werkt net zo goed, en een "
         "vaste waarde blijft werken als het afpellen die map al weggenomen heeft.\n\n"
         "**Limieten** (instelbaar; dit zijn de standaardwaarden): het verzoeklichaam is hoogstens 100 MB "
         "(`PLAK_INGEST_MAX_BODY`), een los uitgepakt bestand 50 MB (`PLAK_INGEST_MAX_FILE`), de hele "
@@ -689,7 +689,7 @@ def _deployer(auth: _DeployAuth) -> Deployer:
                 "`HARDLINK_REFUSED`, `SPECIAL_FILE`, `RESERVED_SEGMENT`, `TOO_DEEP`, `DUPLICATE_PATH`, "
                 "`NULL_BYTE`, `EMPTY_PATH`), een bestand dat niet op een website hoort (`SECRET_FILE`: "
                 "een `.git`-map of een `.env`-bestand, die met een gezipte projectmap vanzelf "
-                "meekomen), geen `index.html` in de wortel (`NO_INDEX`, met de gevonden "
+                "meekomen), geen `index.html` in de hoofdmap (`NO_INDEX`, met de gevonden "
                 "paden in `indexCandidates`), of een `basePath` dat niet deugt (`BASE_PATH_INVALID`), geen "
                 "map in de bundel is (`BASE_PATH_UNKNOWN`, ook wanneer het pad naar een bestand wijst) of "
                 "geen `index.html` bevat (`BASE_PATH_WITHOUT_INDEX`, ook wanneer die map helemaal geen "

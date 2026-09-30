@@ -87,7 +87,7 @@ export const publishNl = {
   'publish.packing.indexCase':
     'De startpagina heet "{found}"; hij moet "{index}" heten, met kleine letters.',
   'publish.packing.indexInFolder':
-    'Er staat geen {index} in de wortel van "{name}", wel op "{path}". Sleep de map "{folder}" zelf.',
+    'Er staat geen {index} in de hoofdmap van "{name}", wel op "{path}". Sleep de map "{folder}" zelf.',
   'publish.packing.indexMissing':
     'Er staat geen {index} in "{name}". Zonder startpagina kan niemand de site openen.',
 
@@ -95,7 +95,7 @@ export const publishNl = {
   'publish.deploy.loading': 'Deploy-instellingen laden',
   'publish.deploy.heading': 'Publiceren vanuit GitHub of Forgejo',
   'publish.deploy.intro':
-    'Koppel het repository waarin je site staat. Een push naar de live-branch publiceert daarna automatisch een nieuwe versie.',
+    'Koppel de repository waarin je site staat. Een push naar de live-branch publiceert daarna automatisch een nieuwe versie.',
   'publish.deploy.repo.liveBranch': 'Live-branch: {branch}',
   'publish.deploy.repo.anyBranch': 'elke branch',
   'publish.deploy.repo.linkedBy': 'Gekoppeld door {who}',
@@ -126,7 +126,7 @@ export const publishNl = {
   'publish.deploy.form.branch': 'Live-branch',
   'publish.deploy.form.branchPlaceholder': 'bijv. main',
   'publish.deploy.form.branchHelp':
-    'Leeg: elke branch van dit repository mag live publiceren, zolang de run een push, een handmatige run (workflow_dispatch) of een schedule is, nooit een pull request. Vul een branch in (bijvoorbeeld "main") om alleen die branch live te laten publiceren; previews blijven dan mogelijk vanaf elke branch.',
+    'Leeg: elke branch van deze repository mag live publiceren, zolang de run een push, een handmatige run (workflow_dispatch) of een schedule is, nooit een pull request. Vul een branch in (bijvoorbeeld "main") om alleen die branch live te laten publiceren; previews blijven dan mogelijk vanaf elke branch.',
   'publish.deploy.form.cancel': 'Annuleren',
   'publish.deploy.form.submit': 'Koppelen',
   'publish.deploy.form.recognized': 'Herkend: {label}, {repo}',
@@ -154,41 +154,41 @@ export const publishNl = {
   'publish.deploy.workflow.hint':
     'Kant-en-klare workflow voor {provider} Actions. Vervang {code} door de vastgepinde commit van de action.',
   'publish.deploy.workflow.path':
-    'Zet dit bestand op {path} in het repository. Na een push naar de live-branch staat de nieuwe versie in {link}.',
+    'Zet dit bestand op {path} in de repository. Na een push naar de live-branch staat de nieuwe versie in {link}.',
 
   // -- Deploy tab: why this is safe ------------------------------------------------
   'publish.deploy.safety.summary': 'Waarom is dit veilig?',
   'publish.deploy.safety.noSecret':
-    'Er komt geen geheim in het repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Plak controleert die handtekening.',
+    'Er komt geen geheim in de repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Plak controleert die handtekening.',
   'publish.deploy.safety.scoped':
-    'Dat token bewijst alleen welk repository de run start; Plak accepteert het hier omdat jij precies dat repository aan deze site gekoppeld hebt.',
+    'Dat token bewijst alleen welke repository de run start; Plak accepteert het hier omdat jij precies die repository aan deze site gekoppeld hebt.',
   'publish.deploy.safety.liveRestricted':
     'Live publiceren kan alleen vanaf de ingestelde live-branch, en alleen via een push, een handmatige run of een schedule, nooit vanuit een pull request.',
   'publish.deploy.safety.previews':
     'Previews mogen vanaf elke branch, ook vanuit een pull request, en raken de live site nooit.',
   'publish.deploy.safety.audited': 'Elke publicatie staat in het auditlog.',
   'publish.deploy.safety.unlink':
-    'Ontkoppel je het repository, dan stopt publiceren vanuit CI meteen.',
+    'Ontkoppel je de repository, dan stopt publiceren vanuit CI meteen.',
 
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'Vanaf je eigen computer',
   'publish.deploy.cli.install':
-    'Met de plak-cli publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren en later bijwerken:',
+    'Met de Plak-CLI publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren en later bijwerken:',
   'publish.deploy.cli.run':
     'Werk je uit een checkout, dan draait {run} hem zonder installatie.',
   'publish.deploy.cli.login':
-    '{login} opent je browser op {link} om de CLI-sessie te koppelen; daarna bewaart de cli die sessie voor volgende {publish}-aanroepen.',
+    '{login} opent je browser op {link} om de CLI-sessie te koppelen; daarna bewaart de CLI die sessie voor volgende {publish}-aanroepen.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Repository ontkoppelen?',
   'publish.deploy.unlink.text':
-    'Deze site kan hierna niet meer zonder geheim vanuit CI publiceren, tot een nieuw repository gekoppeld is.',
+    'Deze site kan hierna niet meer zonder geheim vanuit CI publiceren, tot een nieuwe repository gekoppeld is.',
   'publish.deploy.unlink.keep': 'Behoud koppeling',
   'publish.deploy.unlink.confirm': 'Ontkoppel repository',
 
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Toegangsinstellingen laden',
-  'publish.access.unknownSite.title': 'Onbekend site',
+  'publish.access.unknownSite.title': 'Onbekende site',
   'publish.access.unknownSite.detail': 'Geen site "{site}" in groep "{group}".',
   'publish.access.base.heading': 'Wie kan deze site bekijken?',
   'publish.access.saved': 'Toegang opgeslagen',
@@ -208,10 +208,10 @@ export const publishNl = {
   'publish.access.keys.on': 'Geheime links staan aan',
   'publish.access.keys.off': 'Geheime links staan uit',
   'publish.access.keys.intro':
-    'De volledige link zie je maar een keer, direct na het aanmaken. Intrekken werkt meteen, ook voor wie de pagina al open heeft staan.',
+    'De volledige link zie je maar één keer, direct na het aanmaken. Intrekken werkt meteen, ook voor wie de pagina al open heeft staan.',
   'publish.access.keys.created': 'Geheime link aangemaakt',
   'publish.access.keys.createdDetail':
-    'Deze link zie je maar een keer. Kopieer hem nu: iedereen met deze link kan de site zien, ook zonder in te loggen.',
+    'Deze link zie je maar één keer. Kopieer hem nu: iedereen met deze link kan de site zien, ook zonder in te loggen.',
   'publish.access.keys.open': 'Open site',
   'publish.access.keys.column.label': 'Label',
   'publish.access.keys.column.created': 'Aangemaakt',
@@ -219,7 +219,7 @@ export const publishNl = {
   'publish.access.keys.column.status': 'Status',
   'publish.access.keys.empty': 'Nog geen geheime links',
   'publish.access.keys.emptyDetail':
-    'Maak er hieronder een; de link is daarna eenmalig te kopieren.',
+    'Maak er hieronder een; de link is daarna eenmalig te kopiëren.',
   'publish.access.keys.never': 'nooit',
   'publish.access.keys.active': 'Actief',
   'publish.access.keys.revoked': 'Ingetrokken',

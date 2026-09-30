@@ -9,7 +9,7 @@
 export const siteNl = {
   // -- The page itself: loading, tab bar, unknown site ----------------------
   'site.loading': 'Site laden',
-  'site.notFound.title': 'Onbekend site',
+  'site.notFound.title': 'Onbekende site',
   'site.notFound.detail': 'Geen site "{site}" in groep "{group}".',
   'site.tabs.label': 'Siteonderdelen',
   'site.tabs.overview': 'Overzicht',
@@ -39,11 +39,11 @@ export const siteNl = {
   'site.overview.published.detail': 'De nieuwe versie staat nu live.',
   'site.overview.danger.heading': 'Gevarenzone',
   'site.overview.danger.body':
-    'Site verwijderen haalt alle versies, previews, genodigden, geheime links en het gekoppelde repository definitief weg, inclusief de bestanden op de server.',
+    'Site verwijderen haalt alle versies, previews, genodigden, geheime links en de gekoppelde repository definitief weg, inclusief de bestanden op de server.',
   'site.overview.danger.action': 'Site verwijderen',
   'site.overview.danger.confirm.title': 'Site {group}/{site} verwijderen?',
   'site.overview.danger.confirm.text':
-    'Dit kan niet ongedaan gemaakt worden. Alle versies, previews, genodigden, geheime links en het gekoppelde repository verdwijnen definitief.',
+    'Dit kan niet ongedaan gemaakt worden. Alle versies, previews, genodigden, geheime links en de gekoppelde repository verdwijnen definitief.',
   'site.overview.danger.confirm.keep': 'Behoud site',
   'site.overview.danger.confirm.confirm': 'Verwijder deze site',
   'site.overview.delete.failed': 'Site niet verwijderd',
@@ -86,8 +86,8 @@ export const siteNl = {
   'site.versions.view': 'Bekijken',
   'site.versions.view.details': 'nieuw tabblad',
   'site.versions.setLive': 'Zet deze versie live',
-  'site.versions.origin.uploadBy': 'Geupload door {name}',
-  'site.versions.origin.upload': 'Handmatig geupload',
+  'site.versions.origin.uploadBy': 'Geüpload door {name}',
+  'site.versions.origin.upload': 'Handmatig geüpload',
   'site.versions.origin.repository': 'Gepubliceerd door {repository}',
   'site.versions.origin.ci': 'Gepubliceerd door CI',
   'site.versions.setLive.done': 'Versie live gezet',
