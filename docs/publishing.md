@@ -115,16 +115,17 @@ rotate.
 ### Linking a repository
 
 First link the repository to the site, from the terminal or in the
-admin. From a checkout of the repository, with a CLI token from
-`plak login`:
+admin. From the terminal, with a CLI token from `plak login`:
 
 ```bash
-plak site link team-aurora/docs --live-branch main   # left out: every branch
+plak site link team-aurora/docs minbzk/website --live-branch main
 ```
 
-Without a repository argument the CLI takes the remote `origin`; pass
-`owner/repo` (GitHub) or the repository URL (GitHub or Forgejo) to name
-another. For a GitHub repository the CLI asks your own `gh` login for the
+Name the repository as `owner/repo` (GitHub) or by its URL (GitHub or
+Forgejo). Left out, the CLI takes the remote `origin` of the checkout you
+run it in, which is only right in the right checkout: a fork or another
+project links that repository instead. Without `--live-branch` every
+branch may publish live. For a GitHub repository the CLI asks your own `gh` login for the
 ids and sends them along, so a private repository links without further
 ado; `--no-gh` leaves the lookup to Plak, and `--repository-id` with
 `--owner-id` gives the ids by hand. Exit codes as for every command: `0`
