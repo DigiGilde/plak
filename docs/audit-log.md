@@ -120,8 +120,10 @@ who attempted it, and more personal data adds little for investigation.
 `site_repository_set` and `site_repository_remove` are about the repository
 linked to a site so that it may publish from there with a CI ID token
 (`api/admin.py`, "Linked repository"); `refs` carries group, site, provider,
-host, `repository` (`eigenaar/repo`), `repository_id` and `live_branch`, and
-on unlinking only group and site.
+host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed` and
+`live_branch`, and on unlinking only group and site. `ids_confirmed` is
+`false` when the admin entered the ids and the provider could not confirm
+them (a private repository, or the provider was unavailable).
 
 `site_external_sources` is about the site toggle "Externe bronnen
 toestaan": `refs.external_sources` is the new state (`true` or `false`),

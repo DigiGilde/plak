@@ -136,6 +136,11 @@ export const publishNl = {
   'publish.deploy.form.invalidUrl': 'Dit is geen geldige URL.',
   'publish.deploy.form.invalidReference':
     'Eigenaar en repository gescheiden door een schuine streep (bijvoorbeeld "minbzk/website"), of een repository-URL.',
+  'publish.deploy.form.idsIntro':
+    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Vul dan de twee ids zelf in. Vraag ze op met {command}: de eerste regel is het repository-id, de tweede het eigenaar-id. Een verkeerd id koppelt niets anders, het weigert alleen elke deploy.',
+  'publish.deploy.form.repositoryId': 'Repository-id',
+  'publish.deploy.form.ownerId': 'Eigenaar-id',
+  'publish.deploy.form.idsInvalid': 'Vul het repository-id en het eigenaar-id allebei in, alleen met cijfers.',
 
   // -- Deploy tab: the ready-made workflow ---------------------------------------
   'publish.deploy.workflow.hint':

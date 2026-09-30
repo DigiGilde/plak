@@ -66,6 +66,16 @@ const formLiveBranch = ref('');
 const formTouched = ref(false);
 const formError = ref<string | null>(null);
 const formBusy = ref(false);
+// The id fields appear once Plak could not look the repository up itself,
+// which is what a private repository looks like from here.
+const idsVisible = ref(false);
+const formRepositoryId = ref('');
+const formOwnerId = ref('');
+const idsError = ref<string | null>(null);
+// The repository the fields were revealed for, while the input is mid-edit.
+const idsPath = ref('');
+// Ids copied from the existing link belong to that repository only.
+const idsPrefilled = ref(false);
 
 const unlinkOpen = ref(false);
 const unlinkBusy = ref(false);
@@ -219,6 +229,15 @@ watch(repositoryReference, (parsed) => {
   }
 });
 
+function resetIds(): void {
+  idsVisible.value = false;
+  formRepositoryId.value = '';
+  formOwnerId.value = '';
+  idsError.value = null;
+  idsPath.value = '';
+  idsPrefilled.value = false;
+}
+
 function openLinkForm(): void {
   formProvider.value = 'github';
   formHost.value = forgejoHosts.value[0] ?? '';
@@ -226,6 +245,7 @@ function openLinkForm(): void {
   formLiveBranch.value = '';
   formTouched.value = false;
   formError.value = null;
+  resetIds();
   editing.value = true;
 }
 
@@ -239,6 +259,7 @@ function openChangeForm(): void {
   formLiveBranch.value = repository.value.liveBranch ?? '';
   formTouched.value = false;
   formError.value = null;
+  resetIds();
   editing.value = true;
 }
 
@@ -253,11 +274,58 @@ watch(formProvider, (provider) => {
   }
 });
 
+/**
+ * The entered ids, `{}` while both fields are empty (Plak then looks the
+ * repository up as usual), or null when they cannot be sent as they are.
+ */
+function enteredIds(): { repositoryId?: number; ownerId?: number } | null {
+  const repositoryId = formRepositoryId.value.trim();
+  const ownerId = formOwnerId.value.trim();
+  if (!idsVisible.value || (repositoryId === '' && ownerId === '')) return {};
+  if (!/^\d+$/.test(repositoryId) || !/^\d+$/.test(ownerId)) return null;
+  return { repositoryId: Number(repositoryId), ownerId: Number(ownerId) };
+}
+
+/** Whether the existing link names the repository the form now names. */
+function sameAsLinked(owner: string, repo: string): boolean {
+  const linked = repository.value;
+  return (
+    linked !== null &&
+    linked.provider === formProvider.value &&
+    (linked.provider === 'github' || linked.host === formHost.value) &&
+    `${linked.owner}/${linked.repo}`.toLowerCase() === `${owner}/${repo}`.toLowerCase()
+  );
+}
+
+watch([repositoryReference, formProvider, formHost], ([parsed]) => {
+  if (!idsPrefilled.value) return;
+  if (parsed.kind === 'valid' && sameAsLinked(parsed.owner, parsed.repo)) return;
+  formRepositoryId.value = '';
+  formOwnerId.value = '';
+  idsPrefilled.value = false;
+});
+
+const idsCommand = computed(() => {
+  const parsed = repositoryReference.value;
+  const path = parsed.kind === 'valid' ? `${parsed.owner}/${parsed.repo}` : idsPath.value;
+  return formProvider.value === 'forgejo'
+    ? `curl -s -H "Authorization: token <token>" ${formHost.value}/api/v1/repos/${path} | jq '.id, .owner.id'`
+    : `gh api repos/${path} --jq '.id, .owner.id'`;
+});
+
+const idsIntro = computed(() => segments('publish.deploy.form.idsIntro', ['command']));
+
 async function submitRepository(): Promise<void> {
   formError.value = null;
+  idsError.value = null;
   formTouched.value = true;
   const parsed = repositoryReference.value;
   if (parsed.kind !== 'valid') return;
+  const ids = enteredIds();
+  if (ids === null) {
+    idsError.value = t('publish.deploy.form.idsInvalid');
+    return;
+  }
   formBusy.value = true;
   try {
     const result = await plak.setSiteRepository(props.group, props.site, {
@@ -266,6 +334,7 @@ async function submitRepository(): Promise<void> {
       owner: parsed.owner,
       repo: parsed.repo,
       liveBranch: formLiveBranch.value.trim() === '' ? null : formLiveBranch.value.trim(),
+      ...ids,
     });
     repository.value = result;
     editing.value = false;
@@ -275,7 +344,21 @@ async function submitRepository(): Promise<void> {
       t('publish.deploy.repo.linkedDetail', { repo: `${result.owner}/${result.repo}` }),
     );
   } catch (f) {
+    const code = f instanceof ApiError ? f.problem.code : undefined;
+    if (code?.startsWith('REPOSITORY_IDS_')) {
+      idsError.value = errorText(f, t('publish.deploy.repo.linkFailed'));
+      return;
+    }
     formError.value = errorText(f, t('publish.deploy.repo.linkFailed'));
+    if (code === 'REPOSITORY_NOT_FOUND' && !idsVisible.value) {
+      idsVisible.value = true;
+      idsPath.value = `${parsed.owner}/${parsed.repo}`;
+      if (sameAsLinked(parsed.owner, parsed.repo)) {
+        formRepositoryId.value = String(repository.value!.repositoryId);
+        formOwnerId.value = String(repository.value!.ownerId);
+        idsPrefilled.value = true;
+      }
+    }
   } finally {
     formBusy.value = false;
   }
@@ -642,6 +725,45 @@ plak logout
                 </nldd-validation-item>
               </nldd-validation-list>
             </nldd-form-field>
+
+            <template v-if="idsVisible">
+              <nldd-rich-text data-testid="repository-ids-uitleg">
+                <p>
+                  {{ idsIntro[0] }}<code>{{ idsCommand }}</code>{{ idsIntro[1] }}
+                </p>
+              </nldd-rich-text>
+              <nldd-form-field :label="t('publish.deploy.form.repositoryId')">
+                <nldd-text-field
+                  name="repository-id"
+                  width="12rem"
+                  keyboard="numeric"
+                  no-spellcheck
+                  :value="formRepositoryId"
+                  :invalid="idsError !== null || undefined"
+                  :unmet="idsError !== null ? 'repository-ids-fout' : undefined"
+                  data-testid="repository-id"
+                  @input="formRepositoryId = inputValue($event)"
+                ></nldd-text-field>
+              </nldd-form-field>
+              <nldd-form-field :label="t('publish.deploy.form.ownerId')">
+                <nldd-text-field
+                  name="repository-eigenaar-id"
+                  width="12rem"
+                  keyboard="numeric"
+                  no-spellcheck
+                  :value="formOwnerId"
+                  :invalid="idsError !== null || undefined"
+                  :unmet="idsError !== null ? 'repository-ids-fout' : undefined"
+                  data-testid="repository-eigenaar-id"
+                  @input="formOwnerId = inputValue($event)"
+                ></nldd-text-field>
+                <nldd-validation-list>
+                  <nldd-validation-item id="repository-ids-fout">
+                    {{ idsError }}
+                  </nldd-validation-item>
+                </nldd-validation-list>
+              </nldd-form-field>
+            </template>
 
             <nldd-form-field :label="t('publish.deploy.form.branch')" optional>
               <nldd-text-field

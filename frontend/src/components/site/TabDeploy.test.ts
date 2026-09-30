@@ -434,6 +434,296 @@ describe('TabDeploy: linking and changing the repository', () => {
   });
 });
 
+/**
+ * Records every PUT body to `/repository`; `answer` may replace the mock
+ * backend's response for a given body.
+ */
+function recordRepositoryPuts(answer?: (body: Record<string, unknown>) => Response | undefined) {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if ((init?.method ?? 'GET') === 'PUT' && url.includes('/repository')) {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      bodies.push(body);
+      const replaced = answer?.(body);
+      if (replaced) return Promise.resolve(replaced);
+    }
+    return backend.fetch(input, init);
+  });
+  return bodies;
+}
+
+function problemResponse(status: number, code: string, detail: string): Response {
+  return new Response(JSON.stringify({ type: 'about:blank', title: code, status, detail, code }), {
+    status,
+    headers: { 'content-type': 'application/problem+json' },
+  });
+}
+
+const notFoundWithoutIds = (body: Record<string, unknown>) =>
+  body.repositoryId === undefined ? problemResponse(422, 'REPOSITORY_NOT_FOUND', 'Niet gevonden.') : undefined;
+
+async function submitForm(wrapper: ReturnType<typeof makeWrapper>): Promise<void> {
+  await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+  await untilIdle();
+}
+
+function typeInto(wrapper: ReturnType<typeof makeWrapper>, testid: string, value: string): void {
+  fireDetailEvent(wrapper.find(`[data-testid="${testid}"]`).element, 'input', { value });
+}
+
+async function openLinkForm(wrapper: ReturnType<typeof makeWrapper>): Promise<void> {
+  await untilIdle();
+  await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+  await untilIdle();
+}
+
+describe('TabDeploy: a repository Plak cannot look up', () => {
+  it('offers the id fields only after the lookup failed, then links with the entered ids', async () => {
+    backend.data.repositories = [];
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
+
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+
+    expect(bodies[0]).not.toHaveProperty('repositoryId');
+    expect(wrapper.html()).toContain('vul dan het repository-id en het eigenaar-id zelf in');
+    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toBe(
+      "gh api repos/nldd/prive-site --jq '.id, .owner.id'",
+    );
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
+
+    typeInto(wrapper, 'repository-id', ' 5005 ');
+    typeInto(wrapper, 'repository-eigenaar-id', '6006');
+    await submitForm(wrapper);
+
+    expect(bodies[1]).toMatchObject({ owner: 'nldd', repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
+    expect(backend.data.repositories[0]).toMatchObject({ repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
+    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+  });
+
+  it('sends no ids while both fields stay empty, and keeps the fields in view', async () => {
+    backend.data.repositories = [];
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+    await submitForm(wrapper);
+
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).not.toHaveProperty('repositoryId');
+    expect(bodies[1]).not.toHaveProperty('ownerId');
+    expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(true);
+  });
+
+  it.each([
+    ['5005', ''],
+    ['', '6006'],
+    ['5005', 'abc'],
+    ['-1', '6006'],
+    ['50.5', '6006'],
+  ])('refuses ids %j and %j client-side, without a request', async (repositoryId, ownerId) => {
+    backend.data.repositories = [];
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+
+    typeInto(wrapper, 'repository-id', repositoryId);
+    typeInto(wrapper, 'repository-eigenaar-id', ownerId);
+    await submitForm(wrapper);
+
+    expect(bodies).toHaveLength(1);
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('unmet')).toBe('repository-ids-fout');
+    expect(wrapper.find('#repository-ids-fout').text()).toBe(
+      'Vul het repository-id en het eigenaar-id allebei in, alleen met cijfers.',
+    );
+  });
+
+  it('shows an ids refusal from the server at the id fields, not at the repository', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts((body) =>
+      body.repositoryId === undefined
+        ? problemResponse(422, 'REPOSITORY_NOT_FOUND', 'Niet gevonden.')
+        : problemResponse(422, 'REPOSITORY_IDS_MISMATCH', 'GitHub geeft andere ids.'),
+    );
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/website');
+    await submitForm(wrapper);
+    typeInto(wrapper, 'repository-id', '1');
+    typeInto(wrapper, 'repository-eigenaar-id', '2');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('#repository-ids-fout').text()).toBe('GitHub geeft andere ids.');
+    expect(wrapper.find('#repository-server').text()).toBe('');
+    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeUndefined();
+  });
+
+  it('keeps the command on the repository it failed for while the input is mid-edit', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toContain('repos/nldd/prive-site');
+
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toContain('repos/nldd/prive-docs');
+  });
+
+  it('names the Forgejo API for a Forgejo repository', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-ids-uitleg"] code').text()).toBe(
+      `curl -s -H "Authorization: token <token>" https://code.overheid.nl/api/v1/repos/nldd/prive-site | jq '.id, .owner.id'`,
+    );
+  });
+
+  it('prefills the stored ids when a linked repository turns out private on Change', async () => {
+    const linked = backend.data.repositories[0]!;
+    const bodies = recordRepositoryPuts(notFoundWithoutIds);
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}`.toUpperCase());
+    typeInto(wrapper, 'repository-livebranch-invoer', 'release');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
+    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe(String(linked.ownerId));
+
+    // Another spelling of the same repository keeps them.
+    typeInto(wrapper, 'repository-eigenaar-repo', `https://github.com/${linked.owner}/${linked.repo}`);
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
+
+    await submitForm(wrapper);
+    expect(bodies[1]).toMatchObject({
+      repositoryId: linked.repositoryId,
+      ownerId: linked.ownerId,
+      liveBranch: 'release',
+    });
+    expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('release');
+  });
+
+  it('prefills the stored ids of a linked Forgejo repository on the same host', async () => {
+    backend.data.repositories = [
+      { ...backend.data.repositories[0]!, provider: 'forgejo', host: 'https://code.overheid.nl' },
+    ];
+    recordRepositoryPuts(notFoundWithoutIds);
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(
+      String(backend.data.repositories[0]!.repositoryId),
+    );
+  });
+
+  it('drops prefilled ids once the form names another repository, even if it names the linked one again', async () => {
+    const linked = backend.data.repositories[0]!;
+    const bodies = recordRepositoryPuts(notFoundWithoutIds);
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    await submitForm(wrapper);
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
+
+    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}-oud`);
+    await untilIdle();
+    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}`);
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe('');
+    await submitForm(wrapper);
+    expect(bodies[1]).not.toHaveProperty('repositoryId');
+  });
+
+  it('drops prefilled ids when the provider changes, but keeps ids typed by hand', async () => {
+    recordRepositoryPuts(notFoundWithoutIds);
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    await submitForm(wrapper);
+
+    await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
+
+    typeInto(wrapper, 'repository-id', '5005');
+    typeInto(wrapper, 'repository-eigenaar-id', '6006');
+    await wrapper.find('[data-testid="repository-provider"]').setValue('github');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('5005');
+  });
+
+  it('does not prefill the stored ids for another repository', async () => {
+    recordRepositoryPuts(notFoundWithoutIds);
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-docs');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe('');
+  });
+
+  it('shows the generic message and no id fields when the request itself fails', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
+    await submitForm(wrapper);
+
+    expect(wrapper.find('#repository-server').text()).toBe('Koppelen is niet gelukt.');
+    expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
+  });
+
+  it('hides the id fields again when the form is reopened', async () => {
+    backend.data.repositories = [];
+    recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    typeInto(wrapper, 'repository-eigenaar-repo', 'nldd/prive-site');
+    await submitForm(wrapper);
+    expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="repository-annuleren"]').trigger('click');
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
+  });
+});
+
 describe('TabDeploy: unlinking the repository', () => {
   it('asks for confirmation and only then unlinks', async () => {
     const wrapper = makeWrapper();

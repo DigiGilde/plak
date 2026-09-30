@@ -80,6 +80,7 @@ from plak.ci.providers import (
     ProviderClient,
     ProviderUnavailableError,
     RepositoryNotFoundError,
+    ResolvedRepository,
     host_label,
     valid_name,
 )
@@ -1061,6 +1062,20 @@ class SiteRepositoryBody(ApiModel):
             "en het opruimen ervan mogen altijd vanaf elke branch."
         ),
         examples=["main"],
+    )
+    repository_id: int | None = Field(
+        default=None,
+        description=(
+            "Numeriek id van de repository, alleen nodig als Plak haar niet kan opzoeken omdat ze privé "
+            "is. Samen met `ownerId`, of allebei weglaten. Op te vragen met "
+            "`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
+        ),
+        examples=[123456],
+    )
+    owner_id: int | None = Field(
+        default=None,
+        description="Numeriek id van de eigenaar, samen met `repositoryId`.",
+        examples=[7890],
     )
 
 
@@ -2377,6 +2392,33 @@ def _live_branch(value: str | None) -> str | None:
     return branch
 
 
+# site_repositories stores both ids as a BigInteger.
+_MAX_PROVIDER_ID = 2**63 - 1
+
+
+def _entered_ids(body: SiteRepositoryBody) -> tuple[int, int] | None:
+    """The repository and owner id the admin entered, both or neither."""
+    repository_id, owner_id = body.repository_id, body.owner_id
+    if repository_id is None and owner_id is None:
+        return None
+    if (
+        repository_id is None
+        or owner_id is None
+        or not 0 < repository_id <= _MAX_PROVIDER_ID
+        or not 0 < owner_id <= _MAX_PROVIDER_ID
+    ):
+        raise ApiError(422, "REPOSITORY_IDS_INVALID")
+    return repository_id, owner_id
+
+
+def _lookup_failed(error: RepositoryNotFoundError | ProviderUnavailableError, where: dict[str, str]) -> ApiError:
+    if isinstance(error, RepositoryNotFoundError):
+        return ApiError(422, "REPOSITORY_NOT_FOUND", params=where)
+    if error.rate_limited:
+        return ApiError(503, "CI_PROVIDER_RATE_LIMITED", params={"host": where["host"]})
+    return ApiError(503, "CI_PROVIDER_UNREACHABLE.lookup", params={"host": where["host"]})
+
+
 def _repository_host(request: Request, provider: CiProvider, host: str | None) -> str:
     if provider == CiProvider.GITHUB:
         if host is not None and host.strip().rstrip("/").lower() != GITHUB_HOST:
@@ -3277,8 +3319,11 @@ def make_admin_router() -> APIRouter:
             "die blijven gelijk bij een hernoeming, en een nieuwe repository onder dezelfde naam krijgt ze "
             "niet. Een CI-ID-token uit deze repository mag daarna publiceren: een preview (en het opruimen "
             "ervan) vanaf elke branch, live alleen vanuit `push`, `workflow_dispatch` of `schedule` en, als "
-            "die is ingesteld, alleen vanaf `liveBranch`. De repository "
-            "moet openbaar zijn, want Plak zoekt haar zonder inloggegevens op.\n\n"
+            "die is ingesteld, alleen vanaf `liveBranch`.\n\n"
+            "Plak zoekt zonder inloggegevens, dus een privé repository vindt het niet. Geef dan zelf "
+            "`repositoryId` en `ownerId` mee (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): Plak "
+            "bewaart ze zonder opzoeking als die faalt. Een verkeerd id koppelt niets anders, het weigert "
+            "alleen elke deploy. Vindt Plak de repository wel, dan moeten de ids kloppen.\n\n"
             "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
         ),
         responses=_errors(
@@ -3289,14 +3334,17 @@ def make_admin_router() -> APIRouter:
                 422: (
                     "Eigenaar of repository is geen geldige naam (`REPOSITORY_INVALID`), de host hoort niet "
                     "bij de provider of staat niet in de toegestane Forgejo-instanties (`HOST_NOT_ALLOWED`), de "
-                    "live-branch is geen geldige branchnaam (`LIVE_BRANCH_INVALID`), of de provider kent de "
-                    "repository niet, of niet openbaar (`REPOSITORY_NOT_FOUND`)."
+                    "live-branch is geen geldige branchnaam (`LIVE_BRANCH_INVALID`), de provider kent de "
+                    "repository niet, of niet openbaar, en er zijn geen ids meegegeven (`REPOSITORY_NOT_FOUND`), "
+                    "de ids zijn niet allebei een positief geheel getal (`REPOSITORY_IDS_INVALID`), of de "
+                    "provider geeft de repository andere ids (`REPOSITORY_IDS_MISMATCH`)."
                 )
             },
             {
                 503: (
                     "De provider is niet bereikbaar (`CI_PROVIDER_UNREACHABLE`) of zijn limiet voor "
-                    "anonieme verzoeken is op (`CI_PROVIDER_RATE_LIMITED`); probeer het later opnieuw."
+                    "anonieme verzoeken is op (`CI_PROVIDER_RATE_LIMITED`), en er zijn geen ids meegegeven; "
+                    "probeer het later opnieuw."
                 )
             },
         ),
@@ -3316,23 +3364,23 @@ def make_admin_router() -> APIRouter:
         if not valid_name(owner) or not valid_name(repo):
             raise ApiError(422, "REPOSITORY_INVALID")
         live_branch = _live_branch(body.live_branch)
+        entered = _entered_ids(body)
+        where = {"owner": owner, "repo": repo, "host": host_label(host)}
         providers: ProviderClient = request.app.state.ci_providers
+        # Entered ids are safe without the lookup: a token only matches the
+        # repository that really carries them, so a wrong id means every
+        # deploy is refused. The lookup still catches a typo in a public one.
         try:
             resolved = await providers.resolve(body.provider, host, owner, repo)
-        except RepositoryNotFoundError:
-            raise ApiError(
-                422,
-                "REPOSITORY_NOT_FOUND",
-                params={"owner": owner, "repo": repo, "host": host_label(host)},
-            ) from None
-        except ProviderUnavailableError as error:
-            if error.rate_limited:
-                raise ApiError(
-                    503, "CI_PROVIDER_RATE_LIMITED", params={"host": host_label(host)}
-                ) from None
-            raise ApiError(
-                503, "CI_PROVIDER_UNREACHABLE.lookup", params={"host": host_label(host)}
-            ) from None
+        except (RepositoryNotFoundError, ProviderUnavailableError) as error:
+            if entered is None:
+                raise _lookup_failed(error, where) from None
+            resolved = ResolvedRepository(owner=owner, repo=repo, repository_id=entered[0], owner_id=entered[1])
+            ids_confirmed = False
+        else:
+            if entered is not None and entered != (resolved.repository_id, resolved.owner_id):
+                raise ApiError(422, "REPOSITORY_IDS_MISMATCH", params=where)
+            ids_confirmed = True
 
         repository = await db.scalar(select(SiteRepository).where(SiteRepository.site_id == site.id))
         if repository is None:
@@ -3359,6 +3407,7 @@ def make_admin_router() -> APIRouter:
                 "host": host,
                 "repository": f"{resolved.owner}/{resolved.repo}",
                 "repository_id": resolved.repository_id,
+                "ids_confirmed": ids_confirmed,
                 "live_branch": live_branch,
             },
         )

@@ -1184,6 +1184,26 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           if (provider === 'forgejo' && !MOCK_CI_FORGEJO_HOSTS.some((allowed) => allowed === host)) {
             return problem(422, 'Host niet toegestaan', `"${host}" is geen toegestane Forgejo-host.`, 'HOST_NOT_ALLOWED');
           }
+          const positive = (value: unknown): value is number => Number.isInteger(value) && (value as number) > 0;
+          const entered = body.repositoryId !== undefined || body.ownerId !== undefined;
+          if (entered && !(positive(body.repositoryId) && positive(body.ownerId))) {
+            return problem(
+              422,
+              'Ongeldige ids',
+              'Vul het repository-id en het eigenaar-id allebei in, als positief geheel getal.',
+              'REPOSITORY_IDS_INVALID',
+            );
+          }
+          // In the mock a repository whose name starts with "prive" is
+          // private: the anonymous lookup does not find it.
+          if (!entered && repo.toLowerCase().startsWith('prive')) {
+            return problem(
+              422,
+              'Repository niet gevonden',
+              `Repository ${owner}/${repo} niet gevonden, of niet openbaar. Is ze privé, vul dan het repository-id en het eigenaar-id zelf in.`,
+              'REPOSITORY_NOT_FOUND',
+            );
+          }
           const liveBranch = (body.liveBranch as string | null) ?? null;
           const linked: SiteRepository = {
             groupSlug,
@@ -1192,8 +1212,8 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             host,
             owner,
             repo,
-            repositoryId: existing?.repositoryId ?? nextSequenceNumber(),
-            ownerId: existing?.ownerId ?? nextSequenceNumber(),
+            repositoryId: entered ? (body.repositoryId as number) : (existing?.repositoryId ?? nextSequenceNumber()),
+            ownerId: entered ? (body.ownerId as number) : (existing?.ownerId ?? nextSequenceNumber()),
             liveBranch,
             createdBy: 'Bea Heerder',
             createdAt: existing?.createdAt ?? now(),
