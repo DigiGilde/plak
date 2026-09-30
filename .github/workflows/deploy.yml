@@ -21,6 +21,8 @@ on:
     branches: [main, beta]
   pull_request:
     types: [opened, synchronize, reopened, closed]
+  # Without it the merge queue on beta gets no checks and merges nothing.
+  merge_group:
 
 env:
   REGISTRY: ghcr.io
@@ -50,7 +52,9 @@ jobs:
   # (see the preview job below).
   bouw:
     needs: ci
-    if: github.event.action != 'closed' && github.event.pull_request.user.login != 'dependabot[bot]'
+    if: >-
+      github.event.action != 'closed' && github.event_name != 'merge_group'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # This job executes the Containerfile, so `npm ci` and `uv sync` run
     # here. It therefore holds no more than building and pushing needs; the
