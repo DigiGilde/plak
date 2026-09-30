@@ -16,6 +16,9 @@ Usage:
     plak site create <group/site> --title <title> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
+    plak site link <group/site> [<repository>] \
+        (--live-branch <branch> | --any-branch) \
+        [--repository-id <id> --owner-id <id>] [--no-gh] [--host <host>]
 
 Signing in happens with 'plak login': the session belongs to your user
 account, for every directory. The tokens go into the system keyring (macOS
@@ -48,6 +51,7 @@ import os
 import platform
 import re
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -906,6 +910,172 @@ def cmd_site_create(args: argparse.Namespace) -> int:
     return 0
 
 
+# GitHub and Forgejo owner and repository names, as the server accepts them.
+REPOSITORY_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+GITHUB_HOSTNAME = "github.com"
+HOSTNAME_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?$")
+MAX_PROVIDER_ID = 2**63 - 1
+SUBPROCESS_TIMEOUT_S = 30
+
+
+def _repository_name(value: str) -> str | None:
+    return value if REPOSITORY_NAME_RE.match(value) and value not in (".", "..") else None
+
+
+def _parse_repository(reference: str) -> tuple[str, str, str]:
+    """`owner/repo`, an https or ssh URL, or a git@ address into (hostname,
+    owner, repo); a bare `owner/repo` is on github.com."""
+    value = reference.strip()
+    hostname = GITHUB_HOSTNAME
+    scp = re.match(r"^[^@/\s]+@([^:/\s]+):(.+)$", value)
+    if scp:
+        hostname, path = scp.group(1), scp.group(2)
+    elif "://" in value:
+        parsed = urllib.parse.urlsplit(value)
+        try:
+            port = parsed.port
+        except ValueError:
+            port = -1
+        if parsed.scheme not in ("https", "ssh", "git") or not parsed.hostname or port == -1:
+            raise UsageError(f"Not a repository URL: {reference!r}")
+        hostname, path = parsed.hostname, parsed.path
+        # An ssh port says nothing about where the web host listens.
+        if parsed.scheme == "https" and port is not None:
+            hostname = f"{hostname}:{port}"
+    else:
+        path = value
+    if not HOSTNAME_RE.match(hostname.lower()):
+        raise UsageError(f"Not a valid host in {reference!r}")
+    parts = [part for part in path.split("/") if part]
+    if "://" not in value and not scp and len(parts) != 2:
+        raise UsageError(f"The repository must be 'owner/repo' or a URL, got: {reference!r}")
+    if len(parts) < 2:
+        raise UsageError(f"The URL names no owner and repository: {reference!r}")
+    owner, repo = _repository_name(parts[0]), _repository_name(parts[1].removesuffix(".git"))
+    if owner is None or repo is None:
+        raise UsageError(f"Not a valid owner or repository name: {reference!r}")
+    return hostname.lower(), owner, repo
+
+
+def _git_origin() -> str:
+    """The URL of the remote 'origin' of the git checkout we are in."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        result = None
+    if result is None or result.returncode != 0 or not result.stdout.strip():
+        raise UsageError(
+            "No repository given and no git remote 'origin' here: pass 'owner/repo' or the repository URL"
+        )
+    return result.stdout.strip()
+
+
+def _github_repository(owner: str, repo: str) -> tuple[str, str, int, int] | None:
+    """(owner, repo, repository id, owner id) as GitHub has them, asked with
+    your own gh login, so a private repository resolves too; None when gh is
+    missing, not logged in or cannot see it."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--hostname", GITHUB_HOSTNAME, f"repos/{owner}/{repo}"],
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except ValueError:
+        return None
+    owner_data = data.get("owner") if isinstance(data, dict) else None
+    if not isinstance(owner_data, dict):
+        return None
+    ids = (data.get("id"), owner_data.get("id"))
+    names = (owner_data.get("login"), data.get("name"))
+    if not all(type(value) is int and 0 < value <= MAX_PROVIDER_ID for value in ids):
+        return None
+    if not all(isinstance(value, str) and _repository_name(value) for value in names):
+        return None
+    return names[0], names[1], ids[0], ids[1]
+
+
+def cmd_site_link(args: argparse.Namespace) -> int:
+    try:
+        host = _resolve_host(args)
+        _require_https(host)
+        group, site = _split_site(args.site, "The site")
+        if (args.repository_id is None) != (args.owner_id is None):
+            raise UsageError("Pass --repository-id and --owner-id together, or neither")
+        for value in (args.repository_id, args.owner_id):
+            if value is not None and not 0 < value <= MAX_PROVIDER_ID:
+                raise UsageError("--repository-id and --owner-id must be positive whole numbers")
+        hostname, owner, repo = _parse_repository(args.repository or _git_origin())
+        token = _get_member_token(host)
+    except UsageError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
+
+    body: dict[str, object] = {"owner": owner, "repo": repo, "liveBranch": args.live_branch}
+    if hostname == GITHUB_HOSTNAME:
+        body["provider"] = "github"
+    else:
+        body["provider"] = "forgejo"
+        body["host"] = f"https://{hostname}"
+    ids_from = None
+    if args.repository_id is not None:
+        body["repositoryId"], body["ownerId"] = args.repository_id, args.owner_id
+        ids_from = "as given"
+    elif hostname == GITHUB_HOSTNAME and args.gh:
+        found = _github_repository(owner, repo)
+        if found is not None:
+            body["owner"], body["repo"], body["repositoryId"], body["ownerId"] = found
+            ids_from = "from gh"
+
+    try:
+        response = httpx.put(
+            f"{host}/-/api/v1/sites/{group}/{site}/repository",
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+            timeout=30.0,
+        )
+    except httpx.HTTPError as error:
+        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+        return 1
+    if response.status_code != 200:
+        _print_problem_detail(response)
+        if _problem_data(response).get("code") == "REPOSITORY_NOT_FOUND":
+            print(
+                "A private repository: log in to GitHub with 'gh auth login' and run this again, "
+                "or pass --repository-id and --owner-id.",
+                file=sys.stderr,
+            )
+        return 1
+
+    data = _problem_data(response)
+    linked = f"{hostname}/{body['owner']}/{body['repo']}"
+    if isinstance(data.get("owner"), str) and isinstance(data.get("repo"), str):
+        linked = f"{hostname}/{_clean(data['owner'])}/{_clean(data['repo'])}"
+    print(f"Linked {linked} to {group}/{site}.")
+    if args.live_branch is None:
+        print("Live: from any branch, on a push, a manual run or a schedule. Previews: from any branch.")
+    else:
+        print(f"Live: only from '{args.live_branch}', on a push, a manual run or a schedule. "
+              "Previews: from any branch.")
+    if ids_from is not None:
+        print(f"Ids {ids_from}: repository {body['repositoryId']}, owner {body['ownerId']}.")
+    print(f"Set up the workflow: {host}/{group}/{site}/deploy")
+    return 0
+
+
 def _add_access_flags(parser: argparse.ArgumentParser, defaults: tuple[str, str, str]) -> None:
     """--access, --secret-links and --invitees, with what leaving each out means."""
     base_default, keys_default, invitees_default = defaults
@@ -1250,6 +1420,56 @@ def _build_parser() -> argparse.ArgumentParser:
     site_create.add_argument("--title", required=True, help="Display name of the site")
     _add_access_flags(site_create, ("the group's default",) * 3)
     site_create.set_defaults(func=cmd_site_create)
+
+    site_link = site_commands.add_parser(
+        "link",
+        help="Link the repository that may publish to a site from CI.",
+        description=(
+            "Link a GitHub or Forgejo repository to a site where you are admin, so "
+            "its workflows may publish with an OIDC ID token, without a secret. "
+            "Without a repository argument it takes the remote 'origin' of the "
+            "git checkout you are in. For a GitHub repository the ids come from "
+            "your own 'gh' login, so a private repository links too."
+        ),
+    )
+    site_link.add_argument("site", help="group/site, for instance team-aurora/docs")
+    site_link.add_argument(
+        "repository",
+        nargs="?",
+        default=None,
+        help=(
+            "owner/repo (on GitHub) or the repository URL, for instance "
+            "https://code.overheid.nl/minbzk/website. Left out: the remote 'origin' here"
+        ),
+    )
+    branch = site_link.add_mutually_exclusive_group(required=True)
+    branch.add_argument(
+        "--live-branch",
+        default=None,
+        help="The only branch that may publish live, for instance main",
+    )
+    branch.add_argument(
+        "--any-branch",
+        action="store_true",
+        help="Let every branch publish live (still only from a push, a manual run or a schedule)",
+    )
+    site_link.add_argument(
+        "--repository-id",
+        type=int,
+        default=None,
+        help="Numeric id of the repository, for one Plak and gh cannot look up (with --owner-id)",
+    )
+    site_link.add_argument(
+        "--owner-id", type=int, default=None, help="Numeric id of the repository's owner (with --repository-id)"
+    )
+    site_link.add_argument(
+        "--no-gh",
+        dest="gh",
+        action="store_false",
+        help="Do not ask gh for the ids; Plak looks the repository up itself, which finds a public one only",
+    )
+    site_link.add_argument("--host", default=None, help=HOST_HELP)
+    site_link.set_defaults(func=cmd_site_link)
 
     return parser
 

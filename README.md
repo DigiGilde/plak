@@ -185,7 +185,15 @@ plak group create team-aurora --name "Team Aurora"
 plak site create team-aurora/docs --title "Documentation" --access sso
 ```
 
-Deleting groups and sites and managing members stays in the admin.
+To publish from CI, link the repository from its checkout; as site admin.
+For a GitHub repository the ids come from your own `gh` login, so a private
+repository links too:
+
+```bash
+plak site link team-aurora/docs --live-branch main
+```
+
+Deleting groups and sites, unlinking and managing members stays in the admin.
 
 From a checkout of this repository the same commands run without
 installing anything:

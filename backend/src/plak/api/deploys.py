@@ -86,10 +86,11 @@ _PREVIEW_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/previews/[^/]+$")
 # token as well.
 CLI_SESSION_PATH = "/-/api/v1/cli/session"
 CLI_WHOAMI_PATH = "/-/api/v1/cli/whoami"
-# Creating a group or a site (api/admin.py) also takes the CLI token; nothing
-# else in the admin API does.
+# Creating a group or a site and linking a repository (api/admin.py) also
+# take the CLI token; nothing else in the admin API does.
 GROUP_CREATE_PATH = "/-/api/v1/groups"
 _SITE_CREATE_PATH_RE = re.compile(r"^/-/api/v1/groups/[^/]+/sites$")
+_REPOSITORY_LINK_PATH_RE = re.compile(r"^/-/api/v1/sites/[^/]+/[^/]+/repository$")
 
 router = APIRouter(prefix="/-/api/v1")
 
@@ -231,10 +232,18 @@ def is_creation_endpoint(method_: str, path: str) -> bool:
     return path == GROUP_CREATE_PATH or bool(_SITE_CREATE_PATH_RE.match(path))
 
 
+def is_repository_link_endpoint(method_: str, path: str) -> bool:
+    return method_ == "PUT" and bool(_REPOSITORY_LINK_PATH_RE.match(path))
+
+
 def accepts_bearer(method_: str, path: str) -> bool:
-    """The deploy endpoints, the CLI's logout and whoami, and group and site
-    creation."""
-    if is_deploy_endpoint(method_, path) or is_creation_endpoint(method_, path):
+    """The deploy endpoints, the CLI's logout and whoami, group and site
+    creation, and linking a repository."""
+    if (
+        is_deploy_endpoint(method_, path)
+        or is_creation_endpoint(method_, path)
+        or is_repository_link_endpoint(method_, path)
+    ):
         return True
     return (method_, path) in (("DELETE", CLI_SESSION_PATH), ("GET", CLI_WHOAMI_PATH))
 
