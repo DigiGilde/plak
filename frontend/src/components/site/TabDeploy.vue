@@ -313,10 +313,10 @@ const idsCommand = computed(() => {
     : `gh api repos/${path} --jq '.id, .owner.id'`;
 });
 
-// The same link from a checkout; an empty live branch means --any-branch, as in the form.
+// The same link from a checkout; without --live-branch every branch may go live, as in the form.
 const cliLinkCommand = computed(() => {
   const branch = formLiveBranch.value.trim();
-  return `plak site link ${props.group}/${props.site} ${branch ? `--live-branch ${branch}` : '--any-branch'}`;
+  return `plak site link ${props.group}/${props.site}${branch ? ` --live-branch ${branch}` : ''}`;
 });
 
 

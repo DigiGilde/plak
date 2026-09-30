@@ -16,8 +16,7 @@ Usage:
     plak site create <group/site> --title <title> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
-    plak site link <group/site> [<repository>] \
-        (--live-branch <branch> | --any-branch) \
+    plak site link <group/site> [<repository>] [--live-branch <branch>] \
         [--repository-id <id> --owner-id <id>] [--no-gh] [--host <host>]
 
 Signing in happens with 'plak login': the session belongs to your user
@@ -1442,16 +1441,13 @@ def _build_parser() -> argparse.ArgumentParser:
             "https://code.overheid.nl/minbzk/website. Left out: the remote 'origin' here"
         ),
     )
-    branch = site_link.add_mutually_exclusive_group(required=True)
-    branch.add_argument(
+    site_link.add_argument(
         "--live-branch",
         default=None,
-        help="The only branch that may publish live, for instance main",
-    )
-    branch.add_argument(
-        "--any-branch",
-        action="store_true",
-        help="Let every branch publish live (still only from a push, a manual run or a schedule)",
+        help=(
+            "The only branch that may publish live, for instance main. Left out: every "
+            "branch may, still only from a push, a manual run or a schedule"
+        ),
     )
     site_link.add_argument(
         "--repository-id",

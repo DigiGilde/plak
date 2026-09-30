@@ -714,7 +714,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
     const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-commando"]');
 
-    expect(command().text()).toBe('plak site link nldd/website --any-branch');
+    expect(command().text()).toBe('plak site link nldd/website');
     expect(command().attributes('no-copy')).toBeUndefined();
     expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
 
@@ -765,7 +765,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       const hint = wrapper.find('[data-testid="repository-cli-hint"]');
       expect(hint.text()).toContain('Rather from the terminal? Run this in a checkout of the repository');
       expect(hint.find('[data-testid="repository-cli-commando"]').text()).toBe(
-        'plak site link nldd/website --any-branch',
+        'plak site link nldd/website',
       );
     } finally {
       _setLocaleForTest('nl');
