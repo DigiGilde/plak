@@ -55,15 +55,15 @@ deployments:
     domain-format: component.subdomain
     domain-mode: nice-url
     subdomain: plak
-    base-domain: rijksapp.nl
+    base-domain: rijks.app
     issuer: letsencrypt
     root-component: beheer
 ```
 
 `component.subdomain` yields `{component}.{subdomain}.{domein}`; because the
-component is called `beheer` that is `beheer.plak.rijksapp.nl`.
+component is called `beheer` that is `beheer.plak.rijks.app`.
 `root-component` makes that same component also serve the address without that
-first label: `plak.rijksapp.nl`. Two Ingress objects, two Let's Encrypt
+first label: `plak.rijks.app`. Two Ingress objects, two Let's Encrypt
 certificates, one pod.
 
 Three things to know:
@@ -74,7 +74,7 @@ Three things to know:
   object itself. The field `domain-mode` still exists (optional in the
   schema), but is not derived from `domain-format`: the Operations Manager
   reads `domain-mode` literally, and both the root ingress
-  (`plak.rijksapp.nl`) and the self-service registration of the subdomain
+  (`plak.rijks.app`) and the self-service registration of the subdomain
   start only if that value is exactly `nice-url`. Without
   `domain-mode: nice-url` alongside it there is no second host, even with
   `domain-format` and `root-component` set.
@@ -91,7 +91,7 @@ Three things to know:
 
 Request the subdomain through the portal or the API; a platform administrator
 sets it to `approved`. Check with `zadctl project subdomains` and
-`zadctl project check-subdomain plak rijksapp.nl`: that second command wants
+`zadctl project check-subdomain plak rijks.app`: that second command wants
 subdomain and base domain, both mandatory.
 
 ## 4. Applying the configuration
@@ -272,7 +272,7 @@ services:
       config:
         template: sso-only
         additional_redirect_uris:
-          - "https://plak.rijksapp.nl/-/oauth2/callback"
+          - "https://plak.rijks.app/-/oauth2/callback"
 ```
 
 One line of its own per environment. After the first rollout, check that both
