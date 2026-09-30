@@ -310,19 +310,24 @@ async def _serve(
 
     # A preview or a _version view is often the first thing a member opens of
     # a site, and the content session cookie is scoped per site, so that first
-    # request carries none. Neither route ever hands an anonymous visitor a
-    # login redirect of its own, so the answer would be the neutral 404 for a
-    # member who is in fact logged in. Only for a browser that says it has a
-    # content session and only for a top-level navigation: an anonymous
-    # visitor keeps the byte-identical 404, and another site's page cannot
-    # chain this into a session for a request of its own. Live content needs
-    # none of this: wherever a session could grant anything there, the gate
-    # already answers an anonymous visitor with the login redirect.
+    # request carries none; a site without a live version has no live route
+    # that could have handed one out. The gate never gives these routes a
+    # login redirect of its own, so every anonymous refusal here becomes one,
+    # whatever the reason: the answer is then the same for a path with
+    # nothing behind it, and guessing paths teaches nothing. Only for a
+    # top-level navigation, so another site's page cannot chain this into a
+    # session for a request of its own. Not with a key in play, whose holder
+    # may have no SSO account at all, and not for a path the login cannot
+    # scope a site cookie to, where the visitor would come back anonymous and
+    # loop. Live content needs none of this: wherever a session could grant
+    # anything there, the gate already answers with the login redirect.
     if (
         decision.kind is DecisionKind.NEUTRAL_404
         and kind in ("preview", "version")
         and visitor.sub is None
-        and sessions.content_presence(request)
+        and visitor.key_query is None
+        and visitor.key_cookie is None
+        and sessions.content_site_prefix(request.url.path) is not None
         and sessions.top_level_navigation(request)
     ):
         await _audit(request, visitor, "login_redirect", REASON_LOGIN_REQUIRED, refs)

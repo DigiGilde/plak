@@ -268,7 +268,9 @@ def expected(policy: AccessPolicy, name: str, *, preview: bool) -> tuple[Decisio
     the base OR a valid secret link OR an invitee with a session.
 
     On previews an anonymous visitor who could have logged in gets a neutral
-    404 instead of a login redirect.
+    404 instead of a login redirect. The serving layer turns every anonymous
+    preview refusal, this one included, into the login redirect on a
+    top-level navigation; test_serving.py covers that.
     """
     if policy.base is AccessBase.PUBLIC:
         return ALLOW

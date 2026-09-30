@@ -530,6 +530,8 @@ extras are an OR and stopping at the first closed door would make it an AND:
 4. without a session: if logging in could help (`login_can_help`: base `sso`,
    base `site_team`, or invitees on), a login redirect for live content and a
    neutral 404 for a preview, because the existence of a preview does not leak.
+   The serving layer then turns every anonymous preview refusal into the same
+   login redirect on a top-level navigation, whatever its reason (§7.6).
 5. otherwise the neutral 404, with reason `KEY_INVALID` when a key was presented
    and refused and nothing else could have helped, and `NO_ACCESS` otherwise.
    Outward they are the same answer.
@@ -556,7 +558,9 @@ Code: `access/gate.py` (`decide`, `decide_preview`, `_assess`),
 ### 7.3 `_version` views
 
 `/{group}/{site}/_version/{id}/` is for the site team only (§3.3), whatever the
-site's access setting; for anybody else the neutral 404, never a login redirect.
+site's access setting; for anybody else the neutral 404. The one exception is an
+anonymous top-level navigation, which goes to the login whatever lies behind the
+path (§7.6).
 Membership is checked before the version lookup, so a non-member cannot probe
 for the existence of version ids. Every `_version` access is audited.
 
@@ -616,10 +620,10 @@ field plus a separate cookie name: beheer routes accept the beheer session only,
 content serving the content session only. `returnTo` is validated strictly: own
 origin, paths only, and never carrying a `key` parameter.
 
-The beheer session cookie is SameSite=Strict. On the content host the three
-cookies differ: the site cookie is SameSite=None, the anchor and the presence
-flag stay Lax. None is what a shared link to restricted content needs (it has
-to open after a cross-site navigation, which Lax already covers) plus what a
+The admin session cookie is SameSite=Strict. On the content host the two
+cookies differ: the site cookie is SameSite=None, the anchor stays Lax. None is
+what a shared link to restricted content needs (it has to open after a
+cross-site navigation, which Lax already covers) plus what a
 sandboxed page needs to reach its own assets, since its opaque origin is
 cross-site with its own site (§5.7, §5.10). The anchor is the cookie that can
 mint a site cookie for the next site and is only ever read on a top-level
@@ -628,7 +632,7 @@ alternatives are worse, is in `docs/security.md`. Logging out on the beheer
 host is POST only and ends the content session too, through a redirect to
 `/-/logout` on the content host.
 
-The content session rides in three cookies, because all sites share one
+The content session rides in two cookies, because all sites share one
 hostname (§5.10):
 
 - `__Secure-plak-content`, `Path=/{group}/{site}/`: the session id for content
@@ -642,11 +646,8 @@ hostname (§5.10):
   nothing on the content host can write it.
 - `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
   login, the callback and the logout can read it, and nowhere else.
-- `__Host-plak-content-present`, `Path=/`: a flag with no session id and no
-  authority, which tells the serving layer that this browser has a content
-  session somewhere.
 
-One server-side session behind all three: one 12-hour lifetime, one `kind`, one
+One server-side session behind both: one 12-hour lifetime, one `kind`, one
 revocation. Opening a site the visitor has not opened before arrives without a
 site cookie, so the gate sees an anonymous visitor and answers with the login
 redirect; `/-/login` then hands out the cookie for that site off the anchor
@@ -654,11 +655,17 @@ session and sends the visitor on, without a round trip to the IdP. It does that
 only for a top-level navigation (`Sec-Fetch-Dest: document`, a header page
 script cannot set), because otherwise a page could walk another site's request
 through the login and collect a session for it on the way back. A preview or a
-`_version` view never answers an anonymous visitor with a login redirect of its
-own, so there the presence flag is what turns that first request into one; for a
-browser without the flag the answer stays the byte-identical neutral 404.
+`_version` view never gets a login redirect from the gate, and a site without a
+live version has no live route that could hand one out, so the serving layer
+turns every anonymous refusal on those two routes into the login redirect,
+whatever the reason. The answer is then the same for a path with nothing behind
+it, so guessing paths teaches nothing. It does that only for a top-level
+navigation, not when a `?key=` or key cookie came along (its holder may have no
+SSO account), and not for a path that is no `/{group}/{site}/` of slugs, where
+the login could set no site cookie and the visitor would loop. Everything else
+keeps the byte-identical neutral 404.
 
-The logout clears the anchor, the flag and the site cookie at every path the
+The logout clears the anchor and the site cookie at every path the
 session handed one out for (the session remembers up to 32 of them). Past that
 ceiling a site cookie survives in the browser until it closes, and opens
 nothing: the session behind the id is gone.

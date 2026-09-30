@@ -969,8 +969,11 @@ class TestSiteScopedSession:
 
 class TestFirstVisitToPreviewOrVersion:
     """Neither route hands an anonymous visitor a login redirect of its own,
-    so without the presence flag a member's first request to a site would be
-    the neutral 404 although they are logged in."""
+    and a site without a live version has no live route that could, so a
+    member's first request to a preview would be the neutral 404 although
+    logging in would let them in. Every anonymous top-level navigation to one
+    of these routes therefore goes to the login, whether or not anything
+    exists behind the path."""
 
     NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
 
@@ -986,14 +989,74 @@ class TestFirstVisitToPreviewOrVersion:
         response = await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
         assert response.status_code == 302
 
-    async def test_an_anonymous_visitor_keeps_the_neutral_404(self, client, environment):
+    async def test_an_anonymous_visitor_is_sent_to_the_login(self, client, environment):
+        """No content session anywhere, as after logging in on the admin host
+        only: the case this redirect exists for."""
         for path in (
             f"/aurora/site/_version/{environment.world.site_live_id}/",
             "/aurora/site/_preview/pr-besloten/",
         ):
             response = await client.get(path, headers=self.NAVIGATION)
-            assert response.status_code == 404, path
-            assert "location" not in response.headers, path
+            assert response.status_code == 302, path
+            assert response.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}", path
+
+    async def test_the_redirect_does_not_depend_on_what_exists(self, client, environment):
+        """Guessing paths teaches nothing: an unknown group, site, preview or
+        version gets the same answer as one that exists, byte for byte apart
+        from the returnTo that echoes the requested path."""
+        paths = [
+            "/nergens/niks/_preview/pr-1/",  # unknown group
+            "/aurora/bestaat-niet/_preview/pr-1/",  # unknown site
+            "/aurora/leeg/_preview/pr-1/",  # site without a live version
+            "/aurora/site/_preview/pr-999/",  # unknown preview
+            "/aurora/site/_preview/pr-besloten/",  # existing login-gated preview
+            "/aurora/site/_version/geen-uuid/",  # invalid version id
+            f"/aurora/site/_version/{uuid.uuid4()}/",  # unknown version
+            f"/aurora/site/_version/{environment.world.site_live_id}/",  # existing version
+        ]
+        responses_ = [await client.get(path, headers=self.NAVIGATION) for path in paths]
+        ref = responses_[0]
+
+        def without_location(response: httpx.Response) -> list[tuple[str, str]]:
+            return [(k, v) for k, v in _header_list(response) if k != "location"]
+
+        for path, response in zip(paths, responses_, strict=True):
+            assert response.status_code == 302, path
+            assert response.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}", path
+            assert response.content == ref.content, path
+            assert without_location(response) == without_location(ref), path
+
+    async def test_a_public_preview_is_served_to_an_anonymous_navigation(self, client, environment):
+        """Only a refusal becomes the redirect: a visitor without an SSO
+        account still opens a public preview."""
+        response = await client.get("/aurora/site/_preview/pr-42/", headers=self.NAVIGATION)
+        assert response.status_code == 200
+        assert response.content == PREVIEW_INDEX
+        assert "location" not in response.headers
+
+    async def test_the_redirect_is_audited_as_a_login_redirect(self, client, environment):
+        await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [("login_redirect", "LOGIN_REQUIRED")]
+
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            {},  # no fetch metadata: curl, a link checker
+            {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "empty"},
+            {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "image"},
+            {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "iframe"},
+        ],
+    )
+    async def test_anything_but_a_top_level_navigation_keeps_the_neutral_404(
+        self, client, environment, headers
+    ):
+        """Another site's page cannot walk a request through the login and
+        collect a session on the way back, and nobody logs in because of an
+        image."""
+        response = await client.get("/aurora/site/_preview/pr-besloten/", headers=headers)
+        assert response.status_code == 404
+        assert "location" not in response.headers
 
     async def test_a_subresource_gets_no_redirect_to_chain(self, client, environment):
         set_content_session_cookie(client, environment.app, sub="lid-actief")
@@ -1003,11 +1066,46 @@ class TestFirstVisitToPreviewOrVersion:
         )
         assert response.status_code == 404
 
+    async def test_a_refused_key_in_the_query_keeps_the_neutral_404(self, client, environment):
+        """Whoever came in on a secret link may have no SSO Rijk account at
+        all; a login they cannot complete helps nobody."""
+        response = await client.get(
+            "/aurora/site/_preview/pr-besloten/?key=fout.fout", headers=self.NAVIGATION
+        )
+        assert response.status_code == 404
+        assert "location" not in response.headers
+
+    async def test_a_refused_key_cookie_keeps_the_neutral_404(self, client, environment):
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        response = await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
+        assert response.status_code == 404
+        assert "location" not in response.headers
+
+    async def test_a_path_the_login_cannot_scope_a_cookie_to_keeps_the_neutral_404(self, client, environment):
+        """The login hands out a site cookie only for a `/{group}/{site}/` of
+        slugs. For any other path it would send the visitor back without one,
+        the gate would see them as anonymous again, and the redirect would
+        loop."""
+        response = await client.get("/Aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
+        assert response.status_code == 404
+        assert "location" not in response.headers
+
+    async def test_a_visitor_with_a_session_and_no_access_gets_the_neutral_404(self, client, environment):
+        """Once logged in the refusal is the neutral 404 and not another round
+        to the login, so a visitor without access does not loop either."""
+        set_content_session_cookie(
+            client, environment.app, sub="willekeurige-kijker", sites=("/aurora/site/",)
+        )
+        response = await client.get(
+            f"/aurora/site/_version/{environment.world.site_live_id}/", headers=self.NAVIGATION
+        )
+        assert response.status_code == 404
+        assert "location" not in response.headers
+
     async def test_live_content_needs_none_of_this(self, client, environment):
         """Wherever a session could grant anything on live content, the gate
-        already answers an anonymous visitor with the login redirect, so the
-        presence flag changes nothing there."""
-        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker")
+        already answers an anonymous visitor with the login redirect; where it
+        could not, the neutral 404 stays."""
         response = await client.get("/aurora/geheim/", headers=self.NAVIGATION)
         assert response.status_code == 404
 

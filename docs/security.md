@@ -88,6 +88,7 @@ see the CLI row above.
 | Secret link without a code: `?key=selector` only shows a code page for a usable key of that site, everything beyond that stays the neutral 404; the code goes in the body of a POST, never in the URL | implemented: `serving/code_page.py`, `access/gate.py` (`code_page_needed`), `access/keys.py` (`verify_parts`, `selector_usable`, `compare_dummy`), `backend/tests/test_code_page.py` |
 | Secret link: `?key=` is redeemed (cookie plus 302 to the URL without `key`); key never in audit, returnTo or access log | implemented: `serving/router.py`, `containers/plak/Containerfile` and `justfile` (`--no-access-log`), `backend/tests/test_serving.py` |
 | Expired preview gets the neutral 404 straight away at the access decision itself (not only via the purge job) | implemented: `access/gate.py` (`REASON_PREVIEW_EXPIRED`), `backend/tests/test_access_gate.py` |
+| Anonymous top-level navigation to a preview or `_version` view: the same login redirect whatever lies behind the path, so it betrays no existence of non-public content (a public preview is served, as it always was); not for a subresource, not with a key in play, not for a path of non-slugs (the login could scope no site cookie there, so it would loop) | implemented: `serving/router.py`, `backend/tests/test_serving.py` (`TestFirstVisitToPreviewOrVersion`) |
 | `_version` views exclusively for active group members, every access audited | implemented: `access/gate.py`, `serving/router.py`, `backend/tests/test_access_gate.py`, `backend/tests/test_serving.py` |
 | Path validation before every access check (traversal, null bytes, backslashes, percent-encoded) | implemented: `serving/resolution.py` (`normalise_rest`), `backend/tests/test_resolution.py` |
 | Non-public content is not served to a subresource request from another site's page on the same origin (one hostname for every site, so the cookies ride along); navigation and clients without `Sec-Fetch-*` stay through. A stopgap while every site shares one origin, see design.md §5.10 | implemented: `serving/router.py` (`_foreign_subresource`), `backend/tests/test_serving.py` |
@@ -270,10 +271,9 @@ while public sites were unaffected because they need no cookie.
 
 There is no request signal that separates such a load from a third party's,
 so the site cookie (`__Secure-plak-content`) and the secret-link cookie
-(`__Secure-plak-key`) are `SameSite=None; Secure`. The anchor and the presence
-flag stay `Lax`: they are only ever read on a top-level navigation, which Lax
-covers, and the anchor is the cookie that can mint a site cookie for the next
-site.
+(`__Secure-plak-key`) are `SameSite=None; Secure`. The anchor stays `Lax`: it
+is only ever read on a top-level navigation, which Lax covers, and it is the
+cookie that can mint a site cookie for the next site.
 
 What that opens, shape by shape, for a site this browser has a cookie for:
 
@@ -645,8 +645,8 @@ the same OIDC client as the admin login (PKCE, state, nonce, iss check,
 that second redirect URI has to be registered at the IdP alongside
 `{PLAK_BASE_URL}/-/oauth2/callback`. The outcome is a content session
 (`__Secure-plak-content`, HttpOnly, Secure, SameSite=None,
-`Path=/{group}/{site}/`, 12 hours, no CSRF cookie, with an anchor under `/-/`
-and a presence flag at `/`, see the cookie row above) without admin
+`Path=/{group}/{site}/`, 12 hours, no CSRF cookie, with an anchor under `/-/`,
+see the cookie row above) without admin
 authority: `session_from_request` (admin and API) accepts kind `admin` only, content serving kind `content` only,
 and a login attempt carries its kind so that a callback never redeems an
 attempt of the other flow. A content login creates no member record (spec §7

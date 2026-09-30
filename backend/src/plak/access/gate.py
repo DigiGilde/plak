@@ -8,7 +8,10 @@ secret link, OR they are an invitee with a
 session. A visitor without a session gets a LOGIN_REDIRECT for live content
 whenever logging in could grant them something, and a neutral 404 for previews
 (the existence of a preview does not leak). With a preview override that
-override is the policy, base and extras together.
+override is the policy, base and extras together. The serving layer turns
+every anonymous refusal on a preview or `_version` view into the login
+redirect on a top-level navigation, whatever its reason (serving/router.py),
+so that answer leaks nothing either.
 """
 
 from __future__ import annotations

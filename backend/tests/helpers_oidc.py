@@ -24,8 +24,6 @@ from plak.auth.oidc import OidcClient
 from plak.auth.sessions import (
     CONTENT_ANCHOR_COOKIE,
     CONTENT_ANCHOR_PATH,
-    CONTENT_PRESENCE_COOKIE,
-    CONTENT_PRESENT,
     CONTENT_SESSION_COOKIE,
     SESSION_COOKIE,
     SessionKind,
@@ -324,7 +322,7 @@ def set_content_session_cookie(
     sites: Sequence[str] = (),
 ):
     """Creates a server-side content session (viewer) directly and sets its
-    cookies: the anchor and the presence flag, plus the site cookie for every
+    cookies: the anchor, plus the site cookie for every
     `/{group}/{site}/` in `sites`. Like a browser, the client sends a site
     cookie only to the site it belongs to, so a test that leaves `sites` empty
     is a visitor who has not opened that site yet."""
@@ -340,7 +338,6 @@ def set_content_session_cookie(
     )
     token = sign(app.state.settings.session_secret, session.id)
     client.cookies.set(CONTENT_ANCHOR_COOKIE, token, domain="plak.example", path=CONTENT_ANCHOR_PATH)
-    client.cookies.set(CONTENT_PRESENCE_COOKIE, CONTENT_PRESENT, domain="plak.example", path="/")
     for prefix in sites:
         store.note_content_site(session.id, prefix)
         client.cookies.set(CONTENT_SESSION_COOKIE, token, domain="plak.example", path=prefix)
