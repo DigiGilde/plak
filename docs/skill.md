@@ -41,10 +41,11 @@ tab **Marketplaces**). By hand:
 then **Update now** on the plugin in the **Installed** tab of `/plugin`,
 or `claude plugin update plak@plak` in your shell.
 
-The manifests pin a version, and Claude Code keeps an installed copy until
-that string changes, however many commits land. So a change under
-`plugin/` reaches existing installs only with a new `version`, in both
-`plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+The plugin manifest pins a version, and Claude Code keeps an installed
+copy until that string changes, however many commits land. So a change
+under `plugin/` reaches existing installs only with a new `version` in
+`plugin/.claude-plugin/plugin.json`, the one place it lives; the
+marketplace entry carries none.
 
 The skill needs the `plak` CLI on your PATH:
 

@@ -27,24 +27,24 @@ def _load():
 check = _load()
 
 
-def _marketplace(version: object = "0.2.0", name: str = "plak") -> dict:
-    return {"name": "plak", "plugins": [{"name": name, "source": "./plugin", "version": version}]}
+def _marketplace(name: str = "plak", **extra: object) -> dict:
+    return {"name": "plak", "plugins": [{"name": name, "source": "./plugin", **extra}]}
 
 
 class TestProblems:
     def test_a_raised_version_in_both_manifests_passes(self):
         assert check.problems(["plugin/skills/x/SKILL.md"], {"version": "0.1.0"}, {"version": "0.2.0"},
-                              _marketplace("0.2.0")) == []
+                              _marketplace()) == []
 
     @pytest.mark.parametrize("head", ["0.1.0", "0.0.9"])
     def test_a_plugin_change_without_a_higher_version_fails(self, head):
         [problem] = check.problems(["plugin/skills/x/SKILL.md"], {"version": "0.1.0"}, {"version": head},
-                                   _marketplace(head))
+                                   _marketplace())
         assert "raise the version above 0.1.0" in problem
 
     def test_versions_compare_as_numbers_not_as_text(self):
         assert check.problems(["plugin/x"], {"version": "0.9.0"}, {"version": "0.10.0"},
-                              _marketplace("0.10.0")) == []
+                              _marketplace()) == []
 
     @pytest.mark.parametrize(
         "changed",
@@ -52,16 +52,27 @@ class TestProblems:
         ids=["only-evals", "outside-plugin", "nothing"],
     )
     def test_a_change_outside_what_an_install_runs_needs_no_new_version(self, changed):
-        assert check.problems(changed, {"version": "0.1.0"}, {"version": "0.1.0"}, _marketplace("0.1.0")) == []
+        assert check.problems(changed, {"version": "0.1.0"}, {"version": "0.1.0"}, _marketplace()) == []
 
     def test_the_marketplace_manifest_itself_needs_no_new_version(self):
         assert check.problems([".claude-plugin/marketplace.json"], {"version": "0.1.0"}, {"version": "0.1.0"},
-                              _marketplace("0.1.0")) == []
+                              _marketplace()) == []
 
-    def test_manifests_that_disagree_fail_even_without_a_plugin_change(self):
+    @pytest.mark.parametrize("version", ["0.2.0", "0.1.0"])
+    def test_a_version_in_the_marketplace_entry_fails_even_without_a_plugin_change(self, version):
+        """The plugin's own manifest wins; a second copy can only drift."""
         [problem] = check.problems(["README.md"], {"version": "0.2.0"}, {"version": "0.2.0"},
-                                   _marketplace("0.1.0"))
-        assert "differs from '0.2.0'" in problem
+                                   _marketplace(version=version))
+        assert problem == f"{check.MARKETPLACE}: drop the version of 'plak'; it lives in {check.PLUGIN_MANIFEST} only."
+
+    @pytest.mark.parametrize(("base", "head"), [("0.3.1", "2026.10.1"), ("2026.10.1", "2026.10.1.1"),
+                                                ("2026.9.30", "2026.10.1")])
+    def test_a_calver_version_from_a_release_counts_as_higher(self, base, head):
+        assert check.problems(["plugin/x"], {"version": base}, {"version": head}, _marketplace()) == []
+
+    def test_a_same_day_suffix_counts_from_one(self):
+        [problem] = check.problems([], {"version": "0.1.0"}, {"version": "2026.10.1.0"}, _marketplace())
+        assert "is not MAJOR.MINOR.PATCH[.N]" in problem
 
     @pytest.mark.parametrize("marketplace", [{"plugins": []}, {}, {"plugins": ["plak"]},
                                              {"plugins": [_marketplace()["plugins"][0]] * 2}])
@@ -71,12 +82,12 @@ class TestProblems:
 
     @pytest.mark.parametrize("version", [None, "1.0", "v1.0.0", "1.0.0-beta", "01.0.0", 1])
     def test_a_version_that_is_not_major_minor_patch_fails(self, version):
-        found = check.problems(["plugin/x"], {"version": "0.1.0"}, {"version": version}, _marketplace(version))
-        assert found == [f"{check.PLUGIN_MANIFEST}: version {version!r} is not MAJOR.MINOR.PATCH."]
+        found = check.problems(["plugin/x"], {"version": "0.1.0"}, {"version": version}, _marketplace())
+        assert found == [f"{check.PLUGIN_MANIFEST}: version {version!r} is not MAJOR.MINOR.PATCH[.N]."]
 
     @pytest.mark.parametrize("base", [None, {}, {"version": "oud"}])
     def test_without_a_usable_base_version_there_is_nothing_to_raise_above(self, base):
-        assert check.problems(["plugin/x"], base, {"version": "0.1.0"}, _marketplace("0.1.0")) == []
+        assert check.problems(["plugin/x"], base, {"version": "0.1.0"}, _marketplace()) == []
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -91,9 +102,8 @@ def _write_manifests(repo: Path, version: str, marketplace_version: str | None =
     (repo / "plugin" / ".claude-plugin").mkdir(parents=True, exist_ok=True)
     (repo / ".claude-plugin").mkdir(exist_ok=True)
     (repo / "plugin" / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "plak", "version": version}))
-    (repo / ".claude-plugin" / "marketplace.json").write_text(
-        json.dumps(_marketplace(marketplace_version or version))
-    )
+    extra = {} if marketplace_version is None else {"version": marketplace_version}
+    (repo / ".claude-plugin" / "marketplace.json").write_text(json.dumps(_marketplace(**extra)))
 
 
 @pytest.fixture
@@ -162,12 +172,12 @@ class TestMain:
 
         assert check.main(["check", "base"]) == 0
 
-    def test_disagreeing_manifests_fail(self, repo, capsys):
-        _write_manifests(repo, "0.2.0", marketplace_version="0.1.0")
+    def test_a_version_in_the_marketplace_fails(self, repo, capsys):
+        _write_manifests(repo, "0.2.0", marketplace_version="0.2.0")
         _commit(repo)
 
         assert check.main(["check", "base"]) == 1
-        assert "differs from '0.2.0'" in capsys.readouterr().out
+        assert "drop the version of 'plak'" in capsys.readouterr().out
 
     def test_without_a_base_ref_it_says_how_to_call_it(self, capsys):
         assert check.main(["check"]) == 2
