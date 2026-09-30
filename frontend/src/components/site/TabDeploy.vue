@@ -313,10 +313,19 @@ const idsCommand = computed(() => {
     : `gh api repos/${path} --jq '.id, .owner.id'`;
 });
 
-// The same link from a checkout; without --live-branch every branch may go live, as in the form.
+// The same link from the terminal. The repository is named whenever the form
+// holds one, so the command does not depend on which checkout it runs in; a
+// Forgejo repository needs its URL, as a bare owner/repo means GitHub to the CLI.
+// Without --live-branch every branch may go live, as in the form.
 const cliLinkCommand = computed(() => {
+  const parsed = repositoryReference.value;
   const branch = formLiveBranch.value.trim();
-  return `plak site link ${props.group}/${props.site}${branch ? ` --live-branch ${branch}` : ''}`;
+  let command = `plak site link ${props.group}/${props.site}`;
+  if (parsed.kind === 'valid') {
+    const path = `${parsed.owner}/${parsed.repo}`;
+    command += formProvider.value === 'forgejo' ? ` ${formHost.value}/${path}` : ` ${path}`;
+  }
+  return branch ? `${command} --live-branch ${branch}` : command;
 });
 
 

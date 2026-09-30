@@ -721,6 +721,40 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     typeInto(wrapper, 'repository-livebranch-invoer', ' main ');
     await untilIdle();
     expect(command().text()).toBe('plak site link nldd/website --live-branch main');
+
+    // Named, the repository no longer depends on the checkout the command runs in.
+    typeInto(wrapper, 'repository-eigenaar-repo', 'https://github.com/minbzk/website.git');
+    await untilIdle();
+    expect(command().text()).toBe('plak site link nldd/website minbzk/website --live-branch main');
+
+    typeInto(wrapper, 'repository-eigenaar-repo', 'minbzk/');
+    await untilIdle();
+    expect(command().text()).toBe('plak site link nldd/website --live-branch main');
+  });
+
+  it('names a Forgejo repository by its URL, since a bare owner/repo means GitHub', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+    await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
+    typeInto(wrapper, 'repository-eigenaar-repo', 'minbzk/website');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toBe(
+      'plak site link nldd/website https://code.overheid.nl/minbzk/website',
+    );
+  });
+
+  it('names the linked repository when the form is opened to change it', async () => {
+    const linked = backend.data.repositories[0]!;
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toContain(
+      `plak site link nldd/website ${linked.owner}/${linked.repo}`,
+    );
   });
 
   it('names plak site link first for a private GitHub repository, and only once', async () => {
@@ -736,7 +770,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const blocks = explanation.findAll('nldd-code-viewer').map((block) => block.attributes('data-testid'));
     expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-commando']);
     expect(explanation.find('[data-testid="repository-ids-cli"]').text()).toBe(
-      'plak site link nldd/website --live-branch main',
+      'plak site link nldd/website nldd/prive-site --live-branch main',
     );
     expect(explanation.text()).toContain('Een verkeerd id koppelt niets anders');
     expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(false);
