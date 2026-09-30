@@ -65,3 +65,12 @@ def test_waiting_for_the_database_is_bounded(entrypoint: str) -> None:
     # alive and never serves.
     assert "-ge 30" in entrypoint
     assert "exit 1" in entrypoint
+
+
+def test_uvicorn_does_not_derive_the_client_itself(entrypoint: str) -> None:
+    # With proxy headers on, uvicorn rewrites request.client from
+    # X-Forwarded-For as soon as the peer is in --forwarded-allow-ips, whose
+    # default reads the FORWARDED_ALLOW_IPS environment variable. net.py would
+    # then walk the header starting from an address that already came out of
+    # it, and `vouched` would stop meaning anything.
+    assert "--no-proxy-headers" in entrypoint
