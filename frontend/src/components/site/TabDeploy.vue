@@ -98,7 +98,13 @@ async function load(): Promise<void> {
 }
 
 onMounted(load);
-watch(() => [props.group, props.site], load);
+watch(
+  () => [props.group, props.site],
+  () => {
+    closeForm();
+    return load();
+  },
+);
 
 function errorText(f: unknown, fallback: string): string {
   return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
@@ -673,7 +679,7 @@ plak logout
             </template>
           </template>
 
-          <nldd-form v-else-if="isSiteAdmin" data-testid="repository-formulier" @submit.prevent="submitRepository">
+          <nldd-form v-else data-testid="repository-formulier" @submit.prevent="submitRepository">
             <nldd-form-field :label="t('publish.deploy.form.provider')">
               <nldd-dropdown width="180px">
                 <select
