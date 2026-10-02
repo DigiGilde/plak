@@ -40,6 +40,8 @@ export const pagesNl = {
   // -- About ----------------------------------------------------------------
   'page.whatsNew.title': 'Wat is er nieuw in Plak',
   'page.whatsNew.empty': 'Er zijn nog geen releases.',
+  'page.whatsNew.using': 'Je gebruikt versie {version}.',
+  'page.whatsNew.unchanged': 'Sinds {date} is er niets veranderd dat je merkt.',
   'page.about.title': 'Over Plak',
   'page.about.intro':
     'Plak is er voor die ene pagina die je wilt delen. Een rapport, een analyse, een overzicht: je zet het online, kiest wie het mag zien en deelt de link. Geen bijlage die door mailboxen zwerft, maar een adres dat je kunt bijwerken en weer kunt intrekken.',

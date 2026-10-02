@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import hmac
 import logging
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
@@ -440,19 +439,6 @@ def _language_links(content_origin: str, locale: str) -> tuple[str, str]:
     return "\n".join(alternates), switch
 
 
-_CALVER = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.\d+)?")
-
-
-def day_anchor(version: str) -> str:
-    """The id of a day on the What's new page, the same rule as `dayAnchor` in
-    frontend/src/releases.ts; empty for a version that is not a CalVer."""
-    match = _CALVER.fullmatch(version)
-    if match is None:
-        return ""
-    year, month, day = match.groups()
-    return f"d{year}-{int(month):02d}-{int(day):02d}"
-
-
 def front_page_html(
     admin_origin: str,
     locale: str = i18n.DEFAULT,
@@ -468,16 +454,14 @@ def front_page_html(
     host's own address, needed for the hreflang alternates.
     """
     origin = escape(admin_origin, quote=True)
-    # A build without a version (`dev`) names none; a version that is not a
-    # CalVer has no day to point at, so it links to the page itself.
-    anchor = f"#{day_anchor(version)}" if day_anchor(version) else ""
+    # The notes live in the SPA bundle, so there is no day to point at here.
     version_text = (
         i18n.t(locale, "footer.whatsNew")
         if version == "dev"
         else i18n.t(locale, "footer.version").replace("{version}", escape(version))
     )
     footer = "\n".join(
-        [f'<li><a href="{origin}/-/whats-new{anchor}">{version_text}</a></li>']
+        [f'<li><a href="{origin}/-/whats-new">{version_text}</a></li>']
         + [f'<li><a href="{origin}{path}">{i18n.t(locale, key)}</a></li>' for path, key in _FOOTER_LINKS]
     )
     alternates, switch = _language_links(content_origin, locale)

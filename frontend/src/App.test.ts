@@ -208,12 +208,24 @@ describe('App', () => {
     }
   });
 
-  it('links to the own notes of a release in the footer of a release build', async () => {
+  it('links to the day of the version when the notes have one for it', async () => {
+    vi.mocked(appVersion).mockReturnValue('2026.9.30.2');
+    try {
+      const app = await mountApp();
+
+      const link = footerItem(app, '/-/whats-new#d2026-09-30');
+      expect(property<string>(link, 'text')).toBe('Versie 2026.9.30.2');
+    } finally {
+      vi.mocked(appVersion).mockReturnValue('dev');
+    }
+  });
+
+  it('links to the plain page when the notes have no day for the version', async () => {
     vi.mocked(appVersion).mockReturnValue('2026.10.1.2');
     try {
       const app = await mountApp();
 
-      const link = footerItem(app, '/-/whats-new#d2026-10-01');
+      const link = footerItem(app, '/-/whats-new');
       expect(property<string>(link, 'text')).toBe('Versie 2026.10.1.2');
     } finally {
       vi.mocked(appVersion).mockReturnValue('dev');

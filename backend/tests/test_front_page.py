@@ -255,7 +255,7 @@ class TestElsewhere:
 
 
 class TestVersionLink:
-    def test_a_dev_build_links_to_the_page_without_an_anchor(self) -> None:
+    def test_a_dev_build_links_to_the_plain_page(self) -> None:
         body = front_page_html(ADMIN)
 
         assert f'<li><a href="{ADMIN}/-/whats-new">Wat is er nieuw</a></li>' in body
@@ -265,35 +265,35 @@ class TestVersionLink:
 
         assert f'<a href="{ADMIN}/-/whats-new">What\'s new</a>' in english
 
-    def test_a_version_that_is_not_a_calver_links_to_the_page_itself(self) -> None:
+    def test_every_version_links_to_the_plain_page(self) -> None:
         body = front_page_html(ADMIN, version="2026.9.30-5-g1a2b3c4")
 
         assert f'<a href="{ADMIN}/-/whats-new">Versie 2026.9.30-5-g1a2b3c4</a>' in body
 
-    def test_a_release_links_to_its_own_notes_in_both_languages(self) -> None:
+    def test_a_release_names_its_version_in_both_languages(self) -> None:
         dutch = front_page_html(ADMIN, version="2026.10.2.1")
         english = front_page_html(ADMIN, i18n.negotiate("en"), version="2026.10.2.1")
 
-        assert f'<a href="{ADMIN}/-/whats-new#d2026-10-02">Versie 2026.10.2.1</a>' in dutch
-        assert f'<a href="{ADMIN}/-/whats-new#d2026-10-02">Version 2026.10.2.1</a>' in english
+        assert f'<a href="{ADMIN}/-/whats-new">Versie 2026.10.2.1</a>' in dutch
+        assert f'<a href="{ADMIN}/-/whats-new">Version 2026.10.2.1</a>' in english
 
     def test_the_version_comes_first_in_the_footer(self) -> None:
         body = front_page_html(ADMIN, version="2026.10.2")
 
-        assert body.index("/-/whats-new#") < body.index("/-/about")
+        assert body.index("/-/whats-new") < body.index("/-/about")
 
     def test_the_version_is_escaped(self) -> None:
         body = front_page_html(ADMIN, version='1"><script>')
 
         assert "<script>" not in body
-        assert "/-/whats-new#" not in body
 
     async def test_the_settings_version_reaches_the_page(self, tmp_path: Path) -> None:
         app = create_app(_settings(tmp_path, version="2026.10.2"))
         async with app.router.lifespan_context(app), _client(app, CONTENT) as client:
             body = (await client.get("/")).text
 
-        assert "#d2026-10-02" in body
+        assert "Versie 2026.10.2</a>" in body
+        assert "/-/whats-new#" not in body
 
     def test_the_version_defaults_to_dev(self, tmp_path: Path) -> None:
         assert _settings(tmp_path).version == "dev"

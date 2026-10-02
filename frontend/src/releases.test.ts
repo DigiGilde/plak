@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { calverDate, compareCalver, dayAnchor, groupByDate, loadReleases } from './releases';
+import { calverDate, compareCalver, dayAnchor, groupByDate, loadReleases, versionDay } from './releases';
 
 const glob = (files: Record<string, string>) =>
   Object.fromEntries(
@@ -100,5 +100,13 @@ describe('groupByDate', () => {
 
   it('is empty without releases', () => {
     expect(groupByDate([])).toEqual([]);
+  });
+});
+
+describe('versionDay', () => {
+  it('is the padded day of a CalVer and empty for anything else', () => {
+    expect(versionDay('2026.9.30.1')).toBe('2026-09-30');
+    expect(versionDay('dev')).toBe('');
+    expect(versionDay('2026.9.30-5-g1a2b3c4')).toBe('');
   });
 });
