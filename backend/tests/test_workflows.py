@@ -41,6 +41,11 @@ def plugin() -> dict:
     return _load("plugin.yml")
 
 
+@pytest.fixture(scope="module")
+def changelog() -> dict:
+    return _load("changelog.yml")
+
+
 class TestTheCheckGate:
     def test_production_waits_for_the_checks(self, deploy) -> None:
         """BIO2 8.31.02: significant changes are tested before they go to
@@ -139,6 +144,22 @@ class TestTheCheckGate:
         report = ci["jobs"]["backend-coverage"]["steps"][-1]["run"]
         assert "coverage combine" in report
         assert "coverage report" in report
+
+    def test_the_release_script_has_a_floor_of_its_own(self, ci) -> None:
+        """release.py lies outside src/plak, which is all the merged backend
+        coverage measures. So its tests run again in the required job,
+        measured on that file alone, kept out of the data that gets
+        combined."""
+        [step] = [
+            s for s in ci["jobs"]["backend-coverage"]["steps"] if s.get("name") == "Release script tests with coverage"
+        ]
+        assert step["working-directory"] == "backend"
+        assert step["env"] == {"COVERAGE_FILE": "${{ runner.temp }}/release.coverage"}
+        run, report = step["run"].splitlines()
+        assert run.endswith("-m pytest -q tests/test_release.py")
+        for line in (run, report):
+            assert "--include='*/.github/scripts/release.py'" in line
+        assert "--fail-under=100" in report
 
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
         # These are also the names branch protection should be set to
@@ -249,7 +270,7 @@ class TestTheScans:
         directory rather than a hand-kept list, so a new one is covered the
         moment it lands."""
         paths = sorted(WORKFLOWS.glob("*.yml"))
-        assert [p.name for p in paths] == ["ci.yml", "codeql.yml", "deploy.yml", "plugin.yml"]
+        assert [p.name for p in paths] == ["changelog.yml", "ci.yml", "codeql.yml", "deploy.yml", "plugin.yml"]
 
         for path in paths:
             workflow = _load(path.name)
@@ -363,3 +384,55 @@ class TestThePluginManifests:
         assert check["env"] == {"BASE_REF": "${{ github.base_ref }}"}
         assert check["run"] == 'python3 .github/scripts/check_plugin_version.py "origin/${BASE_REF}"'
         assert "${{" not in check["run"]
+
+
+class TestTheChangelogCheck:
+    """What the check decides is tested in test_release.py; here only how
+    the workflow runs it."""
+
+    def test_it_runs_on_every_pull_request_and_in_the_merge_queue(self, changelog) -> None:
+        """`edited`, because a description that says `No changelog entry:`
+        clears the warning and has to be read again when it changes."""
+        triggers = changelog[True]
+        assert set(triggers) == {"pull_request", "merge_group"}
+        assert triggers["pull_request"]["types"] == ["opened", "synchronize", "reopened", "edited"]
+        assert "paths" not in triggers["pull_request"]
+
+    def test_only_the_job_may_write_to_pull_requests(self, changelog) -> None:
+        assert changelog["permissions"] == {"contents": "read"}
+        assert changelog["jobs"]["changelog"]["permissions"] == {"contents": "read", "pull-requests": "write"}
+
+    def test_the_actions_are_the_ones_ci_already_pins(self, ci, changelog) -> None:
+        pinned = {s["uses"] for job in ci["jobs"].values() for s in job.get("steps", []) if "uses" in s}
+        for step in changelog["jobs"]["changelog"]["steps"]:
+            if "uses" in step:
+                assert step["uses"] in pinned, step["uses"]
+
+    def test_the_check_sees_the_base_and_the_tags(self, changelog) -> None:
+        checkout = changelog["jobs"]["changelog"]["steps"][0]
+        assert checkout["uses"].startswith("actions/checkout@")
+        assert checkout["with"]["fetch-depth"] == 0
+
+    def test_the_merge_queue_runs_only_what_fails(self, changelog) -> None:
+        step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "release.py" in s.get("run", ""))
+        assert step["env"]["BASE"] == (
+            "${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha "
+            "|| format('origin/{0}', github.base_ref) }}"
+        )
+        assert "--hard-only" in step["run"]
+        assert "${{" not in step["run"]
+
+    def test_the_comment_cannot_fail_the_check(self, changelog) -> None:
+        """A fork or Dependabot pull request has a read-only token."""
+        step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "comment" in s.get("name", ""))
+        assert step["continue-on-error"] is True
+        assert "github.event_name == 'pull_request'" in step["if"]
+        assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+        assert "${{" not in step["run"]
+
+    def test_the_comment_marker_is_the_one_the_script_writes(self, changelog) -> None:
+        """Another marker and every run posts a new comment instead of
+        updating the one that is there."""
+        script = (WORKFLOWS.parent / "scripts" / "release.py").read_text(encoding="utf-8")
+        step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "comment" in s.get("name", ""))
+        assert f'COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script

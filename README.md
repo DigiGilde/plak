@@ -306,6 +306,8 @@ ZAD environment to deploy to yet.
 - `docs/local-development.md`: dev stack, justfile, Testcontainers.
 - `docs/deploying-on-zad.md`: the step-by-step guide for the rollout on
   ZAD.
+- `docs/releasing.md`: how releases are cut from `CHANGELOG.md`, the
+  CalVer tags and how to write an entry.
 
 ## The technology in short
 

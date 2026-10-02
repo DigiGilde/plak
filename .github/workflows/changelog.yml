@@ -1,0 +1,90 @@
+# The changelog check (docs/releasing.md), run by
+# .github/scripts/release.py.
+#
+# What fails the check: a malformed [Unreleased], an edit to a section
+# that was already released, a What's new note in one language only.
+# What only warns: shipped paths changed while [Unreleased] did not. On a
+# pull request that warning becomes one sticky comment, which goes away
+# once there is an entry or the description says `No changelog entry:`
+# with a reason; `edited` is a trigger so a changed description counts.
+# In the merge queue only the failing half runs.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: Changelog
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base branch and the tags have to be there: the diff runs
+          # against the base, the frozen sections are the tagged ones.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Check CHANGELOG.md and the What's new notes
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || format('origin/{0}', github.base_ref) }}
+          BODY_FILE: ${{ runner.temp }}/pull-request-body.md
+          COMMENT_FILE: ${{ runner.temp }}/changelog-comment.md
+        run: |
+          set -euo pipefail
+          args=(check --base "$BASE")
+          if [ "$EVENT" = pull_request ]; then
+            jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" > "$BODY_FILE"
+            args+=(--body-file "$BODY_FILE" --comment-file "$COMMENT_FILE")
+          else
+            args+=(--hard-only)
+          fi
+          uv run --script .github/scripts/release.py "${args[@]}"
+
+      # A pull request from a fork, and one from Dependabot, gets a
+      # read-only token: the comment fails there, and that must not fail
+      # the check. The warning is in the annotations and the job summary
+      # either way.
+      - name: Update the changelog comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          COMMENT_FILE: ${{ runner.temp }}/changelog-comment.md
+          MARKER: "<!-- plak-changelog-check -->"
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER))) | .id')"
+          existing="${ids%%$'\n'*}"
+          if [ -s "$COMMENT_FILE" ]; then
+            if [ -n "$existing" ]; then
+              gh api --method PATCH "repos/$REPOSITORY/issues/comments/$existing" -F "body=@$COMMENT_FILE" > /dev/null
+            else
+              gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/comments" -F "body=@$COMMENT_FILE" > /dev/null
+            fi
+          elif [ -n "$existing" ]; then
+            gh api --method DELETE "repos/$REPOSITORY/issues/comments/$existing"
+          fi
