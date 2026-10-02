@@ -296,10 +296,11 @@ class TestDeployContract:
         assert "curl" in hint
         assert "PLAK_INGEST_MAX_BODY" in hint
 
-    def test_response_is_version_id(self, schema) -> None:
+    def test_response_is_version_id_and_url(self, schema) -> None:
         response = self._deploy(schema)["responses"]["201"]["content"]["application/json"]["schema"]
         model = schema["components"]["schemas"][response["$ref"].split("/")[-1]]
-        assert list(model["properties"]) == ["versionId"]
+        assert list(model["properties"]) == ["versionId", "url"]
+        assert sorted(model["required"]) == ["url", "versionId"]
 
     def test_preview_teardown_gives_204_without_body(self, schema) -> None:
         path = "/-/api/v1/sites/{group_slug}/{site_slug}/previews/{ref}"

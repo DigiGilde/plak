@@ -86,6 +86,8 @@ SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 VERSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
+# No whitespace or control characters: the URL goes into GITHUB_OUTPUT too.
+DEPLOY_URL_RE = re.compile(r"^https?://[\x21-\x7e]+$")
 
 # Suggested paths come from the server and go to the terminal: only ordinary
 # relative paths are shown, so no answer can push line endings or control
@@ -728,6 +730,13 @@ def cmd_publish(args: argparse.Namespace) -> int:
         if not isinstance(version_id, str) or not VERSION_ID_RE.match(version_id):
             print("Error: unexpected versionId format", file=sys.stderr)
             return 1
+        # A server from before the url field answers without it.
+        deploy_url = response.json().get("url")
+        if deploy_url is not None and (
+            not isinstance(deploy_url, str) or not DEPLOY_URL_RE.match(deploy_url)
+        ):
+            print("Error: unexpected url format", file=sys.stderr)
+            return 1
         if args.output_file:
             # Straight to the output file ($GITHUB_OUTPUT, say): in CI stdout
             # also carries the '::add-mask::' command, and a shell capturing
@@ -735,6 +744,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
             try:
                 with open(args.output_file, "a", encoding="utf-8") as handle:
                     handle.write(f"version-id={version_id}\n")
+                    if deploy_url is not None:
+                        handle.write(f"url={deploy_url}\n")
             except OSError as error:
                 print(
                     f"Error: publish succeeded (version {version_id}) but could not "

@@ -10,7 +10,10 @@ inputs:
       Admin origin of the Plak instance (the PLAK_BASE_URL), for example
       https://beheer.plak.example.nl, without an /admin suffix. The deploy
       API exists only on this host; the content host answers with a 404.
-    required: true
+      Empty means PLAK_HOST from the environment, else the DigiGilde
+      instance https://beheer.plak.rijks.app.
+    required: false
+    default: ''
   site:
     description: 'Slug of group and site, in the form group/site.'
     required: true
@@ -42,25 +45,90 @@ inputs:
       publishing (on a PR close event, say). Idempotent.
     required: false
     default: 'false'
+  environment:
+    description: >-
+      GitHub only. Name of a GitHub environment (preview, say) to record the
+      deploy in as a deployment with its URL, so a pull request shows a
+      "View deployment" button. Teardown marks the preview's deployments
+      inactive. Needs 'deployments: write'. Empty means no deployment.
+    required: false
+    default: ''
+  comment-on-pr:
+    description: >-
+      GitHub only. Set to 'true' to put the link to the deploy in a comment
+      on the pull request, updated on every deploy and marked removed on
+      teardown. Needs 'pull-requests: write'.
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token for environment and comment-on-pr.'
+    required: false
+    default: ${{ github.token }}
+  skip-bot-prs:
+    description: >-
+      Set to 'false' to also run for pull requests opened by a bot
+      (dependabot, renovate, pre-commit-ci, github-actions). By default the
+      action does nothing for those, teardown included, and sets the output
+      skipped; a Dependabot pull request gets no OIDC token anyway.
+    required: false
+    default: 'true'
 
 outputs:
   version-id:
     description: 'ID of the published version. Empty when teardown has run.'
     value: ${{ steps.publish.outputs.version-id }}
+  url:
+    description: >-
+      Where the deploy can be seen: the live site, or the preview. Empty when
+      teardown has run.
+    value: ${{ steps.publish.outputs.url }}
+  skipped:
+    description: "'true' when skip-bot-prs left a bot's pull request alone, else 'false'."
+    value: ${{ steps.bot-check.outputs.skipped == 'true' && 'true' || 'false' }}
 
 runs:
   using: 'composite'
   steps:
+    # The same bot check as RijksICTGilde/zad-actions, so one workflow
+    # skips the same pull requests for both.
+    - name: Check pull request author
+      id: bot-check
+      shell: bash
+      env:
+        PLAK_INPUT_SKIP_BOT_PRS: ${{ inputs.skip-bot-prs }}
+        PLAK_EVENT_NAME: ${{ github.event_name }}
+        PLAK_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PLAK_PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+      run: |
+        set -euo pipefail
+        case "$PLAK_INPUT_SKIP_BOT_PRS" in
+          true) ;;
+          false) exit 0 ;;
+          *) echo "Error: skip-bot-prs must be 'true' or 'false'" >&2; exit 2 ;;
+        esac
+        case "$PLAK_EVENT_NAME" in
+          pull_request|pull_request_target) ;;
+          *) exit 0 ;;
+        esac
+        case "$PLAK_PR_AUTHOR" in
+          "dependabot[bot]"|"renovate[bot]"|"pre-commit-ci[bot]"|"github-actions[bot]") ;;
+          *) [ "$PLAK_PR_AUTHOR_TYPE" = "Bot" ] || exit 0 ;;
+        esac
+        echo "::notice::Skipping: pull request author '$PLAK_PR_AUTHOR' is a bot"
+        echo "skipped=true" >> "$GITHUB_OUTPUT"
+
     # setup-uv puts uv on PATH for every step that follows. enable-cache
     # 'auto' means: cache on GitHub-hosted runners, and no cache upload on
     # self-hosted ones, where uv keeps its cache on the runner's own disk and
     # an Actions cache service may not exist at all.
     - name: Install uv
+      if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       with:
         enable-cache: 'auto'
 
     - name: Check OIDC access
+      if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -82,12 +150,34 @@ runs:
         EOF
         exit 2
 
-    - name: Publish
-      id: publish
-      if: ${{ inputs.teardown != 'true' }}
+    # Before the deploy: a refusal afterwards would put a published site
+    # behind a red run.
+    - name: Check GitHub options
+      if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       env:
-        PLAK_HOST: ${{ inputs.host }}
+        PLAK_INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        PLAK_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
+      run: |
+        set -euo pipefail
+        case "$PLAK_INPUT_COMMENT" in
+          true|false) ;;
+          *) echo "Error: comment-on-pr must be 'true' or 'false'" >&2; exit 2 ;;
+        esac
+        if [ -z "$PLAK_INPUT_ENVIRONMENT" ] && [ "$PLAK_INPUT_COMMENT" = "false" ]; then
+          exit 0
+        fi
+        if [ "${FORGEJO_ACTIONS:-}" = "true" ]; then
+          echo "Error: environment and comment-on-pr work on GitHub Actions only" >&2
+          exit 2
+        fi
+
+    - name: Publish
+      id: publish
+      if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown != 'true' }}
+      shell: bash
+      env:
+        PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
         PLAK_INPUT_DIST_PATH: ${{ inputs.dist-path }}
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
@@ -98,7 +188,11 @@ runs:
           echo "Error: dist-path is required unless teardown is 'true'" >&2
           exit 2
         fi
-        ARGS=(publish "$PLAK_INPUT_DIST_PATH" --host "$PLAK_HOST" --site "$PLAK_SITE")
+        ARGS=(publish "$PLAK_INPUT_DIST_PATH" --site "$PLAK_SITE")
+        # Without --host the CLI takes PLAK_HOST, then its default instance.
+        if [ -n "$PLAK_INPUT_HOST" ]; then
+          ARGS+=(--host "$PLAK_INPUT_HOST")
+        fi
         if [ -n "$PLAK_PREVIEW_REF" ]; then
           ARGS+=(--preview "$PLAK_PREVIEW_REF")
         fi
@@ -116,10 +210,10 @@ runs:
         uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
 
     - name: Remove preview
-      if: ${{ inputs.teardown == 'true' }}
+      if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown == 'true' }}
       shell: bash
       env:
-        PLAK_HOST: ${{ inputs.host }}
+        PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
       run: |
@@ -128,6 +222,45 @@ runs:
           echo "Error: preview-ref is required when teardown is 'true'" >&2
           exit 2
         fi
-        uv run --project "${{ github.action_path }}/../../cli" plak \
-          preview-remove "$PLAK_PREVIEW_REF" \
-          --host "$PLAK_HOST" --site "$PLAK_SITE"
+        ARGS=(preview-remove "$PLAK_PREVIEW_REF" --site "$PLAK_SITE")
+        if [ -n "$PLAK_INPUT_HOST" ]; then
+          ARGS+=(--host "$PLAK_INPUT_HOST")
+        fi
+        uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
+
+    - name: Report to GitHub
+      if: ${{ steps.bot-check.outputs.skipped != 'true' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PLAK_INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        PLAK_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
+        PLAK_INPUT_TEARDOWN: ${{ inputs.teardown }}
+        PLAK_SITE: ${{ inputs.site }}
+        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
+        PLAK_URL: ${{ steps.publish.outputs.url }}
+        PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
+      run: |
+        set -euo pipefail
+        if [ -z "$PLAK_INPUT_ENVIRONMENT" ] && [ "$PLAK_INPUT_COMMENT" = "false" ]; then
+          exit 0
+        fi
+        if [ "$PLAK_INPUT_TEARDOWN" = "true" ]; then
+          ARGS=(teardown)
+        elif [ -z "$PLAK_URL" ]; then
+          echo "Error: the Plak server returned no url; environment and comment-on-pr need a newer Plak" >&2
+          exit 1
+        else
+          ARGS=(publish --url "$PLAK_URL" --version-id "$PLAK_VERSION_ID")
+        fi
+        ARGS+=(--site "$PLAK_SITE")
+        if [ -n "$PLAK_PREVIEW_REF" ]; then
+          ARGS+=(--preview-ref "$PLAK_PREVIEW_REF")
+        fi
+        if [ -n "$PLAK_INPUT_ENVIRONMENT" ]; then
+          ARGS+=(--environment "$PLAK_INPUT_ENVIRONMENT")
+        fi
+        if [ "$PLAK_INPUT_COMMENT" = "true" ]; then
+          ARGS+=(--comment)
+        fi
+        uv run --project "${{ github.action_path }}/../../cli" python -m plak_cli.github "${ARGS[@]}"
