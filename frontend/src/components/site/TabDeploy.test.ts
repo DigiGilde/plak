@@ -1064,7 +1064,7 @@ describe('TabDeploy: admin status', () => {
     expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(true);
   });
 
-  it('drops an open form when the tab moves to a site where the member is not admin', async () => {
+  it('shows the read-only view, not an empty block, when an open form moves to a site where the member is not admin', async () => {
     // lid-4 is admin on team-aurora/website through a site role, but only a
     // group reader on any other site in team-aurora.
     backend.data.loggedInMemberId = 'lid-4';
@@ -1081,6 +1081,26 @@ describe('TabDeploy: admin status', () => {
 
     expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
+    const empty = wrapper.find('[data-testid="repository-leeg"]');
+    expect(empty.exists()).toBe(true);
+    expect(empty.attributes('supporting-text')).toContain('Vraag een beheerder van deze site');
+  });
+
+  it('closes an open change form when the tab moves to another site, so it cannot submit to that site', async () => {
+    // The default logged-in user (lid-1) is a platform admin, so admin on both.
+    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'docs', title: 'Docs' });
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+
+    await wrapper.setProps({ site: 'docs' });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(true);
   });
 });
 
