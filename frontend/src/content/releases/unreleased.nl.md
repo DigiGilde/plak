@@ -7,3 +7,7 @@ Onderaan de pagina staat ook de versie van Plak waar je nu mee werkt.
 ## Versie van de CLI
 
 Met `plak --version` zie je welke versie van de Plak CLI je gebruikt. Spreekt de server een nieuwere versie van de API dan de CLI kent, dan stopt de CLI en zegt hij hoe je bijwerkt.
+
+## Previews bij de pull request
+
+De `publiceer`-action kan een preview nu op GitHub bij de pull request laten zien: als deployment met een knop "View deployment", als reactie met de link, of allebei. Pull requests van bots, zoals Dependabot, slaat hij standaard over.

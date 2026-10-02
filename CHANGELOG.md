@@ -19,11 +19,19 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   the server speaks a newer major API version than it supports.
 - A public What's new page at `/-/whats-new`, linked from the footer
   next to the Plak version.
+- The `publiceer` action can show a deploy on the pull request, as a
+  GitHub deployment and as a comment with the link, and by default
+  skips pull requests opened by bots.
 
 ### Changed
 
 - A preview environment follows the `preview` label on a pull request
   instead of appearing for every one; taking the label off cleans it up.
+
+### Fixed
+
+- The repository form on a site's Deploy tab closes when you switch to
+  another site, instead of staying open for the previous one.
 
 ## [2026.9.30]
 
