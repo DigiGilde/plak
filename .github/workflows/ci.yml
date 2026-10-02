@@ -108,6 +108,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
+      # .github/scripts/release.py is outside src/plak, so the merged
+      # backend coverage does not measure it. Its tests run once more
+      # here, measured on that one file only, against the same floor.
+      - name: Release script tests with coverage
+        working-directory: backend
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/release.coverage
+        run: |
+          uv run coverage run --include='*/.github/scripts/release.py' -m pytest -q tests/test_release.py
+          uv run coverage report --include='*/.github/scripts/release.py' --show-missing --fail-under=100
+
       - name: Fetch the coverage data
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

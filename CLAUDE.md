@@ -91,6 +91,12 @@ interface. That now holds for the text it relays too: the CLI sends no
 
 No em dashes or en dashes, not in code and not in docs.
 
+## Changelog
+
+Every pull request that changes shipped behaviour adds a line under
+`## [Unreleased]` in `CHANGELOG.md`; releases are cut from it
+automatically. See `docs/releasing.md` and the `changelog` skill.
+
 ## Design of the interface
 
 The interface follows `@nldd/design-system` and the design guidelines
