@@ -113,6 +113,14 @@ updates:
           - "*"
         update-types:
           - major
+    ignore:
+      # 30.1.0 and 30.1.1 make the axe tests about five times slower, past
+      # the 5s test timeout in CI. A later release comes through again.
+      - dependency-name: jsdom
+        versions: ["30.1.0", "30.1.1"]
+      # 7 ships no JS compiler API (typescript/lib/tsc), which vue-tsc needs.
+      - dependency-name: typescript
+        versions: [">=7.0.0"]
 
   - package-ecosystem: pre-commit
     directory: /
