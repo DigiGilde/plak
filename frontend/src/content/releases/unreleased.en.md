@@ -10,4 +10,6 @@ The bottom of the page also shows the version of Plak you are using now.
 
 ## Previews on the pull request
 
-The `publiceer` action can now show a preview on its pull request on GitHub: as a deployment with a "View deployment" button, as a comment with the link, or both. Pull requests opened by bots, such as Dependabot, are skipped by default.
+The publish action can now show a preview on its pull request on GitHub: as a deployment with a "View deployment" button, as a comment with the link, or both. Pull requests opened by bots, such as Dependabot, are skipped by default. For the DigiGilde instance you no longer need to give `host`.
+
+The action is now `actions/publish` instead of `actions/publiceer`. When you move the pinned commit in your workflow, change that path too.

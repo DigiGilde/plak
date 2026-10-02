@@ -204,12 +204,12 @@ uv run --project cli plak publish ./dist --site team-aurora/website
 ```
 
 `docs/publishing.md` has the full story: the base path contract for
-your build, publishing from CI with the `publiceer` action, the curl
+your build, publishing from CI with the `publish` action, the curl
 fallback and the error codes.
 
 ## Publishing from CI
 
-The composite action in `actions/publiceer/` publishes from GitHub
+The composite action in `actions/publish/` publishes from GitHub
 Actions or Forgejo Actions without a secret: the workflow proves who it
 is with an OIDC ID token, and Plak checks that token against the
 repository linked to the site. Link the repository first, on the
@@ -227,14 +227,14 @@ permissions:
   id-token: write
 
 jobs:
-  publiceer:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<commit-sha>
       - run: npm ci && npm run build
         env:
           PLAK_BASE_PATH: /team-aurora/website/
-      - uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+      - uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
           dist-path: ./dist
@@ -296,7 +296,7 @@ ZAD environment to deploy to yet.
 - `docs/design.md`: the numbered design. Every "spec §7" or
   "behaviour requirement 6" in the code points at a section there.
 - `docs/publishing.md`: how to publish a site (base path contract, the
-  `publiceer` action, curl fallback, previews and `_version`).
+  `publish` action, curl fallback, previews and `_version`).
 - `docs/skill.md`: the Claude Code plugin in `plugin/`: installing it,
   what the skill does, and running its evals.
 - `docs/security.md`: the living security checklist.
@@ -317,9 +317,9 @@ ZAD environment to deploy to yet.
 - `cli/`: the publishing CLI, a uv project of its own that installs the
   `plak` command; its only dependency is httpx and it shares no code with
   the backend. `cli/tests/` is its suite (`just test-cli`).
-- `actions/publiceer/`: the composite action for GitHub Actions and
+- `actions/publish/`: the composite action for GitHub Actions and
   Forgejo Actions that calls that CLI. `plugin/` is the Claude Code
-  plugin for the same job, with the `plak-publiceren` skill and its
+  plugin for the same job, with the `plak-publish` skill and its
   evals; `.claude-plugin/marketplace.json` offers it for installation.
 - The app serves content and the admin SPA itself (`FileResponse` with
   Range, ETag/304 and the fixed header set) and separates the admin and

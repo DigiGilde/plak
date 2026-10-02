@@ -1255,7 +1255,7 @@ def test_hosts_file_is_never_readable_by_others_even_if_it_was(capsys):
 
 # --- action.yml: no stdout capture around publish, --output-file instead ----
 
-ACTION_YML_PATH = Path(__file__).resolve().parents[2] / "actions" / "publiceer" / "action.yml"
+ACTION_YML_PATH = Path(__file__).resolve().parents[2] / "actions" / "publish" / "action.yml"
 
 
 def test_action_yml_does_not_capture_publish_stdout():
@@ -1279,7 +1279,7 @@ def test_action_yml_pins_every_nested_action_to_a_commit_sha():
 
 
 def test_action_yml_runs_the_cli_from_the_project_two_levels_up():
-    """github.action_path is actions/publiceer/ in this repository, so the
+    """github.action_path is actions/publish/ in this repository, so the
     reference to the CLI project in cli/ has to climb out of it."""
     content = ACTION_YML_PATH.read_text()
     assert content.count('--project "${{ github.action_path }}/../../cli" plak') == 2
@@ -2030,7 +2030,7 @@ ACTION_REFERENCE_FILES = (
     "frontend/src/components/site/TabDeploy.vue",
     "frontend/src/components/site/TabDeploy.test.ts",
     "docs/publishing.md",
-    "plugin/skills/plak-publiceren/SKILL.md",
+    "plugin/skills/plak-publish/SKILL.md",
     "README.md",
 )
 
@@ -2057,7 +2057,7 @@ def test_the_deploy_tab_snippet_and_the_docs_point_at_the_action_path():
         assert uses, f"{name} has no `uses:` for the action"
         for value in uses:
             assert value.startswith(
-                (f"{reference}/actions/publiceer@", f"https://github.com/{reference}/actions/publiceer@")
+                (f"{reference}/actions/publish@", f"https://github.com/{reference}/actions/publish@")
             ), f"{name}: {value}"
 
 
@@ -2070,7 +2070,7 @@ def test_the_generated_snippet_only_uses_inputs_the_action_declares():
         encoding="utf-8"
     )
     blocks = re.findall(
-        r"uses: \S*/plak/actions/publiceer@\S+\n {8}with:\n((?: {10}[\w-]+:.*\n)+)", snippet
+        r"uses: \S*/plak/actions/publish@\S+\n {8}with:\n((?: {10}[\w-]+:.*\n)+)", snippet
     )
     assert len(blocks) == 6, "two snippets, three action steps each"
     for block in blocks:

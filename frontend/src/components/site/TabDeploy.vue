@@ -416,7 +416,7 @@ const liveBranchOrMain = computed(() => repository.value?.liveBranch ?? 'main');
 // Matches docs/publishing.md: always pin the action to a commit SHA, never
 // to a tag or branch.
 const githubSnippet = computed(
-  () => `name: Publiceer
+  () => `name: Publish
 
 on:
   push:
@@ -429,7 +429,7 @@ permissions:
   id-token: write
 
 jobs:
-  publiceer:
+  publish:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
@@ -440,17 +440,17 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publiceer live
+      - name: Publish live
         if: github.event_name == 'push'
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
           dist-path: ./dist
 
-      - name: Publiceer preview
+      - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -461,8 +461,8 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Ruim preview op
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+      - name: Remove preview
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -472,7 +472,7 @@ jobs:
 );
 
 const forgejoSnippet = computed(
-  () => `name: Publiceer
+  () => `name: Publish
 
 on:
   push:
@@ -485,7 +485,7 @@ permissions:
   id-token: write
 
 jobs:
-  publiceer:
+  publish:
     if: github.event.action != 'closed'
     runs-on: docker # de runner-label van deze Forgejo-instantie
     enable-openid-connect: true
@@ -497,17 +497,17 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publiceer live
+      - name: Publish live
         if: github.event_name == 'push'
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
           dist-path: ./dist
 
-      - name: Publiceer preview
+      - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -519,8 +519,8 @@ jobs:
     runs-on: docker # de runner-label van deze Forgejo-instantie
     enable-openid-connect: true
     steps:
-      - name: Ruim preview op
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+      - name: Remove preview
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -544,8 +544,8 @@ const workflowHint = computed(() =>
 // Matches the workflow files docs/publishing.md shows for each provider.
 const workflowPath = computed(() =>
   repository.value?.provider === 'forgejo'
-    ? '.forgejo/workflows/publiceer.yml'
-    : '.github/workflows/publiceer.yml',
+    ? '.forgejo/workflows/publish.yml'
+    : '.github/workflows/publish.yml',
 );
 
 const workflowPathHint = computed(() => segments('publish.deploy.workflow.path', ['path', 'link']));

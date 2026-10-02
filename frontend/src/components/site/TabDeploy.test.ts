@@ -914,7 +914,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('host: https://plak.test');
     expect(snippet).toContain('site: team-aurora/website');
-    expect(snippet).toContain('DigiGilde/plak/actions/publiceer@<commit-sha>');
+    expect(snippet).toContain('DigiGilde/plak/actions/publish@<commit-sha>');
     expect(snippet).toContain('id-token: write');
     expect(snippet).toContain('branches: [main]');
     expect(snippet).toContain('preview-ref: pr-${{ github.event.pull_request.number }}');
@@ -932,7 +932,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('enable-openid-connect: true');
-    expect(snippet).toContain('uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>');
+    expect(snippet).toContain('uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>');
     expect(snippet).toContain('runs-on: docker');
     expect(snippet).not.toContain('secrets.');
   });
@@ -981,7 +981,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     await untilIdle();
 
     const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
-    expect(richText.textContent).toContain('.github/workflows/publiceer.yml');
+    expect(richText.textContent).toContain('.github/workflows/publish.yml');
 
     const versionsLink = wrapper.find('[data-testid="deploy-naar-versies"]');
     expect(versionsLink.attributes('href')).toBe('/team-aurora/website/versions');
@@ -996,7 +996,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     await untilIdle();
 
     const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
-    expect(richText.textContent).toContain('.forgejo/workflows/publiceer.yml');
+    expect(richText.textContent).toContain('.forgejo/workflows/publish.yml');
   });
 });
 

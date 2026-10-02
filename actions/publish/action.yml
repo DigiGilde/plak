@@ -203,7 +203,7 @@ runs:
         # '::add-mask::' command for the OIDC token, and $(...) would pull
         # that into the version-id variable.
         ARGS+=(--output-file "$GITHUB_OUTPUT")
-        # github.action_path is actions/publiceer/ inside the checked-out
+        # github.action_path is actions/publish/ inside the checked-out
         # plak repository; the CLI project sits two levels up, in cli/.
         # --project, not uvx: the same invocation contributors use from a
         # checkout, so one form is documented and exercised.

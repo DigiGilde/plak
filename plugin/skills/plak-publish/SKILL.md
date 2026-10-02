@@ -1,5 +1,5 @@
 ---
-name: plak-publiceren
+name: plak-publish
 description: Publish a static site to a Plak instance, create the group or site to publish to, link the repository that may publish to it from CI, or clean up a preview. Use when the user points at a Plak admin URL (https://beheer.plak...) or a group/site slug, when a build directory (dist/, build/, _site/, out/) has to go online, or when they say things like "zet deze map online op Plak", "publiceer dit", "zet dit online", "maak er een preview van", "werk mijn site bij", "vervang de site", "maak een nieuwe site aan", "koppel deze repo aan mijn site", "publiceer vanuit GitHub Actions" or "mijn Plak-site geeft 404". Carries the safety rules (a preview by default, live only when the user asks for it in this conversation, access and the live branch only as the user states them, sign in with plak login and never approve that yourself), the publishing path with the plak CLI, and what the error codes mean.
 ---
 

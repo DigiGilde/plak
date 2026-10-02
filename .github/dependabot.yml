@@ -23,7 +23,7 @@ updates:
   - package-ecosystem: github-actions
     directories:
       - /
-      - /actions/publiceer
+      - /actions/publish
     schedule:
       interval: weekly
       day: monday

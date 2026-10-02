@@ -71,7 +71,7 @@ their English contents. Where a doc quotes a Dutch label, route or
 message, the Dutch is quoted literally, with a short English gloss only
 where the meaning is not obvious.
 
-`plugin/skills/plak-publiceren` is English: it is distributed to people
+`plugin/skills/plak-publish` is English: it is distributed to people
 outside this repository, as the `plak` plugin. Two things stay Dutch in
 it: the user phrasings it has to recognise or speak back ("werk mijn
 site bij", "zet dit online"), and the eval prompts in `plugin/evals/`,
@@ -81,7 +81,7 @@ quote is the English string the CLI really prints.
 The CLI (`cli/`) is English all the way out: identifiers, the argparse
 help and description texts, and everything it prints to stdout and
 stderr. The same holds for the step names, job names and echoed
-messages in `actions/publiceer/action.yml` and in the workflows under
+messages in `actions/publish/action.yml` and in the workflows under
 `.github/workflows/`, except where a name is a contract with the
 platform: the ZAD deployment and GitHub environment `productie` and the
 component `beheer`. It is developer tooling with English

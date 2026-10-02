@@ -1,7 +1,7 @@
 """Reports a Plak deploy back to GitHub for the publish action: a deployment
 in an environment, and a comment on the pull request with the link.
 
-Not a `plak` subcommand: actions/publiceer runs it as `python -m
+Not a `plak` subcommand: actions/publish runs it as `python -m
 plak_cli.github`, with the runner's GITHUB_* variables in the environment.
 
 Usage:
