@@ -7,21 +7,31 @@ vulnerabilities:
   - id: PYSEC-2026-1845
     expired_at: 2026-12-31
     statement: >-
-      pytest, alleen dev-groep. De fix vraagt pytest 9 en de pin in
-      backend/pyproject.toml staat op <9; dat is een eigen upgrade met een
-      eigen testronde. Komt niet in het image: containers/plak/Containerfile
-      draait uv sync --frozen --no-dev.
+      pytest, dev group only. The fix needs pytest 9 and the pin in
+      backend/pyproject.toml is <9; that is an upgrade of its own with its
+      own test round. Not in the image: containers/plak/Containerfile runs
+      uv sync --frozen --no-dev.
   - id: GHSA-82fw-gwwq-j7x9
     expired_at: 2026-12-31
     statement: >-
-      @vitest/mocker, alleen devDependencies. De fix vraagt een major van
-      vitest en dat is een eigen upgrade. Zit niet in de SPA-bundel:
-      npm audit --omit=dev meldt hem niet.
+      @vitest/mocker, devDependencies only. The fix needs a major of vitest,
+      which is an upgrade of its own. Not in the SPA bundle: npm audit
+      --omit=dev does not report it.
   - id: CVE-2026-93990
     expired_at: 2026-11-01
     statement: >-
-      libexpat in het nginx-image van de ontwikkelomgeving. Er is nog geen
-      image dat hem oplost: 1.30-alpine en 1.31-alpine dragen hem allebei.
-      Deze proxy draait alleen in dev/compose.yml en wordt nooit uitgerold.
-      Korte termijn, want een nieuw basisimage kan hem elke week verhelpen;
-      daarna komt hij vanzelf terug en kan de pin mee omhoog.
+      libexpat in the nginx image of the development environment. No image
+      fixes it yet: 1.30-alpine and 1.31-alpine both carry it. This proxy
+      only runs in dev/compose.yml and is never rolled out. Short term,
+      because a new base image can fix it any week; after that it comes back
+      by itself and the pin can move up.
+  - id: CVE-2026-103111
+    expired_at: 2026-11-01
+    statement: >-
+      pcre2 in the nginx image of the development environment. The base
+      image still carries 10.48-r0 and no fixed upstream image exists yet.
+      Our own dev image upgrades pcre2 to 10.49-r0 in
+      containers/nginx-dev/Containerfile. The scan looks at the base image,
+      so this entry keeps it from failing. It expires on 2026-11-01; once
+      the FROM pin moves to an image with 10.49, both this entry and the
+      upgrade go.
