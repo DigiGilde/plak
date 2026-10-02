@@ -73,7 +73,7 @@ branch = true
 concurrency = ["thread", "greenlet"]
 
 # Every line and branch is tested or carries a `pragma: no cover` with its
-# reason (CLAUDE.md); anything below 100 fails the run.
+# reason (.claude/CLAUDE.md); anything below 100 fails the run.
 [tool.coverage.report]
 fail_under = 100
 
