@@ -84,6 +84,8 @@ const shared = {
   'nav.profile': 'Profile',
   'nav.sessions': 'Linked CLI sessions',
   'nav.logout': 'Sign out',
+  'footer.whatsNew': "What's new",
+  'footer.version': 'Version {version}',
   'footer.about': 'About Plak',
   'footer.accessibility': 'Accessibility',
   'footer.privacy': 'Privacy',

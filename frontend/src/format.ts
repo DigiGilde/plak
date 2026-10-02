@@ -37,6 +37,11 @@ export function formatDate(iso: string | null | undefined): string {
   return iso ? formatter({ dateStyle: 'medium' }, 'date').format(new Date(iso)) : '-';
 }
 
+/** A `YYYY-MM-DD` day as printed, without the time zone moving it to another day. */
+export function formatCalendarDate(day: string): string {
+  return formatter({ dateStyle: 'long', timeZone: 'UTC' }, 'calendar-date').format(new Date(day));
+}
+
 /** A number in the conventions of the language on screen (grouping, decimals). */
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(intlLocale.value, options).format(value);

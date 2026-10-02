@@ -38,6 +38,8 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.start.loading': 'Loading...',
 
   // -- About ----------------------------------------------------------------
+  'page.whatsNew.title': "What's new in Plak",
+  'page.whatsNew.empty': 'No releases yet.',
   'page.about.title': 'About Plak',
   'page.about.intro':
     'Plak is there for that one page you want to share. A report, an analysis, an overview: you put it online, choose who may see it and share the link. Not an attachment drifting through mailboxes, but an address you can update and withdraw again.',

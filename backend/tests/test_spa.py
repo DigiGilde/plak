@@ -147,6 +147,7 @@ class TestBoundary:
             # The SPA's own platform pages, the only ones it owns under `/-/`.
             "/-/members",
             "/-/about",
+            "/-/whats-new",
         ],
     )
     def test_spa_paths(self, path: str) -> None:

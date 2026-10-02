@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
@@ -194,7 +195,7 @@ _LANGUAGE_NAMES = {"nl": "Nederlands", "en": "English"}
 # /{group}/{site}, so a path prefix would cost a group slug.
 LANG_PARAM = "lang"
 
-# Path plus the catalogue key for its label: the same four links in the same
+# Path plus the catalogue key for its label: the same links in the same
 # order as the SPA footer (frontend/src/App.vue). They are public SPA routes
 # (`meta: { public: true }` in frontend/src/router.ts), so this footer is the
 # first place where the accessibility statement - which has to be publicly
@@ -439,8 +440,25 @@ def _language_links(content_origin: str, locale: str) -> tuple[str, str]:
     return "\n".join(alternates), switch
 
 
+_CALVER = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.\d+)?")
+
+
+def day_anchor(version: str) -> str:
+    """The id of a day on the What's new page, the same rule as `dayAnchor` in
+    frontend/src/releases.ts; empty for a version that is not a CalVer."""
+    match = _CALVER.fullmatch(version)
+    if match is None:
+        return ""
+    year, month, day = match.groups()
+    return f"d{year}-{int(month):02d}-{int(day):02d}"
+
+
 def front_page_html(
-    admin_origin: str, locale: str = i18n.DEFAULT, content_origin: str = ""
+    admin_origin: str,
+    locale: str = i18n.DEFAULT,
+    content_origin: str = "",
+    *,
+    version: str = "dev",
 ) -> str:
     """The front page, with every link to the admin host absolute.
 
@@ -450,8 +468,17 @@ def front_page_html(
     host's own address, needed for the hreflang alternates.
     """
     origin = escape(admin_origin, quote=True)
+    # A build without a version (`dev`) names none; a version that is not a
+    # CalVer has no day to point at, so it links to the page itself.
+    anchor = f"#{day_anchor(version)}" if day_anchor(version) else ""
+    version_text = (
+        i18n.t(locale, "footer.whatsNew")
+        if version == "dev"
+        else i18n.t(locale, "footer.version").replace("{version}", escape(version))
+    )
     footer = "\n".join(
-        f'<li><a href="{origin}{path}">{i18n.t(locale, key)}</a></li>' for path, key in _FOOTER_LINKS
+        [f'<li><a href="{origin}/-/whats-new{anchor}">{version_text}</a></li>']
+        + [f'<li><a href="{origin}{path}">{i18n.t(locale, key)}</a></li>' for path, key in _FOOTER_LINKS]
     )
     alternates, switch = _language_links(content_origin, locale)
     say = partial(i18n.t, locale)
@@ -510,7 +537,8 @@ def front_page_response(settings: Settings, locale: str = i18n.DEFAULT) -> Respo
     if not origin:
         return neutral_404_response()
     return HTMLResponse(
-        front_page_html(origin, locale, settings.content_base_url), headers=FRONT_PAGE_HEADERS
+        front_page_html(origin, locale, settings.content_base_url, version=settings.version),
+        headers=FRONT_PAGE_HEADERS,
     )
 
 

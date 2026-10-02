@@ -15,6 +15,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { fetchCurrentMember, currentMemberState, isPlatformAdmin } from './composables/currentMember';
 import { breadcrumbsFor } from './composables/breadcrumbs';
 import { t } from './i18n';
+import { dayAnchor } from './releases';
+import { appVersion } from './version';
 
 interface MenuChoice {
   text: string;
@@ -27,6 +29,17 @@ const route = useRoute();
 const router = useRouter();
 const { member } = currentMemberState();
 const logoutForm = ref<HTMLFormElement | null>(null);
+
+// A build without a version (`dev`) names none; a version that is not a CalVer
+// has no day to point at, so it links to the page itself.
+const versionText = computed(() => {
+  const version = appVersion();
+  return version === 'dev' ? t('footer.whatsNew') : t('footer.version', { version });
+});
+const versionHref = computed(() => {
+  const anchor = dayAnchor(appVersion());
+  return anchor ? `/-/whats-new#${anchor}` : '/-/whats-new';
+});
 
 const crumbs = computed(() => breadcrumbsFor(route.path));
 const admin = computed(() => isPlatformAdmin(member.value));
@@ -244,12 +257,15 @@ function logout(): void {
             :current="crumb.href === undefined || undefined"
           ></nldd-breadcrumbs-item>
         </nldd-breadcrumbs>
-        <!-- Everything in the end slot: per NLDD that slot is for "privacy,
-             accessibility", while start is for a "© notice, version". Plak has
-             no copyright line, so start stays empty and the four links wrap as
-             one group on a narrow screen instead of as two rows below each
-             other. -->
+        <!-- Per NLDD the end slot is for "privacy, accessibility", while
+             start is for a "© notice, version". Plak has no copyright line, so
+             start carries the version, as the link to its release notes. -->
         <nldd-page-footer-legal-bar slot="legal-bar">
+          <nldd-page-footer-legal-bar-item
+            slot="start"
+            :href="versionHref"
+            :text="versionText"
+          ></nldd-page-footer-legal-bar-item>
           <nldd-page-footer-legal-bar-item
             slot="end"
             href="/-/about"

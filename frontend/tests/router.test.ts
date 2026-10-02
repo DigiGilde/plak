@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import { makeMockBackend, type MockBackend } from '../src/api/mock';
-import { platformAdminGuard, routes } from '../src/router';
+import { platformAdminGuard, routes, scrollBehavior } from '../src/router';
 import router from '../src/router';
 
 let backend: MockBackend;
@@ -44,6 +44,7 @@ describe('router: every configured route resolves and mounts its component', () 
     ['/-/privacy', 'privacy'],
     ['/-/accessibility', 'accessibility'],
     ['/-/about', 'about'],
+    ['/-/whats-new', 'whats-new'],
     ['/-/profile', 'profile'],
     ['/-/sessions', 'sessions'],
     ['/cli-link', 'cli-link'],
@@ -93,5 +94,18 @@ describe('router: document title', () => {
     await router.push('/team-aurora');
 
     expect(document.title).toBe('team-aurora - Plak');
+  });
+});
+
+describe('router: scrollBehavior', () => {
+  const call = (hash: string) =>
+    scrollBehavior({ hash } as never, {} as never, null);
+
+  it('scrolls to the hash target when there is one', () => {
+    expect(call('#d2026-10-01')).toEqual({ el: '#d2026-10-01' });
+  });
+
+  it('leaves every other navigation to the default', () => {
+    expect(call('')).toBeUndefined();
   });
 });

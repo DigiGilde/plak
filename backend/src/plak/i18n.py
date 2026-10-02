@@ -86,6 +86,8 @@ NL: Final[dict[str, str]] = {
     # survives the truncation on a narrow screen.
     "beta.bar": "Bètaversie - Plak is in ontwikkeling en kan fouten bevatten",
     "footer.label": "Over deze dienst",
+    "footer.whatsNew": "Wat is er nieuw",
+    "footer.version": "Versie {version}",
     "footer.about": "Over Plak",
     "footer.accessibility": "Toegankelijkheid",
     "footer.privacy": "Privacy",
@@ -146,6 +148,8 @@ EN: Final[dict[str, str]] = {
     ),
     "beta.bar": "Beta - Plak is under development and may contain errors",
     "footer.label": "About this service",
+    "footer.whatsNew": "What's new",
+    "footer.version": "Version {version}",
     "footer.about": "About Plak",
     "footer.accessibility": "Accessibility",
     "footer.privacy": "Privacy",

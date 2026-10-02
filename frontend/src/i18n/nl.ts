@@ -105,6 +105,8 @@ const shared = {
   'nav.profile': 'Profiel',
   'nav.sessions': 'Gekoppelde CLI-sessies',
   'nav.logout': 'Uitloggen',
+  'footer.whatsNew': 'Wat is er nieuw',
+  'footer.version': 'Versie {version}',
   'footer.about': 'Over Plak',
   'footer.accessibility': 'Toegankelijkheid',
   'footer.privacy': 'Privacy',
