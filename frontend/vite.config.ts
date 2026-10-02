@@ -5,6 +5,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   base: '/',
+  define: { __PLAK_VERSION__: JSON.stringify(process.env.PLAK_VERSION || 'dev') },
   build: {
     // The CSP (spec 9) allows no inline scripts; Vite's modulepreload polyfill
     // injects one into index.html by default.

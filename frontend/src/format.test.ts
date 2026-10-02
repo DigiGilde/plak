@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { contentUrl, formatDate, siteUrl } from './format';
+import { contentUrl, formatCalendarDate, formatDate, siteUrl } from './format';
 
 describe('formatDate', () => {
   it('formats an ISO timestamp in the date style of the language on screen', () => {
@@ -10,6 +10,12 @@ describe('formatDate', () => {
   it('falls back to a dash without a date, null or undefined alike', () => {
     expect(formatDate(null)).toBe('-');
     expect(formatDate(undefined)).toBe('-');
+  });
+});
+
+describe('formatCalendarDate', () => {
+  it('prints the day it names, whatever the time zone of the reader', () => {
+    expect(formatCalendarDate('2026-10-01')).toBe('1 oktober 2026');
   });
 });
 

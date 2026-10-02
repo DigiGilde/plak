@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory, type NavigationGuardWithThis } from 'vue-router';
+import {
+  createRouter,
+  createWebHistory,
+  type NavigationGuardWithThis,
+  type RouterScrollBehavior,
+} from 'vue-router';
 
 import { fetchCurrentMember, isPlatformAdmin } from './composables/currentMember';
 import { t, type MessageKey } from './i18n';
@@ -42,6 +47,12 @@ export const routes = [
     name: 'about',
     component: () => import('./pages/About.vue'),
     meta: { public: true, titleKey: 'footer.about' },
+  },
+  {
+    path: '/-/whats-new',
+    name: 'whats-new',
+    component: () => import('./pages/WhatsNew.vue'),
+    meta: { public: true, titleKey: 'page.whatsNew.title' },
   },
   {
     path: '/-/profile',
@@ -157,9 +168,13 @@ export const platformAdminGuard: NavigationGuardWithThis<undefined> = async (to)
   return true;
 };
 
+/** A link with a hash (the footer's version) scrolls to its target; every other navigation keeps the default. */
+export const scrollBehavior: RouterScrollBehavior = (to) => (to.hash ? { el: to.hash } : undefined);
+
 const router = createRouter({
   history: createWebHistory('/'),
   routes,
+  scrollBehavior,
 });
 
 router.beforeEach(platformAdminGuard);

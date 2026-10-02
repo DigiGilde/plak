@@ -98,7 +98,7 @@ class TestOnTheContentHost:
 
         assert f'<a class="button" href="{ADMIN}/-/login">Inloggen</a>' in body
 
-    async def test_footer_carries_the_four_public_pages_absolute(self, two_hosts) -> None:
+    async def test_footer_carries_the_public_pages_absolute(self, two_hosts) -> None:
         _, content = two_hosts
         body = (await content.get("/")).text
 
@@ -109,6 +109,7 @@ class TestOnTheContentHost:
         assert f'<a href="{ADMIN}/-/about">Over Plak</a>' in body
         assert f'<a href="{ADMIN}/-/privacy">Privacy</a>' in body
         assert f'<a href="{ADMIN}/-/api/docs">API-documentatie</a>' in body
+        assert f'<a href="{ADMIN}/-/whats-new">Wat is er nieuw</a>' in body
 
     async def test_page_carries_no_authority(self, two_hosts) -> None:
         """The core requirement: nothing here can do anything on this origin.
@@ -253,6 +254,51 @@ class TestElsewhere:
         assert response.content == NEUTRAL_404_BODY
 
 
+class TestVersionLink:
+    def test_a_dev_build_links_to_the_page_without_an_anchor(self) -> None:
+        body = front_page_html(ADMIN)
+
+        assert f'<li><a href="{ADMIN}/-/whats-new">Wat is er nieuw</a></li>' in body
+
+    def test_a_dev_build_says_what_is_new_in_both_languages(self) -> None:
+        english = front_page_html(ADMIN, i18n.negotiate("en"))
+
+        assert f'<a href="{ADMIN}/-/whats-new">What\'s new</a>' in english
+
+    def test_a_version_that_is_not_a_calver_links_to_the_page_itself(self) -> None:
+        body = front_page_html(ADMIN, version="2026.9.30-5-g1a2b3c4")
+
+        assert f'<a href="{ADMIN}/-/whats-new">Versie 2026.9.30-5-g1a2b3c4</a>' in body
+
+    def test_a_release_links_to_its_own_notes_in_both_languages(self) -> None:
+        dutch = front_page_html(ADMIN, version="2026.10.2.1")
+        english = front_page_html(ADMIN, i18n.negotiate("en"), version="2026.10.2.1")
+
+        assert f'<a href="{ADMIN}/-/whats-new#d2026-10-02">Versie 2026.10.2.1</a>' in dutch
+        assert f'<a href="{ADMIN}/-/whats-new#d2026-10-02">Version 2026.10.2.1</a>' in english
+
+    def test_the_version_comes_first_in_the_footer(self) -> None:
+        body = front_page_html(ADMIN, version="2026.10.2")
+
+        assert body.index("/-/whats-new#") < body.index("/-/about")
+
+    def test_the_version_is_escaped(self) -> None:
+        body = front_page_html(ADMIN, version='1"><script>')
+
+        assert "<script>" not in body
+        assert "/-/whats-new#" not in body
+
+    async def test_the_settings_version_reaches_the_page(self, tmp_path: Path) -> None:
+        app = create_app(_settings(tmp_path, version="2026.10.2"))
+        async with app.router.lifespan_context(app), _client(app, CONTENT) as client:
+            body = (await client.get("/")).text
+
+        assert "#d2026-10-02" in body
+
+    def test_the_version_defaults_to_dev(self, tmp_path: Path) -> None:
+        assert _settings(tmp_path).version == "dev"
+
+
 class TestRendering:
     def test_the_front_page_says_plak_is_still_in_development(self) -> None:
         """A visitor who lands here has to be told before they rely on it, not
@@ -360,7 +406,7 @@ class TestRendering:
         assert "&quot;onmouseover=&quot;alert(1)" in body
 
     def test_the_footer_matches_the_footer_of_the_spa(self) -> None:
-        """Both footers name the same four pages in the same order.
+        """Both footers name the same pages in the same order.
 
         A visitor meets one of the two depending on the host; a link that is
         added on one side and forgotten on the other makes the two say
@@ -382,5 +428,15 @@ class TestRendering:
         body = front_page_html(ADMIN)
         front_page_links = re.findall(r"<li><a href=\"([^\"]+)\">([^<]+)</a></li>", body)
 
-        assert spa_links
-        assert front_page_links == [(ADMIN + href, catalogue[key]) for href, key in spa_links]
+        # The version link sits in the SPA's start slot, before the legal
+        # bar's own links, and has a dynamic href and text that the pattern
+        # above does not match. The front page renders it first, as "Wat is er
+        # nieuw" (no version known here means a dev build).
+        assert ':text="versionText"' in source
+        assert "t('footer.version', { version })" in source
+        assert catalogue["footer.version"] == "Versie {version}"
+        assert catalogue["footer.whatsNew"] == "Wat is er nieuw"
+
+        assert len(spa_links) == 4
+        assert front_page_links[0] == (f"{ADMIN}/-/whats-new", catalogue["footer.whatsNew"])
+        assert front_page_links[1:] == [(ADMIN + href, catalogue[key]) for href, key in spa_links]

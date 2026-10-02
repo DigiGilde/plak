@@ -127,6 +127,8 @@ class Settings(BaseSettings):
     # requirements, base url, https). dev/compose.yml sets PLAK_ENVIRONMENT=
     # dev explicitly for local development.
     environment: str = "productie"
+    # The release this build ships as (PLAK_VERSION, set by the Containerfile).
+    version: str = "dev"
     base_url: str | None = None
     # Two origins, always: the admin host and the content host are
     # separate origins, and the app derives the content host from this URL.

@@ -38,6 +38,8 @@ export const pagesNl = {
   'page.start.loading': 'Bezig met laden...',
 
   // -- About ----------------------------------------------------------------
+  'page.whatsNew.title': 'Wat is er nieuw in Plak',
+  'page.whatsNew.empty': 'Er zijn nog geen releases.',
   'page.about.title': 'Over Plak',
   'page.about.intro':
     'Plak is er voor die ene pagina die je wilt delen. Een rapport, een analyse, een overzicht: je zet het online, kiest wie het mag zien en deelt de link. Geen bijlage die door mailboxen zwerft, maar een adres dat je kunt bijwerken en weer kunt intrekken.',

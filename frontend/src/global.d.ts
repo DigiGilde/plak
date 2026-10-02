@@ -10,4 +10,9 @@ declare module '*.vue' {
 // vite.config.ts is still needed for the runtime compiler.
 import '@nldd/design-system/vue';
 
+/** The release this build ships as (vite.config.ts `define`); `dev` outside a release build. */
+declare global {
+  const __PLAK_VERSION__: string;
+}
+
 export {};

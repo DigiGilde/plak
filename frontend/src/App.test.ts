@@ -14,6 +14,9 @@ import { makeMockBackend, type MockBackend } from './api/mock';
 import App from './App.vue';
 import { _resetCurrentMemberCache } from './composables/currentMember';
 import { _resetBreadcrumbs, setBreadcrumbs } from './composables/breadcrumbs';
+import { appVersion } from './version';
+
+vi.mock('./version', () => ({ appVersion: vi.fn(() => 'dev') }));
 
 let wrapper: ReturnType<typeof mount> | null = null;
 let backend: MockBackend;
@@ -123,6 +126,13 @@ function withText(app: ReturnType<typeof mount>, selector: string, text: string)
   return app.findAll(selector).find((el) => property<string>(el.element, 'text') === text);
 }
 
+function footerItem(app: ReturnType<typeof mount>, href: string): Element {
+  return app
+    .findAll('nldd-page-footer-legal-bar-item')
+    .map((item) => item.element)
+    .find((element) => property<string>(element, 'href') === href)!;
+}
+
 function texts(
   root: { findAll: (selector: string) => { element: Element }[] },
   selector: string,
@@ -160,6 +170,7 @@ describe('App', () => {
     expect(app.find('nldd-page-footer').exists()).toBe(true);
     const items = app.findAll('nldd-page-footer-legal-bar-item');
     expect(items.map((item) => property<string>(item.element, 'href'))).toEqual([
+      '/-/whats-new',
       '/-/about',
       '/-/accessibility',
       '/-/privacy',
@@ -169,7 +180,44 @@ describe('App', () => {
     // (start is for a copyright line or version number). That keeps them
     // together on the right and stops them wrapping into two rows on a narrow
     // screen.
-    expect(items.map((item) => item.attributes('slot'))).toEqual(['end', 'end', 'end', 'end']);
+    expect(items.map((item) => item.attributes('slot'))).toEqual([
+      'start',
+      'end',
+      'end',
+      'end',
+      'end',
+    ]);
+  });
+
+  it('links to the release notes page in the footer on a dev build', async () => {
+    const app = await mountApp();
+
+    const link = footerItem(app, '/-/whats-new');
+    expect(property<string>(link, 'text')).toBe('Wat is er nieuw');
+  });
+
+  it('names a version that is not a CalVer but links to the page itself', async () => {
+    vi.mocked(appVersion).mockReturnValue('2026.9.30-5-g1a2b3c4');
+    try {
+      const app = await mountApp();
+
+      const link = footerItem(app, '/-/whats-new');
+      expect(property<string>(link, 'text')).toBe('Versie 2026.9.30-5-g1a2b3c4');
+    } finally {
+      vi.mocked(appVersion).mockReturnValue('dev');
+    }
+  });
+
+  it('links to the own notes of a release in the footer of a release build', async () => {
+    vi.mocked(appVersion).mockReturnValue('2026.10.1.2');
+    try {
+      const app = await mountApp();
+
+      const link = footerItem(app, '/-/whats-new#d2026-10-01');
+      expect(property<string>(link, 'text')).toBe('Versie 2026.10.1.2');
+    } finally {
+      vi.mocked(appVersion).mockReturnValue('dev');
+    }
   });
 
   it('has a skip link to the main content', async () => {
