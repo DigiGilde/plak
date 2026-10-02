@@ -1063,6 +1063,25 @@ describe('TabDeploy: admin status', () => {
     expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(true);
   });
+
+  it('drops an open form when the tab moves to a site where the member is not admin', async () => {
+    // lid-4 is admin on team-aurora/website through a site role, but only a
+    // group reader on any other site in team-aurora.
+    backend.data.loggedInMemberId = 'lid-4';
+    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'docs', title: 'Docs' });
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+
+    await wrapper.setProps({ site: 'docs' });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
+  });
 });
 
 describe('TabDeploy: owner/repo input without a detail payload', () => {
