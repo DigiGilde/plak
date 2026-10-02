@@ -72,6 +72,36 @@ class TestTheCheckGate:
             "github.event_name == 'pull_request'"
         )
 
+    def test_a_preview_follows_the_label(self, deploy) -> None:
+        """A preview costs a pod, a database and a certificate per pull
+        request, and clones production's configuration. Most changes are
+        answered by the checks without anyone opening one, so it is asked
+        for rather than given."""
+        assert "contains(github.event.pull_request.labels.*.name, 'preview')" in (
+            deploy["jobs"]["preview"]["if"]
+        )
+        assert "labeled" in deploy[True]["pull_request"]["types"]
+
+    def test_taking_the_label_off_cleans_the_preview_up(self, deploy) -> None:
+        """Otherwise the label is a one-way start: a preview nobody wants any
+        more would run until the pull request closed."""
+        condition = " ".join(deploy["jobs"]["cleanup"]["if"].split())
+        assert "github.event.action == 'unlabeled'" in condition
+        assert "!contains(github.event.pull_request.labels.*.name, 'preview')" in condition
+        assert "github.event.action == 'closed'" in condition
+        assert "unlabeled" in deploy[True]["pull_request"]["types"]
+
+    def test_another_label_does_not_run_the_suite(self, deploy) -> None:
+        """`labeled` fires for every label. Without this, writing any word on
+        a pull request would start the whole suite and build an image."""
+        for job in ("ci", "build"):
+            condition = " ".join(deploy["jobs"][job]["if"].split())
+            assert "github.event.action != 'unlabeled'" in condition, job
+            assert (
+                "github.event.action != 'labeled' || github.event.label.name == 'preview'"
+                in condition
+            ), job
+
     def test_the_merge_queue_gets_the_checks_and_nothing_else(self, deploy) -> None:
         """beta merges through a merge queue, which waits for the required
         checks on its own commit: without the trigger they never report and

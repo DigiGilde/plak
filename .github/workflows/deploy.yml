@@ -20,7 +20,9 @@ on:
   push:
     branches: [main, beta]
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    # labeled/unlabeled as well: a preview follows the `preview` label, so
+    # putting it on has to start one and taking it off has to clean it up.
+    types: [opened, synchronize, reopened, closed, labeled, unlabeled]
   # Without it the merge queue on beta gets no checks and merges nothing.
   merge_group:
 
@@ -39,8 +41,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A label event only matters when it is the `preview` label: every other
+  # label would otherwise run the whole suite for a word on a pull request.
   ci:
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed'
+      && (github.event.action != 'unlabeled')
+      && (github.event.action != 'labeled' || github.event.label.name == 'preview')
     uses: ./.github/workflows/ci.yml
 
   # A dependabot PR does not need a preview environment; the gate above
@@ -52,6 +59,8 @@ jobs:
   build:
     if: >-
       github.event.action != 'closed' && github.event_name != 'merge_group'
+      && (github.event.action != 'unlabeled')
+      && (github.event.action != 'labeled' || github.event.label.name == 'preview')
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # This job executes the Containerfile, so `npm ci` and `uv sync` run
@@ -206,9 +215,16 @@ jobs:
 
   # preview and cleanup wait for the ZAD project: without ZAD_PROJECT_ID
   # there is nothing to deploy to, and every pull request would go red.
+  #
+  # And on the `preview` label, because a preview is not free: it is a pod, a
+  # database and a Let's Encrypt certificate per pull request, it clones
+  # production's configuration, and most changes are answered by the checks
+  # above without anyone opening it. Asking for one is one click; getting one
+  # unasked is the cost of every pull request.
   preview:
     if: >-
       github.event_name == 'pull_request' && github.event.action != 'closed'
+      && contains(github.event.pull_request.labels.*.name, 'preview')
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
     needs: [ci, build]
@@ -380,9 +396,20 @@ jobs:
           clone-from: productie
           comment-on-pr: true
 
+  # Two moments: the pull request closes, or the label comes off while it is
+  # still open. The second is what makes the label a switch rather than a
+  # one-way start; without it a preview taken off the label would run on
+  # until the pull request closed.
   cleanup:
     if: >-
-      github.event_name == 'pull_request' && github.event.action == 'closed'
+      github.event_name == 'pull_request'
+      && (
+        github.event.action == 'closed'
+        || (
+          github.event.action == 'unlabeled'
+          && !contains(github.event.pull_request.labels.*.name, 'preview')
+        )
+      )
       && github.event.pull_request.user.login != 'dependabot[bot]'
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
