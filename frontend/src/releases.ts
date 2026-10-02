@@ -38,13 +38,19 @@ export function calverDate(version: string): string {
   return `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}`;
 }
 
+/** The day (`YYYY-MM-DD`) a CalVer names; empty for anything else. */
+export function versionDay(version: string): string {
+  return CALVER.test(version) ? calverDate(version) : '';
+}
+
 /**
  * The id of a day's heading, and the hash that points at it. The `d` keeps it
  * from starting with a digit. Empty for a version that is not a CalVer, such as
  * `dev` or a git describe string.
  */
 export function dayAnchor(version: string): string {
-  return CALVER.test(version) ? `d${calverDate(version)}` : '';
+  const day = versionDay(version);
+  return day ? `d${day}` : '';
 }
 
 export interface ReleaseDay {

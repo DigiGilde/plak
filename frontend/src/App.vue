@@ -14,8 +14,8 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { fetchCurrentMember, currentMemberState, isPlatformAdmin } from './composables/currentMember';
 import { breadcrumbsFor } from './composables/breadcrumbs';
-import { t } from './i18n';
-import { dayAnchor } from './releases';
+import { currentLocale, t } from './i18n';
+import { dayAnchor, groupByDate, loadReleases, versionDay } from './releases';
 import { appVersion } from './version';
 
 interface MenuChoice {
@@ -30,15 +30,19 @@ const router = useRouter();
 const { member } = currentMemberState();
 const logoutForm = ref<HTMLFormElement | null>(null);
 
-// A build without a version (`dev`) names none; a version that is not a CalVer
-// has no day to point at, so it links to the page itself.
+// A build without a version (`dev`) names none. The link points at the day of
+// the version only when the notes have that day; otherwise (no note for it, or
+// not a CalVer) it links to the page itself.
 const versionText = computed(() => {
   const version = appVersion();
   return version === 'dev' ? t('footer.whatsNew') : t('footer.version', { version });
 });
 const versionHref = computed(() => {
-  const anchor = dayAnchor(appVersion());
-  return anchor ? `/-/whats-new#${anchor}` : '/-/whats-new';
+  const version = appVersion();
+  const hasNotes = groupByDate(loadReleases(currentLocale.value)).some(
+    (day) => day.date === versionDay(version),
+  );
+  return hasNotes ? `/-/whats-new#${dayAnchor(version)}` : '/-/whats-new';
 });
 
 const crumbs = computed(() => breadcrumbsFor(route.path));
