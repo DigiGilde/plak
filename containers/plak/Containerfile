@@ -2,7 +2,7 @@
 # Builds the whole product image: backend plus the built admin SPA. Build
 # context is the repo root (dev/compose.yml: context ".."), because the
 # image bundles the built admin SPA from frontend/ alongside the backend.
-FROM docker.io/library/node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS spa
+FROM docker.io/library/node:26-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS spa
 
 WORKDIR /spa
 
