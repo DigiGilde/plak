@@ -375,11 +375,17 @@ frontend tests and the CSP check on the built SPA.
 `.github/workflows/deploy.yml` builds the image, pushes it to GHCR and deploys
 with `RijksICTGilde/zad-actions`. Both are pinned to commit SHAs.
 
-A PR gets a preview deployment `pr-<nummer>` that is cloned from `productie`,
-and when the PR is closed the cleanup action removes the deployment, the
-GitHub deployments and the image. Both jobs only run once the repository
-variable `ZAD_PROJECT_ID` is set; until then a PR builds and scans its image
-and stops there.
+A PR labelled `preview` gets a preview deployment `pr-<nummer>` that is cloned
+from `productie`. Taking the label off cleans it up again, and so does closing
+the PR: the cleanup action removes the deployment, the GitHub deployments and
+the image. Both jobs only run once the repository variable `ZAD_PROJECT_ID` is
+set; until then a PR builds and scans its image and stops there.
+
+The label, rather than every PR, because a preview is not free. It is a pod, a
+database and a Let's Encrypt certificate per pull request, it clones
+production's configuration, and most changes are answered by the checks without
+anyone opening it. A label event for any other word does not run the suite
+(`deploy.yml`, the `ci` and `build` conditions).
 
 The `pr-` prefix is there so one pattern covers every preview: ZAD's
 sleep-mode service matches deployment names with `pr-*`, and the
