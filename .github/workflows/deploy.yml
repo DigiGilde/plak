@@ -202,8 +202,9 @@ jobs:
   #
   # Attestations on a private repository need GitHub Enterprise Cloud; on
   # the Free plan they work only while the repository is public, which it
-  # is since 2026-09-27. Available, not yet exercised: every run so far
-  # skipped this job with `build`, so no attestation exists to verify.
+  # is since 2026-09-27. In use since then: the image of v2026.9.30
+  # (be6f388) carries both attestations, and `gh attestation verify
+  # oci://ghcr.io/digigilde/plak@<digest> -R DigiGilde/plak` checks them.
   provenance:
     needs: build
     runs-on: ubuntu-latest
