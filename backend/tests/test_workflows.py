@@ -8,6 +8,8 @@ checked here, on every commit.
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import parts
@@ -55,22 +57,43 @@ class TestTheCheckGate:
         assert "needs" not in deploy["jobs"]["build"]
         assert deploy["jobs"]["preview"]["needs"] == ["ci", "build"]
 
-    def test_a_push_to_beta_deploys_to_production(self, deploy) -> None:
-        """`beta` is the default branch and there is no `main`. Bound to the
-        branch that does not exist, the rollout was skipped on every push
-        while the run stayed green, because a skipped job counts as success.
-        The ZAD_PROJECT_ID guard keeps it standing down where there is no
-        project, instead of failing the action on an empty api-key."""
+    def test_only_a_release_tag_deploys_to_production(self, deploy) -> None:
+        """A push to `beta` still builds, scans and attests its image, but
+        production follows a release tag alone. The ZAD_PROJECT_ID guard
+        keeps it standing down where there is no project, instead of failing
+        the action on an empty api-key."""
         assert deploy[True]["push"]["branches"] == ["main", "beta"]
+        assert deploy[True]["push"]["tags"] == ["v[0-9][0-9][0-9][0-9].*"]
         condition = " ".join(deploy["jobs"]["production"]["if"].split())
         assert condition == (
             "github.event_name == 'push' "
-            "&& github.ref == 'refs/heads/beta' "
+            "&& startsWith(github.ref, 'refs/tags/v') "
             "&& vars.ZAD_PROJECT_ID != ''"
         )
         assert deploy["jobs"]["preview"]["if"].startswith(
             "github.event_name == 'pull_request'"
         )
+
+    def test_a_branch_push_never_reaches_production(self, deploy) -> None:
+        """Every condition on `production` has to hold, so a branch push
+        (`refs/heads/...`) fails the tag prefix whatever branch it is. No
+        other job in the file deploys to `productie`."""
+        condition = deploy["jobs"]["production"]["if"]
+        assert "refs/heads" not in condition
+        assert "||" not in condition
+        assert [
+            name
+            for name, job in deploy["jobs"].items()
+            if "productie" in str(job.get("environment", ""))
+        ] == ["production"]
+
+    def test_production_rolls_out_one_tag_at_a_time(self, deploy) -> None:
+        """Without it two tags pushed close together could roll out side by
+        side, and the older one finish last."""
+        assert deploy["jobs"]["production"]["concurrency"] == {
+            "group": "production",
+            "cancel-in-progress": False,
+        }
 
     def test_a_preview_follows_the_label(self, deploy) -> None:
         """A preview costs a pod, a database and a certificate per pull
@@ -271,6 +294,297 @@ class TestTheScans:
             if push is None:
                 continue
             assert "beta" in push["branches"], path.name
+
+
+GUARDS = (
+    "Check the tag format",
+    "Check that the tagged commit is on beta",
+    "Check that the tag is the newest release",
+)
+
+
+def _step(job: dict, name: str) -> dict:
+    return next(s for s in job["steps"] if s.get("name") == name)
+
+
+def _env(**extra: str) -> dict[str, str]:
+    # Clear of the developer's git config, so a signing or hook setting
+    # there cannot change what these repositories do.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_AUTHOR_NAME="Test",
+        GIT_AUTHOR_EMAIL="test@example.nl",
+        GIT_COMMITTER_NAME="Test",
+        GIT_COMMITTER_EMAIL="test@example.nl",
+    )
+    env.update(extra)
+    return env
+
+
+def _git(repo: Path, *args: str) -> str:
+    # git via PATH, like the justfile does; every argument comes from this file.
+    return subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
+        cwd=repo,
+        env=_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _run(step: dict, cwd: Path, **env: str) -> subprocess.CompletedProcess:
+    """A `run:` step as the runner executes it on Linux: `bash -e`."""
+    return subprocess.run(  # noqa: S603
+        ["bash", "-e", "-c", step["run"]],  # noqa: S607
+        cwd=cwd,
+        env=_env(**env),
+        capture_output=True,
+        text=True,
+    )
+
+
+def _refused(result: subprocess.CompletedProcess) -> bool:
+    return result.returncode != 0 and result.stdout.startswith("::error::")
+
+
+class TestTheReleaseGuards:
+    """Production rolls out a release tag only after three checks, each of
+    which fails the job rather than skipping it, so a refused tag shows red.
+    The steps are run here as they are written in deploy.yml, against real
+    repositories."""
+
+    @pytest.fixture
+    def production(self, deploy) -> dict:
+        return deploy["jobs"]["production"]
+
+    @pytest.fixture
+    def release_tag(self, deploy) -> str:
+        return deploy["env"]["RELEASE_TAG"]
+
+    @pytest.fixture
+    def work(self, tmp_path) -> Path:
+        """`origin` with beta at two commits, the baseline tag on the first."""
+        origin = tmp_path / "origin.git"
+        work = tmp_path / "work"
+        _git(tmp_path, "init", "-q", "--bare", "-b", "beta", str(origin))
+        _git(tmp_path, "init", "-q", "-b", "beta", str(work))
+        _git(work, "remote", "add", "origin", str(origin))
+        _git(work, "commit", "-q", "--allow-empty", "-m", "one")
+        _git(work, "tag", "-a", "v2026.9.30", "-m", "Plak v2026.9.30")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "two")
+        _git(work, "push", "-q", "origin", "beta", "--tags")
+        return work
+
+    @staticmethod
+    def _tag(work: Path, tag: str, ref: str = "HEAD") -> None:
+        _git(work, "tag", "-a", tag, ref, "-m", f"Plak {tag}")
+        _git(work, "push", "-q", "origin", tag)
+
+    @staticmethod
+    def _checkout(tmp_path: Path) -> Path:
+        """What actions/checkout leaves on the runner, at this moment."""
+        runner = tmp_path / "runner"
+        _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(runner))
+        return runner
+
+    def test_the_guards_run_after_a_full_checkout_and_before_the_rollout(
+        self, production
+    ) -> None:
+        """Ancestry and the newest tag need the whole history and every tag;
+        a shallow checkout would refuse every release or pass the wrong one.
+        The token stays out of .git/config: this job holds the ZAD api-key,
+        and the repository is public, so the fetches need no credentials."""
+        steps = production["steps"]
+        assert steps[0]["uses"].startswith("actions/checkout@")
+        assert steps[0]["with"] == {"fetch-depth": 0, "persist-credentials": False}
+        assert [s.get("name") for s in steps[1:]] == [*GUARDS, "Roll out to ZAD"]
+        assert production["env"] == {"TAG": "${{ github.ref_name }}"}
+        for name in GUARDS:
+            assert "${{" not in _step(production, name)["run"], name
+
+    @pytest.mark.parametrize("tag", ["v2026.10.1", "v2026.9.30", "v2026.12.31.2"])
+    def test_a_calver_tag_passes_the_format_check(
+        self, production, release_tag, tmp_path, tag
+    ) -> None:
+        result = _run(
+            _step(production, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
+        )
+        assert result.returncode == 0, result.stdout
+
+    @pytest.mark.parametrize(
+        "tag",
+        [
+            "v2026.10",
+            "v2026.01.1",
+            "v2026.10.01",
+            "v2026.0.1",
+            "v26.10.1",
+            "v2026.10.1.0",
+            "v2026.10.1-rc1",
+            "v2026.10.1,evil",
+            "2026.10.1",
+        ],
+    )
+    def test_any_other_tag_is_refused(self, production, release_tag, tmp_path, tag) -> None:
+        result = _run(
+            _step(production, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
+        )
+        assert _refused(result), result.stdout
+
+    def test_a_commit_on_beta_passes_the_ancestry_check(self, production, work, tmp_path) -> None:
+        """Including one that reached beta after the checkout: the guard
+        fetches beta itself."""
+        runner = self._checkout(tmp_path)
+        _git(work, "commit", "-q", "--allow-empty", "-m", "three")
+        _git(work, "push", "-q", "origin", "beta")
+        result = _run(
+            _step(production, "Check that the tagged commit is on beta"),
+            runner,
+            TAG="v2026.10.1",
+            GITHUB_SHA=_git(work, "rev-parse", "HEAD"),
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_commit_off_beta_is_refused(self, production, work, tmp_path) -> None:
+        """A tag on a branch that never merged would ship unreviewed code."""
+        _git(work, "switch", "-q", "-c", "side", "HEAD~1")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "unreviewed")
+        _git(work, "push", "-q", "origin", "side")
+        result = _run(
+            _step(production, "Check that the tagged commit is on beta"),
+            self._checkout(tmp_path),
+            TAG="v2026.10.1",
+            GITHUB_SHA=_git(work, "rev-parse", "HEAD"),
+        )
+        assert _refused(result), result.stdout
+
+    def test_a_commit_dropped_from_beta_is_refused(self, production, work, tmp_path) -> None:
+        """The runner's own origin/beta may be older than beta is now; the
+        guard overwrites it rather than trusting it."""
+        dropped = _git(work, "rev-parse", "HEAD")
+        runner = self._checkout(tmp_path)
+        _git(work, "reset", "-q", "--hard", "HEAD~1")
+        _git(work, "push", "-q", "--force", "origin", "beta")
+        result = _run(
+            _step(production, "Check that the tagged commit is on beta"),
+            runner,
+            TAG="v2026.10.1",
+            GITHUB_SHA=dropped,
+        )
+        assert _refused(result), result.stdout
+
+    def test_the_newest_tag_passes(self, production, release_tag, work, tmp_path) -> None:
+        """Ordered as numbers, not text: as text v2026.9.30 sorts after
+        v2026.10.1. A tag that is not a release does not count."""
+        self._tag(work, "v2026.10.1")
+        self._tag(work, "v2026.12.1-rc1")
+        result = _run(
+            _step(production, "Check that the tag is the newest release"),
+            self._checkout(tmp_path),
+            TAG="v2026.10.1",
+            RELEASE_TAG=release_tag,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_an_older_tag_pushed_again_is_refused(
+        self, production, release_tag, work, tmp_path
+    ) -> None:
+        """Otherwise re-pushing an old tag rolls production back."""
+        self._tag(work, "v2026.10.1")
+        result = _run(
+            _step(production, "Check that the tag is the newest release"),
+            self._checkout(tmp_path),
+            TAG="v2026.9.30",
+            RELEASE_TAG=release_tag,
+        )
+        assert _refused(result), result.stdout
+
+    def test_a_newer_tag_the_checkout_missed_still_refuses(
+        self, production, release_tag, work, tmp_path
+    ) -> None:
+        """The guard fetches the tags itself, so one pushed after the
+        checkout counts too."""
+        self._tag(work, "v2026.10.1")
+        runner = self._checkout(tmp_path)
+        self._tag(work, "v2026.10.1.1")
+        result = _run(
+            _step(production, "Check that the tag is the newest release"),
+            runner,
+            TAG="v2026.10.1",
+            RELEASE_TAG=release_tag,
+        )
+        assert _refused(result), result.stdout
+
+
+class TestTheReleaseImage:
+    """A release tag gets its version as a second image tag and as
+    PLAK_VERSION in the image; any other push builds as before."""
+
+    @pytest.fixture
+    def build(self, deploy) -> dict:
+        return deploy["jobs"]["build"]
+
+    def test_only_a_tag_push_sets_a_version(self, build) -> None:
+        """The step is skipped on every other event, so its outputs are empty
+        and the build gets no build-arg (PLAK_VERSION stays `dev`) and only
+        the commit tag."""
+        release = _step(build, "Determine the release version")
+        assert release["if"] == (
+            "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+        )
+        assert release["env"]["TAG"] == "${{ github.ref_name }}"
+        assert "${{" not in release["run"]
+
+        push = _step(build, "Build and push the image")
+        assert push["with"]["build-args"] == "${{ steps.release.outputs.build-args }}"
+        assert push["with"]["tags"] == (
+            "${{ steps.release.outputs.tags || steps.tag.outputs.image }}"
+        )
+        # Scans and attestation keep following the commit tag.
+        assert build["outputs"]["image"] == "${{ steps.tag.outputs.image }}"
+
+    def test_a_release_tag_gets_both_image_tags_and_the_version(
+        self, build, deploy, tmp_path
+    ) -> None:
+        output = tmp_path / "output"
+        output.touch()
+        result = _run(
+            _step(build, "Determine the release version"),
+            tmp_path,
+            TAG="v2026.10.1",
+            NAME="ghcr.io/digigilde/plak",
+            IMAGE="ghcr.io/digigilde/plak:abc123",
+            RELEASE_TAG=deploy["env"]["RELEASE_TAG"],
+            GITHUB_OUTPUT=str(output),
+        )
+        assert result.returncode == 0, result.stdout
+        assert output.read_text().splitlines() == [
+            "build-args=PLAK_VERSION=2026.10.1",
+            "tags<<EOF",
+            "ghcr.io/digigilde/plak:abc123",
+            "ghcr.io/digigilde/plak:2026.10.1",
+            "EOF",
+        ]
+
+    def test_a_malformed_tag_builds_nothing(self, build, deploy, tmp_path) -> None:
+        """A comma is legal in a git tag and a separator in the tag list:
+        refused before it gets there."""
+        output = tmp_path / "output"
+        output.touch()
+        result = _run(
+            _step(build, "Determine the release version"),
+            tmp_path,
+            TAG="v2026.10.1,evil",
+            NAME="ghcr.io/digigilde/plak",
+            IMAGE="ghcr.io/digigilde/plak:abc123",
+            RELEASE_TAG=deploy["env"]["RELEASE_TAG"],
+            GITHUB_OUTPUT=str(output),
+        )
+        assert _refused(result), result.stdout
+        assert output.read_text() == ""
 
 
 class TestCodeQL:
