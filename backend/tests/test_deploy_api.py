@@ -320,6 +320,7 @@ async def test_live_deploy_with_ci_token(environment: Environment) -> None:
 
     assert resp.status_code == 201
     version_id = uuid.UUID(resp.json()["versionId"])
+    assert resp.json()["url"] == "https://plak.example/team-aurora/website/"
 
     async with environment.session_factory() as db:
         version = await db.scalar(select(Version).where(Version.id == version_id))
@@ -722,6 +723,7 @@ async def test_preview_deploy_with_ci_token_from_a_pull_request(environment: Env
 
     assert resp.status_code == 201
     version_id = uuid.UUID(resp.json()["versionId"])
+    assert resp.json()["url"] == "https://plak.example/team-aurora/website/_preview/pr-42/"
 
     async with environment.session_factory() as db:
         preview = await db.scalar(

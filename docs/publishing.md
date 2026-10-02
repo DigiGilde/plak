@@ -298,11 +298,62 @@ on GitHub by default; do not use `pull_request_target` there to work around
 that, because then the workflow runs with the rights of the target
 repository on code from the fork.
 
+A pull request opened by a bot (dependabot, renovate, pre-commit-ci,
+github-actions, or any author of type `Bot`) needs no preview, and a
+Dependabot one runs like a fork, without an ID token. The action leaves
+those alone, teardown included, and sets its output `skipped` to `true`;
+`skip-bot-prs: "false"` turns that off. The check is the one
+`RijksICTGilde/zad-actions` does, so a workflow that uses both skips the
+same pull requests.
+
 The input `host` is the admin origin of the instance (`PLAK_BASE_URL`, e.g.
 `https://beheer.plak.example.org`), without an `/admin` suffix, and at the
 same time the expected `aud` claim of the ID token: the action sets that
 audience itself. The deploy API exists only on that host; the content host
-(`https://plak.example.org`) answers `/admin/...` with a neutral 404.
+(`https://plak.example.org`) answers `/admin/...` with a neutral 404. Leave
+`host` out to publish to the DigiGilde instance,
+`https://beheer.plak.rijks.app`, or to whatever `PLAK_HOST` in the job's
+environment names.
+
+The action's output `url` is where the deploy can be seen, for a later step
+of your own.
+
+#### The preview in the pull request
+
+Two optional inputs report a deploy back to GitHub (not to Forgejo, where
+the action refuses them before it publishes):
+
+- `environment: preview` records the deploy as a deployment in the GitHub
+  environment `preview`, with its URL, so the pull request shows a "View
+  deployment" button. Each pull request keeps its own deployment; teardown
+  marks it inactive. Needs `deployments: write`.
+- `comment-on-pr: "true"` puts the link in a comment on the pull request, updated
+  on every push and marked removed on teardown. Needs
+  `pull-requests: write`.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+  pull-requests: write
+
+# ...
+      - name: Publiceer preview
+        if: github.event_name == 'pull_request'
+        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        with:
+          site: team-aurora/website
+          dist-path: ./dist
+          preview-ref: pr-${{ github.event.pull_request.number }}
+          environment: preview
+          comment-on-pr: "true"
+```
+
+Give the teardown step the same `environment` and `comment-on-pr`. Both use the
+workflow's own `GITHUB_TOKEN`; pass another one through `github-token` if
+needed. A pull request from a fork gets a read-only token, so there these
+two cannot write, just as the deploy itself gets no ID token.
 
 ### Forgejo Actions
 
@@ -531,7 +582,9 @@ curl -sS -X POST \
     "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
-Success: `201` with JSON body `{"versionId": "<uuid>"}`.
+Success: `201` with JSON body `{"versionId": "<uuid>", "url": "<url>"}`;
+`url` is where the deploy can be seen, the live site here and
+`.../_preview/<ref>/` for a preview.
 
 ### Preview deploy
 

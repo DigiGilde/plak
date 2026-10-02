@@ -1246,7 +1246,7 @@ def _action_definition() -> dict:
     return yaml.safe_load(ACTION_YML_PATH.read_text(encoding="utf-8"))
 
 
-def _expression_values(inputs: dict[str, str]) -> dict[str, str]:
+def _expression_values(inputs: dict[str, str], github: dict[str, str] | None = None) -> dict[str, str]:
     declared = _action_definition()["inputs"]
     unknown = set(inputs) - set(declared)
     assert not unknown, f"not an input of the action: {sorted(unknown)}"
@@ -1255,12 +1255,20 @@ def _expression_values(inputs: dict[str, str]) -> dict[str, str]:
         for name, spec in declared.items()
     }
     values["github.action_path"] = str(ACTION_YML_PATH.parent)
+    # A push by a person, unless the test says otherwise.
+    values["github.event_name"] = "push"
+    values["github.event.pull_request.user.login"] = ""
+    values["github.event.pull_request.user.type"] = ""
+    values.update({f"github.{key}": value for key, value in (github or {}).items()})
     return values
 
 
 def _render(text: str, values: dict[str, str]) -> str:
     def replace(match: re.Match[str]) -> str:
         reference = match.group(1)
+        if reference.startswith("steps.") and reference not in values:
+            # A runner renders the output of a step that did not run as empty.
+            return ""
         assert reference in values, f"unhandled expression in action.yml: {reference}"
         return values[reference]
 
@@ -1270,11 +1278,18 @@ def _render(text: str, values: dict[str, str]) -> str:
 def _step_runs(condition: str, values: dict[str, str]) -> bool:
     expression = _EXPRESSION.fullmatch(condition.strip())
     assert expression, f"unhandled if: in action.yml: {condition}"
-    comparison = _COMPARISON.match(expression.group(1))
-    assert comparison, f"unhandled if: in action.yml: {condition}"
-    left, operator, right = comparison.groups()
-    assert left in values, f"unhandled expression in action.yml: {left}"
-    return (values[left] == right) if operator == "==" else (values[left] != right)
+    for part in expression.group(1).split(" && "):
+        comparison = _COMPARISON.match(part.strip())
+        assert comparison, f"unhandled if: in action.yml: {condition}"
+        left, operator, right = comparison.groups()
+        if left.startswith("steps."):
+            value = values.get(left, "")
+        else:
+            assert left in values, f"unhandled expression in action.yml: {left}"
+            value = values[left]
+        if (value == right) != (operator == "=="):
+            return False
+    return True
 
 
 class _ActionRun:
@@ -1286,11 +1301,13 @@ class _ActionRun:
         self.stderr = ""
 
 
-def _run_action(inputs: dict[str, str], *, env: dict[str, str], cwd: Path) -> _ActionRun:
+def _run_action(
+    inputs: dict[str, str], *, env: dict[str, str], cwd: Path, github: dict[str, str] | None = None
+) -> _ActionRun:
     """Runs the shell steps of action.yml the way a runner would: the ${{ }}
     expressions filled in, each step's own env applied, the `if:` conditions
     honoured, and the run stopping at the first step that fails."""
-    values = _expression_values(inputs)
+    values = _expression_values(inputs, github)
     run = _ActionRun()
     for step in _action_definition()["runs"]["steps"]:
         if "run" not in step:
@@ -1313,6 +1330,10 @@ def _run_action(inputs: dict[str, str], *, env: dict[str, str], cwd: Path) -> _A
             check=False,
         )
         run.steps.append(step["name"])
+        if "id" in step and "GITHUB_OUTPUT" in env:
+            for line in Path(env["GITHUB_OUTPUT"]).read_text().splitlines():
+                key, _, value = line.partition("=")
+                values[f"steps.{step['id']}.outputs.{key}"] = value
         run.stdout += result.stdout
         run.stderr += result.stderr
         if result.returncode != 0:
@@ -1366,7 +1387,13 @@ def test_action_publishes_live_and_reports_the_version_id(
     )
 
     assert run.returncode == 0, run.stderr
-    assert run.steps == ["Check OIDC access", "Publish"]
+    assert run.steps == [
+        "Check pull request author",
+        "Check OIDC access",
+        "Check GitHub options",
+        "Publish",
+        "Report to GitHub",
+    ]
 
     deploys = _deploy_requests(stub_server)
     assert len(deploys) == 1
@@ -1432,7 +1459,13 @@ def test_action_teardown_removes_the_preview_and_publishes_nothing(
     )
 
     assert run.returncode == 0, run.stderr
-    assert run.steps == ["Check OIDC access", "Remove preview"]
+    assert run.steps == [
+        "Check pull request author",
+        "Check OIDC access",
+        "Check GitHub options",
+        "Remove preview",
+        "Report to GitHub",
+    ]
     assert _deploy_requests(stub_server) == []
 
     removals = [r for r in stub_server.requests if "/previews/" in r["path"]]
@@ -1478,7 +1511,7 @@ def test_action_refuses_a_publish_without_a_dist_path(
 
 
 def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
-    stub_server, host, dist_folder, isolated_cwd
+    stub_server, host, dist_folder, isolated_cwd, action_env
 ):
     """Without `permissions: id-token: write` the two request variables are
     not in the environment at all. The step has to name that itself: the CLI
@@ -1488,13 +1521,13 @@ def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
 
     run = _run_action(
         {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
-        env={"GITHUB_OUTPUT": str(isolated_cwd / "github_output.txt")},
+        env={"GITHUB_OUTPUT": action_env["GITHUB_OUTPUT"]},
         cwd=isolated_cwd,
     )
 
     assert run.returncode == 2
     assert run.failed_step == "Check OIDC access"
-    assert run.steps == ["Check OIDC access"]
+    assert run.steps == ["Check pull request author", "Check OIDC access"]
     assert "no OIDC token available" in run.stderr
     assert "id-token: write" in run.stderr
     assert "enable-openid-connect: true" in run.stderr
@@ -1543,6 +1576,320 @@ def test_action_fails_the_teardown_step_when_the_server_refuses_it(
     assert run.returncode != 0
     assert run.failed_step == "Remove preview"
     assert "Not your preview." in run.stderr
+
+
+def test_action_without_host_leaves_the_host_to_the_cli(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    """An empty host input passes no --host at all, so PLAK_HOST set on the
+    job reaches the CLI; on a runner without it the CLI's DEFAULT_HOST
+    applies (test_default_host_*)."""
+    _action_responder(stub_server)
+    env = {**action_env, "PLAK_HOST": host}
+
+    publish = _run_action(
+        {"site": "team-aurora/website", "dist-path": str(dist_folder), "preview-ref": "pr-42"},
+        env=env,
+        cwd=isolated_cwd,
+    )
+    teardown = _run_action(
+        {"site": "team-aurora/website", "preview-ref": "pr-42", "teardown": "true"},
+        env=env,
+        cwd=isolated_cwd,
+    )
+
+    assert publish.returncode == 0, publish.stderr
+    assert teardown.returncode == 0, teardown.stderr
+    assert [r["method"] for r in stub_server.requests if "/-/api/" in r["path"]] == ["POST", "DELETE"]
+
+
+def test_action_refuses_a_comment_input_that_is_not_true_or_false(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), "comment-on-pr": "yes"},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Check GitHub options"
+    assert "comment-on-pr must be 'true' or 'false'" in run.stderr
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize("option", [{"environment": "preview"}, {"comment-on-pr": "true"}])
+def test_action_refuses_the_github_options_on_forgejo_before_publishing(
+    stub_server, host, dist_folder, isolated_cwd, action_env, option
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), **option},
+        env={**action_env, "FORGEJO_ACTIONS": "true"},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Check GitHub options"
+    assert "work on GitHub Actions only" in run.stderr
+    assert stub_server.requests == []
+
+
+def test_action_on_forgejo_without_github_options_publishes(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
+        env={**action_env, "FORGEJO_ACTIONS": "true"},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert len(_deploy_requests(stub_server)) == 1
+
+
+def _bot_pull_request(login: str, user_type: str, event: str = "pull_request") -> dict[str, str]:
+    return {
+        "event_name": event,
+        "event.pull_request.user.login": login,
+        "event.pull_request.user.type": user_type,
+    }
+
+
+@pytest.mark.parametrize(
+    ("login", "user_type", "event"),
+    [
+        ("some-app[bot]", "Bot", "pull_request"),
+        # Forgejo has no user type; the known logins still count.
+        ("renovate[bot]", "", "pull_request"),
+        ("dependabot[bot]", "Bot", "pull_request_target"),
+    ],
+)
+@pytest.mark.parametrize("teardown", ["false", "true"])
+def test_action_leaves_a_bots_pull_request_alone(
+    stub_server, host, dist_folder, isolated_cwd, action_env, login, user_type, event, teardown
+):
+    """A Dependabot pull request gets no OIDC token: without the skip the
+    run would go red on 'no OIDC token available'. With it, nothing runs
+    after the check, the teardown neither, and the skipped output says so."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "teardown": teardown,
+        },
+        env={"GITHUB_OUTPUT": action_env["GITHUB_OUTPUT"]},
+        cwd=isolated_cwd,
+        github=_bot_pull_request(login, user_type, event),
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert run.steps == ["Check pull request author"]
+    assert f"::notice::Skipping: pull request author '{login}' is a bot" in run.stdout
+    assert Path(action_env["GITHUB_OUTPUT"]).read_text() == "skipped=true\n"
+    assert stub_server.requests == []
+
+
+@pytest.mark.parametrize(
+    "github",
+    [
+        _bot_pull_request("robbert", "User"),
+        # A push carries no pull request author, whoever pushed.
+        _bot_pull_request("dependabot[bot]", "Bot", event="push"),
+    ],
+)
+def test_action_publishes_for_a_person_and_for_a_push(
+    stub_server, host, dist_folder, isolated_cwd, action_env, github
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
+        env=action_env,
+        cwd=isolated_cwd,
+        github=github,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert len(_deploy_requests(stub_server)) == 1
+    assert "skipped=" not in Path(action_env["GITHUB_OUTPUT"]).read_text()
+
+
+def test_action_with_skip_bot_prs_false_publishes_for_a_bot(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "skip-bot-prs": "false",
+        },
+        env=action_env,
+        cwd=isolated_cwd,
+        github=_bot_pull_request("dependabot[bot]", "Bot"),
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert len(_deploy_requests(stub_server)) == 1
+
+
+def test_action_refuses_a_skip_bot_prs_input_that_is_not_true_or_false(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), "skip-bot-prs": "nee"},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Check pull request author"
+    assert "skip-bot-prs must be 'true' or 'false'" in run.stderr
+    assert stub_server.requests == []
+
+
+PREVIEW_URL = "https://plak.example/team-aurora/website/_preview/pr-42/"
+
+
+@pytest.fixture
+def github_runner(host, isolated_cwd, action_env) -> dict[str, str]:
+    """action_env on a pull_request event for PR 42, with the stub server
+    standing in for the GitHub API as well."""
+    event = isolated_cwd / "event.json"
+    event.write_text(json.dumps({"pull_request": {"number": 42, "head": {"sha": "abcdef0123456789"}}}))
+    return {
+        **action_env,
+        "GITHUB_API_URL": host,
+        "GITHUB_SERVER_URL": "https://github.test",
+        "GITHUB_REPOSITORY": "digigilde/website",
+        "GITHUB_RUN_ID": "987",
+        "GITHUB_SHA": "merge0000000000",
+        "GITHUB_EVENT_PATH": str(event),
+    }
+
+
+def test_action_reports_a_preview_to_github_as_deployment_and_comment(
+    stub_server, host, dist_folder, isolated_cwd, github_runner
+):
+    """The url the deploy returns travels through the Publish step's output
+    into the deployment status and the comment."""
+    repo = "/repos/digigilde/website"
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/team-aurora/website/deploys": [
+                _json_step(201, {"versionId": "11111111-2222-3333-4444-555555555555", "url": PREVIEW_URL})
+            ],
+            f"{repo}/deployments": [_json_step(201, {"id": 7}), _json_step(200, [{"id": 7}])],
+            f"{repo}/deployments/7/statuses": [_json_step(201, {})],
+            f"{repo}/issues/42/comments": [_json_step(200, []), _json_step(201, {"id": 1})],
+        }
+    )
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "environment": "preview",
+            "comment-on-pr": "true",
+            "github-token": "ghs-token",
+        },
+        env=github_runner,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    github = [r for r in stub_server.requests if r["path"].startswith(repo)]
+    assert [(r["method"], r["path"].split("?")[0]) for r in github] == [
+        ("POST", f"{repo}/deployments"),
+        ("POST", f"{repo}/deployments/7/statuses"),
+        ("GET", f"{repo}/deployments"),
+        ("GET", f"{repo}/issues/42/comments"),
+        ("POST", f"{repo}/issues/42/comments"),
+    ]
+    assert all(r["headers"]["Authorization"] == "Bearer ghs-token" for r in github)
+    assert json.loads(github[1]["body"])["environment_url"] == PREVIEW_URL
+    assert PREVIEW_URL in json.loads(github[4]["body"])["body"]
+    assert f"url={PREVIEW_URL}" in Path(github_runner["GITHUB_OUTPUT"]).read_text()
+
+
+def test_action_fails_the_report_when_the_server_returns_no_url(
+    stub_server, host, dist_folder, isolated_cwd, github_runner
+):
+    """A Plak from before the url field: the deploy stands, but a comment
+    without a link is no comment, so the step says why it cannot."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "comment-on-pr": "true",
+            "github-token": "ghs-token",
+        },
+        env=github_runner,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 1
+    assert run.failed_step == "Report to GitHub"
+    assert "returned no url" in run.stderr
+    assert len(_deploy_requests(stub_server)) == 1
+
+
+def test_action_teardown_reports_the_removal_to_github(
+    stub_server, host, isolated_cwd, github_runner
+):
+    repo = "/repos/digigilde/website"
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [lambda _record: (204, None, "text/plain")],
+            f"{repo}/deployments": [_json_step(200, [])],
+            f"{repo}/issues/42/comments": [_json_step(200, [])],
+        }
+    )
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "preview-ref": "pr-42",
+            "teardown": "true",
+            "environment": "preview",
+            "comment-on-pr": "true",
+            "github-token": "ghs-token",
+        },
+        env=github_runner,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert [r["method"] + " " + r["path"].split("?")[0] for r in stub_server.requests] == [
+        "GET /oidc-token",
+        "DELETE /-/api/v1/sites/team-aurora/website/previews/pr-42",
+        f"GET {repo}/deployments",
+        f"GET {repo}/issues/42/comments",
+    ]
 
 
 # --- action.yml: one repository reference, in every place that names it ----
@@ -2594,6 +2941,75 @@ def test_publish_writes_the_version_id_to_the_output_file_instead_of_stdout(
     assert output_file.read_text() == (
         "eerder=1\nversion-id=00000000-0000-0000-0000-000000000000\n"
     )
+
+
+def test_publish_writes_the_url_beside_the_version_id(
+    stub_server, host, dist_folder, token_env, tmp_path
+):
+    stub_server.responder = _json_responder(
+        201,
+        {
+            "versionId": "00000000-0000-0000-0000-000000000000",
+            "url": "https://plak.example/team-aurora/website/_preview/pr-42/",
+        },
+    )
+    output_file = tmp_path / "github_output.txt"
+
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "team-aurora/website",
+            "--preview",
+            "pr-42",
+            "--output-file",
+            str(output_file),
+        ]
+    )
+
+    assert code == 0
+    assert output_file.read_text() == (
+        "version-id=00000000-0000-0000-0000-000000000000\n"
+        "url=https://plak.example/team-aurora/website/_preview/pr-42/\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://plak.example/\nversion-id=evil",
+        "https://plak.example/a b/",
+        "javascript:alert(1)",
+        42,
+    ],
+)
+def test_publish_refuses_a_url_that_could_break_out_of_the_output_file(
+    stub_server, host, dist_folder, token_env, tmp_path, capsys, url
+):
+    stub_server.responder = _json_responder(
+        201, {"versionId": "00000000-0000-0000-0000-000000000000", "url": url}
+    )
+    output_file = tmp_path / "github_output.txt"
+
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "team-aurora/website",
+            "--output-file",
+            str(output_file),
+        ]
+    )
+
+    assert code == 1
+    assert "unexpected url format" in capsys.readouterr().err
+    assert not output_file.exists()
 
 
 def test_publish_reports_an_unwritable_output_file_after_a_successful_publish(

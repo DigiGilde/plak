@@ -236,7 +236,6 @@ jobs:
           PLAK_BASE_PATH: /team-aurora/website/
       - uses: DigiGilde/plak/actions/publiceer@<commit-sha>
         with:
-          host: https://beheer.plak.rijks.app
           site: team-aurora/website
           dist-path: ./dist
 ```

@@ -31,6 +31,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
+from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from pydantic import Field
@@ -170,6 +171,13 @@ class DeployResult(ApiModel):
             "Id van de zojuist aangemaakte versie. Hiermee is de deploy terug te vinden in de versielijst van "
             "de site, en hiernaar is later terug te rollen."
         )
+    )
+    url: str = Field(
+        description=(
+            "Waar de deploy te bekijken is: de live site, of bij een preview de preview-URL. CI kan hier een "
+            "link naar plaatsen, in een pull request bijvoorbeeld."
+        ),
+        examples=["https://plak.example/team-aurora/website/_preview/pr-42/"],
     )
 
 
@@ -780,7 +788,10 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         None,
         {**refs, "version_id": str(version_id)},
     )
-    return DeployResult(version_id=version_id)
+    url = f"{settings.content_base_url.rstrip('/')}/{quote(group.slug)}/{quote(site.slug)}/"
+    if preview is not None:
+        url += f"_preview/{quote(preview)}/"
+    return DeployResult(version_id=version_id, url=url)
 
 
 @router.delete(
