@@ -125,6 +125,7 @@ def test_preview_deployment_points_at_the_pushed_commit_and_the_preview(fake, ru
     }
     assert fake.requests[0]["headers"]["Authorization"] == "Bearer ghs-token"
     assert fake.requests[0]["headers"]["X-GitHub-Api-Version"] == "2022-11-28"
+    assert fake.requests[0]["headers"]["User-Agent"] == f"plak-cli/{github.VERSION}"
 
 
 def test_a_new_preview_deployment_switches_off_only_this_previews_earlier_ones(fake, runner_env):

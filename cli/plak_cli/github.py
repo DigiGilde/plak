@@ -20,6 +20,8 @@ import sys
 
 import httpx
 
+from plak_cli import VERSION
+
 PER_PAGE = 100
 
 
@@ -173,6 +175,7 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": f"plak-cli/{VERSION}",
         },
         timeout=30.0,
         transport=transport,
