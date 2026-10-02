@@ -4,19 +4,6 @@
 # .github/scripts/kwetsbaarheden.py, so there is one place where an
 # accepted finding is written down.
 vulnerabilities:
-  - id: PYSEC-2026-1845
-    expired_at: 2026-12-31
-    statement: >-
-      pytest, dev group only. The fix needs pytest 9 and the pin in
-      backend/pyproject.toml is <9; that is an upgrade of its own with its
-      own test round. Not in the image: containers/plak/Containerfile runs
-      uv sync --frozen --no-dev.
-  - id: GHSA-82fw-gwwq-j7x9
-    expired_at: 2026-12-31
-    statement: >-
-      @vitest/mocker, devDependencies only. The fix needs a major of vitest,
-      which is an upgrade of its own. Not in the SPA bundle: npm audit
-      --omit=dev does not report it.
   - id: CVE-2026-93990
     expired_at: 2026-11-01
     statement: >-
