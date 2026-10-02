@@ -1,7 +1,8 @@
 # How Plak ends up on ZAD: build and push the image, then deploy with
-# zad-actions. A push to `beta` runs both halves, so every push reaches
-# production; the preview half is still written for a situation that has
-# to be created, not one that has been observed.
+# zad-actions. A push to `beta` builds, scans and attests the image and
+# deploys nowhere; production follows a release tag (vYYYY.M.D[.N]) alone.
+# The preview half is still written for a situation that has to be
+# created, not one that has been observed.
 #
 # Needed in advance, outside this file:
 #   - repository secret ZAD_API_KEY (the project's API key, returned once
@@ -19,6 +20,9 @@ name: Test and deploy
 on:
   push:
     branches: [main, beta]
+    # A release tag. GitHub's filter cannot say vYYYY.M.D[.N] exactly, so
+    # RELEASE_TAG below is what decides.
+    tags: ['v[0-9][0-9][0-9][0-9].*']
   pull_request:
     # labeled/unlabeled as well: a preview follows the `preview` label, so
     # putting it on has to start one and taking it off has to clean it up.
@@ -32,6 +36,7 @@ env:
   # Dependabot updates `uses:` references, not this input: bump it by hand,
   # together with the same variable in ci.yml.
   TRIVY_VERSION: v0.74.0
+  RELEASE_TAG: '^v[0-9]{4}\.[1-9][0-9]?\.[1-9][0-9]?(\.[1-9][0-9]*)?$'
 
 permissions:
   contents: read
@@ -88,6 +93,30 @@ jobs:
             echo "image=${name}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # The tag name goes through env and is checked before it is used: git
+      # allows characters in a tag that the tag list below reads as a
+      # separator.
+      - name: Determine the release version
+        id: release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ steps.tag.outputs.name }}
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: |
+          if [[ ! "${TAG}" =~ ${RELEASE_TAG} ]]; then
+            echo "::error::${TAG} is not a release tag of the form vYYYY.M.D[.N]"
+            exit 1
+          fi
+          version="${TAG#v}"
+          echo "build-args=PLAK_VERSION=${version}" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE}"
+            echo "${NAME}:${version}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Log in to the registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -110,7 +139,8 @@ jobs:
           context: .
           file: containers/plak/Containerfile
           push: true
-          tags: ${{ steps.tag.outputs.image }}
+          tags: ${{ steps.release.outputs.tags || steps.tag.outputs.image }}
+          build-args: ${{ steps.release.outputs.build-args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -436,15 +466,18 @@ jobs:
           # on both lines once that exists.
           delete-github-env: false
 
+  # Only a release tag reaches production, never a branch push. The
+  # ZAD_PROJECT_ID guard is the same one `preview` carries: without a
+  # project there is nothing to deploy to, and the action would fail on an
+  # empty api-key instead of standing down.
+  #
+  # The guards below run from the workflow file of the tagged commit, so
+  # they catch a mistaken tag, not someone who edits them on that commit:
+  # that takes a tag ruleset and the deployment rules of `productie`.
   production:
-    # `beta` is this repository's default branch; there is no `main`, so that
-    # ref never matched and every push built an image the rollout then never
-    # collected. The ZAD_PROJECT_ID guard is the same one `preview` carries:
-    # without a project there is nothing to deploy to, and the action would
-    # fail on an empty api-key instead of standing down.
     if: >-
       github.event_name == 'push'
-      && github.ref == 'refs/heads/beta'
+      && startsWith(github.ref, 'refs/tags/v')
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
     needs: [ci, build]
@@ -453,7 +486,44 @@ jobs:
     environment:
       name: productie
       url: ${{ steps.rollout.outputs.url }}
+    # Two tags pushed close together roll out one after the other, so an
+    # older one cannot finish last.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    env:
+      TAG: ${{ github.ref_name }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag format
+        run: |
+          if [[ ! "${TAG}" =~ ${RELEASE_TAG} ]]; then
+            echo "::error::${TAG} is not a release tag of the form vYYYY.M.D[.N]"
+            exit 1
+          fi
+
+      - name: Check that the tagged commit is on beta
+        run: |
+          git fetch --no-tags origin +refs/heads/beta:refs/remotes/origin/beta
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/beta; then
+            echo "::error::${TAG} points at ${GITHUB_SHA}, which is not on beta"
+            exit 1
+          fi
+
+      # An old tag pushed again would otherwise roll production back.
+      - name: Check that the tag is the newest release
+        run: |
+          git fetch --force --tags origin
+          newest=$(git tag -l 'v[0-9]*' | grep -E "${RELEASE_TAG}" | sort -V | tail -1)
+          if [ "${newest}" != "${TAG}" ]; then
+            echo "::error::${TAG} is not the newest release tag (${newest} is)"
+            exit 1
+          fi
+
       - name: Roll out to ZAD
         id: rollout
         uses: RijksICTGilde/zad-actions/deploy@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
