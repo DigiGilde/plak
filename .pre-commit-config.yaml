@@ -54,7 +54,7 @@ repos:
 
   - repo: local
     hooks:
-      # House rule from CLAUDE.md: no em dashes and no en dashes, not in
+      # House rule from .claude/CLAUDE.md: no em dashes and no en dashes, not in
       # code and not in docs. The only file in the tree that carries any is
       # the vendored swagger-ui-bundle.js, excluded above and here.
       #

@@ -20,6 +20,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - A public What's new page at `/-/whats-new`, linked from the footer
   next to the Plak version.
 
+### Changed
+
+- A preview environment follows the `preview` label on a pull request
+  instead of appearing for every one; taking the label off cleans it up.
+
 ## [2026.9.30]
 
 The first tagged version: what ran in production on 30 September 2026.
