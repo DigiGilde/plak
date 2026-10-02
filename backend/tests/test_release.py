@@ -322,9 +322,9 @@ class TestShippedPaths:
             "cli/plak_cli/__init__.py",
             "cli/pyproject.toml",
             "cli/uv.lock",
-            "plugin/skills/plak-publiceren/SKILL.md",
+            "plugin/skills/plak-publish/SKILL.md",
             "plugin/.claude-plugin/plugin.json",
-            "actions/publiceer/action.yml",
+            "actions/publish/action.yml",
         ],
     )
     def test_what_ends_up_in_a_release_counts(self, path):

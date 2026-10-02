@@ -61,7 +61,7 @@ SHIPPED_PATHS = (
     "cli/pyproject.toml",
     "cli/uv.lock",
     "plugin/",
-    "actions/publiceer/",
+    "actions/publish/",
 )
 NOT_SHIPPED = ("plugin/evals/",)
 

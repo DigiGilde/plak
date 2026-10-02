@@ -3,13 +3,13 @@
 This document describes the contract you use to publish a static site on
 Plak: the base path contract for your build, publishing from CI with an
 OIDC ID token, publishing from your own machine with `plak login`, the use
-of the `publiceer` action, the curl fallback, and the difference
+of the `publish` action, the curl fallback, and the difference
 between a live version, a preview and a `_version` view.
 
 The CLI and the action live in this repository: `cli/` is the CLI (a uv
 project of its own, installing the `plak` command),
-`actions/publiceer/action.yml` the composite
-action, and `plugin/skills/plak-publiceren/` the Claude skill that
+`actions/publish/action.yml` the composite
+action, and `plugin/skills/plak-publish/` the Claude skill that
 drives the CLI, shipped as the `plak` plugin (see `docs/skill.md`).
 Until 2026-09 they sat in a separate `plak-actions` repository; a
 `uses:` line that still names it points at code that no longer moves.
@@ -45,11 +45,11 @@ tools support this through a "base" setting; the path differs per
 environment (main deploy versus PR preview), so set it through an
 environment variable that your CI step fills in.
 
-The `plak` CLI and the `publiceer` action (see §3) only upload;
+The `plak` CLI and the `publish` action (see §3) only upload;
 they do not compute or set `PLAK_BASE_PATH`. Determining that path
 and setting it as an environment variable is up to your own **build**
 step, before you call the CLI or the action. See the workflow example in
-§3 for a "Bepaal base-path" (determine base path) step that does this.
+§3 for a "Determine base path" step that does this.
 
 ### Astro example
 
@@ -223,8 +223,8 @@ can link (in the admin or with the CLI) and unlink (in the admin only),
 ### GitHub Actions
 
 ```yaml
-# .github/workflows/publiceer.yml
-name: Publiceer
+# .github/workflows/publish.yml
+name: Publish
 
 on:
   push:
@@ -237,13 +237,13 @@ permissions:
   id-token: write
 
 jobs:
-  publiceer:
+  publish:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@<commit-sha>
 
-      - name: Bepaal base-path
+      - name: Determine base path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
@@ -256,17 +256,17 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publiceer live
+      - name: Publish live
         if: github.event_name == 'push'
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
           dist-path: ./dist
 
-      - name: Publiceer preview
+      - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
@@ -277,8 +277,8 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Ruim preview op
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+      - name: Remove preview
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
@@ -286,7 +286,7 @@ jobs:
           teardown: "true"
 ```
 
-The step "Bepaal base-path" sets `PLAK_BASE_PATH` before the build, so
+The step "Determine base path" sets `PLAK_BASE_PATH` before the build, so
 that the build configuration (see the Astro and Vite examples above) can
 read it. This is the only place where that path is determined: neither the
 CLI nor the action does this for you.
@@ -339,9 +339,9 @@ permissions:
   pull-requests: write
 
 # ...
-      - name: Publiceer preview
+      - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
           dist-path: ./dist
@@ -358,8 +358,8 @@ two cannot write, just as the deploy itself gets no ID token.
 ### Forgejo Actions
 
 ```yaml
-# .forgejo/workflows/publiceer.yml
-name: Publiceer
+# .forgejo/workflows/publish.yml
+name: Publish
 
 on:
   push:
@@ -372,14 +372,14 @@ permissions:
   id-token: write
 
 jobs:
-  publiceer:
+  publish:
     if: github.event.action != 'closed'
     runs-on: docker # the runner label of this Forgejo instance
     enable-openid-connect: true
     steps:
       - uses: actions/checkout@<commit-sha>
 
-      - name: Bepaal base-path
+      - name: Determine base path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
@@ -392,17 +392,17 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publiceer live
+      - name: Publish live
         if: github.event_name == 'push'
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
           dist-path: ./dist
 
-      - name: Publiceer preview
+      - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
@@ -414,8 +414,8 @@ jobs:
     runs-on: docker # the runner label of this Forgejo instance
     enable-openid-connect: true
     steps:
-      - name: Ruim preview op
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+      - name: Remove preview
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
@@ -427,7 +427,7 @@ jobs:
 `permissions: id-token: write`. Always pin the action to a commit SHA, not
 to a tag or branch (supply chain requirement, see `docs/security.md`); on
 Forgejo Actions you use the full URL,
-`https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>`, because
+`https://github.com/DigiGilde/plak/actions/publish@<commit-sha>`, because
 Forgejo resolves a short `uses:` against its own `DEFAULT_ACTIONS_URL`, which
 is `https://data.forgejo.org`, not GitHub.
 
@@ -435,7 +435,7 @@ is `https://data.forgejo.org`, not GitHub.
 
 The GitHub form is documented and supported. GitHub's workflow syntax
 documents an action in a subdirectory of a repository as
-`{owner}/{repo}/{path}@{ref}`, so `DigiGilde/plak/actions/publiceer@<commit-sha>`
+`{owner}/{repo}/{path}@{ref}`, so `DigiGilde/plak/actions/publish@<commit-sha>`
 is the ordinary spelling and needs nothing special.
 
 The Forgejo form is **not proven yet**. Forgejo's Actions documentation shows
@@ -443,7 +443,7 @@ a `uses:` with a full URL, and it shows a path inside a repository for
 *reusable workflows*
 (`some-org/some-repo/.forgejo/workflows/reusable.yml@main`), but it does not
 document a subdirectory path for an *action*. Whether
-`https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>` resolves is
+`https://github.com/DigiGilde/plak/actions/publish@<commit-sha>` resolves is
 therefore a question for a real Forgejo runner, not for this document.
 
 One smoke test settles it. On a Forgejo instance with a runner and OIDC
@@ -451,22 +451,22 @@ enabled, in a repository linked to a site, add this workflow and start it by
 hand:
 
 ```yaml
-# .forgejo/workflows/plak-rooktest.yml
-name: Plak-rooktest
+# .forgejo/workflows/plak-smoke-test.yml
+name: Plak smoke test
 
 on: [workflow_dispatch]
 
 jobs:
-  rooktest:
+  smoke-test:
     runs-on: docker # the runner label of this Forgejo instance
     enable-openid-connect: true
     steps:
-      - name: Ruim een niet-bestaande preview op
-        uses: https://github.com/DigiGilde/plak/actions/publiceer@<commit-sha>
+      - name: Remove a preview that does not exist
+        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
-          preview-ref: rooktest
+          preview-ref: smoke-test
           teardown: "true"
 ```
 
@@ -490,14 +490,14 @@ that name still belongs to the linked ids (see `docs/security.md`).
 
 ### Maintaining the action
 
-`actions/publiceer/action.yml` installs uv with `astral-sh/setup-uv`, on the
+`actions/publish/action.yml` installs uv with `astral-sh/setup-uv`, on the
 same commit SHA as `.github/workflows/ci.yml` uses, so the repository has one
 uv installer to bump instead of two. It replaces a hand-rolled step that
 fetched `https://astral.sh/uv/<version>/install.sh` on every run and checked a
 pinned `UV_INSTALLER_SHA256` against it; the action resolves the version,
 verifies the download itself and reuses the runner's tool cache. Bump the SHA
 here and in `ci.yml` together; dependabot proposes both (`github-actions`,
-directories `/` and `/actions/publiceer`).
+directories `/` and `/actions/publish`).
 
 Caching stays on `enable-cache: 'auto'`, the action's default: the uv cache is
 uploaded on GitHub-hosted runners and left alone on self-hosted ones, where uv

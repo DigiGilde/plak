@@ -384,7 +384,7 @@ unnecessary at once.
 | Item | Status |
 |---|---|
 | Base images pinned on digest | open: `containers/plak/Containerfile` (node 22, uv 0.5/python 3.12, python 3.12-slim-bookworm) pins on fixed tags; digests are a production prerequisite. `containers/nginx-dev/Containerfile` is only the dev proxy and falls outside this |
-| CI actions pinned on commit SHA | done: every `uses:` in `ci.yml` and `deploy.yml` sits on a commit SHA, fixed by `test_workflows.py`. Handled on the user side: `docs/publishing.md` pins every `uses:` on a commit SHA, and the one nested `uses:` in `actions/publiceer/action.yml` (`astral-sh/setup-uv`) sits on a commit SHA too, fixed by `cli/tests/test_cli.py` |
+| CI actions pinned on commit SHA | done: every `uses:` in `ci.yml` and `deploy.yml` sits on a commit SHA, fixed by `test_workflows.py`. Handled on the user side: `docs/publishing.md` pins every `uses:` on a commit SHA, and the one nested `uses:` in `actions/publish/action.yml` (`astral-sh/setup-uv`) sits on a commit SHA too, fixed by `cli/tests/test_cli.py` |
 | Lockfiles (uv.lock, package-lock.json) | implemented |
 | Vendored files pinned on hash | done since 2026-09-28: `backend/src/plak/static/docs/SHA256SUMS` records the sha256 of the two Swagger UI files, `just refresh-swagger-ui` checks its download against it, and `test_api_documentation.py` checks the shipped bytes without a network call. Before this the recipe printed a truncated hash and compared it to nothing, which read as verification. It hid a real change: a repo-wide rename of `project` to `site` had edited a URI-scheme list inside the minified bundle. Both files were restored from the npm registry tarball of the pinned version. Weight: 1.5 MB of minified JavaScript, served from the admin origin under `script-src 'self'`, so fully trusted script beside the session cookie, arriving in git as a diff nobody reads |
 | Vulnerability scan on dependencies | done: the CI job `vulnerabilities` runs pip-audit on the exported lockfile and npm audit on the frontend, locally via `just scan`. Accepted findings sit in `.trivyignore.yaml` with a date and a motivation and come back by themselves on that date |
@@ -470,7 +470,7 @@ Everything about CI trusted publishing is verified by reading the code and by
 tests with tokens we mint ourselves. A workflow could prove the real chain:
 bring up the e2e stack, seed a `site_repositories` row for this repository,
 request a genuine GitHub OIDC token with that stack's base URL as the audience,
-run `actions/publiceer`, and fetch the published page back.
+run `actions/publish`, and fetch the published page back.
 
 Decided on 2026-09-27 not to build it yet, and the reason is the permission
 rather than the work. A job with `id-token: write` can request a token for any

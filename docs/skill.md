@@ -10,7 +10,7 @@ the rules of this project already in hand. The plugin lives in
 .claude-plugin/marketplace.json      the marketplace entry, source ./plugin
 plugin/
 ├── .claude-plugin/plugin.json       the plugin manifest
-├── skills/plak-publiceren/SKILL.md  the skill
+├── skills/plak-publish/SKILL.md  the skill
 └── evals/                           the behaviour tests
 ```
 
@@ -59,7 +59,7 @@ public, so the install needs no credentials.
 
 ## What the skill does
 
-The skill (`plak-publiceren`) loads when you ask Claude to put a static
+The skill (`plak-publish`) loads when you ask Claude to put a static
 site on Plak: "zet deze map online op Plak", "maak er een preview van",
 "werk mijn site bij", or when you paste a `https://beheer.plak...` URL
 with a group/site slug. It carries the publishing path (base path,

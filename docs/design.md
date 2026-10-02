@@ -820,7 +820,7 @@ UI sit on `/-/api/docs`; the assets are local files because the CSP of §9 allow
 no CDN.
 
 The workflow examples, the curl fallback and the `publiceer` action
-(`actions/publiceer/`) are in `docs/publishing.md`.
+(`actions/publish/`) are in `docs/publishing.md`.
 
 Code: `api/deploys.py`, `api/cli.py`, `api/admin.py`, `api/errors.py`,
 `api/docs.py`, `ci/tokens.py`, `ci/trust.py`, `ci/providers.py`,

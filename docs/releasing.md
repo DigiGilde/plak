@@ -75,7 +75,7 @@ which component gets a new version. The list is `SHIPPED_PATHS` in
 - `containers/plak/`
 - `cli/plak_cli/`, `cli/pyproject.toml`, `cli/uv.lock`
 - `plugin/`, except `plugin/evals/`
-- `actions/publiceer/`
+- `actions/publish/`
 
 Tests never count, wherever they sit: a `tests/` or `__tests__/`
 directory, a `*.test.*` or `*.spec.*` file, `test_*.py`, `conftest.py`.
