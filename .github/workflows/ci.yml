@@ -359,10 +359,12 @@ jobs:
         id: bases
         run: |
           set -euo pipefail
-          runtime="$(grep -oE '^FROM docker\.io/library/python@sha256:[0-9a-f]{64}' \
-            containers/plak/Containerfile | tail -1 | cut -d' ' -f2)"
-          nginx="$(grep -oE '^FROM docker\.io/nginxinc/nginx-unprivileged@sha256:[0-9a-f]{64}' \
-            containers/nginx-dev/Containerfile | tail -1 | cut -d' ' -f2)"
+          # The tag in front of the digest is for Dependabot; trivy gets
+          # repo@digest only.
+          runtime="$(grep -oE '^FROM docker\.io/library/python(:[^@ ]+)?@sha256:[0-9a-f]{64}' \
+            containers/plak/Containerfile | tail -1 | cut -d' ' -f2 | sed -E 's/:[^@/]+@/@/')"
+          nginx="$(grep -oE '^FROM docker\.io/nginxinc/nginx-unprivileged(:[^@ ]+)?@sha256:[0-9a-f]{64}' \
+            containers/nginx-dev/Containerfile | tail -1 | cut -d' ' -f2 | sed -E 's/:[^@/]+@/@/')"
           if [ -z "$runtime" ] || [ -z "$nginx" ]; then
             echo "Base image not found: is the FROM line still as expected?" >&2
             exit 1

@@ -2,8 +2,7 @@
 # Builds the whole product image: backend plus the built admin SPA. Build
 # context is the repo root (dev/compose.yml: context ".."), because the
 # image bundles the built admin SPA from frontend/ alongside the backend.
-# docker.io/library/node:22-bookworm-slim
-FROM docker.io/library/node@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS spa
+FROM docker.io/library/node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS spa
 
 WORKDIR /spa
 
@@ -13,8 +12,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-# ghcr.io/astral-sh/uv:0.5-python3.12-bookworm-slim
-FROM ghcr.io/astral-sh/uv@sha256:fef6dca3a45cd7ac8c4386e78263033ee4b262fe36c1ee077630e53ed6df2070 AS build
+FROM ghcr.io/astral-sh/uv:0.5-python3.12-bookworm-slim@sha256:fef6dca3a45cd7ac8c4386e78263033ee4b262fe36c1ee077630e53ed6df2070 AS build
 
 WORKDIR /app
 
@@ -28,8 +26,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/src ./src
 RUN uv sync --frozen --no-dev
 
-# docker.io/library/python:3.12-slim-bookworm
-FROM docker.io/library/python@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS runtime
+FROM docker.io/library/python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS runtime
 
 RUN groupadd --system --gid 1000 plak \
     && useradd --system --uid 1000 --gid plak --no-create-home plak \
