@@ -167,7 +167,7 @@ jobs:
 
       - name: CLI tests
         working-directory: cli
-        run: uv run pytest tests -q
+        run: uv run pytest tests -q -rs
 
   frontend:
     runs-on: ubuntu-latest
