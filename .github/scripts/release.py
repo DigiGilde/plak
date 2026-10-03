@@ -9,6 +9,7 @@
     notes --tag T       the GitHub Release body for T
     validate-tag T      exit 1 unless T is a CalVer tag
     check --base REF    the pull request check on CHANGELOG.md and the notes
+    api-check           the pull request check on the API contract
     hook                the Claude Code PreToolUse hook for `gh pr create`
 
 Run from anywhere inside the repository. docs/releasing.md has the model.
@@ -23,10 +24,12 @@ import re
 import shlex
 import subprocess
 import sys
-from collections.abc import Iterable
+import tempfile
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 CHANGELOG = "CHANGELOG.md"
@@ -75,6 +78,12 @@ BACKEND_PYPROJECT = "backend/pyproject.toml"
 BACKEND_LOCK = "backend/uv.lock"
 FRONTEND_PACKAGE = "frontend/package.json"
 FRONTEND_LOCK = "frontend/package-lock.json"
+OPENAPI = "backend/openapi.json"
+API_VERSION_FILE = "backend/src/plak/main.py"
+API_VERSION_LINE = re.compile(r'^(API_VERSION = ")[^"\n]*(")$', re.MULTILINE)
+SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+#: oasdiff's level for a breaking change (ERR); WARN is 2 and INFO 1.
+BREAKING = 3
 
 NOTES_DIR = "frontend/src/content/releases/"
 NOTE_NAME = re.compile(r"^(?P<key>.+)\.(?P<lang>nl|en)\.md$")
@@ -83,6 +92,7 @@ MEMBER_FACING = ("frontend/src/", "cli/plak_cli/")
 
 BASE_BRANCH = "origin/beta"
 COMMENT_MARKER = "<!-- plak-changelog-check -->"
+API_COMMENT_MARKER = "<!-- plak-api-check -->"
 OPT_OUT = re.compile(r"""(?:^|["'])[ \t]*No changelog entry:[ \t]*\S""", re.MULTILINE)
 GH_PR_CREATE = re.compile(r"\bgh\s+pr\s+create\b")
 
@@ -377,6 +387,112 @@ def note_operations(notes: dict[str, str], version: str) -> list[tuple[str, str 
     return [(name, name.replace("unreleased", version)) for name in UNRELEASED_NOTES]
 
 
+# --- The API contract -------------------------------------------------------
+
+#: oasdiff's changelog of a base schema against a head schema, both as text.
+Diff = Callable[[str, str], list[dict[str, Any]]]
+
+
+def api_version(spec: dict[str, Any], source: str) -> tuple[int, int, int]:
+    version = str(spec.get("info", {}).get("version", ""))
+    match = SEMVER.match(version)
+    if not match:
+        raise ReleaseError(f"{source}: info.version '{version}' is not MAJOR.MINOR.PATCH.")
+    major, minor, patch = (int(part) for part in match.groups())
+    return major, minor, patch
+
+
+def _without_version(spec: dict[str, Any]) -> dict[str, Any]:
+    info = {key: value for key, value in spec.get("info", {}).items() if key != "version"}
+    return {**spec, "info": info}
+
+
+def _where(change: dict[str, Any]) -> str:
+    return " ".join(filter(None, (change.get("operation"), change.get("path")))) or change.get("section", "API")
+
+
+def breaking_problems(changes: list[dict[str, Any]], major: int) -> list[str]:
+    breaking = [change for change in changes if change.get("level") == BREAKING]
+    if not breaking:
+        return []
+    return [
+        *(f"Breaking API change: {_where(change)}: {change.get('text')}." for change in breaking),
+        (
+            f"A breaking change needs a new major: serve the API under /-/api/v{major + 1} and set "
+            f"API_VERSION in {API_VERSION_FILE} to '{major + 1}.0.0' (docs/publishing.md)."
+        ),
+    ]
+
+
+def next_api_version(base: dict[str, Any] | None, head: dict[str, Any], changes: list[dict[str, Any]]) -> str:
+    """The version a release gives `head`, after `base` shipped. The major
+    is set by hand with the path; minor and patch follow what changed."""
+    major, minor, patch = api_version(head, API_VERSION_FILE)
+    if base is None:
+        return f"{major}.{minor}.{patch}"
+    released = api_version(base, f"{OPENAPI} at the newest tag")
+    if major > released[0]:
+        return f"{major}.0.0"
+    if major < released[0]:
+        raise ReleaseError(f"API_VERSION in {API_VERSION_FILE} has major {major}, below the released {released[0]}.")
+    if problems := breaking_problems(changes, major):
+        raise ReleaseError(*problems)
+    if _without_version(base) == _without_version(head):
+        return "{}.{}.{}".format(*released)
+    if changes:
+        return f"{major}.{released[1] + 1}.0"
+    return f"{major}.{released[1]}.{released[2] + 1}"
+
+
+def set_api_version(text: str, version: str) -> str:
+    edited, count = API_VERSION_LINE.subn(rf"\g<1>{version}\g<2>", text)
+    if count != 1:
+        raise ReleaseError(f"{API_VERSION_FILE}: expected one API_VERSION line, found {count}.")
+    return edited
+
+
+def render_spec(spec: dict[str, Any], version: str) -> str:
+    """The schema as plak.api.openapi_file prints it, at `version`."""
+    document = {**spec, "info": {**spec.get("info", {}), "version": version}}
+    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+
+
+def parse_spec(text: str, source: str) -> dict[str, Any]:
+    try:
+        spec = json.loads(text)
+    except ValueError:
+        raise ReleaseError(f"{source} is not JSON.") from None
+    if not isinstance(spec, dict):
+        raise ReleaseError(f"{source} is not an OpenAPI document.")
+    return spec
+
+
+def oasdiff(binary: str) -> Diff:
+    """Runs `oasdiff changelog` from `binary`. External references stay
+    off: oasdiff would fetch them, and the schema has none."""
+
+    def diff(base: str, head: str) -> list[dict[str, Any]]:
+        with tempfile.TemporaryDirectory() as folder:
+            files = [Path(folder) / "base.json", Path(folder) / "head.json"]
+            for path, text in zip(files, (base, head), strict=True):
+                path.write_text(text, encoding="utf-8")
+            result = subprocess.run(
+                [binary, "changelog", str(files[0]), str(files[1]), "--format", "json", "--allow-external-refs=false"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        if result.returncode:
+            raise ReleaseError(f"oasdiff: {result.stderr.strip() or f'exit {result.returncode}'}")
+        try:
+            changes = json.loads(result.stdout or "[]")
+        except ValueError:
+            raise ReleaseError("oasdiff: its output is not JSON.") from None
+        return changes
+
+    return diff
+
+
 # --- git --------------------------------------------------------------------
 
 
@@ -468,9 +584,12 @@ def decide(git: Git, day: date) -> tuple[str, str]:
     return "none", ""
 
 
-def promote(git: Git, tag: str, day: date) -> list[str]:
+def promote(git: Git, tag: str, day: date, spec: str, diff: Diff) -> list[str]:
     """Writes the release into the working tree and stages it. Returns the
-    paths it touched. Refuses before it writes anything."""
+    paths it touched. Refuses before it writes anything.
+
+    `spec` is the API schema of HEAD, as plak.api.openapi_file prints it;
+    `diff` compares it with the one the previous release committed."""
     if error := tag_error(tag):
         raise ReleaseError(error)
     text = (git.root / CHANGELOG).read_text(encoding="utf-8")
@@ -503,6 +622,14 @@ def promote(git: Git, tag: str, day: date) -> list[str]:
     writes[BACKEND_LOCK] = set_lock_version(_read(git, BACKEND_LOCK), version, "plak-api", BACKEND_LOCK)
     writes[FRONTEND_PACKAGE] = set_package_version(_read(git, FRONTEND_PACKAGE), version)
     writes[FRONTEND_LOCK] = set_package_version(_read(git, FRONTEND_LOCK), version, FRONTEND_LOCK)
+    head = parse_spec(spec, "The API schema")
+    base_text = git.show(previous, OPENAPI) if previous else None
+    base = parse_spec(base_text, f"{OPENAPI} at {previous}") if base_text is not None else None
+    api = next_api_version(base, head, diff(base_text, spec) if base_text is not None else [])
+    writes[OPENAPI] = render_spec(head, api)
+    code = _read(git, API_VERSION_FILE)
+    if (edited := set_api_version(code, api)) != code:
+        writes[API_VERSION_FILE] = edited
     operations = note_operations(_working_tree_notes(git.root), version)
 
     for path, content in writes.items():
@@ -524,6 +651,13 @@ def _read(git: Git, path: str) -> str:
         return (git.root / path).read_text(encoding="utf-8")
     except FileNotFoundError:
         raise ReleaseError(f"{path} is missing.") from None
+
+
+def _read_spec(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        raise ReleaseError(f"{path}: cannot read the API schema.") from None
 
 
 def _working_tree_notes(root: Path) -> dict[str, str]:
@@ -552,6 +686,10 @@ def release_notes(git: Git, tag: str) -> str:
     lines = [section.body]
     for name, current in (("CLI", pyproject_version(pyproject)), ("Plugin", json.loads(plugin)["version"])):
         lines.append(f"{name} {current}" if current == version else f"{name} unchanged ({current})")
+    # Tags from before the release step wrote the schema have none.
+    if (spec := git.show(tag, OPENAPI)) is not None:
+        source = f"{OPENAPI} at {tag}"
+        lines.append("API {}.{}.{}".format(*api_version(parse_spec(spec, source), source)))
     return "\n\n".join(lines) + "\n"
 
 
@@ -653,6 +791,59 @@ def report_check(result: CheckResult, comment_file: Path | None) -> int:
     return 1 if result.errors else 0
 
 
+@dataclass
+class ApiCheckResult:
+    errors: list[str] = field(default_factory=list)
+    notice: str | None = None
+    comment: str = ""
+
+
+def _change_line(change: dict[str, Any]) -> str:
+    return f"- `{_where(change)}`: {change.get('text')}"
+
+
+def api_check(git: Git, spec: str, diff: Diff) -> ApiCheckResult:
+    """A pull request against the contract the newest release committed:
+    a breaking change fails unless the major went up. Every change the
+    schema shows goes into the comment, with the version it leads to."""
+    result = ApiCheckResult()
+    head = parse_spec(spec, "The API schema")
+    tag = newest_tag(git.tags())
+    base_text = git.show(tag, OPENAPI) if tag else None
+    if base_text is None:
+        result.notice = f"No {OPENAPI} at {tag or 'any tag'} yet: the next release writes it, and checks start there."
+        return result
+    base = parse_spec(base_text, f"{OPENAPI} at {tag}")
+    changes = diff(base_text, spec)
+    try:
+        version = next_api_version(base, head, changes)
+    except ReleaseError as error:
+        result.errors.extend(error.problems)
+        version = None
+    if changes:
+        outcome = f"The next release makes it API {version}." if version else "This cannot be released as it is."
+        result.comment = (
+            f"{API_COMMENT_MARKER}\n**API:** changes against the contract of {tag}.\n\n"
+            + "\n".join(map(_change_line, changes))
+            + f"\n\n{outcome}\n"
+        )
+    return result
+
+
+def report_api_check(result: ApiCheckResult, comment_file: Path | None) -> int:
+    for error in result.errors:
+        print(_annotation("error", "API contract", error))
+    if result.notice:
+        print(_annotation("notice", "API contract", result.notice))
+    if not (result.errors or result.notice):
+        print("The API contract holds.")
+    if result.errors:
+        _append("GITHUB_STEP_SUMMARY", "## API contract\n\n" + "\n".join(f"- {e}" for e in result.errors) + "\n")
+    if comment_file is not None:
+        comment_file.write_text(result.comment, encoding="utf-8")
+    return 1 if result.errors else 0
+
+
 def _body_file(command: str, cwd: Path) -> str:
     try:
         words = shlex.split(command)
@@ -710,14 +901,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Releases from CHANGELOG.md (docs/releasing.md)")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("decide", help="print route=release|hold|none and tag=, also to $GITHUB_OUTPUT")
-    for name, text in (("promote", "promote [Unreleased] to TAG and set versions"), ("notes", "release notes")):
-        commands.add_parser(name, help=text).add_argument("--tag", required=True)
+    promoting = commands.add_parser("promote", help="promote [Unreleased] to TAG and set versions")
+    promoting.add_argument("--tag", required=True)
+    commands.add_parser("notes", help="release notes").add_argument("--tag", required=True)
     commands.add_parser("validate-tag", help="exit 1 unless TAG is a CalVer tag").add_argument("tag")
     checking = commands.add_parser("check", help="the pull request check")
     checking.add_argument("--base", required=True, help="the ref the pull request goes into")
     checking.add_argument("--body-file", type=Path, help="the pull request description")
     checking.add_argument("--comment-file", type=Path, help="write the sticky comment here, empty for none")
     checking.add_argument("--hard-only", action="store_true", help="only what fails the check")
+    api_checking = commands.add_parser("api-check", help="the pull request check on the API contract")
+    api_checking.add_argument("--comment-file", type=Path, help="write the sticky comment here, empty for none")
+    for command in (promoting, api_checking):
+        command.add_argument("--spec", type=Path, required=True, help="the schema `python -m plak.api.openapi_file` prints")
+        command.add_argument("--oasdiff", required=True, help="the oasdiff binary")
     commands.add_parser("hook", help="Claude Code PreToolUse hook, reads the event on stdin")
     args = parser.parse_args(argv)
 
@@ -740,12 +937,15 @@ def main(argv: list[str] | None = None) -> int:
             _append("GITHUB_OUTPUT", output)
             return 0
         if args.command == "promote":
-            for path in promote(git, args.tag, today()):
+            for path in promote(git, args.tag, today(), _read_spec(args.spec), oasdiff(args.oasdiff)):
                 print(f"updated {path}")
             return 0
         if args.command == "notes":
             print(release_notes(git, args.tag), end="")
             return 0
+        if args.command == "api-check":
+            result = api_check(git, _read_spec(args.spec), oasdiff(args.oasdiff))
+            return report_api_check(result, args.comment_file)
         body = args.body_file.read_text(encoding="utf-8") if args.body_file else ""
         return report_check(check(git, args.base, body, args.hard_only), args.comment_file)
     except ReleaseError as error:
