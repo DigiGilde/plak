@@ -167,6 +167,7 @@ class TestTheCheckGate:
             "backend-coverage",
             "backend-tests",
             "cli",
+            "cli-windows",
             "frontend",
             "vulnerabilities",
             "pre-commit",
