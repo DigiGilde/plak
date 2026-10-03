@@ -544,8 +544,9 @@ confirms. Capitalisation counts, because both the filesystem and §5.2 look for
 exactly `index.html`.
 
 Versions are immutable: everything is written to `{root}/_tmp/{uuid}` first and
-moved with one atomic `os.rename` to `{group}/{site}/{version_id}` on the same
-filesystem. Going live is a pointer swap on `sites.live_version_id` in the same
+moved with one atomic `os.rename` to `{site_id}/{version_id}` on the same
+filesystem. No slug is part of the path: a site created again under a slug
+that was deleted starts with a directory of its own, and an id never recurs. Going live is a pointer swap on `sites.live_version_id` in the same
 transaction as the version insert. Rollback is a pointer swap to an earlier
 version with target `live`; a version with target `preview` is never a rollback
 target. Every live version is kept.
@@ -886,6 +887,17 @@ Teardown and the daily cleanup job (03:00) remove the preview row, its version
 and its files, and the job also sweeps orphaned preview versions, stale `_tmp`
 directories and expired CLI device authorizations and sessions.
 
+**Directories without a row.** A publish renames its directory into place
+before it inserts the row, and a cleanup commits the delete before it removes
+the directory; a process that stops in between leaves a directory nobody
+points at. The same job moves a site or version directory that has no row and
+is older than 24 hours into `_reclaimed/`, where it no longer counts towards
+the site's quota, and removes it from there after 7 days. Two brakes keep a
+database that does not belong to the volume (a wrong `PLAK_DB_URL`, a restored
+backup) from emptying it: a site of which no directory has a row keeps all of
+them, and nothing moves when more versions would go than stay. Both log an
+ERROR naming the directories.
+
 **Old live versions.** The same job removes, per site, the live versions
 beyond the current live one and the newest others the site keeps (row and file
 tree, one `version_cleanup` audit row per site). That number is the site's own
@@ -896,7 +908,7 @@ same lock before it looks its version up, so a version that becomes live while
 the job runs is never removed.
 
 **Deleting.** Deleting a site cascades over versions, previews, invitees, keys,
-site members and the repository link, and removes the file trees. Deleting a
+site members and the repository link, and removes the site's directory. Deleting a
 group does the same for every site in it, then removes the group and its
 memberships; only a group admin may.
 

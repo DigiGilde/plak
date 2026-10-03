@@ -95,7 +95,7 @@ async def _make_preview_version(
     preview row; returns (version_id, storage_ref)."""
     version_id = uuid.uuid4()
     storage_ref = environment.store.store_version(
-        environment.group.slug, environment.site.slug, version_id, {"index.html": b"<h1>preview</h1>"}
+        environment.site.id, version_id, {"index.html": b"<h1>preview</h1>"}
     )
     async with environment.session_factory() as session, session.begin():
         session.add(
@@ -227,7 +227,6 @@ class TestExpiredPreviews:
                 event.listen(db.sync_session, "before_commit", hold_before_commit)
                 return await service.preview_deploy(
                     db,
-                    environment.group,
                     environment.site,
                     "pr-renewed",
                     "index.html",
@@ -304,7 +303,7 @@ async def _make_live_versions(
         for index in range(count):
             version_id = uuid.uuid4()
             storage_ref = environment.store.store_version(
-                environment.group.slug, site.slug, version_id, {"index.html": f"<h1>{index}</h1>".encode()}
+                site.id, version_id, {"index.html": f"<h1>{index}</h1>".encode()}
             )
             session.add(
                 Version(
@@ -659,6 +658,104 @@ class TestTmpSweeper:
         assert result.tmp_swept == 1
         assert not stale_map.exists()
         assert fresh_dir.exists()
+
+
+def _age(path: Path) -> None:
+    old = (datetime.now(tz=UTC) - timedelta(hours=48)).timestamp()
+    os.utime(path, (old, old))
+
+
+def _reclaimed_names(environment: Environment) -> set[str]:
+    reclaimed = environment.content_root / "_reclaimed"
+    return {entry.name.split("-", 1)[1] for entry in reclaimed.iterdir()} if reclaimed.exists() else set()
+
+
+class TestOrphanDirectories:
+    """Directories that lost their row: a publish that stopped between its
+    rename and its insert, a cleanup that stopped between its commit and its
+    rmtree, a site deleted in the same way."""
+
+    async def test_a_directory_whose_insert_never_came_is_moved_aside(self, environment: Environment, caplog):
+        ((_, kept),) = await _make_live_versions(environment, 1)
+        orphan = environment.store.store_version(environment.site.id, uuid.uuid4(), {"index.html": b"x"})
+        _age(environment.content_root / orphan)
+
+        with caplog.at_level(logging.WARNING):
+            result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.orphan_directories == 1
+        assert result.held_directories == 0
+        assert not (environment.content_root / orphan).exists()
+        assert _reclaimed_names(environment) == {orphan.replace("/", "_")}
+        assert (environment.content_root / kept).is_dir()
+        assert any(orphan in record.getMessage() for record in caplog.records)
+
+    async def test_a_directory_whose_row_was_deleted_is_moved_aside(self, environment: Environment):
+        (_, kept), (deleted_id, orphan) = await _make_live_versions(environment, 2, live=0)
+        async with environment.session_factory() as session, session.begin():
+            await session.execute(text("DELETE FROM versions WHERE id = :id"), {"id": deleted_id})
+        _age(environment.content_root / orphan)
+
+        result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.orphan_directories == 1
+        assert not (environment.content_root / orphan).exists()
+        assert (environment.content_root / kept).is_dir()
+
+    async def test_the_directory_of_a_deleted_site_is_moved_aside(self, environment: Environment):
+        await _make_live_versions(environment, 1)
+        gone = await _make_site(environment)
+        await _make_live_versions(environment, 1, site=gone)
+        async with environment.session_factory() as session, session.begin():
+            await session.execute(text("DELETE FROM sites WHERE id = :id"), {"id": gone.id})
+        _age(environment.content_root / str(gone.id))
+
+        result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.orphan_directories == 1
+        assert not (environment.content_root / str(gone.id)).exists()
+        assert _reclaimed_names(environment) == {str(gone.id)}
+
+    async def test_a_directory_within_the_grace_period_stays(self, environment: Environment):
+        await _make_live_versions(environment, 1)
+        in_flight = environment.store.store_version(environment.site.id, uuid.uuid4(), {"index.html": b"x"})
+
+        result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.orphan_directories == 0
+        assert (environment.content_root / in_flight).is_dir()
+
+    async def test_a_brake_that_holds_is_logged_as_an_error_and_moves_nothing(
+        self, environment: Environment, caplog
+    ):
+        await _make_live_versions(environment, 1)
+        orphans = [
+            environment.store.store_version(environment.site.id, uuid.uuid4(), {"index.html": b"x"})
+            for _ in range(2)
+        ]
+        for orphan in orphans:
+            _age(environment.content_root / orphan)
+
+        with caplog.at_level(logging.ERROR):
+            result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.orphan_directories == 0
+        assert result.held_directories == 2
+        assert all((environment.content_root / orphan).is_dir() for orphan in orphans)
+        errors = [record.getMessage() for record in caplog.records if record.levelno == logging.ERROR]
+        assert len(errors) == 1
+        assert all(orphan in errors[0] for orphan in orphans)
+
+    async def test_what_cooled_off_in_reclaimed_is_removed(self, environment: Environment):
+        cooled = environment.content_root / "_reclaimed" / "20260901T030000-oud"
+        cooled.mkdir(parents=True)
+        old = (datetime.now(tz=UTC) - timedelta(days=8)).timestamp()
+        os.utime(cooled, (old, old))
+
+        result = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert result.reclaimed_swept == 1
+        assert not cooled.exists()
 
 
 class TestSecondsUntil:

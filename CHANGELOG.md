@@ -29,6 +29,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- Files left behind by an interrupted publish, cleanup or delete no
+  longer count against a site's storage quota: the nightly cleanup sets
+  them aside and removes them a week later, and a site created again
+  under a deleted name starts empty.
 
 ### Security
 

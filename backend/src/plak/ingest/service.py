@@ -25,7 +25,6 @@ from plak.config import Settings
 from plak.ingest.store import ContentStore, VersionWriter
 from plak.ingest.unpacker import Limits, unpack
 from plak.messages import Msg
-from plak.models.identity import Group
 from plak.models.publication import Preview, Site, Version, VersionTarget
 
 PREVIEW_VALIDITY = timedelta(days=30)
@@ -134,23 +133,23 @@ class IngestService:
         return RoomGuard(self._content_store, self._min_free)
 
     def _store_sync(
-        self, group: Group, site: Site, filename: str, source: Path, base_path: str | None
+        self, site: Site, filename: str, source: Path, base_path: str | None
     ) -> tuple[uuid.UUID, str]:
         version_id = uuid.uuid4()
-        with self._content_store.write_version(group.slug, site.slug, version_id) as writer:
+        with self._content_store.write_version(site.id, version_id) as writer:
             destination = _GuardedDestination(writer, self.room_guard())
             unpack(filename, source, destination, self._limits, base_path=base_path)
             # Inside the with: on a refusal the work directory is cleaned up
             # and nothing is renamed into place. The site is measured only now
             # because the size of this version is not known before it is
             # unpacked, and the older versions are all still there.
-            self._check_quota(group, site, writer.total_bytes())
+            self._check_quota(site, writer.total_bytes())
         return version_id, writer.storage_ref
 
-    def _check_quota(self, group: Group, site: Site, added: int) -> None:
+    def _check_quota(self, site: Site, added: int) -> None:
         if not self._site_max_bytes:
             return
-        used = self._content_store.site_bytes(group.slug, site.slug)
+        used = self._content_store.site_bytes(site.id)
         if used + added > self._site_max_bytes:
             raise IngestError(
                 "SITE_QUOTA_EXCEEDED",
@@ -158,25 +157,24 @@ class IngestService:
             )
 
     async def _store(
-        self, group: Group, site: Site, filename: str, source: Path, base_path: str | None
+        self, site: Site, filename: str, source: Path, base_path: str | None
     ) -> tuple[uuid.UUID, str]:
         """Unpacks the spooled upload `source` into a new version; the blocking disk
         work runs in a thread so serving keeps going meanwhile."""
         return await asyncio.to_thread(
-            self._store_sync, group, site, filename, source, base_path
+            self._store_sync, site, filename, source, base_path
         )
 
     async def deploy(
         self,
         db: AsyncSession,
-        group: Group,
         site: Site,
         filename: str,
         source: Path,
         deployer: Deployer,
         base_path: str | None = None,
     ) -> uuid.UUID:
-        version_id, storage_ref = await self._store(group, site, filename, source, base_path)
+        version_id, storage_ref = await self._store(site, filename, source, base_path)
         try:
             async with db.begin():
                 db.add(
@@ -201,7 +199,6 @@ class IngestService:
     async def preview_deploy(
         self,
         db: AsyncSession,
-        group: Group,
         site: Site,
         ref: str,
         filename: str,
@@ -209,7 +206,7 @@ class IngestService:
         deployer: Deployer,
         base_path: str | None = None,
     ) -> uuid.UUID:
-        version_id, storage_ref = await self._store(group, site, filename, source, base_path)
+        version_id, storage_ref = await self._store(site, filename, source, base_path)
         expires_at = datetime.now(tz=UTC) + PREVIEW_VALIDITY
         old_storage_ref: str | None = None
         try:

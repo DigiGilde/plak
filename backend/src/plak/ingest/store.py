@@ -1,7 +1,7 @@
 """ContentStore: immutable version storage on the content volume.
 
 Writing goes to {root}/_tmp/{uuid} in full first, and from there to
-{group}/{site}/{version_id} with an atomic os.rename. The tempdir sits on
+{site_id}/{version_id} with an atomic os.rename. The tempdir sits on
 the same filesystem as the final directory, so the rename is atomic and has
 no EXDEV/copy fallback. The spooled upload lives in {root}/_tmp as well:
 outside every servable path, on the volume instead of in memory.
@@ -11,14 +11,17 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO
 
 TMP_DIRNAME = "_tmp"
+RECLAIMED_DIRNAME = "_reclaimed"
 SPOOL_SUFFIX = ".upload"
 
 
@@ -85,6 +88,7 @@ class ContentStore:
         self._root = root.resolve()
         self._tmp = self._root / TMP_DIRNAME
         self._tmp.mkdir(parents=True, exist_ok=True)
+        self._reclaimed = self._root / RECLAIMED_DIRNAME
 
     @property
     def root(self) -> Path:
@@ -105,7 +109,7 @@ class ContentStore:
         """Free space on the content volume."""
         return shutil.disk_usage(self._root).free
 
-    def site_bytes(self, group: str, site: str) -> int:
+    def site_bytes(self, site_id: uuid.UUID) -> int:
         """What every version of one site together occupies.
 
         Measured on disk rather than kept in a column: a version's size is
@@ -113,17 +117,17 @@ class ContentStore:
         expired previews), and the volume is the only place where the two are
         always in step.
         """
-        return _tree_bytes(self._version_root(f"{group}/{site}"))
+        return _tree_bytes(self._version_root(str(site_id)))
 
     def new_spool_file(self) -> Path:
         """Unique path in the tempdir for an upload still to be received."""
         return self._tmp / f"{uuid.uuid4()}{SPOOL_SUFFIX}"
 
     @contextmanager
-    def write_version(self, group: str, site: str, version_id: uuid.UUID) -> Iterator[VersionWriter]:
+    def write_version(self, site_id: uuid.UUID, version_id: uuid.UUID) -> Iterator[VersionWriter]:
         """Work directory for a new version; on a normal exit atomically renamed
         to its final place, on an exception cleaned up entirely."""
-        storage_ref = f"{group}/{site}/{version_id}"
+        storage_ref = f"{site_id}/{version_id}"
         final_target = self._version_root(storage_ref)
 
         workdir = self._tmp / str(uuid.uuid4())
@@ -136,10 +140,8 @@ class ContentStore:
             shutil.rmtree(workdir, ignore_errors=True)
             raise
 
-    def store_version(
-        self, group: str, site: str, version_id: uuid.UUID, files: dict[str, bytes]
-    ) -> str:
-        with self.write_version(group, site, version_id) as writer:
+    def store_version(self, site_id: uuid.UUID, version_id: uuid.UUID, files: dict[str, bytes]) -> str:
+        with self.write_version(site_id, version_id) as writer:
             for rel_path, content in files.items():
                 with writer.open_file(rel_path) as out:
                     out.write(content)
@@ -162,18 +164,122 @@ class ContentStore:
         if path.exists():
             shutil.rmtree(path)
 
+    def delete_site(self, site_id: uuid.UUID) -> None:
+        """Every version of one site, and whatever else lies in its directory.
+
+        Never raises on the removal itself: the rows are gone by now, and what
+        stays behind is reclaimed by the nightly cleanup."""
+        shutil.rmtree(self._version_root(str(site_id)), ignore_errors=True)
+
     def sweep_tmp(self, older_than: timedelta) -> int:
         boundary = datetime.now(tz=UTC) - older_than
         swept = 0
         for entry in self._tmp.iterdir():
-            try:
-                mtime = datetime.fromtimestamp(entry.stat().st_mtime, tz=UTC)
-            except OSError:
-                continue
-            if mtime < boundary:
-                if entry.is_dir():
-                    shutil.rmtree(entry, ignore_errors=True)
-                else:
-                    entry.unlink(missing_ok=True)
+            if _remove_if_older(entry, boundary):
                 swept += 1
         return swept
+
+    def reclaim(self, site_ids: set[str], storage_refs: set[str], older_than: timedelta) -> Reclaimed:
+        """Moves the directories no row points at into `_reclaimed/`.
+
+        `site_ids` and `storage_refs` are what the database holds, read before
+        this call: a site or version made after that read is younger than
+        `older_than` and left alone. Ids never recur, so a directory that lost
+        its row can never be claimed by a new one. At the top only directories
+        named like a site id are considered: `lost+found` on a fresh volume or
+        a backup an operator put there is not ours.
+
+        Two brakes against a database that does not belong to this volume (a
+        wrong PLAK_DB_URL, a restored backup): a site of which no directory has
+        a row keeps all of them, and nothing moves at all when more versions
+        would go than stay.
+        """
+        boundary = datetime.now(tz=UTC) - older_than
+        kept = 0
+        orphans: list[tuple[str, int]] = []
+        held: list[str] = []
+        for site_dir in sorted(self._root.iterdir()):
+            if not _is_id(site_dir.name) or not _is_directory(site_dir):
+                continue
+            if site_dir.name not in site_ids:
+                if _older(site_dir, boundary):
+                    orphans.append((site_dir.name, sum(1 for _ in site_dir.iterdir())))
+                continue
+            versions = sorted(site_dir.iterdir())
+            refs = [f"{site_dir.name}/{version_dir.name}" for version_dir in versions]
+            with_row = sum(ref in storage_refs for ref in refs)
+            without_row = [
+                ref
+                for ref, version_dir in zip(refs, versions, strict=True)
+                if ref not in storage_refs and _older(version_dir, boundary)
+            ]
+            if with_row == 0:
+                held.extend(without_row)
+                continue
+            kept += with_row
+            orphans.extend((ref, 1) for ref in without_row)
+        if sum(weight for _, weight in orphans) > kept:
+            return Reclaimed(moved=[], held=held + [ref for ref, _ in orphans])
+        moved = [ref for ref, _ in orphans if self._quarantine(ref)]
+        return Reclaimed(moved=moved, held=held)
+
+    def _quarantine(self, ref: str) -> bool:
+        """Renames `ref` into `_reclaimed/` with a fresh mtime, so the sweep
+        counts the cooling-off period from the move rather than from its age."""
+        self._reclaimed.mkdir(exist_ok=True)
+        stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
+        target = self._reclaimed / f"{stamp}-{ref.replace('/', '_')}"
+        try:
+            os.rename(self._root / ref, target)
+        except OSError:
+            return False
+        os.utime(target)
+        return True
+
+    def sweep_reclaimed(self, older_than: timedelta) -> int:
+        """Removes for good what `reclaim` moved aside longer than `older_than` ago."""
+        if not self._reclaimed.is_dir():
+            return 0
+        boundary = datetime.now(tz=UTC) - older_than
+        return sum(_remove_if_older(entry, boundary) for entry in self._reclaimed.iterdir())
+
+
+@dataclass(frozen=True)
+class Reclaimed:
+    """Paths relative to the content root: what `reclaim` moved aside, and what
+    it found without a row but left in place because a brake held."""
+
+    moved: list[str]
+    held: list[str]
+
+
+def _older(entry: Path, boundary: datetime) -> bool:
+    try:
+        return datetime.fromtimestamp(entry.lstat().st_mtime, tz=UTC) < boundary
+    except OSError:
+        return False
+
+
+def _is_id(name: str) -> bool:
+    try:
+        return str(uuid.UUID(name)) == name
+    except ValueError:
+        return False
+
+
+def _is_directory(entry: Path) -> bool:
+    """A directory itself, not a symlink to one."""
+    try:
+        return stat.S_ISDIR(entry.lstat().st_mode)
+    except OSError:
+        return False
+
+
+def _remove_if_older(entry: Path, boundary: datetime) -> bool:
+    if not _older(entry, boundary):
+        return False
+    if _is_directory(entry):
+        shutil.rmtree(entry, ignore_errors=True)
+    else:
+        entry.unlink(missing_ok=True)
+    return True
