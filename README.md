@@ -172,9 +172,10 @@ for a single command.
 `plak login` uses the OAuth 2.0 Device Authorization Grant: it shows a
 code, you confirm it in the admin, and the session belongs to your user
 account, for every directory. The tokens go into the system keyring
-(macOS Keychain, Secret Service on Linux).
+(macOS Keychain, Secret Service on Linux, Windows Credential Manager).
 Where there is no usable keyring, or with `--insecure-storage`, they go
-into `~/.config/plak/hosts.json` (mode 0600) and `plak login` says so.
+into `~/.config/plak/hosts.json` (mode 0600; `%APPDATA%\plak\hosts.json`
+on Windows) and `plak login` says so.
 That file also remembers the host you last logged in to; set
 `PLAK_CONFIG_DIR` or `XDG_CONFIG_HOME` to move it. An old `.env.plak`
 from an earlier version is no longer read: log in again and delete it.

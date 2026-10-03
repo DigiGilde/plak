@@ -42,6 +42,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 - The repository form on a site's Deploy tab closes when you switch to
   another site, instead of staying open for the previous one.
+- The Plak CLI runs on Windows: it keeps the session in Windows
+  Credential Manager, or else in `%APPDATA%\plak\hosts.json`.
 
 ## [2026.9.30]
 

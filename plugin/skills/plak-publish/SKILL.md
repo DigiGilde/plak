@@ -64,7 +64,7 @@ browser.
 - The session belongs to the human's user account, not to the project: one
   login holds in every directory. The CLI keeps the tokens in the system
   keyring; only where there is none do they land in
-  `~/.config/plak/hosts.json`. Treat both as a key: never read the tokens
+  `~/.config/plak/hosts.json` (`%APPDATA%\plak\hosts.json` on Windows). Treat both as a key: never read the tokens
   from the keyring, never `cat`, `echo` or log that file, and never pass
   `--insecure-storage` on your own. If `plak login` warns that the session
   went into a plain-text file, tell the human.
@@ -122,7 +122,7 @@ unsure about the host, the group/site, or about live versus preview: stop and
 ask one question. That is cheaper than a deploy to the wrong site.
 
 The CLI trusts `hosts.json` only if the file is the user's own and has mode
-0600; if it fails that, the CLI ignores it as a whole, says so and falls back
+0600 (on Windows: only if it is a regular file); if it fails that, the CLI ignores it as a whole, says so and falls back
 to the DigiGilde instance, so pass `--host` explicitly. That keeps a tampered
 file from sending a token to somebody else's server. A session is only ever
 sent to the host it was issued for.
