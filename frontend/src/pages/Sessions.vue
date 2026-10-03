@@ -100,7 +100,7 @@ async function confirmRevoke(): Promise<void> {
 </script>
 
 <template>
-  <nldd-simple-section class="leesbreedte">
+  <nldd-simple-section class="reading-width">
     <Notices ref="notices" />
 
     <nldd-title :size="1">
@@ -125,13 +125,13 @@ async function confirmRevoke(): Promise<void> {
           icon="link"
           :text="t('admin.sessions.empty')"
           :supporting-text="t('admin.sessions.empty.detail')"
-          data-testid="sessies-leeg"
+          data-testid="sessions-empty"
         ></nldd-inline-dialog>
         <nldd-list-item
           v-for="session in sessions"
           :key="session.id"
           size="md"
-          :data-testid="`sessie-${session.id}`"
+          :data-testid="`session-${session.id}`"
         >
           <nldd-text-cell
             :text="clientName(session)"
@@ -140,7 +140,7 @@ async function confirmRevoke(): Promise<void> {
           <nldd-list-item-segment
             button
             :accessible-label="t('admin.sessions.revoke.label', { name: clientName(session) })"
-            :data-testid="`sessie-intrekken-${session.id}`"
+            :data-testid="`session-revoke-${session.id}`"
             @click="revoking = session"
           >
             <nldd-text-cell
@@ -161,7 +161,7 @@ async function confirmRevoke(): Promise<void> {
         <nldd-rich-text>
           <p>
             {{ t('admin.sessions.empty.install.before')
-            }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="sessies-cli-install"
+            }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="sessions-cli-install"
               >{{ t('admin.sessions.empty.install.link') }}</nldd-link
             >
           </p>

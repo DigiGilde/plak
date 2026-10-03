@@ -68,8 +68,8 @@ def postgres_container() -> Iterator[object]:
     socket = _podman_socket()
     if socket is None:
         pytest.skip(
-            "Geen Podman-socket gevonden voor testcontainers. Start 'podman machine "
-            "start' (macOS) of zet DOCKER_HOST naar de Podman-socket."
+            "No Podman socket found for testcontainers. Run 'podman machine "
+            "start' (macOS) or point DOCKER_HOST at the Podman socket."
         )
 
     os.environ.setdefault("DOCKER_HOST", socket)
@@ -82,7 +82,7 @@ def postgres_container() -> Iterator[object]:
     try:
         container.start()
     except Exception as error:  # pragma: no cover - depends on the environment
-        pytest.skip(f"Geen containerruntime bereikbaar via {socket}: {error}")
+        pytest.skip(f"No container runtime reachable via {socket}: {error}")
         return
 
     try:

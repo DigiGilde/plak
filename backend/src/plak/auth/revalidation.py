@@ -56,7 +56,7 @@ RECHECK_BACKOFF = timedelta(seconds=60)
 
 @dataclass
 class IdpRevalidationFault:
-    """The standing complaint about a broken coupling to the IdP.
+    """The recorded fault for a broken connection to the IdP.
 
     Set when the token endpoint refuses our client itself, cleared by the first
     re-validation that succeeds. Two readers: the ERROR log line (at most one
@@ -85,7 +85,7 @@ class IdpRevalidationFault:
 
     @property
     def message(self) -> str | None:
-        return f"IdP re-validation is failing: {self.code}" if self.code else None
+        return f"IdP revalidation is failing: {self.code}" if self.code else None
 
 
 def idp_fault(app: FastAPI) -> IdpRevalidationFault:
@@ -97,7 +97,7 @@ def idp_fault(app: FastAPI) -> IdpRevalidationFault:
 
 
 def revalidation_status(app: FastAPI) -> str | None:
-    """What /-/healthz reports about the coupling to the IdP; None while it is
+    """What /-/healthz reports about the connection to the IdP; None while it is
     healthy."""
     fault = getattr(app.state, "idp_revalidation_fault", None)
     return fault.message if fault is not None else None
@@ -164,7 +164,7 @@ async def _redeem(request: Request, session: Session, now: datetime) -> None:
         # Nothing to check with: the OP handed out no refresh token. Keeping
         # the session is the lesser evil; the log line says the window is not
         # closed for this one.
-        _logger.warning("Sessie zonder verversingstoken: hercontrole bij de IdP overgeslagen")
+        _logger.warning("Session without refresh token: revalidation with the IdP skipped")
         store.defer_check(session.id, until=now + RECHECK_BACKOFF)
         return
 
@@ -175,14 +175,14 @@ async def _redeem(request: Request, session: Session, now: datetime) -> None:
         await _drop(request, session, vocabulary.IDP_SESSION_ENDED)
         return
     except ClientRejectedError as error:
-        # Our own coupling is broken, not this session: keep everyone logged in
+        # Our own connection is broken, not this session: keep everyone logged in
         # and complain where an operator looks.
         issuer = request.app.state.settings.oidc_issuer
         if idp_fault(request.app).record(
             code=error.code, issuer=issuer, now=now, window=RECHECK_BACKOFF
         ):
             _logger.error(
-                "IdP re-validation is failing: the token endpoint refused our client with '%s' "
+                "IdP revalidation is failing: the token endpoint refused our client with '%s' "
                 "at issuer %s. Sessions are kept; fix the client configuration",
                 error.code,
                 issuer,
@@ -190,7 +190,7 @@ async def _redeem(request: Request, session: Session, now: datetime) -> None:
         store.defer_check(session.id, until=now + RECHECK_BACKOFF)
         return
     except OidcError as error:
-        _logger.warning("Hercontrole bij de IdP mislukt, sessie blijft staan: %s", error)
+        _logger.warning("Re-validation at the IdP failed, session is kept: %s", error)
         store.defer_check(session.id, until=now + RECHECK_BACKOFF)
         return
 
@@ -199,7 +199,7 @@ async def _redeem(request: Request, session: Session, now: datetime) -> None:
         try:
             claims = await oidc.validate_refreshed_id_token(id_token)
         except OidcError as error:
-            _logger.warning("Id-token uit de hercontrole ongeldig: %s", error)
+            _logger.warning("ID token from the revalidation is invalid: %s", error)
             await _drop(request, session, vocabulary.IDP_TOKEN_INVALID)
             return
         if claims.get("sub") != session.sub:

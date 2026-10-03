@@ -1046,7 +1046,7 @@ class TestContentViewerUpsert:
 
     async def test_a_failed_upsert_does_not_block_the_login(self, content_client, app, idp, monkeypatch, caplog):
         async def _boom(session_factory, sub, email, email_verified):
-            raise RuntimeError("content_viewers kapot")
+            raise RuntimeError("content_viewers broken")
 
         app.state.session_factory = object()
         monkeypatch.setattr(pages, "upsert_content_viewer", _boom)

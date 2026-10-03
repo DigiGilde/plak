@@ -206,7 +206,7 @@ class TestReading:
         _as_admin(client, app)
 
         async def _boom(*args, **kwargs):
-            raise RuntimeError("auditlog schrijffout")
+            raise RuntimeError("audit log write error")
 
         monkeypatch.setattr(app.state.audit_log, "write_strict", _boom)
         response = await client.get(AUDIT)
@@ -300,7 +300,7 @@ class TestLookingSomeoneUp:
         headers = _as_admin(client, app)
 
         async def _boom(*args, **kwargs):
-            raise RuntimeError("auditlog schrijffout")
+            raise RuntimeError("audit log write error")
 
         monkeypatch.setattr(app.state.audit_log, "write_strict_limited", _boom)
         response = await client.post(LOOKUP, json={"identifier": "a@example.nl", "reason": REASON}, headers=headers)
@@ -416,7 +416,7 @@ class TestIdentifyingAPseudonym:
         pseudonym = pseudonymise(app.state.settings.audit_pepper, data.member_a.sso_subject)
 
         async def _boom(*args, **kwargs):
-            raise RuntimeError("auditlog schrijffout")
+            raise RuntimeError("audit log write error")
 
         monkeypatch.setattr(app.state.audit_log, "write_strict_limited", _boom)
         response = await client.post(IDENTITY, json={"actorPseudonym": pseudonym, "reason": REASON}, headers=headers)

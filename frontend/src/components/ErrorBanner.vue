@@ -58,7 +58,7 @@ const loginHref = computed(
       variant="primary"
       :text="t('error.expired.action')"
       :href="loginHref"
-      data-testid="opnieuw-inloggen"
+      data-testid="sign-in-again"
     ></nldd-button>
   </nldd-banner>
 </template>

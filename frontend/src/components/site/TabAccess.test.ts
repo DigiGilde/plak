@@ -42,26 +42,26 @@ describe('TabAccess: the base', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const group = wrapper.find('[data-testid="toegang-basis"]');
+    const group = wrapper.find('[data-testid="access-base"]');
     expect(group.element.tagName.toLowerCase()).toBe('nldd-list');
     expect(group.attributes('type')).toBe('radiogroup');
 
     const rows = group.findAll('nldd-list-item');
     expect(rows).toHaveLength(4);
     expect(rows[0]!.attributes('radio')).toBeDefined();
-    expect(wrapper.find('[data-testid="basis-sso"]').attributes('checked')).toBeDefined();
-    expect(wrapper.find('[data-testid="basis-public"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="base-sso"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="base-public"]').attributes('checked')).toBeUndefined();
 
     // The radio's shape sits inside the row, its state on the row itself.
-    const button = wrapper.find('[data-testid="basis-public"]').find('nldd-radio-button');
+    const button = wrapper.find('[data-testid="base-public"]').find('nldd-radio-button');
     expect(button.attributes('decorative')).toBeDefined();
     expect(button.attributes('checked')).toBeUndefined();
 
     // Label and explanation sit apart in an nldd-title-cell, not in one string.
-    const cell = wrapper.find('[data-testid="basis-public"]').find('nldd-title-cell');
+    const cell = wrapper.find('[data-testid="base-public"]').find('nldd-title-cell');
     expect(cell.attributes('text')).toBe('Iedereen');
     expect(cell.attributes('supporting-text')).toContain('De site is openbaar');
-    expect(wrapper.find('[data-testid="basis-nobody"]').find('nldd-title-cell').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="base-nobody"]').find('nldd-title-cell').attributes('text')).toBe(
       'Alleen via een link of uitnodiging',
     );
   });
@@ -70,7 +70,7 @@ describe('TabAccess: the base', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const summary = wrapper.find('[data-testid="toegang-samenvatting"]').attributes('text')!;
+    const summary = wrapper.find('[data-testid="access-summary"]').attributes('text')!;
     expect(summary).toContain('SSO Rijk');
     expect(summary).toContain('geheime link');
     expect(summary).toContain('genodigden');
@@ -81,7 +81,7 @@ describe('TabAccess: the base', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="toegang-samenvatting"]').attributes('text')).toContain(
+    expect(wrapper.find('[data-testid="access-summary"]').attributes('text')).toContain(
       'Niemand kan de site bekijken',
     );
   });
@@ -97,7 +97,7 @@ describe('TabAccess: the base', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="basis-site_team"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="base-site_team"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -117,13 +117,13 @@ describe('TabAccess: the base', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="basis-public"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="base-public"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="basis-sso"]').attributes('checked')).toBeDefined();
-    expect(wrapper.find('[data-testid="basis-public"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="base-sso"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="base-public"]').attributes('checked')).toBeUndefined();
     expect(wrapper.find('nldd-notification[variant="critical"]').attributes('text')).toBe(
       'Toegang niet opgeslagen',
     );
@@ -134,7 +134,7 @@ describe('TabAccess: the base', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', networkErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="basis-public"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="base-public"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -157,7 +157,7 @@ describe('TabAccess: the base', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="basis-sso"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="base-sso"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -172,13 +172,13 @@ describe('TabAccess: the base', () => {
     // read yet.
     const wrapper = makeWrapper();
 
-    fireDetailEvent(wrapper.find('[data-testid="basis-public"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="base-public"]').element, 'change', {
       checked: true,
     });
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-keys"]').element, 'change', {
       checked: false,
     });
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-invitees"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
@@ -210,7 +210,7 @@ describe('TabAccess: the two exceptions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const keys = wrapper.find('[data-testid="uitzondering-sleutels"]');
+    const keys = wrapper.find('[data-testid="exception-keys"]');
     expect(keys.element.tagName.toLowerCase()).toBe('nldd-switch-field');
     expect(keys.attributes('label')).toBe('Geheime links');
     expect(keys.attributes('checked')).toBeDefined();
@@ -219,7 +219,7 @@ describe('TabAccess: the two exceptions', () => {
     // in the DOM but never on the screen, which jsdom cannot tell apart.
     expect(helpTextBeside(keys.element)).toContain('zonder in te loggen');
 
-    const invitees = wrapper.find('[data-testid="uitzondering-genodigden"]');
+    const invitees = wrapper.find('[data-testid="exception-invitees"]');
     expect(invitees.attributes('label')).toBe('Genodigden');
     expect(invitees.attributes('checked')).toBeDefined();
     expect(helpTextBeside(invitees.element)).toContain('SSO Rijk');
@@ -230,7 +230,7 @@ describe('TabAccess: the two exceptions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-keys"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -246,31 +246,31 @@ describe('TabAccess: the two exceptions', () => {
   it('turns off an exception and hides its table', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
-    expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitees-list"]').exists()).toBe(true);
 
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-invitees"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.access.invitees).toBe(false);
-    expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="invitees-list"]').exists()).toBe(false);
     // The keys table is untouched: the two extras are independent.
-    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(true);
   });
 
   it('turns off secret links and hides their table', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
-    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(true);
 
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-keys"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.access.keys).toBe(false);
-    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(false);
     expect(wrapper.find('nldd-notification[text="Geheime links staan uit"]').exists()).toBe(true);
   });
 
@@ -279,7 +279,7 @@ describe('TabAccess: the two exceptions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-invitees"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -290,17 +290,17 @@ describe('TabAccess: the two exceptions', () => {
       invitees: true,
     });
     expect(wrapper.find('nldd-notification[text="Genodigden staan aan"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitees-list"]').exists()).toBe(true);
   });
 
   it('does nothing when a switch reports the value it already has', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-sleutels"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-keys"]').element, 'change', {
       checked: true,
     });
-    fireDetailEvent(wrapper.find('[data-testid="uitzondering-genodigden"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="exception-invitees"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -314,8 +314,8 @@ describe('TabAccess: the two exceptions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="genodigden-lijst"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="invitees-list"]').exists()).toBe(false);
   });
 
   it('says for a public base that the exceptions add nothing', async () => {
@@ -323,22 +323,22 @@ describe('TabAccess: the two exceptions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const banner = wrapper.find('[data-testid="uitzonderingen-zinloos"]');
+    const banner = wrapper.find('[data-testid="exceptions-pointless"]');
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('supporting-text')).toContain('iedereen mag toch al kijken');
-    expect(wrapper.find('[data-testid="toegang-samenvatting"]').attributes('text')).toContain(
+    expect(wrapper.find('[data-testid="access-summary"]').attributes('text')).toContain(
       'voegen daar niets aan toe',
     );
     // Said, not silently done: the lists stay reachable so what is set up here
     // survives turning the base back down.
-    expect(wrapper.find('[data-testid="sleutels-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(true);
   });
 
   it('omits the notice once the base shields off something', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="uitzonderingen-zinloos"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="exceptions-pointless"]').exists()).toBe(false);
   });
 });
 
@@ -351,7 +351,7 @@ describe('TabAccess: states', () => {
     expect(indicator.exists()).toBe(true);
     expect(indicator.attributes('complete')).toBeUndefined();
     expect(indicator.attributes('timing')).toBeUndefined();
-    expect(indicator.findAll('[data-testid="toegang-basis"] nldd-list-item')).toHaveLength(4);
+    expect(indicator.findAll('[data-testid="access-base"] nldd-list-item')).toHaveLength(4);
     expect(wrapper.html()).toContain('Wie kan deze site bekijken?');
   });
 
@@ -371,10 +371,10 @@ describe('TabAccess: states', () => {
 
     // The empty text belongs in the table's own empty slot, so the table
     // decides when to show it.
-    const inviteesEmpty = wrapper.find('[data-testid="genodigden-leeg"]');
+    const inviteesEmpty = wrapper.find('[data-testid="invitees-empty"]');
     expect(inviteesEmpty.attributes('slot')).toBe('empty');
     expect(inviteesEmpty.element.parentElement?.tagName.toLowerCase()).toBe('nldd-table');
-    const keysEmpty = wrapper.find('[data-testid="sleutels-leeg"]');
+    const keysEmpty = wrapper.find('[data-testid="keys-empty"]');
     expect(keysEmpty.attributes('slot')).toBe('empty');
     expect(keysEmpty.element.parentElement?.tagName.toLowerCase()).toBe('nldd-table');
   });
@@ -419,12 +419,12 @@ describe('TabAccess: external sources', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="externe-bronnen"]');
+    const field = wrapper.find('[data-testid="external-sources"]');
     expect(field.element.tagName.toLowerCase()).toBe('nldd-switch-field');
     expect(field.attributes('label')).toBe('Externe bronnen toestaan');
     expect(field.attributes('checked')).toBeDefined();
 
-    const section = wrapper.find('section[aria-labelledby="kop-externe-bronnen"]');
+    const section = wrapper.find('section[aria-labelledby="heading-external-sources"]');
     expect(section.text()).toContain('Staat aan, tenzij je het uitzet');
     expect(section.text()).toContain('cdnjs, jsDelivr en unpkg');
     expect(section.text()).toContain('Tailwind-CDN');
@@ -441,20 +441,20 @@ describe('TabAccess: external sources', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="external-sources"]').attributes('checked')).toBeUndefined();
   });
 
   it('saves turning it off', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="external-sources"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.externalSources).toBe(false);
-    expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="external-sources"]').attributes('checked')).toBeUndefined();
     expect(wrapper.find('nldd-notification[text="Externe bronnen opgeslagen"]').exists()).toBe(
       true,
     );
@@ -465,12 +465,12 @@ describe('TabAccess: external sources', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="external-sources"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="external-sources"]').attributes('checked')).toBeDefined();
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Externe bronnen niet opgeslagen');
   });
@@ -481,13 +481,13 @@ describe('TabAccess: external sources', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="external-sources"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.externalSources).toBe(true);
-    expect(wrapper.find('[data-testid="externe-bronnen"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="external-sources"]').attributes('checked')).toBeDefined();
     expect(
       wrapper.find('nldd-notification[text="Externe bronnen opgeslagen"]').attributes(
         'supporting-text',
@@ -499,7 +499,7 @@ describe('TabAccess: external sources', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="externe-bronnen"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="external-sources"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -514,12 +514,12 @@ describe('TabAccess: shielding from other sites', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="afscherming"]');
+    const field = wrapper.find('[data-testid="sandbox"]');
     expect(field.element.tagName.toLowerCase()).toBe('nldd-switch-field');
     expect(field.attributes('label')).toBe('Afschermen van andere sites');
     expect(field.attributes('checked')).toBeDefined();
 
-    const section = wrapper.find('section[aria-labelledby="kop-afscherming"]');
+    const section = wrapper.find('section[aria-labelledby="heading-sandbox"]');
     expect(section.text()).toContain('Staat aan, tenzij je het uitzet');
     // The price has to be in the words a publisher recognises, not only in
     // the API names: this is the switch that breaks a working site.
@@ -545,20 +545,20 @@ describe('TabAccess: shielding from other sites', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="sandbox"]').attributes('checked')).toBeUndefined();
   });
 
   it('saves turning it off', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="sandbox"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.sandbox).toBe(false);
-    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeUndefined();
+    expect(wrapper.find('[data-testid="sandbox"]').attributes('checked')).toBeUndefined();
     expect(wrapper.find('nldd-notification[text="Afscherming opgeslagen"]').exists()).toBe(true);
   });
 
@@ -568,13 +568,13 @@ describe('TabAccess: shielding from other sites', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="sandbox"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
 
     expect(backend.data.sites[0]!.sandbox).toBe(true);
-    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="sandbox"]').attributes('checked')).toBeDefined();
   });
 
   it('rolls back the switch and reports it when saving fails', async () => {
@@ -582,12 +582,12 @@ describe('TabAccess: shielding from other sites', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="sandbox"]').element, 'change', {
       checked: false,
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="afscherming"]').attributes('checked')).toBeDefined();
+    expect(wrapper.find('[data-testid="sandbox"]').attributes('checked')).toBeDefined();
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Afscherming niet opgeslagen');
   });
@@ -596,7 +596,7 @@ describe('TabAccess: shielding from other sites', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="afscherming"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="sandbox"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -611,7 +611,7 @@ describe('TabAccess: invitees', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const table = wrapper.find('[data-testid="genodigden-lijst"]');
+    const table = wrapper.find('[data-testid="invitees-list"]');
     expect(table.element.tagName.toLowerCase()).toBe('nldd-table');
     // No sheet left on this tab: the lists are what the tab is about.
     expect(wrapper.find('nldd-sheet').exists()).toBe(false);
@@ -622,91 +622,91 @@ describe('TabAccess: invitees', () => {
     expect(columns).toContain('**Toegevoegd**');
     // A columnheader without a name is an axe violation, so the menu column is
     // named for a screen reader and hidden for everyone else.
-    expect(header.find('.alleen-schermlezer').text()).toBe('Acties');
+    expect(header.find('.visually-hidden').text()).toBe('Acties');
 
-    const row = wrapper.find('[data-testid="genodigde-reviewer@voorbeeld.nl"]');
+    const row = wrapper.find('[data-testid="invitee-reviewer@voorbeeld.nl"]');
     expect(row.exists()).toBe(true);
-    expect(row.find('[data-testid="acties-reviewer@voorbeeld.nl"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="genodigde-formulier"]').exists()).toBe(true);
+    expect(row.find('[data-testid="actions-reviewer@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitee-form"]').exists()).toBe(true);
   });
 
   it('adds an invitee by email address and shows the row right away', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="invitee-email"]').element, 'input', {
       value: 'nieuw@voorbeeld.nl',
     });
-    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="invitee-form"]').trigger('submit');
 
     // Optimistic: the row is there before the server has answered.
-    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitee-nieuw@voorbeeld.nl"]').exists()).toBe(true);
 
     await untilIdle();
     expect(backend.data.invitees.map((g) => g.identifier)).toContain('nieuw@voorbeeld.nl');
-    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitee-nieuw@voorbeeld.nl"]').exists()).toBe(true);
   });
 
   it('removes an invitee it just added, by the id the server gave back', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="invitee-email"]').element, 'input', {
       value: 'nieuw@voorbeeld.nl',
     });
-    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="invitee-form"]').trigger('submit');
     await untilIdle();
 
     fireDetailEvent(
-      wrapper.find('[data-testid="genodigde-verwijderen-nieuw@voorbeeld.nl"]').element,
+      wrapper.find('[data-testid="invitee-delete-nieuw@voorbeeld.nl"]').element,
       'select',
       {},
     );
     await untilIdle();
 
     expect(backend.data.invitees.map((g) => g.identifier)).not.toContain('nieuw@voorbeeld.nl');
-    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="invitee-nieuw@voorbeeld.nl"]').exists()).toBe(false);
   });
 
   it('rolls back the row and shows the backend error on a duplicate', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="invitee-email"]').element, 'input', {
       value: 'reviewer@voorbeeld.nl',
     });
-    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="invitee-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('nldd-validation-item#genodigde-server').text()).toContain(
+    expect(wrapper.find('nldd-validation-item#invitee-server').text()).toContain(
       'staat al op de genodigdenlijst',
     );
-    const field = wrapper.find('[data-testid="genodigde-email"]');
+    const field = wrapper.find('[data-testid="invitee-email"]');
     expect(field.attributes('invalid')).toBeDefined();
-    expect(field.attributes('unmet')).toBe('genodigde-server');
+    expect(field.attributes('unmet')).toBe('invitee-server');
     // The entered value comes back so the user can correct it.
     expect(field.attributes('value')).toBe('reviewer@voorbeeld.nl');
     expect(backend.data.invitees).toHaveLength(1);
-    expect(wrapper.findAll('[data-testid="genodigde-reviewer@voorbeeld.nl"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-testid="invitee-reviewer@voorbeeld.nl"]')).toHaveLength(1);
   });
 
   it('validates that an email address is filled in', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="invitee-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.invitees).toHaveLength(1);
     // nldd-form-field links label and validation list to direct children only;
     // an intervening container breaks the accessible name and the tie between
     // the requirements and the field.
-    const field = wrapper.find('[data-testid="genodigde-email"]').element;
+    const field = wrapper.find('[data-testid="invitee-email"]').element;
     expect(field.parentElement?.tagName.toLowerCase()).toBe('nldd-form-field');
     expect(field.getAttribute('required')).not.toBeNull();
     expect(field.getAttribute('invalid')).not.toBeNull();
     expect(field.getAttribute('unmet')).toBeNull();
-    const requirement = wrapper.find('#genodigde-email-vereist').element;
+    const requirement = wrapper.find('#invitee-email-required').element;
     expect(requirement.tagName.toLowerCase()).toBe('nldd-validation-item');
     expect(requirement.hasAttribute('required')).toBe(true);
     expect(requirement.textContent?.trim()).toBe('Een e-mailadres');
@@ -718,12 +718,12 @@ describe('TabAccess: invitees', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const action = wrapper.find('[data-testid="genodigde-verwijderen-reviewer@voorbeeld.nl"]');
+    const action = wrapper.find('[data-testid="invitee-delete-reviewer@voorbeeld.nl"]');
     expect(action.attributes('destructive')).toBeDefined();
     action.element.dispatchEvent(new CustomEvent('select'));
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="genodigde-reviewer@voorbeeld.nl"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="invitee-reviewer@voorbeeld.nl"]').exists()).toBe(false);
     expect(backend.data.invitees).toHaveLength(0);
   });
 
@@ -732,19 +732,19 @@ describe('TabAccess: invitees', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="genodigde-email"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="invitee-email"]').element, 'input', {
       value: 'nieuw@voorbeeld.nl',
     });
-    await wrapper.find('[data-testid="genodigde-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="invitee-form"]').trigger('submit');
     // Optimistic row shown before the server answers, same as on the happy path.
-    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitee-nieuw@voorbeeld.nl"]').exists()).toBe(true);
     await untilIdle();
 
     // Unlike the duplicate case, this row was never on the server's list, so
     // the whole provisional row comes back out, not just its optimistic state.
-    expect(wrapper.find('[data-testid="genodigde-nieuw@voorbeeld.nl"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="invitee-nieuw@voorbeeld.nl"]').exists()).toBe(false);
     expect(backend.data.invitees).toHaveLength(1);
-    expect(wrapper.find('nldd-validation-item#genodigde-server').text()).toBe('Serverfout');
+    expect(wrapper.find('nldd-validation-item#invitee-server').text()).toBe('Serverfout');
   });
 
   it('rolls back a failed removal and reports it', async () => {
@@ -753,11 +753,11 @@ describe('TabAccess: invitees', () => {
 
     vi.stubGlobal('fetch', serverErrorFetch());
     wrapper
-      .find('[data-testid="genodigde-verwijderen-reviewer@voorbeeld.nl"]')
+      .find('[data-testid="invitee-delete-reviewer@voorbeeld.nl"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="genodigde-reviewer@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="invitee-reviewer@voorbeeld.nl"]').exists()).toBe(true);
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
   });
 });
@@ -767,7 +767,7 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const table = wrapper.find('[data-testid="sleutels-lijst"]');
+    const table = wrapper.find('[data-testid="keys-list"]');
     expect(table.element.tagName.toLowerCase()).toBe('nldd-table');
     const header = table.find('nldd-table-row[slot="header"]');
     const columns = header.findAll('nldd-text-cell').map((c) => c.attributes('text'));
@@ -775,26 +775,26 @@ describe('TabAccess: secret links', () => {
     expect(columns).toContain('**Aangemaakt**');
     expect(columns).toContain('**Vervalt**');
     expect(columns).toContain('**Status**');
-    expect(header.find('.alleen-schermlezer').text()).toBe('Acties');
+    expect(header.find('.visually-hidden').text()).toBe('Acties');
 
-    const row = wrapper.find('[data-testid="sleutel-sel-abc123"]');
+    const row = wrapper.find('[data-testid="key-sel-abc123"]');
     expect(row.html()).toContain('Demo voor stakeholders');
     expect(row.find('nldd-tag').attributes('text')).toBe('Actief');
-    expect(row.find('[data-testid="acties-Demo voor stakeholders"]').exists()).toBe(true);
+    expect(row.find('[data-testid="actions-Demo voor stakeholders"]').exists()).toBe(true);
   });
 
   it('creates a key from the form and shows the full link exactly once', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-dagen"]').setValue('30');
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-days"]').setValue('30');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
-    const secret = wrapper.find('[data-testid="nieuwe-sleutel-link"]');
+    const secret = wrapper.find('[data-testid="new-key-link"]');
     expect(secret.exists()).toBe(true);
     // The secret link lives on the content host, not on the admin origin.
     expect(secret.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
@@ -804,13 +804,13 @@ describe('TabAccess: secret links', () => {
     expect(newKey.label).toBe('Demo klanten');
     expect(newKey.expiresAt).not.toBeNull();
     // And the new row is in the table straight away.
-    expect(wrapper.find(`[data-testid="sleutel-${newKey.selector}"]`).exists()).toBe(true);
+    expect(wrapper.find(`[data-testid="key-${newKey.selector}"]`).exists()).toBe(true);
 
     // Shown once: after reloading the tab the link is gone and nothing in the
     // table holds the secret value.
     const again = makeWrapper();
     await untilIdle();
-    expect(again.find('[data-testid="nieuwe-sleutel-link"]').exists()).toBe(false);
+    expect(again.find('[data-testid="new-key-link"]').exists()).toBe(false);
     expect(again.html()).not.toContain('?key=');
   });
 
@@ -818,38 +818,38 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     const selector = backend.data.keys[1]!.selector;
-    const bare = wrapper.find('[data-testid="nieuwe-sleutel-link-zonder-code"]');
+    const bare = wrapper.find('[data-testid="new-key-link-without-code"]');
     expect(bare.text()).toBe(`https://sites.plak.test/team-aurora/website/?key=${selector}`);
-    const code = wrapper.find('[data-testid="nieuwe-sleutel-code"]').text();
+    const code = wrapper.find('[data-testid="new-key-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-link"]').text()).toContain(code);
+    expect(wrapper.find('[data-testid="new-key-link"]').text()).toContain(code);
   });
 
   it('shows the created link as success, with a button to copy and open', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
-    const banner = wrapper.find('[data-testid="nieuwe-sleutel"]');
+    const banner = wrapper.find('[data-testid="new-key"]');
     expect(banner.attributes('variant')).toBe('success');
     expect(banner.attributes('supporting-text')).toContain('iedereen met deze link');
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-kopieren"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="new-key-copy"]').attributes('text')).toBe(
       'Kopieer link',
     );
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-openen"]').attributes('target')).toBe(
+    expect(wrapper.find('[data-testid="new-key-open"]').attributes('target')).toBe(
       '_blank',
     );
   });
@@ -858,12 +858,12 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sleutel-dagen"] option[value=""]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="key-days"] option[value=""]').exists()).toBe(false);
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo standaardtermijn',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.keys).toHaveLength(2);
@@ -876,7 +876,7 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="sleutel-label"]');
+    const field = wrapper.find('[data-testid="key-label"]');
     expect(field.attributes('required')).toBeUndefined();
     expect(wrapper.find('nldd-form-field[label="Label"]').attributes('optional')).toBeDefined();
   });
@@ -885,14 +885,14 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.keys).toHaveLength(2);
     const newKey = backend.data.keys[1]!;
     expect(newKey.label).toMatch(/^Link van \d{1,2} /);
     // The table shows the generated name.
-    expect(wrapper.find(`[data-testid="sleutel-${newKey.selector}"]`).html()).toContain(
+    expect(wrapper.find(`[data-testid="key-${newKey.selector}"]`).html()).toContain(
       newKey.label,
     );
   });
@@ -902,18 +902,18 @@ describe('TabAccess: secret links', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.keys).toHaveLength(1);
-    expect(wrapper.find('[data-testid="nieuwe-sleutel"]').exists()).toBe(false);
-    const field = wrapper.find('[data-testid="sleutel-label"]');
+    expect(wrapper.find('[data-testid="new-key"]').exists()).toBe(false);
+    const field = wrapper.find('[data-testid="key-label"]');
     expect(field.attributes('invalid')).toBeDefined();
-    expect(field.attributes('unmet')).toBe('sleutel-server');
-    expect(wrapper.find('nldd-validation-item#sleutel-server').text()).toBe('Serverfout');
+    expect(field.attributes('unmet')).toBe('key-server');
+    expect(wrapper.find('nldd-validation-item#key-server').text()).toBe('Serverfout');
   });
 
   it('leaves an untouched key alone when revoking another one', async () => {
@@ -930,14 +930,14 @@ describe('TabAccess: secret links', () => {
     await untilIdle();
 
     wrapper
-      .find('[data-testid="sleutel-intrekken-sel-abc123"]')
+      .find('[data-testid="key-revoke-sel-abc123"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await untilIdle();
 
     expect(backend.data.keys[0]!.status).toBe('revoked');
     expect(backend.data.keys[1]!.status).toBe('active');
     expect(
-      wrapper.find('[data-testid="sleutel-sel-def456"]').find('nldd-tag').attributes('text'),
+      wrapper.find('[data-testid="key-sel-def456"]').find('nldd-tag').attributes('text'),
     ).toBe('Actief');
   });
 
@@ -946,16 +946,16 @@ describe('TabAccess: secret links', () => {
     await untilIdle();
 
     wrapper
-      .find('[data-testid="sleutel-intrekken-sel-abc123"]')
+      .find('[data-testid="key-revoke-sel-abc123"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await untilIdle();
 
     expect(backend.data.keys[0]!.status).toBe('revoked');
-    const row = wrapper.find('[data-testid="sleutel-sel-abc123"]');
+    const row = wrapper.find('[data-testid="key-sel-abc123"]');
     expect(row.exists()).toBe(true);
     expect(row.find('nldd-tag').attributes('text')).toBe('Ingetrokken');
     // Nothing left to do with it, so no menu: the row is history now.
-    expect(row.find('[data-testid="sleutel-intrekken-sel-abc123"]').exists()).toBe(false);
+    expect(row.find('[data-testid="key-revoke-sel-abc123"]').exists()).toBe(false);
     expect(row.find('nldd-icon-button').exists()).toBe(false);
   });
 
@@ -965,11 +965,11 @@ describe('TabAccess: secret links', () => {
 
     vi.stubGlobal('fetch', serverErrorFetch());
     wrapper
-      .find('[data-testid="sleutel-intrekken-sel-abc123"]')
+      .find('[data-testid="key-revoke-sel-abc123"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sleutel-sel-abc123"]').find('nldd-tag').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="key-sel-abc123"]').find('nldd-tag').attributes('text')).toBe(
       'Actief',
     );
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
@@ -984,17 +984,17 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
-    await wrapper.find('[data-testid="nieuwe-sleutel-kopieren"]').trigger('click');
+    await wrapper.find('[data-testid="new-key-copy"]').trigger('click');
     await untilIdle();
 
     expect(write).toHaveBeenCalledWith(expect.stringContaining('?key='));
-    const notice = wrapper.find('[data-testid="nieuwe-sleutel-melding"]');
+    const notice = wrapper.find('[data-testid="new-key-notice"]');
     expect(notice.text()).toBe('Link gekopieerd.');
     expect(notice.attributes('role')).toBe('status');
   });
@@ -1003,14 +1003,14 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="sleutel-label"]').element as HTMLInputElement & {
+    const field = wrapper.find('[data-testid="key-label"]').element as HTMLInputElement & {
       value: string;
     };
     // Not every input source is the nldd wrapper's CustomEvent: a plain
     // native 'input' event carries the value on the target instead.
     field.value = 'Van het element zelf';
     field.dispatchEvent(new Event('input'));
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.keys[1]!.label).toBe('Van het element zelf');
@@ -1020,10 +1020,10 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="sleutel-label"]').element;
+    const field = wrapper.find('[data-testid="key-label"]').element;
     // Neither a detail nor a DOM value property: inputValue lands on ''.
     field.dispatchEvent(new Event('input'));
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
 
     // Same as submitting without ever touching the field: the server makes up
@@ -1039,15 +1039,15 @@ describe('TabAccess: secret links', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="sleutel-label"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="key-label"]').element, 'input', {
       value: 'Demo klanten',
     });
-    await wrapper.find('[data-testid="sleutel-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="key-form"]').trigger('submit');
     await untilIdle();
-    await wrapper.find('[data-testid="nieuwe-sleutel-kopieren"]').trigger('click');
+    await wrapper.find('[data-testid="new-key-copy"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-melding"]').text()).toContain(
+    expect(wrapper.find('[data-testid="new-key-notice"]').text()).toContain(
       'Selecteer de link',
     );
   });

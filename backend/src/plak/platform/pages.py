@@ -661,22 +661,22 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
         oidc.check_callback_iss(params, metadata)
 
         if params.get("error"):
-            raise OidcError(f"IdP meldde een fout: {params['error']}", reason=vocabulary.LOGIN_IDP_ERROR)
+            raise OidcError(f"IdP reported an error: {params['error']}", reason=vocabulary.LOGIN_IDP_ERROR)
 
         login_token = request.cookies.get(profile.login_cookie)
         attempt_id = check_signature(settings.session_secret, login_token) if login_token else None
         attempt = store.take_attempt(attempt_id) if attempt_id else None
         if attempt is None or attempt.kind is not profile.kind:
-            raise OidcError("geen geldige login-poging bij deze callback", reason=vocabulary.LOGIN_ATTEMPT_MISSING)
+            raise OidcError("no valid login attempt for this callback", reason=vocabulary.LOGIN_ATTEMPT_MISSING)
 
         state = params.get("state")
         # Compare as bytes: compare_digest on str raises TypeError for non-ASCII.
         if not state or not hmac.compare_digest(state.encode("utf-8"), attempt.state.encode("utf-8")):
-            raise OidcError("state komt niet overeen met de login-poging", reason=vocabulary.LOGIN_STATE_MISMATCH)
+            raise OidcError("state does not match the login attempt", reason=vocabulary.LOGIN_STATE_MISMATCH)
 
         code = params.get("code")
         if not code:
-            raise OidcError("code-parameter ontbreekt", reason=vocabulary.LOGIN_CODE_MISSING)
+            raise OidcError("code parameter is missing", reason=vocabulary.LOGIN_CODE_MISSING)
 
         tokens = await oidc.exchange_code(code, _redirect_uri(request, profile), attempt.code_verifier)
         claims = await oidc.validate_id_token(
@@ -731,7 +731,7 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
                 request.app.state.session_factory, session.sub, session.email, session.email_verified
             )
         except Exception:
-            _logger.exception("Bijwerken van content_viewers overgeslagen (fail-open)")
+            _logger.exception("Updating content_viewers skipped (fail-open)")
 
     target = valid_return_to(attempt.return_to, profile.default_return_to)
     response = RedirectResponse(target, status_code=303)

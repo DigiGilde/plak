@@ -124,14 +124,14 @@ watch(
           <nldd-form @submit.prevent="onSubmit">
             <nldd-form-field :label="t('group.new.name.label')">
               <nldd-text-field
-                name="naam"
+                name="name"
                 :value="name"
                 required
                 :invalid="nameEmpty || undefined"
                 @input="(e: CustomEvent) => { name = (e.detail?.value ?? (e.target as HTMLInputElement).value); onNameInput(); }"
               ></nldd-text-field>
               <nldd-validation-list>
-                <nldd-validation-item id="groep-naam-vereist" required>
+                <nldd-validation-item id="group-name-required" required>
                   {{ t('group.new.name.required') }}
                 </nldd-validation-item>
               </nldd-validation-list>
@@ -144,7 +144,7 @@ watch(
                 required
                 :pattern="SLUG_PATTERN"
                 :invalid="slugInvalid || slugServerError !== null || undefined"
-                :unmet="slugServerError !== null ? 'groep-slug-server' : undefined"
+                :unmet="slugServerError !== null ? 'group-slug-server' : undefined"
                 @input="(e: CustomEvent) => onSlugInput(e.detail?.value ?? (e.target as HTMLInputElement).value)"
               ></nldd-text-field>
               <!-- The list normally reads the value off the field on every
@@ -152,13 +152,13 @@ watch(
                    it does not see that change. `value` hands it the value the app
                    keeps. -->
               <nldd-validation-list :value="slug">
-                <nldd-validation-item id="groep-slug-vereist" required>
+                <nldd-validation-item id="group-slug-required" required>
                   {{ t('group.new.slug.required') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="groep-slug-vorm" hint :match="SLUG_MATCH">
+                <nldd-validation-item id="group-slug-format" hint :match="SLUG_MATCH">
                   {{ t('group.new.slug.pattern') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="groep-slug-server">
+                <nldd-validation-item id="group-slug-server">
                   {{ slugServerError }}
                 </nldd-validation-item>
               </nldd-validation-list>

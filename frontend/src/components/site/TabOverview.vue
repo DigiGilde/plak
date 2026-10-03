@@ -150,9 +150,9 @@ function errorText(f: unknown, fallback: string): string {
   <ErrorBanner v-else-if="error" :error="error" />
 
   <nldd-container v-else-if="siteInfo" layout="stack" gap="24">
-    <section aria-labelledby="kop-status">
+    <section aria-labelledby="heading-status">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4"><h2 id="kop-status">{{ t('site.overview.status.heading') }}</h2></nldd-title>
+        <nldd-title :size="4"><h2 id="heading-status">{{ t('site.overview.status.heading') }}</h2></nldd-title>
         <nldd-container layout="stack" gap="16">
           <template v-if="siteInfo.hasLiveVersion">
             <!-- Both facts about the state of this site, side by side: is it
@@ -163,7 +163,7 @@ function errorText(f: unknown, fallback: string): string {
                 color="neutral"
                 icon="lock-closed"
                 :text="accessLabel(siteInfo.access)"
-                data-testid="zichtbaarheid-tag"
+                data-testid="visibility-tag"
               ></nldd-tag>
             </nldd-container>
             <!-- The site's address is the answer to the whole journey, so it
@@ -171,7 +171,7 @@ function errorText(f: unknown, fallback: string): string {
             <nldd-box>
               <nldd-container layout="stack" gap="12" padding="16">
                 <nldd-container layout="stack" gap="4">
-                  <nldd-text size="sm" data-testid="adres-label">
+                  <nldd-text size="sm" data-testid="address-label">
                     {{ addressLabel }}
                   </nldd-text>
                   <p class="address">
@@ -179,7 +179,7 @@ function errorText(f: unknown, fallback: string): string {
                       :href="liveUrl"
                       target="_blank"
                       size="lg"
-                      data-testid="publieke-url"
+                      data-testid="public-url"
                       >{{ liveUrl }}</nldd-link
                     >
                   </p>
@@ -191,7 +191,7 @@ function errorText(f: unknown, fallback: string): string {
                     :text="t('site.overview.copyAddress')"
                     start-icon="copy"
                     type="button"
-                    data-testid="kopieer-adres"
+                    data-testid="copy-address"
                     @click="copyAddress"
                   ></nldd-button>
                   <nldd-button
@@ -209,11 +209,11 @@ function errorText(f: unknown, fallback: string): string {
                 <nldd-text
                   size="sm"
                   role="status"
-                  data-testid="kopieermelding"
+                  data-testid="copy-notice"
                   >{{ copyNotice }}</nldd-text
                 >
 
-                <nldd-text size="sm" data-testid="zichtbaar-voor">
+                <nldd-text size="sm" data-testid="visible-to">
                   {{ accessSummary(siteInfo.access) }}
                 </nldd-text>
                 <nldd-text size="sm">
@@ -238,9 +238,9 @@ function errorText(f: unknown, fallback: string): string {
       </nldd-container>
     </section>
 
-    <section aria-labelledby="kop-upload">
+    <section aria-labelledby="heading-upload">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4"><h2 id="kop-upload">{{ t('site.overview.publish.heading') }}</h2></nldd-title>
+        <nldd-title :size="4"><h2 id="heading-upload">{{ t('site.overview.publish.heading') }}</h2></nldd-title>
         <nldd-container layout="stack" gap="16">
           <UploadZone :busy="uploadBusy" @file="publish" />
           <ErrorBanner v-if="uploadError" :error="uploadError" />
@@ -248,10 +248,10 @@ function errorText(f: unknown, fallback: string): string {
       </nldd-container>
     </section>
 
-    <section aria-labelledby="kop-gevarenzone">
+    <section aria-labelledby="heading-danger-zone">
       <nldd-box background="critical">
         <nldd-container layout="stack" gap="8" padding="16">
-          <nldd-title :size="4"><h2 id="kop-gevarenzone">{{ t('site.overview.danger.heading') }}</h2></nldd-title>
+          <nldd-title :size="4"><h2 id="heading-danger-zone">{{ t('site.overview.danger.heading') }}</h2></nldd-title>
           <nldd-container layout="stack" gap="16">
             <nldd-rich-text>
               <p>{{ t('site.overview.danger.body') }}</p>
@@ -260,7 +260,7 @@ function errorText(f: unknown, fallback: string): string {
               <nldd-button
                 variant="destructive"
                 :text="t('site.overview.danger.action')"
-                data-testid="verwijder-site"
+                data-testid="delete-site"
                 @click="deleteOpen = true"
               ></nldd-button>
             </nldd-button-group>

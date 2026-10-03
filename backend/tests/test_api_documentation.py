@@ -115,7 +115,7 @@ class TestEveryEndpointIsDescribed:
         without = [
             f"{sorted(route.methods)} {route.path}" for route in _routes(app) if not route.summary
         ]
-        assert without == [], f"routes zonder summary=: {without}"
+        assert without == [], f"routes without summary=: {without}"
 
     def test_every_route_declares_a_response_model(self, app) -> None:
         """A bare `-> dict` yields an empty schema; only a 204 may go without."""
@@ -127,15 +127,15 @@ class TestEveryEndpointIsDescribed:
                 continue
             if not _is_api_model(route.response_model):
                 error.append(f"{sorted(route.methods)} {route.path}: {route.response_model!r}")
-        assert error == [], f"routes zonder pydantic-responsemodel: {error}"
+        assert error == [], f"routes without a pydantic response model: {error}"
 
     def test_every_endpoint_has_a_summary(self, schema) -> None:
         without = [f"{m.upper()} {p}" for m, p, op in _operations(schema) if not op.get("summary")]
-        assert without == [], f"endpoints zonder summary: {without}"
+        assert without == [], f"endpoints without summary: {without}"
 
     def test_every_endpoint_has_a_hint(self, schema) -> None:
         without = [f"{m.upper()} {p}" for m, p, op in _operations(schema) if not op.get("description")]
-        assert without == [], f"endpoints zonder description: {without}"
+        assert without == [], f"endpoints without description: {without}"
 
     def test_every_endpoint_has_a_known_tag(self, schema) -> None:
         known = {tag["name"] for tag in schema.get("tags", [])}
@@ -145,7 +145,7 @@ class TestEveryEndpointIsDescribed:
             for m, p, op in _operations(schema)
             if not op.get("tags") or not set(op["tags"]) <= known
         ]
-        assert error == [], f"endpoints zonder (bekende) tag: {error}"
+        assert error == [], f"endpoints without a (known) tag: {error}"
 
     def test_every_endpoint_has_a_response_model(self, schema) -> None:
         """A successful response points at a schema, or by its status code has
@@ -192,7 +192,7 @@ class TestEveryEndpointIsDescribed:
             for param in op.get("parameters", [])
             if not param.get("description")
         ]
-        assert error == [], f"parameters zonder beschrijving: {error}"
+        assert error == [], f"parameters without description: {error}"
 
     def test_no_response_schema_is_an_empty_object(self, schema) -> None:
         """The regression that provoked all of this: `-> dict` yields `{}`."""
@@ -200,9 +200,9 @@ class TestEveryEndpointIsDescribed:
             for code, response in operation.get("responses", {}).items():
                 for mediatype, content in response.get("content", {}).items():
                     content_schema = content.get("schema", {})
-                    assert content_schema != {}, f"{method_.upper()} {path} {code} {mediatype}: leeg schema"
+                    assert content_schema != {}, f"{method_.upper()} {path} {code} {mediatype}: empty schema"
                     assert content_schema != {"type": "object"}, (
-                        f"{method_.upper()} {path} {code} {mediatype}: schema zonder velden"
+                        f"{method_.upper()} {path} {code} {mediatype}: schema without fields"
                     )
 
 
@@ -229,7 +229,7 @@ class TestErrorContract:
                 content = response.get("content", {})
                 assert list(content) == [PROBLEM_CONTENT_TYPE], f"{method_.upper()} {path} {code}: {list(content)}"
                 assert content[PROBLEM_CONTENT_TYPE]["schema"] == {"$ref": PROBLEM_SCHEMA_REF}
-                assert response.get("description"), f"{method_.upper()} {path} {code}: geen omschrijving"
+                assert response.get("description"), f"{method_.upper()} {path} {code}: no description"
         assert seen >= 60
 
     def test_fastapi_validation_schema_is_replaced(self, schema) -> None:
@@ -254,7 +254,7 @@ class TestErrorContract:
         without = {
             f"{m.upper()} {p}" for m, p, op in _operations(schema) if "401" not in op.get("responses", {})
         }
-        assert without == self.ANONYMOUS, f"endpoints zonder 401: {without - self.ANONYMOUS}"
+        assert without == self.ANONYMOUS, f"endpoints without 401: {without - self.ANONYMOUS}"
 
 
 class TestFieldsAreDescribed:
@@ -264,7 +264,7 @@ class TestFieldsAreDescribed:
             for field, definition in (model.get("properties") or {}).items():
                 if not definition.get("description"):
                     error.append(f"{name}.{field}")
-        assert error == [], f"velden zonder beschrijving: {error}"
+        assert error == [], f"fields without description: {error}"
 
     def test_wire_fields_are_lowercamelcase(self, schema) -> None:
         """The ApiModel base serialises camelCase (NL API Design Rules)."""
@@ -273,7 +273,7 @@ class TestFieldsAreDescribed:
             for field in model.get("properties") or {}:
                 if "_" in field or field[:1].isupper():
                     error.append(f"{name}.{field}")
-        assert error == [], f"velden die geen lowerCamelCase zijn: {error}"
+        assert error == [], f"fields that are not lowerCamelCase: {error}"
 
 
 class TestDeployContract:

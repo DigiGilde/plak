@@ -122,7 +122,7 @@ async function runAction(name: string, testid: string): Promise<void> {
 }
 
 async function search(term: string): Promise<void> {
-  const field = wrapper!.find('[data-testid="leden-zoeken"]');
+  const field = wrapper!.find('[data-testid="members-search"]');
   field.element.dispatchEvent(new CustomEvent('input', { detail: { value: term } }));
   await flushPromises();
 }
@@ -133,7 +133,7 @@ describe('Platform management (filled)', () => {
 
     expect(html()).toContain('Bea Heerder');
     expect(html()).toContain('Wim Weg');
-    expect(actionOf('Wim Weg', 'lid-toegang-lid-2').attributes('text')).toBe('Toegang teruggeven');
+    expect(actionOf('Wim Weg', 'member-access-lid-2').attributes('text')).toBe('Toegang teruggeven');
   });
 
   it('puts the members in a table with fixed columns, so every row aligns on the same x', async () => {
@@ -154,8 +154,8 @@ describe('Platform management (filled)', () => {
     await mountComponent();
 
     // Two states, two verbs, all about access.
-    expect(actionOf('Ada Vermeer', 'lid-toegang-lid-3').attributes('text')).toBe('Toegang intrekken');
-    expect(actionOf('Karel Oud', 'lid-toegang-lid-5').attributes('text')).toBe('Toegang teruggeven');
+    expect(actionOf('Ada Vermeer', 'member-access-lid-3').attributes('text')).toBe('Toegang intrekken');
+    expect(actionOf('Karel Oud', 'member-access-lid-5').attributes('text')).toBe('Toegang teruggeven');
   });
 
   it('puts where someone stands in the role column, and colors it', async () => {
@@ -188,7 +188,7 @@ describe('Platform management (filled)', () => {
     backend.data.loggedInMemberId = 'lid-3';
     const app = await mountComponent();
 
-    const item = actionOf('Bea Heerder', 'lid-toegang-lid-1');
+    const item = actionOf('Bea Heerder', 'member-access-lid-1');
     expect(item.exists()).toBe(true);
     expect(item.attributes('disabled')).toBeDefined();
     expect(item.attributes('details')).toBe('bootstrap-account');
@@ -203,13 +203,13 @@ describe('Platform management (filled)', () => {
     expect(rowWith('Bea Heerder')!.html()).toContain('text="Platformbeheerder"');
     expect(rowWith('Ada Vermeer')!.html()).toContain('text="Lid"');
 
-    expect(actionOf('Ada Vermeer', 'lid-rol-lid-3').attributes('text')).toBe('Maak platformbeheerder');
+    expect(actionOf('Ada Vermeer', 'member-role-lid-3').attributes('text')).toBe('Maak platformbeheerder');
 
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
+    await runAction('Ada Vermeer', 'member-role-lid-3');
 
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('admin');
     // And the menu now offers the reverse.
-    expect(actionOf('Ada Vermeer', 'lid-rol-lid-3').attributes('text')).toBe('Beheerdersrol afnemen');
+    expect(actionOf('Ada Vermeer', 'member-role-lid-3').attributes('text')).toBe('Beheerdersrol afnemen');
   });
 
   it('names the action column for a screen reader without putting the heading on screen', async () => {
@@ -219,7 +219,7 @@ describe('Platform management (filled)', () => {
     // No visible text: at 3rem "Acties" wrapped over two lines.
     expect(last.attributes('text')).toBeUndefined();
     // A name, though, otherwise the column header is an axe violation.
-    expect(last.find('.alleen-schermlezer').text()).toBe('Acties');
+    expect(last.find('.visually-hidden').text()).toBe('Acties');
   });
 
   it('gives every row one menu, right-aligned on the same edge', async () => {
@@ -274,7 +274,7 @@ describe('Platform management (filled)', () => {
   // BUG (found while writing this test, not fixed here): the comment on
   it('sorts by role, admins first when descending and last when ascending', async () => {
     await mountComponent();
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
+    await runAction('Ada Vermeer', 'member-role-lid-3');
 
     await sortOn('Rol');
     expect(ariaSortOf('Rol')).toBe('descending');
@@ -382,24 +382,24 @@ describe('Platform management (filled)', () => {
 
     await mountComponent();
 
-    const toegang = actionOf('Ada Vermeer', 'lid-toegang-lid-3');
+    const toegang = actionOf('Ada Vermeer', 'member-access-lid-3');
     expect(toegang.attributes('disabled')).toBeDefined();
     expect(toegang.attributes('details')).toBe('laatste beheerder');
 
-    const rol = actionOf('Ada Vermeer', 'lid-rol-lid-3');
+    const rol = actionOf('Ada Vermeer', 'member-role-lid-3');
     expect(rol.attributes('disabled')).toBeDefined();
     expect(rol.attributes('details')).toBe('laatste beheerder');
   });
 
   it('demotes a platform admin back to member', async () => {
     await mountComponent();
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
+    await runAction('Ada Vermeer', 'member-role-lid-3');
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('admin');
 
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
+    await runAction('Ada Vermeer', 'member-role-lid-3');
 
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('member');
-    expect(actionOf('Ada Vermeer', 'lid-rol-lid-3').attributes('text')).toBe(
+    expect(actionOf('Ada Vermeer', 'member-role-lid-3').attributes('text')).toBe(
       'Maak platformbeheerder',
     );
   });
@@ -420,10 +420,10 @@ describe('Platform management (filled)', () => {
     );
     await mountComponent();
 
-    await runAction('Ada Vermeer', 'lid-rol-lid-3');
+    await runAction('Ada Vermeer', 'member-role-lid-3');
 
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('member');
-    expect(actionOf('Ada Vermeer', 'lid-rol-lid-3').attributes('text')).toBe(
+    expect(actionOf('Ada Vermeer', 'member-role-lid-3').attributes('text')).toBe(
       'Maak platformbeheerder',
     );
     const notice = document.querySelector('nldd-notification') as
@@ -440,7 +440,7 @@ describe('Platform management (filled)', () => {
   it('falls back to the native input value for an input event without a detail', async () => {
     const app = await mountComponent();
 
-    const field = app.find('[data-testid="leden-zoeken"]').element as HTMLInputElement;
+    const field = app.find('[data-testid="members-search"]').element as HTMLInputElement;
     field.value = 'zoë';
     field.dispatchEvent(new Event('input'));
     await flushPromises();
@@ -478,12 +478,12 @@ describe('Platform management (filled)', () => {
   it('gives a deactivated member access back', async () => {
     await mountComponent();
 
-    await runAction('Wim Weg', 'lid-toegang-lid-2');
+    await runAction('Wim Weg', 'member-access-lid-2');
 
     expect(backend.data.members.find((l) => l.id === 'lid-2')?.status).toBe('active');
     // Access restored, so the menu now offers the reverse and the
     // overline is gone.
-    expect(actionOf('Wim Weg', 'lid-toegang-lid-2').attributes('text')).toBe('Toegang intrekken');
+    expect(actionOf('Wim Weg', 'member-access-lid-2').attributes('text')).toBe('Toegang intrekken');
     expect(rowWith('Wim Weg')!.findAll('nldd-text-cell')[1]!.attributes('text')).toBe('Lid');
   });
 
@@ -503,10 +503,10 @@ describe('Platform management (filled)', () => {
     );
     await mountComponent();
 
-    actionOf('Wim Weg', 'lid-toegang-lid-2').element.dispatchEvent(new CustomEvent('select'));
+    actionOf('Wim Weg', 'member-access-lid-2').element.dispatchEvent(new CustomEvent('select'));
     await flushPromises();
 
-    expect(actionOf('Wim Weg', 'lid-toegang-lid-2').attributes('text')).toBe('Toegang intrekken');
+    expect(actionOf('Wim Weg', 'member-access-lid-2').attributes('text')).toBe('Toegang intrekken');
     expect(backend.data.members.find((l) => l.id === 'lid-2')?.status).toBe('deactivated');
 
     release();
@@ -531,9 +531,9 @@ describe('Platform management (filled)', () => {
     );
     await mountComponent();
 
-    await runAction('Wim Weg', 'lid-toegang-lid-2');
+    await runAction('Wim Weg', 'member-access-lid-2');
 
-    expect(actionOf('Wim Weg', 'lid-toegang-lid-2').attributes('text')).toBe('Toegang teruggeven');
+    expect(actionOf('Wim Weg', 'member-access-lid-2').attributes('text')).toBe('Toegang teruggeven');
     // nldd-notification moves itself into its own region in the body, so it no
     // longer sits under the page's element.
     const notice = document.querySelector('nldd-notification') as
@@ -546,11 +546,11 @@ describe('Platform management (filled)', () => {
   it('revokes access from an active member', async () => {
     await mountComponent();
 
-    await runAction('Ada Vermeer', 'lid-toegang-lid-3');
+    await runAction('Ada Vermeer', 'member-access-lid-3');
 
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.status).toBe('deactivated');
     // Revoked reads differently from pending: this account was on before.
-    expect(actionOf('Ada Vermeer', 'lid-toegang-lid-3').attributes('text')).toBe('Toegang teruggeven');
+    expect(actionOf('Ada Vermeer', 'member-access-lid-3').attributes('text')).toBe('Toegang teruggeven');
     expect(rowWith('Ada Vermeer')!.findAll('nldd-text-cell')[1]!.attributes('text')).toBe(
       'Geen toegang',
     );

@@ -10,7 +10,7 @@ const VALUE = 'AbCdEfGh.geheimeverifier';
 
 function makeWrapper() {
   return mount(SecretLink, {
-    props: { value: VALUE, siteUrl: SITE, prefix: 'nieuwe-sleutel' },
+    props: { value: VALUE, siteUrl: SITE, prefix: 'new-key' },
   });
 }
 
@@ -22,27 +22,27 @@ describe('Secret link: two ways to share', () => {
   it('shows the full link, the link without the code and the code separately', () => {
     const wrapper = makeWrapper();
 
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-link"]').text()).toBe(
+    expect(wrapper.find('[data-testid="new-key-link"]').text()).toBe(
       `${SITE}?key=${VALUE}`,
     );
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-link-zonder-code"]').text()).toBe(
+    expect(wrapper.find('[data-testid="new-key-link-without-code"]').text()).toBe(
       `${SITE}?key=AbCdEfGh`,
     );
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-code"]').text()).toBe('geheimeverifier');
+    expect(wrapper.find('[data-testid="new-key-code"]').text()).toBe('geheimeverifier');
   });
 
   it('does not carry the code in the link without the code', () => {
     const wrapper = makeWrapper();
 
-    const bare = wrapper.find('[data-testid="nieuwe-sleutel-link-zonder-code"]');
+    const bare = wrapper.find('[data-testid="new-key-link-without-code"]');
     expect(bare.text()).not.toContain('geheimeverifier');
     expect(bare.attributes('href')).toBe(`${SITE}?key=AbCdEfGh`);
   });
 
   it.each([
-    ['nieuwe-sleutel-kopieren', `${SITE}?key=${VALUE}`, 'Link gekopieerd.'],
-    ['nieuwe-sleutel-kopieren-zonder-code', `${SITE}?key=AbCdEfGh`, 'Link zonder code gekopieerd.'],
-    ['nieuwe-sleutel-code-kopieren', 'geheimeverifier', 'Code gekopieerd.'],
+    ['new-key-copy', `${SITE}?key=${VALUE}`, 'Link gekopieerd.'],
+    ['new-key-copy-without-code', `${SITE}?key=AbCdEfGh`, 'Link zonder code gekopieerd.'],
+    ['new-key-code-copy', 'geheimeverifier', 'Code gekopieerd.'],
   ])('copies via %s and confirms it beside the button', async (testid, copied, notice) => {
     const write = vi.fn().mockResolvedValue(undefined);
     withClipboard(write);
@@ -52,7 +52,7 @@ describe('Secret link: two ways to share', () => {
     await wrapper.vm.$nextTick();
 
     expect(write).toHaveBeenCalledWith(copied);
-    const line = wrapper.find('[data-testid="nieuwe-sleutel-melding"]');
+    const line = wrapper.find('[data-testid="new-key-notice"]');
     expect(line.text()).toBe(notice);
     expect(line.attributes('role')).toBe('status');
   });
@@ -61,15 +61,15 @@ describe('Secret link: two ways to share', () => {
     withClipboard(vi.fn().mockRejectedValue(new Error('geen toestemming')));
     const wrapper = makeWrapper();
 
-    await wrapper.find('[data-testid="nieuwe-sleutel-kopieren"]').trigger('click');
+    await wrapper.find('[data-testid="new-key-copy"]').trigger('click');
     await wrapper.vm.$nextTick();
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-melding"]').text()).toContain(
+    expect(wrapper.find('[data-testid="new-key-notice"]').text()).toContain(
       'Selecteer de link',
     );
 
-    await wrapper.find('[data-testid="nieuwe-sleutel-code-kopieren"]').trigger('click');
+    await wrapper.find('[data-testid="new-key-code-copy"]').trigger('click');
     await wrapper.vm.$nextTick();
-    expect(wrapper.find('[data-testid="nieuwe-sleutel-melding"]').text()).toContain(
+    expect(wrapper.find('[data-testid="new-key-notice"]').text()).toContain(
       'Selecteer de code',
     );
   });
@@ -86,7 +86,7 @@ describe('Secret link: two ways to share', () => {
   it('has no axe violations', async () => {
     // Attached to the document: axe runs against a page, not a loose fragment.
     const wrapper = mount(SecretLink, {
-      props: { value: VALUE, siteUrl: SITE, prefix: 'nieuwe-sleutel' },
+      props: { value: VALUE, siteUrl: SITE, prefix: 'new-key' },
       attachTo: document.body,
     });
 
@@ -97,10 +97,10 @@ describe('Secret link: two ways to share', () => {
 
   it('falls back to an empty code when the value has no dot', () => {
     const wrapper = mount(SecretLink, {
-      props: { value: 'AbCdEfGh', siteUrl: SITE, prefix: 'klaar-sleutel' },
+      props: { value: 'AbCdEfGh', siteUrl: SITE, prefix: 'done-key' },
     });
 
-    expect(wrapper.find('[data-testid="klaar-sleutel-code"]').text()).toBe('');
-    expect(wrapper.find('[data-testid="klaar-sleutel-link"]').text()).toBe(`${SITE}?key=AbCdEfGh`);
+    expect(wrapper.find('[data-testid="done-key-code"]').text()).toBe('');
+    expect(wrapper.find('[data-testid="done-key-link"]').text()).toBe(`${SITE}?key=AbCdEfGh`);
   });
 });

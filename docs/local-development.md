@@ -251,11 +251,11 @@ platform role `admin` and status `active` on the first `/admin` login
 `http://beheer.plak.localhost:8080/-/login`; there is no
 choice screen, every login comes in as `dev-beheerder`.
 
-Next to the `authorization_code` rule the mock server has the same rule for
-`refresh_token`, because the periodic re-validation at the IdP
+Alongside the `authorization_code` rule, the mock server has the same rule for
+`refresh_token`, because the periodic revalidation with the IdP
 (`PLAK_IDP_RECHECK_SECONDS`, `auth/revalidation.py`) refreshes with it.
 Without that rule the mock would answer a refresh with different claims and
-the re-validation would drop the session on a sub mismatch.
+the revalidation would drop the session on a sub mismatch.
 
 To test other member profiles (a deactivated member or an ordinary
 group member, for instance), adjust `tokenCallbacks` with an extra
@@ -293,7 +293,7 @@ Two things to know while using it:
 - Do not run the e2e suite against a stack started this way. That suite has
   its own stack and its own config (`e2e/mock-oidc-config.e2e.json`), so
   `just e2e` is unaffected either way.
-- The periodic re-validation against the IdP (`PLAK_IDP_RECHECK_SECONDS`,
+- The periodic revalidation against the IdP (`PLAK_IDP_RECHECK_SECONDS`,
   default 900) refreshes with a `refresh_token` grant, which carries no
   subject field for the mock to match on. A session may therefore be dropped
   after a quarter of an hour in this mode; log in again.
@@ -333,8 +333,8 @@ to the issuer derived from `OIDC_DISCOVERY_URL` just the same. In dev nothing
 changes: the mock runs on `http://oidc.plak.localhost:8080/default`.
 
 Whatever the environment, the app logs one INFO line at startup naming the
-issuer and the client id (`OIDC-koppeling: issuer ..., client_id ...`), so a
-wrong coupling is visible in the first lines of the log instead of only in a
+issuer and the client id (`OIDC configuration: issuer ..., client_id ...`), so a
+wrong configuration is visible in the first lines of the log instead of only in a
 failing login. No secret is ever in that line.
 
 ### On ZAD (Keycloak)

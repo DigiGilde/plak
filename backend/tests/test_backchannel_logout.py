@@ -369,7 +369,7 @@ async def test_a_replayed_jti_is_refused_before_verification() -> None:
         response = await _post_refused_before_verification(app, client, token)
 
     assert response.status_code == 400
-    assert response.json()["error_description"] == "logout_token is al gebruikt"
+    assert response.json()["error_description"] == "logout_token has already been used"
 
 
 async def test_a_jti_lost_to_the_precheck_race_is_still_refused_after_validation() -> None:
@@ -387,7 +387,7 @@ async def test_a_jti_lost_to_the_precheck_race_is_still_refused_after_validation
 
     assert first.status_code == 200
     assert second.status_code == 400
-    assert second.json()["error_description"] == "logout_token is al gebruikt"
+    assert second.json()["error_description"] == "logout_token has already been used"
 
 
 async def test_a_valid_token_still_ends_the_session_with_the_prefilter_in_place() -> None:

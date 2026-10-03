@@ -56,7 +56,7 @@ function meFetch(status: number): typeof fetch {
 async function makeWrapper(status: number) {
   vi.stubGlobal('fetch', meFetch(status));
   const mounted = mount(Start, {
-    global: { stubs: { Overview: { template: '<div data-testid="overzicht"></div>' } } },
+    global: { stubs: { Overview: { template: '<div data-testid="overview"></div>' } } },
   });
   await flushPromises();
   return mounted;
@@ -66,14 +66,14 @@ describe('Start: the three session states', () => {
   it('shows the overview to an active member', async () => {
     wrapper = await makeWrapper(200);
 
-    expect(wrapper.find('[data-testid="overzicht"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(true);
     expect(wrapper.findComponent(Landing).exists()).toBe(false);
   });
 
   it('shows the login explanation without a session', async () => {
     wrapper = await makeWrapper(401);
 
-    expect(wrapper.find('[data-testid="overzicht"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(false);
     expect(wrapper.findComponent(Landing).props()).toMatchObject({
       state: 'no-session',
       reason: '',
@@ -83,7 +83,7 @@ describe('Start: the three session states', () => {
   it('shows the withdrawn explanation with the backend\'s reason for a blocked session', async () => {
     wrapper = await makeWrapper(403);
 
-    expect(wrapper.find('[data-testid="overzicht"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(false);
     expect(wrapper.findComponent(Landing).props()).toMatchObject({
       state: 'awaiting-activation',
       reason: WITHDRAWN,
@@ -105,6 +105,6 @@ describe('Start: the three session states', () => {
       .vm.$emit('refreshed', { state: 'active', member: null, reason: '' });
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="overzicht"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(true);
   });
 });

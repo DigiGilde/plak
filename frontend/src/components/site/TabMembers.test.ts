@@ -28,13 +28,13 @@ type Wrapper = ReturnType<typeof makeWrapper>;
 
 function inheritedNames(wrapper: Wrapper): (string | undefined)[] {
   return wrapper
-    .find('[data-testid="leden-via-groep-lijst"]')
+    .find('[data-testid="members-via-group-list"]')
     .findAll('nldd-table-row:not([slot="header"])')
     .map((row) => row.find('nldd-text-cell').attributes('text'));
 }
 
 function siteRows(wrapper: Wrapper) {
-  return wrapper.find('[data-testid="leden-lijst"]').findAll('nldd-table-row:not([slot="header"])');
+  return wrapper.find('[data-testid="members-list"]').findAll('nldd-table-row:not([slot="header"])');
 }
 
 function siteRowTexts(wrapper: Wrapper): (string | undefined)[][] {
@@ -56,7 +56,7 @@ async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   field.dispatchEvent(new CustomEvent('input', { detail: { value } }));
   // Only a pick is an identifier: the combo box reports one as a `change`.
   field.dispatchEvent(new CustomEvent('change', { detail: { value } }));
-  await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
   await untilIdle();
 }
 
@@ -65,7 +65,7 @@ describe('TabMembers', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="leden-via-groep"]').find('summary').text()).toBe(
+    expect(wrapper.find('[data-testid="members-via-group"]').find('summary').text()).toBe(
       '2 leden via de groep Team Aurora',
     );
     expect(inheritedNames(wrapper)).toEqual(['Bea Heerder', 'Ada Vermeer']);
@@ -95,13 +95,13 @@ describe('TabMembers', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'site-role-remove-zoe@voorbeeld.nl');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(siteRowTexts(wrapper)).toEqual([['Wim Weg', 'Redacteur']]);
     expect(inheritedNames(wrapper)).toContain('Zoë de Wit');
-    expect(wrapper.find('[data-testid="leden-via-groep"]').find('summary').text()).toBe(
+    expect(wrapper.find('[data-testid="members-via-group"]').find('summary').text()).toBe(
       '3 leden via de groep Team Aurora',
     );
   });
@@ -122,7 +122,7 @@ describe('TabMembers', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await runAction(wrapper, 'weg@voorbeeld.nl', 'siterol-weg@voorbeeld.nl-reader');
+    await runAction(wrapper, 'weg@voorbeeld.nl', 'site-role-weg@voorbeeld.nl-reader');
 
     expect(siteRowTexts(wrapper)).toContainEqual(['Wim Weg', 'Lezer']);
     expect(backend.data.siteRoles).toContainEqual({
@@ -137,8 +137,8 @@ describe('TabMembers', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await runAction(wrapper, 'weg@voorbeeld.nl', 'siterol-weghalen-weg@voorbeeld.nl');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await runAction(wrapper, 'weg@voorbeeld.nl', 'site-role-remove-weg@voorbeeld.nl');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(siteRowTexts(wrapper)).toEqual([['Zoë de Wit', 'Beheerder']]);
@@ -167,7 +167,7 @@ describe('TabMembers', () => {
 
       expect(
         wrapper
-          .find('[data-testid="siterol-suggesties"]')
+          .find('[data-testid="site-role-suggestions"]')
           .findAll('nldd-menu-item')
           .map((item) => item.attributes('value')),
       ).toContain('sanne@voorbeeld.nl');

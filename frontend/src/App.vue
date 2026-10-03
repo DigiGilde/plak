@@ -129,7 +129,7 @@ function logout(): void {
 </script>
 
 <template>
-  <nldd-skip-link href="#hoofdinhoud" :text="t('shell.skip')"></nldd-skip-link>
+  <nldd-skip-link href="#main-content" :text="t('shell.skip')"></nldd-skip-link>
   <nldd-app-view>
     <nldd-page>
       <div slot="header">
@@ -248,7 +248,7 @@ function logout(): void {
            <main> around this would produce a second, nested main. This block is
            only the skip link's target, and tabindex really puts focus on it
            instead of only the scroll position. -->
-      <div id="hoofdinhoud" tabindex="-1">
+      <div id="main-content" tabindex="-1">
         <router-view />
       </div>
       <nldd-page-footer slot="footer">

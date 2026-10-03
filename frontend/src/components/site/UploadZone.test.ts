@@ -21,8 +21,8 @@ async function mountComponent() {
   // place in the tree.
   const wrapper = mount(UploadZone);
   await flushPromises();
-  const field = wrapper.find('[data-testid="upload-invoer"]').element;
-  const zone = wrapper.find('[data-testid="sleepzone"]').element;
+  const field = wrapper.find('[data-testid="upload-input"]').element;
+  const zone = wrapper.find('[data-testid="dropzone"]').element;
   return { wrapper, field, zone };
 }
 
@@ -53,7 +53,7 @@ describe('UploadZone: choosing via the field', () => {
     await flushPromises();
 
     expect(field.hasAttribute('invalid')).toBe(true);
-    expect(wrapper.find('[data-testid="sleep-klaar"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -93,13 +93,13 @@ describe('UploadZone: choosing via the field', () => {
 
     fireDetailEvent(field, 'change', { files: [archive()] });
     await flushPromises();
-    expect(wrapper.find('[data-testid="sleep-klaar"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(true);
 
     // Without a detail the field's own FileList is the source, and that is empty.
     field.dispatchEvent(new Event('change'));
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="sleep-klaar"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -109,7 +109,7 @@ describe('UploadZone: choosing via the field', () => {
     const chosen = archive();
 
     fireDetailEvent(field, 'change', { files: [chosen] });
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
 
     expect(wrapper.emitted('file')).toEqual([[chosen]]);
 
@@ -119,7 +119,7 @@ describe('UploadZone: choosing via the field', () => {
   it('emits nothing when no file is chosen', async () => {
     const { wrapper } = await mountComponent();
 
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
 
     expect(wrapper.emitted('file')).toBeUndefined();
 
@@ -186,11 +186,11 @@ describe('UploadZone: dragging', () => {
     fireDrop(zone, 'drop', makeTransfer({ 'site.zip': dropped }));
     await untilQuiet();
 
-    expect(wrapper.find('[data-testid="sleep-klaar"]').attributes('supporting-text')).toContain(
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
       'site.zip',
     );
 
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     expect(wrapper.emitted('file')).toEqual([[dropped]]);
 
     wrapper.unmount();
@@ -212,11 +212,11 @@ describe('UploadZone: dragging', () => {
     );
     await untilQuiet();
 
-    const notice = wrapper.find('[data-testid="sleep-klaar"]').attributes('supporting-text');
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
     expect(notice).toContain('mijn-site');
     expect(notice).toContain('2 bestanden');
 
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     const sent = wrapper.emitted('file')?.[0]?.[0] as File;
     expect(sent.name).toBe('mijn-site.tar.gz');
     expect(sent.size).toBeGreaterThan(0);
@@ -236,7 +236,7 @@ describe('UploadZone: dragging', () => {
     );
     await untilQuiet();
 
-    const notice = wrapper.find('[data-testid="sleep-klaar"]').attributes('supporting-text');
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
     expect(notice).toContain('1 bestand');
     expect(notice).not.toContain('1 bestanden');
 
@@ -258,12 +258,12 @@ describe('UploadZone: dragging', () => {
     );
     await untilQuiet();
 
-    expect(wrapper.find('[data-testid="sleep-fout"]').attributes('supporting-text')).toContain(
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
       'Sleep de map "dist" zelf',
     );
-    expect(wrapper.find('[data-testid="sleep-klaar"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
 
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     expect(wrapper.emitted('file')).toBeUndefined();
 
     wrapper.unmount();
@@ -275,7 +275,7 @@ describe('UploadZone: dragging', () => {
     fireDrop(zone, 'drop', makeTransfer({ 'stijl.css': file('stijl.css') }));
     await untilQuiet();
 
-    expect(wrapper.find('[data-testid="sleep-fout"]').attributes('supporting-text')).toContain(
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
       'stijl.css',
     );
 
@@ -289,7 +289,7 @@ describe('UploadZone: dragging', () => {
     fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
     await untilQuiet();
 
-    expect(wrapper.find('[data-testid="sleep-fout"]').attributes('supporting-text')).toContain(
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
       'Deze browser kan een map niet zelf inpakken',
     );
 
@@ -310,10 +310,10 @@ describe('UploadZone: dragging', () => {
     fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
     await untilQuiet();
 
-    expect(wrapper.find('[data-testid="sleep-fout"]').attributes('supporting-text')).toContain(
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
       'Inpakken is niet gelukt',
     );
-    expect(wrapper.find('[data-testid="sleep-voortgang"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-progress"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -324,8 +324,8 @@ describe('UploadZone: dragging', () => {
     fireDrop(zone, 'drop');
     await untilQuiet(2);
 
-    expect(wrapper.find('[data-testid="sleep-klaar"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="sleep-fout"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
 
     wrapper.unmount();
   });

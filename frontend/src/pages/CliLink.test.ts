@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import { makeMockBackend, type MockBackend } from '@/api/mock';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { serverErrorFetch, untilIdle } from '@/components/site/testHelpers';
-import CliKoppelen from './CliKoppelen.vue';
+import CliLink from './CliLink.vue';
 
 let backend: MockBackend;
 let originalLocation: Location;
@@ -28,11 +28,11 @@ afterEach(() => {
 async function makeWrapper(path: string): Promise<{ wrapper: ReturnType<typeof mount>; router: Router }> {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/cli-link', name: 'cli-link', component: CliKoppelen }],
+    routes: [{ path: '/cli-link', name: 'cli-link', component: CliLink }],
   });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(CliKoppelen, { global: { plugins: [router] } });
+  const wrapper = mount(CliLink, { global: { plugins: [router] } });
   await untilIdle();
   return { wrapper, router };
 }
@@ -81,16 +81,16 @@ function countLookups(): () => number {
  * not come back pre-filled after a login.
  */
 function expectLoginStage(wrapper: ReturnType<typeof mount>): void {
-  const link = wrapper.find('[data-testid="code-inloggen"]');
+  const link = wrapper.find('[data-testid="code-sign-in"]');
   expect(link.exists()).toBe(true);
   expect(link.attributes('href')).toBe(LOGIN_HREF);
   expect(link.attributes('disabled')).toBeUndefined();
   expect(wrapper.find('nldd-title h1').text()).toBe('CLI-sessie koppelen');
   expect(wrapper.text()).toContain('kort nadat je zelf bent ingelogd');
-  expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
+  expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(false);
 }
 
-describe('CliKoppelen: session', () => {
+describe('CliLink: session', () => {
   it('asks an anonymous visitor to sign in, without navigating there itself', async () => {
     backend.data.loggedInMemberId = null;
     const lookups = countLookups();
@@ -135,7 +135,7 @@ describe('CliKoppelen: session', () => {
     const { wrapper } = await makeWrapper('/cli-link?code=abcd-efgh');
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
-    expect(wrapper.find('[data-testid="reden"]').text()).toBe(
+    expect(wrapper.find('[data-testid="reason"]').text()).toBe(
       'Je toegang is ingetrokken door een platformbeheerder.',
     );
     expect(window.location.href).toBe('');
@@ -163,10 +163,10 @@ describe('CliKoppelen: session', () => {
     // The account gets released while the tab stays open: the retry inside
     // Landing checks again and this page picks up from there.
     vi.stubGlobal('fetch', backend.fetch);
-    await wrapper.find('[data-testid="controleer-opnieuw"]').trigger('click');
+    await wrapper.find('[data-testid="check-again"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
   });
 
   it('stays on the blocked screen when a retry finds the account still not active', async () => {
@@ -188,11 +188,11 @@ describe('CliKoppelen: session', () => {
     const { wrapper } = await makeWrapper('/cli-link');
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
 
-    await wrapper.find('[data-testid="controleer-opnieuw"]').trigger('click');
+    await wrapper.find('[data-testid="check-again"]').trigger('click');
     await untilIdle();
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(false);
   });
 
   it('asks for a sign-in when a retry from the blocked screen finds the session gone', async () => {
@@ -216,7 +216,7 @@ describe('CliKoppelen: session', () => {
 
     backend.data.loggedInMemberId = null;
     vi.stubGlobal('fetch', backend.fetch);
-    await wrapper.find('[data-testid="controleer-opnieuw"]').trigger('click');
+    await wrapper.find('[data-testid="check-again"]').trigger('click');
     await untilIdle();
 
     expect(window.location.href).toBe('');
@@ -232,12 +232,12 @@ describe('CliKoppelen: session', () => {
   });
 });
 
-describe('CliKoppelen: entering a code', () => {
+describe('CliLink: entering a code', () => {
   it('asks for a code when none is in the url', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-display"]').exists()).toBe(false);
   });
 
   it('points a member without the CLI yet at the install instructions', async () => {
@@ -253,47 +253,47 @@ describe('CliKoppelen: entering a code', () => {
   it('normalizes and looks up the manually entered code', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    const input = wrapper.find('[data-testid="code-input"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
+    expect(wrapper.find('[data-testid="code-display"]').text()).toBe('ABCD-EFGH');
   });
 
   it('leaves a short code as typed, without a hyphen', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    const input = wrapper.find('[data-testid="code-input"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'ab' } }));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
     // Too short to be a real code either way; the point is no crash and no
     // hyphen inserted into a string shorter than the split point.
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
   });
 
   it('does not look anything up on an empty submit, only marks the field touched', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-invoer"]').attributes('invalid')).toBeDefined();
-    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-input"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="code-display"]').exists()).toBe(false);
   });
 
   it('falls back to the native input value for an input event without a detail', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element as HTMLInputElement;
+    const input = wrapper.find('[data-testid="code-input"]').element as HTMLInputElement;
     input.value = 'abcdefgh';
     input.dispatchEvent(new Event('input'));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
+    expect(wrapper.find('[data-testid="code-display"]').text()).toBe('ABCD-EFGH');
   });
 
   it("shows the server's error message on 429 without a detail of its own", async () => {
@@ -316,9 +316,9 @@ describe('CliKoppelen: entering a code', () => {
     });
     const { wrapper } = await makeWrapper('/cli-link');
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    const input = wrapper.find('[data-testid="code-input"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
     expect(wrapper.html()).toContain('Te veel pogingen. Probeer het zo nog eens.');
@@ -327,17 +327,17 @@ describe('CliKoppelen: entering a code', () => {
   it('shows USER_CODE_UNKNOWN and stays on the input form', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    const input = wrapper.find('[data-testid="code-input"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'ZZZZ-ZZZZ' } }));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
     expect(wrapper.html()).toContain('onbekend, verlopen of al gebruikt');
   });
 });
 
-describe('CliKoppelen: looking up the code via the url', () => {
+describe('CliLink: looking up the code via the url', () => {
   it('looks up the code from the query and shows the data for confirmation', async () => {
     const lookups = countLookups();
 
@@ -345,11 +345,11 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     expect(lookups()).toBe(1);
 
-    expect(wrapper.find('[data-testid="code-weergave"]').text()).toBe('ABCD-EFGH');
-    expect(wrapper.find('[data-testid="code-programma"]').text()).toContain('plak-cli');
-    expect(wrapper.find('[data-testid="code-netwerk"]').text()).toContain('203.0.113.0/24');
-    expect(wrapper.find('[data-testid="code-waarschuwing"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="code-ander-netwerk"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-display"]').text()).toBe('ABCD-EFGH');
+    expect(wrapper.find('[data-testid="code-program"]').text()).toContain('plak-cli');
+    expect(wrapper.find('[data-testid="code-network"]').text()).toContain('203.0.113.0/24');
+    expect(wrapper.find('[data-testid="code-warning"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-other-network"]').exists()).toBe(false);
   });
 
   it('names the account being linked', async () => {
@@ -378,7 +378,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    expect(wrapper.find('[data-testid="code-netwerk"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-network"]').exists()).toBe(false);
   });
 
   it('warns when the request comes from a different network', async () => {
@@ -386,7 +386,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    expect(wrapper.find('[data-testid="code-ander-netwerk"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-other-network"]').exists()).toBe(true);
   });
 
   it("doesn't warn about the network when it's unknown", async () => {
@@ -394,13 +394,13 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    expect(wrapper.find('[data-testid="code-ander-netwerk"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-other-network"]').exists()).toBe(false);
   });
 
   it("doesn't repeat the warning in heading and supporting text", async () => {
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    const warning = wrapper.find('[data-testid="code-waarschuwing"]');
+    const warning = wrapper.find('[data-testid="code-warning"]');
     const heading = warning.attributes('text')!;
     const supporting = warning.attributes('supporting-text')!;
     expect(supporting).not.toContain(heading);
@@ -412,16 +412,16 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    expect(wrapper.find('[data-testid="code-programma"]').text()).toContain('Onbekend programma');
+    expect(wrapper.find('[data-testid="code-program"]').text()).toContain('Onbekend programma');
   });
 
   it('links after Koppelen and shows the success message', async () => {
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-gekoppeld"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-linked"]').exists()).toBe(true);
     expect(backend.data.deviceAuthorizations[0]!.status).toBe('approved');
     expect(backend.data.cliSessions.some((s) => s.clientName === 'plak-cli')).toBe(true);
   });
@@ -429,10 +429,10 @@ describe('CliKoppelen: looking up the code via the url', () => {
   it('refuses after Weigeren and grants no access', async () => {
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 
-    await wrapper.find('[data-testid="code-weigeren"]').trigger('click');
+    await wrapper.find('[data-testid="code-deny"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-geweigerd"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-denied"]').exists()).toBe(true);
     expect(backend.data.deviceAuthorizations[0]!.status).toBe('denied');
   });
 
@@ -441,12 +441,12 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     vi.stubGlobal('fetch', refusingFetch(notFresh));
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
     expect(window.location.href).toBe('');
     expectLoginStage(wrapper);
-    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-display"]').exists()).toBe(false);
     expect(backend.data.deviceAuthorizations[0]!.status).toBe('pending');
   });
 
@@ -455,7 +455,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     vi.stubGlobal('fetch', refusingFetch(notFresh));
 
-    await wrapper.find('[data-testid="code-weigeren"]').trigger('click');
+    await wrapper.find('[data-testid="code-deny"]').trigger('click');
     await untilIdle();
 
     expect(window.location.href).toBe('');
@@ -484,10 +484,10 @@ describe('CliKoppelen: looking up the code via the url', () => {
       );
     });
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
     expect(wrapper.html()).toContain('Even geduld, probeer het zo weer.');
   });
 
@@ -512,10 +512,10 @@ describe('CliKoppelen: looking up the code via the url', () => {
       );
     });
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
     expect(wrapper.html()).toContain('Te veel pogingen. Probeer het zo nog eens.');
   });
 
@@ -541,10 +541,10 @@ describe('CliKoppelen: looking up the code via the url', () => {
       );
     });
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="code-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="code-form"]').exists()).toBe(true);
     expect(wrapper.html()).toContain('onbekend, verlopen of al gebruikt');
   });
 
@@ -559,7 +559,7 @@ describe('CliKoppelen: looking up the code via the url', () => {
       return serverErrorFetch()(input, init);
     });
 
-    await wrapper.find('[data-testid="code-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
     await untilIdle();
 
     expect(wrapper.html()).toContain('Serverfout');
@@ -572,16 +572,16 @@ describe('CliKoppelen: looking up the code via the url', () => {
 
     expect(window.location.href).toBe('');
     expectLoginStage(wrapper);
-    expect(wrapper.find('[data-testid="code-weergave"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-display"]').exists()).toBe(false);
   });
 
   it('asks for a fresh sign-in when a typed code meets SESSION_NOT_FRESH', async () => {
     const { wrapper } = await makeWrapper('/cli-link');
     vi.stubGlobal('fetch', refusingFetch(notFresh));
 
-    const input = wrapper.find('[data-testid="code-invoer"]').element;
+    const input = wrapper.find('[data-testid="code-input"]').element;
     input.dispatchEvent(new CustomEvent('input', { detail: { value: 'abcdefgh' } }));
-    await wrapper.find('[data-testid="code-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="code-form"]').trigger('submit');
     await untilIdle();
 
     expect(window.location.href).toBe('');

@@ -167,7 +167,7 @@ watch(siteSheetOpen, (open) => {
       v-if="dropTargetActive && canPublishHere"
       variant="accent"
       :text="t('group.drop.release')"
-      data-testid="overzicht-sleep-actief"
+      data-testid="overview-drag-active"
     ></nldd-banner>
 
     <nldd-banner
@@ -175,7 +175,7 @@ watch(siteSheetOpen, (open) => {
       variant="critical"
       dismissible
       :text="dropError"
-      data-testid="overzicht-sleep-fout"
+      data-testid="overview-drag-error"
       @dismiss="dropError = null"
     ></nldd-banner>
 
@@ -195,14 +195,14 @@ watch(siteSheetOpen, (open) => {
         variant="primary"
         :text="t('group.action.publishSite')"
         icon="plus"
-        data-testid="overzicht-publiceren"
+        data-testid="overview-publish"
         @action-click="publish()"
       >
         <nldd-menu placement="bottom-end">
           <nldd-menu-item
             :text="t('group.action.newGroup')"
             icon="folder-on-folder"
-            data-testid="overzicht-groep-aanmaken"
+            data-testid="overview-group-create"
             @select="groupSheetOpen = true"
           ></nldd-menu-item>
         </nldd-menu>
@@ -235,7 +235,7 @@ watch(siteSheetOpen, (open) => {
         variant="primary"
         :text="t('group.action.publishSite')"
         start-icon="plus"
-        data-testid="overzicht-leeg-publiceren"
+        data-testid="overview-empty-publish"
         @click="publish()"
       ></nldd-button>
     </nldd-inline-dialog>

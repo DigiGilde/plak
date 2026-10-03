@@ -101,7 +101,7 @@ class IdpUnavailableError(OidcError):
 class ClientRejectedError(IdpUnavailableError):
     """Soft failure of the loud kind: the token endpoint refused our client
     rather than the session (wrong secret, the refresh grant switched off, the
-    client gone). Nobody is logged out over our own broken coupling, but an
+    client gone). Nobody is logged out over our own broken connection, but an
     operator has to hear about it. `code` is the OAuth error code."""
 
     def __init__(self, message: str, *, code: str) -> None:
@@ -210,9 +210,9 @@ def unverified_logout_token_jti(token: str) -> str | None:
 def _check_sub_exp_iat(claims: Mapping[str, Any]) -> None:
     """joserfc treats `exp` and `iat` as optional, so demand them ourselves."""
     if not claims.get("sub"):
-        raise OidcError("id-token sub ontbreekt")
+        raise OidcError("ID token sub is missing")
     if "exp" not in claims or "iat" not in claims:
-        raise OidcError("id-token exp of iat ontbreekt")
+        raise OidcError("ID token exp or iat is missing")
 
 
 def _error_code(response: httpx.Response) -> str | None:
@@ -251,9 +251,9 @@ class OidcClient:
         )
         if not self.required_acr:
             message = (
-                "PLAK_OIDC_REQUIRED_ACR is leeg: de acr-claim van het id-token wordt niet "
-                "gecontroleerd en er wordt geen acr_values meegestuurd; het "
-                "authenticatieniveau hangt dan volledig af van de OP (%s)"
+                "PLAK_OIDC_REQUIRED_ACR is empty: the acr claim of the ID token is not "
+                "checked and no acr_values is sent; the "
+                "authentication level then depends entirely on the OP (%s)"
             )
             if settings.environment == "productie":
                 _logger.warning(message, settings.oidc_issuer)
@@ -270,12 +270,12 @@ class OidcClient:
                 self._private_key = import_key(self._private_jwk)
             except (ValueError, JoseError) as error:
                 raise ConfigurationError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is geen geldige private JWK"
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is not a valid private JWK"
                 ) from error
             self._assertion_alg = {"RSA": "RS256", "EC": "ES256"}.get(self._private_jwk.get("kty"))
             if self._assertion_alg is None:
                 raise ConfigurationError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK moet een RSA- of EC-sleutel zijn"
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK must be an RSA or EC key"
                 )
 
     async def metadata(self) -> dict[str, Any]:
@@ -287,11 +287,11 @@ class OidcClient:
                 data_ = response.json()
             except Exception as error:
                 raise OidcError(
-                    f"discovery-metadata niet op te halen: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
+                    f"discovery metadata cannot be fetched: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
                 ) from error
             if data_.get("issuer") != self._settings.oidc_issuer:
                 raise OidcError(
-                    "issuer in discovery-metadata wijkt af van de configuratie",
+                    "issuer in discovery metadata differs from the configuration",
                     reason=vocabulary.LOGIN_IDP_UNREACHABLE,
                 )
             self._metadata = data_
@@ -308,7 +308,7 @@ class OidcClient:
         except OidcError:  # pragma: no cover - nothing above raises OidcError, only httpx/joserfc errors
             raise
         except Exception as error:
-            raise OidcError(f"JWKS niet op te halen: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE) from error
+            raise OidcError(f"JWKS cannot be fetched: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE) from error
         return self._keyset
 
     async def start_login(self, redirect_uri: str) -> LoginStart:
@@ -362,7 +362,7 @@ class OidcClient:
         if iss is not None:
             if iss != self._settings.oidc_issuer:
                 raise OidcError(
-                    "iss-parameter komt niet overeen met de geconfigureerde issuer",
+                    "iss parameter does not match the configured issuer",
                     reason=vocabulary.LOGIN_ISS_MISMATCH,
                 )
             return
@@ -370,13 +370,13 @@ class OidcClient:
             metadata.get("authorization_response_iss_parameter_supported")
         )
         if required:
-            raise OidcError("iss-parameter ontbreekt in de callback", reason=vocabulary.LOGIN_ISS_MISMATCH)
+            raise OidcError("iss parameter is missing from the callback", reason=vocabulary.LOGIN_ISS_MISMATCH)
 
     def _make_client_assertion(self, token_endpoint: str) -> str:
         private_jwk = self._private_jwk
         if private_jwk is None:
             raise OidcError(
-                "client_assertion vereist PLAK_OIDC_CLIENT_AUTH=private_key_jwt",
+                "client_assertion requires PLAK_OIDC_CLIENT_AUTH=private_key_jwt",
                 reason=vocabulary.LOGIN_IDP_UNREACHABLE,
             )
         now_ = int(time.time())
@@ -430,15 +430,15 @@ class OidcClient:
             )
         except Exception as error:
             raise OidcError(
-                f"token-endpoint niet bereikbaar: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
+                f"token endpoint unreachable: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
             ) from error
         if response.status_code != 200:
-            raise OidcError(f"token-endpoint weigerde de code (status {response.status_code})")
+            raise OidcError(f"token endpoint refused the code (status {response.status_code})")
         data_ = _json_object(response)
         if data_ is None:
-            raise OidcError("token-endpoint gaf status 200 zonder JSON-object terug")
+            raise OidcError("token endpoint returned status 200 without a JSON object")
         if not data_.get("id_token"):
-            raise OidcError("token-antwoord bevat geen id_token")
+            raise OidcError("token response contains no id_token")
         return data_
 
     async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
@@ -463,20 +463,20 @@ class OidcClient:
                 headers=headers,
             )
         except Exception as error:
-            raise IdpUnavailableError(f"token-endpoint niet bereikbaar: {error}") from error
+            raise IdpUnavailableError(f"token endpoint unreachable: {error}") from error
         if response.status_code == 200:
             data_ = _json_object(response)
             if data_ is None:
-                raise IdpUnavailableError("token-endpoint gaf status 200 zonder JSON-object terug")
+                raise IdpUnavailableError("token endpoint returned status 200 without a JSON object")
             return data_
         code = _error_code(response)
         if response.status_code in (400, 401) and code == "invalid_grant":
-            raise RefreshRejectedError("de IdP verwierp het verversingstoken")
+            raise RefreshRejectedError("the IdP rejected the refresh token")
         if code in CLIENT_FAULT_ERRORS:
             raise ClientRejectedError(
-                f"token-endpoint weigerde onze client met '{code}'", code=code
+                f"token endpoint rejected our client with '{code}'", code=code
             )
-        raise IdpUnavailableError(f"token-endpoint gaf status {response.status_code}")
+        raise IdpUnavailableError(f"token endpoint returned status {response.status_code}")
 
     async def validate_refreshed_id_token(self, id_token: str) -> dict[str, Any]:
         """The id token of a refresh: signature, issuer, audience and sub.
@@ -500,29 +500,29 @@ class OidcClient:
 
         iat = claims.get("iat")
         if not isinstance(iat, int) or abs(time.time() - iat) > LOGOUT_TOKEN_MAX_AGE_S:
-            raise OidcError("logout-token heeft geen recente iat")
+            raise OidcError("logout token has no recent iat")
 
         # §2.4 makes both REQUIRED. joserfc checks exp only when it is there,
         # and the replay check in platform/backchannel.py keys on the jti.
         if "exp" not in claims:
-            raise OidcError("logout-token mist exp")
+            raise OidcError("logout token lacks exp")
         jti = claims.get("jti")
         if not isinstance(jti, str) or not jti:
-            raise OidcError("logout-token mist een jti")
+            raise OidcError("logout token lacks a jti")
 
         events = claims.get("events")
         if not isinstance(events, dict) or not isinstance(events.get(BACKCHANNEL_LOGOUT_EVENT), dict):
-            raise OidcError("logout-token mist de backchannel-logout-event")
+            raise OidcError("logout token lacks the backchannel-logout event")
 
         # §2.4: a nonce is what an id token carries, so its presence marks a
         # token that was meant as one and is being replayed here.
         if "nonce" in claims:
-            raise OidcError("logout-token bevat een nonce")
+            raise OidcError("logout token contains a nonce")
 
         sub = claims.get("sub") or None
         sid = claims.get("sid") or None
         if not sub and not sid:
-            raise OidcError("logout-token bevat sub noch sid")
+            raise OidcError("logout token contains neither sub nor sid")
         return LogoutToken(sub=sub, sid=sid, jti=jti)
 
     async def validate_id_token(
@@ -545,14 +545,14 @@ class OidcClient:
         except _UnknownKid as error:
             if not self._may_refresh_kid():
                 raise OidcError(
-                    "token verwijst naar een onbekende sleutel (kid); JWKS-ververscooldown actief"
+                    "token refers to an unknown key (kid); JWKS refresh cooldown active"
                 ) from error
             self._last_kid_refresh = time.monotonic()
             await self._fetch_keyset(force=True)
             try:
                 return await self._decode_id_token(token)
             except _UnknownKid as inner:
-                raise OidcError(f"token ongeldig: {inner}") from inner
+                raise OidcError(f"token invalid: {inner}") from inner
 
     def _may_refresh_kid(self) -> bool:
         if self._last_kid_refresh is None:
@@ -572,14 +572,14 @@ class OidcClient:
             keys = keyset.keys
             if len(keys) == 1:
                 return keys[0]
-            raise OidcError("id-token zonder kid terwijl de JWKS meerdere sleutels bevat")
+            raise OidcError("ID token without kid while the JWKS contains several keys")
 
         try:
             claims = jwt.decode(id_token, _key, registry=self._registry).claims
             # jwt.decode only checks that the payload is JSON; a signed array
             # or scalar would otherwise reach the claim checks as a non-dict.
             if not isinstance(claims, dict):
-                raise OidcError("id-token payload is geen JSON-object")
+                raise OidcError("ID token payload is not a JSON object")
             JWTClaimsRegistry(leeway=60).validate(claims)
         except _UnknownKid:
             raise
@@ -588,7 +588,7 @@ class OidcClient:
         # TypeError: joserfc walks a `crit` header before it type-checks it,
         # so `"crit": 5` escapes as a bare TypeError ahead of any signature.
         except (JoseError, ValueError, TypeError) as error:
-            raise OidcError(f"id-token ongeldig: {error}") from error
+            raise OidcError(f"ID token invalid: {error}") from error
         return claims
 
     def _check_issuer_and_audience(self, claims: Mapping[str, Any]) -> None:
@@ -597,19 +597,19 @@ class OidcClient:
         our client."""
         settings = self._settings
         if claims.get("iss") != settings.oidc_issuer:
-            raise OidcError("token issuer onjuist")
+            raise OidcError("token issuer incorrect")
 
         aud = claims.get("aud")
         if isinstance(aud, str):
             aud = [aud]
         if not aud or settings.oidc_client_id not in aud:
-            raise OidcError("token aud onjuist")
+            raise OidcError("token aud incorrect")
         if len(aud) > 1 and claims.get("azp") != settings.oidc_client_id:
-            raise OidcError("token azp onjuist bij meerdere audiences")
+            raise OidcError("token azp incorrect with multiple audiences")
 
         azp = claims.get("azp")
         if azp is not None and azp != settings.oidc_client_id:
-            raise OidcError("token azp onjuist")
+            raise OidcError("token azp incorrect")
 
     def _check_claims(
         self, claims: Mapping[str, Any], *, nonce: str, access_token: str | None
@@ -618,11 +618,11 @@ class OidcClient:
         _check_sub_exp_iat(claims)
 
         if not nonce or claims.get("nonce") != nonce:
-            raise OidcError("id-token nonce onjuist")
+            raise OidcError("ID token nonce incorrect")
 
         if self.required_acr and claims.get("acr") not in self.required_acr:
             raise OidcError(
-                "id-token acr ontbreekt of staat niet in de vereiste lijst",
+                "ID token acr is missing or not in the required list",
                 reason=vocabulary.LOGIN_ACR_INSUFFICIENT,
             )
 
@@ -630,14 +630,14 @@ class OidcClient:
         if at_hash is not None:
             # RS256/PS256/ES256 all three use SHA-256 for at_hash.
             if not access_token:
-                raise OidcError("at_hash aanwezig maar geen access_token om te controleren")
+                raise OidcError("at_hash present but no access_token to check it against")
             expected = _b64url(hashlib.sha256(access_token.encode("ascii")).digest()[:16])
             # Compare as bytes: compare_digest raises TypeError for non-ASCII
             # str and for anything that is not a str at all.
             if not isinstance(at_hash, str) or not hmac.compare_digest(
                 expected.encode("ascii"), at_hash.encode("utf-8")
             ):
-                raise OidcError("at_hash komt niet overeen met het access_token")
+                raise OidcError("at_hash does not match the access_token")
 
 
 __all__ = [

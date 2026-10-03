@@ -100,7 +100,7 @@ interface TabDefinition {
 }
 
 const TABS = computed<readonly TabDefinition[]>(() => [
-  { name: 'site-overview', label: t('site.tabs.overview'), path: '', testid: 'tab-overzicht' },
+  { name: 'site-overview', label: t('site.tabs.overview'), path: '', testid: 'tab-overview' },
   {
     name: 'site-previews',
     label: t('site.tabs.previews'),
@@ -111,10 +111,10 @@ const TABS = computed<readonly TabDefinition[]>(() => [
     name: 'site-versions',
     label: t('site.tabs.versions'),
     path: 'versions',
-    testid: 'tab-versies',
+    testid: 'tab-versions',
   },
-  { name: 'site-access', label: t('site.tabs.access'), path: 'access', testid: 'tab-toegang' },
-  { name: 'site-members', label: t('site.tabs.members'), path: 'members', testid: 'tab-leden' },
+  { name: 'site-access', label: t('site.tabs.access'), path: 'access', testid: 'tab-access' },
+  { name: 'site-members', label: t('site.tabs.members'), path: 'members', testid: 'tab-members' },
   { name: 'site-deploy', label: t('site.tabs.deploy'), path: 'deploy', testid: 'tab-deploy' },
 ]);
 
@@ -143,7 +143,7 @@ function afterRemoval(): void {
 <template>
   <!-- The deploy tab keeps the reading width itself, so its code can run to
        the work width. -->
-  <nldd-simple-section :class="{ leesbreedte: route.name !== 'site-deploy' }">
+  <nldd-simple-section :class="{ 'reading-width': route.name !== 'site-deploy' }">
     <nldd-activity-indicator v-if="loading" :text="t('site.loading')"></nldd-activity-indicator>
 
     <ErrorBanner v-else-if="error" :error="error" />

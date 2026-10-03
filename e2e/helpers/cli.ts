@@ -47,7 +47,7 @@ export async function cliLoginToken(
   // the suite's existing mock-login helper finishes that the same way the
   // other scenarios do. Race the two outcomes instead of a fixed check
   // right after navigation, since either one takes a round trip to appear.
-  const codeShown = adminPage.getByTestId('code-weergave');
+  const codeShown = adminPage.getByTestId('code-display');
   const loginForm = onMockLoginPage(adminPage);
   await expect(codeShown.or(loginForm)).toBeVisible({ timeout: 15_000 });
   if (await loginForm.isVisible()) {
@@ -55,8 +55,8 @@ export async function cliLoginToken(
     await adminPage.waitForURL((url) => url.href.startsWith(adminUrl), { timeout: 15_000 });
   }
   await expect(codeShown).toContainText(authorization.userCode);
-  await adminPage.getByTestId('code-koppelen').click();
-  await expect(adminPage.getByTestId('code-gekoppeld')).toBeVisible();
+  await adminPage.getByTestId('code-link').click();
+  await expect(adminPage.getByTestId('code-linked')).toBeVisible();
 
   // The approval already happened above, so the first exchange should
   // succeed; a short retry absorbs the AUTHORIZATION_PENDING window on a

@@ -113,8 +113,8 @@ class ChainBreak:
 
     def describe(self) -> str:
         moment = f"{self.occurred_at:%Y-%m-%d %H:%M:%S}"
-        where = "ketenkop" if self.entry_id is None else f"regel {self.entry_id}"
-        return f"keten {self.shard} positie {self.seq} ({where}, {moment}): {self.reason}"
+        where = "chain head" if self.entry_id is None else f"row {self.entry_id}"
+        return f"chain {self.shard} position {self.seq} ({where}, {moment}): {self.reason}"
 
 
 def _hex(value: bytes | None) -> str | None:
@@ -131,7 +131,7 @@ def _break_reason(row) -> str | None:
     purge removes from that end, so its predecessor may legitimately be gone,
     and only a published checkpoint can say whether it went in time. A gap
     between two surviving rows stays a break: a chain holds rows of one
-    retention term, written in order of time, so the purge only ever takes a
+    retention period, written in order of time, so the purge only ever takes a
     prefix and never leaves one.
     """
     if _hex(row.chain_hash) != _hex(row.expected_hash):
@@ -191,8 +191,8 @@ async def verify(dsn: str) -> list[ChainBreak]:
                     continue
                 if row.previous_seq is None and row.chain_seq > 1:
                     _logger.info(
-                        "Keten %d begint op positie %d: wat daarvoor stond is weg. Dat is wat de opruiming doet; "
-                        "alleen een eerder gepubliceerde ketenkop kan opruimen van afkappen onderscheiden.",
+                        "Chain %d starts at position %d: earlier rows are gone, which is expected after a purge; "
+                        "only a previously published chain head can tell a purge apart from truncation.",
                         row.chain_shard,
                         row.chain_seq,
                     )
@@ -223,14 +223,14 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     dsn = os.environ.get(DB_URL_VAR)
     if not dsn:
-        _logger.error("%s is niet gezet; de controle weet niet met welke database ze moet praten.", DB_URL_VAR)
+        _logger.error("%s is not set; the check does not know which database to talk to.", DB_URL_VAR)
         return 1
     breaks = asyncio.run(verify(dsn))
     if not breaks:
-        _logger.info("Auditlogketen is ongeschonden.")
+        _logger.info("Audit log chain is intact.")
         return 0
     for chain_break in breaks:
-        _logger.error("Auditlogketen gebroken: %s", chain_break.describe())
+        _logger.error("Audit log chain broken: %s", chain_break.describe())
     return 1
 
 

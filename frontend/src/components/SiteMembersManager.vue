@@ -382,14 +382,14 @@ function actionsFor(row: Row): RowAction[] {
       text: t('admin.siteMembers.action.setRole', { role: roleLabel(role).toLowerCase() }),
       icon: ROLE_ICONS[role],
       details: widens(row.groupRole, role) ? undefined : keepsViaGroup(row.groupRole!),
-      testid: `siterol-${row.identifier}-${role}`,
+      testid: `site-role-${row.identifier}-${role}`,
       run: () => void onRole(row, role),
     })),
     {
       text: t('admin.siteMembers.action.remove'),
       icon: 'trash',
       destructive: true,
-      testid: `siterol-weghalen-${row.identifier}`,
+      testid: `site-role-remove-${row.identifier}`,
       run: () => {
         removing.value = row;
       },
@@ -456,16 +456,16 @@ async function onRemove(row: Row): Promise<void> {
          keyboard operable by itself, announces its open state, and lets the
          browser find text inside it with ctrl+F while it is closed. NLDD has
          no accordion component, so the styling hangs on its tokens. -->
-    <details v-if="inherited.length > 0" class="via-groep" data-testid="leden-via-groep">
-      <summary data-testid="leden-via-groep-samenvatting">{{ inheritedSummary }}</summary>
+    <details v-if="inherited.length > 0" class="via-group" data-testid="members-via-group">
+      <summary data-testid="members-via-group-summary">{{ inheritedSummary }}</summary>
 
-      <nldd-container layout="stack" gap="8" class="via-groep-inhoud">
+      <nldd-container layout="stack" gap="8" class="via-group-content">
         <nldd-text size="sm">
           {{ inheritedNote[0]
           }}<nldd-link
             :href="groupPath(group, '/-/members')"
             size="inherit"
-            data-testid="leden-naar-groep"
+            data-testid="members-to-group"
           >{{ t('admin.siteMembers.inherited.link', { group: groupName }) }}</nldd-link
           >{{ inheritedNote[1] }}
         </nldd-text>
@@ -473,7 +473,7 @@ async function onRemove(row: Row): Promise<void> {
         <nldd-table
           class="member-table"
           :accessible-label="t('admin.siteMembers.inherited.table')"
-          data-testid="leden-via-groep-lijst"
+          data-testid="members-via-group-list"
           :columns="COLUMNS_INHERITED"
           :sm-columns="COLUMNS_INHERITED_SM"
         >
@@ -499,7 +499,7 @@ async function onRemove(row: Row): Promise<void> {
       <nldd-table
         class="member-table"
         :accessible-label="t('admin.siteMembers.table')"
-        data-testid="leden-lijst"
+        data-testid="members-list"
         :columns="COLUMNS"
         :sm-columns="COLUMNS_SM"
       >
@@ -515,7 +515,7 @@ async function onRemove(row: Row): Promise<void> {
                one icon button says nothing, and a columnheader without a name
                is an axe violation. -->
           <nldd-text-cell horizontal-alignment="right">
-            <span class="alleen-schermlezer">{{ t('admin.column.actions') }}</span>
+            <span class="visually-hidden">{{ t('admin.column.actions') }}</span>
           </nldd-text-cell>
         </nldd-table-row>
         <nldd-inline-dialog
@@ -544,7 +544,7 @@ async function onRemove(row: Row): Promise<void> {
          not one more row of the table above. -->
     <nldd-box>
       <nldd-container layout="stack" padding="16">
-        <nldd-form data-testid="siterol-formulier" @submit.prevent="onAdd">
+        <nldd-form data-testid="site-role-form" @submit.prevent="onAdd">
           <nldd-form-section
             :text="t('admin.siteMembers.form.heading')"
             :supporting-text="t('admin.siteMembers.form.hint')"
@@ -570,14 +570,14 @@ async function onRemove(row: Row): Promise<void> {
                 <nldd-menu
                   :empty-text="emptyText"
                   :filterFn.prop="keepEverySuggestion"
-                  data-testid="siterol-suggesties"
+                  data-testid="site-role-suggestions"
                 >
                   <!-- The footer sits outside role="menu", so it is neither a
                        choosable option nor a stop for arrow keys; it holds no
                        control, so it is no tab stop either. The slot is
                        unpadded, hence the container. -->
                   <nldd-container v-if="startingList" slot="footer" padding="8">
-                    <nldd-text size="sm" data-testid="siterol-verder-zoeken">
+                    <nldd-text size="sm" data-testid="site-role-further-search">
                       {{ t('admin.siteMembers.form.searchFurther') }}
                     </nldd-text>
                   </nldd-container>
@@ -586,7 +586,7 @@ async function onRemove(row: Row): Promise<void> {
                     :key="person.identifier"
                     :text="suggestionText(person)"
                     :value="person.identifier"
-                    :data-testid="`siterol-suggestie-${person.identifier}`"
+                    :data-testid="`site-role-suggestion-${person.identifier}`"
                   ></nldd-menu-item>
                 </nldd-menu>
               </nldd-combo-box>
@@ -597,7 +597,7 @@ async function onRemove(row: Row): Promise<void> {
                    control: the list re-checks on the control's `input` event,
                    and picking from the menu is a `change` without one. -->
               <nldd-validation-list :value="newIdentifier">
-                <nldd-validation-item id="siterol-toevoegen-vereist" required>
+                <nldd-validation-item id="site-role-add-required" required>
                   {{ t('admin.siteMembers.form.identifier.required') }}
                 </nldd-validation-item>
               </nldd-validation-list>
@@ -605,7 +605,7 @@ async function onRemove(row: Row): Promise<void> {
 
             <nldd-form-field :label="t('admin.siteMembers.form.role')">
               <nldd-dropdown>
-                <select v-model="newRole" name="rol" data-testid="siterol-nieuw">
+                <select v-model="newRole" name="role" data-testid="site-role-new">
                   <option v-for="role in ROLES" :key="role" :value="role">
                     {{ roleLabel(role) }}
                   </option>
@@ -614,7 +614,7 @@ async function onRemove(row: Row): Promise<void> {
               <nldd-form-field-help-text>
                 {{ siteRoleHint(newRole) }}
                 <template v-if="roleChangesNothing">
-                  <span data-testid="siterol-geen-effect">{{
+                  <span data-testid="site-role-no-effect">{{
                     t('admin.siteMembers.form.role.noEffect', {
                       role: roleLabel(pickedGroupRole!).toLowerCase(),
                     })
@@ -673,7 +673,7 @@ async function onRemove(row: Row): Promise<void> {
   max-width: var(--plak-table-max-width);
 }
 
-.via-groep {
+.via-group {
   max-width: var(--plak-table-max-width);
   border: var(--semantics-surfaces-border-width, 1px) solid
     var(--semantics-surfaces-base-border-color, #e6e8ea);
@@ -683,21 +683,21 @@ async function onRemove(row: Row): Promise<void> {
 
 /* No display: flex or block here: both drop the native disclosure triangle in
    Chrome and Safari, and there is no component icon to put in its place. */
-.via-groep > summary {
+.via-group > summary {
   padding: 12px 16px;
   cursor: pointer;
   color: var(--semantics-content-color, inherit);
   font: var(--primitives-font-body-md-semi-bold-snug, inherit);
 }
 
-.via-groep > summary:focus-visible {
+.via-group > summary:focus-visible {
   outline: var(--semantics-focus-ring-outline);
   outline-offset: var(--semantics-focus-ring-outline-offset);
   box-shadow: var(--semantics-focus-ring-box-shadow);
   border-radius: var(--semantics-surfaces-corner-radius, 12px);
 }
 
-.via-groep-inhoud {
+.via-group-content {
   padding: 0 16px 16px;
 }
 </style>

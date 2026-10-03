@@ -67,7 +67,7 @@ function savedDetail(choice: LanguageChoice): string {
 }
 
 function testid(choice: LanguageChoice): string {
-  return `taal-${choice ?? 'auto'}`;
+  return `language-${choice ?? 'auto'}`;
 }
 
 async function choose(choice: LanguageChoice): Promise<void> {
@@ -104,7 +104,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <nldd-simple-section class="leesbreedte">
+  <nldd-simple-section class="reading-width">
     <Notices ref="notices" />
 
     <nldd-title :size="1">
@@ -115,26 +115,26 @@ onMounted(() => {
     <nldd-spacer size="24"></nldd-spacer>
 
     <nldd-container layout="stack" gap="24">
-      <section aria-labelledby="kop-account">
+      <section aria-labelledby="heading-account">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-account">{{ t('profile.account.heading') }}</h2>
+            <h2 id="heading-account">{{ t('profile.account.heading') }}</h2>
             <span slot="subtitle">{{ t('profile.account.hint') }}</span>
           </nldd-title>
           <nldd-list variant="box-tinted" :accessible-label="t('profile.account.heading')">
-            <nldd-list-item size="md" data-testid="profiel-naam">
+            <nldd-list-item size="md" data-testid="profile-name">
               <nldd-text-cell
                 :text="`**${t('profile.account.name')}**`"
               ></nldd-text-cell>
               <nldd-text-cell :text="name"></nldd-text-cell>
             </nldd-list-item>
-            <nldd-list-item size="md" data-testid="profiel-email">
+            <nldd-list-item size="md" data-testid="profile-email">
               <nldd-text-cell
                 :text="`**${t('profile.account.email')}**`"
               ></nldd-text-cell>
               <nldd-text-cell :text="email"></nldd-text-cell>
             </nldd-list-item>
-            <nldd-list-item size="md" data-testid="profiel-rol">
+            <nldd-list-item size="md" data-testid="profile-role">
               <nldd-text-cell
                 :text="`**${t('profile.account.role')}**`"
               ></nldd-text-cell>
@@ -144,17 +144,17 @@ onMounted(() => {
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-taal">
+      <section aria-labelledby="heading-language">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-taal">{{ t('profile.language.heading') }}</h2>
+            <h2 id="heading-language">{{ t('profile.language.heading') }}</h2>
             <span slot="subtitle">{{ t('profile.language.subtitle') }}</span>
           </nldd-title>
           <nldd-list
             type="radiogroup"
             variant="box-base"
             :accessible-label="t('profile.language.heading')"
-            data-testid="taalkeuze"
+            data-testid="language-choice"
           >
             <nldd-list-item
               v-for="choice in CHOICES"
@@ -184,16 +184,16 @@ onMounted(() => {
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-sessies">
+      <section aria-labelledby="heading-sessions">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-sessies">{{ t('profile.sessions.heading') }}</h2>
+            <h2 id="heading-sessions">{{ t('profile.sessions.heading') }}</h2>
             <span slot="subtitle">{{ t('profile.sessions.body') }}</span>
           </nldd-title>
           <nldd-rich-text>
             <p>
               {{ t('profile.sessions.install.before')
-              }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="profiel-cli-install"
+              }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="profile-cli-install"
                 >{{ t('profile.sessions.install.link') }}</nldd-link
               >
             </p>
@@ -203,7 +203,7 @@ onMounted(() => {
             start-icon="link"
             :text="t('profile.sessions.link')"
             href="/-/sessions"
-            data-testid="profiel-sessies"
+            data-testid="profile-sessions"
           ></nldd-button>
         </nldd-container>
       </section>

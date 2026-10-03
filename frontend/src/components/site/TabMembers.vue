@@ -91,10 +91,10 @@ function onRemoved(identifier: string): void {
     :text="t('site.members.loading')"
     :complete="!loading || undefined"
   >
-    <section aria-labelledby="kop-siteleden">
+    <section aria-labelledby="heading-site-members">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4">
-          <h2 id="kop-siteleden">{{ t('site.members.heading') }}</h2>
+          <h2 id="heading-site-members">{{ t('site.members.heading') }}</h2>
           <span slot="subtitle">{{ t('site.members.intro') }}</span>
         </nldd-title>
 

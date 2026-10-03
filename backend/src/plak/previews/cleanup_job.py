@@ -170,7 +170,7 @@ async def _record_live_cleanup(
                 )
             )
     except Exception:
-        _logger.exception("Auditregel voor opgeruimde live-versies niet geschreven: %s/%s", group_slug, site_slug)
+        _logger.exception("Audit row for purged live versions not written: %s/%s", group_slug, site_slug)
 
 
 async def _cleanup_old_live_versions(
@@ -261,7 +261,7 @@ async def _run_daily(
             # A transient failure (DB hiccup, ...) must not end the loop: the
             # process would then keep running with no sweep for the rest of
             # its life. Log loud, wait for the next scheduled run.
-            _logger.exception("Dagelijkse opschoning mislukt, volgende poging op de volgende ronde")
+            _logger.exception("Daily cleanup failed, retrying on the next run")
 
 
 @asynccontextmanager

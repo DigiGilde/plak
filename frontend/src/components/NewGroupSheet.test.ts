@@ -35,7 +35,7 @@ describe('NewGroupSheet', () => {
   it('derives the slug from the name as long as the slug field has not been edited manually', async () => {
     const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Digitaal!');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team Digitaal!');
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').element.getAttribute('value')).toBe(
@@ -47,7 +47,7 @@ describe('NewGroupSheet', () => {
     const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
 
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'eigen-slug');
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Digitaal');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team Digitaal');
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('eigen-slug');
@@ -57,7 +57,7 @@ describe('NewGroupSheet', () => {
     const create = vi.fn().mockResolvedValue(newGroup);
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
@@ -71,7 +71,7 @@ describe('NewGroupSheet', () => {
     const create = vi.fn().mockResolvedValue(newGroup);
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'Niet Geldig');
     await flushPromises();
 
@@ -87,7 +87,7 @@ describe('NewGroupSheet', () => {
     const create = vi.fn();
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     // A hyphen at the start survives the normalisation (it is what the next
     // character gets typed after) and is refused on submit, as before.
     typeInText(wrapper, 'nldd-text-field[name="slug"]', '-begin');
@@ -113,7 +113,7 @@ describe('NewGroupSheet', () => {
     await flushPromises();
 
     expect(create).not.toHaveBeenCalled();
-    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-text-field[name="name"]').attributes('invalid')).toBeDefined();
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('invalid')).toBeDefined();
     expect(wrapper.emitted('update:open')).toBeUndefined();
   });
@@ -129,7 +129,7 @@ describe('NewGroupSheet', () => {
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Aurora');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team Aurora');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team-aurora');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
@@ -137,8 +137,8 @@ describe('NewGroupSheet', () => {
     expect(wrapper.find('nldd-banner').exists()).toBe(false);
     const slugField = wrapper.find('nldd-text-field[name="slug"]');
     expect(slugField.attributes('invalid')).toBeDefined();
-    expect(slugField.attributes('unmet')).toBe('groep-slug-server');
-    expect(wrapper.find('nldd-validation-item#groep-slug-server').text()).toContain(
+    expect(slugField.attributes('unmet')).toBe('group-slug-server');
+    expect(wrapper.find('nldd-validation-item#group-slug-server').text()).toContain(
       'bestaat al een groep',
     );
     expect(wrapper.emitted('update:open')).toBeUndefined();
@@ -150,7 +150,7 @@ describe('NewGroupSheet', () => {
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
@@ -172,23 +172,23 @@ describe('NewGroupSheet', () => {
   it('resets the form and closes when the sheet closes itself', async () => {
     const wrapper = mountComponent(vi.fn());
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     await flushPromises();
-    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('Team');
+    expect(wrapper.find('nldd-text-field[name="name"]').attributes('value')).toBe('Team');
 
     await wrapper.find('nldd-sheet').trigger('close');
 
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
-    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('');
+    expect(wrapper.find('nldd-text-field[name="name"]').attributes('value')).toBe('');
   });
 
   it('falls back to the field value on a plain native input event, name field', async () => {
     const wrapper = mountComponent(vi.fn().mockResolvedValue(newGroup));
 
-    typeNative(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeNative(wrapper, 'nldd-text-field[name="name"]', 'Team');
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="naam"]').attributes('value')).toBe('Team');
+    expect(wrapper.find('nldd-text-field[name="name"]').attributes('value')).toBe('Team');
   });
 
   it('falls back to the field value on a plain native input event, slug field', async () => {
@@ -211,7 +211,7 @@ describe('NewGroupSheet', () => {
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team');
     await wrapper.find('nldd-form').trigger('submit');
     await wrapper.find('nldd-form').trigger('submit');
@@ -227,12 +227,12 @@ describe('NewGroupSheet', () => {
     );
     const wrapper = mountComponent(create);
 
-    typeInText(wrapper, 'nldd-text-field[name="naam"]', 'Team Aurora');
+    typeInText(wrapper, 'nldd-text-field[name="name"]', 'Team Aurora');
     typeInText(wrapper, 'nldd-text-field[name="slug"]', 'team-aurora');
     await wrapper.find('nldd-form').trigger('submit');
     await flushPromises();
 
-    expect(wrapper.find('nldd-validation-item#groep-slug-server').text()).toContain(
+    expect(wrapper.find('nldd-validation-item#group-slug-server').text()).toContain(
       'Groep bestaat al',
     );
   });

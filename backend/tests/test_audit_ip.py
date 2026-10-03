@@ -159,7 +159,7 @@ async def test_a_failed_audit_write_gives_503_and_no_ip(client, app, factory, da
     headers = _as_admin(client, app)
 
     async def _boom(*args, **kwargs):
-        raise RuntimeError("auditlog schrijffout")
+        raise RuntimeError("audit log write error")
 
     monkeypatch.setattr(app.state.audit_log, "write_strict_limited", _boom)
     response = await client.post(_reveal_url(entry.id), json={"reason": REASON}, headers=headers)
