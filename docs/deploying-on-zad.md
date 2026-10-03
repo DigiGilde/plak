@@ -297,6 +297,18 @@ reserve. Deploys will be refused soon; free up space or enlarge the volume.`)
 at most once per hour for as long as it lasts. A content root that is not a
 mount point writes an ERROR line once, at startup.
 
+The nightly cleanup also reclaims directories that lost their row (a pod
+stopped between writing a version and recording it, or between deleting the
+row and the files). It moves them into `/content/_reclaimed/`, named
+`<moment>-<site_id>_<version_id>` or `<moment>-<site_id>`, and removes them
+from there after 7 days; until then `mv` puts one back. A WARNING line names
+what moved. When the database and the volume disagree too much, it moves
+nothing and writes an ERROR line instead (`Left ... directories without a
+row in place, the database and the content volume disagree: ...`): a site of which no
+directory has a row, or more versions without a row than with one. That is
+the line to alarm on after restoring a database backup or changing
+`PLAK_DB_URL`.
+
 A platform administrator sees the whole volume in the admin SPA, on
 "Platformbeheer" (`/-/platform`), below the member list: size, used, free and
 the reserve, without any group or site. It is backed by
@@ -394,7 +406,11 @@ task, and `zadctl` has no `job` command. There are three real routes:
 
 Route 1 is the most honest for the first rollout (you see the output), route 2
 is the route as soon as there are regular migrations. Pick one and write it
-down.
+down. A migration that moves version directories (`0003_storage_by_site_id`)
+needs the content volume and `PLAK_CONTENT_ROOT`, which only the app's own pod
+has: it refuses to run without them, so take route 2 for it. Should it stop
+halfway, let the pod start again rather than rolling back to the previous
+image, which only knows the old places of the directories already moved.
 
 Plak runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the

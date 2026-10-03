@@ -926,3 +926,160 @@ async def test_deleting_a_group_does_clean_up_the_last_admin_role(
     await db_connection.execute("DELETE FROM groups WHERE id = $1", group_id)
 
     assert await db_connection.fetchval("SELECT count(*) FROM group_members WHERE group_id = $1", group_id) == 0
+
+
+@pytest.fixture
+async def own_database(postgres_container):
+    """A database of its own at the revision before the storage move, so the
+    shared one stays at head for every other test."""
+    base = postgres_container.get_connection_url(driver=None)
+    name = f"opslag_{uuid.uuid4().hex[:8]}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE DATABASE "{name}"')
+    dsn = f"{base.rsplit('/', 1)[0]}/{name}"
+    try:
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "0002_retention_and_repo_ids")
+        yield dsn
+    finally:
+        await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+        await admin.close()
+
+
+async def _slug_layout_versions(dsn: str, root: pathlib.Path, sites: int, per_site: int) -> list[dict]:
+    """Versions as the layout before site ids stored them: a row with
+    storage_ref {group}/{site}/{id} and an index.html in that directory."""
+    conn = await asyncpg.connect(dsn)
+    try:
+        member_id = await _make_member(conn)
+        group_id = await _make_group(conn)
+        group_slug = await conn.fetchval("SELECT slug FROM groups WHERE id = $1", group_id)
+        versions = []
+        for _ in range(sites):
+            site_id = await _make_site(conn, group_id)
+            site_slug = await conn.fetchval("SELECT slug FROM sites WHERE id = $1", site_id)
+            for _ in range(per_site):
+                version_id = uuid.uuid4()
+                old = f"{group_slug}/{site_slug}/{version_id}"
+                await conn.execute(
+                    "INSERT INTO versions (id, site_id, target, storage_ref, member_id) "
+                    "VALUES ($1, $2, 'live', $3, $4)",
+                    version_id,
+                    site_id,
+                    old,
+                    member_id,
+                )
+                (root / old).mkdir(parents=True)
+                (root / old / "index.html").write_text(str(version_id))
+                versions.append({"id": version_id, "old": old, "new": f"{site_id}/{version_id}"})
+        return versions
+    finally:
+        await conn.close()
+
+
+async def _storage_refs(dsn: str) -> dict[uuid.UUID, str]:
+    conn = await asyncpg.connect(dsn)
+    try:
+        return {row["id"]: row["storage_ref"] for row in await conn.fetch("SELECT id, storage_ref FROM versions")}
+    finally:
+        await conn.close()
+
+
+async def test_the_storage_migration_moves_every_version_to_its_site_id_and_back(
+    own_database: str, tmp_path: pathlib.Path, monkeypatch, caplog
+) -> None:
+    root = tmp_path / "content"
+    versions = await _slug_layout_versions(own_database, root, sites=2, per_site=2)
+    group_slug, site_slug = versions[0]["old"].split("/")[:2]
+    # Left by a publish that never inserted its row.
+    stray = root / group_slug / site_slug / str(uuid.uuid4())
+    stray.mkdir()
+    # Not a group Plak knows: perhaps an operator's, so it stays.
+    (root / "backup").mkdir()
+    (root / "_tmp").mkdir()
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {version["id"]: version["new"] for version in versions}
+    for version in versions:
+        assert (root / version["new"] / "index.html").read_text() == str(version["id"])
+        assert not (root / version["old"]).exists()
+    assert not (root / group_slug).exists()
+    (reclaimed,) = (root / "_reclaimed").iterdir()
+    assert reclaimed.name.endswith(f"-{group_slug}")
+    assert (reclaimed / site_slug / stray.name).is_dir()
+    assert (root / "backup").is_dir()
+    assert any("backup" in record.getMessage() for record in caplog.records)
+
+    await asyncio.to_thread(_alembic, own_database, "downgrade", "0002_retention_and_repo_ids")
+
+    assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
+    for version in versions:
+        assert (root / version["old"] / "index.html").read_text() == str(version["id"])
+    assert {entry.name for entry in root.iterdir()} == {group_slug, "_reclaimed", "_tmp", "backup"}
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {version["id"]: version["new"] for version in versions}
+
+
+async def test_the_storage_migration_finishes_a_run_that_stopped_halfway(
+    own_database: str, tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """The renames are outside the transaction: a run that died after moving
+    the first directory left its row pointing at the old place."""
+    root = tmp_path / "content"
+    moved, waiting = await _slug_layout_versions(own_database, root, sites=1, per_site=2)
+    (root / moved["new"]).parent.mkdir(parents=True)
+    (root / moved["old"]).rename(root / moved["new"])
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {moved["id"]: moved["new"], waiting["id"]: waiting["new"]}
+    assert (root / moved["new"] / "index.html").is_file()
+    assert (root / waiting["new"] / "index.html").is_file()
+
+
+async def test_the_storage_migration_rewrites_a_row_whose_directory_is_missing(
+    own_database: str, tmp_path: pathlib.Path, monkeypatch, caplog
+) -> None:
+    root = tmp_path / "content"
+    present, missing = await _slug_layout_versions(own_database, root, sites=1, per_site=2)
+    (root / missing["old"] / "index.html").unlink()
+    (root / missing["old"]).rmdir()
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {present["id"]: present["new"], missing["id"]: missing["new"]}
+    assert any(missing["old"] in record.getMessage() for record in caplog.records)
+
+
+async def test_the_storage_migration_refuses_a_volume_without_any_version(
+    own_database: str, tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """A volume that is not mounted: every row would end up pointing at a
+    path the real volume lacks, and the cleanup would then reclaim it all."""
+    versions = await _slug_layout_versions(own_database, tmp_path / "content", sites=1, per_site=2)
+    empty = tmp_path / "leeg"
+    empty.mkdir()
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(empty))
+
+    with pytest.raises(RuntimeError, match="is the content volume mounted"):
+        await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
+    assert list(empty.iterdir()) == []
+
+
+async def test_the_storage_migration_needs_the_content_root_when_there_is_something_to_move(
+    own_database: str, tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    versions = await _slug_layout_versions(own_database, tmp_path / "content", sites=1, per_site=1)
+    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
+
+    with pytest.raises(RuntimeError, match="PLAK_CONTENT_ROOT"):
+        await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+
+    assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
