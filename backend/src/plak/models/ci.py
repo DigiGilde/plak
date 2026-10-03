@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, false, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,9 +22,9 @@ class CiProvider(enum.StrEnum):
 
 class SiteRepository(IDMixin, Base):
     """`repository_id` and `owner_id` are the provider's numeric ids, resolved
-    through its REST API when the link is made: they survive a rename or a
-    transfer, which is what makes them the thing to trust rather than the
-    name.
+    through its REST API when the link is made, or entered by an admin for a
+    private repository: they survive a rename, which is what makes them the
+    thing to trust rather than the name.
     """
 
     __tablename__ = "site_repositories"
@@ -42,6 +42,9 @@ class SiteRepository(IDMixin, Base):
     repository_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     owner_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     live_branch: Mapped[str | None] = mapped_column(String, nullable=True)
+    # False while the ids are only what an admin entered: the provider could
+    # not look them up and no trusted CI token has matched them yet.
+    ids_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("members.id", ondelete="SET NULL"), nullable=True
     )

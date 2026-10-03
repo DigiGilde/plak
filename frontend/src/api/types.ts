@@ -214,6 +214,8 @@ export interface SiteRepository {
   ownerId: number;
   /** null means every branch may publish live; previews may always publish from any branch. */
   liveBranch: string | null;
+  /** False while the IDs are only as entered: neither the provider nor a CI token has confirmed them. */
+  idsConfirmed: boolean;
   /** Name or e-mail of whoever linked the repository; empty string if unknown. */
   createdBy: string;
   createdAt: Timestamp;

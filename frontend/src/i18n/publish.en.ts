@@ -100,6 +100,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.repo.anyBranch': 'any branch',
   'publish.deploy.repo.linkedBy': 'Linked by {who}',
   'publish.deploy.repo.unknownWho': 'unknown',
+  'publish.deploy.repo.unconfirmed': 'Not confirmed yet',
+  'publish.deploy.repo.unconfirmedDetail':
+    'Plak could not look this repository up, so its name and IDs are as they were entered. The first publish from the repository confirms the IDs and corrects the name.',
   'publish.deploy.repo.change': 'Change',
   'publish.deploy.repo.unlink': 'Unlink',
   'publish.deploy.repo.empty': 'No repository linked yet',

@@ -100,6 +100,9 @@ export const publishNl = {
   'publish.deploy.repo.anyBranch': 'elke branch',
   'publish.deploy.repo.linkedBy': 'Gekoppeld door {who}',
   'publish.deploy.repo.unknownWho': 'onbekend',
+  'publish.deploy.repo.unconfirmed': 'Nog niet bevestigd',
+  'publish.deploy.repo.unconfirmedDetail':
+    'Plak kon deze repository niet opzoeken, dus de naam en de ids staan zoals ze zijn ingevuld. De eerste publicatie vanuit de repository bevestigt de ids en zet de naam goed.',
   'publish.deploy.repo.change': 'Wijzigen',
   'publish.deploy.repo.unlink': 'Ontkoppelen',
   'publish.deploy.repo.empty': 'Nog geen repository gekoppeld',

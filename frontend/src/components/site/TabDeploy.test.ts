@@ -56,6 +56,18 @@ describe('TabDeploy: linked repository', () => {
     );
     expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('main');
     expect(wrapper.html()).toContain('Bea Heerder');
+    expect(wrapper.find('[data-testid="repository-onbevestigd"]').exists()).toBe(false);
+  });
+
+  it('says the name and ids are as entered while nothing has confirmed them', async () => {
+    backend.data.repositories[0]!.idsConfirmed = false;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const note = wrapper.find('[data-testid="repository-onbevestigd"]');
+    expect(note.attributes('text')).toBe('Nog niet bevestigd');
+    expect(note.attributes('supporting-text')).toContain('zoals ze zijn ingevuld');
   });
 
   it('shows "elke branch" when there is no live branch restriction', async () => {

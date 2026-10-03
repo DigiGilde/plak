@@ -1168,6 +1168,13 @@ class SiteRepositoryOut(ApiModel):
     live_branch: str | None = Field(
         default=None, description="De enige branch die live mag publiceren, of `null`: elke branch.", examples=["main"]
     )
+    ids_confirmed: bool = Field(
+        description=(
+            "Of de ids bevestigd zijn: door de provider bij het koppelen, of door een CI-ID-token dat ze allebei "
+            "droeg. `false` zolang ze alleen zijn zoals ze zijn ingevuld; de naam kan dan ook nog afwijken."
+        ),
+        examples=[True],
+    )
     created_by: str = Field(
         description="Naam of e-mailadres van wie de koppeling maakte; leeg als dat lid verwijderd is."
     )
@@ -2519,6 +2526,7 @@ async def _repository_json(db: AsyncSession, repository: SiteRepository, group_s
         repository_id=repository.repository_id,
         owner_id=repository.owner_id,
         live_branch=repository.live_branch,
+        ids_confirmed=repository.ids_confirmed,
         created_by=(creator.name or creator.email) if creator is not None else "",
         created_at=_iso(repository.created_at),
     )
@@ -3526,6 +3534,23 @@ def make_admin_router() -> APIRouter:
         if repository is None:
             repository = SiteRepository(site_id=site.id)
             db.add(repository)
+        elif repository.ids_confirmed and (
+            repository.provider,
+            repository.host,
+            f"{repository.owner}/{repository.repo}".lower(),
+            repository.repository_id,
+            repository.owner_id,
+        ) == (
+            body.provider,
+            host,
+            f"{resolved.owner}/{resolved.repo}".lower(),
+            resolved.repository_id,
+            resolved.owner_id,
+        ):
+            # Changing the live branch of a private repository keeps what a
+            # token or an earlier lookup confirmed about the same repository.
+            ids_confirmed = True
+        repository.ids_confirmed = ids_confirmed
         repository.provider = body.provider
         repository.host = host
         repository.owner = resolved.owner

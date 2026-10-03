@@ -10,6 +10,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from helpers_ci import FORGEJO_HOST, FORGEJO_ISSUER, MockCi
+from sqlalchemy import update
 
 from plak.audit import vocabulary
 from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer, ProviderClient
@@ -19,7 +20,7 @@ from plak.ci.trust import (
     audit_refs,
     check_live_deploy,
     ci_actor_identifier,
-    follow_rename,
+    follow_token,
     refused_actor_identifier,
     trusted_repository,
 )
@@ -84,6 +85,7 @@ async def _add_repository(
     repository_id: int = 1001,
     owner_id: int = 2002,
     live_branch: str | None = None,
+    ids_confirmed: bool = False,
 ) -> SiteRepository:
     row = SiteRepository(
         id=uuid.uuid4(),
@@ -95,6 +97,7 @@ async def _add_repository(
         repository_id=repository_id,
         owner_id=owner_id,
         live_branch=live_branch,
+        ids_confirmed=ids_confirmed,
     )
     async with factory() as db:
         db.add(row)
@@ -139,6 +142,7 @@ class TestTrustedRepositoryIdPath:
             trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
         assert trusted.repository_id == 1001
         assert trusted.owner_id == 2002
+        assert trusted.confirms_ids is True
 
     async def test_id_mismatch_refused(self, factory):
         site = await _make_site(factory)
@@ -165,6 +169,8 @@ class TestTrustedRepositoryIdPath:
         async with factory() as db:
             trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
         assert trusted.repository_id == 1001
+        # Nothing vouched for the owner id, so the link stays unconfirmed.
+        assert trusted.confirms_ids is False
 
     async def test_github_without_ids_refused(self, factory):
         site = await _make_site(factory)
@@ -223,14 +229,14 @@ class TestTrustedRepositoryName:
         assert trusted.origin == "github.com/minbzk/website"
 
 
-class TestFollowRename:
+class TestFollowToken:
     async def test_stores_the_token_name_and_returns_the_previous_one(self, factory):
         site = await _make_site(factory)
         row = await _add_repository(factory, site, owner="minbzk", repo="oude-naam")
         token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/nieuwe-naam", repository_id="1001")
         async with factory() as db:
             trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
-            previous = await follow_rename(db, site, trusted)
+            previous = await follow_token(db, site, trusted)
         assert previous == "minbzk/oude-naam"
         async with factory() as db:
             stored = await db.get(SiteRepository, row.id)
@@ -242,7 +248,59 @@ class TestFollowRename:
         token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website", repository_id="1001")
         async with factory() as db:
             trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
-            assert await follow_rename(db, site, trusted) is None
+            assert await follow_token(db, site, trusted) is None
+
+    @pytest.mark.parametrize(
+        ("claims", "confirmed_before", "confirmed_after"),
+        [
+            ({"repository_id": "1001", "repository_owner_id": "2002"}, False, True),
+            ({"repository_id": "1001"}, False, False),
+            ({"repository_id": "1001", "repository_owner_id": "2002"}, True, True),
+            ({"repository_id": "1001"}, True, True),
+        ],
+    )
+    async def test_a_token_that_vouches_for_both_ids_confirms_them(
+        self, factory, claims, confirmed_before, confirmed_after
+    ):
+        site = await _make_site(factory)
+        row = await _add_repository(factory, site, ids_confirmed=confirmed_before)
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website", **claims)
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+            assert await follow_token(db, site, trusted) is None
+        async with factory() as db:
+            stored = await db.get(SiteRepository, row.id)
+        assert stored.ids_confirmed is confirmed_after
+
+    async def test_a_forgejo_name_token_confirms_the_ids_after_the_rest_check(self, factory):
+        site = await _make_site(factory)
+        row = await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, repository_id=1001, owner_id=2002
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 1001, 2002)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(ci.client()))
+            await follow_token(db, site, trusted)
+        async with factory() as db:
+            stored = await db.get(SiteRepository, row.id)
+        assert stored.ids_confirmed is True
+
+    @pytest.mark.parametrize("replaced", [{"repository_id": 5005}, {"owner_id": 6006}])
+    async def test_a_link_with_other_ids_is_not_confirmed(self, factory, replaced):
+        site = await _make_site(factory)
+        row = await _add_repository(factory, site)
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website", repository_id="1001", repository_owner_id="2002")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        async with factory() as db:
+            await db.execute(update(SiteRepository).where(SiteRepository.id == row.id).values(**replaced))
+            await db.commit()
+        async with factory() as db:
+            await follow_token(db, site, trusted)
+            stored = await db.get(SiteRepository, row.id)
+        assert stored.ids_confirmed is False
 
     async def test_a_link_replaced_in_the_meantime_is_left_alone(self, factory):
         site = await _make_site(factory)
@@ -256,7 +314,7 @@ class TestFollowRename:
             stored.owner, stored.repo, stored.repository_id = "ander", "project", 5005
             await db.commit()
         async with factory() as db:
-            assert await follow_rename(db, site, trusted) is None
+            assert await follow_token(db, site, trusted) is None
             stored = await db.get(SiteRepository, row.id)
         assert (stored.owner, stored.repo, stored.repository_id) == ("ander", "project", 5005)
 
@@ -274,6 +332,7 @@ class TestTrustedRepositoryForgejoNamePath:
         async with factory() as db:
             trusted = await trusted_repository(db, token, site, ProviderClient(ci.client()))
         assert trusted.repository_id == 1001
+        assert trusted.confirms_ids is True
         # The name is the token's spelling, not the stored one.
         assert trusted.origin == "code.overheid.nl/MinBZK/Website"
 

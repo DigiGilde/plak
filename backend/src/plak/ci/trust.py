@@ -5,7 +5,8 @@ its issuer is that repository's provider and host, and:
 
 - the token carries `repository_id` (GitHub, Forgejo 16 and later): it must
   equal the stored id, and `repository_owner_id`, when present, the stored
-  owner id. Ids survive renames and transfers; names do not.
+  owner id. Ids survive a rename; names do not. A transfer to another owner
+  changes the owner id, so the token is refused until the site is relinked.
 - the token carries no ids (Forgejo 15, e.g. code.overheid.nl): `repository`
   must equal the stored `owner/repo` (case-insensitive), and Plak asks the
   Forgejo REST API whether `owner/repo` still has the stored ids, so a
@@ -16,8 +17,9 @@ The repository's name on the trusted result, and so the origin a version
 records, comes from the token's signed `repository` claim: the stored name
 is whatever an admin typed for a private repository and goes stale after a
 rename. A missing or malformed claim falls back to the stored name.
-follow_rename then brings the stored name in line, so the Deploy tab shows
-it too.
+follow_token then brings the stored name in line, so the Deploy tab shows
+it too, and marks ids an admin entered as confirmed once a token has matched
+both of them.
 
 A live deploy additionally needs an event from LIVE_EVENTS (fail closed: a
 missing or any other event_name is refused) and, when one is set, the live
@@ -78,6 +80,9 @@ class TrustedRepository:
     repository_id: int
     owner_id: int
     live_branch: str | None
+    # Whether the token vouched for both stored ids: a GitHub or Forgejo 16
+    # token matches the owner id only when it carries one.
+    confirms_ids: bool = False
 
     @property
     def actor_identifier(self) -> str:
@@ -116,6 +121,7 @@ async def trusted_repository(
         owner_id = token.claim("repository_owner_id")
         if owner_id is not None and owner_id != str(row.owner_id):
             raise _not_trusted()
+        confirms_ids = owner_id is not None
     else:
         if row.provider != CiProvider.FORGEJO:
             raise _not_trusted()
@@ -132,6 +138,7 @@ async def trusted_repository(
             ) from error
         if not still:
             raise _not_trusted()
+        confirms_ids = True
 
     owner, repo = _claimed_name(token) or (row.owner, row.repo)
     return TrustedRepository(
@@ -142,14 +149,16 @@ async def trusted_repository(
         repository_id=row.repository_id,
         owner_id=row.owner_id,
         live_branch=row.live_branch,
+        confirms_ids=confirms_ids,
     )
 
 
-async def follow_rename(db: AsyncSession, site: Site, repository: TrustedRepository) -> str | None:
+async def follow_token(db: AsyncSession, site: Site, repository: TrustedRepository) -> str | None:
     """Stores the name a trusted token gave, when it differs from the stored
-    one; returns the previous `owner/repo`, or None when nothing changed.
-    Matched on the ids too, so a link replaced in the meantime is left alone;
-    the row lock keeps an admin relinking from slipping in before the commit."""
+    one, and marks the ids confirmed when the token vouched for both; returns
+    the previous `owner/repo` on a rename, else None. Matched on the ids too,
+    so a link replaced in the meantime is left alone; the row lock keeps an
+    admin relinking from slipping in before the commit."""
     row = await db.scalar(
         select(SiteRepository)
         .where(
@@ -157,13 +166,18 @@ async def follow_rename(db: AsyncSession, site: Site, repository: TrustedReposit
             SiteRepository.provider == repository.provider,
             SiteRepository.host == repository.host,
             SiteRepository.repository_id == repository.repository_id,
+            SiteRepository.owner_id == repository.owner_id,
         )
         .with_for_update()
     )
-    if row is None or (row.owner, row.repo) == (repository.owner, repository.repo):
+    if row is None:
         return None
-    previous = f"{row.owner}/{row.repo}"
-    row.owner, row.repo = repository.owner, repository.repo
+    previous = None
+    if (row.owner, row.repo) != (repository.owner, repository.repo):
+        previous = f"{row.owner}/{row.repo}"
+        row.owner, row.repo = repository.owner, repository.repo
+    if repository.confirms_ids and not row.ids_confirmed:
+        row.ids_confirmed = True
     await db.commit()
     return previous
 

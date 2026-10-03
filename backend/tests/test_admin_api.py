@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from helpers_audit import install_audit_recorder
 from helpers_ci import FORGEJO_HOST, MockCi
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_test_client, set_session_cookie
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -2533,6 +2533,7 @@ class TestSiteRepository:
         assert (body["owner"], body["repo"]) == ("MinBZK", "Website")
         assert (body["repositoryId"], body["ownerId"]) == (1001, 2002)
         assert body["liveBranch"] == "main"
+        assert body["idsConfirmed"] is True
         assert body["createdBy"] == "a@example.nl"
         assert (await client.get(REPOSITORY)).json() == body
 
@@ -2639,6 +2640,7 @@ class TestSiteRepository:
         body = response.json()
         assert (body["owner"], body["repo"]) == ("minbzk", "Prive")
         assert (body["repositoryId"], body["ownerId"]) == (5005, 6006)
+        assert body["idsConfirmed"] is False
         assert mock_ci.requests == ["https://api.github.com/repos/minbzk/Prive"]
 
         async with factory() as db:
@@ -2676,6 +2678,42 @@ class TestSiteRepository:
                 await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_set"))
             ).scalar_one()
         assert audit.refs["ids_confirmed"] is False
+
+    @pytest.mark.parametrize(
+        ("confirmed_before", "relink", "confirmed_after"),
+        [
+            (True, {}, True),
+            (True, {"repo": "prive"}, True),
+            (True, {"repo": "Anders"}, False),
+            (True, {"repositoryId": 5050}, False),
+            (True, {"ownerId": 6060}, False),
+            (False, {}, False),
+        ],
+    )
+    async def test_relinking_a_private_repository_keeps_a_confirmation_of_the_same_repository(
+        self, client, app, data, factory, confirmed_before, relink, confirmed_after
+    ):
+        """Changing only the live branch must not undo what a CI token
+        confirmed; another name or other ids start unconfirmed again."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        private = _github(repo="Prive", repositoryId=5005, ownerId=6006)
+        assert (await client.put(REPOSITORY, json=private, headers=headers)).status_code == 200
+        async with factory() as db:
+            await db.execute(update(SiteRepository).values(ids_confirmed=confirmed_before))
+            await db.commit()
+
+        response = await client.put(REPOSITORY, json={**private, "liveBranch": "release", **relink}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["idsConfirmed"] is confirmed_after
+        async with factory() as db:
+            audits = list(
+                await db.scalars(
+                    select(AuditLogEntry)
+                    .where(AuditLogEntry.action == "site_repository_set")
+                    .order_by(AuditLogEntry.occurred_at)
+                )
+            )
+        assert audits[-1].refs["ids_confirmed"] is confirmed_after
 
     async def test_entered_ids_that_match_the_provider_are_confirmed(self, client, app, data, factory):
         headers = login(client, app, sub="lid-a", email="a@example.nl")

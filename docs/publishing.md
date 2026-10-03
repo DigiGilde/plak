@@ -212,14 +212,21 @@ koppelen". Fill in the provider (GitHub or Forgejo, with for Forgejo the host
 from `PLAK_CI_FORGEJO_HOSTS`), `eigenaar/repo` (owner/repo) and optionally
 a live branch. Plak looks the repository up at the provider and stores its
 numeric ids;
-those stay the same across a rename. Plak looks it up without credentials,
+those stay the same across a rename, and the name follows it: the next
+deploy stores the name its CI token gives, with a `site_repository_rename`
+row in the audit log. A transfer to another owner changes the owner id, so
+the site has to be linked again. Plak looks it up without credentials,
 so it does not find a private repository; the form then asks for the two ids
 ("Repository-id", "Eigenaar-id"). Get them with
 `gh api repos/<owner>/<repo> --jq '.id, .owner.id'` (on Forgejo:
 `/api/v1/repos/<owner>/<repo>`, fields `id` and `owner.id`), or send them as
 `repositoryId` and `ownerId` with the `PUT`. When the lookup fails, Plak
 stores the entered ids as they are; when it does find the repository, they
-must match. A wrong id links nothing else, it only refuses every deploy. A
+must match. A wrong id links nothing else, it only refuses every deploy.
+Entered ids that the provider could not confirm show as "Nog niet bevestigd"
+(not confirmed yet) on the Deploy tab, until the first deploy whose token
+carries both ids (or, on Forgejo 15, passes Plak's API recheck) confirms them
+and corrects the name. A
 private repository on a Forgejo whose tokens carry no ids (Forgejo 15) still
 cannot publish: Plak confirms such a token against the Forgejo API, also
 without credentials. Publishing live is allowed

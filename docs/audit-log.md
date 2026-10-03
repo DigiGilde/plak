@@ -122,8 +122,13 @@ linked to a site so that it may publish from there with a CI ID token
 (`api/admin.py`, "Linked repository"); `refs` carries group, site, provider,
 host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed` and
 `live_branch`, and on unlinking only group and site. `ids_confirmed` is
-`false` when the admin entered the ids and the provider could not confirm
-them (a private repository, or the provider was unavailable). Linked with the
+what the link stores: `false` when the admin entered the ids and the provider
+could not confirm them (a private repository, or the provider was
+unavailable), unless the link already had the same repository and ids
+confirmed, for instance when only the live branch changes. A later CI
+token that carries both ids, or a Forgejo token without ids that Plak's API
+recheck confirms, confirms them without a row of its own; its `deploy` or
+`preview_teardown` row is the record. Linked with the
 CLI token (`plak site link`), the row carries `refs.via` and
 `refs.cli_session` as a creation does.
 
@@ -213,7 +218,7 @@ repository differently from the name stored on the site's link: after a
 rename at the provider, or when an admin typed another name for a private
 repository. A transfer to another owner changes the owner id, and the token
 is refused before it gets here. Plak then stores the token's name, which is what the
-Deploy tab shows from then on (`ci/trust.py:follow_rename`). The row comes
+Deploy tab shows from then on (`ci/trust.py:follow_token`). The row comes
 before the `deploy` or `preview_teardown` row of the same request, with the
 same CI actor; `refs` carries group, site, provider, host, `repository` (the
 new `owner/repo`), `previous_repository` and `repository_id`. A token

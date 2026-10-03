@@ -811,11 +811,15 @@ cap.
 Whether a verified token may deploy is a separate question: a site names one
 repository (`site_repositories`). A token matches when its issuer is that
 repository's provider and host and it carries the stored `repository_id` (and
-`repository_owner_id` where present), because ids survive renames and transfers
-while names do not. A Forgejo version that sends no ids matches on
+`repository_owner_id` where present), because ids survive a rename while names
+do not; a transfer to another owner changes the owner id and is refused. A
+Forgejo version that sends no ids matches on
 `owner/repo` case-insensitively, and Plak then asks the Forgejo REST API whether
 that name still has the stored ids, so a repository deleted and recreated under
 the same name does not inherit the trust. A GitHub token without ids is refused.
+The name a version records as its origin, and the name on the link, come from
+the token's signed `repository` claim, and a token that vouched for both ids
+marks entered ids as confirmed (`site_repositories.ids_confirmed`).
 A live deploy additionally requires an event out of `push`, `workflow_dispatch`
 or `schedule` and, when one is configured, the live branch; previews and
 teardown accept any ref and any event. Claims copied into the audit record
@@ -971,7 +975,8 @@ Guarded by: `test_zad_project_file.py`, `test_workflows.py`,
 ## 12. The data model
 
 PostgreSQL with Alembic migrations: the schema is migration `0001_base`, and
-`0002_site_live_versions_kept` adds `sites.live_versions_kept`.
+`0002_retention_and_repo_ids` adds `sites.live_versions_kept` and
+`site_repositories.ids_confirmed`.
 Tables: `members`, `groups`, `group_members`, `sites`, `site_members`,
 `site_repositories`, `versions`, `previews`, `invitees`, `access_keys`,
 `audit_log_entries`, `content_viewers`, `cli_device_authorizations`,

@@ -471,6 +471,23 @@ async def test_ci_origin_follows_the_token_not_the_stored_name(environment: Envi
     }
 
 
+@pytest.mark.parametrize(("owner_claim", "confirmed"), [("2002", True), (OMIT, False)])
+async def test_a_ci_deploy_confirms_entered_ids_when_the_token_carries_both(
+    environment: Environment, owner_claim, confirmed
+) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(ids_confirmed=False))
+        await db.commit()
+    token = environment.ci.token(repository_owner_id=owner_claim)
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert resp.status_code == 201
+
+    async with environment.session_factory() as db:
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+    assert link.ids_confirmed is confirmed
+
+
 async def test_a_refused_live_deploy_still_follows_the_rename(environment: Environment) -> None:
     """The rename rests on the trusted ids, not on the event, so a live deploy
     refused afterwards keeps it; both rows land in the log."""

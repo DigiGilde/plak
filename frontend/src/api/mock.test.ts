@@ -301,7 +301,21 @@ describe('site repository: defaults', () => {
 
     const linked = await link({ repositoryId: 5005, ownerId: 6006 });
     expect(linked.status).toBe(200);
-    expect(await linked.json()).toMatchObject({ repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
+    expect(await linked.json()).toMatchObject({
+      repo: 'prive-site',
+      repositoryId: 5005,
+      ownerId: 6006,
+      idsConfirmed: false,
+    });
+  });
+
+  it('confirms the ids of a repository the lookup finds', async () => {
+    const response = await makeMockBackend().fetch('/-/api/v1/sites/team-aurora/website/repository', {
+      method: 'PUT',
+      body: JSON.stringify({ provider: 'github', owner: 'team-aurora', repo: 'openbaar' }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ repo: 'openbaar', idsConfirmed: true });
   });
 
   it('refuses ids that are incomplete or not positive whole numbers', async () => {

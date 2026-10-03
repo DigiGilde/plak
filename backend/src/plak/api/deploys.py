@@ -607,7 +607,7 @@ async def _authorize(
         ci=_CiPrincipal(token=auth.ci.token, repository=repository),
         actor=Actor(ActorKind.CI, repository.actor_identifier),
     )
-    previous = await trust.follow_rename(db, site, repository)
+    previous = await trust.follow_token(db, site, repository)
     if previous is not None:
         await _audit(
             request,
