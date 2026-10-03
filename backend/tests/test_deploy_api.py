@@ -737,6 +737,58 @@ async def test_preview_deploy_with_ci_token_from_a_pull_request(environment: Env
     assert timedelta(days=29) < remaining < timedelta(days=31)
 
 
+async def test_deploy_answers_with_the_access_of_the_site(environment: Environment) -> None:
+    """A CI can tell from the answer whether the link needs a sign-in, without
+    a second request that its token is not allowed to make."""
+    async with environment.session_factory() as db:
+        await db.execute(
+            update(Site)
+            .where(Site.id == environment.site.id)
+            .values(access_base=AccessBase.SITE_TEAM, access_keys=False, access_invitees=True)
+        )
+        await db.commit()
+
+    async with environment.client() as client:
+        live = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+        preview = await client.post(
+            DEPLOY_PATH, files=_upload(), data={"preview": "pr-42"}, headers=_bearer(environment.ci_token)
+        )
+
+    expected = {"base": "site_team", "keys": False, "invitees": True}
+    assert live.json()["access"] == expected
+    # A preview without its own access setting follows the site.
+    assert preview.json()["access"] == expected
+
+
+async def test_preview_deploy_answers_with_the_access_override_of_the_preview(
+    environment: Environment,
+) -> None:
+    """The override is what the gate applies to the preview, so the answer
+    names that and not the site's access, which here is wider."""
+    async with environment.client() as client:
+        first = await client.post(
+            DEPLOY_PATH, files=_upload(), data={"preview": "pr-42"}, headers=_bearer(environment.ci_token)
+        )
+        assert first.json()["access"] == {"base": "public", "keys": False, "invitees": False}
+        async with environment.session_factory() as db:
+            await db.execute(
+                update(Preview)
+                .where(Preview.site_id == environment.site.id, Preview.ref == "pr-42")
+                .values(
+                    access_base_override=AccessBase.NOBODY,
+                    access_keys_override=True,
+                    access_invitees_override=False,
+                )
+            )
+            await db.commit()
+        again = await client.post(
+            DEPLOY_PATH, files=_upload(), data={"preview": "pr-42"}, headers=_bearer(environment.ci_token)
+        )
+
+    assert again.status_code == 201
+    assert again.json()["access"] == {"base": "nobody", "keys": True, "invitees": False}
+
+
 async def test_preview_ref_becomes_slug_validated(environment: Environment) -> None:
     async with environment.client() as client:
         for error_ref in ("PR-42", "pr_42", "-pr", "pr-", "a" * 64):

@@ -47,6 +47,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plak import messages, net
+from plak.access.gate import effective_access
 from plak.api.authorization import require_site_role
 from plak.api.docs import TAG_DEPLOYS
 from plak.api.errors import (
@@ -56,7 +57,7 @@ from plak.api.errors import (
     locale_from_header,
     problem_response,
 )
-from plak.api.schema import ApiModel
+from plak.api.schema import AccessOut, ApiModel
 from plak.audit import vocabulary
 from plak.audit.log import ANONYMOUS, Actor, AuditLog
 from plak.auth import sessions
@@ -71,7 +72,7 @@ from plak.ingest.unpacker import BundleError
 from plak.messages import Msg
 from plak.models.audit import ActorKind
 from plak.models.identity import Group, Member, MemberStatus
-from plak.models.publication import Site
+from plak.models.publication import Preview, Site
 
 AUDIT_ACTION_DEPLOY = "deploy"
 AUDIT_ACTION_PREVIEW_TEARDOWN = "preview_teardown"
@@ -178,6 +179,12 @@ class DeployResult(ApiModel):
             "link naar plaatsen, in een pull request bijvoorbeeld."
         ),
         examples=["https://plak.example/team-aurora/website/_preview/pr-42/"],
+    )
+    access: AccessOut = Field(
+        description=(
+            "Wie de deploy mag zien: bij een preview de eigen toegang van die preview als die is ingesteld, "
+            "anders die van de site. CI kan hiermee bij de link zeggen of je moet inloggen."
+        )
     )
 
 
@@ -770,6 +777,11 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
                 version_id = await service.deploy(
                     db, group, site, upload.filename, upload.spool, deployer, base_path
                 )
+            preview_row = (
+                await db.scalar(select(Preview).where(Preview.site_id == site.id, Preview.ref == preview))
+                if preview is not None
+                else None
+            )
     except (BundleError, IngestError) as error:
         await _audit(request, actor, AUDIT_ACTION_DEPLOY, "refused", error.reason, refs)
         raise
@@ -791,7 +803,12 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
     url = f"{settings.content_base_url.rstrip('/')}/{quote(group.slug)}/{quote(site.slug)}/"
     if preview is not None:
         url += f"_preview/{quote(preview)}/"
-    return DeployResult(version_id=version_id, url=url)
+    access = effective_access(site, preview_row)
+    return DeployResult(
+        version_id=version_id,
+        url=url,
+        access=AccessOut(base=access.base, keys=access.keys, invitees=access.invitees),
+    )
 
 
 @router.delete(

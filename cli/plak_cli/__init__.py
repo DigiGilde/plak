@@ -97,8 +97,10 @@ SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 VERSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
-# No whitespace or control characters: the URL goes into GITHUB_OUTPUT too.
-DEPLOY_URL_RE = re.compile(r"^https?://[\x21-\x7e]+$")
+# The URL characters of RFC 3986 without ' ( ) [ ]: the URL goes into
+# GITHUB_OUTPUT, and from there into Markdown in the job summary and the
+# pull request comment.
+DEPLOY_URL_RE = re.compile(r"^https?://[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$")
 
 # Suggested paths come from the server and go to the terminal: only ordinary
 # relative paths are shown, so no answer can push line endings or control
@@ -808,6 +810,13 @@ def cmd_publish(args: argparse.Namespace) -> int:
         ):
             print("Error: unexpected url format", file=sys.stderr)
             return 1
+        # Only a hint for the report, so an access this CLI does not know (a
+        # newer base, say) is left out rather than failing a deploy that went
+        # through. A server from before the access field answers without it.
+        raw_access = response.json().get("access")
+        deploy_access = _parse_access(raw_access)
+        if raw_access is not None and deploy_access is None:
+            print("Warning: leaving out an access this CLI does not know", file=sys.stderr)
         if args.output_file:
             # Straight to the output file ($GITHUB_OUTPUT, say): in CI stdout
             # also carries the '::add-mask::' command, and a shell capturing
@@ -817,6 +826,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
                     handle.write(f"version-id={version_id}\n")
                     if deploy_url is not None:
                         handle.write(f"url={deploy_url}\n")
+                    if deploy_access is not None:
+                        handle.write(f"access={format_access(deploy_access)}\n")
             except OSError as error:
                 print(
                     f"Error: publish succeeded (version {version_id}) but could not "
@@ -826,6 +837,10 @@ def cmd_publish(args: argparse.Namespace) -> int:
                 return 1
         else:
             print(version_id)
+        if deploy_url is None:
+            print(f"Published version {version_id}", file=sys.stderr)
+        else:
+            print(f"Published: {deploy_url} (version {version_id})", file=sys.stderr)
         return 0
 
     _print_problem_detail(response)
@@ -901,6 +916,23 @@ def _on_off(value: bool) -> str:
     return "on" if value else "off"
 
 
+def format_access(access: tuple[str, bool, bool]) -> str:
+    """The base, then the extras that are on: `site_team,invitees`."""
+    base, keys, invitees = access
+    return ",".join([base] + ["keys"] * keys + ["invitees"] * invitees)
+
+
+def who_can_see(access: tuple[str, bool, bool]) -> str:
+    """Who besides the public gets in, for a base other than public."""
+    base, keys, invitees = access
+    who = [] if base == "nobody" else [ACCESS_BASE_WHO[base]]
+    if keys:
+        who.append("anyone with a secret link")
+    if invitees:
+        who.append("invitees, once signed in")
+    return ", ".join(who) if who else "nobody yet"
+
+
 def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -> None:
     base, keys, invitees = access
     print(
@@ -909,12 +941,7 @@ def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -
     )
     if base == "public":
         return
-    who = [] if base == "nobody" else [ACCESS_BASE_WHO[base]]
-    if keys:
-        who.append("anyone with a secret link")
-    if invitees:
-        who.append("invitees, once signed in")
-    print(f"Who can see it: {', '.join(who) if who else 'nobody yet'}.")
+    print(f"Who can see it: {who_can_see(access)}.")
     print(f"Change it at: {change_url}")
 
 

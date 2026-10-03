@@ -56,8 +56,9 @@ inputs:
   comment-on-pr:
     description: >-
       GitHub only. Set to 'true' to put the link to the deploy in a comment
-      on the pull request, updated on every deploy and marked removed on
-      teardown. Needs 'pull-requests: write'.
+      on the pull request, with who can see it and whether that needs a
+      sign-in, updated on every deploy and marked removed on teardown. Needs
+      'pull-requests: write'.
     required: false
     default: 'false'
   github-token:
@@ -228,6 +229,36 @@ runs:
         fi
         uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
 
+    # Forgejo shows a summary only where both runner and server support it;
+    # elsewhere the variable is not set and this step writes nothing.
+    - name: Write summary
+      if: ${{ steps.bot-check.outputs.skipped != 'true' }}
+      shell: bash
+      env:
+        PLAK_INPUT_TEARDOWN: ${{ inputs.teardown }}
+        PLAK_SITE: ${{ inputs.site }}
+        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
+        PLAK_URL: ${{ steps.publish.outputs.url }}
+        PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
+      run: |
+        set -euo pipefail
+        if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
+          exit 0
+        fi
+        if [ -n "$PLAK_PREVIEW_REF" ]; then
+          WHAT="Preview \`$PLAK_PREVIEW_REF\` of \`$PLAK_SITE\`"
+        else
+          WHAT="Live site \`$PLAK_SITE\`"
+        fi
+        if [ "$PLAK_INPUT_TEARDOWN" = "true" ]; then
+          LINE="$WHAT is removed."
+        elif [ -n "$PLAK_URL" ]; then
+          LINE="$WHAT is published: $PLAK_URL (version \`$PLAK_VERSION_ID\`)"
+        else
+          LINE="$WHAT is published (version \`$PLAK_VERSION_ID\`)."
+        fi
+        printf '### Plak\n\n%s\n' "$LINE" >> "$GITHUB_STEP_SUMMARY"
+
     - name: Report to GitHub
       if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
@@ -240,6 +271,7 @@ runs:
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
         PLAK_URL: ${{ steps.publish.outputs.url }}
         PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
+        PLAK_ACCESS: ${{ steps.publish.outputs.access }}
       run: |
         set -euo pipefail
         if [ -z "$PLAK_INPUT_ENVIRONMENT" ] && [ "$PLAK_INPUT_COMMENT" = "false" ]; then
@@ -252,6 +284,10 @@ runs:
           exit 1
         else
           ARGS=(publish --url "$PLAK_URL" --version-id "$PLAK_VERSION_ID")
+          # Empty from a Plak before the access field: the comment then leaves it out.
+          if [ -n "$PLAK_ACCESS" ]; then
+            ARGS+=(--access "$PLAK_ACCESS")
+          fi
         fi
         ARGS+=(--site "$PLAK_SITE")
         if [ -n "$PLAK_PREVIEW_REF" ]; then

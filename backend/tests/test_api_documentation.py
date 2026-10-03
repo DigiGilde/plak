@@ -296,11 +296,13 @@ class TestDeployContract:
         assert "curl" in hint
         assert "PLAK_INGEST_MAX_BODY" in hint
 
-    def test_response_is_version_id_and_url(self, schema) -> None:
+    def test_response_is_version_id_url_and_access(self, schema) -> None:
         response = self._deploy(schema)["responses"]["201"]["content"]["application/json"]["schema"]
         model = schema["components"]["schemas"][response["$ref"].split("/")[-1]]
-        assert list(model["properties"]) == ["versionId", "url"]
-        assert sorted(model["required"]) == ["url", "versionId"]
+        assert list(model["properties"]) == ["versionId", "url", "access"]
+        assert sorted(model["required"]) == ["access", "url", "versionId"]
+        # The same schema as the access of a site in the admin API.
+        assert model["properties"]["access"]["$ref"] == "#/components/schemas/AccessOut"
 
     def test_preview_teardown_gives_204_without_body(self, schema) -> None:
         path = "/-/api/v1/sites/{group_slug}/{site_slug}/previews/{ref}"

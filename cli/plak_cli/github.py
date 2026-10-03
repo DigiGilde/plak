@@ -6,7 +6,8 @@ plak_cli.github`, with the runner's GITHUB_* variables in the environment.
 
 Usage:
     python -m plak_cli.github publish --site <group/site> --url <url> \
-        --version-id <id> [--preview-ref <ref>] [--environment <name>] [--comment]
+        --version-id <id> [--access <access>] [--preview-ref <ref>] \
+        [--environment <name>] [--comment]
     python -m plak_cli.github teardown --site <group/site> --preview-ref <ref> \
         [--environment <name>] [--comment]
 """
@@ -20,7 +21,7 @@ import sys
 
 import httpx
 
-from plak_cli import VERSION
+from plak_cli import ACCESS_BASE_WHO, VERSION, who_can_see
 
 PER_PAGE = 100
 
@@ -145,6 +146,23 @@ def upsert_comment(github: GitHub, number: int, marker: str, text: str, *, creat
         github.request("POST", f"/issues/{number}/comments", json={"body": body})
 
 
+def _access(value: str) -> tuple[str, bool, bool]:
+    """The access line plak publish writes: `site_team,invitees`, say."""
+    base, *extras = value.split(",")
+    if base not in ACCESS_BASE_WHO or len(set(extras)) != len(extras) or not set(extras) <= {"keys", "invitees"}:
+        raise argparse.ArgumentTypeError(f"not an access: {value!r}")
+    return base, "keys" in extras, "invitees" in extras
+
+
+def _access_line(access: tuple[str, bool, bool]) -> str:
+    base, _, invitees = access
+    if base == "public":
+        return "Anyone can open it, without signing in."
+    who = f"Who can see it: {who_can_see(access)}."
+    # Mirrors the server's login_can_help: a secret link alone needs no sign-in.
+    return f"Sign in to open it. {who}" if base in ("sso", "site_team") or invitees else who
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m plak_cli.github")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -157,6 +175,7 @@ def _parser() -> argparse.ArgumentParser:
         if name == "publish":
             command.add_argument("--url", required=True)
             command.add_argument("--version-id", required=True)
+            command.add_argument("--access", type=_access)
     return parser
 
 
@@ -189,11 +208,12 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
                 print("::notice::comment skipped: this run is not for a pull request")
             elif args.comment:
                 what = f"Preview `{preview_ref}`" if preview_ref else "Live site"
+                access = f"{_access_line(args.access)}\n\n" if args.access else ""
                 upsert_comment(
                     github,
                     number,
                     _marker(args.site, preview_ref or "live"),
-                    f"{what} of `{args.site}` is published: {args.url}\n\n"
+                    f"{what} of `{args.site}` is published: {args.url}\n\n{access}"
                     f"Version `{args.version_id}`, commit {_head_sha(event)[:7]}.",
                     create=True,
                 )
