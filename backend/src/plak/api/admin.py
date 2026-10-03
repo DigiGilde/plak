@@ -432,6 +432,22 @@ class SandboxBody(ApiModel):
     )
 
 
+class LiveVersionsKeptBody(ApiModel):
+    """Hoeveel vorige live-versies deze site bewaart."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"liveVersionsKept": 3}]})
+
+    live_versions_kept: int | None = Field(
+        strict=True,
+        description=(
+            "Het aantal vorige live-versies dat de nachtelijke opschoning naast de huidige laat "
+            "staan: een geheel getal van 0 of meer. `0` bewaart alle live-versies van deze site; "
+            "`null` laat de site de standaard van het platform volgen."
+        ),
+        json_schema_extra={"minimum": 0},
+    )
+
+
 class PreviewAccessBody(ApiModel):
     """Een afwijkende toegang voor een preview, of `null` om die af te zetten."""
 
@@ -746,6 +762,15 @@ class SiteOut(ApiModel):
     live_version_id: uuid.UUID | None = Field(
         default=None, description="Versie die nu op de publieke URL staat, of `null` als er nog niets live is."
     )
+    live_versions_kept: int | None = Field(
+        default=None,
+        description=(
+            "Eigen aantal vorige live-versies dat deze site bewaart, of `null` als de site de "
+            "standaard van het platform volgt. `0` bewaart alle live-versies. Het aantal dat nu "
+            "geldt staat op `GET /sites/{groupSlug}/{siteSlug}/storage`."
+        ),
+        examples=[3],
+    )
     created_by: str = Field(
         description="Id van het lid dat de site aanmaakte; leeg als dat lid inmiddels verwijderd is."
     )
@@ -814,8 +839,23 @@ class SiteStorageOut(ApiModel):
     )
     live_versions_kept: int = Field(
         description=(
-            "Hoeveel vorige live-versies naast de huidige bewaard blijven; oudere live-versies ruimt "
+            "Hoeveel vorige live-versies van deze site naast de huidige bewaard blijven: het eigen "
+            "aantal van de site, of anders de standaard van het platform. Oudere live-versies ruimt "
             "de nachtelijke opschoning op, rij en bestanden. `0` betekent dat alle versies blijven."
+        ),
+        examples=[5],
+    )
+    live_versions_kept_is_default: bool = Field(
+        description=(
+            "`true` als de site de standaard van het platform volgt, `false` als een sitebeheerder "
+            "een eigen aantal instelde."
+        ),
+        examples=[True],
+    )
+    default_live_versions_kept: int = Field(
+        description=(
+            "De standaard van het platform: hoeveel vorige live-versies een site zonder eigen "
+            "aantal bewaart. `0` betekent dat zulke sites alle versies bewaren."
         ),
         examples=[5],
     )
@@ -1509,6 +1549,7 @@ def _site_json(
         access=AccessOut(base=site.access_base, keys=site.access_keys, invitees=site.access_invitees),
         external_sources=site.external_sources,
         sandbox=site.sandbox,
+        live_versions_kept=site.live_versions_kept,
         live_version_id=site.live_version_id,
         created_by=str(site.created_by) if site.created_by else "",
         has_live_version=site.live_version_id is not None,
@@ -3088,6 +3129,64 @@ def make_admin_router() -> APIRouter:
         )
         return (await _sites_json(db, group, [site]))[0]
 
+    @router.put(
+        "/sites/{group_slug}/{site_slug}/live-versions-kept",
+        tags=[TAG_SITES],
+        summary="Aantal bewaarde vorige versies zetten",
+        response_description="De site met zijn nieuwe instelling.",
+        description=(
+            "Bepaalt hoeveel vorige live-versies de nachtelijke opschoning van deze site laat staan, "
+            "naast de huidige live-versie. Oudere live-versies gaan weg, rij en bestanden, en daar "
+            "kan daarna niet meer naar teruggerold worden. `0` bewaart alle live-versies, `null` "
+            "zet de site terug op de standaard van het platform. De wijziging geldt vanaf de "
+            "volgende nachtelijke opschoning.\n\n"
+            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_SITE_ROLE,
+            _ERROR_SITE,
+            {
+                422: (
+                    "Geen geheel getal van 0 of meer (`LIVE_VERSIONS_KEPT_INVALID`), of een getal "
+                    "dat te groot is om op te slaan (`LIVE_VERSIONS_KEPT_TOO_LARGE`)."
+                )
+            },
+        ),
+    )
+    async def set_live_versions_kept(
+        request: Request,
+        group_slug: str,
+        site_slug: str,
+        body: LiveVersionsKeptBody,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+    ) -> SiteOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        kept = body.live_versions_kept
+        if kept is not None and kept < 0:
+            raise ApiError(422, "LIVE_VERSIONS_KEPT_INVALID")
+        site.live_versions_kept = kept
+        try:
+            await db.commit()
+        except DBAPIError as error:
+            # The column's integer type is the only upper bound. A number it
+            # cannot hold comes back as SQLSTATE class 22 (data exception):
+            # 22000 when asyncpg cannot encode the parameter, 22003 should the
+            # server be the one to say so.
+            if not str(getattr(error.orig, "sqlstate", "")).startswith("22"):
+                raise
+            await db.rollback()
+            raise ApiError(422, "LIVE_VERSIONS_KEPT_TOO_LARGE") from None
+        await _audit(
+            request,
+            member,
+            "site_live_versions_kept",
+            {"group": group_slug, "site": site_slug, "live_versions_kept": kept},
+        )
+        return (await _sites_json(db, group, [site]))[0]
+
     # -- Invitees --
 
     @router.get(
@@ -4537,8 +4636,9 @@ def make_admin_router() -> APIRouter:
         description=(
             "Hoeveel ruimte de versies van deze site nu innemen, hoeveel ze samen mogen innemen, en "
             "hoeveel vorige live-versies de nachtelijke opschoning laat staan. De huidige live-versie "
-            "blijft altijd, ook na terugrollen naar een oudere versie. Limiet en bewaarregel gelden "
-            "voor het hele platform, niet per site.\n\n"
+            "blijft altijd, ook na terugrollen naar een oudere versie. De limiet geldt voor het hele "
+            "platform; het aantal bewaarde versies is de standaard van het platform, tenzij een "
+            "sitebeheerder voor deze site een eigen aantal instelde.\n\n"
             "**Mag:** effectieve siterol `reader` of ruimer."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
@@ -4549,10 +4649,13 @@ def make_admin_router() -> APIRouter:
         group, site = await _site_with_role(db, member, group_slug, site_slug, Role.READER)
         settings = request.app.state.settings
         used = await asyncio.to_thread(request.app.state.content_store.site_bytes, group.slug, site.slug)
+        own = site.live_versions_kept
         return SiteStorageOut(
             used_bytes=used,
             max_bytes=settings.site_max_bytes,
-            live_versions_kept=settings.live_versions_kept,
+            live_versions_kept=settings.live_versions_kept if own is None else own,
+            live_versions_kept_is_default=own is None,
+            default_live_versions_kept=settings.live_versions_kept,
         )
 
     @router.post(

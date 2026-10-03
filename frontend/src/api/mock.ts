@@ -112,8 +112,10 @@ interface MockData {
   siteRoles: MockSiteRole[];
   sites: Site[];
   versions: Version[];
-  /** What every site's storage endpoint reports. */
-  storage: SiteStorage;
+  /** What every site's storage endpoint reports about usage and quota. */
+  storage: Pick<SiteStorage, 'usedBytes' | 'maxBytes'>;
+  /** The platform default of previous live versions kept; 0 keeps all. */
+  defaultLiveVersionsKept: number;
   previews: Preview[];
   invitees: Invitee[];
   keys: Key[];
@@ -313,6 +315,7 @@ function defaultData(): MockData {
         access: { base: 'public', keys: false, invitees: false },
         externalSources: true,
         sandbox: true,
+        liveVersionsKept: null,
         liveVersionId: 'versie-1',
         createdBy: 'dev-beheerder',
         hasLiveVersion: true,
@@ -429,7 +432,8 @@ function defaultData(): MockData {
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
-    storage: { usedBytes: 77594624, maxBytes: 524288000, liveVersionsKept: 5 },
+    storage: { usedBytes: 77594624, maxBytes: 524288000 },
+    defaultLiveVersionsKept: 5,
     myLanguage: null,
   };
 }
@@ -783,6 +787,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           access: { ...groupRow.defaultAccess },
           externalSources: true,
           sandbox: true,
+          liveVersionsKept: null,
           liveVersionId: null,
           createdBy: 'dev-beheerder',
           hasLiveVersion: false,
@@ -992,6 +997,30 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         if (!siteRow) return siteNotFound();
         const body = readJson();
         siteRow.sandbox = Boolean(body.sandbox);
+        return json(200, siteDerived(data, siteRow));
+      }
+
+      if (method === 'PUT' && rest.length === 4 && rest[3] === 'live-versions-kept') {
+        if (!siteRow) return siteNotFound();
+        const kept = (readJson() as { liveVersionsKept: number | null }).liveVersionsKept;
+        if (kept !== null && (!Number.isInteger(kept) || kept < 0)) {
+          return problem(
+            422,
+            'Ongeldig aantal',
+            'Het aantal bewaarde vorige versies moet een geheel getal van 0 of meer zijn.',
+            'LIVE_VERSIONS_KEPT_INVALID',
+          );
+        }
+        // Stands in for the integer column of the real database.
+        if (kept !== null && kept > 2147483647) {
+          return problem(
+            422,
+            'Te groot aantal',
+            'Dit getal is te groot om op te slaan. Kies een kleiner aantal.',
+            'LIVE_VERSIONS_KEPT_TOO_LARGE',
+          );
+        }
+        siteRow.liveVersionsKept = kept;
         return json(200, siteDerived(data, siteRow));
       }
 
@@ -1261,7 +1290,12 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       // storage
       if (rest.length === 4 && rest[3] === 'storage' && method === 'GET') {
         if (!siteRow) return siteNotFound();
-        return json(200, data.storage);
+        return json(200, {
+          ...data.storage,
+          liveVersionsKept: siteRow.liveVersionsKept ?? data.defaultLiveVersionsKept,
+          liveVersionsKeptIsDefault: siteRow.liveVersionsKept === null,
+          defaultLiveVersionsKept: data.defaultLiveVersionsKept,
+        });
       }
 
       // versions

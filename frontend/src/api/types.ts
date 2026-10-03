@@ -123,6 +123,11 @@ export interface Site {
   hasLiveVersion: boolean;
   lastPublishedAt: Timestamp | null;
   previewCount: number;
+  /**
+   * Previous live versions this site keeps besides the current one, set on the
+   * site itself; null when it follows the platform default, 0 keeps all.
+   */
+  liveVersionsKept: number | null;
 }
 
 export interface SiteStorage {
@@ -130,8 +135,12 @@ export interface SiteStorage {
   usedBytes: number;
   /** The per-site quota in bytes; 0 means no quota. */
   maxBytes: number;
-  /** Previous live versions kept besides the current one; 0 means all versions are kept. */
+  /** Previous live versions kept besides the current one, the effective number; 0 means all versions are kept. */
   liveVersionsKept: number;
+  /** True when the site follows the platform default instead of its own number. */
+  liveVersionsKeptIsDefault: boolean;
+  /** The platform default; 0 means all versions are kept. */
+  defaultLiveVersionsKept: number;
 }
 
 export interface Version {

@@ -47,6 +47,7 @@ ADMIN_ACTIONS: Final = frozenset(
         "site_visibility",
         "site_external_sources",
         "site_sandbox",
+        "site_live_versions_kept",
         "version_set_live",
         "site_member_add",
         "site_member_remove",

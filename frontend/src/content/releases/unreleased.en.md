@@ -16,4 +16,4 @@ The action is now `actions/publish` instead of `actions/publiceer`. When you mov
 
 ## Older versions are cleaned up
 
-Plak keeps the current live version of a site and the five versions before it. Older live versions are removed every night, so a site that publishes often no longer runs out of room. The "Versions" tab shows how much space the site uses and how many versions are kept.
+By default Plak keeps the current live version of a site and the five versions before it; a site administrator can set a different number per site. Older live versions are removed every night, so a site that publishes often no longer runs out of room. The "Versions" tab shows how much space the site uses and how many versions are kept; that is also where a site administrator sets the number.

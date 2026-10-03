@@ -239,6 +239,7 @@ describe('Done (reload and share)', () => {
       access: { base: 'public', keys: false, invitees: false },
       externalSources: false,
       sandbox: true,
+      liveVersionsKept: null,
       liveVersionId: 'versie-1',
       createdBy: 'dev-beheerder',
       hasLiveVersion: true,

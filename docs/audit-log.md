@@ -108,7 +108,7 @@ who attempted it, and more personal data adds little for investigation.
 | `group_create`, `group_delete`, `group_default_visibility` | `allowed` |
 | `group_member_add`, `group_member_remove`, `group_member_role` | `allowed` |
 | `site_create`, `site_delete`, `site_visibility`, `version_set_live` | `allowed` |
-| `site_external_sources`, `site_sandbox` | `allowed` |
+| `site_external_sources`, `site_sandbox`, `site_live_versions_kept` | `allowed` |
 | `site_member_add`, `site_member_remove`, `site_member_role` | `allowed` |
 | `preview_visibility` | `allowed` |
 | `invitee_add`, `invitee_remove` | `allowed` |
@@ -140,6 +140,11 @@ therefore means someone deliberately turned it off.
 `false`), alongside group and site. The toggle is on by default, so a row with
 `false` means someone deliberately gave up the shielding, normally because
 their site needs browser storage.
+
+`site_live_versions_kept` is about the number of previous live versions the
+nightly cleanup keeps for this site (set on the site's Versions tab):
+`refs.live_versions_kept` is the new number, `0` for keeping all, or `null`
+when the site went back to the platform default `PLAK_LIVE_VERSIONS_KEPT`.
 
 `group_create` and `site_create` record the access the new group or site
 starts with, in the same three fields as below: `refs.base`, `refs.keys` and
@@ -206,7 +211,7 @@ pseudonym as an ordinary login.
 
 | Action | Result | When |
 |---|---|---|
-| `version_cleanup` | `allowed` | the nightly cleanup job (`previews/cleanup_job.py`) removed old live versions of a site, rows and files: those beyond the current live version and the `PLAK_LIVE_VERSIONS_KEPT` newest others. One row per site per run. Actor is `system`; `refs` carries group, site, `versions` (the ids removed) and `kept` (the setting at the time) |
+| `version_cleanup` | `allowed` | the nightly cleanup job (`previews/cleanup_job.py`) removed old live versions of a site, rows and files: those beyond the current live version and the newest others the site keeps (its own number, else `PLAK_LIVE_VERSIONS_KEPT`). One row per site per run. Actor is `system`; `refs` carries group, site, `versions` (the ids removed) and `kept` (the number that applied to the site at the time) |
 
 A removed live version is one somebody could have rolled back to, so its
 removal gets a row. What the same job removes besides (expired previews,

@@ -145,6 +145,10 @@ NL: Final[dict[str, str]] = {
         "{host} geeft {owner}/{repo} andere ids dan ingevuld. Laat de ids leeg, of neem ze over van {host}."
     ),
     "LIVE_BRANCH_INVALID": "Deze live-branch is geen geldige branchnaam.",
+    "LIVE_VERSIONS_KEPT_INVALID": (
+        "Het aantal bewaarde vorige versies moet een geheel getal van 0 of meer zijn."
+    ),
+    "LIVE_VERSIONS_KEPT_TOO_LARGE": "Dit getal is te groot om op te slaan. Kies een kleiner aantal.",
     "HOST_NOT_ALLOWED": "Deze Forgejo-instantie staat niet in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "Bij GitHub hoort geen andere host.",
     "CI_PROVIDER_RATE_LIMITED": "{host} laat even geen opzoekingen meer toe; probeer het later opnieuw.",
@@ -418,6 +422,10 @@ EN: Final[dict[str, str]] = {
         "{host}."
     ),
     "LIVE_BRANCH_INVALID": "This live branch is not a valid branch name.",
+    "LIVE_VERSIONS_KEPT_INVALID": (
+        "The number of previous versions kept must be a whole number of 0 or more."
+    ),
+    "LIVE_VERSIONS_KEPT_TOO_LARGE": "This number is too large to store. Choose a smaller one.",
     "HOST_NOT_ALLOWED": "This Forgejo instance is not in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "GitHub does not come with another host.",
     "CI_PROVIDER_RATE_LIMITED": "{host} is not accepting lookups right now; try again later.",

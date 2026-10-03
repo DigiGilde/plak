@@ -26,6 +26,7 @@ import TabAccess from '../src/components/site/TabAccess.vue';
 import TabMembers from '../src/components/site/TabMembers.vue';
 import TabVersions from '../src/components/site/TabVersions.vue';
 import { untilIdle } from '../src/components/site/testHelpers';
+import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import Site from '../src/pages/Site.vue';
 
 /**
@@ -124,6 +125,60 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     backend.data.sites[0]!.access = { base: 'sso', keys: true, invitees: true };
     vi.stubGlobal('fetch', backend.fetch);
     await expectNoViolations(TabAccess);
+  });
+  it('Versies met een eigen aantal bewaarde versies is zonder violations', async () => {
+    // The number field only exists under the custom option; the default fixture
+    // follows the platform and would leave it unchecked.
+    _resetCurrentMemberCache();
+    const backend = makeMockBackend();
+    backend.data.sites[0]!.liveVersionsKept = 3;
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabVersions, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    expect(wrapper.find('[data-testid="retention-count"]').exists()).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('Versies met een geweigerd aantal bij het veld is zonder violations', async () => {
+    _resetCurrentMemberCache();
+    const backend = makeMockBackend();
+    backend.data.sites[0]!.liveVersionsKept = 3;
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabVersions, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    const field = wrapper.find('[data-testid="retention-count"]').element;
+    field.dispatchEvent(new CustomEvent('change', { detail: { value: '5000000001' } }));
+    await untilIdle();
+    expect(wrapper.find('[data-testid="retention-count"]').attributes('invalid')).toBeDefined();
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+  it('Versies met een niet opgeslagen keuze onder de opties is zonder violations', async () => {
+    _resetCurrentMemberCache();
+    const backend = makeMockBackend();
+    backend.data.sites[0]!.liveVersionsKept = 3;
+    vi.stubGlobal('fetch', (request: RequestInfo | URL, init?: RequestInit) =>
+      String(request).endsWith('/live-versions-kept')
+        ? Promise.reject(new TypeError('netwerk weg'))
+        : backend.fetch(request, init),
+    );
+    const wrapper = mount(TabVersions, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    wrapper.find('[data-testid="retention-default"]').element.dispatchEvent(new CustomEvent('change'));
+    await untilIdle();
+    expect(wrapper.find('[data-testid="retention-choice-error"]').exists()).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
   });
   it('Leden is zonder violations', () => expectNoViolations(TabMembers));
   it('Deploy is zonder violations', () => expectNoViolations(TabDeploy));

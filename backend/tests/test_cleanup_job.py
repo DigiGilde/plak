@@ -541,14 +541,104 @@ class TestOldLiveVersions:
         rollback = asyncio.create_task(roll_back())
         await _wait_for_a_lock_wait(environment)
         commit_gate.set()
-        removed = await sweep
+        removed, kept = await sweep
 
         with pytest.raises(IngestError) as refused:
             await rollback
         assert refused.value.reason == "UNKNOWN_VERSION"
-        assert removed == [versions[0][0]]
+        assert (removed, kept) == ([versions[0][0]], 1)
         assert await _live_version_id(environment) == versions[2][0]
         assert not (environment.content_root / versions[0][1]).exists()
+
+
+async def _set_site_kept(environment: Environment, kept: int | None, site: Site | None = None) -> None:
+    async with environment.session_factory() as session, session.begin():
+        await session.execute(
+            update(Site).where(Site.id == (site or environment.site).id).values(live_versions_kept=kept)
+        )
+
+
+class TestLiveVersionsKeptPerSite:
+    """A site's own number wins over the platform default, in both directions."""
+
+    async def _sweep(self, environment: Environment, default: int) -> CleanupResult:
+        return await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=default
+        )
+
+    async def test_an_own_number_above_the_default_keeps_more(self, environment: Environment):
+        versions = await _make_live_versions(environment, 8)
+        await _set_site_kept(environment, 6)
+
+        result = await self._sweep(environment, 2)
+
+        assert result.old_live_versions == 1
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions[1:]}
+
+    async def test_an_own_number_below_the_default_keeps_fewer(self, environment: Environment):
+        versions = await _make_live_versions(environment, 8)
+        await _set_site_kept(environment, 1)
+
+        result = await self._sweep(environment, 5)
+
+        assert result.old_live_versions == 6
+        assert await _version_ids(environment) == {versions[6][0], versions[7][0]}
+        [row] = await _cleanup_rows(environment)
+        assert row.refs["kept"] == 1
+
+    async def test_an_own_zero_keeps_everything_under_a_default_of_five(self, environment: Environment):
+        versions = await _make_live_versions(environment, 8)
+        await _set_site_kept(environment, 0)
+
+        result = await self._sweep(environment, 5)
+
+        assert result.old_live_versions == 0
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions}
+        assert await _cleanup_rows(environment) == []
+
+    async def test_an_own_number_is_cleaned_under_a_default_that_keeps_all(self, environment: Environment):
+        other = await _make_site(environment)
+        mine = await _make_live_versions(environment, 6)
+        theirs = await _make_live_versions(environment, 6, site=other)
+        await _set_site_kept(environment, 3)
+
+        result = await self._sweep(environment, 0)
+
+        assert result.old_live_versions == 2
+        assert await _version_ids(environment) == {v for v, _ in mine[2:]} | {v for v, _ in theirs}
+        [row] = await _cleanup_rows(environment)
+        assert (row.refs["site"], row.refs["kept"]) == (environment.site.slug, 3)
+
+    async def test_null_follows_the_default(self, environment: Environment):
+        other = await _make_site(environment)
+        mine = await _make_live_versions(environment, 5)
+        theirs = await _make_live_versions(environment, 5, site=other)
+        await _set_site_kept(environment, 4, site=other)
+
+        result = await self._sweep(environment, 2)
+
+        assert result.old_live_versions == 2
+        assert await _version_ids(environment) == {v for v, _ in mine[2:]} | {v for v, _ in theirs}
+
+    async def test_a_site_switched_to_keep_all_after_selection_loses_nothing(self, environment: Environment):
+        """The number is read again under the site lock: a site picked as a
+        candidate whose admin then set 0 must not lose its history."""
+        versions = await _make_live_versions(environment, 4)
+        await _set_site_kept(environment, 0)
+
+        removed = await _cleanup_site_live_versions(
+            environment.session_factory, environment.store, environment.site.id, 1
+        )
+
+        assert removed == ([], 0)
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions}
+
+    async def test_a_site_deleted_after_selection_is_skipped(self, environment: Environment):
+        removed = await _cleanup_site_live_versions(
+            environment.session_factory, environment.store, uuid.uuid4(), 1
+        )
+
+        assert removed == ([], 0)
 
 
 class TestTmpSweeper:

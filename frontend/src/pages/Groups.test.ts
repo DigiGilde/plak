@@ -39,6 +39,7 @@ function site(slug: string, live: boolean): Site {
     access: { base: 'public', keys: false, invitees: false },
     externalSources: false,
     sandbox: true,
+    liveVersionsKept: null,
     liveVersionId: live ? 'versie-1' : null,
     createdBy: 'dev-beheerder',
     hasLiveVersion: live,

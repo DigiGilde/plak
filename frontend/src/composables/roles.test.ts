@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { Me } from '@/api/types';
 
-import { isGroupAdmin, mayCreateSiteIn } from './roles';
+import { isGroupAdmin, isSiteAdmin, mayCreateSiteIn } from './roles';
 
-function me(groupRoles: Me['groupRoles']): Me {
+function me(groupRoles: Me['groupRoles'], siteRoles: Me['siteRoles'] = []): Me {
   return {
     id: 'lid-1',
     ssoSubject: 'sub-1',
@@ -16,7 +16,7 @@ function me(groupRoles: Me['groupRoles']): Me {
     lastLoginAt: null,
     contentBaseUrl: 'https://sites.plak.test',
     groupRoles,
-    siteRoles: [],
+    siteRoles,
     ciForgejoHosts: [],
     ciAudience: 'plak',
     language: null,
@@ -66,5 +66,33 @@ describe('isGroupAdmin', () => {
 
   it('allows an admin of the group', () => {
     expect(isGroupAdmin(me([{ groupSlug: 'team-aurora', role: 'admin' }]), 'team-aurora')).toBe(true);
+  });
+});
+
+describe('isSiteAdmin', () => {
+  type R = 'reader' | 'editor' | 'admin';
+  const site = (role: R, effectiveRole: R, siteSlug = 'website') => ({
+    groupSlug: 'team-aurora',
+    siteSlug,
+    role,
+    effectiveRole,
+  });
+
+  it('refuses without a member', () => {
+    expect(isSiteAdmin(null, 'team-aurora', 'website')).toBe(false);
+    expect(isSiteAdmin(undefined, 'team-aurora', 'website')).toBe(false);
+  });
+
+  it('accepts an admin of the group', () => {
+    expect(isSiteAdmin(me([{ groupSlug: 'team-aurora', role: 'admin' }]), 'team-aurora', 'website')).toBe(true);
+  });
+
+  it('accepts an admin role on that site', () => {
+    expect(isSiteAdmin(me([], [site('admin', 'admin')]), 'team-aurora', 'website')).toBe(true);
+  });
+
+  it('refuses a lower effective role, and an admin role on another site', () => {
+    expect(isSiteAdmin(me([], [site('editor', 'editor')]), 'team-aurora', 'website')).toBe(false);
+    expect(isSiteAdmin(me([], [site('admin', 'admin', 'andere')]), 'team-aurora', 'website')).toBe(false);
   });
 });
