@@ -25,3 +25,7 @@ Heb je een privérepository gekoppeld door het repository-id en het eigenaar-id 
 ## Contentvolume
 
 Als platformbeheerder zie je op de pagina "Platformbeheer" nu hoe vol het contentvolume is: in gebruik, vrij en de reserve. Het wordt rood zodra een deploy van de maximale omvang er niet meer bij past.
+
+## API-documentatie in twee talen
+
+De API-documentatie, te vinden onderaan elke pagina, is er nu in het Engels en in het Nederlands. Ben je ingelogd, dan volgt ze de taal uit je profiel; met de wissel bovenaan de pagina kies je de andere taal.

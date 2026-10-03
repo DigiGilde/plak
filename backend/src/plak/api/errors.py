@@ -65,39 +65,39 @@ FIELD_INDEX_CANDIDATES = "indexCandidates"
 
 
 class Problem(ApiModel):
-    """Foutbericht volgens RFC 9457 (`application/problem+json`), met `code` als extensie."""
+    """Error message following RFC 9457 (`application/problem+json`), with `code` as an extension."""
 
     type: str = Field(
         default="about:blank",
-        description="Fouttype-URI. Plak gebruikt altijd `about:blank`; `code` draagt de machineleesbare betekenis.",
+        description="Error type URI. Plak always uses `about:blank`; `code` carries the machine-readable meaning.",
     )
     title: str = Field(
-        description="Korte, vaste omschrijving van de statuscode, bijvoorbeeld 'Geen toegang'.",
-        examples=["Geen toegang"],
+        description="Short, fixed description of the status code, for example 'Forbidden'.",
+        examples=["Forbidden"],
     )
-    status: int = Field(description="De HTTP-statuscode, herhaald in het bericht.", examples=[403])
+    status: int = Field(description="The HTTP status code, repeated in the message.", examples=[403])
     detail: str = Field(
-        description="Toelichting op dit ene voorval, bedoeld voor een mens. Bevat nooit interne details.",
-        examples=["Je bent geen lid van deze groep."],
+        description="Explanation of this one occurrence, meant for a human. Never contains internal details.",
+        examples=["You are not a member of this group."],
     )
     code: str | None = Field(
         default=None,
         description=(
-            "Extensielid (RFC 9457): stabiele, machineleesbare foutcode zoals `NOT_GROUP_MEMBER` of "
-            "`SLUG_EXISTS`. Ontbreekt bij fouten die FastAPI zelf afhandelt, zoals een schemavalidatie."
+            "Extension member (RFC 9457): stable, machine-readable error code such as `NOT_GROUP_MEMBER` or "
+            "`SLUG_EXISTS`. Absent for errors that FastAPI handles itself, such as a schema validation."
         ),
         examples=["NOT_GROUP_MEMBER"],
     )
     index_candidates: list[str] | None = Field(
         default=None,
         description=(
-            "Extensielid (RFC 9457): bij `NO_INDEX`, `BASE_PATH_WITHOUT_INDEX`, `BASE_PATH_UNKNOWN` en "
-            "`TOO_MANY_FILES` de "
-            "`index.html`-paden die in de bundel gevonden zijn, kortste eerst en hoogstens vijf. De paden "
-            "staan relatief aan de hoofdmap na het afpellen, dus de map van zo'n pad is precies de waarde die "
-            "als formveld `basePath` teruggestuurd kan worden. Bevat een pad geen `/`, dan staat die "
-            "`index.html` al in de hoofdmap: dan is er geen map om terug te sturen en is de herstelactie juist "
-            "om `basePath` weg te laten."
+            "Extension member (RFC 9457): with `NO_INDEX`, `BASE_PATH_WITHOUT_INDEX`, `BASE_PATH_UNKNOWN` and "
+            "`TOO_MANY_FILES`, the "
+            "`index.html` paths found in the bundle, shortest first and at most five. The paths "
+            "are relative to the root directory after unwrapping, so the directory of such a path is exactly the "
+            "value that can be sent back as the `basePath` form field. If a path contains no `/`, that "
+            "`index.html` is already in the root directory: there is no directory to send back, and the fix is "
+            "to omit `basePath`."
         ),
         examples=[["dist/index.html", "docs/site/index.html"]],
     )
@@ -107,9 +107,9 @@ class Problem(ApiModel):
 # that underscore keeps bare words like `POST` or `RFC` out of the match.
 _CODE_RE = re.compile(r"`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`")
 
-# The OpenAPI document is written in Dutch, so its examples are too; the
-# answers themselves follow the client's Accept-Language.
-_DOCS_LOCALE = i18n.DEFAULT
+# The OpenAPI document is generated in English, the language a client that
+# asks for nothing gets; api/openapi_i18n.py swaps these examples for Dutch.
+_DOCS_LOCALE = i18n.API_DEFAULT
 _EXAMPLE_STATUSES = frozenset({401, 403, 404, 409, 413, 422, 429})
 
 

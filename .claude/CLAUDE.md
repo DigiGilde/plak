@@ -39,15 +39,17 @@ All three suites sit at 100% and the floors are set there
 
 ## Language
 
-Dutch for everything a person sees: UI texts, error messages, OpenAPI
-descriptions, the `just --list` recipe descriptions and the output of the
-shell scripts in `dev/`.
+Dutch for everything a person sees: UI texts, error messages, the
+`just --list` recipe descriptions and the output of the shell scripts in
+`dev/`.
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
-everything under `docs/`, and the route paths of the admin SPA
-(`/-/sessions`, `/-/profile`, `/cli-link`). A path is an address, not
-interface text, and the SPA answers in two languages under one.
+everything under `docs/`, the route paths of the admin SPA
+(`/-/sessions`, `/-/profile`, `/cli-link`), and the element ids and
+`data-testid`s in the SPA. A path is an address, not interface text, and
+the SPA answers in two languages under one. An id is an identifier too:
+do not copy a Dutch one from older code around it.
 
 The admin SPA is the exception: it is bilingual, Dutch and English.
 Every string it shows lives in `frontend/src/i18n/`, in a shared
@@ -64,6 +66,14 @@ English is what a client that asks for nothing gets; the admin SPA
 sends the language it is showing, so a refusal arrives in the language
 on screen. A new message is added to both catalogues at once, which
 `test_messages.py` enforces.
+
+The OpenAPI schema and the docs page on `/-/api/docs` are bilingual the
+same way, English by default. The routes, models and `api/docs.py` are
+written in English; the Dutch schema comes from `api/openapi_nl.py`, a
+catalogue keyed by the English text itself. Reword an English summary or
+description and `test_openapi_i18n.py` names the sentence that lacks a
+translation and the entry nobody uses any more: update both in the same
+change.
 
 The file names under `docs/` are English (`security.md`, `audit-log.md`,
 `publishing.md`, `local-development.md`, `deploying-on-zad.md`), matching

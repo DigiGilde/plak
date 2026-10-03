@@ -10,8 +10,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
-<!-- release: hold -->
-
 ### Added
 
 - A public What's new page at `/-/whats-new`, linked from the footer
@@ -50,6 +48,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   volume is capped at 1Gi.
 - `plak preview-remove` reports the removal on stderr, like the CLI's
   other messages for people.
+- The API documentation and the OpenAPI schema are in English, and in
+  Dutch through a switch on the page, the language on your profile or
+  `Accept-Language`.
 - The `API-Version` header follows the API from release to release: the
   minor goes up when a release adds to it, the patch when it changes it
   otherwise.

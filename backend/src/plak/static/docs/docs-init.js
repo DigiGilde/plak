@@ -17,8 +17,11 @@
   }
 
   window.addEventListener('load', function () {
+    var lang = new URLSearchParams(window.location.search).get('lang');
     window.ui = SwaggerUIBundle({
-      url: '/-/api/openapi.json',
+      // Without ?lang= the server picks the same language for the schema as
+      // for this page; a choice made with the switch has to be passed on.
+      url: '/-/api/openapi.json' + (lang ? '?lang=' + encodeURIComponent(lang) : ''),
       dom_id: '#swagger-ui',
       presets: [SwaggerUIBundle.presets.apis],
       layout: 'BaseLayout',

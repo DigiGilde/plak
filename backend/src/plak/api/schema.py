@@ -16,18 +16,18 @@ class ApiModel(BaseModel):
 
 
 ACCESS_BASE_HINT = (
-    "`public` (iedereen), `sso` (elke gebruiker die inlogt met SSO Rijk), `site_team` (wie een rol "
-    "heeft op de site of op haar groep) of `nobody` (niemand standaard: alleen via de "
-    "uitzonderingen hieronder)."
+    "`public` (everyone), `sso` (every user who signs in with SSO Rijk), `site_team` (anyone with a role "
+    "on the site or on its group) or `nobody` (nobody by default: only through the "
+    "exceptions below)."
 )
 
 
 class AccessOut(ApiModel):
-    """Wie de content mag zien: een basis plus twee uitzonderingen."""
+    """Who may see the content: a base plus two exceptions."""
 
-    base: AccessBase = Field(description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
-    keys: bool = Field(description="Of geheime links toegang geven, ook zonder inloggen.")
-    invitees: bool = Field(description="Of genodigden toegang geven na inloggen met SSO Rijk.")
+    base: AccessBase = Field(description=f"The base, exactly one of: {ACCESS_BASE_HINT}")
+    keys: bool = Field(description="Whether secret links grant access, even without signing in.")
+    invitees: bool = Field(description="Whether invitees get access after signing in with SSO Rijk.")
 
 
 __all__ = ["ACCESS_BASE_HINT", "AccessOut", "ApiModel"]
