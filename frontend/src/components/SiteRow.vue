@@ -75,7 +75,7 @@ const siteHref = computed(
          twice. -->
     <nldd-cell hide-below="md" :title="accessText">
       <nldd-badge color="neutral" :text="accessShort" decorative></nldd-badge>
-      <span class="alleen-schermlezer">{{ accessText }}</span>
+      <span class="visually-hidden">{{ accessText }}</span>
     </nldd-cell>
     <nldd-text-cell
       :text="lastPublishedLabel"

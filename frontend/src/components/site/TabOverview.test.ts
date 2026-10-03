@@ -26,12 +26,12 @@ function makeWrapper() {
 
 /** Types the site's address, which the delete dialog asks for. */
 function typeAddress(wrapper: ReturnType<typeof makeWrapper>, value = 'team-aurora/website'): void {
-  fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', { value });
+  fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', { value });
 }
 
 /** Picks a file in nldd-file-field: the value arrives in `event.detail`. */
 function chooseFile(wrapper: ReturnType<typeof makeWrapper>, file: File): void {
-  fireDetailEvent(wrapper.find('[data-testid="upload-invoer"]').element, 'change', {
+  fireDetailEvent(wrapper.find('[data-testid="upload-input"]').element, 'change', {
     files: [file],
   });
 }
@@ -43,7 +43,7 @@ describe('TabOverview: states', () => {
 
     expect(wrapper.text()).toContain('Status');
     // On the content host, not on the admin origin the SPA itself runs on.
-    const url = wrapper.find('[data-testid="publieke-url"]');
+    const url = wrapper.find('[data-testid="public-url"]');
     expect(url.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(url.attributes('href')).not.toContain(window.location.origin);
     expect(wrapper.html()).toContain('Laatste deploy:');
@@ -52,7 +52,7 @@ describe('TabOverview: states', () => {
     const tags = wrapper.findAll('nldd-tag');
     expect(tags).toHaveLength(2);
     expect(tags[0]!.attributes('text')).toBe('Live');
-    expect(tags[1]!.attributes('data-testid')).toBe('zichtbaarheid-tag');
+    expect(tags[1]!.attributes('data-testid')).toBe('visibility-tag');
   });
 
   it("doesn't repeat the deploy history: that lives on the Versies tab", async () => {
@@ -68,7 +68,7 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="kopieer-adres"]').attributes('text')).toBe('Kopieer adres');
+    expect(wrapper.find('[data-testid="copy-address"]').attributes('text')).toBe('Kopieer adres');
     const openButtons = wrapper.find('[data-testid="open-site"]');
     expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
@@ -81,8 +81,8 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="adres-label"]').text()).toBe('Publieke URL');
-    expect(wrapper.find('[data-testid="zichtbaar-voor"]').text()).toContain(
+    expect(wrapper.find('[data-testid="address-label"]').text()).toBe('Publieke URL');
+    expect(wrapper.find('[data-testid="visible-to"]').text()).toContain(
       'Iedereen kan de site bekijken',
     );
   });
@@ -92,8 +92,8 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="adres-label"]').text()).toBe('Adres van je site');
-    const who = wrapper.find('[data-testid="zichtbaar-voor"]').text();
+    expect(wrapper.find('[data-testid="address-label"]').text()).toBe('Adres van je site');
+    const who = wrapper.find('[data-testid="visible-to"]').text();
     expect(who).toContain('Alleen wie een rol heeft op deze site');
   });
 
@@ -103,11 +103,11 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="kopieer-adres"]').trigger('click');
+    await wrapper.find('[data-testid="copy-address"]').trigger('click');
     await untilIdle();
 
     expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
-    const notice = wrapper.find('[data-testid="kopieermelding"]');
+    const notice = wrapper.find('[data-testid="copy-notice"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line in the page, so no remount swallows the confirmation.
     expect(notice.attributes('role')).toBe('status');
@@ -121,10 +121,10 @@ describe('TabOverview: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="kopieer-adres"]').trigger('click');
+    await wrapper.find('[data-testid="copy-address"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="kopieermelding"]').text()).toContain('Selecteer het adres');
+    expect(wrapper.find('[data-testid="copy-notice"]').text()).toContain('Selecteer het adres');
   });
 
   it('shows the empty state without a live version', async () => {
@@ -137,7 +137,7 @@ describe('TabOverview: states', () => {
     await untilIdle();
 
     expect(wrapper.html()).toContain('Nog geen live versie');
-    expect(wrapper.find('[data-testid="publieke-url"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="public-url"]').exists()).toBe(false);
   });
 
   it('shows an error message on a server error', async () => {
@@ -189,7 +189,7 @@ describe('TabOverview: upload', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="upload-invoer"]');
+    const field = wrapper.find('[data-testid="upload-input"]');
     expect(field.element.tagName.toLowerCase()).toBe('nldd-file-field');
     expect(field.attributes('accept')).toBe('.zip,.tar.gz,.tgz,.html');
     expect(field.attributes('required')).toBeDefined();
@@ -209,7 +209,7 @@ describe('TabOverview: upload', () => {
     // Picking alone publishes nothing.
     expect(backend.data.versions.length).toBe(countBefore);
 
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.versions.length).toBe(countBefore + 1);
@@ -222,7 +222,7 @@ describe('TabOverview: upload', () => {
     await untilIdle();
 
     const countBefore = backend.data.versions.length;
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.versions.length).toBe(countBefore);
@@ -237,7 +237,7 @@ describe('TabOverview: upload', () => {
     // Without a bestand field the backend refuses with a 422; simulate that by
     // letting the fetch return a problem for a moment.
     vi.stubGlobal('fetch', serverErrorFetch());
-    await wrapper.find('[data-testid="upload-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
     await untilIdle();
 
     expect(wrapper.html()).toContain('Serverfout');
@@ -251,16 +251,16 @@ describe('TabOverview: danger zone', () => {
     await untilIdle();
 
     // Confirming while the dialog is not open does nothing.
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
     expect(backend.data.sites).toHaveLength(1);
     expect(wrapper.emitted('removed')).toBeFalsy();
 
     // Open the dialog, type the address and confirm: now the site really
     // disappears.
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(0);
@@ -273,28 +273,28 @@ describe('TabOverview: danger zone', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
     expect(wrapper.findComponent(ConfirmModal).props('confirmPhrase')).toBe('team-aurora/website');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     typeAddress(wrapper, 'website');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(1);
     expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.find('[data-testid="bevestig-zin"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="confirm-phrase"]').attributes('invalid')).toBeDefined();
   });
 
   it('the safe way out is at the top and is the primary button', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
     const actions = wrapper.findAll('nldd-modal-dialog nldd-button');
-    expect(actions[0]!.attributes('data-testid')).toBe('bevestig-annuleren');
+    expect(actions[0]!.attributes('data-testid')).toBe('confirm-cancel');
     expect(actions[0]!.attributes('variant')).toBe('primary');
     expect(actions[0]!.attributes('text')).toBe('Behoud site');
-    expect(actions[1]!.attributes('data-testid')).toBe('bevestig-doorgaan');
+    expect(actions[1]!.attributes('data-testid')).toBe('confirm-continue');
     expect(actions[1]!.attributes('variant')).toBe('destructive');
     expect(actions[1]!.attributes('disabled')).toBeUndefined();
   });
@@ -303,8 +303,8 @@ describe('TabOverview: danger zone', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(1);
@@ -315,10 +315,10 @@ describe('TabOverview: danger zone', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     // The modal renders the page below it inert: the notification can only be
@@ -329,17 +329,17 @@ describe('TabOverview: danger zone', () => {
     expect(notice.attributes('variant')).toBe('critical');
     expect(notice.attributes('supporting-text')).toBe('Serverfout');
     expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeUndefined();
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('loading')).toBeUndefined();
   });
 
   it('reports a generic failure when deleting throws something other than an ApiError', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="verwijder-site"]').trigger('click');
+    await wrapper.find('[data-testid="delete-site"]').trigger('click');
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');

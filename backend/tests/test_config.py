@@ -145,7 +145,7 @@ def test_audit_pepper_equal_to_session_secret_refused(monkeypatch):
     _set_required_env(monkeypatch, PLAK_SESSION_SECRET=shared, PLAK_AUDIT_PEPPER=shared)
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
-    assert "PLAK_AUDIT_PEPPER moet verschillen van PLAK_SESSION_SECRET" in str(excinfo.value)
+    assert "PLAK_AUDIT_PEPPER must differ from PLAK_SESSION_SECRET" in str(excinfo.value)
     assert shared not in _full_traceback(excinfo.value)
 
 
@@ -392,7 +392,7 @@ def test_production_refuses_a_loopback_issuer(monkeypatch, issuer):
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
     assert "PLAK_OIDC_ISSUER" in str(excinfo.value)
-    assert "hostnaam" in str(excinfo.value)
+    assert "hostname" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(

@@ -115,10 +115,10 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
 <template>
   <Notices ref="notices" />
 
-  <section aria-labelledby="kop-standaardtoegang">
+  <section aria-labelledby="heading-default-access">
     <nldd-container layout="stack" gap="8">
       <nldd-title :size="4">
-        <h2 id="kop-standaardtoegang">{{ t('group.settings.heading') }}</h2>
+        <h2 id="heading-default-access">{{ t('group.settings.heading') }}</h2>
         <span slot="subtitle">{{ t('group.settings.intro') }}</span>
       </nldd-title>
 
@@ -126,7 +126,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
         type="radiogroup"
         variant="box-base"
         :accessible-label="t('group.settings.list.label')"
-        data-testid="standaardtoegang-groep"
+        data-testid="default-access-group"
       >
         <nldd-list-item
           v-for="w in ACCESS_BASE_VALUES"
@@ -134,7 +134,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
           radio
           size="md"
           :checked="w === chosen.base || undefined"
-          :data-testid="`standaardtoegang-${w}`"
+          :data-testid="`default-access-${w}`"
           @change="chooseBase(w)"
         >
           <!-- The row is the radio itself; the button only draws the shape
@@ -157,31 +157,31 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
       <nldd-switch-field
         :label="keysLabel()"
         :checked="chosen.keys || undefined"
-        data-testid="standaardtoegang-sleutels"
+        data-testid="default-access-keys"
         @change="toggle('keys', $event)"
       ></nldd-switch-field>
       <nldd-switch-field
         :label="inviteesLabel()"
         :checked="chosen.invitees || undefined"
-        data-testid="standaardtoegang-genodigden"
+        data-testid="default-access-invitees"
         @change="toggle('invitees', $event)"
       ></nldd-switch-field>
 
       <nldd-inline-dialog
         icon="eye"
         :text="accessSummary(chosen)"
-        data-testid="standaardtoegang-samenvatting"
+        data-testid="default-access-summary"
       ></nldd-inline-dialog>
     </nldd-container>
   </section>
 
   <template v-if="canDelete">
     <nldd-spacer size="24"></nldd-spacer>
-    <section aria-labelledby="kop-gevarenzone-groep">
+    <section aria-labelledby="heading-danger-zone-group">
       <nldd-box background="critical">
         <nldd-container layout="stack" gap="8" padding="16">
           <nldd-title :size="4">
-            <h2 id="kop-gevarenzone-groep">{{ t('group.settings.danger.heading') }}</h2>
+            <h2 id="heading-danger-zone-group">{{ t('group.settings.danger.heading') }}</h2>
           </nldd-title>
           <nldd-container layout="stack" gap="16">
             <nldd-rich-text>
@@ -191,7 +191,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
               <nldd-button
                 variant="destructive"
                 :text="t('group.settings.danger.action')"
-                data-testid="verwijder-groep"
+                data-testid="delete-group"
                 @click="deleteOpen = true"
               ></nldd-button>
             </nldd-button-group>
@@ -219,7 +219,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
           type="form"
           variant="box-tinted"
           :accessible-label="t('group.settings.danger.confirm.sites.list')"
-          data-testid="groep-sites-lijst"
+          data-testid="group-sites-list"
         >
           <nldd-list-item v-for="site in namedSites" :key="site.slug">
             <nldd-text-cell
@@ -227,7 +227,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
               :supporting-text="`${props.group}/${site.slug}`"
             ></nldd-text-cell>
           </nldd-list-item>
-          <nldd-list-item v-if="unnamedSites > 0" data-testid="groep-sites-rest">
+          <nldd-list-item v-if="unnamedSites > 0" data-testid="group-sites-rest">
             <nldd-text-cell size="sm" :text="unnamedText"></nldd-text-cell>
           </nldd-list-item>
         </nldd-list>

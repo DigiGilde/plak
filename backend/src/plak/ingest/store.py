@@ -31,10 +31,10 @@ def _check_rel_path(rel_path: str) -> None:
     # store independently refuses anything that could reach outside the
     # version root.
     if not rel_path or "\x00" in rel_path or "\\" in rel_path:
-        raise StoreError(f"ongeldig relatief pad: {rel_path!r}")
+        raise StoreError(f"invalid relative path: {rel_path!r}")
     parts = rel_path.split("/")
     if any(part in ("", ".", "..") for part in parts) or rel_path.startswith("/"):
-        raise StoreError(f"ongeldig relatief pad: {rel_path!r}")
+        raise StoreError(f"invalid relative path: {rel_path!r}")
 
 
 class VersionWriter:
@@ -53,7 +53,7 @@ class VersionWriter:
             target.parent.mkdir(parents=True, exist_ok=True)
             return target.open("xb")
         except (FileExistsError, NotADirectoryError, IsADirectoryError) as error:
-            raise StoreError(f"pad botst met een eerder geschreven pad: {rel_path!r}") from error
+            raise StoreError(f"path collides with a previously written path: {rel_path!r}") from error
 
     def total_bytes(self) -> int:
         """What has been written so far, measured on disk rather than counted
@@ -93,12 +93,12 @@ class ContentStore:
     def _version_root(self, storage_ref: str) -> Path:
         """Resolved path of a version root, with a containment guarantee."""
         if "\x00" in storage_ref:
-            raise StoreError("storage_ref bevat een null-byte")
+            raise StoreError("storage_ref contains a null byte")
         path = (self._root / storage_ref).resolve()
         if path == self._root or not path.is_relative_to(self._root):
-            raise StoreError("storage_ref wijst buiten de contentroot")
+            raise StoreError("storage_ref points outside the content root")
         if path == self._tmp or path.is_relative_to(self._tmp):
-            raise StoreError("storage_ref wijst naar de tempdirectory")
+            raise StoreError("storage_ref points to the temp directory")
         return path
 
     def free_bytes(self) -> int:

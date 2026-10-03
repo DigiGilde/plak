@@ -471,7 +471,7 @@ class TestOldLiveVersions:
         assert result.old_live_versions == 1
         assert versions[0][0] not in await _version_ids(environment)
         assert not (environment.content_root / versions[0][1]).exists()
-        assert any("live-versies" in record.getMessage() for record in caplog.records)
+        assert any("live versions" in record.getMessage() for record in caplog.records)
 
     async def test_a_rollback_that_commits_while_the_sweep_waits_keeps_its_version(
         self, environment: Environment
@@ -709,7 +709,7 @@ class TestRunDaily:
             await asyncio.wait_for(task, timeout=5)
 
         assert len(calls) >= 2
-        assert any("opschoning" in record.getMessage().lower() for record in caplog.records)
+        assert any("cleanup" in record.getMessage().lower() for record in caplog.records)
         assert any(record.levelno == logging.ERROR for record in caplog.records)
 
     async def test_stopping_while_waiting_runs_no_sweep_and_ends_the_task(

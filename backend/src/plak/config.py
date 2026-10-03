@@ -1,6 +1,6 @@
 """Configuration through environment variables (12-factor), prefix PLAK_.
 
-Fail-fast: missing or invalid required values produce a clear Dutch error
+Fail-fast: missing or invalid required values produce a clear error
 message naming the variable involved, instead of passing on the bare pydantic
 ValidationError.
 
@@ -37,8 +37,8 @@ def issuer_from_discovery_url(discovery_url: str) -> str:
     """OIDC Discovery 1.0 §4: discovery URL = issuer + /.well-known/openid-configuration."""
     if not discovery_url.endswith(OIDC_DISCOVERY_SUFFIX):
         raise ValueError(
-            "OIDC_DISCOVERY_URL eindigt niet op /.well-known/openid-configuration; "
-            "zet PLAK_OIDC_ISSUER expliciet"
+            "OIDC_DISCOVERY_URL does not end in /.well-known/openid-configuration; "
+            "set PLAK_OIDC_ISSUER explicitly"
         )
     return discovery_url[: -len(OIDC_DISCOVERY_SUFFIX)]
 
@@ -50,11 +50,11 @@ def normalise_https_base_url(value: str, field_name: str) -> str:
     try:
         port = parts.port
     except ValueError as error:
-        raise ValueError(f"{field_name}: ongeldige poort in {value.strip()!r}") from error
+        raise ValueError(f"{field_name}: invalid port in {value.strip()!r}") from error
     if parts.scheme != "https" or not parts.hostname:
-        raise ValueError(f"{field_name}: {value.strip()!r} is geen https-URL met hostnaam")
+        raise ValueError(f"{field_name}: {value.strip()!r} is not an https URL with a hostname")
     if parts.path not in ("", "/") or parts.query or parts.fragment or parts.username or parts.password:
-        raise ValueError(f"{field_name}: {value.strip()!r} mag alleen schema en host bevatten")
+        raise ValueError(f"{field_name}: {value.strip()!r} may only contain scheme and host")
     host = parts.hostname
     return f"https://{host}" if port in (None, 443) else f"https://{host}:{port}"
 
@@ -75,9 +75,9 @@ def _decode_audit_ip_key(field_name: str, value: str) -> str:
     try:
         decoded = base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError) as error:
-        raise ValueError(f"{field_name} moet base64-gecodeerd zijn") from error
+        raise ValueError(f"{field_name} must be base64-encoded") from error
     if len(decoded) != AUDIT_IP_KEY_BYTES:
-        raise ValueError(f"{field_name} moet base64 van {AUDIT_IP_KEY_BYTES} bytes zijn")
+        raise ValueError(f"{field_name} must be the base64 encoding of {AUDIT_IP_KEY_BYTES} bytes")
     return value
 
 
@@ -213,7 +213,7 @@ class Settings(BaseSettings):
     def _min_32_bytes(cls, value: str, info) -> str:
         if len(value.encode("utf-8")) < MIN_SECRET_BYTES:
             field_name = f"PLAK_{info.field_name.upper()}"
-            raise ValueError(f"{field_name} moet minstens {MIN_SECRET_BYTES} bytes lang zijn")
+            raise ValueError(f"{field_name} must be at least {MIN_SECRET_BYTES} bytes long")
         return value
 
     @field_validator("audit_ip_key")
@@ -231,7 +231,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _audit_pepper_distinct(self) -> Settings:
         if self.audit_pepper == self.session_secret:
-            raise ValueError("PLAK_AUDIT_PEPPER moet verschillen van PLAK_SESSION_SECRET")
+            raise ValueError("PLAK_AUDIT_PEPPER must differ from PLAK_SESSION_SECRET")
         return self
 
     @model_validator(mode="after")
@@ -239,14 +239,14 @@ class Settings(BaseSettings):
         other_secrets = (self.session_secret, self.audit_pepper)
         if self.audit_ip_key in other_secrets:
             raise ValueError(
-                "PLAK_AUDIT_IP_KEY moet verschillen van PLAK_SESSION_SECRET en PLAK_AUDIT_PEPPER"
+                "PLAK_AUDIT_IP_KEY must differ from PLAK_SESSION_SECRET and PLAK_AUDIT_PEPPER"
             )
         if self.audit_ip_key_previous is not None:
             if self.audit_ip_key_previous == self.audit_ip_key:
-                raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS moet verschillen van PLAK_AUDIT_IP_KEY")
+                raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY")
             if self.audit_ip_key_previous in other_secrets:
                 raise ValueError(
-                    "PLAK_AUDIT_IP_KEY_PREVIOUS moet verschillen van PLAK_SESSION_SECRET en "
+                    "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and "
                     "PLAK_AUDIT_PEPPER"
                 )
         return self
@@ -269,7 +269,7 @@ class Settings(BaseSettings):
             return None
         parts = urlsplit(value.strip())
         if parts.scheme not in ("http", "https") or not parts.hostname:
-            raise ValueError(f"PLAK_BASE_URL: {value.strip()!r} is geen http(s)-URL met hostnaam")
+            raise ValueError(f"PLAK_BASE_URL: {value.strip()!r} is not an http(s) URL with a hostname")
         return value
 
     @field_validator("content_base_url")
@@ -277,8 +277,8 @@ class Settings(BaseSettings):
     def _content_base_url_with_host(cls, value: str) -> str:
         if not urlsplit(value).hostname:
             raise ValueError(
-                "PLAK_CONTENT_BASE_URL moet een absolute URL met hostnaam zijn, "
-                "bijvoorbeeld https://plak.example.org"
+                "PLAK_CONTENT_BASE_URL must be an absolute URL with a hostname, "
+                "for example https://plak.example.org"
             )
         return value
 
@@ -292,7 +292,7 @@ class Settings(BaseSettings):
     @classmethod
     def _environment_valid(cls, value: str) -> str:
         if value not in ("dev", "productie"):
-            raise ValueError("PLAK_ENVIRONMENT moet 'dev' of 'productie' zijn")
+            raise ValueError("PLAK_ENVIRONMENT must be 'dev' or 'productie'")
         return value
 
     @field_validator("oidc_client_auth")
@@ -300,9 +300,8 @@ class Settings(BaseSettings):
     def _client_auth_valid(cls, value: str) -> str:
         if value not in OIDC_CLIENT_AUTH_METHODS:
             raise ValueError(
-                "PLAK_OIDC_CLIENT_AUTH moet een van "
+                "PLAK_OIDC_CLIENT_AUTH must be one of "
                 + ", ".join(OIDC_CLIENT_AUTH_METHODS)
-                + " zijn"
             )
         return value
 
@@ -321,39 +320,39 @@ class Settings(BaseSettings):
 
         if not self.oidc_issuer:
             raise ValueError(
-                "PLAK_OIDC_ISSUER is verplicht (op ZAD volstaat OIDC_DISCOVERY_URL "
-                "van de Keycloak-dienst)"
+                "PLAK_OIDC_ISSUER is required (on ZAD, OIDC_DISCOVERY_URL "
+                "of the Keycloak service suffices)"
             )
         if not self.oidc_client_id:
             raise ValueError(
-                "PLAK_OIDC_CLIENT_ID is verplicht (op ZAD volstaat OIDC_CLIENT_ID "
-                "van de Keycloak-dienst)"
+                "PLAK_OIDC_CLIENT_ID is required (on ZAD, OIDC_CLIENT_ID "
+                "of the Keycloak service suffices)"
             )
 
         method_ = self.oidc_client_auth
         if used_secret:
             if not self.oidc_client_secret:
                 raise ValueError(
-                    f"PLAK_OIDC_CLIENT_SECRET is verplicht bij PLAK_OIDC_CLIENT_AUTH={method_} "
-                    "(op ZAD volstaat OIDC_CLIENT_SECRET van de Keycloak-dienst)"
+                    f"PLAK_OIDC_CLIENT_SECRET is required with PLAK_OIDC_CLIENT_AUTH={method_} "
+                    "(on ZAD, OIDC_CLIENT_SECRET of the Keycloak service suffices)"
                 )
             if self.oidc_client_private_jwk:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK hoort niet bij "
-                    f"PLAK_OIDC_CLIENT_AUTH={method_}; verwijder de sleutel of kies "
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is not used with "
+                    f"PLAK_OIDC_CLIENT_AUTH={method_}; remove the key or choose "
                     "private_key_jwt"
                 )
         else:
             if not self.oidc_client_private_jwk:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is verplicht bij "
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is required with "
                     "PLAK_OIDC_CLIENT_AUTH=private_key_jwt"
                 )
             if self.oidc_client_secret:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_SECRET hoort niet bij PLAK_OIDC_CLIENT_AUTH="
-                    "private_key_jwt; verwijder het secret of kies client_secret_post "
-                    "of client_secret_basic"
+                    "PLAK_OIDC_CLIENT_SECRET is not used with PLAK_OIDC_CLIENT_AUTH="
+                    "private_key_jwt; remove the secret or choose client_secret_post "
+                    "or client_secret_basic"
                 )
         return self
 
@@ -362,31 +361,31 @@ class Settings(BaseSettings):
         if self.environment == "productie":
             if self.behind_proxy is None:
                 raise ValueError(
-                    "PLAK_BEHIND_PROXY is verplicht wanneer "
-                    "PLAK_ENVIRONMENT=productie; 'false' betekent: geen proxy ervoor"
+                    "PLAK_BEHIND_PROXY is required when "
+                    "PLAK_ENVIRONMENT=productie; 'false' means: no proxy in front"
                 )
             if not self.oidc_iss_required:
                 raise ValueError(
-                    "PLAK_OIDC_ISS_REQUIRED moet 'true' zijn wanneer "
+                    "PLAK_OIDC_ISS_REQUIRED must be 'true' when "
                     "PLAK_ENVIRONMENT=productie"
                 )
             if not self.base_url:
                 raise ValueError(
-                    "PLAK_BASE_URL is verplicht wanneer PLAK_ENVIRONMENT=productie"
+                    "PLAK_BASE_URL is required when PLAK_ENVIRONMENT=productie"
                 )
             # The issuer is already filled in by _oidc_source_and_secrets above,
             # whether it came from PLAK_OIDC_ISSUER or from OIDC_DISCOVERY_URL.
             issuer = urlsplit(self.oidc_issuer)
             if issuer.scheme != "https":
                 raise ValueError(
-                    "PLAK_OIDC_ISSUER moet een https-URL zijn wanneer "
-                    "PLAK_ENVIRONMENT=productie; http hoort bij de dev-mock"
+                    "PLAK_OIDC_ISSUER must be an https URL when "
+                    "PLAK_ENVIRONMENT=productie; http is only for the dev mock"
                 )
             if not issuer.hostname or is_loopback_host(issuer.hostname):
                 raise ValueError(
-                    "PLAK_OIDC_ISSUER moet een echte hostnaam hebben wanneer "
-                    "PLAK_ENVIRONMENT=productie; loopback en .localhost horen bij "
-                    "de dev-mock"
+                    "PLAK_OIDC_ISSUER must have a real hostname when "
+                    "PLAK_ENVIRONMENT=productie; loopback and .localhost are only for "
+                    "the dev mock"
                 )
         return self
 
@@ -394,23 +393,23 @@ class Settings(BaseSettings):
 def _field_name_from_location(location: tuple) -> str:
     if location:
         return f"PLAK_{str(location[0]).upper()}"
-    return "PLAK_<onbekend>"
+    return "PLAK_<unknown>"
 
 
 def load_settings() -> Settings:
-    """Loads the settings, or fails with a clear Dutch message."""
+    """Loads the settings, or fails with a clear message."""
     try:
         return Settings()
     except ValidationError as error:
         messages = []
         for fields_error in error.errors():
             field_name = _field_name_from_location(fields_error.get("loc", ()))
-            description_ = fields_error.get("msg", "ongeldige waarde")
+            description_ = fields_error.get("msg", "invalid value")
             messages.append(f"{field_name}: {description_}")
-        # Never render str(fout) or chain the ValidationError (from None):
+        # Never render str(error) or chain the ValidationError (from None):
         # pydantic shows input_value in there and that can be a secret
-        # (sessie_geheim, audit_pepper, oidc_client_secret).
+        # (session_secret, audit_pepper, oidc_client_secret).
         details = "; ".join(messages) if messages else (
-            f"{error.error_count()} validatiefout(en) zonder veldlocatie"
+            f"{error.error_count()} validation error(s) without a field location"
         )
-        raise ConfigurationError(f"Configuratiefout in omgevingsvariabelen: {details}") from None
+        raise ConfigurationError(f"Configuration error in environment variables: {details}") from None

@@ -542,7 +542,7 @@ async def test_a_broken_counter_fails_closed_with_429() -> None:
 
     class _BrokenCounter:
         async def increment(self, key: str, window_s: int, now_: float):
-            raise RuntimeError("teller kapot")
+            raise RuntimeError("counter broken")
 
     settings = _make_settings(ratelimit_login_max=1000, ratelimit_login_window_s=10)
     async with _make_client(settings, counter=_BrokenCounter()) as client:
@@ -562,7 +562,7 @@ async def test_make_ratelimit_middleware_factory_yields_class__and_kwargs() -> N
     assert kwargs["settings"] is settings
     assert isinstance(kwargs["counter"], InMemoryCounter)
 
-    # the factory must be usable as middleware right away, e.g. via app.add_middleware(klasse, **kwargs)
+    # the factory must be usable as middleware right away, e.g. via app.add_middleware(cls, **kwargs)
     middleware = klass(app=_ok_app, **kwargs)
     transport = httpx.ASGITransport(app=middleware, client=("203.0.113.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

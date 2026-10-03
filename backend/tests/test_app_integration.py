@@ -67,10 +67,10 @@ async def test_app_boots_with_test_settings(tmp_path: Path) -> None:
         assert app.state.audit_log is not None
 
 
-async def test_startup_logs_the_idp_coupling_without_any_secret(
+async def test_startup_logs_the_idp_configuration_without_any_secret(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """One INFO line naming the issuer and the client id, so a wrong coupling
+    """One INFO line naming the issuer and the client id, so a wrong configuration
     shows up straight away. The private key and the client secret never do."""
     private_jwk = make_client_jwk()
     settings = _make_settings(
@@ -86,16 +86,16 @@ async def test_startup_logs_the_idp_coupling_without_any_secret(
             pass
 
     lines = [row.getMessage() for row in caplog.records if row.name == "plak.main"]
-    coupling = [line for line in lines if "OIDC-koppeling" in line]
-    assert len(coupling) == 1
-    assert "https://idp.example/realms/plak" in coupling[0]
-    assert "plak-client" in coupling[0]
+    configuration = [line for line in lines if "OIDC configuration" in line]
+    assert len(configuration) == 1
+    assert "https://idp.example/realms/plak" in configuration[0]
+    assert "plak-client" in configuration[0]
     assert private_jwk not in caplog.text
     assert settings.session_secret not in caplog.text
     assert settings.audit_pepper not in caplog.text
 
 
-async def test_startup_log_of_the_idp_coupling_carries_no_client_secret(
+async def test_startup_log_of_the_idp_configuration_carries_no_client_secret(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     settings = _make_settings(
@@ -110,7 +110,7 @@ async def test_startup_log_of_the_idp_coupling_carries_no_client_secret(
         async with app.router.lifespan_context(app):
             pass
 
-    assert "OIDC-koppeling" in caplog.text
+    assert "OIDC configuration" in caplog.text
     assert "geheim-van-de-client" not in caplog.text
 
 

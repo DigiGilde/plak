@@ -94,7 +94,7 @@ describe('Overview', () => {
     expect(wrapper.find('nldd-activity-indicator').exists()).toBe(true);
     expect(wrapper.findAll('nldd-table-row:not([slot="header"])')).toHaveLength(0);
     // While it is unknown whether anything is there, there is no action to offer.
-    expect(wrapper.find('[data-testid="overzicht-publiceren"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="overview-publish"]').exists()).toBe(false);
 
     release(filledData);
     await flushPromises();
@@ -129,7 +129,7 @@ describe('Overview', () => {
     });
     await flushPromises();
 
-    const button = wrapper.find('[data-testid="overzicht-publiceren"]');
+    const button = wrapper.find('[data-testid="overview-publish"]');
     const el = button.element as HTMLElement & { text?: string; variant?: string };
     expect(el.text).toBe('Zet een site online');
     expect(el.variant).toBe('primary');
@@ -143,7 +143,7 @@ describe('Overview', () => {
     // nldd-container does not reflect `layout` back to a DOM attribute, so read
     // the property rather than the attribute.
     expect((heading.element as HTMLElement & { layout?: string }).layout).toBe('wrap');
-    expect(heading.find('[data-testid="overzicht-publiceren"]').exists()).toBe(true);
+    expect(heading.find('[data-testid="overview-publish"]').exists()).toBe(true);
     expect(heading.find('nldd-title h1').text()).toBe('Overzicht');
     expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
 
@@ -219,12 +219,12 @@ describe('Overview', () => {
     // button lives in its own shadow DOM and names itself.
     expect(wrapper.findAll('nldd-icon-button')).toHaveLength(0);
 
-    const split = wrapper.find('[data-testid="overzicht-publiceren"]');
+    const split = wrapper.find('[data-testid="overview-publish"]');
     expect((split.element as HTMLElement & { text?: string }).text).toBe('Zet een site online');
 
     // Creating a group moved into the menu of that same button: still a line
     // with text, not a plus.
-    const item = split.find('[data-testid="overzicht-groep-aanmaken"]');
+    const item = split.find('[data-testid="overview-group-create"]');
     expect(item.exists()).toBe(true);
     expect((item.element as HTMLElement & { text?: string }).text).toBe('Groep aanmaken');
 
@@ -275,7 +275,7 @@ describe('Overview', () => {
     );
     expect(wrapper.text()).not.toContain('platformbeheerder');
 
-    const button = wrapper.find('[data-testid="overzicht-leeg-publiceren"]');
+    const button = wrapper.find('[data-testid="overview-empty-publish"]');
     expect((button.element as HTMLElement & { text?: string }).text).toBe('Zet een site online');
     expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
 
@@ -297,7 +297,7 @@ describe('Overview', () => {
     const banner = wrapper.find('nldd-banner');
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('supporting-text')).toBe('Kon overzicht niet laden');
-    expect(wrapper.find('[data-testid="overzicht-publiceren"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="overview-publish"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -434,14 +434,14 @@ describe('Overview', () => {
      * for them, as in App.test.ts.
      */
     async function clickPublish(): Promise<void> {
-      const button = wrapper!.find('[data-testid="overzicht-publiceren"]');
+      const button = wrapper!.find('[data-testid="overview-publish"]');
       expect(button.exists(), 'the split button is missing').toBe(true);
       button.element.dispatchEvent(new CustomEvent('action-click'));
       await flushPromises();
     }
 
     async function selectCreateGroup(): Promise<void> {
-      const item = wrapper!.find('[data-testid="overzicht-groep-aanmaken"]');
+      const item = wrapper!.find('[data-testid="overview-group-create"]');
       expect(item.exists(), 'the "Groep aanmaken" menu item is missing').toBe(true);
       item.element.dispatchEvent(new CustomEvent('select'));
       await flushPromises();
@@ -506,7 +506,7 @@ describe('Overview', () => {
       expect(listLabels()).toEqual([]);
 
       const form = sheet('Zet een site online');
-      typeIn(form, 'groepnaam', 'Team');
+      typeIn(form, 'group-name', 'Team');
       choose(form, 'handboek.zip');
       submit(form);
       await flushPromises();
@@ -547,7 +547,7 @@ describe('Overview', () => {
       expect(wrapper!.findComponent(NewGroupSheet).props('open')).toBe(true);
 
       const form = sheet('Nieuwe groep');
-      typeIn(form, 'naam', 'Team');
+      typeIn(form, 'name', 'Team');
       typeIn(form, 'slug', 'team');
       submit(form);
       await flushPromises();
@@ -629,7 +629,7 @@ describe('Overview', () => {
       const section = wrapper.find('nldd-simple-section').element;
       section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
       await flushPromises();
-      expect(wrapper.find('[data-testid="overzicht-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="overview-drag-active"]').exists()).toBe(false);
 
       section.dispatchEvent(dragEvent('drop', fakeDataTransfer([droppableFile()])));
       await flushPromises();
@@ -675,11 +675,11 @@ describe('Overview', () => {
       const section = wrapper.find('nldd-simple-section').element;
       section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
       await flushPromises();
-      expect(wrapper.find('[data-testid="overzicht-sleep-actief"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="overview-drag-active"]').exists()).toBe(true);
 
       section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
       await flushPromises();
-      expect(wrapper.find('[data-testid="overzicht-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="overview-drag-active"]').exists()).toBe(false);
 
       wrapper.unmount();
     });
@@ -698,7 +698,7 @@ describe('Overview', () => {
       section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="overzicht-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="overview-drag-active"]').exists()).toBe(false);
 
       wrapper.unmount();
     });
@@ -754,7 +754,7 @@ describe('Overview', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
       await flushPromises();
 
-      const banner = wrapper.find('[data-testid="overzicht-sleep-fout"]');
+      const banner = wrapper.find('[data-testid="overview-drag-error"]');
       expect(banner.exists()).toBe(true);
       // Vue sets a custom element's prop as a DOM property, not an attribute.
       expect((banner.element as unknown as { text: string }).text).toContain('Sleep één bestand');
@@ -763,7 +763,7 @@ describe('Overview', () => {
       banner.element.dispatchEvent(new CustomEvent('dismiss'));
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="overzicht-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="overview-drag-error"]').exists()).toBe(false);
 
       wrapper.unmount();
     });
@@ -782,7 +782,7 @@ describe('Overview', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="overzicht-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="overview-drag-error"]').exists()).toBe(false);
       expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
 
       wrapper.unmount();

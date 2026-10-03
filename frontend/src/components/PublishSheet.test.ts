@@ -122,7 +122,7 @@ function textOf(wrapper: Wrapper, testid: string): string {
 
 /** The summary sits in an attribute, the way nldd-inline-dialog takes it. */
 function explanationOf(wrapper: Wrapper): string {
-  return wrapper.find('[data-testid="publiceer-toegang-uitleg"]').attributes('text') ?? '';
+  return wrapper.find('[data-testid="publish-access-explanation"]').attributes('text') ?? '';
 }
 
 describe('PublishSheet (the file drives the rest)', () => {
@@ -132,8 +132,8 @@ describe('PublishSheet (the file drives the rest)', () => {
     choose(wrapper, file('mijn-site.zip'));
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Mijn site');
-    expect(textOf(wrapper, 'publiceer-adres')).toContain(
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
+    expect(textOf(wrapper, 'publish-address')).toContain(
       'https://sites.plak.test/team-aurora/mijn-site/',
     );
   });
@@ -149,7 +149,7 @@ describe('PublishSheet (the file drives the rest)', () => {
     choose(wrapper, file(name));
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe(expect_);
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe(expect_);
   });
 
   it.each(['index.html', 'index.htm', '.zip'])(
@@ -160,19 +160,19 @@ describe('PublishSheet (the file drives the rest)', () => {
       choose(wrapper, file(name));
       await flushPromises();
 
-      expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('');
-      expect(wrapper.find('[data-testid="publiceer-adres-leeg"]').exists()).toBe(true);
+      expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+      expect(wrapper.find('[data-testid="publish-address-empty"]').exists()).toBe(true);
     },
   );
 
   it('keeps a title the user typed themselves on a second file choice', async () => {
     const { wrapper } = mountComponent();
 
-    typeIn(wrapper, 'titel', 'Eigen titel');
+    typeIn(wrapper, 'title', 'Eigen titel');
     choose(wrapper, file('heel-iets-anders.zip'));
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Eigen titel');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Eigen titel');
   });
 
   it('does nothing when the file field is cleared, instead of wiping the title', async () => {
@@ -183,7 +183,7 @@ describe('PublishSheet (the file drives the rest)', () => {
     choose(wrapper);
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Mijn site');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
   });
 
   it('also reads the choice from a change event without detail (native input)', async () => {
@@ -194,19 +194,19 @@ describe('PublishSheet (the file drives the rest)', () => {
     field.dispatchEvent(new Event('change'));
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Rapport');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Rapport');
   });
 
   it('lets the field itself show the name on a choice via the field, without a second notice', async () => {
     const { wrapper } = mountComponent();
 
-    expect(wrapper.find('[data-testid="publiceer-bestand-gekozen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
 
     choose(wrapper, file('mijn-site.zip'));
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-bestand-gekozen"]').exists()).toBe(false);
-    const field = wrapper.find('[data-testid="publiceer-bestand"]');
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
+    const field = wrapper.find('[data-testid="publish-file"]');
     expect(field.attributes('required')).toBeDefined();
     expect(field.attributes('invalid')).toBeUndefined();
   });
@@ -224,13 +224,13 @@ describe('PublishSheet (the address is always visible and editable)', () => {
   it('shows the address field right away, prefilled from the title', async () => {
     const { wrapper } = mountComponent();
 
-    typeIn(wrapper, 'titel', 'Mijn Nieuwe Site!');
+    typeIn(wrapper, 'title', 'Mijn Nieuwe Site!');
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe(
       'mijn-nieuwe-site',
     );
-    expect(textOf(wrapper, 'publiceer-adres')).toContain(
+    expect(textOf(wrapper, 'publish-address')).toContain(
       'https://sites.plak.test/team-aurora/mijn-nieuwe-site/',
     );
   });
@@ -238,28 +238,28 @@ describe('PublishSheet (the address is always visible and editable)', () => {
   it('lets the title release the address as soon as the address is edited by hand', async () => {
     const { wrapper } = mountComponent();
 
-    typeIn(wrapper, 'titel', 'Eerste');
+    typeIn(wrapper, 'title', 'Eerste');
     await flushPromises();
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('eerste');
 
     typeIn(wrapper, 'slug', 'eigen-adres');
-    typeIn(wrapper, 'titel', 'Tweede');
+    typeIn(wrapper, 'title', 'Tweede');
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('eigen-adres');
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team-aurora/eigen-adres/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/team-aurora/eigen-adres/');
   });
 
   it('follows the title again once the address is cleared', async () => {
     const { wrapper } = mountComponent();
 
-    typeIn(wrapper, 'titel', 'Eerste');
+    typeIn(wrapper, 'title', 'Eerste');
     await flushPromises();
     typeIn(wrapper, 'slug', 'eigen-adres');
     await flushPromises();
 
     typeIn(wrapper, 'slug', '');
-    typeIn(wrapper, 'titel', 'Tweede');
+    typeIn(wrapper, 'title', 'Tweede');
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('tweede');
@@ -289,10 +289,10 @@ describe('PublishSheet (the address is always visible and editable)', () => {
   it('shows the path without a content origin, not a half address with an empty host', async () => {
     const { wrapper } = mountComponent({ contentBase: '' });
 
-    typeIn(wrapper, 'titel', 'Site');
+    typeIn(wrapper, 'title', 'Site');
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team-aurora/site/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/team-aurora/site/');
   });
 });
 
@@ -300,14 +300,14 @@ describe('PublishSheet (input without a detail event)', () => {
   it('also reads title, group name and address from the field itself', async () => {
     const { wrapper, actions } = mountComponent({ groups: [] });
 
-    typeNative(wrapper, 'groepnaam', 'Mijn team');
-    typeNative(wrapper, 'titel', 'Mijn site');
+    typeNative(wrapper, 'group-name', 'Mijn team');
+    typeNative(wrapper, 'title', 'Mijn site');
     await flushPromises();
     typeNative(wrapper, 'slug', 'eigen-adres');
     choose(wrapper, file('iets.zip'));
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/mijn-team/eigen-adres/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/mijn-team/eigen-adres/');
 
     await submit(wrapper);
 
@@ -321,7 +321,7 @@ describe('PublishSheet (the group)', () => {
     const { wrapper } = mountComponent({ groups: [AURORA] });
 
     expect(wrapper.find('nldd-dropdown').exists()).toBe(false);
-    expect(wrapper.find('nldd-text-field[name="groepnaam"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="group-name"]').exists()).toBe(false);
   });
 
   it('offers the choice with more than one group and lets the address move along', async () => {
@@ -336,10 +336,10 @@ describe('PublishSheet (the group)', () => {
     choose(wrapper, file('handboek.zip'));
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team/handboek/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/team/handboek/');
     // The chosen group also decides the base that is preselected.
     expect(
-      wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').attributes('checked'),
+      wrapper.find('[data-testid="publish-visibility-site_team"]').attributes('checked'),
     ).toBeDefined();
 
     await submit(wrapper);
@@ -354,7 +354,7 @@ describe('PublishSheet (the group)', () => {
     choose(wrapper, file('site.zip'));
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team/site/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/team/site/');
   });
 
   it('keeps the chosen group when the running list still contains it', async () => {
@@ -368,7 +368,7 @@ describe('PublishSheet (the group)', () => {
     choose(wrapper, file('site.zip'));
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/team/site/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/team/site/');
   });
 
   it('does not let the flow strand without a group, but creates one', async () => {
@@ -381,14 +381,14 @@ describe('PublishSheet (the group)', () => {
     // In the backend a fresh group starts on site_team; that belongs on screen
     // before anything is published.
     expect(
-      wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').attributes('checked'),
+      wrapper.find('[data-testid="publish-visibility-site_team"]').attributes('checked'),
     ).toBeDefined();
 
-    typeIn(wrapper, 'groepnaam', 'Mijn team');
+    typeIn(wrapper, 'group-name', 'Mijn team');
     choose(wrapper, file('mijn-site.zip'));
     await flushPromises();
 
-    expect(textOf(wrapper, 'publiceer-adres')).toContain('/mijn-team/mijn-site/');
+    expect(textOf(wrapper, 'publish-address')).toContain('/mijn-team/mijn-site/');
 
     await submit(wrapper);
 
@@ -409,7 +409,7 @@ describe('PublishSheet (the group, filtered by role)', () => {
     const { wrapper } = mountComponent({ groups: [AURORA, READERS], me });
 
     expect(wrapper.find('nldd-dropdown').exists()).toBe(false);
-    expect(wrapper.find('nldd-text-field[name="groepnaam"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="group-name"]').exists()).toBe(false);
   });
 
   it('offers in the choice list only the groups where editor or admin applies', async () => {
@@ -448,7 +448,7 @@ describe('PublishSheet (the group, filtered by role)', () => {
     expect(field.exists()).toBe(true);
     expect(field.attributes('supporting-label')).toContain('editor of beheerder');
 
-    typeIn(wrapper, 'groepnaam', 'Mijn team');
+    typeIn(wrapper, 'group-name', 'Mijn team');
     choose(wrapper, file('mijn-site.zip'));
     await flushPromises();
     await submit(wrapper);
@@ -496,7 +496,7 @@ describe('PublishSheet (publishing)', () => {
     choose(wrapper, file('site.zip'));
     await flushPromises();
     await submit(wrapper);
-    expect(wrapper.find('[data-testid="publiceer-indienen"]').attributes('loading')).toBeDefined();
+    expect(wrapper.find('[data-testid="publish-submit"]').attributes('loading')).toBeDefined();
 
     await submit(wrapper);
     release();
@@ -513,8 +513,8 @@ describe('PublishSheet (publishing)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('');
-    expect(wrapper.find('[data-testid="publiceer-adres-leeg"]').exists()).toBe(true);
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="publish-address-empty"]').exists()).toBe(true);
   });
 
   it('leaves the default visibility alone when nothing else is chosen', async () => {
@@ -531,7 +531,7 @@ describe('PublishSheet (publishing)', () => {
     const { wrapper, actions } = mountComponent({ groups: [AURORA] });
     const zip = file('site.zip');
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-site_team"]').trigger('change');
     choose(wrapper, zip);
     await flushPromises();
     await submit(wrapper);
@@ -552,7 +552,7 @@ describe('PublishSheet (publishing)', () => {
     );
     const { wrapper, actions } = mountComponent({ groups: [AURORA], setAccess });
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-site_team"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-site_team"]').trigger('change');
     choose(wrapper, file('site.zip'));
     await flushPromises();
     await submit(wrapper);
@@ -564,9 +564,9 @@ describe('PublishSheet (publishing)', () => {
   it('publishes with a secret link in one go, without a detour via the Toegang tab', async () => {
     const { wrapper, actions } = mountComponent({ groups: [AURORA] });
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-nobody"]').trigger('change');
     wrapper
-      .find('[data-testid="publiceer-uitzondering-sleutels"]')
+      .find('[data-testid="publish-exception-keys"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { checked: true } }));
     choose(wrapper, file('site.zip'));
     await flushPromises();
@@ -582,9 +582,9 @@ describe('PublishSheet (publishing)', () => {
   it('turns on invitees from the same sheet', async () => {
     const { wrapper, actions } = mountComponent({ groups: [AURORA] });
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-nobody"]').trigger('change');
     wrapper
-      .find('[data-testid="publiceer-uitzondering-genodigden"]')
+      .find('[data-testid="publish-exception-invitees"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { checked: true } }));
     choose(wrapper, file('site.zip'));
     await flushPromises();
@@ -600,12 +600,12 @@ describe('PublishSheet (publishing)', () => {
   it('tells at the choice who can actually see the site then', async () => {
     const { wrapper } = mountComponent({ groups: [AURORA] });
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-nobody"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-nobody"]').trigger('change');
     await flushPromises();
     expect(explanationOf(wrapper)).toContain('Niemand kan de site bekijken');
 
     wrapper
-      .find('[data-testid="publiceer-uitzondering-sleutels"]')
+      .find('[data-testid="publish-exception-keys"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { checked: true } }));
     await flushPromises();
 
@@ -623,10 +623,10 @@ describe('PublishSheet (publishing)', () => {
     const { wrapper } = mountComponent({ groups: [WITH_EXTRAS] });
 
     expect(
-      wrapper.find('[data-testid="publiceer-uitzondering-sleutels"]').attributes('checked'),
+      wrapper.find('[data-testid="publish-exception-keys"]').attributes('checked'),
     ).toBeDefined();
     expect(
-      wrapper.find('[data-testid="publiceer-uitzondering-genodigden"]').attributes('checked'),
+      wrapper.find('[data-testid="publish-exception-invitees"]').attributes('checked'),
     ).toBeUndefined();
   });
 
@@ -644,7 +644,7 @@ describe('PublishSheet (publishing)', () => {
     const { wrapper, actions } = mountComponent({ groups: [WITH_EXTRAS], createSite });
 
     wrapper
-      .find('[data-testid="publiceer-uitzondering-sleutels"]')
+      .find('[data-testid="publish-exception-keys"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { checked: false } }));
     choose(wrapper, file('site.zip'));
     await flushPromises();
@@ -666,7 +666,7 @@ describe('PublishSheet (publishing)', () => {
     };
     const { wrapper, actions } = mountComponent({ groups: [WITH_KEYS] });
 
-    await wrapper.find('[data-testid="publiceer-zichtbaarheid-sso"]').trigger('change');
+    await wrapper.find('[data-testid="publish-visibility-sso"]').trigger('change');
     choose(wrapper, file('site.zip'));
     await flushPromises();
     await submit(wrapper);
@@ -683,8 +683,8 @@ describe('PublishSheet (refusals)', () => {
   it('flags a missing file without disabling the button', async () => {
     const { wrapper, actions } = mountComponent();
 
-    expect(wrapper.find('[data-testid="publiceer-indienen"]').attributes('disabled')).toBeUndefined();
-    typeIn(wrapper, 'titel', 'Site');
+    expect(wrapper.find('[data-testid="publish-submit"]').attributes('disabled')).toBeUndefined();
+    typeIn(wrapper, 'title', 'Site');
     await submit(wrapper);
 
     expect(actions.createSite).not.toHaveBeenCalled();
@@ -699,11 +699,11 @@ describe('PublishSheet (refusals)', () => {
     await submit(wrapper);
 
     expect(actions.createSite).not.toHaveBeenCalled();
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('invalid')).toBeDefined();
 
-    typeIn(wrapper, 'titel', 'Welkom');
+    typeIn(wrapper, 'title', 'Welkom');
     await flushPromises();
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('invalid')).toBeUndefined();
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('invalid')).toBeUndefined();
   });
 
   it('opens the address field for a title that yields no address, since the notice needs somewhere to attach', async () => {
@@ -711,7 +711,7 @@ describe('PublishSheet (refusals)', () => {
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
-    typeIn(wrapper, 'titel', '???');
+    typeIn(wrapper, 'title', '???');
     await submit(wrapper);
 
     expect(actions.createSite).not.toHaveBeenCalled();
@@ -719,7 +719,7 @@ describe('PublishSheet (refusals)', () => {
     expect(slugField.exists()).toBe(true);
     expect(slugField.attributes('invalid')).toBeDefined();
 
-    const shape = wrapper.find('nldd-validation-item#publiceer-slug-vorm');
+    const shape = wrapper.find('nldd-validation-item#publish-slug-format');
     const match = new RegExp(shape.attributes('match')!, 'u');
     expect(match.test('Niet Geldig')).toBe(false);
     expect(match.test('-begin')).toBe(false);
@@ -734,11 +734,11 @@ describe('PublishSheet (refusals)', () => {
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
-    typeIn(wrapper, 'groepnaam', '!!!');
+    typeIn(wrapper, 'group-name', '!!!');
     await submit(wrapper);
 
     expect(actions.createGroup).not.toHaveBeenCalled();
-    expect(wrapper.find('nldd-text-field[name="groepnaam"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-text-field[name="group-name"]').attributes('invalid')).toBeDefined();
   });
 
   it('shows a 409 on the address at the field, not as a banner', async () => {
@@ -758,8 +758,8 @@ describe('PublishSheet (refusals)', () => {
 
     expect(wrapper.find('nldd-banner[variant="critical"]').exists()).toBe(false);
     const slugField = wrapper.find('nldd-text-field[name="slug"]');
-    expect(slugField.attributes('unmet')).toBe('publiceer-slug-server');
-    expect(wrapper.find('nldd-validation-item#publiceer-slug-server').text()).toContain(
+    expect(slugField.attributes('unmet')).toBe('publish-slug-server');
+    expect(wrapper.find('nldd-validation-item#publish-slug-server').text()).toContain(
       'bestaat al een site',
     );
     expect(wrapper.emitted('update:open')).toBeUndefined();
@@ -778,13 +778,13 @@ describe('PublishSheet (refusals)', () => {
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
-    typeIn(wrapper, 'groepnaam', 'Mijn team');
+    typeIn(wrapper, 'group-name', 'Mijn team');
     await submit(wrapper);
 
     expect(actions.createSite).not.toHaveBeenCalled();
-    const field = wrapper.find('nldd-text-field[name="groepnaam"]');
-    expect(field.attributes('unmet')).toBe('publiceer-groep-server');
-    expect(wrapper.find('nldd-validation-item#publiceer-groep-server').text()).toContain(
+    const field = wrapper.find('nldd-text-field[name="group-name"]');
+    expect(field.attributes('unmet')).toBe('publish-group-server');
+    expect(wrapper.find('nldd-validation-item#publish-group-server').text()).toContain(
       'bestaat al een groep',
     );
   });
@@ -799,7 +799,7 @@ describe('PublishSheet (refusals)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(wrapper.find('nldd-validation-item#publiceer-slug-server').text()).toBe(
+    expect(wrapper.find('nldd-validation-item#publish-slug-server').text()).toBe(
       'Ongeldige slug',
     );
   });
@@ -823,7 +823,7 @@ describe('PublishSheet (refusals)', () => {
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
-    typeIn(wrapper, 'groepnaam', 'Mijn team');
+    typeIn(wrapper, 'group-name', 'Mijn team');
     await submit(wrapper);
 
     expect(wrapper.find('nldd-banner[variant="critical"]').attributes('text')).toBe(
@@ -844,7 +844,7 @@ describe('PublishSheet (getting stuck halfway)', () => {
     await flushPromises();
     await submit(wrapper);
 
-    expect(wrapper.find('[data-testid="publiceer-halfweg"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-halfway"]').exists()).toBe(true);
     expect(wrapper.emitted('created')).toHaveLength(1);
     expect(wrapper.emitted('published')).toBeUndefined();
 
@@ -864,12 +864,12 @@ describe('PublishSheet (getting stuck halfway)', () => {
 
     choose(wrapper, file('site.zip'));
     await flushPromises();
-    typeIn(wrapper, 'groepnaam', 'Mijn team');
+    typeIn(wrapper, 'group-name', 'Mijn team');
     await submit(wrapper);
 
     expect(actions.createGroup).toHaveBeenCalledTimes(1);
     // The group really exists now, so the question about it should be gone.
-    expect(wrapper.find('nldd-text-field[name="groepnaam"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="group-name"]').exists()).toBe(false);
 
     await submit(wrapper);
 
@@ -883,13 +883,13 @@ describe('PublishSheet (closing and showing)', () => {
   it('closes with a button set apart from the primary action and discards the form', async () => {
     const { wrapper } = mountComponent();
 
-    typeIn(wrapper, 'titel', 'Halverwege');
-    await wrapper.find('[data-testid="publiceer-sluiten"]').trigger('click');
+    typeIn(wrapper, 'title', 'Halverwege');
+    await wrapper.find('[data-testid="publish-close"]').trigger('click');
 
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
     // The way out sits in the heading, not up against "Zet online".
-    expect(wrapper.find('[data-testid="publiceer-sluiten"]').attributes('slot')).toBe('end');
+    expect(wrapper.find('[data-testid="publish-close"]').attributes('slot')).toBe('end');
     expect(wrapper.find('nldd-form-actions nldd-button[type="button"]').exists()).toBe(false);
   });
 
@@ -964,11 +964,11 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Mijn site');
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
     // No shadow DOM here, so the field cannot be given the file and the chip
     // is the fallback. In a browser the field holds it and shows it itself.
-    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('mijn-site.zip');
+    expect(textOf(wrapper, 'publish-file-chosen')).toContain('mijn-site.zip');
   });
 
   it('does not mark the field as invalid while a dragged file is held', async () => {
@@ -978,7 +978,7 @@ describe('PublishSheet (dragging)', () => {
     await flushPromises();
 
     // Its own required rule would block the submit over a file it never got.
-    const field = wrapper.find('[data-testid="publiceer-bestand"]');
+    const field = wrapper.find('[data-testid="publish-file"]');
     expect(field.attributes('required')).toBeUndefined();
     expect(field.attributes('invalid')).toBeUndefined();
 
@@ -991,10 +991,10 @@ describe('PublishSheet (dragging)', () => {
 
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
-    await wrapper.find('[data-testid="publiceer-bestand-gekozen"]').trigger('dismiss');
+    await wrapper.find('[data-testid="publish-file-chosen"]').trigger('dismiss');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-bestand"]').attributes('required')).toBeDefined();
+    expect(wrapper.find('[data-testid="publish-file"]').attributes('required')).toBeDefined();
   });
 
   it('clears a dragged file again, with the same button as on a choice', async () => {
@@ -1003,10 +1003,10 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
 
-    await wrapper.find('[data-testid="publiceer-bestand-gekozen"]').trigger('dismiss');
+    await wrapper.find('[data-testid="publish-file-chosen"]').trigger('dismiss');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-bestand-gekozen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
@@ -1019,7 +1019,7 @@ describe('PublishSheet (dragging)', () => {
     );
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
@@ -1032,7 +1032,7 @@ describe('PublishSheet (dragging)', () => {
     );
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
@@ -1043,7 +1043,7 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
@@ -1054,19 +1054,19 @@ describe('PublishSheet (dragging)', () => {
 
     el.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
-    expect(wrapper.find('[data-testid="publiceer-sleep-actief"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-active"]').exists()).toBe(true);
 
     el.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
-    expect(wrapper.find('[data-testid="publiceer-sleep-actief"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-drag-active"]').exists()).toBe(false);
 
     el.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
-    expect(wrapper.find('[data-testid="publiceer-sleep-actief"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-active"]').exists()).toBe(true);
 
     el.dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
     await flushPromises();
-    expect(wrapper.find('[data-testid="publiceer-sleep-actief"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-drag-active"]').exists()).toBe(false);
   });
 
   it('shows the size in kB, then MB, once it steps past the next unit', async () => {
@@ -1074,14 +1074,14 @@ describe('PublishSheet (dragging)', () => {
 
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([bigFile('groot.zip', 2_500)])));
     await flushPromises();
-    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('2,5 kB');
+    expect(textOf(wrapper, 'publish-file-chosen')).toContain('2,5 kB');
 
-    await wrapper.find('[data-testid="publiceer-bestand-gekozen"]').trigger('dismiss');
+    await wrapper.find('[data-testid="publish-file-chosen"]').trigger('dismiss');
     sheetEl(wrapper).dispatchEvent(
       dragEvent('drop', fakeDataTransfer([bigFile('reusachtig.zip', 2_500_000)])),
     );
     await flushPromises();
-    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('2,5 MB');
+    expect(textOf(wrapper, 'publish-file-chosen')).toContain('2,5 MB');
   });
 
   it('ignores a drop that carries no file at all, such as dragged text', async () => {
@@ -1090,8 +1090,8 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="publiceer-bestand-gekozen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
   });
 
   it('prevents the default on dragover, so a drop can land on the sheet', async () => {
@@ -1108,11 +1108,11 @@ describe('PublishSheet (dragging)', () => {
 
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
     await flushPromises();
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
 
-    await wrapper.find('[data-testid="publiceer-sleep-fout"]').trigger('dismiss');
+    await wrapper.find('[data-testid="publish-drag-error"]').trigger('dismiss');
 
-    expect(wrapper.find('[data-testid="publiceer-sleep-fout"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
   });
 
   it('lets a second drop win over the async handoff of the first, without racing it', async () => {
@@ -1122,8 +1122,8 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('tweede.zip')])));
     for (let i = 0; i < 5; i += 1) await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Eerste');
-    expect(textOf(wrapper, 'publiceer-bestand-gekozen')).toContain('tweede.zip');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Eerste');
+    expect(textOf(wrapper, 'publish-file-chosen')).toContain('tweede.zip');
   });
 
   it('fills the file right away when the sheet opens with a file already chosen', async () => {
@@ -1142,7 +1142,7 @@ describe('PublishSheet (dragging)', () => {
     await wrapper.setProps({ open: true });
     await flushPromises();
 
-    expect(wrapper.find('nldd-text-field[name="titel"]').attributes('value')).toBe('Gedropt');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Gedropt');
   });
 
   it('slots an nldd-page, the component that brings the sheet its scroller', () => {
@@ -1161,7 +1161,7 @@ describe('PublishSheet (dragging)', () => {
     // stays in the DOM and never reaches the screen, which jsdom cannot see.
     const { wrapper } = mountComponent();
 
-    for (const id of ['publiceer-uitzondering-sleutels', 'publiceer-uitzondering-genodigden']) {
+    for (const id of ['publish-exception-keys', 'publish-exception-invitees']) {
       const control = wrapper.find(`[data-testid="${id}"]`).element;
       expect(control.querySelector('nldd-form-field-help-text')).toBeNull();
       const field = control.closest('nldd-form-field');

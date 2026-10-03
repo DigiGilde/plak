@@ -225,7 +225,7 @@ What you do have to set:
   values `0` and `1`, so an eIDAS LoA requirement shuts everybody out. At
   startup the app logs explicitly that there is no acr check.
 
-### Re-validation at the IdP
+### Revalidation at the IdP
 
 With `PLAK_IDP_RECHECK_SECONDS` (default 900) Plak redeems the refresh token
 of the session at the token endpoint of Keycloak on the first request after
@@ -250,11 +250,11 @@ answers with status 200 and
 The endpoint is public, so it names only the check, never the error code; the
 ERROR line in the log is where that is. The probe on ZAD is `tcp`, so it does
 not notice either: alarm on the log or on `/-/healthz`. The first successful
-re-validation clears the complaint by itself.
+revalidation clears the complaint by itself.
 
 The precondition is that the client issues a refresh token; with the default
 `sso-only` template of the ZAD Keycloak it does. If the client issues none,
-the session stays and the app logs a warning per session: the re-validation is
+the session stays and the app logs a warning per session: the revalidation is
 then no extra risk, but also no extra certainty.
 
 ### Content volume
@@ -361,7 +361,7 @@ Settings):
 | Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Plak does not speak |
 
 Without this configuration the rest works fine: the endpoint then only exists
-and is never called, and the periodic re-validation stays the boundary (at
+and is never called, and the periodic revalidation stays the boundary (at
 most `PLAK_IDP_RECHECK_SECONDS`, see `docs/security.md`).
 
 Test it: log in, sign the session out from Users -> Sessions in the Keycloak

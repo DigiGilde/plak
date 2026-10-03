@@ -62,7 +62,7 @@ type Wrapper = ReturnType<typeof mountComponent>;
 
 function pageRows(wrapper: Wrapper) {
   return wrapper
-    .find('[data-testid="leden-lijst"]')
+    .find('[data-testid="members-list"]')
     .findAll('nldd-table-row:not([slot="header"])');
 }
 
@@ -108,21 +108,21 @@ function confirmation(wrapper: Wrapper) {
 
 /** Asking to remove someone from the group and going through with it. */
 async function removeMember(wrapper: Wrapper, identifier: string): Promise<void> {
-  await runAction(wrapper, identifier, `lid-verwijderen-${identifier}`);
-  await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+  await runAction(wrapper, identifier, `member-delete-${identifier}`);
+  await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
   await flushPromises();
 }
 
 /** Tick the box that takes the site roles along. */
 async function tickSiteRoles(wrapper: Wrapper, checked = true): Promise<void> {
   wrapper
-    .find('[data-testid="siterollen-meenemen"]')
+    .find('[data-testid="site-roles-include"]')
     .element.dispatchEvent(new CustomEvent('change', { detail: { checked } }));
   await nextTick();
 }
 
 async function pickRole(wrapper: Wrapper, role: Role): Promise<void> {
-  await wrapper.find('[data-testid="lid-rol-nieuw"]').setValue(role);
+  await wrapper.find('[data-testid="member-role-new"]').setValue(role);
 }
 
 function comboBox(wrapper: Wrapper) {
@@ -155,7 +155,7 @@ async function pickSuggestion(wrapper: Wrapper, identifier: string): Promise<voi
 }
 
 function suggestionItems(wrapper: Wrapper) {
-  return wrapper.find('[data-testid="lid-suggesties"]').findAll('nldd-menu-item');
+  return wrapper.find('[data-testid="member-suggestions"]').findAll('nldd-menu-item');
 }
 
 /** Waits out the debounce and lets the answer land. */
@@ -167,14 +167,14 @@ async function afterDebounce(): Promise<void> {
 /** Typing and submitting without ever picking: what the form now refuses. */
 async function typeAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
-  await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="member-form"]').trigger('submit');
 }
 
 /** The whole way in: type, pick the person the list answered with, submit. */
 async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
   await pickSuggestion(wrapper, value);
-  await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="member-form"]').trigger('submit');
 }
 
 describe('GroupMembersManager (empty)', () => {
@@ -186,7 +186,7 @@ describe('GroupMembersManager (empty)', () => {
     expect(pageRows(wrapper)).toHaveLength(0);
     // The list is empty, the form below it is there: that is the route to the
     // first member.
-    expect(wrapper.find('[data-testid="lid-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="member-form"]').exists()).toBe(true);
   });
 });
 
@@ -198,7 +198,7 @@ describe('GroupMembersManager (filled)', () => {
     expect(headings.map((cell) => cell.attributes('text'))).toEqual(['**Lid**', '**Rol**', undefined]);
     // The action column carries a header too: an empty columnheader lands in
     // the accessibility tree without a name.
-    expect(headings[2]!.find('.alleen-schermlezer').text()).toBe('Acties');
+    expect(headings[2]!.find('.visually-hidden').text()).toBe('Acties');
 
     const rows = pageRows(wrapper);
     expect(rows).toHaveLength(1);
@@ -245,7 +245,7 @@ describe('GroupMembersManager (filled)', () => {
     const menuButton = rowOf(wrapper, 'lid@voorbeeld.nl').find('nldd-icon-button');
     expect(menuButton.attributes('accessible-label')).toBe('Acties voor lid@voorbeeld.nl');
 
-    const action = actionOf(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    const action = actionOf(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
     expect(action.element.tagName.toLowerCase()).toBe('nldd-menu-item');
     expect(action.attributes('text')).toBe('Uit de groep halen');
     expect(action.attributes('destructive')).toBeDefined();
@@ -266,7 +266,7 @@ describe('GroupMembersManager (filled)', () => {
       'Uit de groep halen',
     ]);
     expect(
-      actionOf(wrapper, 'lezer@voorbeeld.nl', 'lid-rol-lezer@voorbeeld.nl-reader').exists(),
+      actionOf(wrapper, 'lezer@voorbeeld.nl', 'member-role-lezer@voorbeeld.nl-reader').exists(),
     ).toBe(false);
 
     expect(actionTexts(wrapper, 'beheerder@voorbeeld.nl')).toEqual([
@@ -304,12 +304,12 @@ describe('GroupMembersManager (confirming a removal)', () => {
     const remove = vi.fn().mockResolvedValue(undefined);
     const wrapper = mountComponent({ members: [member], remove });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     expect(pageRows(wrapper)).toHaveLength(1);
     expect(remove).not.toHaveBeenCalled();
 
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await flushPromises();
 
     expect(remove).not.toHaveBeenCalled();
@@ -321,7 +321,7 @@ describe('GroupMembersManager (confirming a removal)', () => {
       members: [memberWith({ name: 'Lid Voorbeeld', role: 'editor' })],
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     expect(confirmation(wrapper).attributes('text')).toBe('Lid Voorbeeld uit de groep halen?');
     expect(confirmation(wrapper).attributes('supporting-text')).toBe(
@@ -329,13 +329,13 @@ describe('GroupMembersManager (confirming a removal)', () => {
         'site erin. Lid Voorbeeld heeft in deze groep geen eigen siterol, dus verder ' +
         'verandert er niets.',
     );
-    expect(wrapper.find('[data-testid="siterollen-meenemen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-roles-include"]').exists()).toBe(false);
   });
 
   it('puts the way out at the top and gives the removal the destructive variant', async () => {
     const wrapper = mountComponent({ members: [member] });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     const buttons = confirmation(wrapper).findAll('nldd-button');
     expect(buttons.map((button) => button.attributes('text'))).toEqual([
@@ -356,16 +356,16 @@ describe('GroupMembersManager (confirming a removal)', () => {
     );
     const wrapper = mountComponent({ members: [member], remove });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeDefined();
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('loading')).toBeDefined();
 
     settle();
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('loading')).toBeUndefined();
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('loading')).toBeUndefined();
     expect(wrapper.emitted('removed')?.[0]).toEqual(['lid@voorbeeld.nl']);
   });
 });
@@ -384,13 +384,13 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       ],
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     expect(confirmation(wrapper).attributes('supporting-text')).toBe(
       'Lid Voorbeeld is dan geen lezer meer in deze groep en verliest die rol op elke site ' +
         'erin. Op 2 sites in deze groep heeft Lid Voorbeeld daarnaast een eigen siterol:',
     );
-    const rows = wrapper.find('[data-testid="siterollen-lijst"]').findAll('nldd-text-cell');
+    const rows = wrapper.find('[data-testid="site-roles-list"]').findAll('nldd-text-cell');
     expect(rows.map((row) => row.attributes('text'))).toEqual(['Jaarverslag 2025', 'Kerncijfers']);
     expect(rows.map((row) => row.attributes('supporting-text'))).toEqual(['Beheerder', 'Redacteur']);
   });
@@ -402,16 +402,16 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       remove,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     expect(
-      wrapper.find('[data-testid="siterollen-meenemen"]').attributes('checked'),
+      wrapper.find('[data-testid="site-roles-include"]').attributes('checked'),
     ).toBeUndefined();
-    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('text')).toBe(
       'Uit de groep halen',
     );
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(remove).toHaveBeenCalledWith('lid-7', 'keep');
@@ -424,14 +424,14 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       remove,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
     await tickSiteRoles(wrapper);
 
-    expect(wrapper.find('[data-testid="bevestig-doorgaan"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('text')).toBe(
       'Uit de groep halen en siterollen weghalen',
     );
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(remove).toHaveBeenCalledWith('lid-7', 'remove');
@@ -444,11 +444,11 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       remove,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
     await tickSiteRoles(wrapper);
     await tickSiteRoles(wrapper, false);
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(remove).toHaveBeenCalledWith('lid-7', 'keep');
@@ -460,12 +460,12 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
     );
     const wrapper = mountComponent({ members: [memberWith({ siteRoles: many })] });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
-    const rows = wrapper.find('[data-testid="siterollen-lijst"]').findAll('nldd-list-item');
+    const rows = wrapper.find('[data-testid="site-roles-list"]').findAll('nldd-list-item');
     expect(rows).toHaveLength(6);
     expect(
-      wrapper.find('[data-testid="siterollen-rest"]').find('nldd-text-cell').attributes('text'),
+      wrapper.find('[data-testid="site-roles-rest"]').find('nldd-text-cell').attributes('text'),
     ).toBe('En nog 3 sites');
   });
 
@@ -475,10 +475,10 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
     );
     const wrapper = mountComponent({ members: [memberWith({ siteRoles: many })] });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
 
     expect(
-      wrapper.find('[data-testid="siterollen-rest"]').find('nldd-text-cell').attributes('text'),
+      wrapper.find('[data-testid="site-roles-rest"]').find('nldd-text-cell').attributes('text'),
     ).toBe('En nog 1 site');
   });
 
@@ -489,12 +489,12 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       remove,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
     await tickSiteRoles(wrapper);
-    wrapper.find('[data-testid="siterollen-meenemen"]').element.dispatchEvent(new Event('change'));
+    wrapper.find('[data-testid="site-roles-include"]').element.dispatchEvent(new Event('change'));
     await nextTick();
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(remove).toHaveBeenCalledWith('lid-7', 'remove');
@@ -516,18 +516,18 @@ describe('GroupMembersManager (site roles in the confirmation)', () => {
       remove,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-verwijderen-lid@voorbeeld.nl');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-delete-lid@voorbeeld.nl');
     await tickSiteRoles(wrapper);
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await flushPromises();
 
-    await runAction(wrapper, 'tweede@voorbeeld.nl', 'lid-verwijderen-tweede@voorbeeld.nl');
+    await runAction(wrapper, 'tweede@voorbeeld.nl', 'member-delete-tweede@voorbeeld.nl');
 
     expect(
-      wrapper.find('[data-testid="siterollen-meenemen"]').attributes('checked'),
+      wrapper.find('[data-testid="site-roles-include"]').attributes('checked'),
     ).toBeUndefined();
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(remove).toHaveBeenCalledWith('lid-8', 'keep');
@@ -540,7 +540,7 @@ describe('GroupMembersManager (changing role)', () => {
     const setRole = vi.fn().mockResolvedValue(promoted);
     const wrapper = mountComponent({ members: [member], setRole });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-editor');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-role-lid@voorbeeld.nl-editor');
 
     expect(setRole).toHaveBeenCalledWith('lid-7', 'editor');
     expect(wrapper.emitted('roleChanged')?.[0]).toEqual([promoted]);
@@ -548,7 +548,7 @@ describe('GroupMembersManager (changing role)', () => {
 
   it('keeps the row menu short: a label with an icon, no explanation per role', () => {
     const wrapper = mountComponent({ members: [member] });
-    const item = actionOf(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-admin');
+    const item = actionOf(wrapper, 'lid@voorbeeld.nl', 'member-role-lid@voorbeeld.nl-admin');
 
     expect(item.attributes('text')).toBe('Maak beheerder');
     expect(item.attributes('icon')).toBe('key');
@@ -571,7 +571,7 @@ describe('GroupMembersManager (changing role)', () => {
       setRole,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-reader');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-role-lid@voorbeeld.nl-reader');
 
     expect(cellTexts(pageRows(wrapper)[0]!)).toEqual(['Ada Vermeer', 'Beheerder']);
     const notice = wrapper.find('nldd-notification');
@@ -597,7 +597,7 @@ describe('GroupMembersManager (changing role)', () => {
       setRole,
     });
 
-    await runAction(wrapper, 'lid@voorbeeld.nl', 'lid-rol-lid@voorbeeld.nl-reader');
+    await runAction(wrapper, 'lid@voorbeeld.nl', 'member-role-lid@voorbeeld.nl-reader');
     expect(wrapper.find('nldd-notification').exists()).toBe(true);
 
     await wrapper.find('nldd-notification').trigger('dismiss');
@@ -617,7 +617,7 @@ describe('GroupMembersManager (adding)', () => {
     // Without allow-custom: only someone the list answered with goes through.
     expect(field.attributes('allow-custom')).toBeUndefined();
     const requirement = wrapper.find(
-      'nldd-form-field > nldd-validation-list > nldd-validation-item#lid-toevoegen-vereist',
+      'nldd-form-field > nldd-validation-list > nldd-validation-item#member-add-required',
     );
     expect(requirement.attributes('required')).toBeDefined();
     expect(requirement.text()).toBe('Iemand uit de lijst');
@@ -636,7 +636,7 @@ describe('GroupMembersManager (adding)', () => {
   it('offers reader as the default role, with the role explanation at the role field', () => {
     const wrapper = mountComponent({});
 
-    const select = wrapper.find('[data-testid="lid-rol-nieuw"]');
+    const select = wrapper.find('[data-testid="member-role-new"]');
     expect(select.findAll('option').map((option) => option.text().trim())).toEqual([
       'Lezer',
       'Redacteur',
@@ -688,7 +688,7 @@ describe('GroupMembersManager (adding)', () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
 
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
@@ -746,7 +746,7 @@ describe('GroupMembersManager (nothing picked)', () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
 
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
@@ -797,7 +797,7 @@ describe('GroupMembersManager (nothing picked)', () => {
 
     await typeIn(wrapper, 'ada');
     await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
@@ -921,7 +921,7 @@ describe('GroupMembersManager (the bubbled native event)', () => {
 
     comboBox(wrapper).element.dispatchEvent(new Event('input'));
 
-    expect(wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text')).not.toBe(
+    expect(wrapper.find('[data-testid="member-suggestions"]').attributes('empty-text')).not.toBe(
       'Zoeken...',
     );
   });
@@ -996,7 +996,7 @@ describe('GroupMembersManager (suggestions)', () => {
     expect(comboBox(wrapper).attributes('text')).toBe('Ada Vermeer');
     expect(comboBox(wrapper).attributes('value')).toBe('ada@voorbeeld.nl');
 
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
@@ -1006,7 +1006,7 @@ describe('GroupMembersManager (suggestions)', () => {
   it('says which of the three empty lists it is looking at', async () => {
     const search = vi.fn().mockResolvedValue([]);
     const wrapper = mountComponent({ search });
-    const menu = () => wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text');
+    const menu = () => wrapper.find('[data-testid="member-suggestions"]').attributes('empty-text');
 
     expect(menu()).toBe('Typ twee letters om te zoeken');
 
@@ -1056,7 +1056,7 @@ describe('GroupMembersManager (suggestions)', () => {
 
     await typeIn(wrapper, 'nieuw@voorbeeld.nl');
     await afterDebounce();
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
@@ -1072,7 +1072,7 @@ describe('GroupMembersManager (suggestions)', () => {
     await afterDebounce();
 
     expect(suggestionItems(wrapper)).toHaveLength(0);
-    expect(wrapper.find('[data-testid="lid-suggesties"]').attributes('empty-text')).toBe(
+    expect(wrapper.find('[data-testid="member-suggestions"]').attributes('empty-text')).toBe(
       'Niemand gevonden',
     );
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
@@ -1125,7 +1125,7 @@ describe('GroupMembersManager (suggestions)', () => {
     await typeIn(wrapper, 'ada');
     await afterDebounce();
     await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(

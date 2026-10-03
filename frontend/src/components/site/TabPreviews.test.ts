@@ -63,7 +63,7 @@ describe('TabPreviews: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const empty = wrapper.find('nldd-inline-dialog[data-testid="previews-leeg"]');
+    const empty = wrapper.find('nldd-inline-dialog[data-testid="previews-empty"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('text')).toBe('Geen previews');
     expect(empty.attributes('icon')).toBe('git-pull-request');
@@ -117,7 +117,7 @@ describe('TabPreviews: actions', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await runAction(wrapper, 'override-pr-42-sleutels');
+    await runAction(wrapper, 'override-pr-42-keys');
 
     expect(backend.data.previews[0]!.accessOverride).toEqual({
       base: 'nobody',
@@ -134,10 +134,10 @@ describe('TabPreviews: actions', () => {
     await untilIdle();
 
     // Seeded with invitees already on: the first toggle turns it off.
-    await runAction(wrapper, 'override-pr-42-genodigden');
+    await runAction(wrapper, 'override-pr-42-invitees');
     expect(backend.data.previews[0]!.accessOverride).toMatchObject({ invitees: false });
 
-    await runAction(wrapper, 'override-pr-42-genodigden');
+    await runAction(wrapper, 'override-pr-42-invitees');
     expect(backend.data.previews[0]!.accessOverride).toMatchObject({ invitees: true });
   });
 
@@ -148,8 +148,8 @@ describe('TabPreviews: actions', () => {
 
     // Without its own access there is nothing to widen, and turning it on
     // would silently pick a base that no one chose.
-    expect(wrapper.find('[data-testid="override-pr-42-sleutels"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="override-pr-42-genodigden"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="override-pr-42-keys"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="override-pr-42-invitees"]').exists()).toBe(false);
   });
 
   it('removes the override with the "Zelfde als site" option', async () => {
@@ -192,7 +192,7 @@ describe('TabPreviews: actions', () => {
     await untilIdle();
 
     wrapper
-      .find('[data-testid="verwijder-pr-42"]')
+      .find('[data-testid="delete-pr-42"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await wrapper.vm.$nextTick();
 
@@ -209,7 +209,7 @@ describe('TabPreviews: actions', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    await runAction(wrapper, 'verwijder-pr-42');
+    await runAction(wrapper, 'delete-pr-42');
 
     expect(wrapper.find('[data-testid="preview-pr-42"]').exists()).toBe(true);
     const notice = wrapper.find('nldd-notification[variant="critical"]');

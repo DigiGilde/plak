@@ -163,7 +163,7 @@ function keyErrorText(): string {
 </script>
 
 <template>
-  <nldd-simple-section class="leesbreedte">
+  <nldd-simple-section class="reading-width">
     <nldd-inline-dialog
       v-if="loading"
       variant="loading"
@@ -188,7 +188,7 @@ function keyErrorText(): string {
             :key="address.id"
             layout="stack"
             gap="12"
-            data-testid="klaar-adres"
+            data-testid="done-address"
           >
             <nldd-container layout="stack" gap="4">
               <nldd-text size="sm">{{ address.label }}</nldd-text>
@@ -197,7 +197,7 @@ function keyErrorText(): string {
                   :href="address.url"
                   target="_blank"
                   size="lg"
-                  :data-testid="`klaar-adres-link-${address.id}`"
+                  :data-testid="`done-address-link-${address.id}`"
                   >{{ address.url }}</nldd-link
                 >
               </p>
@@ -209,7 +209,7 @@ function keyErrorText(): string {
                 :text="t('page.done.copy.button')"
                 start-icon="copy"
                 type="button"
-                :data-testid="`klaar-kopieer-${address.id}`"
+                :data-testid="`done-copy-${address.id}`"
                 @click="copy(address)"
               ></nldd-button>
               <nldd-button
@@ -218,7 +218,7 @@ function keyErrorText(): string {
                 start-icon="open-new-page"
                 :href="address.url"
                 target="_blank"
-                :data-testid="`klaar-open-${address.id}`"
+                :data-testid="`done-open-${address.id}`"
               ></nldd-button>
             </nldd-button-group>
 
@@ -227,7 +227,7 @@ function keyErrorText(): string {
             <nldd-text
               size="sm"
               role="status"
-              :data-testid="`klaar-kopieermelding-${address.id}`"
+              :data-testid="`done-copy-notice-${address.id}`"
               >{{ copyNotice[address.id] ?? '' }}</nldd-text
             >
           </nldd-container>
@@ -238,7 +238,7 @@ function keyErrorText(): string {
             :supporting-text="
               t('page.done.published.detail', { time: formatTimestamp(site.lastPublishedAt) })
             "
-            data-testid="klaar-bevestiging"
+            data-testid="done-confirmation"
           ></nldd-banner>
         </template>
 
@@ -248,7 +248,7 @@ function keyErrorText(): string {
           :text="t('page.done.noVersion.title')"
           :supporting-text="t('page.done.noVersion.detail')"
           horizontal-alignment="left"
-          data-testid="klaar-geen-versie"
+          data-testid="done-no-version"
         >
           <nldd-button
             slot="actions"
@@ -260,10 +260,10 @@ function keyErrorText(): string {
 
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="5"><h2>{{ t('page.done.visibility.heading') }}</h2></nldd-title>
-          <nldd-text data-testid="klaar-zichtbaarheid">
+          <nldd-text data-testid="done-visibility">
             {{ accessSummary(site.access) }}
           </nldd-text>
-          <nldd-link :href="`${sitePath}/access`" size="md" data-testid="klaar-zichtbaarheid-wijzigen"
+          <nldd-link :href="`${sitePath}/access`" size="md" data-testid="done-visibility-change"
             >{{ t('page.done.visibility.change') }}</nldd-link
           >
         </nldd-container>
@@ -274,12 +274,12 @@ function keyErrorText(): string {
             variant="success"
             :text="t('page.done.key.created.title')"
             :supporting-text="t('page.done.key.created.detail')"
-            data-testid="klaar-sleutel"
+            data-testid="done-key"
           >
             <SecretLink
               :value="keyValue"
               :site-url="siteUrl(contentBase, groupSlug, siteSlug)"
-              prefix="klaar-sleutel"
+              prefix="done-key"
             />
           </nldd-banner>
           <nldd-banner
@@ -287,24 +287,24 @@ function keyErrorText(): string {
             variant="critical"
             :text="t('page.done.key.failed.title')"
             :supporting-text="keyErrorText()"
-            data-testid="klaar-sleutel-fout"
+            data-testid="done-key-error"
           >
             <nldd-button
               slot="actions"
               variant="secondary"
               :text="t('page.done.key.failed.action')"
               :href="`${sitePath}/access`"
-              data-testid="klaar-sleutel-naar-toegang"
+              data-testid="done-key-to-access"
             ></nldd-button>
           </nldd-banner>
         </nldd-container>
 
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="5"><h2>{{ t('page.done.next.heading') }}</h2></nldd-title>
-          <nldd-link :href="sitePath" size="md" data-testid="klaar-naar-site"
+          <nldd-link :href="sitePath" size="md" data-testid="done-to-site"
             >{{ t('page.done.next.site') }}</nldd-link
           >
-          <nldd-link href="/" size="md" data-testid="klaar-naar-overzicht"
+          <nldd-link href="/" size="md" data-testid="done-to-overview"
             >{{ t('page.done.next.overview') }}</nldd-link
           >
         </nldd-container>

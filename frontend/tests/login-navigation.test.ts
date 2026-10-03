@@ -65,8 +65,8 @@ function scriptNavigationsToLogin(source: string): string[] {
 }
 
 describe('the detector', () => {
-  it('flags the CliKoppelen.vue code that let a link re-arm a fresh session', () => {
-    // Verbatim from CliKoppelen.vue before the fix.
+  it('flags the CliLink.vue code that let a link re-arm a fresh session', () => {
+    // Verbatim from CliLink.vue before the fix.
     const before = `
 function redirectToLogin(rawCode: string | null): void {
   const query = rawCode ? \`?code=\${encodeURIComponent(rawCode)}\` : '';
@@ -110,7 +110,7 @@ describe('No script navigation to the login route', () => {
     // A check that silently scans nothing is worse than no check.
     expect(files.length).toBeGreaterThan(30);
     expect(names).toEqual(
-      expect.arrayContaining(['pages/CliKoppelen.vue', 'components/ErrorBanner.vue', 'pages/Landing.vue']),
+      expect.arrayContaining(['pages/CliLink.vue', 'components/ErrorBanner.vue', 'pages/Landing.vue']),
     );
   });
 

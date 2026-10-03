@@ -1037,11 +1037,11 @@ async def test_an_unexpected_error_before_the_ingest_cleans_up_the_spool(
     has to remove the spool file it made."""
 
     def _boom(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("onverwachte fout")
+        raise RuntimeError("unexpected error")
 
     monkeypatch.setattr(trust, "check_live_deploy", _boom)
     async with environment.client() as client:
-        with pytest.raises(RuntimeError, match="onverwachte fout"):
+        with pytest.raises(RuntimeError, match="unexpected error"):
             await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
 
     async with environment.session_factory() as db:
@@ -1589,7 +1589,7 @@ async def test_spool_and_workdir_empty_after_success(environment: Environment) -
     assert list(_tmp_dir(environment).iterdir()) == []
 
 
-async def test_upload_streams_without_the_body_in_memory_too_keep(
+async def test_upload_streams_without_keeping_the_body_in_memory(
     tmp_path: Path, migrated_dsn: str
 ) -> None:
     """A 64 MB html upload through a generator: peak memory of the whole
@@ -1623,7 +1623,7 @@ async def test_upload_streams_without_the_body_in_memory_too_keep(
             storage_ref = await db.scalar(select(Version.storage_ref).where(Version.id == version_id))
         index = environment.settings.content_root / storage_ref / "index.html"
         assert index.stat().st_size == count * len(chunk)
-        assert peak < 8 * 1024 * 1024, f"piek {peak} bytes voor een lichaam van {size} bytes"
+        assert peak < 8 * 1024 * 1024, f"peak {peak} bytes for a body of {size} bytes"
         assert list(_tmp_dir(environment).iterdir()) == []
 
 

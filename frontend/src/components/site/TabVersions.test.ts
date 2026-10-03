@@ -37,10 +37,10 @@ describe('TabVersions: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="versie-versie-1"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="versie-versie-0"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="version-versie-1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="version-versie-0"]').exists()).toBe(true);
     // The preview version does not belong in this list.
-    expect(wrapper.find('[data-testid="versie-versie-preview-42"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="version-versie-preview-42"]').exists()).toBe(false);
 
     // Every row carries the marker; the color and the accessible label say
     // which of the two states it is.
@@ -59,11 +59,11 @@ describe('TabVersions: states', () => {
     await untilIdle();
 
     // WCAG 3.2.5: announce a new window before it opens.
-    expect(wrapper.find('[data-testid="bekijk-versie-0"]').attributes('details')).toBe(
+    expect(wrapper.find('[data-testid="view-versie-0"]').attributes('details')).toBe(
       'nieuw tabblad',
     );
 
-    await runAction(wrapper, 'bekijk-versie-0');
+    await runAction(wrapper, 'view-versie-0');
 
     expect(open).toHaveBeenCalledWith(
       'https://sites.plak.test/team-aurora/website/_version/versie-0/',
@@ -75,7 +75,7 @@ describe('TabVersions: states', () => {
   it('renders the version list and its skeleton as box-tinted', async () => {
     const loadWrapper = makeWrapper();
     // Not finished loading: this is the skeleton behind the indicator.
-    expect(loadWrapper.find('[data-testid="versies-skelet"]').attributes('variant')).toBe(
+    expect(loadWrapper.find('[data-testid="versions-skeleton"]').attributes('variant')).toBe(
       'box-tinted',
     );
 
@@ -92,7 +92,7 @@ describe('TabVersions: states', () => {
     await untilIdle();
 
     // The marker is the first cell, then a 12 spacer, only then the text.
-    const live = wrapper.find('[data-testid="versie-versie-1"]');
+    const live = wrapper.find('[data-testid="version-versie-1"]');
     const cellen = [...live.element.children].map((c) => c.tagName.toLowerCase());
     expect(cellen[0]).toBe('nldd-cell');
     expect(live.find('nldd-cell').find('nldd-badge').exists()).toBe(true);
@@ -104,7 +104,7 @@ describe('TabVersions: states', () => {
     // Two separate buttons did not fit: at 320px and 200% text "Zet deze
     // versie live" stuck out 151px beyond the screen (WCAG 1.4.10). The
     // number of actions may no longer touch the row's width.
-    const older = wrapper.find('[data-testid="versie-versie-0"]');
+    const older = wrapper.find('[data-testid="version-versie-0"]');
     expect(older.findAll('nldd-icon-button')).toHaveLength(1);
     expect(older.findAll('nldd-spacer-cell').map((c) => c.attributes('size'))).toEqual(['12']);
   });
@@ -115,7 +115,7 @@ describe('TabVersions: states', () => {
 
     expect(wrapper.find('[data-testid="versions-list"]').attributes('type')).toBe('form');
     expect(
-      wrapper.find('[data-testid="live-zetten-versie-0"]').attributes('disabled'),
+      wrapper.find('[data-testid="set-live-versie-0"]').attributes('disabled'),
     ).toBeUndefined();
   });
 
@@ -132,19 +132,19 @@ describe('TabVersions: states', () => {
 
     // The skeleton is inside it, so the indicator dims that rather than filling
     // an empty screen; the heading and the list shape are already there.
-    const skeleton = indicator.find('[data-testid="versies-skelet"]');
+    const skeleton = indicator.find('[data-testid="versions-skeleton"]');
     expect(skeleton.exists()).toBe(true);
     expect(skeleton.attributes('aria-hidden')).toBe('true');
     expect(skeleton.attributes('type')).toBe('form');
     expect(skeleton.findAll('nldd-list-item')).toHaveLength(3);
-    expect(wrapper.find('#kop-versies').exists()).toBe(true);
+    expect(wrapper.find('#heading-versions').exists()).toBe(true);
   });
 
   it('clears the skeleton once the versions are in', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="versies-skelet"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="versions-skeleton"]').exists()).toBe(false);
     expect(wrapper.find('nldd-activity-indicator').exists()).toBe(false);
   });
 
@@ -152,12 +152,12 @@ describe('TabVersions: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const row = wrapper.find('[data-testid="versie-versie-0"]');
+    const row = wrapper.find('[data-testid="version-versie-0"]');
     const stamp = row.find('nldd-text-cell').attributes('text');
     expect(row.find('nldd-icon-button').attributes('accessible-label')).toBe(
       `Acties voor ${stamp}`,
     );
-    expect(wrapper.find('[data-testid="live-zetten-versie-0"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="set-live-versie-0"]').attributes('text')).toBe(
       'Zet deze versie live',
     );
   });
@@ -166,7 +166,7 @@ describe('TabVersions: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const row = wrapper.find('[data-testid="versie-versie-1"]');
+    const row = wrapper.find('[data-testid="version-versie-1"]');
     expect(row.find('nldd-text-cell').attributes('supporting-text')).toBe(
       'Gepubliceerd door github.com/team-aurora/website',
     );
@@ -180,7 +180,7 @@ describe('TabVersions: states', () => {
     await untilIdle();
 
     expect(
-      wrapper.find('[data-testid="versie-versie-0"]').find('nldd-text-cell').attributes('supporting-text'),
+      wrapper.find('[data-testid="version-versie-0"]').find('nldd-text-cell').attributes('supporting-text'),
     ).toBe('Handmatig geüpload');
   });
 
@@ -192,7 +192,7 @@ describe('TabVersions: states', () => {
     await untilIdle();
 
     expect(
-      wrapper.find('[data-testid="versie-versie-1"]').find('nldd-text-cell').attributes('supporting-text'),
+      wrapper.find('[data-testid="version-versie-1"]').find('nldd-text-cell').attributes('supporting-text'),
     ).toBe('Gepubliceerd door CI');
   });
 
@@ -202,7 +202,7 @@ describe('TabVersions: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const empty = wrapper.find('nldd-inline-dialog[data-testid="versies-leeg"]');
+    const empty = wrapper.find('nldd-inline-dialog[data-testid="versions-empty"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('text')).toBe('Nog geen live-versies');
     expect(empty.attributes('supporting-text')).toContain('tabblad Overzicht');
@@ -287,7 +287,7 @@ describe('TabVersions: states', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="versions-storage"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="versie-versie-1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="version-versie-1"]').exists()).toBe(true);
     expect(wrapper.html()).not.toContain('Serverfout');
   });
 
@@ -297,7 +297,7 @@ describe('TabVersions: states', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="versies-leeg"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="versions-empty"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="versions-storage"]').text()).toContain('Deze site gebruikt');
   });
 
@@ -317,9 +317,9 @@ describe('TabVersions: setting live', () => {
     await untilIdle();
 
     // The current live version has no "live zetten" action.
-    expect(wrapper.find('[data-testid="live-zetten-versie-1"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="set-live-versie-1"]').exists()).toBe(false);
 
-    await runAction(wrapper, 'live-zetten-versie-0');
+    await runAction(wrapper, 'set-live-versie-0');
 
     expect(backend.data.sites[0]!.liveVersionId).toBe('versie-0');
     expect(wrapper.find('[data-testid="live-marker-versie-0"]').attributes('color')).toBe('success');
@@ -333,7 +333,7 @@ describe('TabVersions: setting live', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', serverErrorFetch());
-    await runAction(wrapper, 'live-zetten-versie-0');
+    await runAction(wrapper, 'set-live-versie-0');
 
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Versie niet live gezet');
@@ -345,7 +345,7 @@ describe('TabVersions: setting live', () => {
     await untilIdle();
 
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
-    await runAction(wrapper, 'live-zetten-versie-0');
+    await runAction(wrapper, 'set-live-versie-0');
 
     const notice = wrapper.find('nldd-notification[variant="critical"]');
     expect(notice.attributes('text')).toBe('Versie niet live gezet');

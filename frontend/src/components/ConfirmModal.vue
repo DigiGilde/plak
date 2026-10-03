@@ -40,7 +40,7 @@ const dialog = ref<DialogElement | null>(null);
 
 const typed = ref('');
 const phraseInvalid = ref(false);
-const phraseUnmetId = `bevestig-zin-${useId()}`;
+const phraseUnmetId = `confirm-phrase-${useId()}`;
 
 function phraseMatches(): boolean {
   return props.confirmPhrase === undefined || typed.value.trim() === props.confirmPhrase;
@@ -102,7 +102,7 @@ function confirm(): void {
         v-if="confirmPhrase !== undefined"
         layout="stack"
         gap="16"
-        data-testid="bevestig-inhoud"
+        data-testid="confirm-content"
       >
         <slot></slot>
         <nldd-form-field :label="t('admin.confirm.phrase.label', { phrase: confirmPhrase })">
@@ -112,7 +112,7 @@ function confirm(): void {
             no-spellcheck
             :invalid="phraseInvalid || undefined"
             :unmet="phraseInvalid ? phraseUnmetId : undefined"
-            data-testid="bevestig-zin"
+            data-testid="confirm-phrase"
             @input="onPhraseInput"
             @keydown.enter.prevent="confirm"
           ></nldd-text-field>
@@ -130,7 +130,7 @@ function confirm(): void {
         slot="actions"
         variant="primary"
         :text="keepText"
-        data-testid="bevestig-annuleren"
+        data-testid="confirm-cancel"
         @click="emit('close')"
       ></nldd-button>
       <nldd-button
@@ -138,7 +138,7 @@ function confirm(): void {
         variant="destructive"
         :text="confirmLabel"
         :loading="busy || undefined"
-        data-testid="bevestig-doorgaan"
+        data-testid="confirm-continue"
         @click="confirm"
       ></nldd-button>
     </nldd-modal-dialog>

@@ -214,7 +214,7 @@ class RateLimitMiddleware:
                 backstop = await self._backstops.increment(f"{klass.value}:{_BACKSTOP_KEY}", limit.window_s, now_)
                 refusal_s = backstop.remaining_s if backstop.count > limit.global_max else None
         except Exception:
-            _logger.exception("Ratelimit-teller kapot; verzoek fail-closed geweigerd (klasse=%s)", klass.value)
+            _logger.exception("Rate limit counter broken; request refused fail-closed (class=%s)", klass.value)
             response = _too_many_requests_response(limit.window_s, accept_language)
             await response(scope, receive, send)
             return

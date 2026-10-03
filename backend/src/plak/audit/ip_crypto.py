@@ -58,7 +58,7 @@ def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_key: by
     `previous_key` when its key id matches - the usual case right after a
     key rotation, for rows encrypted before it."""
     if len(blob) < _HEADER_LEN or blob[:1] != _VERSION:
-        raise IpDecryptError("onbekende versie van het versleutelde IP-adres")
+        raise IpDecryptError("unknown version of the encrypted IP address")
     blob_key_id = blob[len(_VERSION) : len(_VERSION) + _KEY_ID_LEN]
     nonce = blob[len(_VERSION) + _KEY_ID_LEN : _HEADER_LEN]
     ciphertext = blob[_HEADER_LEN:]
@@ -70,5 +70,5 @@ def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_key: by
         try:
             return AESGCM(candidate).decrypt(nonce, ciphertext, aad).decode("utf-8")
         except InvalidTag as error:
-            raise IpDecryptError("IP-adres kan niet ontsleuteld worden met deze sleutel") from error
-    raise IpDecryptError("geen van de geconfigureerde sleutels hoort bij dit versleutelde IP-adres")
+            raise IpDecryptError("IP address cannot be decrypted with this key") from error
+    raise IpDecryptError("none of the configured keys belongs to this encrypted IP address")

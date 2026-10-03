@@ -67,9 +67,9 @@ const props = defineProps<{
     variant="neutral-transparent"
     icon="ellipsis"
     popup-type="menu"
-    class="rij-acties"
+    class="row-actions"
     :accessible-label="t('admin.rowActions.label', { label: props.label })"
-    :data-testid="`acties-${props.label}`"
+    :data-testid="`actions-${props.label}`"
   >
     <nldd-menu slot="popup" placement="bottom-end">
       <!-- The group first: it carries its own divider towards what follows,
@@ -109,7 +109,7 @@ const props = defineProps<{
    button rather than the icon, because the icon lives in the shadow root; the
    button is square, so its focus ring and hover come out identical either
    way. */
-.rij-acties {
+.row-actions {
   transform: rotate(90deg);
 }
 </style>

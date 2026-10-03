@@ -80,7 +80,7 @@ class TestWriteVersion:
         with pytest.raises(RuntimeError), store.write_version("g", "p", uuid.uuid4()) as writer:
             with writer.open_file("a/b/c.txt") as out:
                 out.write(b"deels geschreven")
-            raise RuntimeError("uitpakken mislukt halverwege")
+            raise RuntimeError("unpacking failed halfway")
         assert list((root / "_tmp").iterdir()) == []
         assert not (root / "g").exists()
 

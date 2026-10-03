@@ -55,7 +55,7 @@ body {
    the toolbar and footer keep the work width. On the children rather than the
    section's own `width`, because that centres the body and pulls the h1 off
    the x of the wordmark. */
-.leesbreedte > * {
+.reading-width > * {
   max-width: var(--plak-reading-width);
 }
 
@@ -76,7 +76,7 @@ nldd-description-cell {
 /* Names something for a screen reader without taking room on screen. Not
    `display: none` and not `visibility: hidden`: both would take it out of the
    accessibility tree, which is the whole point of the class. */
-.alleen-schermlezer {
+.visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;

@@ -51,12 +51,12 @@ describe('TabDeploy: linked repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-name"]').text()).toContain(
       'GitHub - team-aurora/website',
     );
-    expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('main');
+    expect(wrapper.find('[data-testid="repository-live-branch"]').text()).toContain('main');
     expect(wrapper.html()).toContain('Bea Heerder');
-    expect(wrapper.find('[data-testid="repository-onbevestigd"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-unconfirmed"]').exists()).toBe(false);
   });
 
   it('says the name and ids are as entered while nothing has confirmed them', async () => {
@@ -65,7 +65,7 @@ describe('TabDeploy: linked repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const note = wrapper.find('[data-testid="repository-onbevestigd"]');
+    const note = wrapper.find('[data-testid="repository-unconfirmed"]');
     expect(note.attributes('text')).toBe('Nog niet bevestigd');
     expect(note.attributes('supporting-text')).toContain('zoals ze zijn ingevuld');
   });
@@ -76,7 +76,7 @@ describe('TabDeploy: linked repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('elke branch');
+    expect(wrapper.find('[data-testid="repository-live-branch"]').text()).toContain('elke branch');
   });
 
   it('shows the empty state and the link form without a linked repository', async () => {
@@ -85,14 +85,14 @@ describe('TabDeploy: linked repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-leeg"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="workflow-snippet"]').exists()).toBe(false);
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(true);
   });
 
   it('shows an error message on a server error while loading', async () => {
@@ -111,23 +111,23 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
     // No slash: refused client-side, nothing submitted.
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'ongeldig',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
-    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="repository-owner-repo"]').attributes('invalid')).toBeDefined();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'minbzk/website',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(1);
@@ -141,7 +141,7 @@ describe('TabDeploy: linking and changing the repository', () => {
       // may publish live.
       liveBranch: null,
     });
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
     expect(wrapper.find('nldd-notification[variant="success"]').exists()).toBe(true);
   });
 
@@ -150,7 +150,7 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
     const providerSelect = wrapper.find('[data-testid="repository-provider"]');
@@ -163,10 +163,10 @@ describe('TabDeploy: linking and changing the repository', () => {
       'https://code.overheid.nl',
     ]);
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'robbertbos/waggle',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({
@@ -182,16 +182,16 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'minbzk/website',
     });
-    fireDetailEvent(wrapper.find('[data-testid="repository-livebranch-invoer"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-live-branch-input"]').element, 'input', {
       value: '',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]!.liveBranch).toBeNull();
@@ -202,11 +202,11 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
     expect(
-      (wrapper.find('[data-testid="repository-livebranch-invoer"]').element as HTMLInputElement).getAttribute(
+      (wrapper.find('[data-testid="repository-live-branch-input"]').element as HTMLInputElement).getAttribute(
         'value',
       ),
     ).toBe('');
@@ -217,16 +217,16 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'minbzk/website',
     });
-    fireDetailEvent(wrapper.find('[data-testid="repository-livebranch-invoer"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-live-branch-input"]').element, 'input', {
       value: 'main',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]!.liveBranch).toBe('main');
@@ -237,22 +237,22 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://github.com/minbzk/website.git',
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-herkend"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-recognized"]').text()).toContain(
       'Herkend: GitHub, minbzk/website',
     );
     expect(
       (wrapper.find('[data-testid="repository-provider"]').element as HTMLSelectElement).value,
     ).toBe('github');
 
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({
@@ -267,15 +267,15 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://code.overheid.nl/robbertbos/waggle/tree/main',
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-herkend"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-recognized"]').text()).toContain(
       'Herkend: Forgejo (code.overheid.nl), robbertbos/waggle',
     );
     expect(
@@ -285,7 +285,7 @@ describe('TabDeploy: linking and changing the repository', () => {
       (wrapper.find('[data-testid="repository-host"]').element as HTMLSelectElement).value,
     ).toBe('https://code.overheid.nl');
 
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({
@@ -301,15 +301,15 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'git@github.com:minbzk/website.git',
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-herkend"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-recognized"]').text()).toContain(
       'Herkend: GitHub, minbzk/website',
     );
   });
@@ -319,17 +319,17 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://gitlab.com/minbzk/website',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
-    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="repository-owner-repo"]').attributes('invalid')).toBeDefined();
     expect(wrapper.html()).toContain('Onbekende host "gitlab.com"');
     expect(wrapper.html()).toContain('github.com');
     expect(wrapper.html()).toContain('code.overheid.nl');
@@ -340,17 +340,17 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'minbzk/website',
     });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-herkend"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-recognized"]').exists()).toBe(false);
 
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({ provider: 'github', owner: 'minbzk', repo: 'website' });
@@ -360,35 +360,35 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
     expect(
-      (wrapper.find('[data-testid="repository-eigenaar-repo"]').element as HTMLInputElement).getAttribute(
+      (wrapper.find('[data-testid="repository-owner-repo"]').element as HTMLInputElement).getAttribute(
         'value',
       ),
     ).toBe('team-aurora/website');
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'team-aurora/nieuwe-website',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]!.repo).toBe('nieuwe-website');
-    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain('nieuwe-website');
+    expect(wrapper.find('[data-testid="repository-name"]').text()).toContain('nieuwe-website');
   });
 
   it('closes the form on cancel without saving anything', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
-    await wrapper.find('[data-testid="repository-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="repository-cancel"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
     expect(backend.data.repositories[0]!.repo).toBe('website');
   });
 
@@ -396,17 +396,17 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: '',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     // Empty after the slash: refused client-side before the request goes out.
-    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="repository-owner-repo"]').attributes('invalid')).toBeDefined();
   });
 
   it('shows the server error message for a failed link', async () => {
@@ -414,10 +414,10 @@ describe('TabDeploy: linking and changing the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'minbzk/website',
     });
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
@@ -438,10 +438,10 @@ describe('TabDeploy: linking and changing the repository', () => {
       }
       return backend.fetch(input, init);
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(true);
     expect(wrapper.html()).toContain('Dit repository bestaat niet of is niet publiek.');
   });
 });
@@ -476,7 +476,7 @@ const notFoundWithoutIds = (body: Record<string, unknown>) =>
   body.repositoryId === undefined ? problemResponse(422, 'REPOSITORY_NOT_FOUND', 'Niet gevonden.') : undefined;
 
 async function submitForm(wrapper: ReturnType<typeof makeWrapper>): Promise<void> {
-  await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="repository-form"]').trigger('submit');
   await untilIdle();
 }
 
@@ -486,7 +486,7 @@ function typeInto(wrapper: ReturnType<typeof makeWrapper>, testid: string, value
 
 async function openLinkForm(wrapper: ReturnType<typeof makeWrapper>): Promise<void> {
   await untilIdle();
-  await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+  await wrapper.find('[data-testid="repository-link"]').trigger('click');
   await untilIdle();
 }
 
@@ -498,23 +498,23 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await openLinkForm(wrapper);
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     expect(bodies[0]).not.toHaveProperty('repositoryId');
     expect(wrapper.html()).toContain('vul dan het repository-id en het eigenaar-id zelf in');
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-ids-command"]').text()).toBe(
       "gh api repos/team-aurora/prive-site --jq '.id, .owner.id'",
     );
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
 
     typeInto(wrapper, 'repository-id', ' 5005 ');
-    typeInto(wrapper, 'repository-eigenaar-id', '6006');
+    typeInto(wrapper, 'repository-owner-id', '6006');
     await submitForm(wrapper);
 
     expect(bodies[1]).toMatchObject({ owner: 'team-aurora', repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
     expect(backend.data.repositories[0]).toMatchObject({ repo: 'prive-site', repositoryId: 5005, ownerId: 6006 });
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
   });
 
   it('sends no ids while both fields stay empty, and keeps the fields in view', async () => {
@@ -522,7 +522,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
     await submitForm(wrapper);
 
@@ -543,17 +543,17 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     typeInto(wrapper, 'repository-id', repositoryId);
-    typeInto(wrapper, 'repository-eigenaar-id', ownerId);
+    typeInto(wrapper, 'repository-owner-id', ownerId);
     await submitForm(wrapper);
 
     expect(bodies).toHaveLength(1);
     expect(wrapper.find('[data-testid="repository-id"]').attributes('invalid')).toBeDefined();
-    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('unmet')).toBe('repository-ids-fout');
-    expect(wrapper.find('#repository-ids-fout').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-owner-id"]').attributes('unmet')).toBe('repository-ids-error');
+    expect(wrapper.find('#repository-ids-error').text()).toBe(
       'Vul het repository-id en het eigenaar-id allebei in, alleen met cijfers.',
     );
   });
@@ -567,15 +567,15 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     );
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/website');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/website');
     await submitForm(wrapper);
     typeInto(wrapper, 'repository-id', '1');
-    typeInto(wrapper, 'repository-eigenaar-id', '2');
+    typeInto(wrapper, 'repository-owner-id', '2');
     await submitForm(wrapper);
 
-    expect(wrapper.find('#repository-ids-fout').text()).toBe('GitHub geeft andere ids.');
+    expect(wrapper.find('#repository-ids-error').text()).toBe('GitHub geeft andere ids.');
     expect(wrapper.find('#repository-server').text()).toBe('');
-    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeUndefined();
+    expect(wrapper.find('[data-testid="repository-owner-repo"]').attributes('invalid')).toBeUndefined();
   });
 
   it('keeps the command on the repository it failed for while the input is mid-edit', async () => {
@@ -583,16 +583,16 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/team-aurora/prive-site');
+    expect(wrapper.find('[data-testid="repository-ids-command"]').text()).toContain('repos/team-aurora/prive-site');
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-docs');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toContain('repos/team-aurora/prive-docs');
+    expect(wrapper.find('[data-testid="repository-ids-command"]').text()).toContain('repos/team-aurora/prive-docs');
   });
 
   it('names the Forgejo API for a Forgejo repository', async () => {
@@ -601,10 +601,10 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
-    expect(wrapper.find('[data-testid="repository-ids-commando"]').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-ids-command"]').text()).toBe(
       `curl -s -H "Authorization: token <token>" https://code.overheid.nl/api/v1/repos/team-aurora/prive-site | jq '.id, .owner.id'`,
     );
   });
@@ -614,17 +614,17 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts(notFoundWithoutIds);
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
-    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}`.toUpperCase());
-    typeInto(wrapper, 'repository-livebranch-invoer', 'release');
+    typeInto(wrapper, 'repository-owner-repo', `${linked.owner}/${linked.repo}`.toUpperCase());
+    typeInto(wrapper, 'repository-live-branch-input', 'release');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
-    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe(String(linked.ownerId));
+    expect(wrapper.find('[data-testid="repository-owner-id"]').attributes('value')).toBe(String(linked.ownerId));
 
     // Another spelling of the same repository keeps them.
-    typeInto(wrapper, 'repository-eigenaar-repo', `https://github.com/${linked.owner}/${linked.repo}`);
+    typeInto(wrapper, 'repository-owner-repo', `https://github.com/${linked.owner}/${linked.repo}`);
     await untilIdle();
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
 
@@ -634,7 +634,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       ownerId: linked.ownerId,
       liveBranch: 'release',
     });
-    expect(wrapper.find('[data-testid="repository-livebranch"]').text()).toContain('release');
+    expect(wrapper.find('[data-testid="repository-live-branch"]').text()).toContain('release');
   });
 
   it('prefills the stored ids of a linked Forgejo repository on the same host', async () => {
@@ -644,7 +644,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts(notFoundWithoutIds);
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
     await submitForm(wrapper);
 
@@ -658,18 +658,18 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const bodies = recordRepositoryPuts(notFoundWithoutIds);
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
     await submitForm(wrapper);
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe(String(linked.repositoryId));
 
-    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}-oud`);
+    typeInto(wrapper, 'repository-owner-repo', `${linked.owner}/${linked.repo}-oud`);
     await untilIdle();
-    typeInto(wrapper, 'repository-eigenaar-repo', `${linked.owner}/${linked.repo}`);
+    typeInto(wrapper, 'repository-owner-repo', `${linked.owner}/${linked.repo}`);
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
-    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="repository-owner-id"]').attributes('value')).toBe('');
     await submitForm(wrapper);
     expect(bodies[1]).not.toHaveProperty('repositoryId');
   });
@@ -678,7 +678,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts(notFoundWithoutIds);
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
     await submitForm(wrapper);
 
@@ -687,9 +687,9 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
 
     typeInto(wrapper, 'repository-id', '5005');
-    typeInto(wrapper, 'repository-eigenaar-id', '6006');
+    typeInto(wrapper, 'repository-owner-id', '6006');
     await wrapper.find('[data-testid="repository-provider"]').setValue('github');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-docs');
     await untilIdle();
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('5005');
   });
@@ -698,20 +698,20 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts(notFoundWithoutIds);
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-docs');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-docs');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-id"]').attributes('value')).toBe('');
-    expect(wrapper.find('[data-testid="repository-eigenaar-id"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="repository-owner-id"]').attributes('value')).toBe('');
   });
 
   it('shows the generic message and no id fields when the request itself fails', async () => {
     backend.data.repositories = [];
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
     await submitForm(wrapper);
 
@@ -724,22 +724,22 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
-    const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-commando"]');
+    const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-command"]');
 
     expect(command().text()).toBe('plak site link team-aurora/website');
     expect(command().attributes('no-copy')).toBeUndefined();
     expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
 
-    typeInto(wrapper, 'repository-livebranch-invoer', ' main ');
+    typeInto(wrapper, 'repository-live-branch-input', ' main ');
     await untilIdle();
     expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
 
     // Named, the repository no longer depends on the checkout the command runs in.
-    typeInto(wrapper, 'repository-eigenaar-repo', 'https://github.com/minbzk/website.git');
+    typeInto(wrapper, 'repository-owner-repo', 'https://github.com/minbzk/website.git');
     await untilIdle();
     expect(command().text()).toBe('plak site link team-aurora/website minbzk/website --live-branch main');
 
-    typeInto(wrapper, 'repository-eigenaar-repo', 'minbzk/');
+    typeInto(wrapper, 'repository-owner-repo', 'minbzk/');
     await untilIdle();
     expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
   });
@@ -749,10 +749,10 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'minbzk/website');
+    typeInto(wrapper, 'repository-owner-repo', 'minbzk/website');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toBe(
+    expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toBe(
       'plak site link team-aurora/website https://code.overheid.nl/minbzk/website',
     );
   });
@@ -761,10 +761,10 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const linked = backend.data.repositories[0]!;
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-cli-commando"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toContain(
       `plak site link team-aurora/website ${linked.owner}/${linked.repo}`,
     );
   });
@@ -774,13 +774,13 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
-    typeInto(wrapper, 'repository-livebranch-invoer', 'main');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-live-branch-input', 'main');
     await submitForm(wrapper);
 
-    const explanation = wrapper.find('[data-testid="repository-ids-uitleg"]');
+    const explanation = wrapper.find('[data-testid="repository-ids-explanation"]');
     const blocks = explanation.findAll('nldd-code-viewer').map((block) => block.attributes('data-testid'));
-    expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-commando']);
+    expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-command']);
     expect(explanation.find('[data-testid="repository-ids-cli"]').text()).toBe(
       'plak site link team-aurora/website team-aurora/prive-site --live-branch main',
     );
@@ -794,11 +794,11 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     await wrapper.find('[data-testid="repository-provider"]').setValue('forgejo');
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-ids-cli"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-ids-uitleg"]').text()).toContain('Vul dan de twee ids hieronder zelf in');
+    expect(wrapper.find('[data-testid="repository-ids-explanation"]').text()).toContain('Vul dan de twee ids hieronder zelf in');
     expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(true);
   });
 
@@ -810,7 +810,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       await openLinkForm(wrapper);
       const hint = wrapper.find('[data-testid="repository-cli-hint"]');
       expect(hint.text()).toContain('Rather from the terminal? Run this in a checkout of the repository');
-      expect(hint.find('[data-testid="repository-cli-commando"]').text()).toBe(
+      expect(hint.find('[data-testid="repository-cli-command"]').text()).toBe(
         'plak site link team-aurora/website',
       );
     } finally {
@@ -823,13 +823,13 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     recordRepositoryPuts();
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
-    typeInto(wrapper, 'repository-eigenaar-repo', 'team-aurora/prive-site');
+    typeInto(wrapper, 'repository-owner-repo', 'team-aurora/prive-site');
     await submitForm(wrapper);
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(true);
 
-    await wrapper.find('[data-testid="repository-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="repository-cancel"]').trigger('click');
     await untilIdle();
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
   });
@@ -840,29 +840,29 @@ describe('TabDeploy: unlinking the repository', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-unlink"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(1);
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
-    expect(wrapper.find('[data-testid="repository-leeg"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-empty"]').exists()).toBe(true);
   });
 
   it('reports it when unlinking fails', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-unlink"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="repository-naam"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-name"]').exists()).toBe(true);
   });
 });
 
@@ -874,12 +874,12 @@ describe('TabDeploy: visibility by role', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-change"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-unlink"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-link"]').exists()).toBe(false);
 
-    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain(
+    expect(wrapper.find('[data-testid="repository-name"]').text()).toContain(
       'GitHub - team-aurora/website',
     );
     expect(wrapper.find('[data-testid="workflow-snippet"]').exists()).toBe(true);
@@ -892,9 +892,9 @@ describe('TabDeploy: visibility by role', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(false);
-    const empty = wrapper.find('[data-testid="repository-leeg"]');
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-link"]').exists()).toBe(false);
+    const empty = wrapper.find('[data-testid="repository-empty"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('supporting-text')).toContain('Vraag een beheerder van deze site');
   });
@@ -904,17 +904,17 @@ describe('TabDeploy: visibility by role', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-change"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-unlink"]').exists()).toBe(true);
 
     backend.data.repositories = [];
     const emptyWrapper = makeWrapper();
     await untilIdle();
 
-    expect(emptyWrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(true);
-    await emptyWrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    expect(emptyWrapper.find('[data-testid="repository-link"]').exists()).toBe(true);
+    await emptyWrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
-    expect(emptyWrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+    expect(emptyWrapper.find('[data-testid="repository-form"]').exists()).toBe(true);
   });
 });
 
@@ -995,7 +995,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
     expect(richText.textContent).toContain('.github/workflows/publish.yml');
 
-    const versionsLink = wrapper.find('[data-testid="deploy-naar-versies"]');
+    const versionsLink = wrapper.find('[data-testid="deploy-to-versions"]');
     expect(versionsLink.attributes('href')).toBe('/team-aurora/website/versions');
     expect(versionsLink.text()).toBe('Versies');
   });
@@ -1017,7 +1017,7 @@ describe('TabDeploy: why this is safe', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    const block = wrapper.find('[data-testid="deploy-safety"]');
     expect(block.element.tagName.toLowerCase()).toBe('details');
     expect(block.attributes('open')).toBeUndefined();
     expect(block.find('summary').text()).toBe('Waarom is dit veilig?');
@@ -1027,7 +1027,7 @@ describe('TabDeploy: why this is safe', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    const block = wrapper.find('[data-testid="deploy-safety"]');
     await block.find('summary').trigger('click');
 
     const text = block.text();
@@ -1043,7 +1043,7 @@ describe('TabDeploy: why this is safe', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const block = wrapper.find('[data-testid="deploy-veiligheid"]');
+    const block = wrapper.find('[data-testid="deploy-safety"]');
     expect(block.find('summary').text()).toBe('Why is this safe?');
     expect(block.text()).toContain('No secret is stored in the repository');
     expect(block.text()).toContain('never touch the live site');
@@ -1059,9 +1059,9 @@ describe('TabDeploy: admin status', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-naam"]').text()).toContain('GitHub - team-aurora/website');
-    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-name"]').text()).toContain('GitHub - team-aurora/website');
+    expect(wrapper.find('[data-testid="repository-change"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-unlink"]').exists()).toBe(false);
   });
 
   it('grants admin controls through an effective site role, not only platform or group admin', async () => {
@@ -1072,8 +1072,8 @@ describe('TabDeploy: admin status', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="repository-ontkoppelen"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-change"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-unlink"]').exists()).toBe(true);
   });
 
   it('shows the read-only view, not an empty block, when an open form moves to a site where the member is not admin', async () => {
@@ -1084,16 +1084,16 @@ describe('TabDeploy: admin status', () => {
 
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(true);
 
     await wrapper.setProps({ site: 'docs' });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-wijzigen"]').exists()).toBe(false);
-    const empty = wrapper.find('[data-testid="repository-leeg"]');
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-change"]').exists()).toBe(false);
+    const empty = wrapper.find('[data-testid="repository-empty"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('supporting-text')).toContain('Vraag een beheerder van deze site');
   });
@@ -1104,15 +1104,15 @@ describe('TabDeploy: admin status', () => {
 
     const wrapper = makeWrapper();
     await untilIdle();
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(true);
 
     await wrapper.setProps({ site: 'docs' });
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="repository-formulier"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="repository-koppelen"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="repository-link"]').exists()).toBe(true);
   });
 });
 
@@ -1122,13 +1122,13 @@ describe('TabDeploy: owner/repo input without a detail payload', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    const field = wrapper.find('[data-testid="repository-eigenaar-repo"]').element as HTMLInputElement;
+    const field = wrapper.find('[data-testid="repository-owner-repo"]').element as HTMLInputElement;
     field.value = 'minbzk/website';
     field.dispatchEvent(new Event('input'));
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({ owner: 'minbzk', repo: 'website' });
@@ -1139,15 +1139,15 @@ describe('TabDeploy: owner/repo input without a detail payload', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    wrapper.find('[data-testid="repository-eigenaar-repo"]').element.dispatchEvent(new Event('input'));
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    wrapper.find('[data-testid="repository-owner-repo"]').element.dispatchEvent(new Event('input'));
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
-    expect(wrapper.find('[data-testid="repository-eigenaar-repo"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('[data-testid="repository-owner-repo"]').attributes('invalid')).toBeDefined();
   });
 });
 
@@ -1159,13 +1159,13 @@ describe('TabDeploy: repository reference edge cases', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://gitlab.com/minbzk/website',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
@@ -1177,13 +1177,13 @@ describe('TabDeploy: repository reference edge cases', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://github.com/onlyowner',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
@@ -1195,13 +1195,13 @@ describe('TabDeploy: repository reference edge cases', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
-    fireDetailEvent(wrapper.find('[data-testid="repository-eigenaar-repo"]').element, 'input', {
+    fireDetailEvent(wrapper.find('[data-testid="repository-owner-repo"]').element, 'input', {
       value: 'https://[',
     });
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(0);
@@ -1217,7 +1217,7 @@ describe('TabDeploy: Forgejo host selection while editing', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
     expect(
@@ -1225,7 +1225,7 @@ describe('TabDeploy: Forgejo host selection while editing', () => {
     ).toBe('https://code.overheid.nl');
 
     await wrapper.find('[data-testid="repository-host"]').setValue('https://code.overheid.nl');
-    await wrapper.find('[data-testid="repository-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="repository-form"]').trigger('submit');
     await untilIdle();
 
     expect(backend.data.repositories[0]).toMatchObject({
@@ -1240,7 +1240,7 @@ describe('TabDeploy: Forgejo host selection while editing', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
     const providerSelect = wrapper.find('[data-testid="repository-provider"]');
@@ -1259,7 +1259,7 @@ describe('TabDeploy: Forgejo host selection while editing', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-koppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-link"]').trigger('click');
     await untilIdle();
 
     const providerSelect = wrapper.find('[data-testid="repository-provider"]');
@@ -1275,11 +1275,11 @@ describe('TabDeploy: Forgejo host selection while editing', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-wijzigen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
     await untilIdle();
 
     expect(
-      (wrapper.find('[data-testid="repository-livebranch-invoer"]').element as HTMLInputElement).getAttribute(
+      (wrapper.find('[data-testid="repository-live-branch-input"]').element as HTMLInputElement).getAttribute(
         'value',
       ),
     ).toBe('');
@@ -1291,23 +1291,23 @@ describe('TabDeploy: unlinking and configuration fallbacks', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-unlink"]').trigger('click');
     await untilIdle();
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.repositories).toHaveLength(1);
-    expect(wrapper.find('[data-testid="repository-naam"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="repository-name"]').exists()).toBe(true);
   });
 
   it('reports unlinking failure with the generic message for a non-ApiError failure', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="repository-ontkoppelen"]').trigger('click');
+    await wrapper.find('[data-testid="repository-unlink"]').trigger('click');
     await untilIdle();
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     const notification = wrapper.find('nldd-notification[variant="critical"]');

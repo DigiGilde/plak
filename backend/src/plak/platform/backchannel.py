@@ -99,7 +99,7 @@ async def backchannel_logout(
     request: Request, logout_token: Annotated[str | None, Form()] = None
 ) -> Response:
     if not logout_token:
-        return _refused("logout_token ontbreekt")
+        return _refused("logout_token is missing")
 
     # Cheap refusals first: this endpoint is unauthenticated and its rate
     # limit keys on a client-controlled address (see docs/security.md), so
@@ -108,25 +108,25 @@ async def backchannel_logout(
     settings: Settings = request.app.state.settings
     prefilter_reason = logout_token_prefilter(logout_token, settings)
     if prefilter_reason is not None:
-        _logger.warning("Back-channel logout geweigerd (prefilter): %s", prefilter_reason)
-        return _refused("logout_token is niet geldig")
+        _logger.warning("Back-channel logout refused (prefilter): %s", prefilter_reason)
+        return _refused("logout_token is not valid")
 
     unverified_jti = unverified_logout_token_jti(logout_token)
     assert unverified_jti is not None  # noqa: S101 - the prefilter above requires a jti
     if replay_cache(request.app).already_seen(unverified_jti, now=datetime.now(UTC)):
-        _logger.warning("Back-channel logout geweigerd: logout_token is al gebruikt")
-        return _refused("logout_token is al gebruikt")
+        _logger.warning("Back-channel logout refused: logout_token already used")
+        return _refused("logout_token has already been used")
 
     oidc: OidcClient = request.app.state.oidc_client
     try:
         token = await oidc.validate_logout_token(logout_token)
     except OidcError as error:
-        _logger.warning("Back-channel logout geweigerd: %s", error)
-        return _refused("logout_token is niet geldig")
+        _logger.warning("Back-channel logout refused: %s", error)
+        return _refused("logout_token is not valid")
 
     if replay_cache(request.app).seen_before(token.jti, now=datetime.now(UTC)):
-        _logger.warning("Back-channel logout geweigerd: logout_token is al gebruikt")
-        return _refused("logout_token is al gebruikt")
+        _logger.warning("Back-channel logout refused: logout_token already used")
+        return _refused("logout_token has already been used")
 
     store: SessionStore = request.app.state.session_store
     for session in store.sessions_for_logout(sid=token.sid, sub=token.sub):

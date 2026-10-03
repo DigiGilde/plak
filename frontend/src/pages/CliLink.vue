@@ -172,7 +172,7 @@ function clientLine(authorization: DeviceAuthorization): string {
 </script>
 
 <template>
-  <nldd-simple-section class="leesbreedte">
+  <nldd-simple-section class="reading-width">
     <nldd-activity-indicator
       v-if="view.stage === 'loading'"
       :text="t('page.cliPair.loading')"
@@ -198,7 +198,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         variant="primary"
         :href="loginHref"
         :text="t('page.cliPair.login.action')"
-        data-testid="code-inloggen"
+        data-testid="code-sign-in"
       ></nldd-button>
     </template>
 
@@ -214,7 +214,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         </p>
       </nldd-rich-text>
       <nldd-spacer size="16"></nldd-spacer>
-      <nldd-form data-testid="code-formulier" @submit.prevent="submitManualCode">
+      <nldd-form data-testid="code-form" @submit.prevent="submitManualCode">
         <nldd-form-field :label="t('page.cliPair.codeEntry.label')">
           <nldd-text-field
             name="code"
@@ -224,13 +224,13 @@ function clientLine(authorization: DeviceAuthorization): string {
             :value="manualCode"
             :invalid="(manualTouched && manualCode.trim() === '') || lookupError !== null || undefined"
             :unmet="lookupError !== null ? 'code-server' : undefined"
-            data-testid="code-invoer"
+            data-testid="code-input"
             @input="
               manualCode = ($event as CustomEvent<{ value?: string }>).detail?.value ?? ($event.target as HTMLInputElement).value
             "
           ></nldd-text-field>
           <nldd-validation-list>
-            <nldd-validation-item id="code-vereist" required>
+            <nldd-validation-item id="code-required" required>
               {{ t('page.cliPair.codeEntry.required') }}
             </nldd-validation-item>
             <nldd-validation-item id="code-server">
@@ -244,7 +244,7 @@ function clientLine(authorization: DeviceAuthorization): string {
             type="submit"
             :text="t('page.cliPair.codeEntry.submit')"
             :loading="lookupBusy || undefined"
-            data-testid="code-opzoeken"
+            data-testid="code-lookup"
           ></nldd-button>
         </nldd-form-actions>
       </nldd-form>
@@ -256,7 +256,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         <p>{{ t('page.cliPair.confirm.question') }}</p>
       </nldd-rich-text>
       <nldd-spacer size="8"></nldd-spacer>
-      <nldd-code-viewer variant="simple" no-copy data-testid="code-weergave">{{
+      <nldd-code-viewer variant="simple" no-copy data-testid="code-display">{{
         view.authorization.userCode
       }}</nldd-code-viewer>
       <nldd-spacer size="16"></nldd-spacer>
@@ -268,11 +268,11 @@ function clientLine(authorization: DeviceAuthorization): string {
       ></nldd-banner>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-rich-text>
-        <p data-testid="code-programma">{{ clientLine(view.authorization) }}</p>
-        <p data-testid="code-tijdstip">
+        <p data-testid="code-program">{{ clientLine(view.authorization) }}</p>
+        <p data-testid="code-time">
           {{ t('page.cliPair.confirm.requested', { time: formatTimestamp(view.authorization.createdAt) }) }}
         </p>
-        <p v-if="view.authorization.ipTruncated" data-testid="code-netwerk">
+        <p v-if="view.authorization.ipTruncated" data-testid="code-network">
           {{ t('page.cliPair.confirm.network', { network: view.authorization.ipTruncated }) }}
         </p>
       </nldd-rich-text>
@@ -282,7 +282,7 @@ function clientLine(authorization: DeviceAuthorization): string {
           variant="critical"
           :text="t('page.cliPair.confirm.otherNetwork.title')"
           :supporting-text="t('page.cliPair.confirm.otherNetwork.detail')"
-          data-testid="code-ander-netwerk"
+          data-testid="code-other-network"
         ></nldd-banner>
         <nldd-spacer size="16"></nldd-spacer>
       </template>
@@ -290,7 +290,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         variant="warning"
         :text="t('page.cliPair.confirm.warning.title')"
         :supporting-text="t('page.cliPair.confirm.warning.detail')"
-        data-testid="code-waarschuwing"
+        data-testid="code-warning"
       ></nldd-banner>
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-button-group orientation="horizontal">
@@ -299,7 +299,7 @@ function clientLine(authorization: DeviceAuthorization): string {
           :text="t('page.cliPair.confirm.approve')"
           :loading="actionBusy === 'approve' || undefined"
           :disabled="actionBusy === 'deny' || undefined"
-          data-testid="code-koppelen"
+          data-testid="code-link"
           @click="respond('approve', view.authorization.userCode)"
         ></nldd-button>
         <nldd-button
@@ -307,7 +307,7 @@ function clientLine(authorization: DeviceAuthorization): string {
           :text="t('page.cliPair.confirm.deny')"
           :loading="actionBusy === 'deny' || undefined"
           :disabled="actionBusy === 'approve' || undefined"
-          data-testid="code-weigeren"
+          data-testid="code-deny"
           @click="respond('deny', view.authorization.userCode)"
         ></nldd-button>
       </nldd-button-group>
@@ -318,7 +318,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         variant="success"
         :text="t('page.cliPair.approved.title')"
         :supporting-text="t('page.cliPair.approved.detail')"
-        data-testid="code-gekoppeld"
+        data-testid="code-linked"
       ></nldd-banner>
     </template>
 
@@ -328,7 +328,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         variant="neutral"
         :text="t('page.cliPair.denied.title')"
         :supporting-text="t('page.cliPair.denied.detail')"
-        data-testid="code-geweigerd"
+        data-testid="code-denied"
       ></nldd-banner>
     </template>
   </nldd-simple-section>
