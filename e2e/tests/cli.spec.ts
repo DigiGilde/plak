@@ -162,6 +162,7 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     ]);
     expect(preview.code, preview.stderr).toBe(0);
     expect(preview.stdout.trim()).toMatch(VERSION_ID);
+    expect(preview.stderr).toContain(`${SITE_PATH}/_preview/${PREVIEW_REF}/ (version ${preview.stdout.trim()})`);
 
     const previewPage = await contentApi.get(`${SITE_PATH}/_preview/${PREVIEW_REF}/`);
     expect(previewPage.status()).toBe(200);
@@ -188,7 +189,7 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
       `${GROUP}/${SITE}`,
     ]);
     expect(removed.code, removed.stderr).toBe(0);
-    expect(removed.stdout).toContain('removed');
+    expect(removed.stderr).toContain('removed');
 
     const gone = await contentApi.get(`${SITE_PATH}/_preview/${PREVIEW_REF}/`);
     expect(gone.status()).toBe(404);
