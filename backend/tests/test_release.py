@@ -479,9 +479,9 @@ class TestDecide:
         ["backend/src/plak/main.py", "backend/uv.lock", "cli/plak_cli/__init__.py", "docs/releasing.md"],
     )
     def test_a_change_without_an_entry_releases_nothing(self, released, path):
-        """No entry, no release notes, no release: the push goes to staging
-        only, shipped path or not. It reaches production with the next
-        release that does have an entry."""
+        """No entry, no release notes, no release, shipped path or not.
+        The change reaches production with the next release that does have
+        an entry."""
         released.commit({path: "changed\n"})
         assert release.decide(released.handle, DAY) == ("none", "")
 

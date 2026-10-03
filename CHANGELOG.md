@@ -3,10 +3,9 @@
 Every change to what Plak ships, newest first, in the format of
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A section is
 a CalVer version, the date of its release: `## [2026.10.1]` is the tag
-`v2026.10.1`, and a second release on the same day adds `.N`. Every
-push to `beta` goes to staging; one with entries under `[Unreleased]`
-and no hold marker becomes a release, with those entries as its notes,
-and goes to production. How to write an entry, the hold marker and the
+`v2026.10.1`, and a second release on the same day adds `.N`. A push
+to `beta` with entries under `[Unreleased]` and no hold marker becomes
+a release, with those entries as its notes, and goes to production. How to write an entry, the hold marker and the
 rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]

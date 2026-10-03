@@ -1,44 +1,58 @@
-# Dependabot en niet Renovate: Renovate vraagt een app-installatie of een eigen
-# token, en met de standaard GITHUB_TOKEN draaien zijn PR's de CI niet.
+# Dependabot rather than Renovate: Renovate needs an app installation or a
+# token of its own, and with the default GITHUB_TOKEN its pull requests do
+# not run CI.
 #
-# Twee dingen houden het aantal pull requests beheersbaar.
+# Three things keep the number of pull requests manageable.
 #
-# Een groep per ecosysteem voor minor en patch, plus een tweede groep over
-# dezelfde patterns voor major. Een dependency komt in de eerste groep die hij
-# matcht; een major matcht de minor-en-patch-groep niet en valt zonder die
-# tweede groep dus in een eigen pull request per pakket. Dat brak het paar
-# vitest en @vitest/coverage-v8, die elkaar exact vastpinnen: twee losse pull
-# requests waarvan geen van beide alleen groen kan worden.
+# The application dependencies (backend, cli, frontend with e2e) get a group
+# for minor and patch plus a second group over the same patterns for major.
+# A dependency lands in the first group it matches; a major does not match
+# the minor-and-patch group, so without that second group it would come in a
+# pull request of its own per package. That broke the pair vitest and
+# @vitest/coverage-v8, which pin each other exactly: two separate pull
+# requests, neither of which can go green alone. Security updates get a
+# group of their own per ecosystem as well.
 #
-# En een cooldown: een nieuwe versie telt pas mee als hij een week oud is,
-# majors pas na een maand. Zo komt kapotte upstream eerst bij een ander boven
-# water en vallen opeenvolgende patches in dezelfde pull request. Security
-# updates kennen geen cooldown, dus een gat wacht nergens op.
+# What only feeds CI and the containers (GitHub Actions, pre-commit hooks,
+# base images) shares one pull request across the three ecosystems: the
+# multi-ecosystem group `ci`. The schedule lives on the group, and
+# `commit-message` may only be set there; on an entry it is a config error.
 #
-# De ecosystemen staan verspreid over de week, want ze kwamen allemaal maandag
-# om 06:00 binnen en pull requests die dezelfde lockfile raken dwingen elkaar
-# tot rebasen.
+# And a cooldown: a new version only counts once it is a week old, majors
+# only after a month. Broken upstream then surfaces somewhere else first,
+# and successive patches land in the same pull request. Security updates
+# have no cooldown, so a hole waits for nothing.
+#
+# The schedules are spread over the week, because they all arrived on
+# Monday at 06:00 and pull requests that touch the same lockfile force each
+# other to rebase.
+#
+# Every change to this file starts an update run straight away, outside the
+# schedule.
 version: 2
-updates:
-  - package-ecosystem: github-actions
-    directories:
-      - /
-      - /actions/publish
+
+multi-ecosystem-groups:
+  ci:
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
       timezone: Europe/Amsterdam
-    open-pull-requests-limit: 5
-    # github-actions kent alleen default-days, geen semver-varianten.
-    cooldown:
-      default-days: 7
     commit-message:
       prefix: "ci"
-    groups:
-      actions:
-        patterns:
-          - "*"
+
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /actions/publish
+    multi-ecosystem-group: ci
+    patterns:
+      - "*"
+    open-pull-requests-limit: 5
+    # github-actions only knows default-days, no semver variants.
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: uv
     directory: /backend
@@ -63,6 +77,10 @@ updates:
           - "*"
         update-types:
           - major
+      backend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: uv
     directory: /cli
@@ -87,6 +105,10 @@ updates:
           - "*"
         update-types:
           - major
+      cli-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: npm
     directories:
@@ -113,6 +135,10 @@ updates:
           - "*"
         update-types:
           - major
+      frontend-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     ignore:
       # 30.1.0 and 30.1.1 make the axe tests about five times slower, past
       # the 5s test timeout in CI. A later release comes through again.
@@ -124,32 +150,22 @@ updates:
 
   - package-ecosystem: pre-commit
     directory: /
-    schedule:
-      interval: weekly
-      day: friday
-      time: "06:00"
-      timezone: Europe/Amsterdam
+    multi-ecosystem-group: ci
+    patterns:
+      - "*"
     open-pull-requests-limit: 5
-    # pre-commit kent alleen default-days, geen semver-varianten.
+    # pre-commit only knows default-days, no semver variants.
     cooldown:
       default-days: 7
-    commit-message:
-      prefix: "ci"
-    groups:
-      pre-commit:
-        patterns:
-          - "*"
 
   - package-ecosystem: docker
     directories:
       - /containers/plak
       - /containers/nginx-dev
-    schedule:
-      interval: weekly
-      day: friday
-      time: "06:00"
-      timezone: Europe/Amsterdam
+    multi-ecosystem-group: ci
+    patterns:
+      - "*"
     open-pull-requests-limit: 5
-    # docker kent alleen default-days, geen semver-varianten.
+    # docker only knows default-days, no semver variants.
     cooldown:
       default-days: 7
