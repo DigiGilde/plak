@@ -376,7 +376,7 @@ frontend tests and the CSP check on the built SPA.
 with `RijksICTGilde/zad-actions`. Both are pinned to commit SHAs.
 
 Production follows release tags only. A push to `beta` builds, scans and
-attests its image and deploys nowhere; a staging deployment comes later. A tag
+attests its image and deploys nowhere. A tag
 `vYYYY.M.D` (or `vYYYY.M.D.N` for a second release that day) rolls out to
 `productie`, with the image tagged `YYYY.M.D` next to its commit SHA and that
 version baked in as `PLAK_VERSION`. Until a release workflow exists, cut one by
@@ -393,22 +393,49 @@ on `beta`, or when it is not the newest release tag, so pushing an old tag again
 never rolls production back. A person (or later a GitHub App) pushes the tag: a
 tag pushed with `GITHUB_TOKEN` starts no workflow.
 
-A PR labelled `preview` gets a preview deployment `pr-<nummer>` that is cloned
-from `productie`. Taking the label off cleans it up again, and so does closing
-the PR: the cleanup action removes the deployment, the GitHub deployments and
-the image. Both jobs only run once the repository variable `ZAD_PROJECT_ID` is
-set; until then a PR builds and scans its image and stops there.
+There are no preview deployments. A pull request builds, scans and attests
+its image and stops there; what runs on ZAD is production, from a release tag.
+Reviewing happens on the dev stack (`docs/local-development.md`), which serves
+both origins on `localhost:8080`.
 
-The label, rather than every PR, because a preview is not free. It is a pod, a
-database and a Let's Encrypt certificate per pull request, it clones
-production's configuration, and most changes are answered by the checks without
-anyone opening it. A label event for any other word does not run the suite
-(`deploy.yml`, the `ci` and `build` conditions).
+Previews were tried and taken out again on 3 October 2026. Not because another
+deployment cannot have two origins -- it can, exactly as `productie` does --
+but because each one needs a subdomain of its own, and every new subdomain
+costs an approval:
 
-The `pr-` prefix is there so one pattern covers every preview: ZAD's
-sleep-mode service matches deployment names with `pr-*`, and the
-`scheduled-cleanup` action of zad-actions finds leftover environments with
-the regex `^pr-?[0-9]+$`.
+- Two hostnames need a dotted domain (`rijks.app`, `rijksapp.nl`,
+  `rijksapp.dev`). The cluster's own domain needs no claim at all, but is
+  `supports-dots: false`, and that flag is about the certificate: the cluster
+  serves `DNS:*.rig.prd1.gn2.quattro.rijksapps.nl`, a wildcard that covers one
+  label. A dotted format there is accepted, rolls out, reports `Healthy` and
+  then serves a certificate for a name it does not carry:
+  `beheer.proef.plak-jr3.rig.prd1...` gives `SSL: no alternative certificate
+  subject name matches target host name`. On the hyphenated formats, which do
+  fit the wildcard, `root-component` makes no second ingress: measured with
+  `component-deployment-project` plus `root-component: beheer`, the API
+  returns one URL.
+- A dotted domain needs a subdomain claim, and a subdomain belongs to exactly
+  one deployment. `productie` holds `plak | rijks.app`, and a second
+  deployment asking for it fails the rollout with "Subdomein 'plak.rijks.app'
+  is niet beschikbaar".
+- A subdomain of its own per pull request does work, and was measured to
+  compose the right addresses, but every claim arrives as `requested` and
+  waits for a platform administrator. One approval for one long-lived
+  deployment is nothing; one per pull request is not a thing to build on.
+
+And a clone carries no deployment-level variables at all, only the
+component-wide ones, so `PLAK_CONTENT_BASE_URL` and `PLAK_BASE_URL` were
+missing and the pod refused to start:
+`ConfigurationError: PLAK_CONTENT_BASE_URL: Field required`.
+
+One thing to know when judging this yourself: a sleeping preview reports
+`Healthy` and answers 200. That is `zad-waker`, the sleep-mode page the
+platform puts in front of a deployment scaled to zero, not the application.
+
+So what is blocked is the environment *per pull request*, not the environment.
+A deployment that lives on, with one subdomain approved once, works exactly as
+`productie` does -- whether that is called staging or a shared preview slot is
+a question for whoever needs one. The approval is a single click, once.
 
 Watch out with previews: **a clone does not carry over the settings of the
 source.** Besides the web address (the preview lands on the cluster address

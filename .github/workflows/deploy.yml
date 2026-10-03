@@ -24,9 +24,7 @@ on:
     # RELEASE_TAG below is what decides.
     tags: ['v[0-9][0-9][0-9][0-9].*']
   pull_request:
-    # labeled/unlabeled as well: a preview follows the `preview` label, so
-    # putting it on has to start one and taking it off has to clean it up.
-    types: [opened, synchronize, reopened, closed, labeled, unlabeled]
+    types: [opened, synchronize, reopened, closed]
   # Without it the merge queue on beta gets no checks and merges nothing.
   merge_group:
 
@@ -46,13 +44,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # A label event only matters when it is the `preview` label: every other
-  # label would otherwise run the whole suite for a word on a pull request.
   ci:
-    if: >-
-      github.event.action != 'closed'
-      && (github.event.action != 'unlabeled')
-      && (github.event.action != 'labeled' || github.event.label.name == 'preview')
+    if: github.event.action != 'closed'
     uses: ./.github/workflows/ci.yml
 
   # A dependabot PR does not need a preview environment; the gate above
@@ -64,8 +57,6 @@ jobs:
   build:
     if: >-
       github.event.action != 'closed' && github.event_name != 'merge_group'
-      && (github.event.action != 'unlabeled')
-      && (github.event.action != 'labeled' || github.event.label.name == 'preview')
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # This job executes the Containerfile, so `npm ci` and `uv sync` run
@@ -244,228 +235,6 @@ jobs:
           sbom-path: sbom.cdx.json
           push-to-registry: true
 
-  # preview and cleanup wait for the ZAD project: without ZAD_PROJECT_ID
-  # there is nothing to deploy to, and every pull request would go red.
-  #
-  # And on the `preview` label, because a preview is not free: it is a pod, a
-  # database and a Let's Encrypt certificate per pull request, it clones
-  # production's configuration, and most changes are answered by the checks
-  # above without anyone opening it. Asking for one is one click; getting one
-  # unasked is the cost of every pull request.
-  preview:
-    if: >-
-      github.event_name == 'pull_request' && github.event.action != 'closed'
-      && contains(github.event.pull_request.labels.*.name, 'preview')
-      && vars.ZAD_PROJECT_ID != ''
-    runs-on: ubuntu-latest
-    needs: [ci, build]
-    permissions:
-      contents: read
-      pull-requests: write
-    environment:
-      name: pr-${{ github.event.pull_request.number }}
-      url: ${{ steps.rollout.outputs.url }}
-    env:
-      # The same base URL the deploy action defaults to, named once so the
-      # step below and the action cannot drift apart. The action gets it
-      # explicitly for that reason.
-      ZAD_API_BASE_URL: https://operations-manager.rig.prd1.gn2.quattro.rijksapps.nl/api
-    steps:
-      # A preview inherits the component-wide user-env-vars, and those are
-      # productie's PLAK_SESSION_SECRET, PLAK_AUDIT_PEPPER and
-      # PLAK_AUDIT_IP_KEY. So the deployment is created here first with
-      # rollout=false, which writes it to the project file and puts nothing
-      # on the cluster, and then gets its own three secrets at the
-      # deployment-component layer, which wins over the component-wide
-      # value. Only the step after this one rolls out, so a preview pod
-      # never runs with productie's secrets, not even briefly.
-      #
-      # The order is forced: the values endpoint answers 404 until the
-      # component is attached to the deployment, so the deployment has to
-      # exist in the project file before the secrets can be written to it.
-      #
-      # Verified against the Operations Manager OpenAPI (vendored in
-      # RijksICTGilde/zad-cli as api/upstream-openapi.json) and the handlers
-      # in RijksICTGilde/RIG-Cluster: upsert_deployment and
-      # configure_service_values both honour rollout=false, both take the
-      # project API key in X-API-Key, and both are asynchronous, hence the
-      # polling.
-      #
-      # The secrets are generated once per preview and never rotated on a
-      # later push: a rewrite would be a change saved with rollout=false
-      # that the rollout below has no reason to pick up.
-      - name: Give the preview its own secrets
-        env:
-          ZAD_API_KEY: ${{ secrets.ZAD_API_KEY }}
-          PROJECT_ID: ${{ vars.ZAD_PROJECT_ID }}
-          DEPLOYMENT: pr-${{ github.event.pull_request.number }}
-          COMPONENT: beheer
-          IMAGE: ${{ needs.build.outputs.image }}
-        run: |
-          set -euo pipefail
-
-          values="${ZAD_API_BASE_URL}/v2/projects/${PROJECT_ID}/services/user-env-vars/values/deployment/${DEPLOYMENT}/component/${COMPONENT}"
-
-          # Sets CALL_CODE and CALL_BODY. A body is piped in, never passed as
-          # an argument, so no secret ends up in the process list.
-          call() {
-            local method="$1" url="$2" body="${3-}" out
-            if [ -n "$body" ]; then
-              out=$(printf '%s' "$body" | curl -sS -w '\n%{http_code}' --max-time 60 \
-                -X "$method" -H "X-API-Key: ${ZAD_API_KEY}" \
-                -H 'Content-Type: application/json' --data-binary @- "$url")
-            else
-              out=$(curl -sS -w '\n%{http_code}' --max-time 60 \
-                -X "$method" -H "X-API-Key: ${ZAD_API_KEY}" "$url")
-            fi
-            CALL_CODE=$(printf '%s' "$out" | tail -n1)
-            CALL_BODY=$(printf '%s' "$out" | sed '$d')
-          }
-
-          require_success() {
-            case "${CALL_CODE}" in
-              2*) return 0 ;;
-            esac
-            echo "::error::$1 returned HTTP ${CALL_CODE}"
-            echo "${CALL_BODY}"
-            return 1
-          }
-
-          # Both writes are asynchronous: the task has to finish before the
-          # next step may assume its result.
-          wait_for_task() {
-            local id status
-            id=$(printf '%s' "${CALL_BODY}" | jq -r '.task_id // empty')
-            if [ -z "${id}" ]; then
-              echo "::error::$1 returned no task_id"
-              return 1
-            fi
-            for _ in $(seq 1 120); do
-              call GET "${ZAD_API_BASE_URL}/tasks/${id}"
-              require_success "Fetching task ${id}"
-              status=$(printf '%s' "${CALL_BODY}" | jq -r '.status // empty')
-              case "${status}" in
-                completed) return 0 ;;
-                failed|cancelled)
-                  echo "::error::$1 is ${status}"
-                  printf '%s' "${CALL_BODY}" | jq -r '.error_message // empty'
-                  return 1 ;;
-              esac
-              sleep 5
-            done
-            echo "::error::$1 had not finished after ten minutes"
-            return 1
-          }
-
-          echo "Creating deployment ${DEPLOYMENT} without a rollout"
-          create_body=$(jq -n --arg d "${DEPLOYMENT}" --arg c "${COMPONENT}" --arg i "${IMAGE}" \
-            '{deploymentName: $d, cloneFrom: "productie", components: [{reference: $c, image: $i}]}')
-          call POST "${ZAD_API_BASE_URL}/v2/projects/${PROJECT_ID}/:upsert-deployment?rollout=false" "${create_body}"
-          require_success "Creating the deployment"
-          wait_for_task "Creating the deployment"
-
-          call GET "${values}"
-          require_success "Reading the preview secrets"
-          complete=true
-          for name in PLAK_SESSION_SECRET PLAK_AUDIT_PEPPER PLAK_AUDIT_IP_KEY; do
-            printf '%s' "${CALL_BODY}" | jq -e --arg n "${name}" '.values | has($n)' >/dev/null || complete=false
-          done
-          if [ "${complete}" = true ]; then
-            echo "This preview already has its own secrets; left unchanged"
-            exit 0
-          fi
-
-          echo "Creating own secrets for ${DEPLOYMENT}"
-          # base64 of 32 random bytes each: long enough for the two 32-byte
-          # minimums, and the exact shape PLAK_AUDIT_IP_KEY wants. The
-          # alphabet carries no whitespace or quotes, so the value reads back
-          # byte for byte, which the API requires.
-          SESSION_SECRET=$(openssl rand -base64 32 | tr -d '\n')
-          AUDIT_PEPPER=$(openssl rand -base64 32 | tr -d '\n')
-          AUDIT_IP_KEY=$(openssl rand -base64 32 | tr -d '\n')
-          echo "::add-mask::${SESSION_SECRET}"
-          echo "::add-mask::${AUDIT_PEPPER}"
-          echo "::add-mask::${AUDIT_IP_KEY}"
-          export SESSION_SECRET AUDIT_PEPPER AUDIT_IP_KEY
-
-          # A partly filled layer is cleared first: POST refuses a name that
-          # is already there, and this layer belongs to this preview alone.
-          call DELETE "${values}?rollout=false"
-          require_success "Clearing the preview secrets"
-          wait_for_task "Clearing the preview secrets"
-
-          secrets_body=$(jq -n '{values: {
-            PLAK_SESSION_SECRET: env.SESSION_SECRET,
-            PLAK_AUDIT_PEPPER: env.AUDIT_PEPPER,
-            PLAK_AUDIT_IP_KEY: env.AUDIT_IP_KEY
-          }}')
-          call POST "${values}?rollout=false" "${secrets_body}"
-          require_success "Setting the preview secrets"
-          wait_for_task "Setting the preview secrets"
-
-      # clone-from copies the `productie` deployment, but DROPS THE WEB
-      # ADDRESS: a preview lands on the cluster address with a single host,
-      # not on beheer.plak.<domain> plus plak.<domain>. `components` is
-      # also on the clone's exclusion list, so production's env vars do
-      # not come along: a preview needs its own
-      # PLAK_BASE_URL/PLAK_CONTENT_BASE_URL. This action (v2) cannot set
-      # that; see docs/deploying-on-zad.md, "Wat nog openstaat".
-      #
-      # The step above already created the deployment (rollout=false), so
-      # this call updates it and is the one that rolls out. It processes
-      # only this deployment, never productie.
-      - name: Roll out to ZAD
-        id: rollout
-        uses: RijksICTGilde/zad-actions/deploy@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
-        with:
-          api-key: ${{ secrets.ZAD_API_KEY }}
-          api-base-url: ${{ env.ZAD_API_BASE_URL }}
-          project-id: ${{ vars.ZAD_PROJECT_ID }}
-          deployment-name: pr-${{ github.event.pull_request.number }}
-          component: beheer
-          image: ${{ needs.build.outputs.image }}
-          clone-from: productie
-          comment-on-pr: true
-
-  # Two moments: the pull request closes, or the label comes off while it is
-  # still open. The second is what makes the label a switch rather than a
-  # one-way start; without it a preview taken off the label would run on
-  # until the pull request closed.
-  cleanup:
-    if: >-
-      github.event_name == 'pull_request'
-      && (
-        github.event.action == 'closed'
-        || (
-          github.event.action == 'unlabeled'
-          && !contains(github.event.pull_request.labels.*.name, 'preview')
-        )
-      )
-      && github.event.pull_request.user.login != 'dependabot[bot]'
-      && vars.ZAD_PROJECT_ID != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      deployments: write
-      packages: write
-      pull-requests: write
-    steps:
-      - name: Clean up the preview
-        uses: RijksICTGilde/zad-actions/cleanup@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
-        with:
-          api-key: ${{ secrets.ZAD_API_KEY }}
-          project-id: ${{ vars.ZAD_PROJECT_ID }}
-          deployment-name: pr-${{ github.event.pull_request.number }}
-          delete-github-deployments: true
-          delete-container: true
-          container-org: ${{ github.repository_owner }}
-          container-name: ${{ github.event.repository.name }}
-          container-tag: pr-${{ github.event.pull_request.number }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # The automatic GITHUB_TOKEN may not delete an environment; that
-          # needs a PAT with repo admin rights as github-admin-token. Turn
-          # on both lines once that exists.
-          delete-github-env: false
 
   # Only a release tag reaches production, never a branch push. The
   # ZAD_PROJECT_ID guard is the same one `preview` carries: without a
