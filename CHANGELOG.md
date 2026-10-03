@@ -27,8 +27,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ### Changed
 
-- A preview environment follows the `preview` label on a pull request
-  instead of appearing for every one; taking the label off cleans it up.
 - The publish action needs no `host` for the DigiGilde instance.
 - The publish action lives at `actions/publish` and the Claude Code skill
   is `plak-publish`; a workflow changes the path when it moves its pin.

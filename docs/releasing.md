@@ -6,14 +6,15 @@ one line under `## [Unreleased]` per change, in the same pull request.
 
 ## The model
 
-- **Every push to `beta` deploys to staging.** Always, release or not.
+- **A push to `beta` deploys nowhere.** It builds, scans and attests an
+  image; nothing on ZAD runs it. Only a release tag reaches `productie`.
 - **An entry under `[Unreleased]`, without the hold marker, makes that
   push a release.** The release step turns `[Unreleased]` into a
   versioned section, sets the component versions, commits that as
   `Release vYYYY.M.D` and gives it an annotated tag `vYYYY.M.D[.N]`.
   The tag gets a GitHub Release with that section as its notes, and
   goes to production.
-- **Nothing under `[Unreleased]` means staging only.** A release needs
+- **Nothing under `[Unreleased]` means no release.** A release needs
   notes, and the entries are the notes; nothing is made up from commit
   subjects.
 - **A dependency update reaches production with the next release.** If
@@ -22,11 +23,8 @@ one line under `## [Unreleased]` per change, in the same pull request.
   merges it releases.
 
 All of it lives in one script, `.github/scripts/release.py`, tested in
-`backend/tests/test_release.py`. The staging deployment, the workflow
-that runs the release on a push to `beta` and the switch of the `beta`
-ruleset that lets it push come in a later pull request; what is here
-now is the changelog, the script, the pull request check and the Claude
-Code hook.
+`backend/tests/test_release.py`. What is here now is the changelog, the
+script, the pull request check and the Claude Code hook.
 
 ## Tags
 
@@ -58,7 +56,7 @@ comes from the release step.
 |---|---|
 | `hold` | `[Unreleased]` holds the line `<!-- release: hold -->` |
 | `release` | `[Unreleased]` has entries |
-| `none` | anything else: staging only |
+| `none` | anything else: no release |
 
 ### Shipped paths
 
@@ -103,15 +101,15 @@ the table, a heading twice or a heading without entries fails the check.
 A pull request that changes a shipped path but deserves no entry (a
 refactor without effect, a lockfile refresh) says so in its description,
 on a line of its own: `No changelog entry: <reason>`. Its change then
-goes to staging and waits for the next release.
+waits for the next release.
 
 ### Holding a release
 
 Put `<!-- release: hold -->` on a line of its own anywhere in
 `[Unreleased]` to stop pushes to `beta` from releasing, for instance
-while a feature lands over several pull requests. Pushes keep going to
-staging and entries keep collecting under it. Taking the line out, in a
-pull request, releases everything that collected.
+while a feature lands over several pull requests. Entries keep
+collecting under it. Taking the line out, in a pull request, releases
+everything that collected.
 
 ### Released sections are frozen
 

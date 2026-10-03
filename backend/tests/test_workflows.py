@@ -55,13 +55,6 @@ class TestTheCheckGate:
         to production, tested or not."""
         assert deploy["jobs"]["production"]["needs"] == ["ci", "build"]
 
-    def test_a_preview_waits_for_the_checks_too(self, deploy) -> None:
-        """The image builds alongside the checks, so this `needs` is the only
-        thing keeping untested code out of a preview, which inherits
-        production secrets."""
-        assert "needs" not in deploy["jobs"]["build"]
-        assert deploy["jobs"]["preview"]["needs"] == ["ci", "build"]
-
     def test_only_a_release_tag_deploys_to_production(self, deploy) -> None:
         """A push to `beta` still builds, scans and attests its image, but
         production follows a release tag alone. The ZAD_PROJECT_ID guard
@@ -74,9 +67,6 @@ class TestTheCheckGate:
             "github.event_name == 'push' "
             "&& startsWith(github.ref, 'refs/tags/v') "
             "&& vars.ZAD_PROJECT_ID != ''"
-        )
-        assert deploy["jobs"]["preview"]["if"].startswith(
-            "github.event_name == 'pull_request'"
         )
 
     def test_a_branch_push_never_reaches_production(self, deploy) -> None:
@@ -100,44 +90,14 @@ class TestTheCheckGate:
             "cancel-in-progress": False,
         }
 
-    def test_a_preview_follows_the_label(self, deploy) -> None:
-        """A preview costs a pod, a database and a certificate per pull
-        request, and clones production's configuration. Most changes are
-        answered by the checks without anyone opening one, so it is asked
-        for rather than given."""
-        assert "contains(github.event.pull_request.labels.*.name, 'preview')" in (
-            deploy["jobs"]["preview"]["if"]
-        )
-        assert "labeled" in deploy[True]["pull_request"]["types"]
-
-    def test_taking_the_label_off_cleans_the_preview_up(self, deploy) -> None:
-        """Otherwise the label is a one-way start: a preview nobody wants any
-        more would run until the pull request closed."""
-        condition = " ".join(deploy["jobs"]["cleanup"]["if"].split())
-        assert "github.event.action == 'unlabeled'" in condition
-        assert "!contains(github.event.pull_request.labels.*.name, 'preview')" in condition
-        assert "github.event.action == 'closed'" in condition
-        assert "unlabeled" in deploy[True]["pull_request"]["types"]
-
-    def test_another_label_does_not_run_the_suite(self, deploy) -> None:
-        """`labeled` fires for every label. Without this, writing any word on
-        a pull request would start the whole suite and build an image."""
-        for job in ("ci", "build"):
-            condition = " ".join(deploy["jobs"][job]["if"].split())
-            assert "github.event.action != 'unlabeled'" in condition, job
-            assert (
-                "github.event.action != 'labeled' || github.event.label.name == 'preview'"
-                in condition
-            ), job
-
     def test_the_merge_queue_gets_the_checks_and_nothing_else(self, deploy) -> None:
         """beta merges through a merge queue, which waits for the required
         checks on its own commit: without the trigger they never report and
         nothing merges. That commit is throwaway, so no image gets built for
-        it, and preview and production stay bound to their own events."""
+        it, and production stays bound to a release tag."""
         assert "merge_group" in deploy[True]
         assert "github.event_name != 'merge_group'" in deploy["jobs"]["build"]["if"]
-        assert "github.event_name == 'pull_request'" in deploy["jobs"]["cleanup"]["if"]
+        assert "startsWith(github.ref, 'refs/tags/v')" in deploy["jobs"]["production"]["if"]
 
     def test_the_checks_are_called_rather_than_triggered(self, ci, deploy) -> None:
         """You cannot pass a standalone workflow as `needs`. Calling it is
