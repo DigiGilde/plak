@@ -1969,7 +1969,7 @@ def test_action_reports_a_preview_to_github_as_deployment_and_comment(
     assert json.loads(github[1]["body"])["environment_url"] == PREVIEW_URL
     comment = json.loads(github[4]["body"])["body"]
     assert PREVIEW_URL in comment
-    assert "Sign in to open it." in comment
+    assert "Open to anyone with an SSO Rijk account, after signing in on Plak." in comment
     assert f"url={PREVIEW_URL}" in Path(github_runner["GITHUB_OUTPUT"]).read_text()
 
 
@@ -2033,7 +2033,7 @@ def test_action_comments_without_access_when_the_server_sends_none(
     ]
     comment = json.loads(posted["body"])["body"]
     assert PREVIEW_URL in comment
-    assert "Who can see it" not in comment
+    assert "Open to" not in comment
 
 
 def test_action_teardown_reports_the_removal_to_github(

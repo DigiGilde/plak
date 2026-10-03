@@ -922,17 +922,6 @@ def format_access(access: tuple[str, bool, bool]) -> str:
     return ",".join([base] + ["keys"] * keys + ["invitees"] * invitees)
 
 
-def who_can_see(access: tuple[str, bool, bool]) -> str:
-    """Who besides the public gets in, for a base other than public."""
-    base, keys, invitees = access
-    who = [] if base == "nobody" else [ACCESS_BASE_WHO[base]]
-    if keys:
-        who.append("anyone with a secret link")
-    if invitees:
-        who.append("invitees, once signed in")
-    return ", ".join(who) if who else "nobody yet"
-
-
 def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -> None:
     base, keys, invitees = access
     print(
@@ -941,7 +930,12 @@ def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -
     )
     if base == "public":
         return
-    print(f"Who can see it: {who_can_see(access)}.")
+    who = [] if base == "nobody" else [ACCESS_BASE_WHO[base]]
+    if keys:
+        who.append("anyone with a secret link")
+    if invitees:
+        who.append("invitees, once signed in")
+    print(f"Who can see it: {', '.join(who) if who else 'nobody yet'}.")
     print(f"Change it at: {change_url}")
 
 
