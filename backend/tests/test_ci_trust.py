@@ -19,6 +19,7 @@ from plak.ci.trust import (
     audit_refs,
     check_live_deploy,
     ci_actor_identifier,
+    follow_rename,
     refused_actor_identifier,
     trusted_repository,
 )
@@ -175,6 +176,91 @@ class TestTrustedRepositoryIdPath:
         assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
 
 
+class TestTrustedRepositoryName:
+    """The name on the trusted repository, and so a version's origin, comes
+    from the signed `repository` claim, not from the stored link."""
+
+    async def test_claim_wins_over_a_differently_typed_stored_name(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, owner="minbzk", repo="website", repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository="eigen-org/eigen-repo", repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.origin == "github.com/eigen-org/eigen-repo"
+
+    async def test_renamed_repository_shows_its_new_name(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, owner="minbzk", repo="oude-naam", repository_id=1001, owner_id=2002)
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/nieuwe-naam", repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.origin == "github.com/minbzk/nieuwe-naam"
+
+    @pytest.mark.parametrize(
+        "claim",
+        [
+            None,
+            "",
+            "minbzk",
+            "minbzk/website/extra",
+            "/website",
+            "minbzk/",
+            "minbzk/web site",
+            "../website",
+            "minbzk/" + "a" * 101,
+            1001,
+        ],
+    )
+    async def test_missing_or_malformed_claim_falls_back_to_the_stored_name(self, factory, claim):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, owner="minbzk", repo="website", repository_id=1001, owner_id=2002)
+        claims: dict[str, object] = {"repository_id": "1001"}
+        if claim is not None:
+            claims["repository"] = claim
+        token = _token(GITHUB_ISSUER_OBJ, **claims)
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.origin == "github.com/minbzk/website"
+
+
+class TestFollowRename:
+    async def test_stores_the_token_name_and_returns_the_previous_one(self, factory):
+        site = await _make_site(factory)
+        row = await _add_repository(factory, site, owner="minbzk", repo="oude-naam")
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/nieuwe-naam", repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+            previous = await follow_rename(db, site, trusted)
+        assert previous == "minbzk/oude-naam"
+        async with factory() as db:
+            stored = await db.get(SiteRepository, row.id)
+        assert (stored.owner, stored.repo) == ("minbzk", "nieuwe-naam")
+
+    async def test_same_name_changes_nothing(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, owner="minbzk", repo="website")
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website", repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+            assert await follow_rename(db, site, trusted) is None
+
+    async def test_a_link_replaced_in_the_meantime_is_left_alone(self, factory):
+        site = await _make_site(factory)
+        row = await _add_repository(factory, site, owner="minbzk", repo="oude-naam", repository_id=1001)
+        token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/nieuwe-naam", repository_id="1001")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        # An admin links another repository before the rename is stored.
+        async with factory() as db:
+            stored = await db.get(SiteRepository, row.id)
+            stored.owner, stored.repo, stored.repository_id = "ander", "project", 5005
+            await db.commit()
+        async with factory() as db:
+            assert await follow_rename(db, site, trusted) is None
+            stored = await db.get(SiteRepository, row.id)
+        assert (stored.owner, stored.repo, stored.repository_id) == ("ander", "project", 5005)
+
+
 class TestTrustedRepositoryForgejoNamePath:
     async def test_name_match_accepted_with_rest_confirmation(self, factory):
         site = await _make_site(factory)
@@ -187,8 +273,9 @@ class TestTrustedRepositoryForgejoNamePath:
         token = _token(FORGEJO_ISSUER_OBJ, repository="MinBZK/Website")  # case-insensitive
         async with factory() as db:
             trusted = await trusted_repository(db, token, site, ProviderClient(ci.client()))
-        assert trusted.owner == "minbzk"
-        assert trusted.repo == "website"
+        assert trusted.repository_id == 1001
+        # The name is the token's spelling, not the stored one.
+        assert trusted.origin == "code.overheid.nl/MinBZK/Website"
 
     async def test_name_mismatch_refused(self, factory):
         site = await _make_site(factory)

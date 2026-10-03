@@ -45,6 +45,14 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The Plak CLI runs on Windows: it keeps the session in Windows
   Credential Manager, or else in `%APPDATA%\plak\hosts.json`.
 
+### Security
+
+- A version published from CI shows the repository its signed token
+  names, so a renamed repository or a mistyped name on the site's link
+  no longer shows up as its origin on the Versions tab; the Deploy tab
+  takes over that name, with a `site_repository_rename` row in the
+  audit log.
+
 ## [2026.9.30]
 
 The first tagged version: what ran in production on 30 September 2026.
