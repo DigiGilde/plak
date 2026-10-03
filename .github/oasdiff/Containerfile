@@ -1,0 +1,5 @@
+# The oasdiff the API contract check runs (.github/workflows/api.yml).
+# Never built or run: the workflow copies the static /usr/bin/oasdiff out
+# of this image. It is a Containerfile so Dependabot bumps the tag and the
+# digest together.
+FROM docker.io/tufin/oasdiff:v1.33.0@sha256:6263a96dd2ef0726c54e21fea9b8e1607eac4841add0079324b424c1f52b819c

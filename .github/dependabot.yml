@@ -162,6 +162,7 @@ updates:
     directories:
       - /containers/plak
       - /containers/nginx-dev
+      - /.github/oasdiff
     multi-ecosystem-group: ci
     patterns:
       - "*"

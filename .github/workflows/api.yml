@@ -8,8 +8,8 @@
 # the version the next release gives the API.
 #
 # All third-party actions are pinned to a commit SHA; the tag after it is
-# the readable label, not the reference. oasdiff is pinned to a release
-# and the checksum of its archive.
+# the readable label, not the reference. oasdiff is pinned by digest in
+# .github/oasdiff/Containerfile, where Dependabot bumps it.
 
 name: API contract
 
@@ -31,9 +31,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    env:
-      OASDIFF_VERSION: 1.33.0
-      OASDIFF_SHA256: 43a4e328e2d13ba1552d760aa68d2485c75c5621f309f6ff64ae895188345247
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,11 +45,16 @@ jobs:
       - name: Install oasdiff
         run: |
           set -euo pipefail
-          archive="oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
-          curl -fsSL -o "$RUNNER_TEMP/$archive" \
-            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/$archive"
-          echo "${OASDIFF_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" oasdiff
+          image="$(grep -oE '^FROM docker\.io/tufin/oasdiff:[^@ ]+@sha256:[0-9a-f]{64}$' \
+            .github/oasdiff/Containerfile | cut -d' ' -f2)"
+          if [ -z "$image" ]; then
+            echo "No oasdiff image pinned by digest in .github/oasdiff/Containerfile" >&2
+            exit 1
+          fi
+          docker create --name oasdiff "$image" > /dev/null
+          docker cp oasdiff:/usr/bin/oasdiff "$RUNNER_TEMP/oasdiff"
+          docker rm oasdiff > /dev/null
+          "$RUNNER_TEMP/oasdiff" --version
 
       - name: Print the API schema
         working-directory: backend

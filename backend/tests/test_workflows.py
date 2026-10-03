@@ -750,13 +750,25 @@ class TestTheApiContractCheck:
         assert checkout["with"]["fetch-depth"] == 0
         assert checkout["with"]["persist-credentials"] is False
 
-    def test_oasdiff_is_pinned_to_a_release_and_its_checksum(self, api) -> None:
-        job = api["jobs"]["api-contract"]
-        assert re.fullmatch(r"\d+\.\d+\.\d+", job["env"]["OASDIFF_VERSION"])
-        assert re.fullmatch(r"[0-9a-f]{64}", job["env"]["OASDIFF_SHA256"])
-        step = next(s for s in job["steps"] if s.get("name") == "Install oasdiff")
-        assert 'echo "${OASDIFF_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -' in step["run"]
-        assert step["run"].index("sha256sum") < step["run"].index("tar -xzf")
+    def test_oasdiff_comes_from_the_image_dependabot_bumps(self, api) -> None:
+        """The digest pins the binary; the tag in front of it is what
+        Dependabot reads. Run against the real Containerfile, so a FROM line
+        the step no longer recognises fails here and not in a pull request."""
+        step = next(s for s in api["jobs"]["api-contract"]["steps"] if s.get("name") == "Install oasdiff")
+        reading = step["run"].split("if [")[0]
+        found = subprocess.run(  # noqa: S603
+            ["bash", "-e", "-c", reading + 'printf "%s" "$image"'],  # noqa: S607
+            cwd=WORKFLOWS.parents[1],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert re.fullmatch(r"docker\.io/tufin/oasdiff:v\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", found)
+        assert step["run"].index('if [ -z "$image" ]') < step["run"].index("docker cp oasdiff:/usr/bin/oasdiff")
+
+        dependabot = yaml.safe_load((WORKFLOWS.parent / "dependabot.yml").read_text(encoding="utf-8"))
+        docker = next(u for u in dependabot["updates"] if u["package-ecosystem"] == "docker")
+        assert "/.github/oasdiff" in docker["directories"]
 
     def test_the_check_compares_the_schema_the_backend_prints(self, api) -> None:
         steps = api["jobs"]["api-contract"]["steps"]
