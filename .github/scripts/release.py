@@ -432,7 +432,7 @@ def today() -> date:
 
 def decide(git: Git, day: date) -> tuple[str, str]:
     """('hold', ''), ('release', tag) or ('none', ''). Only entries release:
-    they are the release notes. Without them a push goes to staging only."""
+    they are the release notes. Without them a push releases nothing."""
     unreleased = parse_changelog((git.root / CHANGELOG).read_text(encoding="utf-8"))[0]
     if has_hold(unreleased.body):
         return "hold", ""

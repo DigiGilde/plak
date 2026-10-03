@@ -10,11 +10,10 @@ Plak releases itself from `CHANGELOG.md` (the full model is in
 its line under `## [Unreleased]` in the same pull request. Nobody writes
 version numbers or version sections: the release step does that.
 
-Every push to `beta` goes to staging; only a push with entries under
-`[Unreleased]` (and no hold marker) becomes a release and goes to
-production, with those entries as its release notes. So an entry is
-also what ships a change: without one it waits on staging for the next
-release.
+Only a push to `beta` with entries under `[Unreleased]` (and no hold
+marker) becomes a release and goes to production, with those entries
+as its release notes. So an entry is also what ships a change: without
+one it waits for the next release.
 
 ## The line
 

@@ -1,8 +1,6 @@
 # How Plak ends up on ZAD: build and push the image, then deploy with
 # zad-actions. A push to `beta` builds, scans and attests the image and
 # deploys nowhere; production follows a release tag (vYYYY.M.D[.N]) alone.
-# The preview half is still written for a situation that has to be
-# created, not one that has been observed.
 #
 # Needed in advance, outside this file:
 #   - repository secret ZAD_API_KEY (the project's API key, returned once
@@ -48,12 +46,10 @@ jobs:
     if: github.event.action != 'closed'
     uses: ./.github/workflows/ci.yml
 
-  # A dependabot PR does not need a preview environment; the gate above
-  # still runs over it.
+  # A dependabot PR builds no image here; the gate above still runs over it.
   #
   # Builds alongside `ci` rather than after it. What keeps untested code out
-  # of a preview (which inherits production secrets) and out of production
-  # is `needs: [ci, build]` on those two jobs, not this one.
+  # of production is `needs: [ci, build]` on that job, not this one.
   build:
     if: >-
       github.event.action != 'closed' && github.event_name != 'merge_group'
@@ -163,7 +159,7 @@ jobs:
           exit-code: "0"
           version: ${{ env.TRIVY_VERSION }}
 
-      # A red scan fails `build` and thereby also `preview` and `production`;
+      # A red scan fails `build` and thereby also `production`;
       # the tag stays in the registry, but nothing deploys with it.
       - name: Scan the image, gate on high and critical (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -188,8 +184,8 @@ jobs:
   #
   # `needs: build` and nothing else: a skipped or failed `build` skips this
   # too, so there is no path on which an image gets attested that was not
-  # built, scanned and pushed. It sits beside `preview` and `production`
-  # rather than in front of them; a deploy does not wait on it.
+  # built, scanned and pushed. It sits beside `production` rather than in
+  # front of it; a deploy does not wait on it.
   #
   # Attestations on a private repository need GitHub Enterprise Cloud; on
   # the Free plan they work only while the repository is public, which it
@@ -236,10 +232,9 @@ jobs:
           push-to-registry: true
 
 
-  # Only a release tag reaches production, never a branch push. The
-  # ZAD_PROJECT_ID guard is the same one `preview` carries: without a
-  # project there is nothing to deploy to, and the action would fail on an
-  # empty api-key instead of standing down.
+  # Only a release tag reaches production, never a branch push. Without a
+  # ZAD_PROJECT_ID there is no project to deploy to, and the action would
+  # fail on an empty api-key instead of standing down.
   #
   # The guards below run from the workflow file of the tagged commit, so
   # they catch a mistaken tag, not someone who edits them on that commit:
