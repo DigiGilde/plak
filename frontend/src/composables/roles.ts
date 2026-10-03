@@ -25,3 +25,17 @@ export function mayCreateSiteIn(me: Me | null | undefined, groupSlug: string): b
 export function isGroupAdmin(me: Me | null | undefined, groupSlug: string): boolean {
   return me?.groupRoles.some((r) => r.groupSlug === groupSlug && r.role === 'admin') ?? false;
 }
+
+/**
+ * Whether `me` is beheerder of this site: the widest of the group role and the
+ * site role is admin. Mirrors `effective_site_role` in the backend; no
+ * platform-admin bypass.
+ */
+export function isSiteAdmin(me: Me | null | undefined, groupSlug: string, siteSlug: string): boolean {
+  return (
+    isGroupAdmin(me, groupSlug) ||
+    (me?.siteRoles.some(
+      (r) => r.groupSlug === groupSlug && r.siteSlug === siteSlug && r.effectiveRole === 'admin',
+    ) ?? false)
+  );
+}

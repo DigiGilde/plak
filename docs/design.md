@@ -450,7 +450,8 @@ Limits (defaults, env-overridable, sized for a 1 GiB volume): request body
 
 Those bound one bundle. Two more bound what the bundles leave behind, because
 the nightly cleanup only removes live versions beyond the current one and the
-`live_versions_kept` (5, 0 keeps all) before it: `site_max_bytes` (500 MiB, 0
+number before it that the site keeps (its own, else `live_versions_kept`, 5; 0
+keeps all): `site_max_bytes` (500 MiB, 0
 turns it off) caps what every version of one site together occupies, measured
 on the volume just before the new version is renamed into place, so a refusal
 leaves nothing behind and answers 413.
@@ -810,8 +811,10 @@ and its files, and the job also sweeps orphaned preview versions, stale `_tmp`
 directories and expired CLI device authorizations and sessions.
 
 **Old live versions.** The same job removes, per site, the live versions
-beyond the current live one and the `live_versions_kept` newest others (row and
-file tree, one `version_cleanup` audit row per site). It holds the site row
+beyond the current live one and the newest others the site keeps (row and file
+tree, one `version_cleanup` audit row per site). That number is the site's own
+`sites.live_versions_kept`, which a site admin sets on the Versions tab, or
+else the platform default `live_versions_kept` (5); 0 keeps every live version. It holds the site row
 locked from reading `live_version_id` to the commit, and a rollback takes the
 same lock before it looks its version up, so a version that becomes live while
 the job runs is never removed.
@@ -937,7 +940,8 @@ Guarded by: `test_zad_project_file.py`, `test_workflows.py`,
 
 ## 12. The data model
 
-PostgreSQL with Alembic migrations; the whole schema is migration `0001_base`.
+PostgreSQL with Alembic migrations: the schema is migration `0001_base`, and
+`0002_site_live_versions_kept` adds `sites.live_versions_kept`.
 Tables: `members`, `groups`, `group_members`, `sites`, `site_members`,
 `site_repositories`, `versions`, `previews`, `invitees`, `access_keys`,
 `audit_log_entries`, `content_viewers`, `cli_device_authorizations`,
@@ -960,6 +964,8 @@ Rules that live in the database rather than only in the application:
   `uq_site_repositories_site`.
 - `groups.slug` refuses the reserved slugs by CHECK; emails and invitee
   identifiers are lowercase by CHECK.
+- `sites.live_versions_kept` is NULL (follow `PLAK_LIVE_VERSIONS_KEPT`) or a
+  number of at least 0 (`ck_sites_live_versions_kept`).
 - Access lives on the site; the group carries a default for new sites and a
   preview may override. A deploy never changes access policy.
 - Deleting a site or a group cascades in the database and removes the file trees
@@ -983,7 +989,7 @@ as well, and what they cost is stated plainly in `docs/audit-log.md`: the
 account owns the schema, so an owner can disable a trigger. The triggers stop
 mistakes and off-hand commands, not a deliberate owner.
 
-Code: `alembic/versions/0001_base.py`, `models/`. Guarded by:
+Code: `alembic/versions/`, `models/`. Guarded by:
 `test_migrations.py`, `test_audit.py`, `test_constants.py`.
 
 ## 13. Quality and evidence

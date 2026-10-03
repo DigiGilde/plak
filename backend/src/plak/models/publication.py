@@ -6,7 +6,18 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, false, func, true
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    false,
+    func,
+    true,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -59,12 +70,18 @@ class Site(IDMixin, Base):
         ForeignKey("versions.id", ondelete="SET NULL", use_alter=True, name="fk_sites_live_version_id"),
         nullable=True,
     )
+    # Previous live versions the nightly cleanup keeps besides the current
+    # one; NULL follows PLAK_LIVE_VERSIONS_KEPT, 0 keeps them all.
+    live_versions_kept: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("members.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
-    __table_args__ = (UniqueConstraint("group_id", "slug", name="uq_sites_group_slug"),)
+    __table_args__ = (
+        UniqueConstraint("group_id", "slug", name="uq_sites_group_slug"),
+        CheckConstraint("live_versions_kept >= 0", name="ck_sites_live_versions_kept"),
+    )
 
 
 class Version(IDMixin, Base):

@@ -2842,7 +2842,13 @@ class TestSiteStorage:
     ):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         empty = (await client.get(f"{BASE}/sites/team/site/storage")).json()
-        assert empty == {"usedBytes": 0, "maxBytes": 500 * 1024 * 1024, "liveVersionsKept": 5}
+        assert empty == {
+            "usedBytes": 0,
+            "maxBytes": 500 * 1024 * 1024,
+            "liveVersionsKept": 5,
+            "liveVersionsKeptIsDefault": True,
+            "defaultLiveVersionsKept": 5,
+        }
 
         await client.post(f"{BASE}/sites/team/site/deploys", files=_upload(), headers=headers)
         await client.post(
@@ -2863,7 +2869,7 @@ class TestSiteStorage:
 
         body = (await client.get(f"{BASE}/sites/team/site/storage")).json()
 
-        assert (body["maxBytes"], body["liveVersionsKept"]) == (0, 0)
+        assert (body["maxBytes"], body["liveVersionsKept"], body["defaultLiveVersionsKept"]) == (0, 0, 0)
 
     async def test_a_reader_may_read_it_and_an_outsider_sees_the_neutral_404(
         self, client, app, data, factory
@@ -2882,6 +2888,206 @@ class TestSiteStorage:
         response = await client.get(f"{BASE}/sites/team/site/storage")
 
         assert response.status_code == 401
+
+
+class TestSiteLiveVersionsKept:
+    """A site's own number of previous live versions kept: set by a site admin,
+    and nobody else."""
+
+    URL = f"{BASE}/sites/team/site/live-versions-kept"
+
+    async def test_an_admin_sets_an_own_number_and_hands_it_back_to_the_default(
+        self, client, app, data, factory
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        group = (await client.get(f"{BASE}/groups/team")).json()
+        assert next(p for p in group["sites"] if p["slug"] == "site")["liveVersionsKept"] is None
+
+        response = await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["liveVersionsKept"] == 3
+        storage = (await client.get(f"{BASE}/sites/team/site/storage")).json()
+        assert (storage["liveVersionsKept"], storage["liveVersionsKeptIsDefault"]) == (3, False)
+        assert storage["defaultLiveVersionsKept"] == 5
+
+        back = await client.put(self.URL, json={"liveVersionsKept": None}, headers=headers)
+        assert back.json()["liveVersionsKept"] is None
+        storage = (await client.get(f"{BASE}/sites/team/site/storage")).json()
+        assert (storage["liveVersionsKept"], storage["liveVersionsKeptIsDefault"]) == (5, True)
+
+        async with factory() as db:
+            rows = list(
+                await db.scalars(
+                    select(AuditLogEntry)
+                    .where(AuditLogEntry.action == "site_live_versions_kept")
+                    .order_by(AuditLogEntry.occurred_at)
+                )
+            )
+        assert [row.refs["live_versions_kept"] for row in rows] == [3, None]
+        assert all(row.result == "allowed" and row.refs["site"] == "site" for row in rows)
+
+    async def test_zero_and_any_number_the_column_holds_are_accepted(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        for value in (0, 1001, 2**31 - 1):
+            response = await client.put(self.URL, json={"liveVersionsKept": value}, headers=headers)
+            assert response.status_code == 200, value
+            assert response.json()["liveVersionsKept"] == value
+
+    async def test_a_negative_number_is_refused_in_both_languages(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        dutch = await client.put(
+            self.URL, json={"liveVersionsKept": -1}, headers={**headers, "Accept-Language": "nl"}
+        )
+        english = await client.put(
+            self.URL, json={"liveVersionsKept": -1}, headers={**headers, "Accept-Language": "en"}
+        )
+
+        assert dutch.status_code == english.status_code == 422
+        assert dutch.json()["code"] == english.json()["code"] == "LIVE_VERSIONS_KEPT_INVALID"
+        assert dutch.json()["detail"] == (
+            "Het aantal bewaarde vorige versies moet een geheel getal van 0 of meer zijn."
+        )
+        assert english.json()["detail"] == (
+            "The number of previous versions kept must be a whole number of 0 or more."
+        )
+        async with factory() as db:
+            site = await db.get(Site, data.site.id)
+            assert site.live_versions_kept is None
+
+    async def test_a_number_the_column_cannot_hold_is_refused_and_not_audited(
+        self, client, app, data, factory
+    ):
+        """No limit of our own: the integer column is the bound, and a number
+        past it ends in the same refusal as a negative one, never a 500."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+
+        for value in (2**31, 10**30):
+            response = await client.put(self.URL, json={"liveVersionsKept": value}, headers=headers)
+            assert response.status_code == 422, value
+            assert response.json()["code"] == "LIVE_VERSIONS_KEPT_TOO_LARGE", value
+        dutch = await client.put(
+            self.URL, json={"liveVersionsKept": 2**31}, headers={**headers, "Accept-Language": "nl"}
+        )
+        english = await client.put(
+            self.URL, json={"liveVersionsKept": 2**31}, headers={**headers, "Accept-Language": "en"}
+        )
+        assert dutch.json()["detail"] == "Dit getal is te groot om op te slaan. Kies een kleiner aantal."
+        assert english.json()["detail"] == "This number is too large to store. Choose a smaller one."
+
+        async with factory() as db:
+            assert (await db.get(Site, data.site.id)).live_versions_kept == 3
+            rows = list(
+                await db.scalars(
+                    select(AuditLogEntry).where(AuditLogEntry.action == "site_live_versions_kept")
+                )
+            )
+        assert [row.refs["live_versions_kept"] for row in rows] == [3]
+        # The session is usable again after the rollback.
+        assert (await client.put(self.URL, json={"liveVersionsKept": 4}, headers=headers)).status_code == 200
+
+    async def test_a_number_too_long_to_parse_is_refused_without_a_500(self, client, app, data, factory):
+        """Python refuses to turn more than 4300 digits into an int, so this body
+        never reaches the handler: FastAPI answers it as an unreadable body."""
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        response = await client.put(
+            self.URL,
+            content=b'{"liveVersionsKept": ' + b"9" * 5000 + b"}",
+            headers={**headers, "content-type": "application/json"},
+        )
+
+        assert response.status_code == 400
+        assert response.headers["content-type"] == PROBLEM
+        async with factory() as db:
+            assert (await db.get(Site, data.site.id)).live_versions_kept is None
+
+    async def test_another_database_error_is_not_dressed_up_as_a_refusal(
+        self, client, app, data, monkeypatch
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        class SerializationFailureError(Exception):
+            sqlstate = "40001"
+
+        commit = AsyncSession.commit
+
+        async def failing_commit(self):
+            # Only the commit of the changed site fails; the session lookups
+            # before it commit as usual.
+            if any(isinstance(row, Site) for row in self.sync_session.dirty):
+                raise DBAPIError("COMMIT", None, SerializationFailureError())
+            await commit(self)
+
+        monkeypatch.setattr(AsyncSession, "commit", failing_commit)
+
+        with pytest.raises(DBAPIError):
+            await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+
+    async def test_anything_but_a_whole_number_or_null_is_refused(self, client, app, data):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        for body in ({"liveVersionsKept": "3"}, {"liveVersionsKept": 2.5}, {"liveVersionsKept": True}, {}):
+            response = await client.put(self.URL, json=body, headers=headers)
+            assert response.status_code == 422, body
+
+    async def test_an_editor_is_refused(self, client, app, data, factory):
+        await _join_group(factory, data.group, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        refused = await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "INSUFFICIENT_ROLE"
+
+    async def test_a_reader_is_refused(self, client, app, data, factory):
+        await _join_site(factory, data.site, data.member_b, Role.READER)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        refused = await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "INSUFFICIENT_ROLE"
+
+    async def test_an_outsider_gets_the_same_404_as_for_a_site_that_does_not_exist(self, client, app, data):
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        outsider = await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+        missing = await client.put(
+            f"{BASE}/sites/team/bestaat-niet/live-versions-kept", json={"liveVersionsKept": 3}, headers=headers
+        )
+
+        assert outsider.status_code == missing.status_code == 404
+        assert outsider.content == missing.content
+
+    async def test_without_a_session_it_is_refused(self, client, app, data):
+        refused = await client.put(self.URL, json={"liveVersionsKept": 3})
+
+        assert refused.status_code == 401
+        assert refused.json()["code"] == "NO_SESSION"
+
+    async def test_a_deactivated_admin_is_refused(self, client, app, data, factory):
+        async with factory() as db:
+            member = await db.get(Member, data.member_a.id)
+            member.status = MemberStatus.DEACTIVATED
+            await db.commit()
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        refused = await client.put(self.URL, json={"liveVersionsKept": 3}, headers=headers)
+
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "MEMBER_DEACTIVATED"
+
+    async def test_without_csrf_it_is_refused(self, client, app, data, factory):
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        refused = await client.put(self.URL, json={"liveVersionsKept": 3})
+
+        assert refused.status_code == 403
+        async with factory() as db:
+            assert (await db.get(Site, data.site.id)).live_versions_kept is None
 
 
 # -- Delete cascade ---------------------------------------------------------

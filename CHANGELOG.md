@@ -24,9 +24,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - A deploy answers with the `url` where it can be seen, and the publish
   action passes it on as an output.
 - Every night Plak removes a site's live versions beyond the current one
-  and the five before it (`PLAK_LIVE_VERSIONS_KEPT`), so a site no longer
-  gets stuck on its storage quota; the Versions tab shows the site's
-  usage and this rule.
+  and the ones before it that the site keeps (five by default, set with
+  `PLAK_LIVE_VERSIONS_KEPT`; a site admin can set another number per site),
+  so a site no longer gets stuck on its storage quota; the Versions tab
+  shows the site's usage and this rule, and is where a site admin sets it.
 
 ### Changed
 

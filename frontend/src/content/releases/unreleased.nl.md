@@ -16,4 +16,4 @@ De action heet nu `actions/publish` in plaats van `actions/publiceer`. Werk je d
 
 ## Oudere versies worden opgeruimd
 
-Plak bewaart de huidige live-versie van een site en de vijf versies daarvoor. Oudere live-versies worden elke nacht opgeruimd, zodat een site die vaak publiceert niet meer vastloopt op de beschikbare ruimte. Het tabblad "Versies" laat zien hoeveel ruimte de site gebruikt en hoeveel versies bewaard blijven.
+Standaard bewaart Plak de huidige live-versie van een site en de vijf versies daarvoor; een sitebeheerder kan per site een ander aantal instellen. Oudere live-versies worden elke nacht opgeruimd, zodat een site die vaak publiceert niet meer vastloopt op de beschikbare ruimte. Het tabblad "Versies" laat zien hoeveel ruimte de site gebruikt en hoeveel versies bewaard blijven; daar stelt een sitebeheerder ook het aantal in.

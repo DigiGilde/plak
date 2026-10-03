@@ -94,7 +94,7 @@ def postgres_container() -> Iterator[object]:
 @pytest.fixture(scope="session")
 def migrated_dsn(postgres_container) -> str:
     """DSN (asyncpg scheme) of the testcontainer database, after a one-off
-    'alembic upgrade head' onto revision 0001_base."""
+    'alembic upgrade head'."""
     base_url = postgres_container.get_connection_url(driver=None)
     asyncpg_dsn = base_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 

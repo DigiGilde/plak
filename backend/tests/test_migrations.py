@@ -4,6 +4,8 @@ group never ends up without an admin."""
 
 from __future__ import annotations
 
+import asyncio
+import os
 import pathlib
 import uuid
 from datetime import timedelta
@@ -487,6 +489,79 @@ async def test_external_sources_defaults_to_on(db_connection: asyncpg.Connection
     assert await db_connection.fetchval(
         "SELECT external_sources FROM sites WHERE id = $1", site_id
     ) is True
+
+
+async def test_live_versions_kept_defaults_to_following_the_platform(db_connection: asyncpg.Connection) -> None:
+    """NULL is the value a site gets for free: it follows PLAK_LIVE_VERSIONS_KEPT
+    until a site admin sets a number of its own."""
+    group_id = await _make_group(db_connection)
+    site_id = await _make_site(db_connection, group_id)
+    assert await db_connection.fetchval(
+        "SELECT live_versions_kept FROM sites WHERE id = $1", site_id
+    ) is None
+
+
+async def test_ck_sites_live_versions_kept_refuses_a_negative_number(db_connection: asyncpg.Connection) -> None:
+    group_id = await _make_group(db_connection)
+    site_id = await _make_site(db_connection, group_id)
+    await db_connection.execute("UPDATE sites SET live_versions_kept = 0 WHERE id = $1", site_id)
+    with pytest.raises(asyncpg.CheckViolationError, match="ck_sites_live_versions_kept"):
+        await db_connection.execute("UPDATE sites SET live_versions_kept = -1 WHERE id = $1", site_id)
+
+
+def _alembic(dsn: str, action: str, revision: str) -> None:
+    from alembic.config import Config
+
+    from alembic import command
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "alembic"
+    cfg = Config()
+    cfg.set_main_option("script_location", str(root))
+    cfg.set_main_option("version_locations", str(root / "versions"))
+    cfg.set_main_option("path_separator", "os")
+    os.environ["PLAK_DB_URL"] = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+    try:
+        getattr(command, action)(cfg, revision)
+    finally:
+        os.environ.pop("PLAK_DB_URL", None)
+
+
+async def test_the_site_retention_migration_goes_down_and_up_again(postgres_container) -> None:
+    """On its own database, so the shared one stays at head for every other
+    test; with a site that has a number of its own, as production will."""
+    base = postgres_container.get_connection_url(driver=None)
+    name = f"heen_en_terug_{uuid.uuid4().hex[:8]}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE DATABASE "{name}"')
+    dsn = f"{base.rsplit('/', 1)[0]}/{name}"
+    try:
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        conn = await asyncpg.connect(dsn)
+        try:
+            site_id = await _make_site(conn, await _make_group(conn))
+            await conn.execute("UPDATE sites SET live_versions_kept = 3 WHERE id = $1", site_id)
+        finally:
+            await conn.close()
+
+        await asyncio.to_thread(_alembic, dsn, "downgrade", "0001_base")
+        conn = await asyncpg.connect(dsn)
+        try:
+            columns = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'sites'"
+            )
+            assert "live_versions_kept" not in {row["column_name"] for row in columns}
+        finally:
+            await conn.close()
+
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        conn = await asyncpg.connect(dsn)
+        try:
+            assert await conn.fetchval("SELECT live_versions_kept FROM sites WHERE id = $1", site_id) is None
+        finally:
+            await conn.close()
+    finally:
+        await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+        await admin.close()
 
 
 async def test_sandbox_defaults_to_on(db_connection: asyncpg.Connection) -> None:

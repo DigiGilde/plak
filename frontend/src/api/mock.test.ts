@@ -245,6 +245,7 @@ describe('sites: not found', () => {
     ['DELETE', '/-/api/v1/sites/team-aurora/geen-site'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/external-sources'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/sandbox'],
+    ['PUT', '/-/api/v1/sites/team-aurora/geen-site/live-versions-kept'],
     ['GET', '/-/api/v1/sites/team-aurora/geen-site/members'],
     ['GET', '/-/api/v1/sites/team-aurora/geen-site/members/search'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/members/lid-1/role'],

@@ -147,6 +147,18 @@ export function setSandbox(
   });
 }
 
+export function setLiveVersionsKept(
+  groupSlug: string,
+  siteSlug: string,
+  liveVersionsKept: number | null,
+): Promise<Site> {
+  return request<Site>(`${sitePath(groupSlug, siteSlug)}/live-versions-kept`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ liveVersionsKept }),
+  });
+}
+
 // -- Invitees -----------------------------------------------------------------
 
 export function invitees(groupSlug: string, siteSlug: string): Promise<Invitee[]> {

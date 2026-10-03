@@ -538,11 +538,69 @@ describe('site storage', () => {
       usedBytes: 77594624,
       maxBytes: 524288000,
       liveVersionsKept: 5,
+      liveVersionsKeptIsDefault: true,
+      defaultLiveVersionsKept: 5,
+    });
+  });
+
+  it('reports the site\'s own number as the effective one', async () => {
+    await plak.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect(await plak.siteStorage('team-aurora', 'website')).toMatchObject({
+      liveVersionsKept: 3,
+      liveVersionsKeptIsDefault: false,
+      defaultLiveVersionsKept: 5,
+    });
+  });
+
+  it('follows an overridden platform default', async () => {
+    backend.data.defaultLiveVersionsKept = 0;
+
+    expect(await plak.siteStorage('team-aurora', 'website')).toMatchObject({
+      liveVersionsKept: 0,
+      liveVersionsKeptIsDefault: true,
     });
   });
 
   it('refuses an unknown site', async () => {
     expect((await refusedWith(plak.siteStorage('team-aurora', 'bestaat-niet'))).problem.status).toBe(404);
+  });
+});
+
+describe('live versions kept', () => {
+  it('sets an own number and hands back the site', async () => {
+    const site = await plak.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect(site.liveVersionsKept).toBe(3);
+  });
+
+  it('accepts 0 (keep all) and a large number', async () => {
+    expect((await plak.setLiveVersionsKept('team-aurora', 'website', 0)).liveVersionsKept).toBe(0);
+    expect((await plak.setLiveVersionsKept('team-aurora', 'website', 5000)).liveVersionsKept).toBe(5000);
+  });
+
+  it('goes back to the platform default with null', async () => {
+    await plak.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect((await plak.setLiveVersionsKept('team-aurora', 'website', null)).liveVersionsKept).toBeNull();
+  });
+
+  it.each([-1, 2.5])('refuses %s with LIVE_VERSIONS_KEPT_INVALID', async (value) => {
+    const error = await refusedWith(plak.setLiveVersionsKept('team-aurora', 'website', value));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('LIVE_VERSIONS_KEPT_INVALID');
+  });
+
+  it('refuses a number the column cannot hold with LIVE_VERSIONS_KEPT_TOO_LARGE', async () => {
+    const error = await refusedWith(plak.setLiveVersionsKept('team-aurora', 'website', 2 ** 31));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('LIVE_VERSIONS_KEPT_TOO_LARGE');
+  });
+
+  it('refuses an unknown site', async () => {
+    expect((await refusedWith(plak.setLiveVersionsKept('team-aurora', 'bestaat-niet', 3))).problem.status).toBe(404);
   });
 });
 

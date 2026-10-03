@@ -2,9 +2,10 @@
 
 Cleans up: expired previews (row, version row and file tree), orphaned
 preview versions (target=preview without a matching preview row, left behind
-by an interrupted upsert/teardown), live versions older than the ones
-PLAK_LIVE_VERSIONS_KEPT keeps (row and file tree), stale `_tmp` directories
-in the ContentStore, and expired CLI device authorizations and CLI sessions.
+by an interrupted upsert/teardown), live versions older than the ones a
+site keeps (its own number, else PLAK_LIVE_VERSIONS_KEPT; row and file tree),
+stale `_tmp` directories in the ContentStore, and expired CLI device
+authorizations and CLI sessions.
 
 `delete_expired` is the core and can be called on its own by tests; main.py
 starts the background loop through `cleanup_job()`, an async context manager,
@@ -99,26 +100,38 @@ async def _cleanup_site_live_versions(
     factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
     site_id: uuid.UUID,
-    kept: int,
-) -> list[uuid.UUID]:
+    default_kept: int,
+) -> tuple[list[uuid.UUID], int]:
     """Removes the live versions of one site beyond the current live one and
-    the `kept` newest others; returns the ids it removed."""
+    the newest others it keeps: its own number, else `default_kept`. Returns
+    the ids it removed and the number it kept by."""
     async with factory() as db:
         async with db.begin():
             # The site row stays locked until commit: a deploy or a rollback
             # that would move live_version_id waits, so the version read here
             # is still the live one when the delete below runs. rollback_to
             # takes the same lock before it looks its version up.
-            live_version_id = await db.scalar(
-                select(Site.live_version_id).where(Site.id == site_id).with_for_update(key_share=True)
-            )
+            site = (
+                await db.execute(
+                    select(
+                        Site.live_version_id,
+                        func.coalesce(Site.live_versions_kept, default_kept).label("kept"),
+                    )
+                    .where(Site.id == site_id)
+                    .with_for_update(key_share=True)
+                )
+            ).one_or_none()
+            # Read again under the lock: the site may have gone, or switched to
+            # keeping everything, since it was picked as a candidate.
+            if site is None or site.kept == 0:
+                return [], 0
             others = (Version.site_id == site_id) & (Version.target == VersionTarget.LIVE)
-            others &= Version.id.is_distinct_from(live_version_id)
+            others &= Version.id.is_distinct_from(site.live_version_id)
             kept_ids = (
                 select(Version.id)
                 .where(others)
                 .order_by(Version.created_at.desc(), Version.id.desc())
-                .limit(kept)
+                .limit(site.kept)
             )
             removed = (
                 await db.execute(
@@ -129,7 +142,7 @@ async def _cleanup_site_live_versions(
             ).all()
         for row in removed:
             store.delete_version(row.storage_ref)
-        return [row.id for row in removed]
+        return [row.id for row in removed], site.kept
 
 
 async def _record_live_cleanup(
@@ -161,24 +174,23 @@ async def _record_live_cleanup(
 
 
 async def _cleanup_old_live_versions(
-    factory: async_sessionmaker[AsyncSession], store: ContentStore, kept: int
+    factory: async_sessionmaker[AsyncSession], store: ContentStore, default_kept: int
 ) -> int:
-    if not kept:
-        return 0
+    effective = func.coalesce(Site.live_versions_kept, default_kept)
     async with factory() as db:
         candidates = (
             await db.execute(
                 select(Site.id, Group.slug.label("group_slug"), Site.slug)
                 .join(Group, Group.id == Site.group_id)
                 .join(Version, Version.site_id == Site.id)
-                .where(Version.target == VersionTarget.LIVE)
+                .where(Version.target == VersionTarget.LIVE, effective > 0)
                 .group_by(Site.id, Group.slug, Site.slug)
-                .having(func.count(Version.id) > kept)
+                .having(func.count(Version.id) > effective)
             )
         ).all()
     total = 0
     for candidate in candidates:
-        removed = await _cleanup_site_live_versions(factory, store, candidate.id, kept)
+        removed, kept = await _cleanup_site_live_versions(factory, store, candidate.id, default_kept)
         if removed:
             await _record_live_cleanup(factory, candidate.group_slug, candidate.slug, removed, kept)
         total += len(removed)
@@ -195,8 +207,8 @@ async def delete_expired(
 ) -> CleanupResult:
     """Runs the full sweep once; callable straight from tests.
 
-    `live_versions_kept` 0 keeps every live version, as PLAK_LIVE_VERSIONS_KEPT
-    does."""
+    `live_versions_kept` is the number for sites without their own, as
+    PLAK_LIVE_VERSIONS_KEPT is; 0 keeps every live version of those sites."""
     expired = await _cleanup_expired_previews(factory, store, now)
     orphans = await _cleanup_orphan_preview_versions(factory, store)
     old_live = await _cleanup_old_live_versions(factory, store, live_versions_kept)
