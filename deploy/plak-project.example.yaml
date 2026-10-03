@@ -180,8 +180,8 @@ deployments:
       # block the platform creates nothing automatically and after a
       # deleted site there is only something to restore if someone started
       # a run manually. RRULE (RFC 5545 subset), times in Europe/Amsterdam.
-      # A clone (preview) deliberately does not inherit this block, so it
-      # only affects production.
+      # A clone deliberately does not inherit this block, so it only
+      # affects the deployment it is set on.
       schedule: "FREQ=DAILY;BYHOUR=2;BYMINUTE=0"
       resource_types:
         - pvc
@@ -233,11 +233,9 @@ deployments:
         #   PLAK_AUDIT_PEPPER    at least 32 bytes, never rotate without a plan
         #   PLAK_AUDIT_IP_KEY    base64 of 32 random bytes, see docs/deploying-on-zad.md
         #
-        # A PR preview gets its own three, written by deploy.yml through
-        # the values API before the deployment is rolled out, so a preview
-        # never runs with productie's. Do NOT set these component-wide:
-        # that inheritance is exactly what the workflow exists to avoid.
-        # See docs/deploying-on-zad.md, "The preview's own secrets".
+        # Do NOT set these component-wide: a second deployment would
+        # inherit productie's. See docs/deploying-on-zad.md, "A second
+        # deployment".
 
 # Only the PVC label that makes the content volume eligible for backup.
 # The scheduling itself is under `deployments[].backup.schedule`.

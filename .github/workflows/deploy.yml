@@ -22,7 +22,7 @@ on:
     # RELEASE_TAG below is what decides.
     tags: ['v[0-9][0-9][0-9][0-9].*']
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
   # Without it the merge queue on beta gets no checks and merges nothing.
   merge_group:
 
@@ -43,7 +43,6 @@ concurrency:
 
 jobs:
   ci:
-    if: github.event.action != 'closed'
     uses: ./.github/workflows/ci.yml
 
   # A dependabot PR builds no image here; the gate above still runs over it.
@@ -52,7 +51,7 @@ jobs:
   # of production is `needs: [ci, build]` on that job, not this one.
   build:
     if: >-
-      github.event.action != 'closed' && github.event_name != 'merge_group'
+      github.event_name != 'merge_group'
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # This job executes the Containerfile, so `npm ci` and `uv sync` run
