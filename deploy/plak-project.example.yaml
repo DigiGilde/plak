@@ -64,14 +64,6 @@ services:
         # origin thus needs to be added here by hand, per environment.
         additional_redirect_uris:
           - "https://plak.rijks.app/-/oauth2/callback"
-  # Scales a preview to zero 8 hours after its last rollout; a visitor wakes
-  # it with a button (wake-mode confirm, the default). The match is
-  # case-sensitive and must never cover `productie`.
-  - sleep-mode:
-      config:
-        enabled: true
-        match: ["pr-*"]
-        sleep-after-deploy: 8h
 
 # Domain/subdomain approval. This is a project-level property in the schema
 # (project_v2.json's `domains`), not nested under a service; opi/connectors/
