@@ -380,7 +380,7 @@ class TestAuthorization:
     async def test_platform_storage_reports_the_volume_and_nothing_about_sites(
         self, client, app, factory, data, content_root
     ):
-        app.state.content_store.store_version("team", "site", uuid.uuid4(), {"index.html": b"x" * 10})
+        app.state.content_store.store_version(data.site.id, uuid.uuid4(), {"index.html": b"x" * 10})
 
         login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.get(f"{BASE}/platform/storage")
@@ -3246,6 +3246,7 @@ class TestSiteDeletion:
         assert await _count(factory, SiteRepository, site_id=site_id) == 0
         for storage_ref in storage_refs:
             assert not (content_root / storage_ref).exists()
+        assert not (content_root / str(site_id)).exists()
 
         assert (await client.get(f"{BASE}/sites/team/site/versions")).status_code == 404
 
@@ -3292,6 +3293,7 @@ class TestGroupDeletion:
         assert await _count(factory, Preview) == 0
         for storage_ref in storage_refs:
             assert not (content_root / storage_ref).exists()
+        assert {entry.name for entry in content_root.iterdir()} == {"_tmp"}
         record = recorder.only()
         assert record.action == "group_delete"
         assert record.refs == {"group": "team", "sites": ["docs", "site"]}

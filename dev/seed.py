@@ -246,7 +246,6 @@ async def _publish(
     ingest: IngestService,
     session_factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
-    group: Group,
     site: Site,
     files: dict[str, bytes],
     deployer: Deployer,
@@ -258,9 +257,9 @@ async def _publish(
     try:
         async with session_factory() as db:
             if ref is None:
-                return await ingest.deploy(db, group, site, BUNDLE_NAME, source, deployer)
+                return await ingest.deploy(db, site, BUNDLE_NAME, source, deployer)
             return await ingest.preview_deploy(
-                db, group, site, ref, BUNDLE_NAME, source, deployer
+                db, site, ref, BUNDLE_NAME, source, deployer
             )
     finally:
         source.unlink(missing_ok=True)
@@ -395,38 +394,38 @@ async def seed(settings: Settings) -> SeedResult:
         by_inspector = Deployer(member_id=inspector.id)
 
         await _publish(
-            ingest, session_factory, store, public_group, annual,
+            ingest, session_factory, store, annual,
             _site_files("Rijksoverheid", "Jaarverslag 2025", "Live versie",
                   "Het jaarverslag over 2025, publiek toegankelijk zonder inloggen."),
             by_admin,
         )
         await _publish(
-            ingest, session_factory, store, public_group, figures,
+            ingest, session_factory, store, figures,
             _site_files("Rijksoverheid", "Kerncijfers open data", "Live versie",
                   "Deze cijfers staan achter een geheime link: alleen wie de link heeft, komt binnen."),
             by_admin,
         )
         await _publish(
-            ingest, session_factory, store, public_group, evaluation,
+            ingest, session_factory, store, evaluation,
             _site_files("Rijksoverheid", "Evaluatie subsidieregeling", "Live versie",
                   "Concept-evaluatie, alleen te lezen door de genodigden op de lijst."),
             by_admin,
         )
         await _publish(
-            ingest, session_factory, store, internal_group, report,
+            ingest, session_factory, store, report,
             _site_files("Inspectie Leefomgeving", "Rapportage toezicht 2025", "Live versie",
                   "Interne rapportage, zichtbaar voor de leden van de groep."),
             by_inspector,
         )
 
         await _publish(
-            ingest, session_factory, store, public_group, annual,
+            ingest, session_factory, store, annual,
             _site_files("Rijksoverheid", "Jaarverslag 2025", f"Preview {PREVIEW_OPEN}",
                   "Voorvertoning van de tekstronde in pull request 42."),
             by_admin, ref=PREVIEW_OPEN,
         )
         await _publish(
-            ingest, session_factory, store, public_group, annual,
+            ingest, session_factory, store, annual,
             _site_files("Rijksoverheid", "Jaarverslag 2025", f"Preview {PREVIEW_RESTRICTED}",
                   "Voorvertoning met een eigen toegang, strenger dan de site zelf."),
             by_admin, ref=PREVIEW_RESTRICTED,

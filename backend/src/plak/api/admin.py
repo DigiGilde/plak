@@ -2875,21 +2875,15 @@ def make_admin_router() -> APIRouter:
         request: Request, group_slug: str, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN)
-        site_slugs = list(
-            await db.scalars(select(Site.slug).where(Site.group_id == group.id).order_by(Site.slug))
-        )
-        storage_refs = list(
-            await db.scalars(
-                select(Version.storage_ref)
-                .join(Site, Version.site_id == Site.id)
-                .where(Site.group_id == group.id)
-            )
-        )
+        sites = (
+            await db.execute(select(Site.id, Site.slug).where(Site.group_id == group.id).order_by(Site.slug))
+        ).all()
         await db.delete(group)
         await db.commit()
         store = request.app.state.content_store
-        for storage_ref in storage_refs:
-            store.delete_version(storage_ref)
+        for site in sites:
+            store.delete_site(site.id)
+        site_slugs = [site.slug for site in sites]
         await _audit(request, member, "group_delete", {"group": group_slug, "sites": site_slugs})
         return Response(status_code=204)
 
@@ -3016,14 +3010,10 @@ def make_admin_router() -> APIRouter:
         request: Request, group_slug: str, site_slug: str, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
         _, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
-        storage_refs = list(
-            await db.scalars(select(Version.storage_ref).where(Version.site_id == site.id))
-        )
+        site_id = site.id
         await db.delete(site)
         await db.commit()
-        store = request.app.state.content_store
-        for storage_ref in storage_refs:
-            store.delete_version(storage_ref)
+        request.app.state.content_store.delete_site(site_id)
         await _audit(request, member, "site_delete", {"group": group_slug, "site": site_slug})
         return Response(status_code=204)
 
@@ -4712,9 +4702,9 @@ def make_admin_router() -> APIRouter:
     async def site_storage(
         request: Request, group_slug: str, site_slug: str, member: ActiveMember, db: Db
     ) -> SiteStorageOut:
-        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.READER)
+        _, site = await _site_with_role(db, member, group_slug, site_slug, Role.READER)
         settings = request.app.state.settings
-        used = await asyncio.to_thread(request.app.state.content_store.site_bytes, group.slug, site.slug)
+        used = await asyncio.to_thread(request.app.state.content_store.site_bytes, site.id)
         own = site.live_versions_kept
         return SiteStorageOut(
             used_bytes=used,

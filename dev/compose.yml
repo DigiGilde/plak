@@ -59,6 +59,12 @@ services:
       - path: .secrets/app.env
         required: false
     command: ["alembic", "upgrade", "head"]
+    # A migration can move version directories (0003), so it sees the
+    # content volume where the app does.
+    environment:
+      PLAK_CONTENT_ROOT: /content
+    volumes:
+      - content:/content
     depends_on:
       postgres:
         condition: service_healthy
