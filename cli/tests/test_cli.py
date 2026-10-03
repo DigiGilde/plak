@@ -4101,8 +4101,8 @@ def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_ar
 # -- plak site link ---------------------------------------------------------------
 
 
-def _completed(stdout: str = "", returncode: int = 0) -> subprocess.CompletedProcess:
-    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr="")
+def _completed(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 def _gh_repository(owner: str = "MinBZK", repo: str = "Prive", repository_id: Any = 5005, owner_id: Any = 6006) -> str:
@@ -4247,7 +4247,11 @@ def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token
     "gh",
     [
         FileNotFoundError("gh"),
+        PermissionError("gh"),
         subprocess.TimeoutExpired(["gh"], 30),
+        _completed("", returncode=4),
+        _completed("", returncode=1, stderr="gh: Bad credentials (HTTP 401)\n"),
+        _completed("", returncode=1, stderr="gh: Not Found (HTTP 404)\n"),
         _completed("", returncode=1),
         _completed("geen json"),
         _completed("[]"),
@@ -4260,7 +4264,7 @@ def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token
         _completed(_gh_repository(repo="..")),
     ],
     ids=[
-        "missing", "timeout", "failed", "not-json", "not-an-object", "owner-not-an-object", "bool-id",
+        "missing", "not-runnable", "timeout", "logged-out", "bad-token", "not-found", "failed", "not-json", "not-an-object", "owner-not-an-object", "bool-id",
         "zero-id", "string-id", "id-too-large", "bad-owner", "bad-repo",
     ],
 )
@@ -4389,24 +4393,151 @@ def test_site_link_without_a_session_asks_to_log_in(stub_server, host, isolated_
     assert stub_server.requests == []
 
 
-def test_site_link_explains_a_private_repository_plak_could_not_find(
-    stub_server, host, token_env, fake_run, capsys
+_NOT_FOUND = {"status": 422, "code": "REPOSITORY_NOT_FOUND", "detail": "Repository o/r not found. Enter the IDs."}
+_RATE_LIMITED = {
+    "status": 503,
+    "code": "CI_PROVIDER_RATE_LIMITED",
+    "detail": "github.com is not accepting lookups right now; try again later.",
+}
+
+
+@pytest.mark.parametrize(
+    ("gh", "hint"),
+    [
+        (
+            FileNotFoundError("gh"),
+            "gh is not installed: install it and run 'gh auth login', or pass --repository-id and --owner-id.",
+        ),
+        (
+            _completed("", returncode=4, stderr="To get started with GitHub CLI, please run:  gh auth login\n"),
+            "gh is not logged in: run 'gh auth login' (or set GH_TOKEN) and run this again.",
+        ),
+        (
+            _completed("", returncode=1, stderr="gh: Bad credentials (HTTP 401)\n"),
+            "gh is not logged in: run 'gh auth login' (or set GH_TOKEN) and run this again.",
+        ),
+        (
+            _completed('{"message":"Not Found"}', returncode=1, stderr="gh: Not Found (HTTP 404)\n"),
+            "gh cannot see o/r with your login: check the name, or ask for access.",
+        ),
+        (
+            _completed("", returncode=1, stderr="gh: SAML enforcement\x1b[31m (HTTP 403)\n\n"),
+            "gh gave no IDs (gh: SAML enforcement [31m (HTTP 403)): pass --repository-id and --owner-id.",
+        ),
+        (
+            _completed("", returncode=1),
+            "gh gave no IDs (exit code 1): pass --repository-id and --owner-id.",
+        ),
+        (
+            subprocess.TimeoutExpired(["gh"], 30),
+            "gh gave no IDs (Command '['gh']' timed out after 30 seconds): pass --repository-id and --owner-id.",
+        ),
+        (
+            _completed("geen json"),
+            "gh gave no usable IDs for o/r: pass --repository-id and --owner-id.",
+        ),
+    ],
+    ids=[
+        "not-installed", "logged-out", "bad-token", "no-access", "other-failure", "silent-failure", "timeout",
+        "unusable",
+    ],
+)
+def test_site_link_says_why_gh_gave_no_ids_when_plak_cannot_find_the_repository(
+    stub_server, host, token_env, fake_run, capsys, gh, hint
 ):
-    fake_run.outcomes["gh"] = _completed("", returncode=1)
-    stub_server.responder = _json_responder(
-        422, {"status": 422, "code": "REPOSITORY_NOT_FOUND", "detail": "Repository o/r not found on github.com."}
-    )
+    fake_run.outcomes["gh"] = gh
+    stub_server.responder = _json_responder(422, _NOT_FOUND)
 
     code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 1
     assert capsys.readouterr().err.splitlines() == [
-        "Error: Repository o/r not found on github.com.",
-        (
-            "A private repository: log in to GitHub with 'gh auth login' and run this again, "
-            "or pass --repository-id and --owner-id."
-        ),
+        "Error: Repository o/r not found on github.com, or not public.",
+        hint,
     ]
+
+
+def test_site_link_with_no_gh_says_to_drop_it_when_plak_cannot_find_the_repository(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(422, _NOT_FOUND)
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--no-gh", "--host", host])
+
+    assert code == 1
+    assert fake_run.calls == []
+    assert capsys.readouterr().err.splitlines() == [
+        "Error: Repository o/r not found on github.com, or not public.",
+        "gh was not asked (--no-gh): run this again without --no-gh, or pass --repository-id and --owner-id.",
+    ]
+
+
+def test_site_link_points_a_forgejo_repository_plak_cannot_find_at_the_ids_not_at_gh(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(422, _NOT_FOUND)
+
+    code = cli.main(["site", "link", "team/docs", "https://code.overheid.nl/o/r", "--host", host])
+
+    assert code == 1
+    assert fake_run.calls == []
+    assert capsys.readouterr().err.splitlines() == [
+        "Error: Repository o/r not found on code.overheid.nl, or not public.",
+        "To link it without Plak's lookup, pass --repository-id and --owner-id.",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("argv", "gh", "hint"),
+    [
+        (
+            [],
+            _completed("", returncode=4),
+            "gh is not logged in: run 'gh auth login' (or set GH_TOKEN) and run this again.",
+        ),
+        (
+            ["--no-gh"],
+            None,
+            "gh was not asked (--no-gh): run this again without --no-gh, or pass --repository-id and --owner-id.",
+        ),
+    ],
+    ids=["logged-out", "no-gh"],
+)
+def test_site_link_shows_the_way_around_the_anonymous_rate_limit(
+    stub_server, host, token_env, fake_run, capsys, argv, gh, hint
+):
+    if gh is not None:
+        fake_run.outcomes["gh"] = gh
+    stub_server.responder = _json_responder(503, _RATE_LIMITED)
+
+    code = cli.main(["site", "link", "team/docs", "o/r", *argv, "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.splitlines() == [
+        "Error: github.com is not accepting lookups right now; try again later.",
+        hint,
+    ]
+
+
+def test_site_link_gives_no_gh_hint_when_the_ids_went_along(stub_server, host, token_env, fake_run, capsys):
+    stub_server.responder = _json_responder(422, _NOT_FOUND)
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--repository-id", "7", "--owner-id", "8", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.splitlines() == ["Error: Repository o/r not found on github.com, or not public."]
+
+
+def test_site_link_gives_no_gh_hint_for_a_refusal_ids_do_not_solve(stub_server, host, token_env, fake_run, capsys):
+    fake_run.outcomes["gh"] = FileNotFoundError("gh")
+    stub_server.responder = _json_responder(
+        503, {"status": 503, "code": "CI_PROVIDER_UNREACHABLE.lookup", "detail": "github.com is unreachable."}
+    )
+
+    code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
+
+    assert code == 1
+    assert capsys.readouterr().err.splitlines() == ["Error: github.com is unreachable."]
 
 
 def test_site_link_shows_any_other_refusal_on_its_own(stub_server, host, token_env, fake_run, capsys):

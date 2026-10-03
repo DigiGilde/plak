@@ -44,6 +44,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   another site, instead of staying open for the previous one.
 - The Plak CLI runs on Windows: it keeps the session in Windows
   Credential Manager, or else in `%APPDATA%\plak\hosts.json`.
+- When `plak site link` cannot find a repository, or GitHub's anonymous
+  lookup limit is used up, the CLI says why `gh` gave no IDs (not
+  installed, not logged in, no access, `--no-gh`) and what to do.
 
 ## [2026.9.30]
 

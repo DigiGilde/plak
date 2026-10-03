@@ -1059,10 +1059,16 @@ def _git_origin() -> str:
     return result.stdout.strip()
 
 
-def _github_repository(owner: str, repo: str) -> tuple[str, str, int, int] | None:
+class NoIdsFromGh(Exception):
+    """gh gave no IDs; the message says why and what to do about it."""
+
+
+IDS_BY_HAND = "pass --repository-id and --owner-id"
+
+
+def _github_repository(owner: str, repo: str) -> tuple[str, str, int, int]:
     """(owner, repo, repository id, owner id) as GitHub has them, asked with
-    your own gh login, so a private repository resolves too; None when gh is
-    missing, not logged in or cannot see it."""
+    your own gh login, so a private repository resolves too."""
     try:
         result = subprocess.run(
             ["gh", "api", "--hostname", GITHUB_HOSTNAME, f"repos/{owner}/{repo}"],
@@ -1071,23 +1077,34 @@ def _github_repository(owner: str, repo: str) -> tuple[str, str, int, int] | Non
             timeout=SUBPROCESS_TIMEOUT_S,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
+    except FileNotFoundError:
+        raise NoIdsFromGh(f"gh is not installed: install it and run 'gh auth login', or {IDS_BY_HAND}.") from None
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise NoIdsFromGh(f"gh gave no IDs ({_clean(str(error))}): {IDS_BY_HAND}.") from None
+    # gh exits with 4 when it has no login at all; a token it has but GitHub
+    # no longer accepts comes back as a 401.
+    if result.returncode == 4 or "(HTTP 401)" in result.stderr:
+        raise NoIdsFromGh("gh is not logged in: run 'gh auth login' (or set GH_TOKEN) and run this again.")
+    if "(HTTP 404)" in result.stderr:
+        raise NoIdsFromGh(f"gh cannot see {owner}/{repo} with your login: check the name, or ask for access.")
     if result.returncode != 0:
-        return None
+        lines = [line for line in result.stderr.splitlines() if line.strip()]
+        why = _clean(lines[-1]) if lines else f"exit code {result.returncode}"
+        raise NoIdsFromGh(f"gh gave no IDs ({why}): {IDS_BY_HAND}.")
+    unusable = NoIdsFromGh(f"gh gave no usable IDs for {owner}/{repo}: {IDS_BY_HAND}.")
     try:
         data = json.loads(result.stdout)
     except ValueError:
-        return None
+        raise unusable from None
     owner_data = data.get("owner") if isinstance(data, dict) else None
     if not isinstance(owner_data, dict):
-        return None
+        raise unusable
     ids = (data.get("id"), owner_data.get("id"))
     names = (owner_data.get("login"), data.get("name"))
     if not all(type(value) is int and 0 < value <= MAX_PROVIDER_ID for value in ids):
-        return None
+        raise unusable
     if not all(isinstance(value, str) and _repository_name(value) for value in names):
-        return None
+        raise unusable
     return names[0], names[1], ids[0], ids[1]
 
 
@@ -1114,14 +1131,21 @@ def cmd_site_link(args: argparse.Namespace) -> int:
         body["provider"] = "forgejo"
         body["host"] = f"https://{hostname}"
     ids_from = None
+    # Why no IDs went along: printed when Plak's own anonymous lookup fails.
+    no_ids = None
     if args.repository_id is not None:
         body["repositoryId"], body["ownerId"] = args.repository_id, args.owner_id
         ids_from = "as given"
-    elif hostname == GITHUB_HOSTNAME and args.gh:
-        found = _github_repository(owner, repo)
-        if found is not None:
-            body["owner"], body["repo"], body["repositoryId"], body["ownerId"] = found
+    elif hostname != GITHUB_HOSTNAME:
+        no_ids = f"To link it without Plak's lookup, {IDS_BY_HAND}."
+    elif not args.gh:
+        no_ids = f"gh was not asked (--no-gh): run this again without --no-gh, or {IDS_BY_HAND}."
+    else:
+        try:
+            body["owner"], body["repo"], body["repositoryId"], body["ownerId"] = _github_repository(owner, repo)
             ids_from = "from gh"
+        except NoIdsFromGh as error:
+            no_ids = str(error)
 
     try:
         response = _http(
@@ -1135,13 +1159,15 @@ def cmd_site_link(args: argparse.Namespace) -> int:
         print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
         return 1
     if response.status_code != 200:
-        _print_problem_detail(response)
-        if _problem_data(response).get("code") == "REPOSITORY_NOT_FOUND":
-            print(
-                "A private repository: log in to GitHub with 'gh auth login' and run this again, "
-                "or pass --repository-id and --owner-id.",
-                file=sys.stderr,
-            )
+        code = _problem_data(response).get("code")
+        if code == "REPOSITORY_NOT_FOUND":
+            # The server's detail also tells the admin form what to fill in;
+            # here the line below says that.
+            print(f"Error: Repository {owner}/{repo} not found on {hostname}, or not public.", file=sys.stderr)
+        else:
+            _print_problem_detail(response)
+        if code in ("REPOSITORY_NOT_FOUND", "CI_PROVIDER_RATE_LIMITED") and no_ids is not None:
+            print(no_ids, file=sys.stderr)
         return 1
 
     data = _problem_data(response)
