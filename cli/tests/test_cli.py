@@ -633,6 +633,9 @@ def test_preview_remove_succeeds(stub_server, host, token_env, capsys):
     code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
 
     assert code == 0
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert out.err == "Preview 'pr-42' removed (or was already gone).\n"
     record = stub_server.requests[0]
     assert record["method"] == "DELETE"
     assert record["path"] == "/-/api/v1/sites/team-aurora/website/previews/pr-42"

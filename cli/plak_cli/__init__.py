@@ -872,7 +872,7 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
         return 1
 
     if response.status_code in (200, 204):
-        print(f"Preview '{args.ref}' removed (or was already gone).")
+        print(f"Preview '{args.ref}' removed (or was already gone).", file=sys.stderr)
         return 0
 
     _print_problem_detail(response)
