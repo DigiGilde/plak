@@ -1,11 +1,10 @@
 # Manifest checks for the `plak` Claude Code plugin in `plugin/`.
 #
 # `claude plugin validate` reads the two manifests and costs nothing: no
-# model is called. On a pull request a change under `plugin/` also needs a
-# higher version: Claude Code keeps an installed copy until the version
-# changes, so without one the change never reaches an existing install. The behaviour tests next to them (`plugin/evals/`) do
-# call a model and are therefore a local command, not a job here; see
-# docs/skill.md.
+# model is called. The version in plugin.json is not checked here: a
+# release sets it when `plugin/` changed (docs/releasing.md). The behaviour
+# tests next to them (`plugin/evals/`) do call a model and are therefore a
+# local command, not a job here; see docs/skill.md.
 #
 # All third-party actions are pinned to a commit SHA; the tag after it is
 # the readable label, not the reference.
@@ -18,7 +17,6 @@ on:
       - "plugin/**"
       - ".claude-plugin/**"
       - ".github/workflows/plugin.yml"
-      - ".github/scripts/check_plugin_version.py"
   # The default branch, as in codeql.yml. This said `main` for a while, a
   # branch that does not exist, so the push half never fired. Validating a
   # manifest has nothing to do with the production branch.
@@ -28,7 +26,6 @@ on:
       - "plugin/**"
       - ".claude-plugin/**"
       - ".github/workflows/plugin.yml"
-      - ".github/scripts/check_plugin_version.py"
   workflow_dispatch:
 
 permissions:
@@ -56,19 +53,3 @@ jobs:
         run: |
           claude plugin validate ./plugin --strict
           claude plugin validate . --strict
-
-  version:
-    # Only a pull request has a base to compare the version with.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The base branch has to be there for `git diff base...HEAD`.
-          fetch-depth: 0
-
-      - name: Require a higher plugin version for a change under plugin/
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: python3 .github/scripts/check_plugin_version.py "origin/${BASE_REF}"

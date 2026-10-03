@@ -982,3 +982,27 @@ response header (for example `1.0.0`).
   is ignored.
 - `plak --version` prints the installed version (`plak 2026.10.1`). The CLI also
   identifies itself on every request as `User-Agent: plak-cli/<version>`.
+
+### A new major
+
+There is only API 1 so far. When a second major comes, the
+[NL API Design Rules 2.2.2](https://gitdocumentatie.logius.nl/publicatie/api/adr/2.2.2/)
+set what happens to the first (`/core/transition-period`,
+`/core/deprecation-schedule`):
+
+- **The old major stays.** `/-/api/v1` keeps running next to `/-/api/v2`
+  for a limited and fixed transition period, and no more than two majors
+  run at once.
+- **The schedule is public before the transition starts:** when v1 was
+  deprecated and the date it goes away, under `### Deprecated` in
+  `CHANGELOG.md` and in these docs. Members who use the API through a
+  linked repository or the CLI hear about it directly as well.
+- **Every v1 response says so** during the transition: `Deprecation`
+  ([RFC 9745](https://www.rfc-editor.org/rfc/rfc9745), the date v1 was
+  deprecated, as `@<unix time>`) and `Sunset`
+  ([RFC 8594](https://www.rfc-editor.org/rfc/rfc8594), the date it goes
+  away, as an HTTP date).
+- **The CLI that speaks v2 comes out before v1 goes away**, so an upgrade
+  is possible during the whole transition.
+
+How long the transition lasts is decided when v2 is planned.

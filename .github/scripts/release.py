@@ -6,6 +6,7 @@
 
     decide              what a push to beta does: release, hold or none
     promote --tag T     turn [Unreleased] into the section for T, set versions
+    verify-staged --tag T   exit 1 unless the index holds only that release
     notes --tag T       the GitHub Release body for T
     validate-tag T      exit 1 unless T is a CalVer tag
     check --base REF    the pull request check on CHANGELOG.md and the notes
@@ -91,6 +92,7 @@ UNRELEASED_NOTES = ("unreleased.nl.md", "unreleased.en.md")
 MEMBER_FACING = ("frontend/src/", "cli/plak_cli/")
 
 BASE_BRANCH = "origin/beta"
+REPOSITORY = "DigiGilde/plak"
 COMMENT_MARKER = "<!-- plak-changelog-check -->"
 API_COMMENT_MARKER = "<!-- plak-api-check -->"
 OPT_OUT = re.compile(r"""(?:^|["'])[ \t]*No changelog entry:[ \t]*\S""", re.MULTILINE)
@@ -646,6 +648,83 @@ def promote(git: Git, tag: str, day: date, spec: str, diff: Diff) -> list[str]:
     return touched
 
 
+def verify_staged(git: Git, tag: str) -> list[str]:
+    """What the publishing job checks before it commits: what is staged is
+    what promote writes for `tag` on HEAD, and nothing else. The job that
+    wrote it ran the dependencies, so its patch is not trusted."""
+    if error := tag_error(tag):
+        return [error]
+    staged = _staged_modes(git)
+    if not staged:
+        return ["Nothing is staged to release."]
+    version = tag[1:]
+    day = date(*(int(part) for part in version.split(".")[:3]))
+    problems: list[str] = []
+    api = _staged_api_version(git, problems)
+    writes: dict[str, Callable[[str], str]] = {
+        CHANGELOG: lambda text: promote_text(text, tag, split_sections(text)[0].body),
+        CLI_PYPROJECT: lambda text: set_pyproject_version(text, version),
+        CLI_LOCK: lambda text: set_lock_version(text, version),
+        PLUGIN_MANIFEST: lambda text: set_plugin_version(text, version),
+        PUBLICCODE: lambda text: set_publiccode(text, version, day),
+        BACKEND_PYPROJECT: lambda text: set_pyproject_version(text, version, BACKEND_PYPROJECT),
+        BACKEND_LOCK: lambda text: set_lock_version(text, version, "plak-api", BACKEND_LOCK),
+        FRONTEND_PACKAGE: lambda text: set_package_version(text, version),
+        FRONTEND_LOCK: lambda text: set_package_version(text, version, FRONTEND_LOCK),
+        API_VERSION_FILE: lambda text: set_api_version(text, api or ""),
+    }
+    # A new schema version without a staged API_VERSION has to be the one
+    # the code already has.
+    if api and API_VERSION_FILE not in staged:
+        staged[API_VERSION_FILE] = "100644"
+    for path, mode in staged.items():
+        before, after = git.show("HEAD", path), git.show("", path)
+        if mode not in ("100644", "000000"):
+            problems.append(f"{path} is not staged as a plain file.")
+        elif path == OPENAPI:
+            continue
+        elif path in writes:
+            try:
+                expected = writes[path](before) if before is not None else None
+            except (ReleaseError, IndexError):
+                expected = None
+            if after is None or after != expected:
+                problems.append(f"{path} is not what the release writes for {tag}.")
+        elif not _renamed_note(git, path, after, version):
+            problems.append(f"{path} is not a file a release writes.")
+    return problems
+
+
+def _staged_modes(git: Git) -> dict[str, str]:
+    """Every staged path with its new mode; 000000 for a removed one."""
+    fields = git.run("diff", "--cached", "--raw", "--no-renames", "-z").split("\0")
+    return {path: meta.split()[1] for meta, path in zip(fields[::2], fields[1::2], strict=False) if path}
+
+
+def _staged_api_version(git: Git, problems: list[str]) -> str | None:
+    """The API version the staged schema declares, which API_VERSION has to
+    match. The schema itself is data the release does not ship."""
+    text = git.show("", OPENAPI)
+    if text is None or text == git.show("HEAD", OPENAPI):
+        return None
+    try:
+        return "{}.{}.{}".format(*api_version(parse_spec(text, OPENAPI), OPENAPI))
+    except ReleaseError as error:
+        problems.extend(error.problems)
+        return None
+
+
+def _renamed_note(git: Git, path: str, after: str | None, version: str) -> bool:
+    """An unreleased What's new note removed, or its text under the version."""
+    if not path.startswith(NOTES_DIR):
+        return False
+    name = path[len(NOTES_DIR) :]
+    if after is None:
+        return name in UNRELEASED_NOTES
+    match = NOTE_NAME.match(name)
+    return bool(match and match["key"] == version and after == git.show("HEAD", f"{NOTES_DIR}unreleased.{match['lang']}.md"))
+
+
 def _read(git: Git, path: str) -> str:
     try:
         return (git.root / path).read_text(encoding="utf-8")
@@ -671,8 +750,9 @@ def _working_tree_notes(root: Path) -> dict[str, str]:
     }
 
 
-def release_notes(git: Git, tag: str) -> str:
-    """The body of the GitHub Release for `tag`, read from the tag itself."""
+def release_notes(git: Git, tag: str, image: str | None = None, digest: str | None = None) -> str:
+    """The body of the GitHub Release for `tag`, read from the tag itself.
+    With the image's name and digest it ends with how to verify it."""
     if error := tag_error(tag):
         raise ReleaseError(error)
     changelog = git.show(tag, CHANGELOG)
@@ -690,7 +770,25 @@ def release_notes(git: Git, tag: str) -> str:
     if (spec := git.show(tag, OPENAPI)) is not None:
         source = f"{OPENAPI} at {tag}"
         lines.append("API {}.{}.{}".format(*api_version(parse_spec(spec, source), source)))
+    if image or digest:
+        lines.append(container_section(image or "", digest or "", version))
     return "\n\n".join(lines) + "\n"
+
+
+IMAGE_NAME = re.compile(r"^[a-z0-9.-]+(?::[0-9]+)?(?:/[a-z0-9._-]+)+$")
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def container_section(image: str, digest: str, version: str) -> str:
+    if not IMAGE_NAME.match(image) or not DIGEST.match(digest):
+        raise ReleaseError(f"'{image}' and '{digest}' are not an image name and a sha256 digest.")
+    reference = f"{image}@{digest}"
+    return (
+        "## Container image\n\n"
+        f"- plak: `{image}:{version}`, digest `{digest}`\n\n"
+        f"Verify where it was built: `gh attestation verify oci://{reference} -R {REPOSITORY}`\n"
+        "Its SBOM (CycloneDX): the same command with `--predicate-type https://cyclonedx.org/bom`"
+    )
 
 
 @dataclass
@@ -903,7 +1001,13 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("decide", help="print route=release|hold|none and tag=, also to $GITHUB_OUTPUT")
     promoting = commands.add_parser("promote", help="promote [Unreleased] to TAG and set versions")
     promoting.add_argument("--tag", required=True)
-    commands.add_parser("notes", help="release notes").add_argument("--tag", required=True)
+    commands.add_parser("verify-staged", help="exit 1 unless the index holds only the release for TAG").add_argument(
+        "--tag", required=True
+    )
+    noting = commands.add_parser("notes", help="release notes")
+    noting.add_argument("--tag", required=True)
+    noting.add_argument("--image", help="the image name, for the container section")
+    noting.add_argument("--digest", help="the image digest, for the container section")
     commands.add_parser("validate-tag", help="exit 1 unless TAG is a CalVer tag").add_argument("tag")
     checking = commands.add_parser("check", help="the pull request check")
     checking.add_argument("--base", required=True, help="the ref the pull request goes into")
@@ -941,7 +1045,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"updated {path}")
             return 0
         if args.command == "notes":
-            print(release_notes(git, args.tag), end="")
+            print(release_notes(git, args.tag, args.image, args.digest), end="")
+            return 0
+        if args.command == "verify-staged":
+            if problems := verify_staged(git, args.tag):
+                raise ReleaseError(*problems)
+            print(f"The index holds the release for {args.tag} and nothing else.")
             return 0
         if args.command == "api-check":
             result = api_check(git, _read_spec(args.spec), oasdiff(args.oasdiff))
