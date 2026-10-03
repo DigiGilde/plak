@@ -1428,6 +1428,11 @@ def _run_action(
     """Runs the shell steps of action.yml the way a runner would: the ${{ }}
     expressions filled in, each step's own env applied, the `if:` conditions
     honoured, and the run stopping at the first step that fails."""
+    if cli.WINDOWS:
+        # `bash` on a Windows runner can be the WSL launcher rather than Git
+        # Bash, and the steps get Windows paths; the Windows leg is for the
+        # CLI, not for the action.
+        pytest.skip("simulates the action's bash steps")
     values = _expression_values(inputs, github)
     run = _ActionRun()
     for step in _action_definition()["runs"]["steps"]:
