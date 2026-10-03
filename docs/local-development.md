@@ -390,8 +390,10 @@ in `backend/pyproject.toml`, `cli/pyproject.toml` and, per metric,
 `frontend/vite.config.ts`. A path no test can reach carries an explicit
 exclusion with its reason (`# pragma: no cover - ...` in Python,
 `/* v8 ignore start */ ... /* v8 ignore stop */` in TypeScript; `next` is
-silently ignored there). CI enforces the floors inside the existing test
-jobs rather than running the suites a second time.
+silently ignored there). CI enforces the floors without running the
+suites a second time: the CLI and frontend inside their test jobs, the
+backend in `backend-coverage` over the data of its test parts, and
+`.github/scripts/release.py` in `release-script`.
 
 On the backend the measurement needs `concurrency = ["thread",
 "greenlet"]`: SQLAlchemy's async adapter runs most of an async route body
