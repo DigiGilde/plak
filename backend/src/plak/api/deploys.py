@@ -108,8 +108,8 @@ _DEPLOY_OPENAPI = {
     "requestBody": {
         "required": True,
         "description": (
-            "De te publiceren bundel, als `multipart/form-data`. Het lichaam wordt streamend verwerkt, dus een "
-            "grote bundel hoeft nergens in geheugen te passen."
+            "The bundle to publish, as `multipart/form-data`. The body is processed as a stream, so a large "
+            "bundle never has to fit in memory."
         ),
         "content": {
             "multipart/form-data": {
@@ -121,12 +121,12 @@ _DEPLOY_OPENAPI = {
                             "type": "string",
                             "format": "binary",
                             "description": (
-                                "Het bestandsveld, verplicht en precies één keer. Geaccepteerd worden een los "
-                                "`.html`-bestand (dat wordt de `index.html` van de site) of een archief "
-                                "`.zip`, `.tar.gz` of `.tgz`. De vorm wordt aan de bestandsnaam herkend; iets "
-                                "anders levert 422 `UNKNOWN_FORMAT`. Paden in het archief moeten relatief en "
-                                "veilig zijn: absolute paden, `..`, symlinks en de gereserveerde topsegmenten "
-                                "`_preview` en `_version` worden geweigerd."
+                                "The `file` field, required and exactly once. Either a single "
+                                "`.html` file (which becomes the site's `index.html`) or a `.zip`, "
+                                "`.tar.gz` or `.tgz` archive. The format is recognised by the file name; anything "
+                                "else yields 422 `UNKNOWN_FORMAT`. Paths in the archive must be relative and "
+                                "safe: absolute paths, `..`, symlinks and the reserved top-level segments "
+                                "`_preview` and `_version` are refused."
                             ),
                         },
                         PREVIEW_FIELD: {
@@ -134,23 +134,23 @@ _DEPLOY_OPENAPI = {
                             "pattern": SLUG_RE.pattern,
                             "examples": ["pr-42"],
                             "description": (
-                                "Optioneel. Met dit veld wordt de bundel een preview onder deze ref, in plaats "
-                                "van de live site. De ref is een slug (kleine letters, cijfers, koppeltekens, "
-                                "hoogstens 63 tekens) en is meestal het pull-requestnummer. Bestaat de preview "
-                                "al, dan wordt hij vervangen en schuift zijn vervaltijd vooruit. Weglaten voor "
-                                "een live-deploy."
+                                "Optional. With this field the bundle becomes a preview under this ref, instead "
+                                "of the live site. The ref is a slug (lowercase letters, digits, hyphens, "
+                                "at most 63 characters) and is usually the pull request number. If the preview "
+                                "already exists, it is replaced and its expiry moves forward. Omit it for "
+                                "a live deploy."
                             ),
                         },
                         BASE_PATH_FIELD: {
                             "type": "string",
                             "examples": ["dist"],
                             "description": (
-                                "Optioneel. De map binnen het archief die de hoofdmap van de site wordt; alles "
-                                "wat ernaast staat wordt niet gepubliceerd. Het pad is relatief aan de hoofdmap "
-                                "na het afpellen van omhullende mappen en moet een bestaande map met een "
-                                "`index.html` erin zijn. Bedoeld als bevestiging van het voorstel dat een "
-                                "geweigerde deploy meegeeft in `indexCandidates`; zonder dit veld bepaalt "
-                                "Plak de hoofdmap zelf."
+                                "Optional. The directory inside the archive that becomes the root of the site; "
+                                "everything next to it is not published. The path is relative to the root "
+                                "directory after unwrapping enclosing directories and must be an existing directory "
+                                "containing an `index.html`. Meant to confirm one of the suggestions a "
+                                "refused deploy returns in `indexCandidates`; without this field "
+                                "Plak determines the root directory itself."
                             ),
                         },
                     },
@@ -165,25 +165,25 @@ _DEPLOY_OPENAPI = {
 
 
 class DeployResult(ApiModel):
-    """Wat CI terugkrijgt na een geslaagde deploy."""
+    """What CI gets back after a successful deploy."""
 
     version_id: uuid.UUID = Field(
         description=(
-            "Id van de zojuist aangemaakte versie. Hiermee is de deploy terug te vinden in de versielijst van "
-            "de site, en hiernaar is later terug te rollen."
+            "ID of the version that was just created. It identifies the deploy in the site's version list, "
+            "and it is what you roll back to later."
         )
     )
     url: str = Field(
         description=(
-            "Waar de deploy te bekijken is: de live site, of bij een preview de preview-URL. CI kan hier een "
-            "link naar plaatsen, in een pull request bijvoorbeeld."
+            "Where the deploy can be viewed: the live site, or for a preview the preview URL. CI can post a "
+            "link to it, in a pull request for example."
         ),
         examples=["https://plak.example/team-aurora/website/_preview/pr-42/"],
     )
     access: AccessOut = Field(
         description=(
-            "Wie de deploy mag zien: bij een preview de eigen toegang van die preview als die is ingesteld, "
-            "anders die van de site. CI kan hiermee bij de link zeggen of je moet inloggen."
+            "Who may see the deploy: for a preview the preview's own access if one is set, "
+            "otherwise the site's. CI can use this to tell, alongside the link, whether signing in is needed."
         )
     )
 
@@ -192,26 +192,26 @@ class DeployResult(ApiModel):
 # differs, so they share these error descriptions.
 _DEPLOY_ERRORS = {
     401: (
-        "Er is noch een bearer-token noch een geldige beheersessie meegestuurd (`NO_AUTHENTICATION`), het "
-        "CLI-token is ongeldig, ingetrokken of verlopen (`TOKEN_INVALID`), of het CI-token wordt geweigerd: "
-        "het komt niet van GitHub of een geconfigureerde Forgejo (`CI_ISSUER_UNKNOWN`), de handtekening of "
-        "geldigheid klopt niet (`CI_TOKEN_INVALID`), of de audience is niet precies de beheer-URL "
-        "(`CI_AUDIENCE_MISMATCH`). Het antwoord draagt dan `WWW-Authenticate: Bearer`."
+        "Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the "
+        "CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: "
+        "it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is "
+        "invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is not exactly "
+        "the admin URL (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`."
     ),
     403: (
-        "Bij een CI-token: de repository is niet aan deze site gekoppeld (`CI_REPOSITORY_NOT_TRUSTED`), of een "
-        "live-deploy komt niet uit `push`, `workflow_dispatch` of `schedule`, of niet van de live-branch "
-        "(`CI_BRANCH_NOT_ALLOWED`). Bij een CLI-token of sessie: het "
-        "lid heeft op deze site niet minimaal de rol `editor` (`INSUFFICIENT_ROLE`) of is niet actief "
-        "(`MEMBER_NOT_ACTIVE`); bij een sessie ook: de CSRF-header ontbreekt of klopt niet (`CSRF_INVALID`). "
-        "Een verzoek van een andere origin dan de beheer-host wordt eveneens geweigerd; CI en de CLI sturen "
-        "geen `Origin` en passeren die bewaking."
+        "With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a "
+        "live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch "
+        "(`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the "
+        "member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active "
+        "(`MEMBER_NOT_ACTIVE`); with a session also: the CSRF header is missing or wrong (`CSRF_INVALID`). "
+        "A request from an origin other than the admin host is refused as well; CI and the CLI send "
+        "no `Origin` and pass that check."
     ),
-    404: "Onbekende groep of onbekende site (`UNKNOWN_SITE`).",
-    429: "Het ratelimit-budget is op; probeer het later opnieuw.",
+    404: "Unknown group or unknown site (`UNKNOWN_SITE`).",
+    429: "The rate limit budget is used up; try again later.",
     503: (
-        "De CI-provider is niet bereikbaar om de sleutels op te halen of de repository te controleren "
-        "(`CI_PROVIDER_UNREACHABLE`); probeer het later opnieuw."
+        "The CI provider cannot be reached to fetch the keys or to check the repository "
+        "(`CI_PROVIDER_UNREACHABLE`); try again later."
     ),
 }
 
@@ -649,48 +649,48 @@ def _deployer(auth: _DeployAuth) -> Deployer:
     status_code=201,
     openapi_extra=_DEPLOY_OPENAPI,
     tags=[TAG_DEPLOYS],
-    summary="Een bundel publiceren, live of als preview",
-    response_description="De bundel is uitgepakt en gepubliceerd; de id van de nieuwe versie komt terug.",
+    summary="Publish a bundle, live or as a preview",
+    response_description="The bundle was unpacked and published; the ID of the new version is returned.",
     description=(
-        "Het endpoint waar CI op bouwt. Stuur de gebouwde site als `multipart/form-data` met het veld "
-        "`file`; zonder het veld `preview` vervangt de bundel de live site, met `preview` komt hij onder "
-        "`/{groupSlug}/{siteSlug}/_preview/{ref}/` te staan.\n\n"
-        "**Mag:** drie manieren. (1) Een CI-ID-token van GitHub of Forgejo Actions "
-        "(`Authorization: Bearer <JWT>`) met als audience precies de beheer-URL van Plak, uit de repository "
-        "die aan deze site gekoppeld is; een live-deploy moet dan uit een `push`, `workflow_dispatch` of "
-        "`schedule` komen, en van de live-branch als die is ingesteld; een preview mag vanaf elke branch. "
-        "(2) Een CLI-token uit `plak login` "
-        "(`Authorization: Bearer plakcli_...`): dat handelt als het lid dat inlogde, met precies diens "
-        "rollen. (3) Een beheersessie plus CSRF-header. Bij (2) en (3) moet het lid actief zijn en op deze "
-        "site minstens de rol `editor` hebben. Dit endpoint en de preview-teardown zijn samen met de "
-        "CLI-sessie-endpoints en het aanmaken van een groep of site de enige die een Bearer-token "
-        "accepteren; elders levert die header 401.\n\n"
-        "**Verloop:** eerst wordt geautoriseerd, pas daarna wordt het lichaam gelezen, zodat een geweigerd "
-        "verzoek geen upload kost. De upload streamt naar schijf en wordt uitgepakt tegen de limieten "
-        "hieronder. Elke deploy, geslaagd of geweigerd, komt in het auditlogboek.\n\n"
-        "**Hoofdmap van de site:** omhullende mappen worden afgepeld zolang de hoofdmap precies één map bevat "
-        "en verder niets, dus een archief met alleen `mijnsite/dist/index.html` landt gewoon op de "
-        "siteroot. Metadata van het besturingssysteem telt daarbij niet mee en wordt ook niet "
-        "gepubliceerd: de map `__MACOSX`, `.DS_Store` en de AppleDouble-bestanden die met `._` "
-        "beginnen. Een zip die je met rechtsklik in de Finder maakt werkt daardoor gewoon. "
-        "Daarna moet er een `index.html` in de hoofdmap staan; zo niet, dan volgt 422 "
-        "`NO_INDEX` met de gevonden index-paden in `indexCandidates`. Staat de site in een map naast "
-        "andere dingen (een gezipte projectmap), stuur die map dan als veld `basePath` mee: dat is de "
-        "bevestiging van het voorstel. Plak kiest nooit zelf een van meerdere kandidaten, want dan zou het "
-        "stilzwijgend bestanden weglaten die je dacht te publiceren. Het `basePath` staat relatief aan de "
-        "hoofdmap ná het afpellen, maar de spelling mét het afgepelde voorvoegsel werkt net zo goed, en een "
-        "vaste waarde blijft werken als het afpellen die map al weggenomen heeft.\n\n"
-        "**Limieten** (instelbaar; dit zijn de standaardwaarden): het verzoeklichaam is hoogstens 100 MB "
-        "(`PLAK_INGEST_MAX_BODY`), een los uitgepakt bestand 50 MB (`PLAK_INGEST_MAX_FILE`), de hele "
-        "uitgepakte site 200 MB (`PLAK_INGEST_MAX_TOTAL`), met hoogstens 1000 entries "
-        "(`PLAK_INGEST_MAX_FILES`) en 10 niveaus mapdiepte (`PLAK_INGEST_MAX_DEPTH`). Die gelden op "
-        "wat gepubliceerd wordt: wat buiten het `basePath` valt telt niet mee. Het archief als geheel mag "
-        "hoogstens vijftig keer zoveel entries bevatten, en bij een `.tar.gz` telt de uitgepakte omvang van "
-        "alle leden mee, ook de niet-gepubliceerde: een tar heeft geen index, dus bij de volgende header "
-        "komen betekent alles ertussen decomprimeren. De limieten worden tijdens het uitpakken bewaakt en "
-        "de headers worden vooraf al tegen dezelfde grenzen gehouden, dus ook een zip- of tar-bom komt er "
-        "niet langs.\n\n"
-        "**Voorbeeld** (`$PLAK_TOKEN` is een CI-ID-token of een CLI-token):\n\n"
+        "The endpoint CI uses. Send the built site as `multipart/form-data` with the "
+        "`file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under "
+        "`/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n"
+        "**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions "
+        "(`Authorization: Bearer <JWT>`) whose audience is exactly Plak's admin URL, from the repository "
+        "linked to this site; a live deploy must then come from a `push`, `workflow_dispatch` or "
+        "`schedule`, and from the live branch if one is set; a preview may come from any branch. "
+        "(2) A CLI token from `plak login` "
+        "(`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their "
+        "roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at "
+        "least the `editor` role on this site. This endpoint and the preview teardown are, together with the "
+        "CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that "
+        "accept a Bearer token; elsewhere that header yields 401.\n\n"
+        "**Flow:** authorization comes first, only then is the body read, so a refused "
+        "request costs no upload. The upload streams to disk and is unpacked against the limits "
+        "below. Every deploy, whether it succeeds or is refused, ends up in the audit log.\n\n"
+        "**Site root:** enclosing directories are repeatedly unwrapped while the root directory contains exactly "
+        "one directory and nothing else, so an archive with only `mysite/dist/index.html` simply lands on the "
+        "site root. Operating system metadata does not count and is not published either: "
+        "the `__MACOSX` directory, `.DS_Store` and the AppleDouble files that start with `._`. "
+        "A zip you make with a right-click in Finder therefore just works. "
+        "After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, "
+        "with the index paths found in `indexCandidates`. If the site is in a directory "
+        "next to other things (a zipped project directory), send that directory as the `basePath` field: this "
+        "confirms one of the suggestions. Plak never picks one of several candidates itself, because it "
+        "would silently leave out files you thought you were publishing. The `basePath` is relative to the "
+        "root directory after unwrapping, but a path that includes the unwrapped prefix works too, and "
+        "a fixed value keeps working if unwrapping has already taken that directory away.\n\n"
+        "**Limits** (configurable; these are the defaults): the request body is at most 100 MB "
+        "(`PLAK_INGEST_MAX_BODY`), a single unpacked file 50 MB (`PLAK_INGEST_MAX_FILE`), the entire "
+        "unpacked site 200 MB (`PLAK_INGEST_MAX_TOTAL`), with at most 1000 entries "
+        "(`PLAK_INGEST_MAX_FILES`) and 10 levels of directory depth (`PLAK_INGEST_MAX_DEPTH`). These apply to "
+        "what is published: what falls outside the `basePath` does not count. The archive as a whole may "
+        "contain at most fifty times as many entries, and for a `.tar.gz` the unpacked size of "
+        "all members counts, including the unpublished ones: a tar has no index, so getting to the next "
+        "header means decompressing everything in between. The limits are enforced during unpacking and "
+        "the headers are checked against the same limits beforehand, so a zip or tar bomb does not get "
+        "past either.\n\n"
+        "**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n\n"
         "```\n"
         "curl --fail --silent --show-error \\\n"
         '  --header "Authorization: Bearer $PLAK_TOKEN" \\\n'
@@ -698,39 +698,39 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "  --form preview=pr-42 \\\n"
         '  "$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys"\n'
         "```\n\n"
-        'Antwoord: `201` met `{"versionId": "..."}`. Laat `--form preview=...` weg voor een live-deploy.'
+        'Response: `201` with `{"versionId": "..."}`. Omit `--form preview=...` for a live deploy.'
     ),
     responses=error_responses(
         {
             **_DEPLOY_ERRORS,
-            400: "De client brak de upload af voordat het lichaam compleet was (`CLIENT_ABORTED`).",
+            400: "The client aborted the upload before the body was complete (`CLIENT_ABORTED`).",
             503: (
-                f"{_DEPLOY_ERRORS[503]} Of het contentvolume heeft te weinig vrije ruimte voor deze upload "
-                "(`STORAGE_UNAVAILABLE`): vooraf gemeten op de opgegeven `Content-Length`, en tijdens het "
-                "ontvangen en uitpakken opnieuw, zodat het volume nooit onder de ingestelde marge vrije "
-                "ruimte zakt. Wat al geschreven was wordt dan opgeruimd; probeer het later opnieuw."
+                f"{_DEPLOY_ERRORS[503]} Or the content volume has too little free space for this upload "
+                "(`STORAGE_UNAVAILABLE`): checked in advance against the declared `Content-Length`, and again while "
+                "receiving and unpacking, so the volume never drops below the configured margin of free "
+                "space. Whatever was already written is then cleaned up; try again later."
             ),
             413: (
-                "De upload is groter dan de bodylimiet (`BODY_TOO_LARGE`), of de bundel wordt uitgepakt te "
-                "groot: `FILE_TOO_LARGE`, `TOTAL_TOO_LARGE` of `TOO_MANY_FILES` (die laatste ook "
-                "wanneer het archief als geheel te veel entries heeft; de melding zegt welke van de twee, "
-                "en draagt waar mogelijk `indexCandidates`, want een gezipte projectmap loopt hier als "
-                "eerste op vast)."
+                "The upload is larger than the body limit (`BODY_TOO_LARGE`), or the bundle unpacks too "
+                "large: `FILE_TOO_LARGE`, `TOTAL_TOO_LARGE` or `TOO_MANY_FILES` (the last one also "
+                "when the archive as a whole has too many entries; the message says which of the two, "
+                "and carries `indexCandidates` where possible, because a zipped project directory runs into "
+                "this first)."
             ),
             422: (
-                "Het verzoek is geen multipart/form-data (`NOT_MULTIPART`), het veld `file` ontbreekt "
-                "(`FILE_MISSING`), de multipart-vorm klopt niet (`MULTIPART_INVALID`), `preview` is "
-                "geen geldige slug (`PREVIEW_REF_INVALID`), of de bundel wordt geweigerd: onbekende vorm "
-                "(`UNKNOWN_FORMAT`), onleesbaar of leeg archief (`INVALID_ARCHIVE`, `EMPTY_ARCHIVE`), "
-                "een onveilig pad erin (`PATH_TRAVERSAL`, `ABSOLUTE_PATH`, `SYMLINK_REFUSED`, "
+                "The request is not multipart/form-data (`NOT_MULTIPART`), the `file` field is missing "
+                "(`FILE_MISSING`), the multipart structure is wrong (`MULTIPART_INVALID`), `preview` is "
+                "not a valid slug (`PREVIEW_REF_INVALID`), or the bundle is refused: unknown format "
+                "(`UNKNOWN_FORMAT`), unreadable or empty archive (`INVALID_ARCHIVE`, `EMPTY_ARCHIVE`), "
+                "an unsafe path in it (`PATH_TRAVERSAL`, `ABSOLUTE_PATH`, `SYMLINK_REFUSED`, "
                 "`HARDLINK_REFUSED`, `SPECIAL_FILE`, `RESERVED_SEGMENT`, `TOO_DEEP`, `DUPLICATE_PATH`, "
-                "`NULL_BYTE`, `EMPTY_PATH`), een bestand dat niet op een website hoort (`SECRET_FILE`: "
-                "een `.git`-map of een `.env`-bestand, die met een gezipte projectmap vanzelf "
-                "meekomen), geen `index.html` in de hoofdmap (`NO_INDEX`, met de gevonden "
-                "paden in `indexCandidates`), of een `basePath` dat niet deugt (`BASE_PATH_INVALID`), geen "
-                "map in de bundel is (`BASE_PATH_UNKNOWN`, ook wanneer het pad naar een bestand wijst) of "
-                "geen `index.html` bevat (`BASE_PATH_WITHOUT_INDEX`, ook wanneer die map helemaal geen "
-                "bestanden bevat)."
+                "`NULL_BYTE`, `EMPTY_PATH`), a file that does not belong on a website (`SECRET_FILE`: "
+                "a `.git` directory or an `.env` file, which come along automatically with a zipped project "
+                "directory), no `index.html` in the root directory (`NO_INDEX`, with the paths found "
+                "in `indexCandidates`), or a `basePath` that is not valid (`BASE_PATH_INVALID`), is not a "
+                "directory in the bundle (`BASE_PATH_UNKNOWN`, also when the path points to a file) or "
+                "contains no `index.html` (`BASE_PATH_WITHOUT_INDEX`, also when that directory contains no "
+                "files at all)."
             ),
         }
     ),
@@ -837,25 +837,25 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
     "/sites/{group_slug}/{site_slug}/previews/{ref}",
     status_code=204,
     tags=[TAG_DEPLOYS],
-    summary="Een preview opruimen",
+    summary="Clean up a preview",
     description=(
-        "Haalt de preview met deze ref weg, inclusief haar bestanden. Bedoeld voor de CI-stap die draait als "
-        "een pull request sluit. De live site en de versiehistorie blijven ongemoeid.\n\n"
-        "**Mag:** hetzelfde als de deploy: een CI-ID-token uit de gekoppelde repository (vanaf elke branch), "
-        "een CLI-token of een beheersessie met CSRF-header van een actief lid met effectieve siterol "
-        "`editor` of ruimer.\n\n"
-        "**Idempotent:** een ref die niet (meer) bestaat levert ook 204, zodat een herhaalde opruimstap in CI "
-        "niet alsnog rood wordt.\n\n"
-        "**Voorbeeld:**\n\n"
+        "Removes the preview with this ref, including its files. Meant for the CI step that runs when "
+        "a pull request closes. The live site and the version history are left alone.\n\n"
+        "**Who can call this:** the same as the deploy: a CI ID token from the linked repository (from any branch), "
+        "a CLI token or an admin session with CSRF header of an active member with effective site role "
+        "`editor` or higher.\n\n"
+        "**Idempotent:** a ref that does not (any more) exist also yields 204, so a repeated cleanup step in CI "
+        "does not fail on a rerun.\n\n"
+        "**Example:**\n\n"
         "```\n"
         "curl --fail --silent --show-error --request DELETE \\\n"
         '  --header "Authorization: Bearer $PLAK_TOKEN" \\\n'
         '  "$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42"\n'
         "```"
     ),
-    responses={204: {"description": "De preview bestaat niet meer. Er komt geen inhoud terug."}}
+    responses={204: {"description": "The preview no longer exists. No content is returned."}}
     | error_responses(
-        {**_DEPLOY_ERRORS, 422: "De ref in het pad is geen geldige slug (`PREVIEW_REF_INVALID`)."}
+        {**_DEPLOY_ERRORS, 422: "The ref in the path is not a valid slug (`PREVIEW_REF_INVALID`)."}
     ),
 )
 async def delete_preview(request: Request, group_slug: str, site_slug: str, ref: str) -> Response:

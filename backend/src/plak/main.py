@@ -186,7 +186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Plak API",
-        summary="Statische sites publiceren en delen, met previews per pull request.",
+        summary="Publish and share static sites, with previews per pull request.",
         description=docs.API_DESCRIPTION,
         version=API_VERSION,
         contact={
