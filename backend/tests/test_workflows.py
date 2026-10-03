@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import parts
@@ -121,37 +122,46 @@ class TestTheCheckGate:
         assert deploy["jobs"]["ci"]["uses"] == "./.github/workflows/ci.yml"
 
     def test_the_backend_parts_are_the_ones_the_suite_knows(self, ci) -> None:
-        assert ci["jobs"]["backend-tests"]["strategy"]["matrix"]["part"] == list(parts.PARTS)
-        assert ci["jobs"]["backend-tests"]["strategy"]["fail-fast"] is False
+        assert ci["jobs"]["backend-part"]["strategy"]["matrix"]["part"] == list(parts.PARTS)
+        assert ci["jobs"]["backend-part"]["strategy"]["fail-fast"] is False
 
-    def test_a_failed_backend_part_fails_the_required_check(self, ci) -> None:
+    def test_a_failed_backend_part_fails_the_test_check(self, ci) -> None:
         """A failed part skips a plain dependent, and a skipped required
         check counts as passed: the tests would go red and the merge
-        button green. So `backend-coverage` runs regardless and fails itself."""
-        backend = ci["jobs"]["backend-coverage"]
-        assert backend["needs"] == "backend-tests"
-        assert backend["if"] == "${{ !cancelled() }}"
-        first = backend["steps"][0]
-        assert first["if"] == "needs.backend-tests.result != 'success'"
-        assert "exit 1" in first["run"]
+        button green. So `backend-tests` runs regardless and fails itself."""
+        gate = ci["jobs"]["backend-tests"]
+        assert gate["needs"] == "backend-part"
+        assert gate["if"] == "${{ !cancelled() }}"
+        [step] = gate["steps"]
+        assert step["if"] == "needs.backend-part.result != 'success'"
+        assert "exit 1" in step["run"]
+
+    def test_coverage_is_judged_whatever_the_tests_concluded(self, ci) -> None:
+        """Coverage is its own check: a part keeps its data when its tests
+        fail, and `backend-coverage` runs then too, rather than being
+        skipped into a pass."""
+        upload = _step(ci["jobs"]["backend-part"], "Keep the coverage data")
+        assert upload["if"] == "${{ !cancelled() }}"
+        assert upload["with"]["if-no-files-found"] == "error"
+        coverage = ci["jobs"]["backend-coverage"]
+        assert coverage["needs"] == "backend-part"
+        assert coverage["if"] == "${{ !cancelled() }}"
+        names = [s.get("name") for s in coverage["steps"]]
+        assert names.index("Require the data of every test part") < names.index("Coverage over all parts")
 
     def test_the_coverage_floor_holds_over_the_merged_parts(self, ci) -> None:
-        run = ci["jobs"]["backend-tests"]["steps"][-2]["run"]
+        run = _step(ci["jobs"]["backend-part"], "Backend tests with coverage (testcontainers)")["run"]
         assert "--cov-fail-under=0" in run
-        report = ci["jobs"]["backend-coverage"]["steps"][-1]["run"]
+        report = _step(ci["jobs"]["backend-coverage"], "Coverage over all parts")["run"]
         assert "coverage combine" in report
         assert "coverage report" in report
 
     def test_the_release_script_has_a_floor_of_its_own(self, ci) -> None:
         """release.py lies outside src/plak, which is all the merged backend
-        coverage measures. So its tests run again in the required job,
-        measured on that file alone, kept out of the data that gets
-        combined."""
-        [step] = [
-            s for s in ci["jobs"]["backend-coverage"]["steps"] if s.get("name") == "Release script tests with coverage"
-        ]
+        coverage measures. So its tests run again in a job of their own,
+        measured on that file alone."""
+        step = _step(ci["jobs"]["release-script"], "Release script tests with coverage")
         assert step["working-directory"] == "backend"
-        assert step["env"] == {"COVERAGE_FILE": "${{ runner.temp }}/release.coverage"}
         run, report = step["run"].splitlines()
         assert run.endswith("-m pytest -q tests/test_release.py")
         for line in (run, report):
@@ -159,13 +169,11 @@ class TestTheCheckGate:
         assert "--fail-under=100" in report
 
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
-        # These are also the names branch protection should be set to
-        # later: `ci / backend-coverage`, `ci / cli`, `ci / frontend`,
-        # `ci / vulnerabilities`, `ci / pre-commit`, `ci / secret-scan`,
-        # `ci / containers`, `ci / e2e`.
         assert set(ci["jobs"]) == {
             "backend-coverage",
+            "backend-part",
             "backend-tests",
+            "release-script",
             "cli",
             "cli-windows",
             "frontend",
@@ -366,6 +374,51 @@ def _run_unnamed(step: dict, cwd: Path, **env: str) -> subprocess.CompletedProce
 
 def _refused(result: subprocess.CompletedProcess) -> bool:
     return result.returncode != 0 and result.stdout.startswith("::error::")
+
+
+class TestTheCoverageDataCheck:
+    """`coverage combine` merges whatever data it finds, so the step before
+    it has to refuse a missing part. Run as written in ci.yml, with a `uv`
+    on PATH that hands `uv run python` to this interpreter."""
+
+    @pytest.fixture
+    def step(self, ci) -> dict:
+        return _step(ci["jobs"]["backend-coverage"], "Require the data of every test part")
+
+    @pytest.fixture
+    def backend(self, tmp_path) -> Path:
+        backend = tmp_path / "backend"
+        (backend / "tests").mkdir(parents=True)
+        (backend / "tests" / "parts.py").write_text(Path(parts.__file__).read_text(encoding="utf-8"), encoding="utf-8")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        uv = bin_dir / "uv"
+        uv.write_text(f'#!/bin/sh\nshift 2\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+        uv.chmod(0o755)
+        return backend
+
+    def _path(self, backend: Path) -> str:
+        return f"{backend.parent / 'bin'}{os.pathsep}{os.environ['PATH']}"
+
+    def test_the_data_of_every_part_passes(self, step, backend) -> None:
+        for part in parts.PARTS:
+            (backend / f".coverage.{part}").touch()
+        result = _run(step, backend, PATH=self._path(backend))
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+
+    def test_a_part_without_data_is_refused(self, step, backend) -> None:
+        missing, *present = parts.PARTS
+        for part in present:
+            (backend / f".coverage.{part}").touch()
+        result = _run(step, backend, PATH=self._path(backend))
+        assert result.returncode == 1
+        assert result.stderr == f"No coverage data from backend test part {missing}.\n"
+
+    def test_every_missing_part_is_named(self, step, backend) -> None:
+        result = _run(step, backend, PATH=self._path(backend))
+        assert result.returncode == 1
+        assert result.stderr.splitlines() == [f"No coverage data from backend test part {p}." for p in parts.PARTS]
 
 
 class TestTheReleaseGuards:
@@ -1096,7 +1149,8 @@ class TestTheRulesets:
         required = _rule(_ruleset("beta"), "required_status_checks")["parameters"]["required_status_checks"]
         checks = {check["context"] for check in required}
         assert checks <= jobs, checks - jobs
-        assert {"ci / backend-coverage", "api-contract", "changelog"} <= checks
+        assert {"ci / backend-tests", "ci / backend-coverage", "ci / release-script"} <= checks
+        assert {"api-contract", "changelog"} <= checks
 
     def test_both_tag_rulesets_cover_the_release_tags(self) -> None:
         for name in ("release-tags", "release-tags-fixed"):
