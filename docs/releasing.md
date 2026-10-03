@@ -12,8 +12,8 @@ one line under `## [Unreleased]` per change, in the same pull request.
   push a release.** The release step turns `[Unreleased]` into a
   versioned section, sets the component versions, commits that as
   `Release vYYYY.M.D` and gives it an annotated tag `vYYYY.M.D[.N]`.
-  The tag gets a GitHub Release with that section as its notes, and
-  goes to production.
+  The tag goes to production, and once it runs there it gets a GitHub
+  Release with that section as its notes.
 - **Nothing under `[Unreleased]` means no release.** A release needs
   notes, and the entries are the notes; nothing is made up from commit
   subjects.
@@ -23,8 +23,9 @@ one line under `## [Unreleased]` per change, in the same pull request.
   merges it releases.
 
 All of it lives in one script, `.github/scripts/release.py`, tested in
-`backend/tests/test_release.py`. What is here now is the changelog, the
-script, the two pull request checks and the Claude Code hook.
+`backend/tests/test_release.py`. `.github/workflows/release.yml` runs it
+on every push to `beta`; `deploy.yml` takes the tag to production and
+publishes the GitHub Release.
 
 ## Tags
 
@@ -140,7 +141,7 @@ previous tag:
 - **The plugin**: `version` in `plugin/.claude-plugin/plugin.json`, when
   anything under `plugin/` changed, `plugin/evals/` and its own version
   line aside. That manifest is the only place the plugin version lives;
-  the marketplace entry carries none.
+  the marketplace entry carries none, and a pull request leaves it alone.
 - **`publiccode.yml`**: `softwareVersion` and `releaseDate`, on every
   release.
 - **The API**: `backend/openapi.json` and `API_VERSION` in
@@ -182,13 +183,8 @@ The CLI reads only its major (`docs/publishing.md`).
   A minor or patch edited by hand in `API_VERSION` counts for nothing;
   the previous release's version is the starting point.
 
-The release workflow runs it as:
-
-```bash
-(cd backend && uv run python -m plak.api.openapi_file) > "$RUNNER_TEMP/openapi.json"
-uv run --script .github/scripts/release.py promote --tag "$TAG" \
-  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"
-```
+The release workflow passes the schema and oasdiff to
+`release.py promote --spec <file> --oasdiff <binary>`.
 
 A tag without `backend/openapi.json`, such as the hand-made `v2026.9.30`,
 counts as no contract yet: the release after it writes the file at the
@@ -208,6 +204,54 @@ oasdiff comes from the image in `.github/oasdiff/Containerfile`, pinned
 by tag and digest, so Dependabot bumps it with the other base images. The
 workflow copies the static binary out of it and never runs the image. It
 runs with external references off.
+
+## The release workflow
+
+`.github/workflows/release.yml` runs on every push to `beta`, one run at
+a time and in push order.
+
+1. **`decide`** runs `release.py decide`, without any token. On `hold`
+   or `none` that is the end of it.
+2. **`prepare`** prints the API schema, gets oasdiff and writes the
+   release with `release.py promote`. It hands the staged change on as a
+   patch. This job runs `uv sync` and the backend, and it never sees the
+   environment, the App's key or a token.
+3. **`publish`**, in the environment `release`, applies that patch to
+   the index of a clean checkout of the same commit, never to its
+   working tree, so the `release.py` it then runs is the commit's own.
+   `release.py verify-staged` recomputes every staged file from the
+   commit and the tag and wants exactly that, as a plain file: the
+   promoted changelog, each version line at the release's version,
+   `API_VERSION` at the version the staged schema declares, the What's
+   new notes renamed. `backend/openapi.json` is the one file it cannot
+   recompute, since that needs the backend; it is data the image does not
+   ship. A workflow, code, another version or a dependency slipped into a
+   lockfile stops the release here.
+   Only then does it get a token of the `digigilde-plak-release` App,
+   commit as the App (`Release vX`), tag (`Plak vX`) and push the commit
+   and the tag in one atomic push. If another merge reached `beta`
+   meanwhile, the push is refused as a whole: no commit, no tag. The
+   next push to `beta` releases what collected.
+
+The release commit is a push to `beta` too. Its `[Unreleased]` is empty,
+so it releases nothing. The tag starts `deploy.yml`, because the App,
+unlike `GITHUB_TOKEN`, starts workflows with its pushes.
+
+### Production and the GitHub Release
+
+`deploy.yml` builds the image for the tag and rolls it out to
+`productie` after four guards, each of which fails the job:
+
+- the tag has the CalVer form,
+- the tagged commit is on `beta`,
+- the tag is the newest release, so an old tag pushed again cannot roll
+  production back,
+- the tagged commit has its section in `CHANGELOG.md`, so a tag set by
+  hand on any other commit goes nowhere.
+
+Once production runs it and the attestations are on the image, the job
+`github-release` publishes the GitHub Release: the notes of
+`release.py notes`, with the image and how to verify it.
 
 ## What's new notes
 
@@ -271,7 +315,10 @@ in CI still runs.
 section for that tag as it stands at the tag, then one line for the CLI
 and one for the plugin, `CLI 2026.10.1` when that release set it and
 `CLI unchanged (2026.9.3)` when it did not, and the API version at that
-tag (`API 1.4.0`).
+tag (`API 1.4.0`). With `--image <name> --digest <sha256:...>` it ends
+with a *Container image* section: the image, its digest and the
+`gh attestation verify` commands. Anything that is not an image name
+and a sha256 digest is refused rather than published.
 
 The tag itself is annotated with `Plak v2026.10.1` as its only text
 (`git tag -a v2026.10.1 -m "Plak v2026.10.1"`). The notes live in
@@ -323,5 +370,49 @@ organisation.
    Then move the `.pem` to the Trash; GitHub keeps no copy, and a new key
    can always be generated.
 
-The release workflow and the ruleset change that lets the App push to
-`beta` follow in a later pull request.
+6. **Move the protection of `beta` into rulesets.** Classic branch
+   protection has no way to let an App past its required checks; a
+   ruleset does. A bypass covers a whole ruleset, so there are two:
+   - `.github/rulesets/beta.json`: the pull request rule, the required
+     checks and the merge queue, with the App as the only bypass;
+   - `.github/rulesets/beta-history.json`: no deleting `beta` and no
+     force push, without any bypass, the App included.
+
+   The `actor_id` is `0` in the files; fill in the **App ID** from the
+   App's page (not the Client ID):
+
+   ```bash
+   APP_ID='<app id>'
+   jq --argjson app "$APP_ID" '.bypass_actors[0].actor_id = $app' .github/rulesets/beta.json \
+     | gh api --method PUT repos/DigiGilde/plak/rulesets/24241440 --input -
+   gh api --method POST repos/DigiGilde/plak/rulesets --input .github/rulesets/beta-history.json
+   gh api --method DELETE repos/DigiGilde/plak/branches/beta/protection
+   ```
+
+   `24241440` is the existing *Merge queue on beta* ruleset, which
+   `beta.json` replaces. Delete the classic protection only after both
+   rulesets are in place.
+7. **Reserve the release tags for the App**, again in two:
+   `release-tags.json` lets only the App create a `v*` tag,
+   `release-tags-fixed.json` lets nobody move or delete one.
+
+   ```bash
+   jq --argjson app "$APP_ID" '.bypass_actors[0].actor_id = $app' .github/rulesets/release-tags.json \
+     | gh api --method POST repos/DigiGilde/plak/rulesets --input -
+   gh api --method POST repos/DigiGilde/plak/rulesets --input .github/rulesets/release-tags-fixed.json
+   ```
+
+8. **Check them under *Settings, Rules, Rulesets*:** the App has to show
+   up by name in the bypass list of `beta` and `release tags`, and
+   nowhere else. GitHub documents `actor_id` only as "the ID of the
+   actor"; if the list shows no App, the value was the wrong ID.
+
+Two things the GitHub documentation does not settle, and that the first
+release therefore shows: that a bypass actor may push past the merge
+queue rule, and the `actor_id` above. If the push in `release` is
+refused, nothing is half done (the push is atomic); fix the ruleset and
+push to `beta` again, or rerun the job.
+
+A required check in `beta.json` that no job reports would block every
+merge; `test_workflows.py` fails when one names a job that does not
+exist.

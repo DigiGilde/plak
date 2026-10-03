@@ -288,6 +288,16 @@ jobs:
             exit 1
           fi
 
+      # A release carries its notes: the section for its version in
+      # CHANGELOG.md at the tagged commit, which the release step writes. A
+      # tag set by hand on any other commit goes nowhere.
+      - name: Check that the tagged commit has its release notes
+        run: |
+          if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then
+            echo "::error::${TAG} has no section in CHANGELOG.md at the tagged commit"
+            exit 1
+          fi
+
       - name: Roll out to ZAD
         id: rollout
         uses: RijksICTGilde/zad-actions/deploy@4ac541a57542a22bde95b28f3ace4ee3123acd7a # v4.2.0
@@ -297,3 +307,31 @@ jobs:
           deployment-name: productie
           component: beheer
           image: ${{ needs.build.outputs.image }}
+
+  # The GitHub Release goes up once the tag runs in production and its image
+  # carries the attestations its notes tell you to verify. The notes are the
+  # section for the tag in CHANGELOG.md at the tagged commit; release.py
+  # checks the image name and digest before they go in.
+  github-release:
+    needs: [build, provenance, production]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      IMAGE: ${{ needs.build.outputs.name }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          python3 .github/scripts/release.py notes --tag "$TAG" --image "$IMAGE" --digest "$DIGEST" > "$notes"
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"

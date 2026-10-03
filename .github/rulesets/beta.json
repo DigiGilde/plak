@@ -1,0 +1,64 @@
+{
+  "name": "beta",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/beta"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [
+    {
+      "actor_id": 0,
+      "actor_type": "Integration",
+      "bypass_mode": "always"
+    }
+  ],
+  "rules": [
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": true
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {"context": "ci / backend-coverage"},
+          {"context": "ci / cli"},
+          {"context": "ci / containers"},
+          {"context": "ci / e2e"},
+          {"context": "ci / frontend"},
+          {"context": "ci / pre-commit"},
+          {"context": "ci / secret-scan"},
+          {"context": "ci / vulnerabilities"},
+          {"context": "Analyse (python)"},
+          {"context": "Analyse (javascript-typescript)"},
+          {"context": "Analyse (actions)"},
+          {"context": "api-contract"},
+          {"context": "changelog"}
+        ]
+      }
+    },
+    {
+      "type": "merge_queue",
+      "parameters": {
+        "check_response_timeout_minutes": 60,
+        "grouping_strategy": "ALLGREEN",
+        "max_entries_to_build": 5,
+        "max_entries_to_merge": 5,
+        "merge_method": "REBASE",
+        "min_entries_to_merge": 1,
+        "min_entries_to_merge_wait_minutes": 5
+      }
+    }
+  ]
+}

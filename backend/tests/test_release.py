@@ -843,6 +843,40 @@ class TestReleaseNotes:
         assert release.main(["notes", "--tag", "v2026.9.1"]) == 0
         assert capsys.readouterr().out.endswith("CLI 2026.9.1\n\nPlugin 2026.9.1\n\nAPI 1.0.0\n")
 
+    def test_with_the_image_it_ends_with_how_to_verify_it(self, released):
+        digest = "sha256:" + "a" * 64
+        notes = release.release_notes(released.handle, "v2026.9.1", "ghcr.io/digigilde/plak", digest)
+        assert notes.endswith(
+            "API 1.0.0\n\n## Container image\n\n"
+            f"- plak: `ghcr.io/digigilde/plak:2026.9.1`, digest `{digest}`\n\n"
+            f"Verify where it was built: `gh attestation verify oci://ghcr.io/digigilde/plak@{digest} "
+            "-R DigiGilde/plak`\n"
+            "Its SBOM (CycloneDX): the same command with `--predicate-type https://cyclonedx.org/bom`\n"
+        )
+
+    @pytest.mark.parametrize(
+        ("image", "digest"),
+        [
+            ("ghcr.io/digigilde/plak", None),
+            (None, "sha256:" + "a" * 64),
+            ("ghcr.io/DigiGilde/plak", "sha256:" + "a" * 64),
+            ("ghcr.io/digigilde/plak`; rm", "sha256:" + "a" * 64),
+            ("ghcr.io/digigilde/plak", "sha256:abc"),
+        ],
+        ids=["no-digest", "no-image", "upper-case", "markdown-break", "short-digest"],
+    )
+    def test_an_image_or_digest_that_is_not_one_is_refused(self, released, image, digest):
+        """Both come from the build job; whatever else lands in the notes
+        is refused rather than published."""
+        with pytest.raises(release.ReleaseError, match="not an image name and a sha256 digest"):
+            release.release_notes(released.handle, "v2026.9.1", image, digest)
+
+    def test_main_prints_the_container_section(self, released, capsys):
+        digest = "sha256:" + "b" * 64
+        args = ["notes", "--tag", "v2026.9.1", "--image", "ghcr.io/digigilde/plak", "--digest", digest]
+        assert release.main(args) == 0
+        assert f"oci://ghcr.io/digigilde/plak@{digest}" in capsys.readouterr().out
+
     def test_a_tag_from_before_the_schema_has_no_api_line(self, repo):
         """v2026.9.30 was tagged by hand, before releases wrote the schema."""
         repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
@@ -1029,6 +1063,183 @@ class TestPromoteTheApi:
         released.git("checkout", "-q", "-")
         with pytest.raises(release.ReleaseError, match=r"backend/openapi\.json at v2026\.9\.1 is not JSON"):
             release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+
+
+UNRELEASED_NOTES = {
+    "frontend/src/content/releases/unreleased.nl.md": "Nieuw.\n",
+    "frontend/src/content/releases/unreleased.en.md": "New.\n",
+}
+
+
+class TestVerifyStaged:
+    """The publishing job applies a patch from a job that ran the
+    dependencies, then pushes it past every review with the App. So what
+    it commits has to be exactly what promote writes."""
+
+    @pytest.fixture
+    def promoted(self, released) -> Repo:
+        """v2026.9.1 released, then a change with an entry and a note,
+        promoted to TAG with an addition to the API."""
+        released.commit({"CHANGELOG.md": changelog(ENTRY), "cli/plak_cli/__init__.py": "x = 2\n", **UNRELEASED_NOTES})
+        release.promote(released.handle, TAG, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
+        return released
+
+    def test_what_promote_writes_passes(self, promoted):
+        assert release.verify_staged(promoted.handle, TAG) == []
+
+    def test_the_patch_survives_the_hand_over_to_a_clean_checkout(self, promoted, tmp_path):
+        """What release.yml does between its two jobs: the staged release as
+        a patch, applied to a fresh clone of the same commit."""
+        patch = tmp_path / "release.patch"
+        patch.write_text(promoted.git("diff", "--cached", "--binary", "--no-renames"), encoding="utf-8")
+        clean = Repo(tmp_path / "clean")
+        subprocess.run(  # noqa: S603
+            ["git", "clone", "-q", str(promoted.path), str(clean.path)],  # noqa: S607
+            check=True,
+            capture_output=True,
+        )
+        clean.git("apply", "--cached", "--binary", str(patch))
+        assert release.verify_staged(clean.handle, TAG) == []
+        assert "frontend/src/content/releases/2026.10.1.nl.md" in clean.git("diff", "--cached", "--name-only")
+
+    def test_main_says_so(self, promoted, capsys):
+        assert release.main(["verify-staged", "--tag", TAG]) == 0
+        assert capsys.readouterr().out == f"The index holds the release for {TAG} and nothing else.\n"
+
+    @pytest.mark.parametrize(
+        ("path", "text", "problem"),
+        [
+            (".github/workflows/x.yml", "on: push\n", ".github/workflows/x.yml is not a file a release writes."),
+            ("backend/src/plak/app.py", "import os\n", "backend/src/plak/app.py is not a file a release writes."),
+            (
+                "backend/uv.lock",
+                BACKEND_LOCK.replace("version = 1\n", 'version = 1\n\n[[package]]\nname = "evil"\n'),
+                "backend/uv.lock is not what the release writes for v2026.10.1.",
+            ),
+            (
+                "backend/src/plak/main.py",
+                MAIN.replace("app = 1", "app = __import__('os')"),
+                "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
+            ),
+            ("CHANGELOG.md", changelog("", "## [2026.10.1]\n\n- Something else."), "CHANGELOG.md is not"),
+            (
+                ".github/scripts/release.py",
+                "def verify_staged(*a): return []\n",
+                ".github/scripts/release.py is not a file a release writes.",
+            ),
+            (
+                "cli/pyproject.toml",
+                release.set_pyproject_version(PYPROJECT, "9.9.9"),
+                "cli/pyproject.toml is not what the release writes for v2026.10.1.",
+            ),
+            (
+                "backend/pyproject.toml",
+                BACKEND_PYPROJECT.replace('requires = ["hatchling"]', 'requires = ["hatchling"]\nversion = "x"'),
+                "backend/pyproject.toml is not what the release writes for v2026.10.1.",
+            ),
+            (
+                "backend/src/plak/main.py",
+                MAIN.replace("1.0.0", "1.2.0"),
+                "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
+            ),
+            (
+                "frontend/src/content/releases/2026.10.1.nl.md",
+                "<script>x</script>\n",
+                "frontend/src/content/releases/2026.10.1.nl.md is not a file a release writes.",
+            ),
+            (
+                "frontend/src/content/releases/2026.9.2.en.md",
+                "New.\n",
+                "frontend/src/content/releases/2026.9.2.en.md is not a file a release writes.",
+            ),
+        ],
+        ids=[
+            "workflow",
+            "code",
+            "lock-dependency",
+            "code-next-to-version",
+            "changelog",
+            "the-validator",
+            "other-version",
+            "other-version-line",
+            "api-version-not-the-schemas",
+            "note-text",
+            "note-version",
+        ],
+    )
+    def test_anything_beyond_the_release_is_refused(self, promoted, path, text, problem):
+        promoted.write({path: text})
+        promoted.git("add", "--", path)
+        problems = release.verify_staged(promoted.handle, TAG)
+        assert len(problems) == 1 and problems[0].startswith(problem), problems
+
+    def test_an_executable_or_a_symlink_is_refused(self, promoted):
+        """Same text, other kind of file: what the release writes is plain."""
+        promoted.git("update-index", "--chmod=+x", "publiccode.yml")
+        (promoted.path / "CHANGELOG.md").unlink()
+        (promoted.path / "CHANGELOG.md").symlink_to("README.md")
+        promoted.git("add", "CHANGELOG.md")
+        assert sorted(release.verify_staged(promoted.handle, TAG)) == [
+            "CHANGELOG.md is not staged as a plain file.",
+            "publiccode.yml is not staged as a plain file.",
+        ]
+
+    def test_the_schema_has_to_declare_the_version_api_version_gets(self, promoted):
+        """API_VERSION follows the staged schema; one without that line
+        staged has to match what the code has."""
+        promoted.git("reset", "-q", "--", "backend/src/plak/main.py")
+        assert release.verify_staged(promoted.handle, TAG) == [
+            "backend/src/plak/main.py is not what the release writes for v2026.10.1."
+        ]
+
+    def test_a_schema_without_a_semver_version_is_refused(self, promoted):
+        promoted.write({"backend/openapi.json": spec_with("one")})
+        promoted.git("add", "backend/openapi.json")
+        problems = release.verify_staged(promoted.handle, TAG)
+        assert problems[0] == "backend/openapi.json: info.version 'one' is not MAJOR.MINOR.PATCH."
+
+    def test_a_file_the_release_removes_has_to_be_an_unreleased_note(self, promoted):
+        promoted.git("rm", "-q", "--cached", "README.md")
+        assert release.verify_staged(promoted.handle, TAG) == ["README.md is not a file a release writes."]
+
+    def test_a_version_file_that_disappears_is_refused(self, promoted):
+        promoted.git("rm", "-q", "--cached", "publiccode.yml")
+        assert release.verify_staged(promoted.handle, TAG) == [
+            "publiccode.yml is not what the release writes for v2026.10.1."
+        ]
+
+    def test_api_version_moves_only_with_the_schema(self, promoted):
+        """The schema unstaged, API_VERSION still raised: refused."""
+        promoted.git("reset", "-q", "--", "backend/openapi.json")
+        assert release.verify_staged(promoted.handle, TAG) == [
+            "backend/src/plak/main.py is not what the release writes for v2026.10.1."
+        ]
+
+    def test_a_file_promote_could_not_have_written_is_refused(self, released):
+        """HEAD's publiccode.yml has no version lines, so promote would have
+        refused; a staged one is not its work."""
+        released.commit({"publiccode.yml": "name: Plak\n"})
+        released.write({"publiccode.yml": 'name: Plak\nsoftwareVersion: "2026.10.1"\n'})
+        released.git("add", "publiccode.yml")
+        assert release.verify_staged(released.handle, TAG) == [
+            "publiccode.yml is not what the release writes for v2026.10.1."
+        ]
+
+    def test_the_tag_has_to_be_the_one_promoted(self, promoted):
+        """Another tag gives another changelog section, and notes named
+        after another version."""
+        problems = release.verify_staged(promoted.handle, "v2026.10.2")
+        assert "CHANGELOG.md is not what the release writes for v2026.10.2." in problems
+
+    def test_nothing_staged_or_no_calver_tag_is_refused(self, released):
+        assert release.verify_staged(released.handle, TAG) == ["Nothing is staged to release."]
+        assert release.verify_staged(released.handle, "v2026.1")[0].startswith("'v2026.1' is not a CalVer tag")
+
+    def test_main_fails_with_every_problem(self, promoted, capsys):
+        promoted.write({"Makefile": "all:\n"})
+        promoted.git("add", "Makefile")
+        assert release.main(["verify-staged", "--tag", TAG]) == 1
+        assert "error: Makefile is not a file a release writes." in capsys.readouterr().err
 
 
 class TestApiCheck:
