@@ -20,8 +20,8 @@ file with four concepts:
   `minio-storage`, `keycloak`.
 - **component**: a slot with a port, resources and services, without an image.
   Exactly one container per component; sidecars are added by the platform only.
-- **deployment**: an environment (production, a PR preview) that fixes an image
-  and a web address per component.
+- **deployment**: an environment (`productie`) that fixes an image and a web
+  address per component.
 
 Plak fits in there as **one component**. The app serves the content, the admin
 SPA and the host separation itself, so no nginx sidecar and no shared volume
@@ -138,11 +138,9 @@ zadctl env add -c beheer --deployment productie \
 Without `--deployment` they land component-wide
 (`components[].user-env-vars`, in the root of the project) and apply to every
 deployment; with `--deployment` they sit under that one deployment and win
-over the component-wide value. That choice determines what a preview
-inherits, because a clone does not copy the deployment block of the component
-along with it (§8). For a preview these three are not set by hand at all:
-`deploy.yml` writes them at the deployment layer through the same endpoint
-`zadctl env add --deployment` uses (§8, "The preview's own secrets").
+over the component-wide value. That choice determines what a second
+deployment inherits, because a clone does not copy the deployment block of
+the component along with it (§8, "A second deployment").
 
 What Plak needs. `PLAK_DB_URL`, `PLAK_CONTENT_ROOT`, `PLAK_SESSION_SECRET`,
 `PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` have no default value and are
@@ -437,98 +435,34 @@ A deployment that lives on, with one subdomain approved once, works exactly as
 `productie` does -- whether that is called staging or a shared preview slot is
 a question for whoever needs one. The approval is a single click, once.
 
-Watch out with previews: **a clone does not carry over the settings of the
-source.** Besides the web address (the preview lands on the cluster address
-with one host, not two), `components` is on the exclusion list of the clone as
-well, together with `name`, `subdomain`, `base-domain`, `domain-format`,
-`issuer` and `backup`. The new deployment gets only the
-`{reference, image}` pairs from the API call. So everything Plak has under
-`deployments[].components[]` falls away: the `env-vars` from the example file
-and every user-env-var that was set with `--deployment`.
+### A second deployment
 
-That is not a cosmetic difference. `PLAK_CONTENT_ROOT`,
-`PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` have no default value, so a
-preview cloned that way does not start. What does come along sits in the root
-of the project or on the deployment itself: the component definition (port,
-resources, probe, storage), the `aliases` for `PLAK_DB_URL`, the services
-with their `OIDC_*` variables, and the component-wide user-env-vars.
+Nothing runs beside `productie`. Whoever adds a deployment next, staging or
+otherwise, starts from three things the previews taught; the route they
+used is in the history of `deploy.yml`, before `aecdb30`.
 
-So set component-wide what may be the same in every environment
-(`zadctl env add -c beheer`, without `--deployment`), so that a preview
-inherits it. What differs per environment, `PLAK_BASE_URL` and
-`PLAK_CONTENT_BASE_URL`, stays manual work per preview. See §10, question 7.
-
-### The preview's own secrets
-
-Component-wide is the wrong place for `PLAK_SESSION_SECRET`,
-`PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY`. A preview that inherits those
-shares the signing secret, the audit pseudonymisation pepper and the audit
-IP-address key with production, and then anyone with write access to the
-repository can open a pull request, get it deployed as a preview (gated on
-CI passing, not on review), and from that code mint session cookies
-production accepts and decrypt production's audited IP addresses.
-
-`deploy.yml` therefore gives every preview its own three, in the step
-`Give the preview its own secrets`, before anything reaches the cluster:
-
-1. `POST /api/v2/projects/{project}/:upsert-deployment?rollout=false` with
-   `cloneFrom: productie` and the component plus its image. `rollout=false`
-   writes the deployment to the project file and puts nothing on the
-   cluster: no manifests, no provisioning, no pod.
-2. `DELETE` and then `POST` on
-   `/api/v2/projects/{project}/services/user-env-vars/values/deployment/{deployment}/component/beheer?rollout=false`,
-   with three freshly generated values. That is the deployment-component
-   layer from §5, which wins over the component-wide value.
-3. The `zad-actions/deploy` step, unchanged, which updates the same
-   deployment with `rollout` at its default and is therefore the call that
-   rolls out. It processes only this deployment, never `productie`.
-
-The order is not a preference. The values endpoint answers 404 until the
-component is attached to the deployment, so the deployment has to exist in
-the project file first; and both writes are asynchronous, so each is polled
-through `/api/tasks/{task_id}` before the next step assumes its result.
-Because nothing is rolled out until step 3, a preview pod never runs with
-production's secrets, not even for the seconds a
-set-afterwards-and-restart would cost.
-
-Both endpoints take the project API key in `X-API-Key`, the same
-`ZAD_API_KEY` secret the deploy action already uses, so no second
-credential is needed. The values are generated with
-`openssl rand -base64 32`, masked with `::add-mask::`, never echoed and
-never passed as a command-line argument. They are written once per preview:
-a later push to the same pull request finds all three names already set and
-leaves them alone.
-
-This is the route the action itself does not offer. Checked against
-`RijksICTGilde/zad-actions` `deploy/action.yml` at both the pinned `v2`
-(commit `5ad04045d781ed153ad75625305bf14d57496128`) and `v4.2.0`: neither
-has an input for env-vars, user-env-vars or secrets, and `deploy`,
-`cleanup` and `scheduled-cleanup` are the only three actions in that
-repository. What the action cannot do, the API can, and the workflow calls
-it directly.
-
-Verified against the Operations Manager OpenAPI document (vendored in
-`RijksICTGilde/zad-cli` as `api/upstream-openapi.json`) and the handlers in
-`RijksICTGilde/RIG-Cluster`: `rollout=false` is honoured for
-`upsert_deployment` and `configure_service_values` (both are in
-`DEFERRABLE_TASK_TYPES` in `opi/core/task_rollout.py`), the 404 comes from
-`_enqueue_values_write` in `opi/api/v2/router.py`, and the rollout in
-`handle_upsert_deployment` is scoped with `deployment_name=`. Not verified
-against a running ZAD: Plak has no project on the platform yet, so the first
-real preview is also the first test of this step.
-
-`PLAK_CONTENT_BASE_URL` is a different matter and still unsolved; see §10
-question 7.
-
-The database is not shared. `generate_database_name` and
-`generate_database_username` in `opi/utils/naming.py` compose
-`{project}_{deployment}` with hyphens turned into underscores, and
-`DatabaseManager` provisions a database, a user and a password per
-deployment, so `pr-123` gets `plak_pr_123` with its own credentials, not
-production's. `PLAK_DB_URL` is an alias over the
-per-deployment `DATABASE_*` variables (§4), so it resolves to that database.
-The one-account limitation of §7 is about role separation inside one
-deployment's database, not about previews reaching production's.
+- **A clone does not carry over the settings of the source.** `components`
+  is on the exclusion list of the clone, together with `name`, `subdomain`,
+  `base-domain`, `domain-format`, `issuer` and `backup`; the new deployment
+  gets only the `{reference, image}` pairs from the API call. Everything
+  under `deployments[].components[]` falls away, and without
+  `PLAK_CONTENT_ROOT`, `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` the pod
+  does not start. What may be the same everywhere goes component-wide
+  (`zadctl env add -c beheer`, without `--deployment`); `PLAK_BASE_URL` and
+  `PLAK_CONTENT_BASE_URL` differ per deployment.
+- **The three secrets are never shared.** A deployment that inherits
+  `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` from
+  production lets whatever code runs there mint session cookies production
+  accepts and decrypt production's audited IP addresses. Write its own at
+  the deployment layer (§5) before the first rollout:
+  `:upsert-deployment?rollout=false` puts the deployment in the project file
+  without a pod, and the values endpoint answers 404 until it is there.
+- **The database is per deployment.** The platform composes
+  `{project}_{deployment}` and provisions a user and password for each
+  (`opi/utils/naming.py` in `RijksICTGilde/RIG-Cluster`), and `PLAK_DB_URL`
+  is an alias over those per-deployment variables (§4). Still a question for
+  the platform team: whether the shared database server keeps one
+  deployment's account out of another's database at the PostgreSQL level.
 
 ## 9. Storage sizing, and MinIO as the next step
 
@@ -593,47 +527,10 @@ is not there:
    `zadctl logs` delivers container logs only. For now: the app itself logs no
    query strings (`--no-access-log`, because a secret link is in `?key=`), so
    there is no second source.
-6. **Does a preview get two hostnames?** The deploy action on `v2` has no
-   `domain-format`, `subdomain` or `base-domain`; from `v4.0.6` it does.
-   Without those inputs a preview runs on one host and the origin separation
-   is not right there. Two possible outcomes: move the pin to `v4` and claim
-   two hosts plus two Let's Encrypt certificates per PR (then also ask about
-   the certificate budget per platform domain), or deliberately accept
-   previews on one host. For now: not solved, previews stay on the cluster
-   address.
-7. **How does a preview get its settings?** A clone does not copy the
-   `components` block of the source, so a preview starts without env-vars
-   and without deployment user-env-vars (§8); without `PLAK_CONTENT_ROOT`,
-   `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` the pod does not even
-   start. What is the same in every environment can go component-wide, and
-   a component-wide user-env-var with `${PUBLIC_HOST}` is filled in by the
-   platform per deployment with its own web address (including scheme).
-   The three secrets are no longer part of this question: `deploy.yml`
-   writes them per preview through the values API before the rollout (§8,
-   "The preview's own secrets"). What remains is
-   `PLAK_CONTENT_BASE_URL`, which on one host coincides with
-   `PLAK_BASE_URL` (question 6). It could be written the same way, but
-   deciding what it should say depends on the answer to question 6, so it
-   is left alone until that is settled. For now: unresolved for the content
-   origin, solved for the secrets.
-8. **Is there an acceptance environment of SSO Rijk or of the `rig-platform`
+6. **Is there an acceptance environment of SSO Rijk or of the `rig-platform`
    realm?** None was found; the sandbox authenticates against the production
    realm. For now: the mock OIDC in the dev stack, plus the production realm
    for the real check.
-9. **Does a preview share production's PostgreSQL database?** No, as far as
-   the platform source says. `generate_database_name` and
-   `generate_database_username` in `opi/utils/naming.py` of
-   `RijksICTGilde/RIG-Cluster` compose `{project}_{deployment}`, and
-   `DatabaseManager` creates the database, the user and the password per
-   deployment, so `pr-123` lands on `plak_pr_123` with credentials of its
-   own. Because `PLAK_DB_URL` is an alias over the per-deployment
-   `DATABASE_*` variables, that is what a preview receives. What we could
-   not check from here is whether the shared database server keeps one
-   project's deployments out of each other's databases at the PostgreSQL
-   level, or whether a preview account can simply connect to
-   `plak_productie`. That is the remaining question for the platform team.
-   Also unanswered: how many databases a project may have before this
-   pinches, given one per open pull request.
 
 ## See also
 
