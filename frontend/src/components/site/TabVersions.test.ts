@@ -206,6 +206,81 @@ describe('TabVersions: states', () => {
     expect(empty.attributes('supporting-text')).toContain('tabblad Overzicht');
   });
 
+  it('shows the usage and the retention rule above the list', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="versies-opslag"]').text()).toBe(
+      "Deze site gebruikt 74 MB van 500 MB. De huidige en de 5 vorige versies blijven bewaard. Oudere worden 's nachts opgeruimd.",
+    );
+  });
+
+  it('does not show the usage while loading', async () => {
+    vi.stubGlobal('fetch', () => new Promise<Response>(() => {}));
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="versies-opslag"]').exists()).toBe(false);
+  });
+
+  it('words a retention of one as "the previous version"', async () => {
+    backend.data.storage.liveVersionsKept = 1;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="versies-opslag"]').text()).toContain(
+      "De huidige en de vorige versie blijven bewaard. Oudere worden 's nachts opgeruimd.",
+    );
+  });
+
+  it('says all versions are kept when the retention is off', async () => {
+    backend.data.storage.liveVersionsKept = 0;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const text = wrapper.find('[data-testid="versies-opslag"]').text();
+    expect(text).toContain('Alle versies blijven bewaard.');
+    expect(text).not.toContain('opgeruimd');
+  });
+
+  it('leaves out the quota when there is none', async () => {
+    backend.data.storage.maxBytes = 0;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const text = wrapper.find('[data-testid="versies-opslag"]').text();
+    expect(text).toContain('Deze site gebruikt 74 MB. ');
+    expect(text).not.toContain(' van ');
+  });
+
+  it('keeps the list when the usage cannot be loaded, without an error banner', async () => {
+    const inner = backend.fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/storage') ? serverErrorFetch()(input, init) : inner(input, init),
+    );
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="versies-opslag"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="versie-versie-1"]').exists()).toBe(true);
+    expect(wrapper.html()).not.toContain('Serverfout');
+  });
+
+  it('shows the usage on the empty state too', async () => {
+    backend.data.versions = [];
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="versies-leeg"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="versies-opslag"]').text()).toContain('Deze site gebruikt');
+  });
+
   it('shows an error message on a server error', async () => {
     vi.stubGlobal('fetch', serverErrorFetch());
 

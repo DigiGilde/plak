@@ -125,6 +125,15 @@ export interface Site {
   previewCount: number;
 }
 
+export interface SiteStorage {
+  /** What all versions of the site (live and preview) occupy on disk, in bytes. */
+  usedBytes: number;
+  /** The per-site quota in bytes; 0 means no quota. */
+  maxBytes: number;
+  /** Previous live versions kept besides the current one; 0 means all versions are kept. */
+  liveVersionsKept: number;
+}
+
 export interface Version {
   id: string;
   siteSlug: string;

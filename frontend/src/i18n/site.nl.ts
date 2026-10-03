@@ -79,6 +79,13 @@ export const siteNl = {
   'site.versions.listLabel': 'Live-versies',
   'site.versions.intro':
     'De live-historie van deze site. Bekijk een oude versie voordat je hem terugzet; die weergave is alleen toegankelijk voor wie een rol heeft op deze site of op haar groep.',
+  'site.versions.storage.quota': 'Deze site gebruikt {used} van {max}.',
+  'site.versions.storage.noQuota': 'Deze site gebruikt {used}.',
+  'site.versions.retention.many':
+    "De huidige en de {kept} vorige versies blijven bewaard. Oudere worden 's nachts opgeruimd.",
+  'site.versions.retention.one':
+    "De huidige en de vorige versie blijven bewaard. Oudere worden 's nachts opgeruimd.",
+  'site.versions.retention.all': 'Alle versies blijven bewaard.',
   'site.versions.empty': 'Nog geen live-versies',
   'site.versions.empty.hint': 'Publiceer een eerste versie via het tabblad Overzicht of Deploy.',
   'site.versions.marker.live': 'Staat nu live',

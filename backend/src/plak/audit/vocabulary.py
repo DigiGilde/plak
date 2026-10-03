@@ -32,6 +32,7 @@ CLI_SESSION_REVOKE: Final = "cli_session_revoke"
 MEMBER_LANGUAGE: Final = "member_language"
 CLI_REFRESH_REUSE: Final = "cli_refresh_reuse"
 IDP_SESSION_ENDED_ACTION: Final = "idp_session_ended"
+VERSION_CLEANUP: Final = "version_cleanup"
 
 ADMIN_ACTIONS: Final = frozenset(
     {
@@ -84,6 +85,7 @@ ACTIONS: Final = frozenset(
         CLI_REFRESH_REUSE,
         MEMBER_LANGUAGE,
         IDP_SESSION_ENDED_ACTION,
+        VERSION_CLEANUP,
         *ADMIN_ACTIONS,
     }
 )

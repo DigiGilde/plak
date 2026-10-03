@@ -263,7 +263,8 @@ NL: Final[dict[str, str]] = {
     "TOTAL_TOO_LARGE.archive": "Archief is uitgepakt groter dan {max_total} bytes.",
     "SITE_QUOTA_EXCEEDED": (
         "Deze site gebruikt al {used} van {max_bytes} bytes; daar passen de {added} bytes van "
-        "deze versie niet meer bij. Verwijder previews die je niet meer nodig hebt, of vraag de "
+        "deze versie niet meer bij. Oude live-versies boven het bewaarde aantal worden 's nachts "
+        "opgeruimd. Verwijder anders previews die je niet meer nodig hebt, of vraag de "
         "platformbeheerder om meer ruimte."
     ),
     "STORAGE_UNAVAILABLE": (
@@ -535,7 +536,8 @@ EN: Final[dict[str, str]] = {
     "TOTAL_TOO_LARGE.archive": "The archive is larger than {max_total} bytes unpacked.",
     "SITE_QUOTA_EXCEEDED": (
         "This site already uses {used} of {max_bytes} bytes, which leaves no room for the "
-        "{added} bytes of this version. Remove previews you no longer need, or ask the platform "
+        "{added} bytes of this version. Old live versions beyond the number kept are removed "
+        "nightly. Otherwise remove previews you no longer need, or ask the platform "
         "administrator for more room."
     ),
     "STORAGE_UNAVAILABLE": (

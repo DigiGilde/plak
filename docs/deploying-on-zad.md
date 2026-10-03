@@ -173,9 +173,10 @@ anybody an administrator.
 | `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
 | `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
 | `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy |
+| `PLAK_LIVE_VERSIONS_KEPT` | env-vars | optional, default `5`, `0` keeps everything; previous live versions per site the nightly cleanup keeps besides the current live one |
 | `PLAK_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
 
-The last five defaults fit the 1Gi content volume (§9). While a deploy runs,
+The last six defaults fit the 1Gi content volume (§9). While a deploy runs,
 its upload and what it unpacks sit on the volume side by side, so one deploy
 needs at most `PLAK_INGEST_MAX_BODY` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB)
 on top of the stored versions. Plak measures the actual deploy, not that
@@ -474,6 +475,20 @@ ReadWriteOnce on `ocs-storagecluster-ceph-rbd`, the number of replicas is
 fixed hard at 1, and as soon as a component has a persistent volume the
 platform switches the rollout strategy to `Recreate` itself (so a short
 interruption on every deploy).
+
+What one site can hold is bounded twice. `PLAK_SITE_MAX_BYTES` (500 MiB by
+default) caps all its versions together, and every night at 03:00 UTC the
+cleanup job removes the live versions beyond the current one and the
+`PLAK_LIVE_VERSIONS_KEPT` (5) before it, row and files, with a
+`version_cleanup` row in the audit log. The current live version always stays,
+also after a rollback to an older one. Previews are not counted in that
+number; they expire after 30 days on their own. A site publishing 13 MB at a
+time therefore settles at about six live versions (some 80 MB) plus its
+previews, where without the cleanup it would reach the quota after some 38
+deploys and then be refused until someone intervened. Size the volume for the
+number of sites times that settled size, plus the floor and one full deploy
+(§5). Setting `PLAK_LIVE_VERSIONS_KEPT=0` keeps every live version, and then
+the quota is the only bound.
 
 For Plak 1Gi is a start, not a terminus: the candidate sites are 1 to 13 MB
 now, but every kept version and every preview counts towards it. As soon as it

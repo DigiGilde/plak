@@ -2,8 +2,9 @@
 
 Cleans up: expired previews (row, version row and file tree), orphaned
 preview versions (target=preview without a matching preview row, left behind
-by an interrupted upsert/teardown), stale `_tmp` directories in the
-ContentStore, and expired CLI device authorizations and CLI sessions.
+by an interrupted upsert/teardown), live versions older than the ones
+PLAK_LIVE_VERSIONS_KEPT keeps (row and file tree), stale `_tmp` directories
+in the ContentStore, and expired CLI device authorizations and CLI sessions.
 
 `delete_expired` is the core and can be called on its own by tests; main.py
 starts the background loop through `cleanup_job()`, an async context manager,
@@ -15,17 +16,21 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from plak.audit import vocabulary
 from plak.cli import service as cli
 from plak.ingest.store import ContentStore
-from plak.models.publication import Preview, Version, VersionTarget
+from plak.models.audit import ActorKind, AuditLogEntry
+from plak.models.identity import Group
+from plak.models.publication import Preview, Site, Version, VersionTarget
 
 TIMESTAMP_DEFAULT = time(3, 0)
 TMP_OLDER_THAN_DEFAULT = timedelta(hours=24)
@@ -40,6 +45,7 @@ class CleanupResult:
     tmp_swept: int
     cli_device_authorizations: int = 0
     cli_sessions: int = 0
+    old_live_versions: int = 0
 
 
 async def _cleanup_expired_previews(
@@ -89,16 +95,111 @@ async def _cleanup_orphan_preview_versions(
         return len(rows)
 
 
+async def _cleanup_site_live_versions(
+    factory: async_sessionmaker[AsyncSession],
+    store: ContentStore,
+    site_id: uuid.UUID,
+    kept: int,
+) -> list[uuid.UUID]:
+    """Removes the live versions of one site beyond the current live one and
+    the `kept` newest others; returns the ids it removed."""
+    async with factory() as db:
+        async with db.begin():
+            # The site row stays locked until commit: a deploy or a rollback
+            # that would move live_version_id waits, so the version read here
+            # is still the live one when the delete below runs. rollback_to
+            # takes the same lock before it looks its version up.
+            live_version_id = await db.scalar(
+                select(Site.live_version_id).where(Site.id == site_id).with_for_update(key_share=True)
+            )
+            others = (Version.site_id == site_id) & (Version.target == VersionTarget.LIVE)
+            others &= Version.id.is_distinct_from(live_version_id)
+            kept_ids = (
+                select(Version.id)
+                .where(others)
+                .order_by(Version.created_at.desc(), Version.id.desc())
+                .limit(kept)
+            )
+            removed = (
+                await db.execute(
+                    delete(Version)
+                    .where(others, Version.id.not_in(kept_ids))
+                    .returning(Version.id, Version.storage_ref)
+                )
+            ).all()
+        for row in removed:
+            store.delete_version(row.storage_ref)
+        return [row.id for row in removed]
+
+
+async def _record_live_cleanup(
+    factory: async_sessionmaker[AsyncSession],
+    group_slug: str,
+    site_slug: str,
+    removed: list[uuid.UUID],
+    kept: int,
+) -> None:
+    # Fail-open like AuditLog.write: the versions are gone either way, and one
+    # failed audit row must not stop the sweep of the remaining sites.
+    try:
+        async with factory() as db, db.begin():
+            db.add(
+                AuditLogEntry(
+                    actor_kind=ActorKind.SYSTEM,
+                    action=vocabulary.VERSION_CLEANUP,
+                    result=vocabulary.ALLOWED,
+                    refs={
+                        "group": group_slug,
+                        "site": site_slug,
+                        "versions": [str(version_id) for version_id in removed],
+                        "kept": kept,
+                    },
+                )
+            )
+    except Exception:
+        _logger.exception("Auditregel voor opgeruimde live-versies niet geschreven: %s/%s", group_slug, site_slug)
+
+
+async def _cleanup_old_live_versions(
+    factory: async_sessionmaker[AsyncSession], store: ContentStore, kept: int
+) -> int:
+    if not kept:
+        return 0
+    async with factory() as db:
+        candidates = (
+            await db.execute(
+                select(Site.id, Group.slug.label("group_slug"), Site.slug)
+                .join(Group, Group.id == Site.group_id)
+                .join(Version, Version.site_id == Site.id)
+                .where(Version.target == VersionTarget.LIVE)
+                .group_by(Site.id, Group.slug, Site.slug)
+                .having(func.count(Version.id) > kept)
+            )
+        ).all()
+    total = 0
+    for candidate in candidates:
+        removed = await _cleanup_site_live_versions(factory, store, candidate.id, kept)
+        if removed:
+            await _record_live_cleanup(factory, candidate.group_slug, candidate.slug, removed, kept)
+        total += len(removed)
+    return total
+
+
 async def delete_expired(
     factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
     now: datetime,
     *,
     tmp_older_than: timedelta = TMP_OLDER_THAN_DEFAULT,
+    live_versions_kept: int = 0,
 ) -> CleanupResult:
-    """Runs the full sweep once; callable straight from tests."""
+    """Runs the full sweep once; callable straight from tests.
+
+    `live_versions_kept` 0 keeps every live version, as PLAK_LIVE_VERSIONS_KEPT
+    does."""
     expired = await _cleanup_expired_previews(factory, store, now)
     orphans = await _cleanup_orphan_preview_versions(factory, store)
+    old_live = await _cleanup_old_live_versions(factory, store, live_versions_kept)
     swept = store.sweep_tmp(tmp_older_than)
     async with factory() as db:
         authorizations, cli_sessions = await cli.delete_expired(db, now)
@@ -108,6 +209,7 @@ async def delete_expired(
         tmp_swept=swept,
         cli_device_authorizations=authorizations,
         cli_sessions=cli_sessions,
+        old_live_versions=old_live,
     )
 
 
@@ -126,6 +228,7 @@ async def _run_daily(
     *,
     occurred_at: time,
     tmp_older_than: timedelta,
+    live_versions_kept: int,
     stop: asyncio.Event,
 ) -> None:
     while not stop.is_set():
@@ -135,7 +238,13 @@ async def _run_daily(
         if stop.is_set():
             break
         try:
-            await delete_expired(factory, store, datetime.now(tz=UTC), tmp_older_than=tmp_older_than)
+            await delete_expired(
+                factory,
+                store,
+                datetime.now(tz=UTC),
+                tmp_older_than=tmp_older_than,
+                live_versions_kept=live_versions_kept,
+            )
         except Exception:
             # A transient failure (DB hiccup, ...) must not end the loop: the
             # process would then keep running with no sweep for the rest of
@@ -148,17 +257,25 @@ async def cleanup_job(
     factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
     *,
+    live_versions_kept: int,
     occurred_at: time = TIMESTAMP_DEFAULT,
     tmp_older_than: timedelta = TMP_OLDER_THAN_DEFAULT,
 ) -> AsyncIterator[asyncio.Task]:
     """Background task that runs the sweep daily at `occurred_at` (UTC).
 
     Meant to be opened inside the lifespan of main.py:
-    `async with cleanup_job(factory, store): yield`.
+    `async with cleanup_job(factory, store, live_versions_kept=...): yield`.
     """
     stop = asyncio.Event()
     task = asyncio.create_task(
-        _run_daily(factory, store, occurred_at=occurred_at, tmp_older_than=tmp_older_than, stop=stop)
+        _run_daily(
+            factory,
+            store,
+            occurred_at=occurred_at,
+            tmp_older_than=tmp_older_than,
+            live_versions_kept=live_versions_kept,
+            stop=stop,
+        )
     )
     try:
         yield task

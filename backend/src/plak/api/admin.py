@@ -26,6 +26,7 @@ origin guard stays on it, as on the deploy router. Every other route in this rou
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hmac
 import math
@@ -795,6 +796,29 @@ class VersionOut(ApiModel):
         default=None, description="Tijdstip van de deploy.", json_schema_extra=_timestamp_schema()
     )
     is_live: bool = Field(description="Of deze versie op dit moment de live versie van de site is.")
+
+
+class SiteStorageOut(ApiModel):
+    """Wat een site op het contentvolume inneemt, en hoeveel live-versies er bewaard blijven."""
+
+    used_bytes: int = Field(
+        description="Wat alle versies van deze site samen innemen op het contentvolume, live en preview, in bytes.",
+        examples=[77594624],
+    )
+    max_bytes: int = Field(
+        description=(
+            "Hoeveel alle versies van een site samen mogen innemen, in bytes. Een deploy die daar "
+            "overheen zou gaan krijgt 413 (`SITE_QUOTA_EXCEEDED`). `0` betekent geen limiet."
+        ),
+        examples=[524288000],
+    )
+    live_versions_kept: int = Field(
+        description=(
+            "Hoeveel vorige live-versies naast de huidige bewaard blijven; oudere live-versies ruimt "
+            "de nachtelijke opschoning op, rij en bestanden. `0` betekent dat alle versies blijven."
+        ),
+        examples=[5],
+    )
 
 
 class PreviewOut(ApiModel):
@@ -4504,6 +4528,32 @@ def make_admin_router() -> APIRouter:
         return [
             _version_json(version, group_slug, site, deployer=deployer) for version, deployer in rows
         ]
+
+    @router.get(
+        "/sites/{group_slug}/{site_slug}/storage",
+        tags=[TAG_VERSIONS],
+        summary="Opslag en bewaarregel van een site",
+        response_description="Het gebruik, de limiet en het aantal bewaarde live-versies.",
+        description=(
+            "Hoeveel ruimte de versies van deze site nu innemen, hoeveel ze samen mogen innemen, en "
+            "hoeveel vorige live-versies de nachtelijke opschoning laat staan. De huidige live-versie "
+            "blijft altijd, ook na terugrollen naar een oudere versie. Limiet en bewaarregel gelden "
+            "voor het hele platform, niet per site.\n\n"
+            "**Mag:** effectieve siterol `reader` of ruimer."
+        ),
+        responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
+    )
+    async def site_storage(
+        request: Request, group_slug: str, site_slug: str, member: ActiveMember, db: Db
+    ) -> SiteStorageOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.READER)
+        settings = request.app.state.settings
+        used = await asyncio.to_thread(request.app.state.content_store.site_bytes, group.slug, site.slug)
+        return SiteStorageOut(
+            used_bytes=used,
+            max_bytes=settings.site_max_bytes,
+            live_versions_kept=settings.live_versions_kept,
+        )
 
     @router.post(
         "/sites/{group_slug}/{site_slug}/versions/{version_id}/_set-live",

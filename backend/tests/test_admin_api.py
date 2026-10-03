@@ -2834,6 +2834,56 @@ class TestVersionsPreviewsUpload:
         assert not (content_root / storage_ref).exists()
 
 
+class TestSiteStorage:
+    """What the Versions tab shows: the site's usage, the quota and the retention rule."""
+
+    async def test_usage_counts_live_and_preview_versions_against_the_platform_settings(
+        self, client, app, data
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        empty = (await client.get(f"{BASE}/sites/team/site/storage")).json()
+        assert empty == {"usedBytes": 0, "maxBytes": 500 * 1024 * 1024, "liveVersionsKept": 5}
+
+        await client.post(f"{BASE}/sites/team/site/deploys", files=_upload(), headers=headers)
+        await client.post(
+            f"{BASE}/sites/team/site/deploys",
+            files=_upload(content=b"<h1>preview</h1>"),
+            data={"preview": "pr-1"},
+            headers=headers,
+        )
+
+        used = (await client.get(f"{BASE}/sites/team/site/storage")).json()["usedBytes"]
+        assert used == len(b"<h1>hoi</h1>") + len(b"<h1>preview</h1>")
+
+    async def test_quota_off_and_keep_all_come_through_as_zero(self, client, app, data):
+        app.state.settings = app.state.settings.model_copy(
+            update={"site_max_bytes": 0, "live_versions_kept": 0}
+        )
+        login(client, app, sub="lid-a", email="a@example.nl")
+
+        body = (await client.get(f"{BASE}/sites/team/site/storage")).json()
+
+        assert (body["maxBytes"], body["liveVersionsKept"]) == (0, 0)
+
+    async def test_a_reader_may_read_it_and_an_outsider_sees_the_neutral_404(
+        self, client, app, data, factory
+    ):
+        login(client, app, sub="lid-b", email="b@example.nl")
+        outsider = await client.get(f"{BASE}/sites/team/site/storage")
+        missing = await client.get(f"{BASE}/sites/team/bestaat-niet/storage")
+        assert outsider.status_code == 404
+        assert outsider.json() == missing.json()
+
+        await _join_group(factory, data.group, data.member_b, Role.READER)
+        login(client, app, sub="lid-b", email="b@example.nl")
+        assert (await client.get(f"{BASE}/sites/team/site/storage")).status_code == 200
+
+    async def test_without_a_session_it_is_refused(self, client, app, data):
+        response = await client.get(f"{BASE}/sites/team/site/storage")
+
+        assert response.status_code == 401
+
+
 # -- Delete cascade ---------------------------------------------------------
 
 

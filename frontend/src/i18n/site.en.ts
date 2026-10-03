@@ -78,6 +78,13 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.versions.listLabel': 'Live versions',
   'site.versions.intro':
     'The live history of this site. View an older version before you put it back; that view is only open to whoever has a role on this site or on its group.',
+  'site.versions.storage.quota': 'This site uses {used} of {max}.',
+  'site.versions.storage.noQuota': 'This site uses {used}.',
+  'site.versions.retention.many':
+    'The current and the {kept} previous versions are kept. Older ones are removed nightly.',
+  'site.versions.retention.one':
+    'The current and the previous version are kept. Older ones are removed nightly.',
+  'site.versions.retention.all': 'All versions are kept.',
   'site.versions.empty': 'No live versions yet',
   'site.versions.empty.hint':
     'Publish a first version through the Overview or the Deploy tab.',

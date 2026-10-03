@@ -448,12 +448,13 @@ Limits (defaults, env-overridable, sized for a 1 GiB volume): request body
 100 MiB, 50 MiB per unpacked file, 200 MiB unpacked in total, 1000 files, depth
 10 (`config.py`, `ingest_max_*`).
 
-Those bound one bundle. Two more bound what the bundles leave behind, because a
-live version is never cleaned up: `site_max_bytes` (500 MiB, 0 turns it off)
-caps what every version of one site together occupies, measured on the volume
-just before the new version is renamed into place, so a refusal leaves nothing
-behind and answers 413. `storage_min_free_bytes` (100 MiB, 0 turns it off) is
-the free space a deploy never takes the volume below, because a volume run dry
+Those bound one bundle. Two more bound what the bundles leave behind, because
+the nightly cleanup only removes live versions beyond the current one and the
+`live_versions_kept` (5, 0 keeps all) before it: `site_max_bytes` (500 MiB, 0
+turns it off) caps what every version of one site together occupies, measured
+on the volume just before the new version is renamed into place, so a refusal
+leaves nothing behind and answers 413.
+`storage_min_free_bytes` (100 MiB, 0 turns it off) is the free space a deploy never takes the volume below, because a volume run dry
 takes the serving of every other site down with it. It is held against the
 actual deploy, not the largest one allowed: before the body is read, the
 declared `Content-Length` (capped at the body limit) must fit above it; while
@@ -807,6 +808,13 @@ A successful upsert removes the replaced preview version, row and file tree.
 Teardown and the daily cleanup job (03:00) remove the preview row, its version
 and its files, and the job also sweeps orphaned preview versions, stale `_tmp`
 directories and expired CLI device authorizations and sessions.
+
+**Old live versions.** The same job removes, per site, the live versions
+beyond the current live one and the `live_versions_kept` newest others (row and
+file tree, one `version_cleanup` audit row per site). It holds the site row
+locked from reading `live_version_id` to the commit, and a rollback takes the
+same lock before it looks its version up, so a version that becomes live while
+the job runs is never removed.
 
 **Deleting.** Deleting a site cascades over versions, previews, invitees, keys,
 site members and the repository link, and removes the file trees. Deleting a

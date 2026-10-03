@@ -54,6 +54,7 @@ def test_valid_configuration_loads_with_expected_defaults(monkeypatch):
     assert settings.ingest_max_file == 50 * 1024 * 1024
     assert settings.ingest_max_total == 200 * 1024 * 1024
     assert settings.site_max_bytes == 500 * 1024 * 1024
+    assert settings.live_versions_kept == 5
     assert settings.storage_min_free_bytes == 100 * 1024 * 1024
 
 
@@ -93,6 +94,18 @@ def test_audit_lookup_daily_limit_above_upper_bound_refused(monkeypatch):
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
     assert "AUDIT_LOOKUP_DAILY_LIMIT" in str(excinfo.value)
+
+
+def test_live_versions_kept_from_env_and_zero_keeps_all(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_LIVE_VERSIONS_KEPT="0")
+    assert load_settings().live_versions_kept == 0
+
+
+def test_negative_live_versions_kept_refused(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_LIVE_VERSIONS_KEPT="-1")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "LIVE_VERSIONS_KEPT" in str(excinfo.value)
 
 
 def test_non_base64_audit_ip_key_refused(monkeypatch):

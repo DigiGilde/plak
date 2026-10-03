@@ -532,6 +532,20 @@ describe('searching members', () => {
   });
 });
 
+describe('site storage', () => {
+  it('reports the usage and the retention rule of a site', async () => {
+    expect(await plak.siteStorage('team-aurora', 'website')).toEqual({
+      usedBytes: 77594624,
+      maxBytes: 524288000,
+      liveVersionsKept: 5,
+    });
+  });
+
+  it('refuses an unknown site', async () => {
+    expect((await refusedWith(plak.siteStorage('team-aurora', 'bestaat-niet'))).problem.status).toBe(404);
+  });
+});
+
 describe('versions and rollback', () => {
   it('puts an older live version back live (rollback)', async () => {
     const before = await plak.versions('team-aurora', 'website');

@@ -749,9 +749,12 @@ published or not.
 Beyond the one bundle, the site itself has a ceiling: every version of it
 together may occupy at most 500 MiB by default. A deploy that would cross it is
 refused with a `413` and the code `SITE_QUOTA_EXCEEDED`, naming what the site
-uses now and what this version would add. Live versions are kept forever, so
-the room usually comes back by removing previews you no longer need; your
-platform administrator can also raise the ceiling.
+uses now and what this version would add. Every night Plak removes the live
+versions older than the current one and the five before it (the platform
+administrator sets that number with `PLAK_LIVE_VERSIONS_KEPT`), so the room
+usually comes back on its own the next day. Removing previews you no longer
+need frees it at once; your platform administrator can also raise the
+ceiling.
 
 If the volume itself has no room for your deploy, it answers `503` with
 `STORAGE_UNAVAILABLE`: before the body is read when the declared size does

@@ -1,6 +1,6 @@
 """Tests for previews/cleanup_job.py: expired previews, orphaned preview
-versions and stale _tmp get swept; and that the docs HTML touches no external
-origin (spec §8).
+versions, live versions beyond the kept number and stale _tmp get swept; and
+that the docs HTML touches no external origin (spec §8).
 
 The DB tests really commit against the test container database (through a
 session factory of their own), just like test_ingest_service.py.
@@ -17,17 +17,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 
+import pytest
 import pytest_asyncio
-from sqlalchemy import event, select, text
+from sqlalchemy import event, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.util import await_only
 
 from plak.api.docs import _ASSETS, _DOCS_HTML, DOCS_CSP, STATIC_DOCS_DIR
+from plak.audit import vocabulary
 from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase
-from plak.ingest.service import Deployer, IngestService
+from plak.ingest.service import Deployer, IngestError, IngestService
 from plak.ingest.store import ContentStore
+from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.cli import CliDeviceAuthorization, CliSession
 from plak.models.identity import Group, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
@@ -35,8 +38,10 @@ from plak.previews.cleanup_job import (
     TIMESTAMP_DEFAULT,
     TMP_OLDER_THAN_DEFAULT,
     CleanupResult,
+    _cleanup_site_live_versions,
     _run_daily,
     _seconds_until,
+    cleanup_job,
     delete_expired,
 )
 
@@ -274,6 +279,278 @@ class TestOrphanPreviewVersions:
         assert any(v.id == version_id for v in await _all_versions(environment))
 
 
+async def _make_site(environment: Environment) -> Site:
+    site = Site(
+        id=uuid.uuid4(),
+        group_id=environment.group.id,
+        slug=f"p{uuid.uuid4().hex[:10]}",
+        title="Andere site",
+        access_base=AccessBase.PUBLIC,
+    )
+    async with environment.session_factory() as session, session.begin():
+        session.add(site)
+    return site
+
+
+async def _make_live_versions(
+    environment: Environment, count: int, *, site: Site | None = None, live: int | None = -1
+) -> list[tuple[uuid.UUID, str]]:
+    """Creates `count` live versions an hour apart, oldest first, and points the
+    site at the one with index `live` (None leaves it without a live version)."""
+    site = site or environment.site
+    start = datetime.now(tz=UTC) - timedelta(days=30)
+    versions = []
+    async with environment.session_factory() as session, session.begin():
+        for index in range(count):
+            version_id = uuid.uuid4()
+            storage_ref = environment.store.store_version(
+                environment.group.slug, site.slug, version_id, {"index.html": f"<h1>{index}</h1>".encode()}
+            )
+            session.add(
+                Version(
+                    id=version_id,
+                    site_id=site.id,
+                    target=VersionTarget.LIVE,
+                    storage_ref=storage_ref,
+                    member_id=environment.member.id,
+                    created_at=start + timedelta(hours=index),
+                )
+            )
+            versions.append((version_id, storage_ref))
+        await session.flush()
+        if live is not None:
+            await session.execute(
+                update(Site).where(Site.id == site.id).values(live_version_id=versions[live][0])
+            )
+    return versions
+
+
+async def _live_version_id(environment: Environment, site: Site | None = None) -> uuid.UUID | None:
+    async with environment.session_factory() as session:
+        return await session.scalar(select(Site.live_version_id).where(Site.id == (site or environment.site).id))
+
+
+async def _version_ids(environment: Environment) -> set[uuid.UUID]:
+    return {version.id for version in await _all_versions(environment)}
+
+
+async def _cleanup_rows(environment: Environment) -> list[AuditLogEntry]:
+    async with environment.session_factory() as session:
+        return list(
+            await session.scalars(select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.VERSION_CLEANUP))
+        )
+
+
+class TestOldLiveVersions:
+    async def test_keeps_the_live_version_and_exactly_the_n_newest_others(self, environment: Environment):
+        versions = await _make_live_versions(environment, 8)
+
+        result = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=5
+        )
+
+        assert result.old_live_versions == 2
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions[2:]}
+        assert await _live_version_id(environment) == versions[7][0]
+        for _, storage_ref in versions[:2]:
+            assert not (environment.content_root / storage_ref).exists()
+        for _, storage_ref in versions[2:]:
+            assert (environment.content_root / storage_ref).exists()
+
+    async def test_a_site_at_exactly_the_kept_number_loses_nothing(self, environment: Environment):
+        versions = await _make_live_versions(environment, 6)
+
+        result = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=5
+        )
+
+        assert result.old_live_versions == 0
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions}
+        assert await _cleanup_rows(environment) == []
+
+    async def test_after_a_rollback_the_old_live_version_survives_and_the_window_skips_it(
+        self, environment: Environment
+    ):
+        versions = await _make_live_versions(environment, 8)
+        service = IngestService(environment.store, _settings(environment.content_root))
+        async with environment.session_factory() as session:
+            await service.rollback_to(session, environment.site, versions[1][0])
+
+        result = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=5
+        )
+
+        # Live is index 1; the five newest others are 3..7; 0 and 2 go.
+        assert result.old_live_versions == 2
+        assert await _version_ids(environment) == {versions[i][0] for i in (1, 3, 4, 5, 6, 7)}
+        assert await _live_version_id(environment) == versions[1][0]
+        assert (environment.content_root / versions[1][1]).exists()
+        assert not (environment.content_root / versions[2][1]).exists()
+
+    async def test_a_site_without_a_live_version_keeps_the_n_newest(self, environment: Environment):
+        versions = await _make_live_versions(environment, 4, live=None)
+
+        result = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=3
+        )
+
+        assert result.old_live_versions == 1
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions[1:]}
+
+    async def test_zero_keeps_every_live_version(self, environment: Environment):
+        versions = await _make_live_versions(environment, 8)
+
+        explicit = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=0
+        )
+        default = await delete_expired(environment.session_factory, environment.store, datetime.now(tz=UTC))
+
+        assert explicit.old_live_versions == default.old_live_versions == 0
+        assert await _version_ids(environment) == {version_id for version_id, _ in versions}
+
+    async def test_previews_are_neither_removed_nor_counted(self, environment: Environment):
+        now_ = datetime.now(tz=UTC)
+        live = await _make_live_versions(environment, 3)
+        previews = [
+            await _make_preview_version(environment, expires_at=now_ + timedelta(days=1), ref=f"pr-{i}")
+            for i in range(4)
+        ]
+
+        result = await delete_expired(environment.session_factory, environment.store, now_, live_versions_kept=1)
+
+        assert result.old_live_versions == 1
+        assert await _version_ids(environment) == {live[1][0], live[2][0]} | {v for v, _ in previews}
+        assert len(await _all_previews(environment)) == 4
+        for _, storage_ref in previews:
+            assert (environment.content_root / storage_ref).exists()
+
+    async def test_other_sites_are_neither_touched_nor_counted(self, environment: Environment):
+        other = await _make_site(environment)
+        mine = await _make_live_versions(environment, 4)
+        theirs = await _make_live_versions(environment, 2, site=other)
+
+        result = await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=1
+        )
+
+        assert result.old_live_versions == 2
+        assert await _version_ids(environment) == {mine[2][0], mine[3][0]} | {v for v, _ in theirs}
+        assert await _live_version_id(environment, other) == theirs[1][0]
+
+    async def test_the_removal_is_audited_once_per_site_as_a_system_action(self, environment: Environment):
+        versions = await _make_live_versions(environment, 4)
+
+        await delete_expired(
+            environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=1
+        )
+
+        [row] = await _cleanup_rows(environment)
+        assert row.actor_kind == ActorKind.SYSTEM
+        assert row.actor_pseudonym is None
+        assert row.result == vocabulary.ALLOWED
+        assert row.refs.pop("versions") in (
+            [str(versions[0][0]), str(versions[1][0])],
+            [str(versions[1][0]), str(versions[0][0])],
+        )
+        assert row.refs == {"group": environment.group.slug, "site": environment.site.slug, "kept": 1}
+
+    async def test_a_failing_audit_write_is_logged_and_the_removal_still_counts(
+        self, environment: Environment, monkeypatch, caplog
+    ):
+        versions = await _make_live_versions(environment, 3)
+
+        def broken_entry(**_kwargs):
+            raise RuntimeError("audit storing")
+
+        monkeypatch.setattr("plak.previews.cleanup_job.AuditLogEntry", broken_entry)
+        with caplog.at_level(logging.ERROR):
+            result = await delete_expired(
+                environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=1
+            )
+
+        assert result.old_live_versions == 1
+        assert versions[0][0] not in await _version_ids(environment)
+        assert not (environment.content_root / versions[0][1]).exists()
+        assert any("live-versies" in record.getMessage() for record in caplog.records)
+
+    async def test_a_rollback_that_commits_while_the_sweep_waits_keeps_its_version(
+        self, environment: Environment
+    ):
+        """The rollback holds the site row and commits only once the sweep is
+        blocked on it: the sweep must read the new live pointer, not the old."""
+        versions = await _make_live_versions(environment, 8)
+        service = IngestService(environment.store, _settings(environment.content_root))
+        commit_gate = asyncio.Event()
+        rollback_ready = asyncio.Event()
+
+        async def roll_back() -> None:
+            async with environment.session_factory() as db:
+                def hold_before_commit(_session: object) -> None:
+                    rollback_ready.set()
+                    await_only(commit_gate.wait())
+
+                event.listen(db.sync_session, "before_commit", hold_before_commit)
+                await service.rollback_to(db, environment.site, versions[0][0])
+
+        rollback = asyncio.create_task(roll_back())
+        await asyncio.wait_for(rollback_ready.wait(), timeout=10)
+        sweep = asyncio.create_task(
+            delete_expired(
+                environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=5
+            )
+        )
+        await _wait_for_a_lock_wait(environment)
+        commit_gate.set()
+        await rollback
+        result = await sweep
+
+        # Live is index 0 now; 3..7 are the five newest others; 1 and 2 go.
+        assert result.old_live_versions == 2
+        assert await _live_version_id(environment) == versions[0][0]
+        assert await _version_ids(environment) == {versions[i][0] for i in (0, 3, 4, 5, 6, 7)}
+        assert (environment.content_root / versions[0][1]).exists()
+
+    async def test_a_rollback_to_a_version_being_removed_finds_it_unknown(self, environment: Environment):
+        """The sweep has deleted the old rows but not committed yet; a rollback to
+        one of them waits for it and then refuses cleanly, leaving the live
+        pointer where it was rather than failing on the foreign key."""
+        versions = await _make_live_versions(environment, 3)
+        service = IngestService(environment.store, _settings(environment.content_root))
+        commit_gate = asyncio.Event()
+        sweep_ready = asyncio.Event()
+
+        def holding_factory() -> AsyncSession:
+            session = environment.session_factory()
+
+            def hold_before_commit(_session: object) -> None:
+                sweep_ready.set()
+                await_only(commit_gate.wait())
+
+            event.listen(session.sync_session, "before_commit", hold_before_commit)
+            return session
+
+        sweep = asyncio.create_task(
+            _cleanup_site_live_versions(holding_factory, environment.store, environment.site.id, 1)
+        )
+        await asyncio.wait_for(sweep_ready.wait(), timeout=10)
+
+        async def roll_back() -> None:
+            async with environment.session_factory() as db:
+                await service.rollback_to(db, environment.site, versions[0][0])
+
+        rollback = asyncio.create_task(roll_back())
+        await _wait_for_a_lock_wait(environment)
+        commit_gate.set()
+        removed = await sweep
+
+        with pytest.raises(IngestError) as refused:
+            await rollback
+        assert refused.value.reason == "UNKNOWN_VERSION"
+        assert removed == [versions[0][0]]
+        assert await _live_version_id(environment) == versions[2][0]
+        assert not (environment.content_root / versions[0][1]).exists()
+
+
 class TestTmpSweeper:
     async def test_stale_tmp_becomes_swept(self, environment: Environment):
         stale_map = environment.content_root / "_tmp" / "stale-werkdir"
@@ -314,7 +591,7 @@ class TestRunDaily:
         calls: list[datetime] = []
         second_call = asyncio.Event()
 
-        async def fake_delete_expired(factory, store, now, *, tmp_older_than):
+        async def fake_delete_expired(factory, store, now, *, tmp_older_than, live_versions_kept):
             calls.append(now)
             if len(calls) == 1:
                 raise RuntimeError("tijdelijke databankstoring")
@@ -333,6 +610,7 @@ class TestRunDaily:
                     environment.store,
                     occurred_at=TIMESTAMP_DEFAULT,
                     tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                    live_versions_kept=5,
                     stop=stop,
                 )
             )
@@ -364,6 +642,7 @@ class TestRunDaily:
                 environment.store,
                 occurred_at=TIMESTAMP_DEFAULT,
                 tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                live_versions_kept=5,
                 stop=stop,
             )
         )
@@ -372,6 +651,19 @@ class TestRunDaily:
         await asyncio.wait_for(task, timeout=5)
 
         assert called is False
+
+    async def test_the_kept_number_reaches_the_sweep(self, environment: Environment, monkeypatch):
+        received: asyncio.Queue[int] = asyncio.Queue()
+
+        async def fake_delete_expired(factory, store, now, *, tmp_older_than, live_versions_kept):
+            received.put_nowait(live_versions_kept)
+            return CleanupResult(expired_previews=0, orphan_versions=0, tmp_swept=0)
+
+        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
+
+        async with cleanup_job(environment.session_factory, environment.store, live_versions_kept=3):
+            assert await asyncio.wait_for(received.get(), timeout=5) == 3
 
     async def test_stop_already_set_before_the_first_tick_runs_no_sweep(
         self, environment: Environment, monkeypatch
@@ -392,6 +684,7 @@ class TestRunDaily:
                 environment.store,
                 occurred_at=TIMESTAMP_DEFAULT,
                 tmp_older_than=TMP_OLDER_THAN_DEFAULT,
+                live_versions_kept=5,
                 stop=stop,
             ),
             timeout=5,
