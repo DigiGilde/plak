@@ -39,6 +39,17 @@ a path that contains the group, the site and (for previews) the ref:
 - Live: `/{group}/{site}/`
 - Preview: `/{group}/{site}/_preview/{ref}/`
 
+These two paths are a contract: a workflow may build them itself, and a
+change to them would be a breaking change, announced in the changelog.
+The full address is the content origin of the instance followed by the
+path; on the DigiGilde instance the content origin is
+`https://plak.rijks.app`, so a preview of `team-aurora/website` for pull
+request 42 lives at
+`https://plak.rijks.app/team-aurora/website/_preview/pr-42/`. A build
+that writes absolute URLs (Astro's `site`, a canonical link, `og:url`)
+takes the content origin from there; after the deploy, the action's
+output `url` gives the same address.
+
 So your build has to know under which path it will run, so that
 generated `<link>`, `<script>` and asset URLs are correct. Most build
 tools support this through a "base" setting; the path differs per
@@ -59,6 +70,7 @@ step, before you call the CLI or the action. See the workflow example in
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
+  site: "https://plak.rijks.app",
   base: process.env.PLAK_BASE_PATH ?? "/",
   trailingSlash: "always",
 });
