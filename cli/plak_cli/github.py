@@ -21,7 +21,7 @@ import sys
 
 import httpx
 
-from plak_cli import ACCESS_BASE_WHO, VERSION, who_can_see
+from plak_cli import ACCESS_BASE_WHO, VERSION
 
 PER_PAGE = 100
 
@@ -154,13 +154,21 @@ def _access(value: str) -> tuple[str, bool, bool]:
     return base, "keys" in extras, "invitees" in extras
 
 
+SIGNED_IN_WHO = {"sso": "anyone with an SSO Rijk account", "site_team": "members of the site and its group"}
+
+
 def _access_line(access: tuple[str, bool, bool]) -> str:
-    base, _, invitees = access
+    base, keys, invitees = access
     if base == "public":
-        return "Anyone can open it, without signing in."
-    who = f"Who can see it: {who_can_see(access)}."
-    # Mirrors the server's login_can_help: a secret link alone needs no sign-in.
-    return f"Sign in to open it. {who}" if base in ("sso", "site_team") or invitees else who
+        return "Open to anyone."
+    # The ones the server's login_can_help counts: a secret link needs no sign-in.
+    signed_in = [SIGNED_IN_WHO[base]] if base in SIGNED_IN_WHO else []
+    if invitees:
+        signed_in.append("invitees")
+    if not signed_in:
+        return "Open to anyone with a secret link." if keys else "Open to nobody yet."
+    line = f"Open to {' and '.join(signed_in)}, after signing in on Plak"
+    return f"{line}, and to anyone with a secret link." if keys else f"{line}."
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -207,14 +215,14 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
             if args.comment and number is None:
                 print("::notice::comment skipped: this run is not for a pull request")
             elif args.comment:
-                what = f"Preview `{preview_ref}`" if preview_ref else "Live site"
+                what = "Preview" if preview_ref else "Live"
                 access = f"{_access_line(args.access)}\n\n" if args.access else ""
                 upsert_comment(
                     github,
                     number,
                     _marker(args.site, preview_ref or "live"),
-                    f"{what} of `{args.site}` is published: {args.url}\n\n{access}"
-                    f"Version `{args.version_id}`, commit {_head_sha(event)[:7]}.",
+                    f"**{what}:** {args.url}\n\n{access}"
+                    f"Commit {_head_sha(event)[:7]}, version `{args.version_id}`.",
                     create=True,
                 )
         else:
@@ -225,7 +233,7 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
                     github,
                     number,
                     _marker(args.site, preview_ref),
-                    f"Preview `{preview_ref}` of `{args.site}` is removed.",
+                    "**Preview:** removed.",
                     create=False,
                 )
     except GitHubError as error:

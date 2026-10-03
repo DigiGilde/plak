@@ -212,11 +212,10 @@ def test_the_first_deploy_of_a_pull_request_places_a_comment(fake, runner_env):
     assert _publish_preview(fake, "--comment") == 0
 
     [comment] = fake.sent("POST", "/issues/42/comments")
-    assert comment["body"].startswith(MARKER + "\n")
-    assert PREVIEW_URL in comment["body"]
-    assert "Preview `pr-42` of `team-aurora/website`" in comment["body"]
-    assert VERSION in comment["body"]
-    assert "commit abcdef0" in comment["body"]
+    # The url already names the site and the ref; the comment does not repeat them.
+    assert comment["body"] == (
+        f"{MARKER}\n**Preview:** {PREVIEW_URL}\n\nCommit abcdef0, version `{VERSION}`."
+    )
     assert ("POST", "/deployments") not in fake.calls()
 
 
@@ -265,25 +264,33 @@ def test_a_live_deploy_on_a_pull_request_comments_under_its_own_marker(fake, run
 
     assert code == 0
     [comment] = fake.sent("POST", "/issues/42/comments")
-    assert comment["body"].startswith("<!-- plak-preview team-aurora/website live -->\nLive site of")
+    assert comment["body"].startswith(
+        "<!-- plak-preview team-aurora/website live -->\n**Live:** https://plak.example/team-aurora/website/\n"
+    )
 
 
 @pytest.mark.parametrize(
     ("access", "line"),
     [
-        ("public", "Anyone can open it, without signing in."),
-        ("sso", "Sign in to open it. Who can see it: anyone who signs in with SSO Rijk."),
+        ("public", "Open to anyone."),
+        ("public,keys,invitees", "Open to anyone."),
+        ("sso", "Open to anyone with an SSO Rijk account, after signing in on Plak."),
+        ("site_team", "Open to members of the site and its group, after signing in on Plak."),
         (
             "site_team,keys",
             (
-                "Sign in to open it. Who can see it: members of the site and its group, "
-                "anyone with a secret link."
+                "Open to members of the site and its group, after signing in on Plak, "
+                "and to anyone with a secret link."
             ),
         ),
-        ("nobody,invitees", "Sign in to open it. Who can see it: invitees, once signed in."),
+        (
+            "site_team,invitees",
+            "Open to members of the site and its group and invitees, after signing in on Plak.",
+        ),
+        ("nobody,invitees", "Open to invitees, after signing in on Plak."),
         # A secret link is the only way in, so signing in would not help.
-        ("nobody,keys", "Who can see it: anyone with a secret link."),
-        ("nobody", "Who can see it: nobody yet."),
+        ("nobody,keys", "Open to anyone with a secret link."),
+        ("nobody", "Open to nobody yet."),
     ],
 )
 def test_the_comment_says_whether_the_link_needs_a_sign_in(fake, runner_env, access, line):
@@ -293,7 +300,7 @@ def test_the_comment_says_whether_the_link_needs_a_sign_in(fake, runner_env, acc
     assert _publish_preview(fake, "--comment", "--access", access) == 0
 
     [comment] = fake.sent("POST", "/issues/42/comments")
-    assert f"{PREVIEW_URL}\n\n{line}\n\nVersion" in comment["body"]
+    assert f"{PREVIEW_URL}\n\n{line}\n\nCommit" in comment["body"]
 
 
 def test_without_access_the_comment_leaves_the_sign_in_out(fake, runner_env):
@@ -304,8 +311,8 @@ def test_without_access_the_comment_leaves_the_sign_in_out(fake, runner_env):
     assert _publish_preview(fake, "--comment") == 0
 
     [comment] = fake.sent("POST", "/issues/42/comments")
-    assert f"{PREVIEW_URL}\n\nVersion" in comment["body"]
-    assert "Who can see it" not in comment["body"]
+    assert f"{PREVIEW_URL}\n\nCommit" in comment["body"]
+    assert "Open to" not in comment["body"]
 
 
 @pytest.mark.parametrize("access", ["everyone", "public,admins", "sso,keys,keys", ""])
@@ -335,7 +342,7 @@ def test_teardown_switches_off_the_deployments_and_marks_the_comment(fake, runne
     assert code == 0
     assert fake.sent("POST", "/deployments/8/statuses") == [{"state": "inactive"}]
     [update] = fake.sent("PATCH", "/issues/comments/6")
-    assert update["body"] == f"{MARKER}\nPreview `pr-42` of `team-aurora/website` is removed."
+    assert update["body"] == f"{MARKER}\n**Preview:** removed."
 
 
 def test_teardown_places_no_comment_where_there_was_none(fake, runner_env):
