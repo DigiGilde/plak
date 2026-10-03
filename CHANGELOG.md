@@ -14,44 +14,42 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ### Added
 
-- `plak --version`, and a Plak CLI that stops with an upgrade hint when
-  the server speaks a newer major API version than it supports.
 - A public What's new page at `/-/whats-new`, linked from the footer
   next to the Plak version.
-- The publish action can show a deploy on the pull request, as a
-  GitHub deployment and as a comment with the link, and by default
-  skips pull requests opened by bots.
-- A deploy answers with the `url` where it can be seen, and the publish
-  action passes it on as an output.
-- A deploy also answers with who may see it, and the publish action's
-  pull request comment says whether opening the link needs a sign-in.
-- `plak publish` ends with the URL and version it published, and the
-  publish action writes the same to the job summary.
-- Every night Plak removes a site's live versions beyond the current one
-  and the ones before it that the site keeps (five by default, set with
-  `PLAK_LIVE_VERSIONS_KEPT`; a site admin can set another number per site),
-  so a site no longer gets stuck on its storage quota; the Versions tab
-  shows the site's usage and this rule, and is where a site admin sets it.
-- The Deploy tab says "Nog niet bevestigd" (not confirmed yet) for a
-  repository whose IDs were entered and not confirmed by the provider,
-  until the first deploy from it confirms them; the API returns this as
-  `idsConfirmed`.
+- `plak --version`. The CLI stops with an upgrade hint when the server
+  speaks a newer major API version; `plak logout` then still forgets the
+  local session.
+- The Plak CLI runs on Windows, with the session in Windows Credential
+  Manager or else in `%APPDATA%\plak\hosts.json`.
+- A deploy answers with the `url` where it can be seen and who may see
+  it; `plak publish` ends with that URL and the version, and the publish
+  action passes the URL on as an output and in the job summary.
+- The publish action can show a preview on its pull request, as a GitHub
+  deployment, as a comment with the link and whether it needs a sign-in,
+  or both; it skips pull requests opened by bots by default.
+- Every night Plak removes the live versions a site no longer keeps: the
+  current one and five before it by default (`PLAK_LIVE_VERSIONS_KEPT`),
+  another number per site on the Versions tab, which also shows the
+  site's usage. A site no longer gets stuck on its storage quota.
 - `GET /-/healthz` on the admin host replaces the unreachable `/healthz`:
-  `ok`, `degraded` or, with an unreachable database, `fail` (503), naming
-  the failing checks, among them a nearly full content volume (`storage`)
-  and a content root that is not mounted in production (`content_root`).
-  Low space also writes an ERROR line at most once per hour, and platform
-  administrators see how full the volume is on "Platformbeheer".
+  `ok`, `degraded` or `fail` (503, no database), naming the failing
+  checks, among them a nearly full content volume and, in production, an
+  unmounted content root. Low space also logs an ERROR at most once an
+  hour, and "Platformbeheer" shows how full the volume is.
+- The Deploy tab marks a repository whose IDs were entered by hand "Nog
+  niet bevestigd" (not confirmed yet) until its first deploy confirms
+  them; the API returns `idsConfirmed`.
 
 ### Changed
 
-- On ZAD a site may hold 200 MiB across all its versions (`PLAK_SITE_MAX_BYTES`),
-  down from the 500 MiB default, because a ZAD volume is capped at 1Gi.
-- The publish action needs no `host` for the DigiGilde instance.
-- The publish action lives at `actions/publish` and the Claude Code skill
-  is `plak-publish`; a workflow changes the path when it moves its pin.
-- `plak preview-remove` reports the removal on stderr instead of stdout,
-  like the other messages the CLI prints for people.
+- The publish action lives at `actions/publish` and needs no `host` for
+  the DigiGilde instance; the Claude Code skill is `plak-publish`. A
+  workflow changes the path when it moves its pin.
+- On ZAD a site may hold 200 MiB across all its versions
+  (`PLAK_SITE_MAX_BYTES`), down from the 500 MiB default, because a ZAD
+  volume is capped at 1Gi.
+- `plak preview-remove` reports the removal on stderr, like the CLI's
+  other messages for people.
 - The `API-Version` header follows the API from release to release: the
   minor goes up when a release adds to it, the patch when it changes it
   otherwise.
@@ -59,20 +57,16 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 ### Fixed
 
 - The repository form on a site's Deploy tab closes when you switch to
-  another site, instead of staying open for the previous one.
-- The Plak CLI runs on Windows: it keeps the session in Windows
-  Credential Manager, or else in `%APPDATA%\plak\hosts.json`.
-- When `plak site link` cannot find a repository, or GitHub's anonymous
-  lookup limit is used up, the CLI says why `gh` gave no IDs (not
-  installed, not logged in, no access, `--no-gh`) and what to do.
+  another site.
+- When `plak site link` finds no repository, or GitHub's anonymous lookup
+  limit is used up, the CLI says why `gh` gave no IDs and what to do.
 
 ### Security
 
-- A version published from CI shows the repository its signed token
-  names, so a renamed repository or a mistyped name on the site's link
-  no longer shows up as its origin on the Versions tab; the Deploy tab
-  takes over that name, with a `site_repository_rename` row in the
-  audit log.
+- A version published from CI shows as its origin the repository its
+  signed token names, not the name typed on the site's link. A renamed
+  repository's new name replaces the old one on the Deploy tab, logged as
+  `site_repository_rename`.
 
 ## [2026.9.30]
 
