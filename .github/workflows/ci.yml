@@ -28,9 +28,10 @@ env:
   TRIVY_VERSION: v0.74.0
 
 jobs:
-  # The backend suite in parts side by side (backend/tests/parts.py); the
-  # `backend` job below merges their coverage.
-  backend-tests:
+  # The backend suite in parts side by side (backend/tests/parts.py).
+  # `backend-tests` below judges their results, `backend-coverage` merges
+  # their coverage.
+  backend-part:
     name: backend-tests (${{ matrix.part }})
     runs-on: ubuntu-latest
     strategy:
@@ -62,7 +63,7 @@ jobs:
           fi
 
       # The floor is not checked per part, only on the merged data in
-      # `backend`.
+      # `backend-coverage`.
       - name: Backend tests with coverage (testcontainers)
         working-directory: backend
         env:
@@ -76,7 +77,10 @@ jobs:
         # worker), so no two workers ever share a database.
         run: uv run python -m pytest -q -rs -n auto --cov=src/plak --cov-report= --cov-fail-under=0
 
+      # Also when the tests failed: coverage is judged on its own, in
+      # `backend-coverage`, and a part without data fails it there.
       - name: Keep the coverage data
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: backend-coverage-${{ matrix.part }}
@@ -85,21 +89,29 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # The required check. `!cancelled()` because a failed part would skip a
-  # plain dependent, and a skipped required check counts as passed.
-  backend-coverage:
-    needs: backend-tests
+  # The required check for the backend tests. `!cancelled()` because a
+  # failed part would skip a plain dependent, and a skipped required check
+  # counts as passed.
+  backend-tests:
+    needs: backend-part
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Require every test part to pass
-        if: needs.backend-tests.result != 'success'
+        if: needs.backend-part.result != 'success'
         env:
-          RESULT: ${{ needs.backend-tests.result }}
+          RESULT: ${{ needs.backend-part.result }}
         run: |
           echo "Not every backend test part passed (${RESULT})." >&2
           exit 1
 
+  # The required check for the backend coverage, whatever the tests
+  # concluded. `!cancelled()` for the same reason as in `backend-tests`.
+  backend-coverage:
+    needs: backend-part
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
@@ -108,23 +120,26 @@ jobs:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
-      # .github/scripts/release.py is outside src/plak, so the merged
-      # backend coverage does not measure it. Its tests run once more
-      # here, measured on that one file only, against the same floor.
-      - name: Release script tests with coverage
-        working-directory: backend
-        env:
-          COVERAGE_FILE: ${{ runner.temp }}/release.coverage
-        run: |
-          uv run coverage run --include='*/.github/scripts/release.py' -m pytest -q tests/test_release.py
-          uv run coverage report --include='*/.github/scripts/release.py' --show-missing --fail-under=100
-
       - name: Fetch the coverage data
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: backend-coverage-*
           merge-multiple: true
           path: backend
+
+      # `coverage combine` merges whatever .coverage.* files it finds, so a
+      # missing part would only lower the number, or not even that.
+      - name: Require the data of every test part
+        working-directory: backend
+        run: |
+          missing=0
+          for part in $(cd tests && uv run python -c 'import parts; print(*parts.PARTS)'); do
+            if [ ! -f ".coverage.${part}" ]; then
+              echo "No coverage data from backend test part ${part}." >&2
+              missing=1
+            fi
+          done
+          exit "${missing}"
 
       # The floor lives in backend/pyproject.toml (fail_under), so the
       # report fails this job when the merged coverage drops.
@@ -133,6 +148,26 @@ jobs:
         run: |
           uv run coverage combine
           uv run coverage report --skip-covered --show-missing
+
+  # .github/scripts/release.py lies outside src/plak, so the backend
+  # coverage does not measure it. Its tests run here, measured on that one
+  # file only, against the same floor.
+  release-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Release script tests with coverage
+        working-directory: backend
+        run: |
+          uv run coverage run --include='*/.github/scripts/release.py' -m pytest -q tests/test_release.py
+          uv run coverage report --include='*/.github/scripts/release.py' --show-missing --fail-under=100
 
   # cli/ is its own uv project (the `plak` command), separate from the
   # backend. Its lint runs in `pre-commit`, like the backend's.
