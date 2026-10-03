@@ -38,6 +38,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The publish action needs no `host` for the DigiGilde instance.
 - The publish action lives at `actions/publish` and the Claude Code skill
   is `plak-publish`; a workflow changes the path when it moves its pin.
+- `plak preview-remove` reports the removal on stderr instead of stdout,
+  like the other messages the CLI prints for people.
 - The `API-Version` header follows the API from release to release: the
   minor goes up when a release adds to it, the patch when it changes it
   otherwise.
