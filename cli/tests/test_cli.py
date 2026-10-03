@@ -38,6 +38,10 @@ import plak_cli as cli
 import pytest
 import yaml
 
+# Mode bits and a uid mean nothing on NTFS (chmod there only toggles the
+# read-only flag), so what rests on them only exists outside Windows.
+posix_only = pytest.mark.skipif(cli.WINDOWS, reason="POSIX mode bits and uid")
+
 
 def _parse_multipart(content_type: str, body: bytes) -> dict[str, dict[str, Any]]:
     boundary = None
@@ -883,8 +887,9 @@ def test_login_device_flow_success_stores_the_tokens_in_the_keyring(
         "refresh_token": "refresh-1",
     }
     hosts_path = cli._hosts_path()
-    assert stat.S_IMODE(hosts_path.stat().st_mode) == 0o600
-    assert stat.S_IMODE(hosts_path.parent.stat().st_mode) == 0o700
+    if not cli.WINDOWS:
+        assert stat.S_IMODE(hosts_path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(hosts_path.parent.stat().st_mode) == 0o700
     # hosts.json holds where the session lives, never the tokens themselves.
     assert "access-1" not in hosts_path.read_text()
     assert "refresh-1" not in hosts_path.read_text()
@@ -1237,6 +1242,7 @@ def test_explicit_plak_access_token_takes_priority_over_oidc(
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer expliciet-token"
 
 
+@posix_only
 def test_hosts_file_is_never_readable_by_others_even_if_it_was(capsys):
     """An existing world-readable hosts.json is replaced, never written in
     place, and what it said is not carried over."""
@@ -2313,6 +2319,7 @@ def _resolved_host() -> str:
     return cli._resolve_host(argparse.Namespace())
 
 
+@posix_only
 @pytest.mark.parametrize("mode", [0o644, 0o640, 0o604, 0o660])
 def test_hosts_file_readable_or_writable_by_others_is_ignored(mode, capsys):
     hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}), mode)
@@ -2321,6 +2328,7 @@ def test_hosts_file_readable_or_writable_by_others_is_ignored(mode, capsys):
     assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
+@posix_only
 def test_hosts_file_owned_by_someone_else_is_ignored(monkeypatch, capsys):
     _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
     real_uid = os.getuid()
@@ -2330,6 +2338,7 @@ def test_hosts_file_owned_by_someone_else_is_ignored(monkeypatch, capsys):
     assert "it must be a file of yours with mode 0600" in capsys.readouterr().err
 
 
+@posix_only
 def test_hosts_file_behind_a_symlink_is_ignored(tmp_path, capsys):
     """A symlink could point hosts.json at another 0600 file of the user's."""
     elsewhere = tmp_path / "elders.json"
@@ -2343,6 +2352,7 @@ def test_hosts_file_behind_a_symlink_is_ignored(tmp_path, capsys):
     assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
+@posix_only
 @pytest.mark.parametrize("mode", [0o770, 0o707, 0o777])
 def test_hosts_file_in_a_directory_others_can_write_to_is_ignored(mode, capsys):
     """Whoever can write the directory can swap the file for one of their own."""
@@ -2353,6 +2363,7 @@ def test_hosts_file_in_a_directory_others_can_write_to_is_ignored(mode, capsys):
     assert "in a directory only you can write to" in capsys.readouterr().err
 
 
+@posix_only
 def test_hosts_file_in_a_directory_of_someone_else_is_ignored(monkeypatch, capsys):
     hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://kwaad.example"}))
     real_stat = Path.stat
@@ -2372,6 +2383,7 @@ def test_hosts_file_in_a_directory_of_someone_else_is_ignored(monkeypatch, capsy
     assert "in a directory only you can write to" in capsys.readouterr().err
 
 
+@posix_only
 def test_hosts_path_that_cannot_be_opened_is_ignored(capsys):
     hosts_path = _write_raw_hosts("{}", 0o000)
 
@@ -2382,6 +2394,7 @@ def test_hosts_path_that_cannot_be_opened_is_ignored(capsys):
     assert f"ignoring {hosts_path}" in capsys.readouterr().err
 
 
+@posix_only
 def test_plain_text_session_in_an_untrusted_hosts_file_is_never_sent(
     stub_server, host, capsys
 ):
@@ -2418,6 +2431,7 @@ def test_hosts_file_that_is_not_utf8_is_ignored_with_a_warning(capsys):
     assert "not readable JSON" in capsys.readouterr().err
 
 
+@posix_only
 def test_a_directory_in_place_of_the_hosts_file_is_ignored(capsys):
     hosts_path = cli._hosts_path()
     hosts_path.mkdir(parents=True, mode=0o700)
@@ -2453,9 +2467,12 @@ def test_odd_shapes_in_the_hosts_file_count_as_no_session(stub_server, host, con
 
 
 def test_config_dir_follows_plak_config_dir_then_xdg_then_home(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "WINDOWS", False)
     monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "eigen"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    # Path.home() reads USERPROFILE on Windows, HOME elsewhere.
     monkeypatch.setenv("HOME", str(tmp_path / "thuis"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "thuis"))
     assert cli._hosts_path() == tmp_path / "eigen" / "hosts.json"
 
     monkeypatch.delenv("PLAK_CONFIG_DIR")
@@ -2463,6 +2480,64 @@ def test_config_dir_follows_plak_config_dir_then_xdg_then_home(tmp_path, monkeyp
 
     monkeypatch.delenv("XDG_CONFIG_HOME")
     assert cli._hosts_path() == tmp_path / "thuis" / ".config" / "plak" / "hosts.json"
+
+
+def test_config_dir_on_windows_follows_plak_config_dir_then_xdg_then_appdata(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(cli, "WINDOWS", True)
+    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "eigen"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))
+    monkeypatch.setenv("HOME", str(tmp_path / "thuis"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "thuis"))
+    assert cli._hosts_path() == tmp_path / "eigen" / "hosts.json"
+
+    monkeypatch.delenv("PLAK_CONFIG_DIR")
+    assert cli._hosts_path() == tmp_path / "xdg" / "plak" / "hosts.json"
+
+    monkeypatch.delenv("XDG_CONFIG_HOME")
+    assert cli._hosts_path() == tmp_path / "roaming" / "plak" / "hosts.json"
+
+    # A service account can run without APPDATA; it points here by default.
+    monkeypatch.delenv("APPDATA")
+    assert cli._hosts_path() == tmp_path / "thuis" / "AppData" / "Roaming" / "plak" / "hosts.json"
+
+
+@pytest.fixture
+def windows(monkeypatch):
+    """The Windows path on any platform: without the POSIX-only parts of os
+    that broke the CLI there (#65), so touching one fails here too."""
+    monkeypatch.setattr(cli, "WINDOWS", True)
+    monkeypatch.delattr(cli.os, "O_NOFOLLOW", raising=False)
+    monkeypatch.delattr(cli.os, "getuid", raising=False)
+
+
+def test_on_windows_the_hosts_file_is_trusted_on_its_location(windows, capsys):
+    """NTFS has no mode bits or uid to check; the profile ACL protects
+    %APPDATA%. What a POSIX check would refuse is read."""
+    hosts_path = _write_raw_hosts(json.dumps({"default_host": "https://laatst.example"}), 0o644)
+    hosts_path.parent.chmod(0o777)
+
+    assert _resolved_host() == "https://laatst.example"
+    assert capsys.readouterr().err == ""
+
+
+def test_on_windows_a_session_round_trips_through_the_hosts_file(windows):
+    _store_session("https://beheer.example", insecure=True)
+
+    assert _stored_tokens("https://beheer.example") == ("access-1", "refresh-1")
+    assert _resolved_host() == "https://beheer.example"
+
+
+def test_on_windows_a_directory_in_place_of_the_hosts_file_is_ignored(windows, capsys):
+    hosts_path = cli._hosts_path()
+    hosts_path.mkdir(parents=True)
+
+    assert _resolved_host() == TEST_DEFAULT_HOST
+    error_output = capsys.readouterr().err
+    assert f"ignoring {hosts_path}: it must be a regular file you can read" in error_output
+    assert "mode 0600" not in error_output
 
 
 def test_sessions_for_two_hosts_live_side_by_side(memory_keyring):
@@ -2513,7 +2588,8 @@ def test_login_without_a_system_keyring_falls_back_to_the_file_and_says_so(
     assert "keyrings.alt" not in error_output
     entry = cli._read_hosts()["hosts"][host]
     assert entry["storage"] == "file"
-    assert stat.S_IMODE(cli._hosts_path().stat().st_mode) == 0o600
+    if not cli.WINDOWS:
+        assert stat.S_IMODE(cli._hosts_path().stat().st_mode) == 0o600
     assert _stored_tokens(host) == ("access-1", "refresh-1")
 
 
@@ -2959,6 +3035,7 @@ def test_logout_of_another_host_leaves_this_session_alone_and_sends_nothing(
     assert _stored_tokens(host) == ("access-1", "refresh-1")
 
 
+@posix_only
 def test_logout_with_an_untrusted_hosts_file_sends_nothing(stub_server, host, capsys):
     _write_raw_hosts(
         json.dumps(

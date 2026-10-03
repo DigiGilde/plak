@@ -21,13 +21,15 @@ Usage:
 
 Signing in happens with 'plak login': the session belongs to your user
 account, for every directory. The tokens go into the system keyring (macOS
-Keychain, Secret Service on Linux); without a usable keyring, or with
---insecure-storage, they go into hosts.json in the config directory
-($PLAK_CONFIG_DIR, else $XDG_CONFIG_HOME/plak, else ~/.config/plak) with
-mode 0600. That file also remembers the host you last logged in to. In CI
-an OIDC token is used automatically (GitHub Actions with 'id-token:
-write', Forgejo Actions with 'enable-openid-connect: true'), or supply a
-token yourself through the environment variable PLAK_ACCESS_TOKEN.
+Keychain, Secret Service on Linux, Windows Credential Manager); without a
+usable keyring, or with --insecure-storage, they go into hosts.json in the
+config directory ($PLAK_CONFIG_DIR, else $XDG_CONFIG_HOME/plak, else
+%APPDATA%\\plak on Windows and ~/.config/plak elsewhere), with mode 0600
+outside Windows. That file also remembers the host you last logged in
+to. In CI an OIDC token is used automatically (GitHub Actions with
+'id-token: write', Forgejo Actions with 'enable-openid-connect: true'), or
+supply a token yourself through the environment variable
+PLAK_ACCESS_TOKEN.
 
 Every command finds its host in this order: --host, PLAK_HOST in the
 environment, the host you last logged in to, then DEFAULT_HOST, the
@@ -80,6 +82,8 @@ HOST_HELP = (
 )
 
 HOSTS_FILENAME = "hosts.json"
+# Its own name, so a test can run the Windows path on any platform.
+WINDOWS = sys.platform == "win32"
 KEYRING_SERVICE_PREFIX = "plak:"
 KEYRING_USERNAME = "session"
 LEGACY_ENV_FILENAME = ".env.plak"
@@ -216,7 +220,12 @@ def _config_dir() -> Path:
     if explicit:
         return Path(explicit)
     xdg = os.environ.get("XDG_CONFIG_HOME")
-    return (Path(xdg) if xdg else Path.home() / ".config") / "plak"
+    if xdg:
+        return Path(xdg) / "plak"
+    if WINDOWS:
+        appdata = os.environ.get("APPDATA")
+        return (Path(appdata) if appdata else Path.home() / "AppData" / "Roaming") / "plak"
+    return Path.home() / ".config" / "plak"
 
 
 def _hosts_path() -> Path:
@@ -227,31 +236,41 @@ def _read_hosts() -> dict:
     """hosts.json, or an empty config if there is none. A file that anyone
     other than this user could have written is ignored as a whole: its
     default host decides where a token goes, and its plain-text sessions
-    could be someone else's."""
+    could be someone else's.
+
+    On Windows there are no mode bits or uid to check: the file is trusted on
+    its location. %APPDATA% sits in the user profile, whose default ACL lets
+    in only the user, SYSTEM and the Administrators; a directory named in
+    PLAK_CONFIG_DIR or XDG_CONFIG_HOME is protected as well as its own ACL
+    protects it."""
     path = _hosts_path()
-    refusal = (
-        f"Warning: ignoring {path}: it must be a file of yours with mode 0600, in a "
-        "directory only you can write to. Log in again to rewrite it."
-    )
-    try:
+    if WINDOWS:
+        refusal = (
+            f"Warning: ignoring {path}: it must be a regular file you can read. "
+            "Log in again to rewrite it."
+        )
+        # No O_NOFOLLOW on Windows. Planting a link here takes write access
+        # to the directory, which the profile ACL keeps to this user.
+        flags = os.O_RDONLY
+    else:
+        refusal = (
+            f"Warning: ignoring {path}: it must be a file of yours with mode 0600, in a "
+            "directory only you can write to. Log in again to rewrite it."
+        )
         # No symlink, and the checks below run on the very file that is read:
         # a path checked first and opened later can be swapped in between.
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        flags = os.O_RDONLY | os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags)
     except FileNotFoundError:
         return {}
     except OSError:
         print(refusal, file=sys.stderr)
         return {}
-    uid = os.getuid()
     try:
         info = os.fstat(fd)
-        directory = path.parent.stat()
-        if (
-            not stat.S_ISREG(info.st_mode)
-            or info.st_uid != uid
-            or stat.S_IMODE(info.st_mode) != 0o600
-            or directory.st_uid != uid
-            or directory.st_mode & 0o022
+        if not stat.S_ISREG(info.st_mode) or (
+            not WINDOWS and not _private_to_this_user(info, path.parent)
         ):
             print(refusal, file=sys.stderr)
             return {}
@@ -263,6 +282,19 @@ def _read_hosts() -> dict:
     finally:
         os.close(fd)
     return data if isinstance(data, dict) else {}
+
+
+def _private_to_this_user(info: os.stat_result, directory: Path) -> bool:
+    """POSIX only: the file is this user's with mode 0600, in a directory of
+    this user's that nobody else can write to."""
+    uid = os.getuid()
+    directory_info = directory.stat()
+    return (
+        info.st_uid == uid
+        and stat.S_IMODE(info.st_mode) == 0o600
+        and directory_info.st_uid == uid
+        and not directory_info.st_mode & 0o022
+    )
 
 
 def _write_hosts(config: dict) -> None:
