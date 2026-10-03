@@ -49,11 +49,11 @@ coverage:
         export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/podman/podman.sock"
     fi
     cd backend && uv run python -m pytest -n 4 --cov=src/plak --cov-report=term-missing:skip-covered
-    # .github/scripts/release.py lies outside src/plak: measured on its own, as in CI.
+    # .github/scripts/release.py and rulesets.py lie outside src/plak: measured on its own, as in CI.
     release_data="$(mktemp -t plak-release-coverage)"
     trap 'trash "$release_data" 2>/dev/null || true' EXIT
-    COVERAGE_FILE="$release_data" uv run coverage run --include='*/.github/scripts/release.py' -m pytest -q tests/test_release.py
-    COVERAGE_FILE="$release_data" uv run coverage report --include='*/.github/scripts/release.py' --show-missing --fail-under=100
+    COVERAGE_FILE="$release_data" uv run coverage run --include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py' -m pytest -q tests/test_release.py tests/test_rulesets.py
+    COVERAGE_FILE="$release_data" uv run coverage report --include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py' --show-missing --fail-under=100
     cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
     cd "{{justfile_directory()}}/frontend" && npm run coverage
 

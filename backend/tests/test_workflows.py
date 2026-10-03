@@ -156,16 +156,16 @@ class TestTheCheckGate:
         assert "coverage combine" in report
         assert "coverage report" in report
 
-    def test_the_release_script_has_a_floor_of_its_own(self, ci) -> None:
-        """release.py lies outside src/plak, which is all the merged backend
-        coverage measures. So its tests run again in a job of their own,
-        measured on that file alone."""
+    def test_the_scripts_have_a_floor_of_their_own(self, ci) -> None:
+        """release.py and rulesets.py lie outside src/plak, which is all the
+        merged backend coverage measures. So their tests run again in a job
+        of their own, measured on those files alone."""
         step = _step(ci["jobs"]["release-script"], "Release script tests with coverage")
         assert step["working-directory"] == "backend"
         run, report = step["run"].splitlines()
-        assert run.endswith("-m pytest -q tests/test_release.py")
+        assert run.endswith("-m pytest -q tests/test_release.py tests/test_rulesets.py")
         for line in (run, report):
-            assert "--include='*/.github/scripts/release.py'" in line
+            assert "--include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py'" in line
         assert "--fail-under=100" in report
 
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
@@ -174,6 +174,7 @@ class TestTheCheckGate:
             "backend-part",
             "backend-tests",
             "release-script",
+            "rulesets",
             "cli",
             "cli-windows",
             "frontend",
@@ -284,6 +285,7 @@ class TestTheScans:
             "deploy.yml",
             "plugin.yml",
             "release.yml",
+            "rulesets.yml",
         ]
 
         for path in paths:
@@ -1157,6 +1159,22 @@ class TestTheRulesets:
             tags = _ruleset(name)
             assert tags["target"] == "tag", name
             assert tags["conditions"]["ref_name"]["include"] == ["refs/tags/v*"], name
+
+    def test_the_drift_check_runs_on_pull_requests_and_daily(self, ci) -> None:
+        """ci.yml is called by deploy.yml, so the job runs on pull requests
+        and in the merge queue; a called workflow cannot carry a schedule,
+        so the daily run is a workflow of its own."""
+        for job in (ci["jobs"]["rulesets"], _load("rulesets.yml")["jobs"]["drift"]):
+            step = _step(job, "Compare the live rulesets with the files")
+            assert step["run"] == "python3 .github/scripts/rulesets.py check"
+            assert step["env"] == {"GH_TOKEN": "${{ github.token }}"}
+        daily = _load("rulesets.yml")
+        assert daily["permissions"] == {"contents": "read"}
+        assert daily[True]["schedule"] == [{"cron": "43 5 * * *"}]
+        assert "ci / rulesets" in {
+            c["context"]
+            for c in _rule(_ruleset("beta"), "required_status_checks")["parameters"]["required_status_checks"]
+        }
 
 
 class TestDependabot:
