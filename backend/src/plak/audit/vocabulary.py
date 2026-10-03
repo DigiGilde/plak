@@ -33,6 +33,7 @@ MEMBER_LANGUAGE: Final = "member_language"
 CLI_REFRESH_REUSE: Final = "cli_refresh_reuse"
 IDP_SESSION_ENDED_ACTION: Final = "idp_session_ended"
 VERSION_CLEANUP: Final = "version_cleanup"
+SITE_REPOSITORY_RENAME: Final = "site_repository_rename"
 
 ADMIN_ACTIONS: Final = frozenset(
     {
@@ -87,6 +88,7 @@ ACTIONS: Final = frozenset(
         MEMBER_LANGUAGE,
         IDP_SESSION_ENDED_ACTION,
         VERSION_CLEANUP,
+        SITE_REPOSITORY_RENAME,
         *ADMIN_ACTIONS,
     }
 )

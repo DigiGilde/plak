@@ -588,9 +588,12 @@ async def _find_group_and_site(
     return row.Group, row.Site
 
 
-async def _authorize(request: Request, db: AsyncSession, auth: _DeployAuth, site: Site) -> _DeployAuth:
+async def _authorize(
+    request: Request, db: AsyncSession, auth: _DeployAuth, group_slug: str, site: Site
+) -> _DeployAuth:
     """Returns the auth to carry on with: for CI, with the matched repository
-    and its actor pseudonymised on the stored repository id."""
+    and its actor pseudonymised on the stored repository id. A trusted token
+    that names the repository differently renames the link."""
     if auth.ci is None:
         await require_site_role(db, auth.member, site, Role.EDITOR)
         return auth
@@ -599,11 +602,30 @@ async def _authorize(request: Request, db: AsyncSession, auth: _DeployAuth, site
         repository = await trust.trusted_repository(db, auth.ci.token, site, providers)
     except CiTokenError as error:
         raise ci_error(error) from None
-    return _DeployAuth(
+    trusted = _DeployAuth(
         member=None,
         ci=_CiPrincipal(token=auth.ci.token, repository=repository),
         actor=Actor(ActorKind.CI, repository.actor_identifier),
     )
+    previous = await trust.follow_rename(db, site, repository)
+    if previous is not None:
+        await _audit(
+            request,
+            trusted.actor,
+            vocabulary.SITE_REPOSITORY_RENAME,
+            vocabulary.ALLOWED,
+            None,
+            {
+                "group": group_slug,
+                "site": site.slug,
+                "provider": str(repository.provider),
+                "host": repository.host,
+                "repository": f"{repository.owner}/{repository.repo}",
+                "previous_repository": previous,
+                "repository_id": repository.repository_id,
+            },
+        )
+    return trusted
 
 
 def _auth_refs(auth: _DeployAuth | None) -> dict:
@@ -728,7 +750,7 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
             actor = auth.actor
             refs.update(_auth_refs(auth))
             group, site = await _find_group_and_site(db, group_slug, site_slug)
-            auth = await _authorize(request, db, auth, site)
+            auth = await _authorize(request, db, auth, group_slug, site)
             actor = auth.actor
 
         service = IngestService(store, settings)
@@ -849,7 +871,7 @@ async def delete_preview(request: Request, group_slug: str, site_slug: str, ref:
             if not SLUG_RE.match(ref):
                 raise ApiError(422, "PREVIEW_REF_INVALID")
             _, site = await _find_group_and_site(db, group_slug, site_slug)
-            auth = await _authorize(request, db, auth, site)
+            auth = await _authorize(request, db, auth, group_slug, site)
             actor = auth.actor
     except ApiError as error:
         await _audit(request, actor, AUDIT_ACTION_PREVIEW_TEARDOWN, "refused", error.reason, refs)

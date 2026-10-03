@@ -12,6 +12,13 @@ its issuer is that repository's provider and host, and:
   repository deleted and recreated under the same name does not inherit the
   trust. GitHub always sends ids; a GitHub token without them is refused.
 
+The repository's name on the trusted result, and so the origin a version
+records, comes from the token's signed `repository` claim: the stored name
+is whatever an admin typed for a private repository and goes stale after a
+rename. A missing or malformed claim falls back to the stored name.
+follow_rename then brings the stored name in line, so the Deploy tab shows
+it too.
+
 A live deploy additionally needs an event from LIVE_EVENTS (fail closed: a
 missing or any other event_name is refused) and, when one is set, the live
 branch; previews and preview teardown accept any ref and any event.
@@ -25,7 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from plak.audit import vocabulary
-from plak.ci.providers import ProviderClient, ProviderUnavailableError, host_label
+from plak.ci.providers import ProviderClient, ProviderUnavailableError, host_label, valid_name
 from plak.ci.tokens import CiTokenError, VerifiedCiToken
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.publication import Site
@@ -82,6 +89,15 @@ class TrustedRepository:
         return f"{host_label(self.host)}/{self.owner}/{self.repo}"
 
 
+def _claimed_name(token: VerifiedCiToken) -> tuple[str, str] | None:
+    """The token's `repository` claim as (owner, repo), or None when it is
+    missing or not a valid `owner/repo`."""
+    parts = (token.claim("repository") or "").split("/")
+    if len(parts) != 2 or not all(valid_name(part) for part in parts):
+        return None
+    return parts[0], parts[1]
+
+
 def _not_trusted() -> CiTokenError:
     return CiTokenError(vocabulary.CI_REPOSITORY_NOT_TRUSTED, status=403)
 
@@ -117,15 +133,39 @@ async def trusted_repository(
         if not still:
             raise _not_trusted()
 
+    owner, repo = _claimed_name(token) or (row.owner, row.repo)
     return TrustedRepository(
         provider=row.provider,
         host=row.host,
-        owner=row.owner,
-        repo=row.repo,
+        owner=owner,
+        repo=repo,
         repository_id=row.repository_id,
         owner_id=row.owner_id,
         live_branch=row.live_branch,
     )
+
+
+async def follow_rename(db: AsyncSession, site: Site, repository: TrustedRepository) -> str | None:
+    """Stores the name a trusted token gave, when it differs from the stored
+    one; returns the previous `owner/repo`, or None when nothing changed.
+    Matched on the ids too, so a link replaced in the meantime is left alone;
+    the row lock keeps an admin relinking from slipping in before the commit."""
+    row = await db.scalar(
+        select(SiteRepository)
+        .where(
+            SiteRepository.site_id == site.id,
+            SiteRepository.provider == repository.provider,
+            SiteRepository.host == repository.host,
+            SiteRepository.repository_id == repository.repository_id,
+        )
+        .with_for_update()
+    )
+    if row is None or (row.owner, row.repo) == (repository.owner, repository.repo):
+        return None
+    previous = f"{row.owner}/{row.repo}"
+    row.owner, row.repo = repository.owner, repository.repo
+    await db.commit()
+    return previous
 
 
 def check_live_deploy(repository: TrustedRepository, token: VerifiedCiToken) -> None:

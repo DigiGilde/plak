@@ -437,6 +437,118 @@ async def test_ci_token_from_another_repository_403(environment: Environment) ->
     assert _assert_problem(resp, 403)["code"] == "CI_REPOSITORY_NOT_TRUSTED"
 
 
+async def test_ci_origin_follows_the_token_not_the_stored_name(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(owner="andere-org", repo="getypte-naam"))
+        await db.commit()
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+    assert resp.status_code == 201
+
+    async with environment.session_factory() as db:
+        version = (await db.execute(select(Version))).scalar_one()
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+        rename = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_rename"))
+        ).scalar_one()
+        deploy_row = (await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "deploy"))).scalar_one()
+        actions = list(await db.scalars(select(AuditLogEntry.action).order_by(AuditLogEntry.occurred_at)))
+    assert version.ci_repository == "github.com/minbzk/website"
+    # The link follows the token, so the Deploy tab shows the name too.
+    assert (link.owner, link.repo) == ("minbzk", "website")
+    assert actions == ["site_repository_rename", "deploy"]
+    assert rename.result == "allowed"
+    assert rename.actor_kind == ActorKind.CI
+    assert rename.actor_pseudonym == deploy_row.actor_pseudonym
+    assert rename.refs == {
+        "group": "team-aurora",
+        "site": "website",
+        "provider": "github",
+        "host": "https://github.com",
+        "repository": "minbzk/website",
+        "previous_repository": "andere-org/getypte-naam",
+        "repository_id": 1001,
+    }
+
+
+async def test_a_refused_live_deploy_still_follows_the_rename(environment: Environment) -> None:
+    """The rename rests on the trusted ids, not on the event, so a live deploy
+    refused afterwards keeps it; both rows land in the log."""
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(repo="oude-naam"))
+        await db.commit()
+    token = environment.ci.token(event_name="pull_request")
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert _assert_problem(resp, 403)["code"] == "CI_BRANCH_NOT_ALLOWED"
+
+    async with environment.session_factory() as db:
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+        rows = list(await db.scalars(select(AuditLogEntry).order_by(AuditLogEntry.occurred_at)))
+        versions = await db.scalar(select(func.count()).select_from(Version))
+    assert versions == 0
+    assert link.repo == "website"
+    assert [(row.action, row.result, row.reason_code) for row in rows] == [
+        ("site_repository_rename", "allowed", None),
+        ("deploy", "refused", "CI_BRANCH_NOT_ALLOWED"),
+    ]
+    assert rows[0].refs["previous_repository"] == "minbzk/oude-naam"
+    assert rows[0].actor_pseudonym == rows[1].actor_pseudonym
+
+
+async def test_a_second_ci_deploy_under_the_same_name_writes_no_rename(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(owner="andere-org", repo="getypte-naam"))
+        await db.commit()
+    async with environment.client() as client:
+        for _ in range(2):
+            resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(environment.ci_token))
+            assert resp.status_code == 201
+
+    async with environment.session_factory() as db:
+        renames = await db.scalar(
+            select(func.count()).select_from(AuditLogEntry).where(AuditLogEntry.action == "site_repository_rename")
+        )
+    assert renames == 1
+
+
+async def test_preview_teardown_from_a_renamed_repository_renames_the_link(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(repo="oude-naam"))
+        await db.commit()
+    async with environment.client() as client:
+        resp = await client.delete(
+            "/-/api/v1/sites/team-aurora/website/previews/pr-7", headers=_bearer(environment.ci_token)
+        )
+    assert resp.status_code == 204
+
+    async with environment.session_factory() as db:
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+        rename = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_rename"))
+        ).scalar_one()
+    assert link.repo == "website"
+    assert rename.refs["previous_repository"] == "minbzk/oude-naam"
+
+
+async def test_ci_origin_without_a_repository_claim_is_the_stored_name(environment: Environment) -> None:
+    async with environment.session_factory() as db:
+        await db.execute(update(SiteRepository).values(owner="andere-org", repo="getypte-naam"))
+        await db.commit()
+    token = environment.ci.token(repository=OMIT)
+    async with environment.client() as client:
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+    assert resp.status_code == 201
+
+    async with environment.session_factory() as db:
+        version = (await db.execute(select(Version))).scalar_one()
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+        actions = list(await db.scalars(select(AuditLogEntry.action)))
+    assert version.ci_repository == "github.com/andere-org/getypte-naam"
+    assert (link.owner, link.repo) == ("andere-org", "getypte-naam")
+    assert actions == ["deploy"]
+
+
 async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environment: Environment) -> None:
     async with environment.session_factory() as db:
         await db.execute(
@@ -453,7 +565,18 @@ async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environmen
 
     async with environment.session_factory() as db:
         version = (await db.execute(select(Version))).scalar_one()
-    assert version.ci_repository == "code.overheid.nl/minbzk/website"
+        link = (await db.execute(select(SiteRepository))).scalar_one()
+        rename = (
+            await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_rename"))
+        ).scalar_one()
+    assert version.ci_repository == "code.overheid.nl/MinBZK/Website"
+    # Only the spelling can differ here, and the link takes the token's.
+    assert (link.owner, link.repo) == ("MinBZK", "Website")
+    assert rename.refs["provider"] == "forgejo"
+    assert rename.refs["host"] == FORGEJO_HOST
+    assert rename.refs["repository"] == "MinBZK/Website"
+    assert rename.refs["previous_repository"] == "minbzk/website"
+    assert rename.refs["repository_id"] == 3003
 
 
 async def test_forgejo_unreachable_for_the_recheck_503(environment: Environment) -> None:

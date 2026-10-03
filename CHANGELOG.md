@@ -62,6 +62,14 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   lookup limit is used up, the CLI says why `gh` gave no IDs (not
   installed, not logged in, no access, `--no-gh`) and what to do.
 
+### Security
+
+- A version published from CI shows the repository its signed token
+  names, so a renamed repository or a mistyped name on the site's link
+  no longer shows up as its origin on the Versions tab; the Deploy tab
+  takes over that name, with a `site_repository_rename` row in the
+  audit log.
+
 ## [2026.9.30]
 
 The first tagged version: what ran in production on 30 September 2026.

@@ -192,6 +192,7 @@ ordinary miss. 409, 413 and 422 are collisions, not refusals.
 |---|---|
 | `deploy` | `allowed`, `refused` |
 | `preview_teardown` | `allowed`, `refused` |
+| `site_repository_rename` | `allowed` |
 
 The actor is `ci` for a CI ID token, `member` for a CLI token from `plak
 login` or for an ordinary admin session. For a CI actor `refs` carries the
@@ -206,6 +207,17 @@ cannot plant a pseudonym of a genuinely linked repository. For a CLI token
 `refs.via` carries the value `cli` and `refs.cli_session` the id of the CLI
 session (never token material), and the actor is the same member and
 pseudonym as an ordinary login.
+
+`site_repository_rename` is written when a trusted CI token names the linked
+repository differently from the name stored on the site's link: after a
+rename at the provider, or when an admin typed another name for a private
+repository. A transfer to another owner changes the owner id, and the token
+is refused before it gets here. Plak then stores the token's name, which is what the
+Deploy tab shows from then on (`ci/trust.py:follow_rename`). The row comes
+before the `deploy` or `preview_teardown` row of the same request, with the
+same CI actor; `refs` carries group, site, provider, host, `repository` (the
+new `owner/repo`), `previous_repository` and `repository_id`. A token
+without a valid `repository` claim changes nothing.
 
 ### Nightly cleanup
 
