@@ -362,7 +362,7 @@ describe('App', () => {
     expect(items.map((item) => property<string>(item.element, 'href'))).toEqual([
       '/',
       '/-/groups',
-      '/-/members',
+      '/-/platform',
       '/-/profile',
       '/-/sessions',
       '',
@@ -637,7 +637,7 @@ describe('App', () => {
   });
 
   it('does not show the breadcrumbs of another route', async () => {
-    setBreadcrumbs('/-/members', [{ text: 'Plak', href: '/' }, { text: 'Leden' }]);
+    setBreadcrumbs('/-/platform', [{ text: 'Plak', href: '/' }, { text: 'Leden' }]);
     const app = await mountApp();
 
     expect(app.find('nldd-breadcrumbs').exists()).toBe(false);

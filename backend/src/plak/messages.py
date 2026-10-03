@@ -275,6 +275,7 @@ NL: Final[dict[str, str]] = {
         "Er is nu te weinig vrije ruimte om te publiceren. Probeer het later opnieuw; de "
         "platformbeheerder is hiervan op de hoogte."
     ),
+    "VOLUME_UNMEASURABLE": "De vulling van het contentvolume kan niet worden gemeten.",
     "SYMLINK_REFUSED": "Symlink in archief geweigerd: {name}",
     "HARDLINK_REFUSED": "Hardlink in archief geweigerd: {name}",
     "SPECIAL_FILE": "Geen gewoon bestand, geweigerd: {name}",
@@ -552,6 +553,7 @@ EN: Final[dict[str, str]] = {
         "There is too little free space to publish right now. Try again later; the platform "
         "administrator has been notified."
     ),
+    "VOLUME_UNMEASURABLE": "The fill level of the content volume cannot be measured.",
     "SYMLINK_REFUSED": "Symlink in the archive refused: {name}",
     "HARDLINK_REFUSED": "Hard link in the archive refused: {name}",
     "SPECIAL_FILE": "Not a regular file, refused: {name}",

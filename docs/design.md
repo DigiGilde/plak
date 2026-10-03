@@ -140,6 +140,7 @@ platform administrator may do without a group role (§3.4).
 | Add, change, remove a site member | effective site `admin` |
 | Delete a site | effective site `admin` |
 | Read the audit log, resolve a pseudonym, reveal an IP | platform administrator |
+| Read how full the content volume is (`GET /platform/storage`) | platform administrator |
 
 A member who has no role at all on a site gets the neutral 404 of an unknown
 site rather than a 403: without that, the API would list which sites exist in a
@@ -165,12 +166,12 @@ The slug is the stable identifier, in the API too; renaming is out of scope.
 | `/-/api/v1/...` | JSON and deploy API (admin host only) |
 | `/-/api/docs` | API documentation, self-hosted UI, publicly readable |
 | `/-/oidc/backchannel-logout` | back-channel logout from the OP (admin host only) |
-| `/-/groups`, `/-/members`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/sessions` | SPA pages inside the platform namespace |
+| `/-/groups`, `/-/platform`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/sessions` | SPA pages inside the platform namespace |
 | `/cli-link` | SPA page the CLI device flow opens by URL |
 | `/` on the admin host | the SPA |
 | `/` on the content host | public front page |
 | `/robots.txt`, `/favicon.ico`, `/.well-known/...` | the locations the web pins down, on both hosts |
-| `/healthz` | internal only, on neither public host |
+| `/-/healthz` | public liveness answer, admin host only |
 
 The platform namespace is the single segment `-`. Because `-` is not a valid
 slug it can never collide with content, and every application endpoint lives
@@ -205,7 +206,7 @@ and content stand on separate origins:
 
 The separation is enforced by the application itself, as middleware that reads
 the `Host` header: on the content host only the paths above exist, on the admin
-host everything but `/healthz`. Every refusal is byte-identical to any other
+host everything. Every refusal is byte-identical to any other
 neutral 404, headers included, because the security headers sit outside that
 middleware and follow the host rather than the path (§5.6, §9).
 
@@ -464,6 +465,35 @@ volume measured again at least every 4 MiB. Crossing it at any of those
 moments answers the same 503 `STORAGE_UNAVAILABLE`, and the spool and work
 directory are cleaned up as on any other refusal.
 
+Nobody watches the ZAD probe (`tcp`), so a filling volume is made visible in
+three places. `GET /-/healthz` is public, on the admin host only (§4a): no
+session, no CSRF, `Cache-Control: no-store`, and the normal content rate limit.
+It answers `200 {"status": "ok"}`, or `200 {"status": "degraded", "checks":
+[...]}`, or `503 {"status": "fail", "checks": ["database"]}` when
+`SELECT 1` fails or takes longer than two seconds (draft-inadarei-api-health-check:
+pass and warn are 2xx, fail is 5xx). `checks` lists only the names of the
+checks that complain, in the order `database`, `storage`, `content_root`,
+`idp_revalidation`, and never a message, a number or an error code.
+`storage` appears once the free space drops below `storage_min_free_bytes` plus
+`ingest_max_total`, the point where a deploy of the maximum size would be
+refused (never with the reserve switched off). `content_root` is decided once
+at startup and only when `PLAK_ENVIRONMENT=productie`: the content root shares
+its device with its parent, so it is not a mount point and what is published
+there is lost when the container restarts. `idp_revalidation` is the complaint
+of §7.7. The detail lives elsewhere: the low-space condition writes an ERROR
+line, at most once per hour, from a small periodic task in the lifespan that
+measures the volume every five minutes, so the line appears whether or not
+anyone calls the endpoint; a `content_root` complaint is logged once at
+startup. Neither refuses to start. Platform administrators see the volume
+itself on "Platformbeheer" (`/-/platform`): `GET /platform/storage` returns
+total, used and free bytes, the reserve and the largest deploy, and nothing
+about groups or sites, because the platform administrator manages people and
+groups (§3.4) and does not look into sites.
+
+Code: `platform/health.py`, `ingest/storage_health.py`, `main.py`, `api/admin.py`
+(`platform_storage`). Guarded by: `test_health.py`, `test_storage_health.py`,
+`test_admin_api.py`, `test_host_separation.py`.
+
 The root of the site is settled in three steps: a chain of enclosing directories
 holding exactly one entry is peeled off; a `basispad` from the caller then wins;
 and if that yields no `index.html` in the root the bundle is refused, naming the
@@ -699,7 +729,7 @@ refusal (`invalid_grant`) drops the session and the request continues as not
 logged in. A network failure leaves the session alone and is retried after a
 backoff. A refusal of our client itself keeps everyone logged in, because a
 broken integration must not log the platform out, but raises an ERROR line and a
-standing complaint that `/healthz` reports as `degraded` while still answering
+standing complaint that `/-/healthz` reports as `degraded` while still answering
 200.
 
 Code: `auth/oidc.py`, `auth/revalidation.py`, `platform/backchannel.py`,
@@ -851,7 +881,7 @@ The boundary is stated negatively, because the SPA is the fallback for the whole
 host: the application claims `/-/...` (with only the SPA pages named in
 `SPA_PAGE_PATHS` carved back out, so a typo in an API path stays a 404 instead
 of coming back as the whole interface with status 200), the locations the web
-pins down, and `/healthz`. Everything else is the SPA: an existing file is
+pins down. Everything else is the SPA: an existing file is
 served statically, every other path gets `index.html`.
 
 Every SPA response carries a fixed header set: `Cache-Control`
@@ -884,7 +914,7 @@ attributes on its elements; `script-src` stays `'self'`.
 
 The SPA reads the content origin from `/me` and builds every shareable URL
 (public URL, secret link, preview link, CI snippet) on it, never on
-`window.location.origin`. Route guard: `/-/members` is platform administration,
+`window.location.origin`. Route guard: `/-/platform` is platform administration,
 and denial is the default when the session cannot be resolved. Interface
 language is Dutch; the wire carries the English enum values.
 
@@ -901,8 +931,8 @@ global backstop limit per class as a DoS net. Classes and defaults
 (`config.py`): login 10 per 60 s (backstop 1000), API 60 per 60 s (backstop
 5000), content 600 per 60 s (backstop 20000), and `code` 10 per 900 s (backstop
 500) for the secret-link code page. The key is the member or token when
-authenticated and the IP for anonymous traffic. `/healthz` is exempt and SPA
-assets sit outside the middleware entirely.
+authenticated and the IP for anonymous traffic. `/-/healthz` counts against the content class
+and SPA assets sit outside the middleware entirely.
 
 The login class covers the login paths of both flows, from the same constants
 the routes are registered with, so moving a route cannot silently change its
@@ -918,14 +948,14 @@ Plak is **one component** on ZAD, because the application serves content, the
 SPA and the host separation itself. Two web addresses on that one component
 through `publish-on-web` with a dotted `domain-format` and `root-component`:
 `beheer.plak.<domain>` and `plak.<domain>`. PostgreSQL and the content volume
-are ZAD services, with the volume's size declared in the project file; for a
-lot of content, MinIO through the existing `ContentStore` abstraction is the
-considered route, not a bigger volume.
+are ZAD services, with the volume's size declared in the project file. How full
+the volume is shows in `/-/healthz`, in the log and in the platform
+administrator's view (§6).
 
 The deployment runs `replicas: 1`: sessions and rate-limit counters live in
-process memory and the content volume is read-write-once. `/healthz` exists
-internally only (§4a): the probe reaches the pod directly, so the path exists on
-neither public host. Secrets (OIDC key or client secret, database credentials,
+process memory and the content volume is read-write-once. The probe is
+`tcp`; `/-/healthz` (§6) exists on the admin host for anyone who wants to
+watch the pod. Secrets (OIDC key or client secret, database credentials,
 audit pepper, audit IP key, session secret) come in as user env vars; nothing
 sits in the image or the repository. Migrations run as a job in the portal or at
 container start, because ZAD has no notion of a Job.

@@ -323,7 +323,7 @@ class TestFullApp:
         _, content = app_clients
         paths = [
             "/-/onbekend",  # host separation: the platform namespace of the admin host
-            "/healthz",  # host separation: internal only
+            "/-/healthz",  # host separation: admin host only
             "/favicon.ico/x/",  # serving router: reserved slug, before the DB
             "/.well-known/x",  # serving router: reserved slug, lexical branch
             "/onbekend",  # the catch-all: a path no route claims

@@ -25,6 +25,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('platformStorage', () => {
+  it('returns the fill level of the content volume', async () => {
+    const volume = await plak.platformStorage();
+
+    expect(volume.totalBytes).toBeGreaterThan(volume.usedBytes);
+    expect(volume.reserveBytes).toBeGreaterThan(0);
+    expect(Object.keys(volume).sort()).toEqual([
+      'freeBytes',
+      'maxDeployBytes',
+      'reserveBytes',
+      'totalBytes',
+      'usedBytes',
+    ]);
+  });
+});
+
 describe('me (session)', () => {
   it('returns the logged-in member, with the content origin for shared links', async () => {
     const loggedIn = await plak.me();

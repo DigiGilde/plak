@@ -69,10 +69,10 @@ describe('router: every configured route resolves and mounts its component', () 
 
   it('lets a platform admin reach the platform route', async () => {
     const { wrapper, testRouter } = mountRouterView();
-    await testRouter.push('/-/members');
+    await testRouter.push('/-/platform');
     await flushPromises();
 
-    expect(testRouter.currentRoute.value.name).toBe('members');
+    expect(testRouter.currentRoute.value.name).toBe('platform');
     wrapper.unmount();
   });
 });

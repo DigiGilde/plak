@@ -28,9 +28,17 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   `PLAK_LIVE_VERSIONS_KEPT`; a site admin can set another number per site),
   so a site no longer gets stuck on its storage quota; the Versions tab
   shows the site's usage and this rule, and is where a site admin sets it.
+- `GET /-/healthz` on the admin host replaces the unreachable `/healthz`:
+  `ok`, `degraded` or, with an unreachable database, `fail` (503), naming
+  the failing checks, among them a nearly full content volume (`storage`)
+  and a content root that is not mounted in production (`content_root`).
+  Low space also writes an ERROR line at most once per hour, and platform
+  administrators see how full the volume is on "Platformbeheer".
 
 ### Changed
 
+- On ZAD a site may hold 200 MiB across all its versions (`PLAK_SITE_MAX_BYTES`),
+  down from the 500 MiB default, because a ZAD volume is capped at 1Gi.
 - The publish action needs no `host` for the DigiGilde instance.
 - The publish action lives at `actions/publish` and the Claude Code skill
   is `plak-publish`; a workflow changes the path when it moves its pin.

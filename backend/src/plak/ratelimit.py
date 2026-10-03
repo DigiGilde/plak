@@ -51,7 +51,6 @@ _LOGIN_PREFIXES = (
 # module sits below the API layer, so this is a literal rather than an import
 # from api/errors.py.
 _API_PREFIXES = ("/-/api",)
-_EXEMPT_PATHS = frozenset({"/healthz"})
 
 
 _CLEANUP_INTERVAL = 128
@@ -67,10 +66,8 @@ class RateLimitClass(enum.StrEnum):
     CODE = "code"
 
 
-def class_for_path(path: str) -> RateLimitClass | None:
-    """Determines the rate-limit class for a path; None means exempt."""
-    if path in _EXEMPT_PATHS:
-        return None
+def class_for_path(path: str) -> RateLimitClass:
+    """Determines the rate-limit class for a path."""
     # Its own class, and the strictest of the four: guessing a code here is
     # the one place on the content host where guessing gets you in
     # (serving/code_page.py). The limit per selector sits in the route itself;
@@ -201,10 +198,6 @@ class RateLimitMiddleware:
 
         request = Request(scope, receive=receive)
         klass = class_for_path(request.url.path)
-        if klass is None:
-            await self._app(scope, receive, send)
-            return
-
         limit = limit_for(self._settings, klass)
         now_ = self._clock()
         accept_language = request.headers.get("accept-language")

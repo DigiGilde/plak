@@ -329,6 +329,17 @@ export interface OverviewGroup {
   sites: Site[];
 }
 
+/** Response of `GET /platform/storage` (platform admins only). */
+export interface Volume {
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  /** Free space the volume must keep; 0 means the check is off. */
+  reserveBytes: number;
+  /** Largest unpacked deploy; free space below reserve plus this stops a maximum deploy. */
+  maxDeployBytes: number;
+}
+
 export interface Overview {
   groups: OverviewGroup[];
 }

@@ -58,7 +58,7 @@ const navigation = computed<MenuChoice[]>(() => [
   { text: t('nav.groups'), icon: 'folder-on-folder', path: '/-/groups' },
   // A page like any other, so it belongs with the navigation; what gates it is
   // the platform role, not the fact that it is about accounts.
-  ...(admin.value ? [{ text: t('nav.platform'), icon: 'person-2', path: '/-/members' }] : []),
+  ...(admin.value ? [{ text: t('nav.platform'), icon: 'person-2', path: '/-/platform' }] : []),
 ]);
 
 /**

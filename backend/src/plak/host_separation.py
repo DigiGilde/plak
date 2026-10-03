@@ -4,18 +4,15 @@ Without nginx in front, the app decides per Host which world a path belongs
 to. The SPA sits on the root of the admin host, so the two worlds do not
 differ in which paths exist there, but in what answers them: on the
 admin host the SPA is the fallback for the whole path space, with the app's
-own paths carved out of it (platform/spa.py), and only `/healthz` does not
-exist at all. On the content host only content exists
+own paths carved out of it (platform/spa.py). On the content host only content exists
 (`/{group}/{site}/...`), robots.txt, favicon.ico, .well-known, the public
 front page on `/` (platform/pages.py) and of the platform namespace exactly
 four paths: the content login, its callback, the content logout and the code
 of a secret link shared without it (the segment `-` is never a slug).
 Everything else under `/-/` is refused there, the API included - without that
 rule moving the API from /beheer/api to /-/api would silently publish it on
-the content host. `/healthz` exists on neither public host (internal only, the
-probe hits the pod directly); a probe therefore has to reach it around this
-middleware and TrustedHost (a separate port or its own exception, still to be
-built). Every refusal is byte-identical to every other
+the content host; that includes `/-/healthz`, which only the admin host answers
+(platform/health.py). Every refusal is byte-identical to every other
 neutral 404, headers included (anti-enumeration: SecurityHeadersMiddleware sits
 outside this one and reads the host, not the path), and leaves ratelimit, audit
 and router untouched.
@@ -31,7 +28,6 @@ from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plak.constants import (
-    INTERNAL_ONLY_PATHS,
     PATH_CONTENT_CODE,
     PATH_CONTENT_LOGIN,
     PATH_CONTENT_LOGOUT,
@@ -53,17 +49,14 @@ def host_from_scope(scope: Scope) -> str:
 
 
 def belongs_to_admin(path: str) -> bool:
-    # Everything here is either an app path or an SPA path; the internal probe
-    # is the only thing that does not exist on this host.
-    return path not in INTERNAL_ONLY_PATHS
+    # Everything here is either an app path or an SPA path.
+    return True
 
 
 def belongs_to_content(path: str) -> bool:
     # `/` is not carved out: the root of the content host carries the public
     # front page (platform/pages.py). Everything the content world does not
     # own is carved out below; what is left over is content.
-    if path in INTERNAL_ONLY_PATHS:
-        return False
     if path_under(path, PLATFORM_PREFIX):
         # Only the content login, its callback, logout and the code of a
         # secret link live here. Everything else under /-/ belongs to the

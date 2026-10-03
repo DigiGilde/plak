@@ -16,7 +16,7 @@ interval the session's refresh token goes to the token endpoint
   blocked, and the check is retried after RECHECK_BACKOFF;
 - a refusal of our client itself (invalid_client and the rest of
   CLIENT_FAULT_ERRORS) is the same for the visitor, but loud: an ERROR line
-  once per backoff window and a standing complaint that /healthz reports.
+  once per backoff window and a standing complaint that /-/healthz reports.
 
 No token material is ever logged or written to an audit ref.
 """
@@ -60,7 +60,7 @@ class IdpRevalidationFault:
 
     Set when the token endpoint refuses our client itself, cleared by the first
     re-validation that succeeds. Two readers: the ERROR log line (at most one
-    per backoff window, so a busy site does not flood the log) and /healthz,
+    per backoff window, so a busy site does not flood the log) and /-/healthz,
     where an operator sees it without reading logs at all.
     """
 
@@ -97,7 +97,7 @@ def idp_fault(app: FastAPI) -> IdpRevalidationFault:
 
 
 def revalidation_status(app: FastAPI) -> str | None:
-    """What /healthz reports about the coupling to the IdP; None while it is
+    """What /-/healthz reports about the coupling to the IdP; None while it is
     healthy."""
     fault = getattr(app.state, "idp_revalidation_fault", None)
     return fault.message if fault is not None else None

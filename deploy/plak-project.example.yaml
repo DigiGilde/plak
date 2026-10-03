@@ -102,20 +102,18 @@ components:
       outbound: [443, 5432]
     # No health-check service: without that service the platform checks the
     # component at TCP level on its first inbound port, and that is exactly
-    # what we want. An HTTP probe would not work: /healthz does not exist
-    # on either public host and the probe arrives with the pod IP as Host,
-    # which the app rejects.
+    # what we want. An HTTP probe would not work: /-/healthz exists on the
+    # admin host only and the probe arrives with the pod IP as Host, which
+    # the app rejects.
     services:
       - publish-on-web
       - keycloak
       - postgresql-database
       - persistent-storage:
           config:
-            # 1Gi is our chosen starting size, not a known ceiling; the
-            # actual platform maximum is unconfirmed (docs/deploying-on-zad.md
-            # §9/§10). Once the content store runs up against it,
-            # minio-storage is the route (bucket per deployment), via the
-            # ContentStore abstraction in the app.
+            # 1Gi is the maximum a ZAD volume can have (docs/deploying-on-zad.md
+            # §9). How full it gets shows in /-/healthz, in the log and
+            # in the platform admin view (docs/deploying-on-zad.md §5).
             - name: content
               size: 1Gi
               mount-path: /content
@@ -185,6 +183,9 @@ deployments:
         env-vars:
           PLAK_ENVIRONMENT: "productie"
           PLAK_CONTENT_ROOT: "/content"
+          # 200 MiB per site: the volume is capped at 1Gi on ZAD (about 700 MiB
+          # usable), which leaves room for several sites at their maximum.
+          PLAK_SITE_MAX_BYTES: "209715200"
           # Must match the two hosts above exactly: the app derives host
           # separation, the HSTS decision and every shareable URL from
           # them. PLAK_BASE_URL (the beheer component's own ingress host)

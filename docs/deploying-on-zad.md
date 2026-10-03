@@ -108,7 +108,7 @@ What is in it and why:
 | `services: publish-on-web, postgresql-database, persistent-storage, keycloak` | the four services Plak needs |
 | component `beheer`, inbound 8080 | the app; one container, port 8080 as in the Containerfile |
 | `persistent-storage` `content` on `/content` | the content volume, `PLAK_CONTENT_ROOT` |
-| `probe: scheme: tcp` | `/healthz` exists on neither public host and the probe arrives with the pod IP as Host; an HTTP probe would always fail |
+| `probe: scheme: tcp` | `/-/healthz` exists on the admin host only and the probe arrives with the pod IP as Host; an HTTP probe would always fail |
 | `aliases` for `PLAK_DB_URL` | the DB service delivers separate variables, Plak wants a DSN |
 | `backup: enabled: true` | content sits on a PVC, not in the database |
 
@@ -172,7 +172,7 @@ anybody an administrator.
 | `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
 | `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
 | `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
-| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy |
+| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy. ZAD runs with `209715200` (200 MiB), set in the project file: the volume is capped at 1Gi (about 700 MiB usable), which leaves room for several sites at their maximum while a site can still publish several times a day before the nightly cleanup |
 | `PLAK_LIVE_VERSIONS_KEPT` | env-vars | optional, default `5`, `0` keeps everything; previous live versions the nightly cleanup keeps besides the current live one, for every site without a number of its own |
 | `PLAK_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
 
@@ -184,8 +184,7 @@ maximum: it checks the declared upload size before reading the body and keeps
 checking while it writes, refusing with `503` `STORAGE_UNAVAILABLE` rather than
 letting the volume drop below `PLAK_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
 one full-size deploy (400 MiB with the defaults) well below the volume size, or
-a large deploy can only ever be refused; on a bigger volume the limits can grow
-with it.
+a large deploy can only ever be refused; a bigger volume is not available on ZAD (§9).
 
 Besides the host separation, `PLAK_BASE_URL` is also the exact CI audience: a
 GitHub or Forgejo workflow requests its ID token with this value as
@@ -241,20 +240,68 @@ If something goes wrong with the link itself instead of with a session
 `unauthorized_client` or `unsupported_grant_type` because the client is not
 allowed the refresh grant), then nobody is logged out, but Plak complains
 loudly: an ERROR line with the error code and the issuer, at most one per
-minute, and for as long as it lasts `/healthz` answers with status 200 and
+minute, and for as long as it lasts `GET /-/healthz` on the admin host
+answers with status 200 and
 
 ```json
-{"status": "degraded", "idp_revalidation": "IdP re-validation is failing: invalid_client"}
+{"status": "degraded", "checks": ["idp_revalidation"]}
 ```
 
-That is the place to alarm on: `/healthz` is internal (the probe on ZAD is
-`tcp`, so it does not notice), but can be queried inside the cluster. The
-first successful re-validation clears the complaint by itself.
+The endpoint is public, so it names only the check, never the error code; the
+ERROR line in the log is where that is. The probe on ZAD is `tcp`, so it does
+not notice either: alarm on the log or on `/-/healthz`. The first successful
+re-validation clears the complaint by itself.
 
 The precondition is that the client issues a refresh token; with the default
 `sso-only` template of the ZAD Keycloak it does. If the client issues none,
 the session stays and the app logs a warning per session: the re-validation is
 then no extra risk, but also no extra certainty.
+
+### Content volume
+
+Nobody watches the ZAD probe (`tcp`), so trouble with the content volume (1Gi,
+§9) is made visible in three places.
+
+`GET https://beheer.plak.<domain>/-/healthz` is public and needs no login. It
+is on the admin host only; the content host answers it with the neutral 404.
+It is never cached, and it counts against the normal rate limit. The answer
+names only the checks that complain, never a message or a number:
+
+| Answer | Status | Meaning |
+|---|---|---|
+| `{"status": "ok"}` | 200 | nothing complains |
+| `{"status": "degraded", "checks": ["storage"]}` | 200 | one or more of `storage`, `content_root`, `idp_revalidation` complain |
+| `{"status": "fail", "checks": ["database"]}` | 503 | the database does not answer within two seconds (`SELECT 1`); degraded checks may be listed next to `database` |
+
+`storage` appears as soon as the free space drops below
+`PLAK_STORAGE_MIN_FREE_BYTES` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB with the
+defaults): the point where a deploy of the maximum size would be refused. With
+`PLAK_STORAGE_MIN_FREE_BYTES=0` the check is off and the check never appears.
+
+`content_root` is decided once, at startup, and only with
+`PLAK_ENVIRONMENT=productie`: the content root is on the same device as its
+parent, so no volume is mounted there. Plak creates the directory itself, so a
+wrong `PLAK_CONTENT_ROOT` would otherwise write into the container's own layer
+and lose everything at the next restart. This is a warning, the pod starts
+anyway, and only a restart with the right mount clears it.
+
+Several complaints sit in one answer, in the order `database`, `storage`,
+`content_root`, `idp_revalidation`. The detailed messages are in the log and on
+"Platformbeheer".
+
+The log is the place to alarm on, because it is there without anyone calling
+anything. The low-space condition is measured every five minutes by a small
+task inside the app, and writes an ERROR line (`Content volume has 240 MiB
+free; a deploy of the maximum size (200 MiB) would take it below the 100 MiB
+reserve. Deploys will be refused soon; free up space or enlarge the volume.`)
+at most once per hour for as long as it lasts. A content root that is not a
+mount point writes an ERROR line once, at startup.
+
+A platform administrator sees the whole volume in the admin SPA, on
+"Platformbeheer" (`/-/platform`), below the member list: size, used, free and
+the reserve, without any group or site. It is backed by
+`GET /-/api/v1/platform/storage` (platform administrators only) and turns red
+under the same threshold as `storage`.
 
 ## 6. Registering the second OIDC redirect URI
 
@@ -465,19 +512,25 @@ used is in the history of `deploy.yml`, before `aecdb30`.
   the platform team: whether the shared database server keeps one
   deployment's account out of another's database at the PostgreSQL level.
 
-## 9. Storage sizing, and MinIO as the next step
+## 9. Storage sizing
 
-`persistent-storage` takes a `size` declared in the project file, free-form
-(the ZAD project schema sets no maximum we could find). What the platform
-actually allows per volume, and whether self-service offers a fixed catalogue
-of sizes, is a question for the platform team (§10, question 1). The volume is
-ReadWriteOnce on `ocs-storagecluster-ceph-rbd`, the number of replicas is
+`persistent-storage` offers a fixed catalogue of sizes: 50Mi, 100Mi, 250Mi,
+500Mi and 1Gi. **1Gi is the maximum per volume**, and a volume can grow but not
+shrink (source: RIG-Cluster, `operations-manager/python/opi/services/catalog/persistent_storage/help.md`
+and `persistent-storage.v1.0.json`). Plak already runs on 1Gi, so there is no
+bigger volume to move to. The volume is ReadWriteOnce on `ocs-storagecluster-ceph-rbd`, the number of replicas is
 fixed hard at 1, and as soon as a component has a persistent volume the
 platform switches the rollout strategy to `Recreate` itself (so a short
 interruption on every deploy).
 
+Of those 1024 MiB, the reserve (`PLAK_STORAGE_MIN_FREE_BYTES`, 100 MiB) and one
+deploy of the maximum size in flight (200 MiB unpacked) are never available to
+stored versions, so roughly 700 MiB is left for all sites together, previews
+included (about 600 MiB while the upload of such a deploy sits next to what it
+unpacks).
+
 What one site can hold is bounded twice. `PLAK_SITE_MAX_BYTES` (500 MiB by
-default) caps all its versions together, and every night at 03:00 UTC the
+default, 200 MiB on ZAD) caps all its versions together, and every night at 03:00 UTC the
 cleanup job removes the live versions beyond the current one and the ones
 before it that the site keeps, row and files, with a `version_cleanup` row in
 the audit log. That number is `PLAK_LIVE_VERSIONS_KEPT` (5) for every site,
@@ -493,36 +546,36 @@ number of sites times that settled size, plus the floor and one full deploy
 `PLAK_LIVE_VERSIONS_KEPT=0` keeps every live version of the sites without
 their own number, and then the quota is their only bound.
 
-For Plak 1Gi is a start, not a terminus: the candidate sites are 1 to 13 MB
-now, but every kept version and every preview counts towards it. As soon as it
-pinches, **MinIO is the route**, not a bigger volume: `minio-storage` gives a
-bucket per deployment, with versioning and backup, and with the
-`ContentStore` abstraction the app already has a place for it.
+The candidate sites are 1 to 13 MB now, but every kept version and every
+preview counts towards the volume. Plak writes to that one volume and nowhere
+else (`ContentStore` is a plain filesystem class). More room than 1Gi would need
+storage other than a volume, which is not planned; the quota and the cleanup
+above are what keep the volume from filling.
 
-MinIO is the way to more storage, but not to a second replica. The number of
-replicas is not a setting of the project on ZAD: the schema has no `replicas`
-field and the Operations Manager renders 1 (0 if the component is turned off),
-whatever the storage is. So ReadWriteOnce is not the binding restriction here,
-and a second pod is a question for the platform team.
+The number of replicas is not a setting of the project on ZAD: the schema has
+no `replicas` field and the Operations Manager renders 1 (0 if the component is
+turned off), whatever the storage is. So ReadWriteOnce is not the binding
+restriction here, and a second pod is a question for the platform team.
 
-So keep an eye on how full the volume is from day one, and treat the move to
-MinIO as planned work instead of as an emergency measure.
+So keep an eye on how full the volume is from day one: `/-/healthz`, the log and
+the platform administrator's view on "Platformbeheer" (`/-/platform`) all report it (§5, "Content
+volume").
 
 ## 10. What is still open
 
 Questions for the platform team, with what we do for now as long as the answer
 is not there:
 
-1. **What is the actual maximum persistent volume size, does self-service
-   offer only a fixed catalogue of sizes, is there a ReadWriteMany option, and
-   can a component run more than one replica?** We could not confirm a
-   maximum or a size catalogue from the ZAD platform repo; the project schema
-   places no upper bound on `size`. The replica question is separate, because
-   the project schema has no `replicas` field and the platform renders 1 hard
-   (§9). For now: 1Gi as our own starting size, one pod, and MinIO as the
-   route to more storage. The sizes offered by the ZAD self-service wizard
-   could not be verified from the platform repo either; treat any number
-   quoted for it as unconfirmed until the platform team answers.
+1. **Answered, from the platform repo.** The `persistent-storage` service
+   offers 50Mi, 100Mi, 250Mi, 500Mi and 1Gi; 1Gi is the maximum per volume and
+   a volume can grow but not shrink (RIG-Cluster,
+   `operations-manager/python/opi/services/catalog/persistent_storage/help.md`
+   and `persistent-storage.v1.0.json`). Plak runs on 1Gi, so more room than that
+   would need storage other than a volume, which is not planned. What stays
+   open is whether there is a ReadWriteMany option and whether a component can
+   run more than one replica: the project schema has no `replicas` field and
+   the platform renders 1 hard (§9). For now: 1Gi, one pod, a site quota of
+   200 MiB, and the signals of §5 ("Content volume") to see it fill up.
 2. **Can the Keycloak client of the project be set to `client-jwt`
    (private_key_jwt with JWKS) and to exact-match redirect URIs, and can
    `directAccessGrants` and service accounts be turned off?** Self-service

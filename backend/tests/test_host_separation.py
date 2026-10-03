@@ -80,10 +80,9 @@ class TestClassification:
     def test_no_content_paths(self, path: str) -> None:
         assert not belongs_to_content(path)
 
-    def test_healthz_exists_on_neither_public_host(self) -> None:
-        # Spec §4a/§11: internal only, the probe hits the pod directly.
-        assert not belongs_to_admin("/healthz")
-        assert not belongs_to_content("/healthz")
+    def test_healthz_belongs_to_the_admin_host_only(self) -> None:
+        assert belongs_to_admin("/-/healthz")
+        assert not belongs_to_content("/-/healthz")
 
     async def test_non_http_scope_is_passed_through_untouched(self) -> None:
         """A websocket (or lifespan) scope carries no host-worthy path
@@ -168,7 +167,7 @@ async def _is_neutral_404(client: httpx.AsyncClient, path: str) -> bool:
 
 
 class TestAdminHost:
-    @pytest.mark.parametrize("path", ["/", "/aurora", "/aurora/site", "/aurora/site/toegang", "/-/members"])
+    @pytest.mark.parametrize("path", ["/", "/aurora", "/aurora/site", "/aurora/site/toegang", "/-/platform"])
     async def test_the_spa_answers_every_path_it_owns(self, two_hosts, path: str) -> None:
         # A group or site path here is an SPA route, not the neutral 404, and
         # the platform pages of the SPA come along under `/-/`.
@@ -183,11 +182,9 @@ class TestAdminHost:
         assert robots.status_code == 200
         assert robots.text == "User-agent: *\nDisallow: /\n"
 
-    async def test_healthz_is_neutral_404(self, two_hosts) -> None:
-        # Internal only (spec §4a/§11): through the public admin host the
-        # probe does not exist, not even rate-limit-free.
+    async def test_healthz_reaches_the_app(self, two_hosts) -> None:
         admin, _ = two_hosts
-        assert await _is_neutral_404(admin, "/healthz")
+        assert not await _is_neutral_404(admin, "/-/healthz")
 
     @pytest.mark.parametrize("path", ["/-/login", "/-/login?returnTo=%2Faurora%2Fsite%2F", "/-/oauth2/callback"])
     async def test_login_exists_also_on_the_admin_host(self, two_hosts, path: str) -> None:
@@ -211,7 +208,7 @@ class TestAdminHost:
 class TestContentHost:
     @pytest.mark.parametrize(
         "path",
-        ["/-/api/v1/x", "/-/onbekend", "/-/onbekend/diep/", "/healthz"],
+        ["/-/api/v1/x", "/-/onbekend", "/-/onbekend/diep/", "/-/healthz"],
     )
     async def test_platform_paths_are_neutral_404(self, two_hosts, path: str) -> None:
         _, content = two_hosts

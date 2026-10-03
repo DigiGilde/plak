@@ -29,6 +29,7 @@ import type {
   SiteRepositoryInput,
   SiteStorage,
   Version,
+  Volume,
   Access,
 } from './types';
 
@@ -438,6 +439,12 @@ export function setPlatformRole(memberId: string, platformRole: PlatformRole): P
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ platformRole }),
   });
+}
+
+// -- Content volume (platform admins only) ---------------------------------------
+
+export function platformStorage(): Promise<Volume> {
+  return request<Volume>(`${BASE}/platform/storage`);
 }
 
 // -- Versions and rollback --------------------------------------------------

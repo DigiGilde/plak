@@ -5,7 +5,7 @@ router as catch-all.
 Only `test_unknown_site_gives_neutral_404_by_full_stack` touches a
 real PostgreSQL test container (through the conftest fixture
 `migrated_dsn`); the other tests need no reachable DB, because the routes
-involved never touch it (lexical redirect, /healthz, /-/login).
+involved never touch it (lexical redirect, /-/login).
 """
 
 from __future__ import annotations
@@ -112,29 +112,6 @@ async def test_startup_log_of_the_idp_coupling_carries_no_client_secret(
 
     assert "OIDC-koppeling" in caplog.text
     assert "geheim-van-de-client" not in caplog.text
-
-
-async def test_healthz_does_not_exist_on_a_public_host(tmp_path: Path) -> None:
-    """Spec §4a/§11: the probe hits the pod directly, so `/healthz` exists on
-    neither public host, and both of them refuse it with the neutral 404. A
-    probe therefore still has to reach the route around the host separation
-    (its own port); the route itself answers, which is what the second half
-    checks - through the endpoint, because no request can reach it."""
-    settings = _make_settings(tmp_path, base_url="https://beheer.plak.example")
-    app = create_app(settings)
-
-    async with app.router.lifespan_context(app):
-        async with _client_for(app) as content:
-            on_content = await content.get("/healthz")
-        async with _client_for(app, base="https://beheer.plak.example") as admin:
-            on_admin = await admin.get("/healthz")
-
-    for resp in (on_content, on_admin):
-        assert resp.status_code == 404
-        assert resp.content == NEUTRAL_404_BODY
-
-    route = next(route for route in app.routes if getattr(route, "path", None) == "/healthz")
-    assert await route.endpoint() == {"status": "ok"}
 
 
 async def test_robots_txt_not_shadowed_by_the_content_catch_all(tmp_path: Path) -> None:

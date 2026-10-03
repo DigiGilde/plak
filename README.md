@@ -98,7 +98,7 @@ free for groups.
 | `/admin` | site overview (start page after login) |
 | `/admin/{group}` | group page |
 | `/admin/{group}/{site}` | site detail, tab Overzicht (overview); other tabs: `/access`, `/previews`, `/versions`, `/deploy` |
-| `/admin/-/members` | platform administration: member activation |
+| `/admin/-/platform` | platform administration: member activation |
 | `/admin/-/privacy`, `/admin/-/toegankelijkheid`, `/admin/-/over` | platform pages (publicly accessible, no login) |
 | `/-/login` | starts the OIDC login; `/-/oauth2/callback` is the redirect URI |
 | `/-/logout` | POST, ends the session |
@@ -283,8 +283,9 @@ serves content, the admin SPA and the host separation itself.
   by the platform team; without approval the rollout falls back to the
   cluster address.
 - PostgreSQL and the content volume come as ZAD services, with the
-  volume's size declared in the project file. For a lot of content,
-  MinIO is the considered route, not a bigger volume.
+  volume's size declared in the project file. How full the volume is
+  shows in `/-/healthz`, in the log and in the platform administrator's
+  view on "Platformbeheer" (`/-/platform`) (`docs/deploying-on-zad.md` §5, §9).
 - Each site's history on that volume is bounded: a 500 MiB quota per
   site (`PLAK_SITE_MAX_BYTES`) and a nightly cleanup of live versions
   beyond the current one and the ones before it that the site keeps

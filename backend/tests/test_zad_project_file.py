@@ -136,6 +136,12 @@ def test_backup_becomes_per_deployment_scheduled() -> None:
         assert "pvc" in deployment["backup"]["resource_types"]
 
 
+def test_the_site_quota_fits_the_volume_zad_caps_at_1gi() -> None:
+    deployment = PROJECT["deployments"][0]
+    env = deployment["components"][0]["env-vars"]
+    assert env["PLAK_SITE_MAX_BYTES"] == str(200 * 1024 * 1024)
+
+
 def test_urls_come_up_with_the_composed_hosts() -> None:
     """The app derives host separation, HSTS and every shareable URL from
     these two, so they must be literally the hosts the domain format

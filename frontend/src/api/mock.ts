@@ -34,6 +34,7 @@ import type {
   SiteRepository,
   SiteStorage,
   Version,
+  Volume,
   Access,
   AccessBase,
 } from './types';
@@ -935,6 +936,19 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         authorization.status = 'denied';
         return empty(204);
       }
+    }
+
+    // /platform/storage
+    if (rest[0] === 'platform' && rest[1] === 'storage' && method === 'GET') {
+      const mib = 1024 * 1024;
+      const volume: Volume = {
+        totalBytes: 1024 * mib,
+        usedBytes: 700 * mib,
+        freeBytes: 324 * mib,
+        reserveBytes: 100 * mib,
+        maxDeployBytes: 200 * mib,
+      };
+      return json(200, volume);
     }
 
     // /platform/members...

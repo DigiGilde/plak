@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -341,6 +342,74 @@ class TestAuthorization:
         assert admin["createdAt"].endswith("Z")
         # Logging in is what fetched this list, so the admin has been seen.
         assert admin["lastLoginAt"].endswith("Z")
+
+    async def test_platform_storage_refuses_anonymous(self, client, app, data):
+        response = await client.get(f"{BASE}/platform/storage")
+        assert response.status_code == 401
+        assert response.json()["code"] == "NO_SESSION"
+
+    async def test_platform_storage_refuses_a_plain_member(self, client, app, data):
+        login(client, app, sub="lid-b", email="b@example.nl")
+        response = await client.get(f"{BASE}/platform/storage")
+        assert response.status_code == 403
+        assert response.json()["code"] == "NOT_ADMIN"
+
+    async def test_platform_storage_refuses_a_group_admin(self, client, app, data):
+        """Admin of a group is not admin of the platform."""
+        login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.get(f"{BASE}/platform/storage")
+        assert response.status_code == 403
+        assert response.json()["code"] == "NOT_ADMIN"
+
+    async def test_platform_storage_refuses_a_deactivated_admin(self, client, app, factory, data):
+        async with factory() as db:
+            db.add(
+                Member(
+                    sso_subject="oud-beheerder",
+                    email="oud-beheerder@example.nl",
+                    platform_role=PlatformRole.ADMIN,
+                    status=MemberStatus.DEACTIVATED,
+                )
+            )
+            await db.commit()
+        login(client, app, sub="oud-beheerder", email="oud-beheerder@example.nl")
+        response = await client.get(f"{BASE}/platform/storage")
+        assert response.status_code == 403
+        assert response.json()["code"] == "MEMBER_DEACTIVATED"
+
+    async def test_platform_storage_reports_the_volume_and_nothing_about_sites(
+        self, client, app, factory, data, content_root
+    ):
+        app.state.content_store.store_version("team", "site", uuid.uuid4(), {"index.html": b"x" * 10})
+
+        login(client, app, sub="admin-sub", email="admin@example.nl")
+        response = await client.get(f"{BASE}/platform/storage")
+
+        assert response.status_code == 200
+        body = response.json()
+        usage = shutil.disk_usage(content_root)
+        assert set(body) == {"totalBytes", "usedBytes", "freeBytes", "reserveBytes", "maxDeployBytes"}
+        assert body["totalBytes"] == usage.total
+        assert 0 < body["freeBytes"] <= body["totalBytes"]
+        assert body["usedBytes"] > 0
+        assert body["reserveBytes"] == app.state.settings.storage_min_free_bytes
+        assert body["maxDeployBytes"] == app.state.settings.ingest_max_total
+        assert "team" not in response.text
+
+    async def test_platform_storage_answers_a_problem_503_when_the_volume_cannot_be_measured(
+        self, client, app, data, monkeypatch
+    ):
+        def gone(path):
+            raise FileNotFoundError("content root is gone")
+
+        monkeypatch.setattr(shutil, "disk_usage", gone)
+        login(client, app, sub="admin-sub", email="admin@example.nl")
+        response = await client.get(f"{BASE}/platform/storage")
+
+        assert response.status_code == 503
+        assert response.headers["content-type"].startswith(PROBLEM)
+        assert response.json()["code"] == "VOLUME_UNMEASURABLE"
+        assert "content root is gone" not in response.text
 
     async def test_deactivate_and_reactivate_by_admin(self, client, app, data):
         login(client, app, sub="iemand-nieuw")

@@ -34,6 +34,7 @@ import {
 } from '../api/plak';
 import type { Member, MemberStatus } from '../api/types';
 import RowActions, { type RowAction } from '../components/RowActions.vue';
+import VolumeUsage from '../components/VolumeUsage.vue';
 import { setBreadcrumbs } from '../composables/breadcrumbs';
 import { currentMemberState, fetchCurrentMember } from '../composables/currentMember';
 import { useNotices } from '../composables/notices';
@@ -426,6 +427,9 @@ onMounted(() => {
         </nldd-cell>
       </nldd-table-row>
     </nldd-table>
+
+    <nldd-spacer size="32"></nldd-spacer>
+    <VolumeUsage />
 
     <nldd-notification
       v-for="notice in notices"
