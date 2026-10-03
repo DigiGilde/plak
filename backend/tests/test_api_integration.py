@@ -14,14 +14,14 @@ from pathlib import Path
 import httpx
 import pytest_asyncio
 from fastapi import FastAPI
-from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_client_jwk
+from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_client_jwk, set_session_cookie
 
 from plak.api.origin_guard import REASON_OTHER_ORIGIN
 from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.main import create_app
-from plak.models.identity import Group, GroupMember, Member, MemberStatus
+from plak.models.identity import Group, GroupMember, Member, MemberLanguage, MemberStatus
 from plak.models.publication import Site
 from plak.serving.response import NEUTRAL_404_BODY
 
@@ -290,6 +290,111 @@ async def test_openapi_schema_reachable(client: httpx.AsyncClient) -> None:
     paths = resp.json()["paths"]
     assert f"{BASE}/sites/{{group_slug}}/{{site_slug}}/deploys" in paths
     assert f"{BASE}/overview" in paths
+
+
+def _tags(resp: httpx.Response) -> list[str]:
+    return [tag["name"] for tag in resp.json()["tags"]]
+
+
+async def _member_with_language(app: FastAPI, sub: str, language: MemberLanguage | None, status: MemberStatus) -> None:
+    async with app.state.session_factory() as db:
+        db.add(Member(sso_subject=sub, email=f"{sub}@example.org", status=status, language=language))
+        await db.commit()
+
+
+async def test_openapi_schema_is_english_when_nothing_is_asked(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/openapi.json")
+
+    assert "Session" in _tags(resp)
+    assert resp.headers["content-language"] == "en"
+    assert resp.headers["vary"] == "Accept-Language, Cookie"
+
+
+async def test_openapi_schema_follows_accept_language(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/openapi.json", headers={"Accept-Language": "nl-NL,nl;q=0.9"})
+
+    assert "Sessie" in _tags(resp)
+    assert resp.headers["content-language"] == "nl"
+
+
+async def test_lang_parameter_beats_accept_language(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/openapi.json?lang=nl", headers={"Accept-Language": "en"})
+
+    assert "Sessie" in _tags(resp)
+
+
+async def test_an_unsupported_lang_parameter_is_ignored(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/openapi.json?lang=fr", headers={"Accept-Language": "nl"})
+
+    assert "Sessie" in _tags(resp)
+
+
+async def test_the_language_of_a_signed_in_member_beats_accept_language(
+    app: FastAPI, client: httpx.AsyncClient
+) -> None:
+    await _member_with_language(app, "docs-nl", MemberLanguage.NL, MemberStatus.ACTIVE)
+    set_session_cookie(client, app, sub="docs-nl")
+
+    resp = await client.get("/-/api/openapi.json", headers={"Accept-Language": "en"})
+
+    assert "Sessie" in _tags(resp)
+
+
+async def test_lang_parameter_beats_the_language_of_the_member(app: FastAPI, client: httpx.AsyncClient) -> None:
+    await _member_with_language(app, "docs-nl", MemberLanguage.NL, MemberStatus.ACTIVE)
+    set_session_cookie(client, app, sub="docs-nl")
+
+    resp = await client.get("/-/api/openapi.json?lang=en")
+
+    assert "Session" in _tags(resp)
+
+
+async def test_a_member_without_a_language_leaves_it_to_the_header(app: FastAPI, client: httpx.AsyncClient) -> None:
+    await _member_with_language(app, "docs-none", None, MemberStatus.ACTIVE)
+    set_session_cookie(client, app, sub="docs-none")
+
+    resp = await client.get("/-/api/openapi.json", headers={"Accept-Language": "nl"})
+
+    assert "Sessie" in _tags(resp)
+
+
+async def test_the_language_of_a_deactivated_member_does_not_count(app: FastAPI, client: httpx.AsyncClient) -> None:
+    await _member_with_language(app, "docs-old", MemberLanguage.NL, MemberStatus.DEACTIVATED)
+    set_session_cookie(client, app, sub="docs-old")
+
+    resp = await client.get("/-/api/openapi.json")
+
+    assert "Session" in _tags(resp)
+
+
+async def test_a_session_without_a_member_record_gets_english(app: FastAPI, client: httpx.AsyncClient) -> None:
+    set_session_cookie(client, app, sub="docs-unknown")
+
+    resp = await client.get("/-/api/openapi.json")
+
+    assert "Session" in _tags(resp)
+
+
+async def test_docs_page_is_english_with_a_switch_to_dutch(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/docs")
+
+    assert '<html lang="en">' in resp.text
+    assert "<title>Plak API documentation</title>" in resp.text
+    assert '<a href="/-/api/openapi.json">OpenAPI schema</a>' in resp.text
+    assert '<a href="/-/api/docs?lang=nl" lang="nl" hreflang="nl">Nederlands</a>' in resp.text
+    assert resp.headers["content-language"] == "en"
+    assert resp.headers["vary"] == "Accept-Language, Cookie"
+
+
+async def test_docs_page_in_dutch_switches_to_english(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/-/api/docs?lang=nl")
+
+    assert '<html lang="nl">' in resp.text
+    assert "<title>Plak API-documentatie</title>" in resp.text
+    assert '<a href="/">Naar het beheer</a>' in resp.text
+    assert '<a href="/-/api/openapi.json?lang=nl">OpenAPI-schema</a>' in resp.text
+    assert '<a href="/-/api/docs?lang=en" lang="en" hreflang="en">English</a>' in resp.text
+    assert resp.headers["content-language"] == "nl"
 
 
 async def test_fastapi_default_docs_disabled(client: httpx.AsyncClient) -> None:

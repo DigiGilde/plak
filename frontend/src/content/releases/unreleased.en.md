@@ -25,3 +25,7 @@ If you linked a private repository by entering its repository ID and owner ID yo
 ## Content volume
 
 As a platform administrator you now see how full the content volume is on the "Platform administration" page: used, free and the reserve. It turns red when a deploy of the maximum size would no longer fit.
+
+## API documentation in two languages
+
+The API documentation, linked at the bottom of every page, is now in English and in Dutch. It follows the language on your profile when you are signed in, and the switch at the top of the page changes it.

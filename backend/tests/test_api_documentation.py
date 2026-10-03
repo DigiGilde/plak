@@ -33,6 +33,7 @@ from plak.api.docs import (
     _restore_examples,
     _set_security,
     docs_asset,
+    localised_openapi,
 )
 from plak.api.errors import (
     _CODE_RE,
@@ -309,6 +310,13 @@ class TestDeployContract:
         response = schema["paths"][path]["delete"]["responses"]["204"]
         assert "content" not in response
         assert response["description"]
+
+
+class TestLocalisedSchema:
+    def test_each_language_is_translated_once_and_then_kept(self, app) -> None:
+        dutch = localised_openapi(app, "nl")
+        assert localised_openapi(app, "nl") is dutch
+        assert localised_openapi(app, "en") is app.openapi()
 
 
 class TestApiDescription:
