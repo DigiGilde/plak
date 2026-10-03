@@ -57,7 +57,7 @@ EXPECTED_SPA_HEADERS = {
 }
 
 ROUTER_TS = Path(__file__).resolve().parents[2] / "frontend" / "src" / "router.ts"
-# Top-level platform routes of the Vue router: `path: '/-/members'`. The tabs
+# Top-level platform routes of the Vue router: `path: '/-/platform'`. The tabs
 # of a group are spelled without a leading slash (`path: '-/members'`), so they
 # stay out of this on purpose.
 _ROUTER_PLATFORM_PATH = re.compile(r"path: '(/-/[a-z0-9-]+)'")
@@ -145,7 +145,7 @@ class TestBoundary:
             "/assets/app-abc123.js",
             "/apix",
             # The SPA's own platform pages, the only ones it owns under `/-/`.
-            "/-/members",
+            "/-/platform",
             "/-/about",
             "/-/whats-new",
         ],
@@ -171,15 +171,15 @@ class TestBoundary:
             "/robots.txt",
             "/favicon.ico",
             "/.well-known/acme-challenge/x",
-            # Internal only.
-            "/healthz",
+            # The public liveness answer.
+            "/-/healthz",
         ],
     )
     def test_no_spa_paths(self, path: str) -> None:
         assert not is_spa_path(path)
 
     @pytest.mark.parametrize(
-        "path", ["/-/apx/v1/overview", "/-/onbekend", "/robots.txt", "/favicon.ico", "/.well-known/x", "/healthz"]
+        "path", ["/-/apx/v1/overview", "/-/onbekend", "/robots.txt", "/favicon.ico", "/.well-known/x", "/-/healthz"]
     )
     async def test_what_the_app_claims_reaches_the_app(self, client: httpx.AsyncClient, path: str) -> None:
         # The other direction: these paths pass through the middleware, so
@@ -267,7 +267,7 @@ class TestServing:
         assert response.headers["content-type"] == "font/woff2"
 
     @pytest.mark.parametrize(
-        "path", ["/aurora", "/aurora/site/toegang", "/-/members", "/assets/ontbreekt.js"]
+        "path", ["/aurora", "/aurora/site/toegang", "/-/platform", "/assets/ontbreekt.js"]
     )
     async def test_unknown_path_gets_index_html(self, client: httpx.AsyncClient, path: str) -> None:
         response = await client.get(path)

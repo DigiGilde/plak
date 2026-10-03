@@ -21,3 +21,7 @@ By default Plak keeps the current live version of a site and the five versions b
 ## The CLI on Windows
 
 The Plak CLI now also runs on Windows. `plak login` keeps your session in Windows Credential Manager.
+
+## Content volume
+
+As a platform administrator you now see how full the content volume is on the "Platform administration" page: used, free and the reserve. It turns red when a deploy of the maximum size would no longer fit.

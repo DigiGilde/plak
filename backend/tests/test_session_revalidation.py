@@ -417,7 +417,7 @@ async def test_the_login_stores_the_refresh_token_and_sid() -> None:
 
 class TestBrokenCoupling:
     """A token endpoint that refuses our client, not the session: nobody is
-    logged out, but it is loud (ERROR once per window, visible on /healthz)."""
+    logged out, but it is loud (ERROR once per window, visible on /-/healthz)."""
 
     @staticmethod
     def _errors(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -554,25 +554,30 @@ class TestBrokenCoupling:
         assert revalidation_status(app) is None
 
 
-async def test_healthz_carries_the_idp_complaint(tmp_path) -> None:
-    """The route is internal only (host separation answers a neutral 404 on
-    both public hosts), so the handler is called directly, the way a probe
-    inside the pod reaches it."""
-    from fastapi.routing import APIRoute
+async def test_healthz_names_the_idp_check_and_nothing_more(tmp_path, monkeypatch) -> None:
+    import httpx
 
     from plak.auth.revalidation import idp_fault
     from plak.main import create_app
 
+    async def reachable(app) -> bool:
+        return True
+
+    monkeypatch.setattr("plak.platform.health._database_reachable", reachable)
     idp = MockIdP()
-    app = create_app(make_settings(idp, content_root=tmp_path, base_url="https://beheer.plak.example"))
-    route = next(r for r in app.routes if isinstance(r, APIRoute) and r.path == "/healthz")
+    app = create_app(make_settings(idp, content_root=tmp_path, storage_min_free_bytes=0))
 
-    assert await route.endpoint() == {"status": "ok"}
+    async def health() -> httpx.Response:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://plak.example") as client:
+            return await client.get("/-/healthz")
 
-    idp_fault(app).record(
-        code="invalid_client", issuer=idp.issuer, now=datetime.now(UTC), window=RECHECK_BACKOFF
-    )
-    assert await route.endpoint() == {
-        "status": "degraded",
-        "idp_revalidation": "IdP re-validation is failing: invalid_client",
-    }
+    async with app.router.lifespan_context(app):
+        assert (await health()).json() == {"status": "ok"}
+
+        idp_fault(app).record(
+            code="invalid_client", issuer=idp.issuer, now=datetime.now(UTC), window=RECHECK_BACKOFF
+        )
+        response = await health()
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "degraded", "checks": ["idp_revalidation"]}

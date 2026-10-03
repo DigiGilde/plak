@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 /**
- * Router guard for '/-/members' (spec 4, 9): a platform admin gets through, an
+ * Router guard for '/-/platform' (spec 4, 9): a platform admin gets through, an
  * ordinary member or an anonymous visitor is sent back to the overview. Uses a
  * memory-history router (rather than the createWebHistory singleton from
  * router.ts): createWebHistory's initial navigation hangs in jsdom (no real
@@ -26,15 +26,15 @@ function testRouter() {
   return createRouter({ history: createMemoryHistory(), routes });
 }
 
-describe('router-guard /-/members', () => {
+describe('router-guard /-/platform', () => {
   it('laat een platformbeheerder toe', async () => {
     backend = makeMockBackend();
     vi.stubGlobal('fetch', backend.fetch);
     const router = testRouter();
     router.beforeEach(platformAdminGuard);
-    await router.push('/-/members');
+    await router.push('/-/platform');
 
-    expect(router.currentRoute.value.name).toBe('members');
+    expect(router.currentRoute.value.name).toBe('platform');
   });
 
   it('stuurt een gewoon lid terug naar het overzicht', async () => {
@@ -45,7 +45,7 @@ describe('router-guard /-/members', () => {
     vi.stubGlobal('fetch', backend.fetch);
     const router = testRouter();
     router.beforeEach(platformAdminGuard);
-    await router.push('/-/members');
+    await router.push('/-/platform');
 
     expect(router.currentRoute.value.name).toBe('overview');
   });
@@ -57,7 +57,7 @@ describe('router-guard /-/members', () => {
     vi.stubGlobal('fetch', backend.fetch);
     const router = testRouter();
     router.beforeEach(platformAdminGuard);
-    await router.push('/-/members');
+    await router.push('/-/platform');
 
     expect(router.currentRoute.value.name).toBe('overview');
   });
@@ -68,7 +68,7 @@ describe('router-guard /-/members', () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('netwerkfout'))));
     const router = testRouter();
     router.beforeEach(platformAdminGuard);
-    await router.push('/-/members');
+    await router.push('/-/platform');
 
     expect(router.currentRoute.value.name).toBe('overview');
   });

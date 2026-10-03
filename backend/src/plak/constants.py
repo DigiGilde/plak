@@ -24,9 +24,6 @@ def path_under(path: str, prefix: str) -> bool:
 # status 200.
 STANDARD_LOCATIONS = ("/robots.txt", "/favicon.ico", "/.well-known")
 
-# Internal only: the probe reaches the pod directly, so this
-# path exists on neither public host.
-INTERNAL_ONLY_PATHS = frozenset({"/healthz"})
 
 
 # SPA pages at the root of the admin host rather than under /-/, because a
@@ -82,6 +79,9 @@ PATH_CONTENT_LOGOUT = f"/{PLATFORM_SEGMENT}/logout"
 # (serving/code_page.py). The only POST the content host has, so host
 # separation and rate limiting both single this path out.
 PATH_CONTENT_CODE = f"/{PLATFORM_SEGMENT}/code"
+
+# Public liveness answer, admin host only (platform/health.py).
+PATH_HEALTHZ = f"/{PLATFORM_SEGMENT}/healthz"
 
 
 class AccessBase(enum.StrEnum):

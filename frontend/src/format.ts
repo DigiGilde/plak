@@ -42,6 +42,18 @@ export function formatCalendarDate(day: string): string {
   return formatter({ dateStyle: 'long', timeZone: 'UTC' }, 'calendar-date').format(new Date(day));
 }
 
+/** A size in bytes as KiB, MiB or GiB, in the number conventions of the language on screen. */
+export function formatBytes(bytes: number): string {
+  const units = ['B', 'KiB', 'MiB', 'GiB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${formatNumber(value, { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
+}
+
 /** A number in the conventions of the language on screen (grouping, decimals). */
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(intlLocale.value, options).format(value);

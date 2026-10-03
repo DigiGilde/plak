@@ -308,7 +308,7 @@ async def test_fastapi_default_docs_disabled(client: httpx.AsyncClient) -> None:
 
 
 async def test_api_version_header_on_every_response(client: httpx.AsyncClient) -> None:
-    for path in ("/healthz", f"{BASE}/overview", "/onbekend/site/"):
+    for path in ("/-/healthz", f"{BASE}/overview", "/onbekend/site/"):
         resp = await client.get(path)
         assert resp.headers.get("api-version") == "1.0.0", path
 
@@ -363,7 +363,7 @@ async def test_unknown_host_refused_by_trustedhost(
         async with httpx.AsyncClient(
             transport=transport, base_url="https://onbekende-host.example"
         ) as unknown_client:
-            resp = await unknown_client.get("/healthz")
+            resp = await unknown_client.get("/-/healthz")
 
     assert resp.status_code == 400
 

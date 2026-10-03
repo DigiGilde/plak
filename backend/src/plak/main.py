@@ -35,6 +35,7 @@ from fastapi import Depends, FastAPI
 from starlette.datastructures import MutableHeaders
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from plak.api import docs
@@ -46,7 +47,7 @@ from plak.api.errors import register_error_handlers
 from plak.api.origin_guard import normalise_origin, require_admin_origin
 from plak.audit.log import AuditLog
 from plak.auth.oidc import OidcClient
-from plak.auth.revalidation import revalidate_sessions, revalidation_status
+from plak.auth.revalidation import revalidate_sessions
 from plak.auth.sessions import (
     SessionStore,
     content_anchor_session_from_request,
@@ -56,11 +57,14 @@ from plak.auth.sessions import (
 from plak.ci.providers import ProviderClient
 from plak.ci.tokens import CiTokenVerifier
 from plak.config import Settings, load_settings
+from plak.constants import PATH_HEALTHZ
 from plak.db import make_engine, make_session_factory
 from plak.host_separation import HostSeparationMiddleware
+from plak.ingest.storage_health import content_root_complaint, storage_check_job, storage_watch
 from plak.ingest.store import ContentStore
 from plak.platform import pages
 from plak.platform.backchannel import router as backchannel_router
+from plak.platform.health import health_response
 from plak.platform.spa import SpaMiddleware, admin_csp, spa_available
 from plak.previews.cleanup_job import cleanup_job
 from plak.ratelimit import InMemoryCounter, make_rate_limit_middleware
@@ -147,6 +151,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # every call (ci/providers.py), whatever the IdP client does.
         ci_http = httpx.AsyncClient(follow_redirects=False)
         content_store = ContentStore(settings.content_root)
+        if settings.environment == "productie":
+            root_complaint = content_root_complaint(content_store.root)
+            storage_watch(app).content_root_message = root_complaint
+            if root_complaint:
+                _logger.error("%s Check PLAK_CONTENT_ROOT and the volume mount.", root_complaint)
 
         app.state.engine = engine
         app.state.settings = settings
@@ -161,10 +170,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.ci_verifier = CiTokenVerifier(settings, ci_http)
         app.state.ci_providers = ProviderClient(ci_http)
         try:
-            async with cleanup_job(
-                session_factory, content_store, live_versions_kept=settings.live_versions_kept
-            ) as cleanup_task:
+            async with (
+                cleanup_job(
+                    session_factory, content_store, live_versions_kept=settings.live_versions_kept
+                ) as cleanup_task,
+                storage_check_job(app, content_store, settings) as storage_task,
+            ):
                 app.state.cleanup_task = cleanup_task
+                app.state.storage_task = storage_task
                 yield
         finally:
             await oidc_http.aclose()
@@ -239,14 +252,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # carry the API-Version header as well.
     app.add_middleware(ApiVersionHeaderMiddleware)
 
-    @app.get("/healthz", include_in_schema=False)
-    async def health() -> dict[str, str]:
-        # Always 200, also when degraded: the probe is what keeps the pod
-        # alive, and a broken IdP coupling is not a reason to restart it.
-        idp = revalidation_status(app)
-        if idp:
-            return {"status": "degraded", "idp_revalidation": idp}
-        return {"status": "ok"}
+    # No dependencies and no session: reachable by anyone on the admin host,
+    # and refused as a neutral 404 on the content host (host_separation.py).
+    @app.get(PATH_HEALTHZ, include_in_schema=False)
+    async def health() -> JSONResponse:
+        return await health_response(app)
 
     # Deploy API before the session API. The origin check sits here too: it
     # lets bearer CI through (no Origin/Sec-Fetch-Site) but turns away a

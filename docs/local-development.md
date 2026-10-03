@@ -118,7 +118,7 @@ What ends up there:
   `editor` on `evaluatie`. A site role adds to the group role and never
   subtracts from it, so she only gets in at that one site.
 - **A deactivated member.** Kim Visser is on `deactivated`, so that
-  `/admin/-/members` has something to do.
+  `/admin/-/platform` has something to do.
 - **The person logging in.** The user from `PLAK_BOOTSTRAP_ADMIN_SUB`
   (default `dev-beheerder`) is platform administrator and group
   administrator of `rijksoverheid`, and deliberately not a member of
@@ -260,7 +260,7 @@ the re-validation would drop the session on a sub mismatch.
 To test other member profiles (a deactivated member or an ordinary
 group member, for instance), adjust `tokenCallbacks` with an extra
 `requestMappings` rule on a different `scope` value, or deactivate a
-second sub via `/admin/-/members` after a first visit with that sub.
+second sub via `/admin/-/platform` after a first visit with that sub.
 The login screen below is the quicker route.
 
 ### The login screen of the mock, for manual testing
@@ -282,7 +282,7 @@ What changes: `/-/login` now lands on a login page of the mock with a subject
 field. Whatever you type there becomes the `sub` of the session, so you can
 walk into the admin as any account: `dev-beheerder` for the bootstrap
 administrator, anything else for a member you created or deactivated
-yourself through `/admin/-/members`. The config fills the rest of the claims
+yourself through `/admin/-/platform`. The config fills the rest of the claims
 around it (`acr` at the required level, `email` as `<subject>@plak.local`),
 so the app sees a complete id token whichever subject you pick.
 

@@ -108,4 +108,17 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.form.role.noEffect':
     'This changes nothing about what this person may do here: via the group they are already {role}.',
   'admin.siteMembers.form.submit': 'Give role',
+
+  // -- Platform administration: the content volume --------
+  'admin.volume.heading': 'Content volume',
+  'admin.volume.loading': 'Loading the content volume...',
+  'admin.volume.summary.label': 'Fill level of the content volume',
+  'admin.volume.used': 'Used',
+  'admin.volume.used.value': '{used} of {total}',
+  'admin.volume.free': 'Free',
+  'admin.volume.reserve': 'Reserve',
+  'admin.volume.reserve.off': 'Off',
+  'admin.volume.low.title': 'Little room left on the content volume',
+  'admin.volume.low.detail':
+    'A deploy of the maximum size ({maxDeploy}) would take the volume below the reserve of {reserve}. Free up space or enlarge the volume.',
 };

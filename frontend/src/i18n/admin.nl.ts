@@ -109,4 +109,17 @@ export const adminNl = {
   'admin.siteMembers.form.role.noEffect':
     'Dit verandert niets aan wat deze persoon hier mag: via de groep is dat al {role}.',
   'admin.siteMembers.form.submit': 'Rol geven',
+
+  // -- Platform administration: the content volume --------
+  'admin.volume.heading': 'Contentvolume',
+  'admin.volume.loading': 'Contentvolume wordt geladen...',
+  'admin.volume.summary.label': 'Vulling van het contentvolume',
+  'admin.volume.used': 'In gebruik',
+  'admin.volume.used.value': '{used} van {total}',
+  'admin.volume.free': 'Vrij',
+  'admin.volume.reserve': 'Reserve',
+  'admin.volume.reserve.off': 'Uit',
+  'admin.volume.low.title': 'Weinig ruimte over op het contentvolume',
+  'admin.volume.low.detail':
+    'Een deploy van de maximale omvang ({maxDeploy}) zou het volume onder de reserve van {reserve} brengen. Maak ruimte vrij of vergroot het volume.',
 } as const;

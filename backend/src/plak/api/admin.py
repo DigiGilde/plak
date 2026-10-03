@@ -30,6 +30,7 @@ import asyncio
 import base64
 import hmac
 import math
+import shutil
 import time
 import unicodedata
 import uuid
@@ -649,6 +650,28 @@ class MemberOut(ApiModel):
         default=None,
         description="Laatste succesvolle login, of `null` als die er nog niet was.",
         json_schema_extra=_timestamp_schema(),
+    )
+
+
+class VolumeOut(ApiModel):
+    """Hoe vol het contentvolume is."""
+
+    total_bytes: int = Field(description="Grootte van het contentvolume in bytes.", examples=[1073741824])
+    used_bytes: int = Field(description="Bytes in gebruik op het volume.", examples=[536870912])
+    free_bytes: int = Field(description="Bytes die nog vrij zijn op het volume.", examples=[536870912])
+    reserve_bytes: int = Field(
+        description=(
+            "Vrije ruimte die het volume moet houden (`PLAK_STORAGE_MIN_FREE_BYTES`); daaronder wordt een "
+            "deploy geweigerd. `0` betekent dat die controle uit staat."
+        ),
+        examples=[104857600],
+    )
+    max_deploy_bytes: int = Field(
+        description=(
+            "Grootste uitgepakte omvang van één deploy (`PLAK_INGEST_MAX_TOTAL`). Is het vrije volume kleiner "
+            "dan `reserveBytes` plus dit getal, dan kan een deploy van maximale omvang niet meer."
+        ),
+        examples=[209715200],
     )
 
 
@@ -3961,6 +3984,38 @@ def make_admin_router() -> APIRouter:
         bootstrap_sub = request.app.state.settings.bootstrap_admin_sub
         members = await db.scalars(select(Member).order_by(Member.email))
         return [_member_json(row, bootstrap_sub=bootstrap_sub) for row in members]
+
+    # -- Content volume --
+
+    @router.get(
+        "/platform/storage",
+        tags=[TAG_PLATFORM],
+        summary="Vulling van het contentvolume",
+        response_description="Totaal, gebruikt en vrij op het contentvolume, met de reserve.",
+        description=(
+            "Het hele contentvolume in één blik: grootte, gebruikt, vrij en de reserve waaronder een deploy "
+            "wordt geweigerd. Er staat geen site of groep in: de platformbeheerder beheert mensen en groepen "
+            "en kijkt niet in de sites.\n\n"
+            "**Mag:** alleen een platformbeheerder."
+        ),
+        responses=_errors(
+            _ERROR_ADMIN,
+            {503: "Het volume is niet te meten, bijvoorbeeld omdat de contentroot ontbreekt (`VOLUME_UNMEASURABLE`)."},
+        ),
+    )
+    async def platform_storage(request: Request, member: PlatformAdmin) -> VolumeOut:
+        settings = request.app.state.settings
+        try:
+            usage = await asyncio.to_thread(shutil.disk_usage, request.app.state.content_store.root)
+        except OSError as error:
+            raise ApiError(503, "VOLUME_UNMEASURABLE") from error
+        return VolumeOut(
+            total_bytes=usage.total,
+            used_bytes=usage.used,
+            free_bytes=usage.free,
+            reserve_bytes=settings.storage_min_free_bytes,
+            max_deploy_bytes=settings.ingest_max_total,
+        )
 
     async def _set_member_status(
         request: Request, member_id: uuid.UUID, status: MemberStatus, action: str, member: Member, db: AsyncSession

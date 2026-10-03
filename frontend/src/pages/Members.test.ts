@@ -21,7 +21,7 @@ beforeEach(() => {
   _resetCurrentMemberCache();
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/-/members', component: Members }],
+    routes: [{ path: '/-/platform', component: Members }],
   });
 });
 
@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 async function mountComponent(): Promise<ReturnType<typeof mount>> {
-  await router.push('/-/members');
+  await router.push('/-/platform');
   await router.isReady();
   wrapper = mount(Members, { global: { plugins: [router] }, attachTo: document.body });
   await waitUntilLoaded();
@@ -355,6 +355,23 @@ describe('Platform management (filled)', () => {
     expect(html()).toContain('Onbekende fout bij het ophalen van leden.');
   });
 
+  it('shows the title of the problem when the API refuses the member list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ type: 'about:blank', title: 'Interne fout', status: 500 }), {
+            status: 500,
+            headers: { 'content-type': 'application/problem+json' },
+          }),
+      ),
+    );
+
+    await mountComponent();
+
+    expect(html()).toContain('Interne fout');
+  });
+
   it('blocks changing the last active admin for someone other than the bootstrap account', async () => {
     // Promote Ada, then take Bea (the bootstrap admin) out of the picture, so
     // Ada is the last admin left without being the bootstrap account herself.
@@ -452,7 +469,7 @@ describe('Platform management (filled)', () => {
     const app = await mountComponent();
 
     expect(app.find('nldd-breadcrumbs').exists()).toBe(false);
-    expect(breadcrumbsFor('/-/members')).toEqual([
+    expect(breadcrumbsFor('/-/platform')).toEqual([
       { text: 'Overzicht', href: '/' },
       { text: 'Platformbeheer' },
     ]);
@@ -541,6 +558,27 @@ describe('Platform management (filled)', () => {
 
   it('has no axe violations', async () => {
     const app = await mountComponent();
+
+    await expectNoAxeViolations(app.element);
+  });
+
+  it('shows the content volume as its own section below the members table', async () => {
+    const app = await mountComponent();
+    await flushPromises();
+
+    const section = app.find('[data-testid="content-volume"]');
+    expect(section.exists()).toBe(true);
+    expect(section.find('h2').text()).toBe('Contentvolume');
+    const table = app.find('nldd-table').element;
+    expect(
+      table.compareDocumentPosition(section.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(section.findAll('nldd-list-item')).toHaveLength(3);
+  });
+
+  it('has no axe violations with the content volume loaded', async () => {
+    const app = await mountComponent();
+    await flushPromises();
 
     await expectNoAxeViolations(app.element);
   });

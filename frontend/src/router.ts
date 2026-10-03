@@ -25,8 +25,8 @@ export const routes = [
     meta: { titleKey: 'nav.groups' },
   },
   {
-    path: '/-/members',
-    name: 'members',
+    path: '/-/platform',
+    name: 'platform',
     component: () => import('./pages/Members.vue'),
     meta: { platformAdminRequired: true, titleKey: 'nav.platform' },
   },
@@ -148,7 +148,7 @@ export const routes = [
   },
 ];
 
-// Route guard: '/-/members' is platform administration, non-admins
+// Route guard: '/-/platform' is platform administration, non-admins
 // do not get in. The platform pages are explicitly public (no login needed);
 // for the rest, the session-dependent UI (Start.vue, the site pages)
 // decides for itself what to show. Exported separately (rather than only as a

@@ -13,12 +13,10 @@ ones the app claims itself:
   callback, logout). The SPA has pages there too, but only the ones named in
   SPA_PAGE_PATHS; everything else under `/-/` belongs to the app, so a typo in
   an API path (`/-/apx/v1/overview`) stays a 404 instead of coming back as the
-  whole interface with status 200;
+  whole interface with status 200 (`/-/healthz` among them);
 - the locations the web pins down (`/robots.txt`, `/favicon.ico`,
   `/.well-known/...`): a crawler, a browser or an ACME client has to get the
   real answer or a 404 there, never an HTML page with status 200;
-- `/healthz`, which is internal only.
-
 Everything else is the SPA: an existing file is served statically, every other
 path gets index.html (client-side routing). Path validation is Starlette's
 StaticFiles.lookup_path: a path pointing outside the SPA directory does not
@@ -38,7 +36,6 @@ from starlette.staticfiles import NotModifiedResponse, StaticFiles
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plak.constants import (
-    INTERNAL_ONLY_PATHS,
     PLATFORM_PREFIX,
     STANDARD_LOCATIONS,
     path_under,
@@ -53,7 +50,7 @@ from plak.serving import mime
 # cannot drift apart.
 SPA_PAGE_PATHS = tuple(
     f"{PLATFORM_PREFIX}/{page}"
-    for page in ("about", "accessibility", "groups", "members", "privacy", "profile", "sessions", "whats-new")
+    for page in ("about", "accessibility", "groups", "platform", "privacy", "profile", "sessions", "whats-new")
 )
 
 
@@ -95,8 +92,6 @@ def is_spa_path(path: str) -> bool:
     root the SPA is the fallback for the whole host, so what the app claims has
     to be named here rather than the other way around.
     """
-    if path in INTERNAL_ONLY_PATHS:
-        return False
     if any(path_under(path, location) for location in STANDARD_LOCATIONS):
         return False
     if path_under(path, PLATFORM_PREFIX):

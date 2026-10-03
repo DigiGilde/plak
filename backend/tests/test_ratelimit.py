@@ -85,7 +85,7 @@ def _make_client(
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("/healthz", None),
+        ("/-/healthz", RateLimitClass.CONTENT),
         ("/-/login", RateLimitClass.LOGIN),
         ("/-/oauth2/callback", RateLimitClass.LOGIN),
         ("/-/logout", RateLimitClass.LOGIN),
@@ -483,16 +483,6 @@ async def test_the_entry_the_router_wrote_is_the_key() -> None:
     assert [r1.status_code, r2.status_code] == [200, 429]
 
 
-async def test_exempt_path_not_limited() -> None:
-    # `/healthz` is the only exemption. SPA assets are unlimited too, because
-    # the SPA middleware sits outside this one (test_app_integration.py), not
-    # because of a rule in here.
-    settings = _make_settings(ratelimit_content_max=1, ratelimit_content_window_s=60)
-    async with _make_client(settings) as client:
-        for _ in range(20):
-            assert (await client.get("/healthz")).status_code == 200
-
-
 async def test_parallel_requests_count_exactly_no_escalation() -> None:
     """Concurrent requests must not count each other twice or too few times
     (no race in the counter), and there is no escalating penalty: exactly the
@@ -576,5 +566,5 @@ async def test_make_ratelimit_middleware_factory_yields_class__and_kwargs() -> N
     middleware = klass(app=_ok_app, **kwargs)
     transport = httpx.ASGITransport(app=middleware, client=("203.0.113.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        resp = await client.get("/healthz")
+        resp = await client.get("/team-aurora/website/")
     assert resp.status_code == 200

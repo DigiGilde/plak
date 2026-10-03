@@ -21,3 +21,7 @@ Standaard bewaart Plak de huidige live-versie van een site en de vijf versies da
 ## De CLI op Windows
 
 De Plak CLI werkt nu ook op Windows. `plak login` bewaart je sessie in Windows Referentiebeheer.
+
+## Contentvolume
+
+Als platformbeheerder zie je op de pagina "Platformbeheer" nu hoe vol het contentvolume is: in gebruik, vrij en de reserve. Het wordt rood zodra een deploy van de maximale omvang er niet meer bij past.
