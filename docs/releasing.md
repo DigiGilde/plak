@@ -204,8 +204,10 @@ change oasdiff lists goes into one sticky comment, with the version the
 next release gives the API; the comment goes away when there is none.
 Until a release has written the file, the check passes with a notice.
 
-oasdiff is pinned in the workflow to a release and the SHA-256 of its
-archive, and runs with external references off.
+oasdiff comes from the image in `.github/oasdiff/Containerfile`, pinned
+by tag and digest, so Dependabot bumps it with the other base images. The
+workflow copies the static binary out of it and never runs the image. It
+runs with external references off.
 
 ## What's new notes
 
