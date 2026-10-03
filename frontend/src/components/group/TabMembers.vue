@@ -43,10 +43,10 @@ function search(query: string): Promise<MemberSuggestion[]> {
 </script>
 
 <template>
-  <section aria-labelledby="kop-leden">
+  <section aria-labelledby="heading-members">
     <nldd-container layout="stack" gap="8">
       <nldd-title :size="4">
-        <h2 id="kop-leden">{{ t('group.members.heading') }}</h2>
+        <h2 id="heading-members">{{ t('group.members.heading') }}</h2>
         <span slot="subtitle">{{ t('group.members.intro') }}</span>
       </nldd-title>
 

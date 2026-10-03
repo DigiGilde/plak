@@ -547,7 +547,7 @@ class TestAuthorization:
             json={"platformRole": "member"},
             headers=headers_a,
         )
-        assert response.status_code == 409, "je eigen rol afnemen mag niet"
+        assert response.status_code == 409, "taking away your own role is not allowed"
 
         headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.put(

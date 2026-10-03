@@ -492,7 +492,7 @@ class TestPathValidation:
 
     async def test_traversal_does_not_touch_the_store(self, environment, monkeypatch):
         def boom(*args, **kwargs):
-            raise AssertionError("store aangeraakt bij ongeldig pad")
+            raise AssertionError("store touched for an invalid path")
 
         monkeypatch.setattr(environment.store, "file_path", boom)
         status, _, _ = await _raw_request(environment.app, "/aurora/site/..%2fx")

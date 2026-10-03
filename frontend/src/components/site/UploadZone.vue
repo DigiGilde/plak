@@ -161,30 +161,30 @@ function publish(): void {
   <div
     class="dropzone"
     :class="{ 'dropzone--active': dropActive }"
-    data-testid="sleepzone"
+    data-testid="dropzone"
     @dragenter.prevent="onDragenter"
     @dragover.prevent="onDragover"
     @dragleave="onDragleave"
     @drop.prevent.stop="onDrop"
   >
-    <nldd-form data-testid="upload-formulier" @submit.prevent="publish">
+    <nldd-form data-testid="upload-form" @submit.prevent="publish">
       <nldd-form-field
         :label="t('publish.upload.field.label')"
         :supporting-label="t('publish.upload.field.hint')"
       >
         <nldd-file-field
           ref="field"
-          name="bestand"
+          name="file"
           accept=".zip,.tar.gz,.tgz,.html"
           :required="chosen === null || undefined"
-          data-testid="upload-invoer"
+          data-testid="upload-input"
           @change="onChoice"
         ></nldd-file-field>
         <!-- nldd-validation-list reads `control.value` and nldd-file-field has
              none: without this value the required rule fails even with a file
              present, and setCustomValidity keeps the field unsubmittable. -->
         <nldd-validation-list :value="chosen?.name ?? ''">
-          <nldd-validation-item id="upload-bestand-vereist" required>
+          <nldd-validation-item id="upload-file-required" required>
             {{ t('publish.upload.field.required') }}
           </nldd-validation-item>
         </nldd-validation-list>
@@ -203,7 +203,7 @@ function publish(): void {
         :value="progress?.done ?? 0"
         :max="progress?.total || 1"
         :indeterminate="step === 'reading' || undefined"
-        data-testid="sleep-voortgang"
+        data-testid="drag-progress"
       ></nldd-progress-bar>
 
       <!-- nldd-banner announces itself (role="status"), so the outcome of a
@@ -214,7 +214,7 @@ function publish(): void {
         size="sm"
         :text="t('publish.upload.ready.title')"
         :supporting-text="ready"
-        data-testid="sleep-klaar"
+        data-testid="drag-done"
       ></nldd-banner>
 
       <nldd-banner
@@ -223,7 +223,7 @@ function publish(): void {
         size="sm"
         :text="t('publish.upload.error.title')"
         :supporting-text="dropError"
-        data-testid="sleep-fout"
+        data-testid="drag-error"
       ></nldd-banner>
 
       <nldd-form-actions>
@@ -232,7 +232,7 @@ function publish(): void {
           type="submit"
           :text="t('publish.upload.submit')"
           :loading="busy || undefined"
-          data-testid="upload-publiceren"
+          data-testid="upload-publish"
         ></nldd-button>
       </nldd-form-actions>
     </nldd-form>

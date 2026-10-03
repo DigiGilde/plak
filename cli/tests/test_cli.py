@@ -1,8 +1,8 @@
-"""Tests voor de plak-CLI tegen een lokale stub-server.
+"""Tests for the plak CLI against a local stub server.
 
-Draai met:
+Run with:
     just test-cli
-of rechtstreeks:
+or directly:
     cd cli && uv run pytest tests -q
 """
 
@@ -50,7 +50,7 @@ def _parse_multipart(content_type: str, body: bytes) -> dict[str, dict[str, Any]
         if piece.startswith("boundary="):
             boundary = piece[len("boundary=") :].strip('"')
     if boundary is None:
-        raise ValueError(f"geen boundary in content-type: {content_type!r}")
+        raise ValueError(f"no boundary in content-type: {content_type!r}")
 
     boundary_bytes = ("--" + boundary).encode()
     fields: dict[str, dict[str, Any]] = {}
@@ -140,8 +140,8 @@ def _empty_responder(status: int):
 
 
 def _sequence_responder(by_path: dict[str, list[Callable[[dict], tuple[int, bytes | None, str]]]]):
-    """Antwoordt op een pad met de volgende functie in zijn lijst, elke keer opnieuw
-    aangeroepen; de laatste blijft gelden zodra de lijst leeg is."""
+    """Answers a path with the next function in its list, called anew each time;
+    the last one keeps applying once the list is exhausted."""
 
     def responder(record: dict) -> tuple[int, bytes | None, str]:
         path = record["path"].split("?", 1)[0]
@@ -193,7 +193,7 @@ def host(stub_server) -> str:
 
 @pytest.fixture
 def token_env(monkeypatch) -> str:
-    """De meeste deploy-tests hebben alleen om het even welk token nodig."""
+    """Most deploy tests only need some token or other."""
     monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
     return "tok"
 
@@ -492,8 +492,8 @@ def test_publish_suggestion_in_the_root_advises_dropping_the_flag(
 def test_publish_suggestion_with_odd_characters_is_not_shown(
     stub_server, host, dist_folder, token_env, capsys
 ):
-    """Het antwoord komt van de server: niets uit dat voorstel mag ongezien op
-    de terminal of in een CI-logregel belanden."""
+    """The answer comes from the server: none of that suggestion may reach
+    the terminal or a CI log line unchecked."""
     stub_server.responder = _json_responder(
         422,
         {
@@ -520,9 +520,9 @@ def test_publish_suggestion_with_odd_characters_is_not_shown(
 def test_publish_detail_with_control_characters_is_cleaned(
     stub_server, host, dist_folder, token_env, capsys
 ):
-    """Het detail is vrije tekst van de server en draagt tegenwoordig
-    archiefpaden; het mag net zomin als een voorstel een eigen regel of een
-    ANSI-escape in de CI-uitvoer schuiven."""
+    """The detail is free text from the server and now carries archive paths;
+    like a suggestion, it must not inject a line of its own or an ANSI escape into
+    the CI output."""
     stub_server.responder = _json_responder(
         422,
         {
@@ -3194,7 +3194,7 @@ def test_logout_with_an_untrusted_hosts_file_sends_nothing(stub_server, host, ca
 
 
 def _raise_connect_error(*_args, **_kwargs):
-    raise httpx.ConnectError("verbinding geweigerd")
+    raise httpx.ConnectError("connection refused")
 
 
 def _device_start_step(host: str, **overrides: Any):
@@ -3921,7 +3921,7 @@ def test_login_does_not_open_a_browser_with_no_open_even_on_a_terminal(
 ):
     monkeypatch.setattr(sys.stderr, "isatty", lambda: True)
     monkeypatch.setattr(
-        cli.webbrowser, "open", lambda url: pytest.fail("browser mag niet geopend worden")
+        cli.webbrowser, "open", lambda url: pytest.fail("the browser must not be opened")
     )
     stub_server.responder = _sequence_responder(
         {

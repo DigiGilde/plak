@@ -42,7 +42,7 @@ describe('group TabMembers', () => {
 
       expect(
         wrapper
-          .find('[data-testid="lid-suggesties"]')
+          .find('[data-testid="member-suggestions"]')
           .findAll('nldd-menu-item')
           .map((item) => item.attributes('value')),
       ).toContain('sanne@voorbeeld.nl');
@@ -57,7 +57,7 @@ describe('group TabMembers', () => {
     wrapper
       .find('nldd-combo-box[name="identifier"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { value: 'sanne@voorbeeld.nl' } }));
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await flushPromises();
 
     expect(wrapper.emitted('memberAdded')?.[0]).toBeTruthy();
@@ -68,7 +68,7 @@ describe('group TabMembers', () => {
     const wrapper = makeWrapper();
 
     wrapper
-      .find('[data-testid="lid-rol-ada@voorbeeld.nl-admin"]')
+      .find('[data-testid="member-role-ada@voorbeeld.nl-admin"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await flushPromises();
 
@@ -82,10 +82,10 @@ describe('group TabMembers', () => {
     const wrapper = makeWrapper();
 
     wrapper
-      .find('[data-testid="lid-verwijderen-ada@voorbeeld.nl"]')
+      .find('[data-testid="member-delete-ada@voorbeeld.nl"]')
       .element.dispatchEvent(new CustomEvent('select'));
     await flushPromises();
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await flushPromises();
 
     expect(wrapper.emitted('memberRemoved')?.[0]).toEqual(['ada@voorbeeld.nl']);

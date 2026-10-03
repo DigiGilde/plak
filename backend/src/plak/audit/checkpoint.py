@@ -48,7 +48,7 @@ DB_URL_VAR = "PLAK_DB_URL"
 # Grep handle. The rest of the line is one JSON object, so a log search finds
 # the runs and a machine reads them without a parser of its own.
 MARKER = "audit-chain-checkpoint"
-# /3 is the chain layout with one set of chains per retention term. A /1 or /2
+# /3 is the chain layout with one set of chains per retention period. A /1 or /2
 # line numbered its chains differently, so it is refused rather than held
 # against chains it never described.
 FORMAT = "plak-audit-chain-checkpoint/3"
@@ -198,7 +198,7 @@ class Finding:
     serious: bool = True
 
     def describe(self) -> str:
-        return f"keten {self.shard} positie {self.seq}: {self.reason}"
+        return f"chain {self.shard} position {self.seq}: {self.reason}"
 
 
 class MalformedCheckpointError(ValueError):
@@ -241,11 +241,11 @@ def parse(line: str) -> Checkpoint:
     works as well as the bare JSON."""
     start = line.find("{")
     if start < 0:
-        raise MalformedCheckpointError("geen JSON-object gevonden in de regel")
+        raise MalformedCheckpointError("no JSON object found in the line")
     try:
         payload = json.loads(line[start:])
         if payload.get("format") != FORMAT:
-            raise MalformedCheckpointError(f"onbekend formaat: {payload.get('format')!r}")
+            raise MalformedCheckpointError(f"unknown format: {payload.get('format')!r}")
         heads = tuple(
             Head(
                 shard=int(shard["shard"]),
@@ -335,17 +335,19 @@ def _read_line(source: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="Publiceert de kop van elke auditketen, of controleert er een.")
+    parser = argparse.ArgumentParser(
+        description="Publish the head of every audit chain, or check the database against a published one."
+    )
     parser.add_argument(
         "--against",
-        metavar="BESTAND",
-        help="controleer de database tegen een eerder gepubliceerde regel (- voor stdin) in plaats van te publiceren",
+        metavar="FILE",
+        help="check the database against a previously published line (- for stdin) instead of publishing",
     )
     arguments = parser.parse_args(argv)
 
     dsn = os.environ.get(DB_URL_VAR)
     if not dsn:
-        _logger.error("%s is niet gezet; de publicatie weet niet met welke database ze moet praten.", DB_URL_VAR)
+        _logger.error("Cannot publish: %s is not set", DB_URL_VAR)
         return 1
 
     if arguments.against is None:
@@ -355,23 +357,23 @@ def main(argv: list[str] | None = None) -> int:
     try:
         published = parse(_read_line(arguments.against))
     except (MalformedCheckpointError, OSError) as error:
-        _logger.error("Kan de gepubliceerde regel niet lezen: %s", error)
+        _logger.error("Cannot read the published line: %s", error)
         return 1
     findings = asyncio.run(compare(dsn, published))
     moment = published.taken_at.isoformat()
     for finding in findings:
         if finding.serious:
-            _logger.error("Auditlog wijkt af van de publicatie van %s: %s", moment, finding.describe())
+            _logger.error("Audit log differs from the checkpoint published at %s: %s", moment, finding.describe())
         else:
             _logger.info(
-                "Opgeruimd sinds de publicatie van %s, na afloop van de bewaartermijn: %s.",
+                "Purged since the checkpoint published at %s, after the retention period: %s.",
                 moment,
                 finding.describe(),
             )
     if any(finding.serious for finding in findings):
         return 1
     _logger.info(
-        "Database komt overeen met de publicatie van %s: %d ketens, %d regels.",
+        "Database matches the checkpoint published at %s: %d chains, %d rows.",
         moment,
         len(published.heads),
         published.entries_total,

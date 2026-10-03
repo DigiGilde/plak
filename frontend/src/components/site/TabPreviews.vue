@@ -116,7 +116,7 @@ function actionsFor(preview: Preview): RowAction[] {
               ? t('site.previews.keys.turnOff')
               : t('site.previews.keys.turnOn'),
             icon: 'key',
-            testid: `override-${preview.ref}-sleutels`,
+            testid: `override-${preview.ref}-keys`,
             run: () => void setOverride(preview, { ...override, keys: !override.keys }),
           },
           {
@@ -124,7 +124,7 @@ function actionsFor(preview: Preview): RowAction[] {
               ? t('site.previews.invitees.turnOff')
               : t('site.previews.invitees.turnOn'),
             icon: 'person-2',
-            testid: `override-${preview.ref}-genodigden`,
+            testid: `override-${preview.ref}-invitees`,
             run: () => void setOverride(preview, { ...override, invitees: !override.invitees }),
           },
         ]
@@ -133,7 +133,7 @@ function actionsFor(preview: Preview): RowAction[] {
       text: t('site.previews.remove'),
       icon: 'trash',
       destructive: true,
-      testid: `verwijder-${preview.ref}`,
+      testid: `delete-${preview.ref}`,
       run: () => void remove(preview),
     },
   ];
@@ -162,10 +162,10 @@ async function remove(preview: Preview): Promise<void> {
 
   <ErrorBanner v-else-if="error" :error="error" />
 
-  <section v-else aria-labelledby="kop-previews">
+  <section v-else aria-labelledby="heading-previews">
     <nldd-container layout="stack" gap="8">
       <nldd-title :size="4">
-        <h2 id="kop-previews">{{ t('site.previews.heading') }}</h2>
+        <h2 id="heading-previews">{{ t('site.previews.heading') }}</h2>
         <span slot="subtitle">{{ t('site.previews.intro') }}</span>
       </nldd-title>
 
@@ -174,7 +174,7 @@ async function remove(preview: Preview): Promise<void> {
         icon="git-pull-request"
         :text="t('site.previews.empty')"
         :supporting-text="t('site.previews.empty.hint')"
-        data-testid="previews-leeg"
+        data-testid="previews-empty"
       ></nldd-inline-dialog>
 
       <nldd-list

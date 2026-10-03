@@ -340,7 +340,7 @@ async def test_a_purged_front_is_not_a_break(
         assert await chain.verify(migrated_dsn) == []
     # It is not silent about it either: the rows in front of position 3 cannot
     # be judged from here at all, and a reader has to know that.
-    assert f"Keten {shard} begint op positie 3" in caplog.text
+    assert f"Chain {shard} starts at position 3" in caplog.text
 
 
 async def test_a_gap_after_a_purged_front_is_still_a_break(
@@ -499,7 +499,7 @@ async def test_a_deleted_tail_row_is_a_break(migrated_dsn: str, connection: asyn
     assert [(one.shard, one.seq, one.entry_id, one.reason) for one in breaks] == [
         (shard, 3, None, chain.TAIL_MISSING)
     ]
-    assert f"keten {shard} positie 3 (ketenkop, " in breaks[0].describe()
+    assert f"chain {shard} position 3 (chain head, " in breaks[0].describe()
 
 
 async def test_a_chain_deleted_before_its_deadline_is_a_break(
@@ -630,7 +630,7 @@ async def test_main_reports_a_whole_chain(
     monkeypatch.setenv(chain.DB_URL_VAR, migrated_dsn)
     with caplog.at_level("INFO"):
         assert await asyncio.to_thread(chain.main) == 0
-    assert "ongeschonden" in caplog.text
+    assert "is intact" in caplog.text
 
 
 async def test_main_reports_a_broken_chain(
@@ -648,7 +648,7 @@ async def test_main_reports_a_broken_chain(
     monkeypatch.setenv(chain.DB_URL_VAR, migrated_dsn)
     with caplog.at_level("ERROR"):
         assert await asyncio.to_thread(chain.main) == 1
-    assert "gebroken" in caplog.text
+    assert "broken" in caplog.text
 
 
 # --- Helpers --------------------------------------------------------------------------

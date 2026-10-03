@@ -28,7 +28,7 @@ import { _resetBreadcrumbs } from '../src/composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import { _setLocaleForTest, currentLocale } from '../src/i18n';
 import Group from '../src/pages/Group.vue';
-import Profiel from '../src/pages/Profiel.vue';
+import Profile from '../src/pages/Profile.vue';
 
 /**
  * jsdom 25 reflects the ARIA properties of ElementInternals onto a map it
@@ -98,7 +98,7 @@ const GROUP_ROUTES = [
   },
 ];
 
-const PROFILE_ROUTES = [{ path: '/-/profile', component: Profiel as Component }];
+const PROFILE_ROUTES = [{ path: '/-/profile', component: Profile as Component }];
 
 async function expectNoViolations(element: Element): Promise<void> {
   const result = await axe.run({ include: [element], exclude: OUT_OF_SCOPE }, AXE_OPTIONS);
@@ -136,7 +136,7 @@ describe('axe: the admin in English', () => {
     const wrapper = await mountPage('/-/profile', PROFILE_ROUTES);
     expect(document.documentElement.lang).toBe('nl');
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await flushPromises();
 
     expect(document.documentElement.lang).toBe('en');

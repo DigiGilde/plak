@@ -29,11 +29,11 @@ describe('ConfirmModal (teleport)', () => {
       global: { stubs: { teleport: true } },
     });
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     expect(wrapper.emitted('confirm')).toBeFalsy();
 
     await wrapper.setProps({ open: true });
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     expect(wrapper.emitted('confirm')).toHaveLength(1);
   });
 
@@ -73,18 +73,18 @@ describe('ConfirmModal (typed confirmation)', () => {
   }
 
   function type(wrapper: ReturnType<typeof makeWrapper>, value: string): void {
-    fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', { value });
+    fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', { value });
   }
 
   const field = (wrapper: ReturnType<typeof makeWrapper>) =>
-    wrapper.find('[data-testid="bevestig-zin"]');
+    wrapper.find('[data-testid="confirm-phrase"]');
 
   it('asks for no text without a phrase', () => {
     const wrapper = mount(ConfirmModal, {
       props: { ...props, open: true },
       global: { stubs: { teleport: true } },
     });
-    expect(wrapper.find('[data-testid="bevestig-zin"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="confirm-phrase"]').exists()).toBe(false);
   });
 
   it('stacks slotted content and the field in one container, for an even gap', () => {
@@ -94,10 +94,10 @@ describe('ConfirmModal (typed confirmation)', () => {
       global: { stubs: { teleport: true } },
     });
 
-    const stack = wrapper.find('[data-testid="bevestig-inhoud"]');
+    const stack = wrapper.find('[data-testid="confirm-content"]');
     expect(stack.attributes('gap')).toBe('16');
     expect(stack.find('[data-testid="extra"]').exists()).toBe(true);
-    expect(stack.find('[data-testid="bevestig-zin"]').exists()).toBe(true);
+    expect(stack.find('[data-testid="confirm-phrase"]').exists()).toBe(true);
   });
 
   it('adds no container without a phrase, so a bare message keeps its layout', () => {
@@ -107,7 +107,7 @@ describe('ConfirmModal (typed confirmation)', () => {
       global: { stubs: { teleport: true } },
     });
 
-    expect(wrapper.find('[data-testid="bevestig-inhoud"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="confirm-content"]').exists()).toBe(false);
     expect(wrapper.find('nldd-modal-dialog > [data-testid="extra"]').exists()).toBe(true);
   });
 
@@ -121,7 +121,7 @@ describe('ConfirmModal (typed confirmation)', () => {
   it('refuses an empty field and marks it, without confirming', async () => {
     const wrapper = makeWrapper();
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     expect(wrapper.emitted('confirm')).toBeFalsy();
     expect(field(wrapper).attributes('invalid')).toBeDefined();
@@ -134,7 +134,7 @@ describe('ConfirmModal (typed confirmation)', () => {
     const wrapper = makeWrapper();
 
     type(wrapper, 'website');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     expect(wrapper.emitted('confirm')).toBeFalsy();
     expect(field(wrapper).attributes('invalid')).toBeDefined();
@@ -144,7 +144,7 @@ describe('ConfirmModal (typed confirmation)', () => {
     const wrapper = makeWrapper();
 
     type(wrapper, 'TEAM-AURORA/website');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     expect(wrapper.emitted('confirm')).toBeFalsy();
   });
@@ -153,7 +153,7 @@ describe('ConfirmModal (typed confirmation)', () => {
     const wrapper = makeWrapper();
 
     type(wrapper, '  team-aurora/website ');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     expect(wrapper.emitted('confirm')).toHaveLength(1);
     expect(field(wrapper).attributes('invalid')).toBeUndefined();
@@ -161,7 +161,7 @@ describe('ConfirmModal (typed confirmation)', () => {
 
   it('keeps the mark while the value is still wrong, and drops it once it is right', async () => {
     const wrapper = makeWrapper();
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     type(wrapper, 'team-aurora/web');
     await wrapper.vm.$nextTick();
@@ -200,7 +200,7 @@ describe('ConfirmModal (typed confirmation)', () => {
     input.value = 'team-aurora/website';
     input.dispatchEvent(new Event('input'));
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     expect(wrapper.emitted('confirm')).toHaveLength(1);
   });
@@ -208,14 +208,14 @@ describe('ConfirmModal (typed confirmation)', () => {
   it('starts empty and unjudged every time the dialog opens again', async () => {
     const wrapper = makeWrapper();
     type(wrapper, 'team-aurora/webs');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
 
     await wrapper.setProps({ open: false });
     await wrapper.setProps({ open: true });
 
     expect(field(wrapper).attributes('value')).toBe('');
     expect(field(wrapper).attributes('invalid')).toBeUndefined();
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     expect(wrapper.emitted('confirm')).toBeFalsy();
   });
 });

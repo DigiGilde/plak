@@ -76,7 +76,7 @@ class TestIdTokenValidation:
         decodes it without complaint, so the object check is ours."""
         header = {"alg": "RS256", "kid": idp.kid}
         token = jws.serialize_compact(header, b'["geen", "object"]', idp.private_key, algorithms=["RS256"])
-        with pytest.raises(OidcError, match="JSON-object"):
+        with pytest.raises(OidcError, match="JSON object"):
             await validate(oidc, idp, token)
 
     async def test_foreign_key_refused(self, oidc, idp):
@@ -309,7 +309,7 @@ class TestEmptyRequiredAcr:
             )
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
-        assert "PLAK_OIDC_REQUIRED_ACR is leeg" in warnings[0].getMessage()
+        assert "PLAK_OIDC_REQUIRED_ACR is empty" in warnings[0].getMessage()
 
     def test_info_in_dev(self, idp, caplog):
         with caplog.at_level(logging.INFO, logger="plak.auth.oidc"):

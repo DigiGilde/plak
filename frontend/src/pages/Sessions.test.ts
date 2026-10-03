@@ -35,7 +35,7 @@ describe('Sessions: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    const row = wrapper.find('[data-testid="sessie-cli-sessie-1"]');
+    const row = wrapper.find('[data-testid="session-cli-sessie-1"]');
     expect(row.exists()).toBe(true);
     expect(row.html()).toContain('plak-cli');
     expect(row.html()).toContain('Gekoppeld');
@@ -49,7 +49,7 @@ describe('Sessions: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').html()).toContain('nog niet');
+    expect(wrapper.find('[data-testid="session-cli-sessie-1"]').html()).toContain('nog niet');
   });
 
   it('shows "Onbekend programma" without clientName', async () => {
@@ -58,7 +58,7 @@ describe('Sessions: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').html()).toContain(
+    expect(wrapper.find('[data-testid="session-cli-sessie-1"]').html()).toContain(
       'Onbekend programma',
     );
   });
@@ -72,7 +72,7 @@ describe('Sessions: overview', () => {
     // The text goes in the component's own supporting-text rather than a
     // slotted paragraph: the slot sits outside the layout that centres the
     // icon and the heading, which left the sentence hanging beside them.
-    const empty = wrapper.find('[data-testid="sessies-leeg"]');
+    const empty = wrapper.find('[data-testid="sessions-empty"]');
     expect(empty.exists()).toBe(true);
     expect(empty.attributes('supporting-text')).toContain('plak login');
     expect(empty.attributes('supporting-text')).toContain(
@@ -86,7 +86,7 @@ describe('Sessions: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    const link = wrapper.find('[data-testid="sessies-cli-install"]');
+    const link = wrapper.find('[data-testid="sessions-cli-install"]');
     expect(link.attributes('href')).toBe(
       'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
     );
@@ -97,7 +97,7 @@ describe('Sessions: overview', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="sessies-cli-install"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sessions-cli-install"]').exists()).toBe(false);
   });
 
   it('provides the breadcrumb path to the app shell', async () => {
@@ -125,52 +125,52 @@ describe('Sessions: revoking', () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="session-revoke-cli-sessie-1"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.cliSessions).toHaveLength(1);
 
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.cliSessions).toHaveLength(0);
-    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="session-cli-sessie-1"]').exists()).toBe(false);
   });
 
   it('keeps the session when the confirmation is cancelled', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="session-revoke-cli-sessie-1"]').trigger('click');
     await untilIdle();
 
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.cliSessions).toHaveLength(1);
-    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="session-cli-sessie-1"]').exists()).toBe(true);
   });
 
   it('reports it when revoking fails and keeps the row', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="session-revoke-cli-sessie-1"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(wrapper.find('nldd-notification[variant="critical"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="sessie-cli-sessie-1"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="session-cli-sessie-1"]').exists()).toBe(true);
   });
 
   it('reports a generic detail when revoking fails with an error that is not from the API', async () => {
     const wrapper = await makeWrapper();
     await untilIdle();
 
-    await wrapper.find('[data-testid="sessie-intrekken-cli-sessie-1"]').trigger('click');
+    await wrapper.find('[data-testid="session-revoke-cli-sessie-1"]').trigger('click');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     const notice = wrapper.find('nldd-notification[variant="critical"]');

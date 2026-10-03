@@ -18,7 +18,7 @@ import Group from './Group.vue';
 
 let backend: MockBackend;
 
-const Empty = defineComponent({ render: () => h('div', { 'data-testid': 'elders' }) });
+const Empty = defineComponent({ render: () => h('div', { 'data-testid': 'elsewhere' }) });
 const Host = defineComponent({ render: () => h(RouterView) });
 
 // A route table of its own (the same shape as router.ts) so this test does not
@@ -154,7 +154,7 @@ describe('Group: layout', () => {
     const banner = wrapper.find('nldd-banner');
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('text')).toBe('Onbekende groep');
-    expect(wrapper.find('[data-testid="groep-tabs"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-tabs"]').exists()).toBe(false);
   });
 });
 
@@ -166,14 +166,14 @@ describe('Group: tab navigation', () => {
     await untilIdle();
     expect(router.currentRoute.value.name).toBe('group-members');
     expect(router.currentRoute.value.path).toBe('/team-aurora/-/members');
-    expect(wrapper.find('[data-testid="leden-lijst"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="members-list"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="tab-members"]').attributes('current')).toBeDefined();
     expect(wrapper.find('[data-testid="tab-sites"]').attributes('current')).toBeUndefined();
 
     await wrapper.find('[data-testid="tab-settings"]').trigger('click');
     await untilIdle();
     expect(router.currentRoute.value.path).toBe('/team-aurora/-/settings');
-    expect(wrapper.find('[data-testid="standaardtoegang-groep"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="default-access-group"]').exists()).toBe(true);
 
     await wrapper.find('[data-testid="tab-sites"]').trigger('click');
     await untilIdle();
@@ -184,7 +184,7 @@ describe('Group: tab navigation', () => {
   it('also loads each tab directly via its URL', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/-/settings');
 
-    expect(wrapper.find('[data-testid="standaardtoegang-public"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="default-access-public"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="tab-settings"]').attributes('current')).toBeDefined();
   });
 
@@ -194,7 +194,7 @@ describe('Group: tab navigation', () => {
     for (const path of ['/team-aurora', '/team-aurora/-/members', '/team-aurora/-/settings']) {
       await router.push(path);
       await untilIdle();
-      expect(wrapper.find('[data-testid="groep-publiceren"]').attributes('text')).toBe(
+      expect(wrapper.find('[data-testid="group-publish"]').attributes('text')).toBe(
         'Zet een site online',
       );
     }
@@ -203,24 +203,24 @@ describe('Group: tab navigation', () => {
   it('gives the site table the work width and the other tabs the reading width', async () => {
     const { wrapper, router } = await makeWrapper('/nldd');
     const section = () => wrapper.find('nldd-simple-section');
-    expect(section().classes()).not.toContain('leesbreedte');
+    expect(section().classes()).not.toContain('reading-width');
 
     for (const path of ['/nldd/-/members', '/nldd/-/settings']) {
       await router.push(path);
       await untilIdle();
-      expect(section().classes()).toContain('leesbreedte');
+      expect(section().classes()).toContain('reading-width');
     }
   });
 
   it('does not rebuild the group header when switching tabs', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora');
-    const bar = wrapper.find('[data-testid="groep-tabs"]').element;
+    const bar = wrapper.find('[data-testid="group-tabs"]').element;
     const title = wrapper.find('h1').element;
 
     await router.push('/team-aurora/-/members');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="groep-tabs"]').element).toBe(bar);
+    expect(wrapper.find('[data-testid="group-tabs"]').element).toBe(bar);
     expect(wrapper.find('h1').element).toBe(title);
   });
 });
@@ -229,7 +229,7 @@ describe('Group: put a site online', () => {
   it('names the button after the task, not after the data model', async () => {
     const { wrapper } = await makeWrapper('/team-aurora');
 
-    expect(wrapper.find('[data-testid="groep-publiceren"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="group-publish"]').attributes('text')).toBe(
       'Zet een site online',
     );
     expect(wrapper.html()).not.toContain('Nieuw site');
@@ -240,7 +240,7 @@ describe('Group: put a site online', () => {
     backend.data.loggedInMemberId = 'lid-3';
     const { wrapper } = await makeWrapper('/team-aurora');
 
-    expect(wrapper.find('[data-testid="groep-publiceren"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(true);
   });
 
   it('hides the button for someone with only the reader role in the group', async () => {
@@ -248,7 +248,7 @@ describe('Group: put a site online', () => {
     backend.data.loggedInMemberId = 'lid-4';
     const { wrapper } = await makeWrapper('/team-aurora');
 
-    expect(wrapper.find('[data-testid="groep-publiceren"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(false);
     // Do not keep a dead button under another name, and otherwise a quiet
     // heading.
     expect(wrapper.html()).not.toContain('Nieuw site');
@@ -308,7 +308,7 @@ describe('Group: put a site online', () => {
       const section = wrapper.find('nldd-simple-section').element;
       section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
       await untilIdle();
-      expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="group-drag-active"]').exists()).toBe(false);
 
       section.dispatchEvent(dragEvent('drop', fakeDataTransfer([droppableFile()])));
       await untilIdle();
@@ -321,11 +321,11 @@ describe('Group: put a site online', () => {
       const section = wrapper.find('nldd-simple-section').element;
       section.dispatchEvent(dragEvent('dragenter', fakeDataTransfer([droppableFile()])));
       await untilIdle();
-      expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="group-drag-active"]').exists()).toBe(true);
 
       section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
       await untilIdle();
-      expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="group-drag-active"]').exists()).toBe(false);
     });
 
     it('prevents the browser default while dragging over the target', async () => {
@@ -358,7 +358,7 @@ describe('Group: put a site online', () => {
       section.dispatchEvent(dragEvent('dragleave', fakeDataTransfer([droppableFile()])));
       await untilIdle();
 
-      expect(wrapper.find('[data-testid="groep-sleep-actief"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="group-drag-active"]').exists()).toBe(false);
     });
 
     it('shows a dismissible error for a dropped file of an unsupported type', async () => {
@@ -370,7 +370,7 @@ describe('Group: put a site online', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
       await untilIdle();
 
-      const banner = wrapper.find('[data-testid="groep-sleep-fout"]');
+      const banner = wrapper.find('[data-testid="group-drag-error"]');
       expect(banner.exists()).toBe(true);
       expect(banner.attributes('text')).toContain('Sleep één bestand');
       expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
@@ -378,7 +378,7 @@ describe('Group: put a site online', () => {
       banner.element.dispatchEvent(new CustomEvent('dismiss'));
       await untilIdle();
 
-      expect(wrapper.find('[data-testid="groep-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="group-drag-error"]').exists()).toBe(false);
     });
 
     it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
@@ -389,7 +389,7 @@ describe('Group: put a site online', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
       await untilIdle();
 
-      expect(wrapper.find('[data-testid="groep-sleep-fout"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="group-drag-error"]').exists()).toBe(false);
       expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
     });
   });
@@ -397,7 +397,7 @@ describe('Group: put a site online', () => {
   it('puts a site online from the sheet and takes the user to the result', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora');
 
-    await wrapper.find('[data-testid="groep-publiceren"]').trigger('click');
+    await wrapper.find('[data-testid="group-publish"]').trigger('click');
     await untilIdle();
 
     // The group is known, so the sheet does not ask for it; the address is
@@ -407,7 +407,7 @@ describe('Group: put a site online', () => {
 
     chooseFile(wrapper, 'documentatie.zip');
     await untilIdle();
-    expect(wrapper.find('[data-testid="publiceer-adres"]').text()).toContain(
+    expect(wrapper.find('[data-testid="publish-address"]').text()).toContain(
       'https://sites.plak.test/team-aurora/documentatie/',
     );
 
@@ -453,12 +453,12 @@ describe('Group: put a site online', () => {
     backend.data.loggedInMemberId = null;
     const { wrapper } = await makeWrapper('/team-aurora');
 
-    await wrapper.find('[data-testid="groep-publiceren"]').trigger('click');
+    await wrapper.find('[data-testid="group-publish"]').trigger('click');
     chooseFile(wrapper, 'documentatie.zip');
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="publiceer-adres"]').text()).toContain('/team-aurora/documentatie/');
-    expect(wrapper.find('[data-testid="publiceer-adres"]').text()).not.toContain('https://');
+    expect(wrapper.find('[data-testid="publish-address"]').text()).toContain('/team-aurora/documentatie/');
+    expect(wrapper.find('[data-testid="publish-address"]').text()).not.toContain('https://');
 
     wrapper.unmount();
   });
@@ -478,7 +478,7 @@ describe('Group: put a site online', () => {
     // The group loaded regardless: only the content host in the address
     // dropped out, not the whole page.
     expect(wrapper.find('h1').text()).toBe('Team Aurora');
-    expect(wrapper.find('[data-testid="groep-publiceren"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(true);
   });
 
   it('handles the request from the toolbar here, on every tab', async () => {
@@ -527,24 +527,24 @@ describe('Group: group members', () => {
     fireDetailEvent(field, 'input', { value: 'nieuw@voorbeeld.nl' });
     // Only a pick is an identifier: the combo box reports one as a `change`.
     fireDetailEvent(field, 'change', { value: 'nieuw@voorbeeld.nl' });
-    await wrapper.find('[data-testid="lid-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="member-form"]').trigger('submit');
     await untilIdle();
 
     expect(
       backend.data.groupMembers.find((l) => l.identifier === 'nieuw@voorbeeld.nl')?.role,
     ).toBe('reader');
-    expect(wrapper.find('[data-testid="lid-verwijderen-nieuw@voorbeeld.nl"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="member-delete-nieuw@voorbeeld.nl"]').exists()).toBe(true);
   });
 
   it('removes a member from the row and keeps the group in sync', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora/-/members');
 
-    await runRowAction(wrapper, 'lid-verwijderen-dev-beheerder');
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await runRowAction(wrapper, 'member-delete-dev-beheerder');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.groupMembers.map((l) => l.identifier)).not.toContain('dev-beheerder');
-    expect(wrapper.find('[data-testid="lid-verwijderen-dev-beheerder"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="member-delete-dev-beheerder"]').exists()).toBe(false);
 
     // The page owns the source of truth: a detour via another tab does not
     // bring the member back.
@@ -552,7 +552,7 @@ describe('Group: group members', () => {
     await untilIdle();
     await router.push('/team-aurora/-/members');
     await untilIdle();
-    expect(wrapper.find('[data-testid="lid-verwijderen-dev-beheerder"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="member-delete-dev-beheerder"]').exists()).toBe(false);
   });
 
   it('changes a role from the row and keeps the group in sync', async () => {
@@ -560,7 +560,7 @@ describe('Group: group members', () => {
 
     expect(roleOf(wrapper, 'ada@voorbeeld.nl')).toBe('Redacteur');
 
-    await runRowAction(wrapper, 'lid-rol-ada@voorbeeld.nl-admin');
+    await runRowAction(wrapper, 'member-role-ada@voorbeeld.nl-admin');
 
     expect(
       backend.data.groupMembers.find((l) => l.identifier === 'ada@voorbeeld.nl')?.role,
@@ -584,15 +584,15 @@ describe('Group: settings', () => {
     expect(sheetLabels(wrapper)).toEqual(['Zet een site online']);
     expect(wrapper.find('nldd-button[text="Wijzigen"]').exists()).toBe(false);
 
-    const group = wrapper.find('[data-testid="standaardtoegang-groep"]');
+    const group = wrapper.find('[data-testid="default-access-group"]');
     expect(group.attributes('type')).toBe('radiogroup');
     expect(group.findAll('nldd-list-item')).toHaveLength(4);
     expect(
-      wrapper.find('[data-testid="standaardtoegang-public"]').attributes('checked'),
+      wrapper.find('[data-testid="default-access-public"]').attributes('checked'),
     ).toBeDefined();
 
     fireDetailEvent(
-      wrapper.find('[data-testid="standaardtoegang-site_team"]').element,
+      wrapper.find('[data-testid="default-access-site_team"]').element,
       'change',
       { checked: true },
     );
@@ -604,7 +604,7 @@ describe('Group: settings', () => {
       invitees: false,
     });
     expect(
-      wrapper.find('[data-testid="standaardtoegang-site_team"]').attributes('checked'),
+      wrapper.find('[data-testid="default-access-site_team"]').attributes('checked'),
     ).toBeDefined();
     expect(
       wrapper.find('nldd-notification[text="Standaardtoegang opgeslagen"]').exists(),
@@ -615,7 +615,7 @@ describe('Group: settings', () => {
     const { wrapper } = await makeWrapper('/team-aurora/-/settings');
 
     fireDetailEvent(
-      wrapper.find('[data-testid="standaardtoegang-sleutels"]').element,
+      wrapper.find('[data-testid="default-access-keys"]').element,
       'change',
       { checked: true },
     );
@@ -633,17 +633,17 @@ describe('Group: settings', () => {
 
     vi.stubGlobal('fetch', serverErrorFetch());
     fireDetailEvent(
-      wrapper.find('[data-testid="standaardtoegang-site_team"]').element,
+      wrapper.find('[data-testid="default-access-site_team"]').element,
       'change',
       { checked: true },
     );
     await untilIdle();
 
     expect(
-      wrapper.find('[data-testid="standaardtoegang-public"]').attributes('checked'),
+      wrapper.find('[data-testid="default-access-public"]').attributes('checked'),
     ).toBeDefined();
     expect(
-      wrapper.find('[data-testid="standaardtoegang-site_team"]').attributes('checked'),
+      wrapper.find('[data-testid="default-access-site_team"]').attributes('checked'),
     ).toBeUndefined();
     expect(
       wrapper.find('nldd-notification[text="Standaardtoegang niet opgeslagen"]').exists(),
@@ -653,7 +653,7 @@ describe('Group: settings', () => {
   it('leaves the already chosen base alone, without bothering the API', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/-/settings');
 
-    fireDetailEvent(wrapper.find('[data-testid="standaardtoegang-public"]').element, 'change', {
+    fireDetailEvent(wrapper.find('[data-testid="default-access-public"]').element, 'change', {
       checked: true,
     });
     await untilIdle();
@@ -671,14 +671,14 @@ describe('Group: deleting the group', () => {
   it('offers it to a group admin and goes to the overview once the group is gone', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
     expect(
-      wrapper.findAll('[data-testid="groep-sites-lijst"] nldd-text-cell').map((c) => c.attributes('supporting-text')),
+      wrapper.findAll('[data-testid="group-sites-list"] nldd-text-cell').map((c) => c.attributes('supporting-text')),
     ).toContain('team-aurora/website');
 
-    await wrapper.find('[data-testid="verwijder-groep"]').trigger('click');
-    fireDetailEvent(wrapper.find('[data-testid="bevestig-zin"]').element, 'input', {
+    await wrapper.find('[data-testid="delete-group"]').trigger('click');
+    fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', {
       value: 'team-aurora',
     });
-    await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
     expect(backend.data.groups.map((g) => g.slug)).not.toContain('team-aurora');
@@ -691,7 +691,7 @@ describe('Group: deleting the group', () => {
     backend.data.loggedInMemberId = 'lid-3';
     const { wrapper } = await makeWrapper('/team-aurora/-/settings');
 
-    expect(wrapper.find('[data-testid="standaardtoegang-groep"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="default-access-group"]').exists()).toBe(true);
     expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
   });
 
@@ -701,7 +701,7 @@ describe('Group: deleting the group', () => {
     );
     const { wrapper } = await makeWrapper('/team-aurora/-/settings');
 
-    expect(wrapper.find('[data-testid="standaardtoegang-groep"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="default-access-group"]').exists()).toBe(true);
     expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
   });
 });
@@ -715,7 +715,7 @@ describe('Group: empty', () => {
     });
 
     const { wrapper, router } = await makeWrapper('/leeg');
-    expect(wrapper.find('[data-testid="sites-leeg"]').attributes('text')).toBe(
+    expect(wrapper.find('[data-testid="sites-empty"]').attributes('text')).toBe(
       'Nog geen sites in deze groep',
     );
 

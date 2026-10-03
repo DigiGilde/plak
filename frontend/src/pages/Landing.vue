@@ -36,13 +36,13 @@ async function checkAgain(): Promise<void> {
 </script>
 
 <template>
-  <nldd-simple-section v-if="props.state === 'awaiting-activation'" class="leesbreedte">
+  <nldd-simple-section v-if="props.state === 'awaiting-activation'" class="reading-width">
     <nldd-title slot="header" :size="1">
       <h1>{{ t('page.landing.withdrawn.title') }}</h1>
     </nldd-title>
     <nldd-rich-text>
       <p>{{ t('page.landing.withdrawn.intro') }}</p>
-      <p v-if="props.reason" data-testid="reden">{{ props.reason }}</p>
+      <p v-if="props.reason" data-testid="reason">{{ props.reason }}</p>
       <p>{{ t('page.landing.withdrawn.body') }}</p>
     </nldd-rich-text>
     <nldd-spacer size="24"></nldd-spacer>
@@ -50,7 +50,7 @@ async function checkAgain(): Promise<void> {
       variant="primary"
       :text="t('page.landing.withdrawn.check')"
       :loading="busy || undefined"
-      data-testid="controleer-opnieuw"
+      data-testid="check-again"
       @click="checkAgain"
     ></nldd-button>
     <template v-if="notice === 'failed'">
@@ -59,12 +59,12 @@ async function checkAgain(): Promise<void> {
         variant="warning"
         :text="t('page.landing.withdrawn.failed.title')"
         :supporting-text="t('page.landing.withdrawn.failed.detail')"
-        data-testid="melding-mislukt"
+        data-testid="notice-failed"
       ></nldd-banner>
     </template>
   </nldd-simple-section>
 
-  <nldd-simple-section v-else class="leesbreedte">
+  <nldd-simple-section v-else class="reading-width">
     <nldd-title slot="header" :size="1"><h1>Plak</h1></nldd-title>
     <nldd-rich-text>
       <p>{{ t('page.landing.intro') }}</p>

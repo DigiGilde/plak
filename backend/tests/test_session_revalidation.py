@@ -112,7 +112,7 @@ def _single_use_refresh(monkeypatch: pytest.MonkeyPatch, app, *, first: str | No
         redeemed.append(refresh_token)
         await release.wait()
         if first is None or redeemed.count(refresh_token) > 1:
-            raise RefreshRejectedError("de IdP verwierp het verversingstoken")
+            raise RefreshRejectedError("the IdP rejected the refresh token")
         return {"refresh_token": first}
 
     monkeypatch.setattr(app.state.oidc_client, "refresh_tokens", refresh_tokens)
@@ -351,7 +351,7 @@ async def test_a_session_without_a_refresh_token_is_kept_and_logged(
 
         assert _refresh_grants(idp) == []
         assert app.state.session_store.get_session(session.id) is not None
-        assert "verversingstoken" in caplog.text
+        assert "refresh token" in caplog.text
 
 
 async def test_recheck_off_never_calls_the_idp() -> None:
@@ -424,7 +424,7 @@ class TestBrokenCoupling:
         return [
             record.getMessage()
             for record in caplog.records
-            if record.levelno >= logging.ERROR and "IdP re-validation is failing" in record.getMessage()
+            if record.levelno >= logging.ERROR and "IdP revalidation is failing" in record.getMessage()
         ]
 
     async def test_the_session_is_kept_and_the_error_is_logged_once_per_window(
@@ -482,7 +482,7 @@ class TestBrokenCoupling:
             _age(app, session, seconds=RECHECK_S + 1)
             await _visit(client)
 
-            assert revalidation_status(app) == "IdP re-validation is failing: invalid_client"
+            assert revalidation_status(app) == "IdP revalidation is failing: invalid_client"
 
             idp.refresh_error = None
             idp.refresh_status = 200

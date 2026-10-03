@@ -7,7 +7,7 @@ import { serverErrorFetch, untilIdle } from '@/components/site/testHelpers';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _setLocaleForTest, currentLocale, languageChoice } from '@/i18n';
-import Profiel from './Profiel.vue';
+import Profile from './Profile.vue';
 
 let backend: MockBackend;
 let router: Router;
@@ -19,7 +19,7 @@ beforeEach(() => {
   _resetCurrentMemberCache();
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/-/profile', component: Profiel }],
+    routes: [{ path: '/-/profile', component: Profile }],
   });
 });
 
@@ -31,7 +31,7 @@ afterEach(() => {
 async function makeWrapper() {
   await router.push('/-/profile');
   await router.isReady();
-  const wrapper = mount(Profiel, { global: { plugins: [router], stubs: { teleport: true } } });
+  const wrapper = mount(Profile, { global: { plugins: [router], stubs: { teleport: true } } });
   await untilIdle();
   return wrapper;
 }
@@ -40,30 +40,30 @@ function checked(wrapper: Awaited<ReturnType<typeof makeWrapper>>, testid: strin
   return wrapper.find(`[data-testid="${testid}"]`).attributes('checked') !== undefined;
 }
 
-describe('Profiel: who you are', () => {
+describe('Profile: who you are', () => {
   it('names you, your address and your role on the platform', async () => {
     const wrapper = await makeWrapper();
 
     expect(wrapper.find('h1').text()).toBe('Profiel');
-    expect(wrapper.find('[data-testid="profiel-naam"]').html()).toContain('Bea Heerder');
-    expect(wrapper.find('[data-testid="profiel-email"]').html()).toContain(
+    expect(wrapper.find('[data-testid="profile-name"]').html()).toContain('Bea Heerder');
+    expect(wrapper.find('[data-testid="profile-email"]').html()).toContain(
       'beheerder@voorbeeld.nl',
     );
-    expect(wrapper.find('[data-testid="profiel-rol"]').html()).toContain('Platformbeheerder');
+    expect(wrapper.find('[data-testid="profile-role"]').html()).toContain('Platformbeheerder');
   });
 
   it('calls an ordinary member a member', async () => {
     backend.data.loggedInMemberId = 'lid-3';
     const wrapper = await makeWrapper();
 
-    expect(wrapper.find('[data-testid="profiel-rol"]').html()).toContain('Lid');
+    expect(wrapper.find('[data-testid="profile-role"]').html()).toContain('Lid');
   });
 
   it('says so when the identity provider supplied no name', async () => {
     backend.data.members[0]!.name = '   ';
     const wrapper = await makeWrapper();
 
-    expect(wrapper.find('[data-testid="profiel-naam"]').html()).toContain('Onbekend');
+    expect(wrapper.find('[data-testid="profile-name"]').html()).toContain('Onbekend');
   });
 
   it('does not crash the page when the session cannot be refreshed on mount', async () => {
@@ -86,7 +86,7 @@ describe('Profiel: who you are', () => {
   it('links to the linked sessions rather than listing them here', async () => {
     const wrapper = await makeWrapper();
 
-    expect(wrapper.find('[data-testid="profiel-sessies"]').attributes('href')).toBe(
+    expect(wrapper.find('[data-testid="profile-sessions"]').attributes('href')).toBe(
       '/-/sessions',
     );
   });
@@ -94,7 +94,7 @@ describe('Profiel: who you are', () => {
   it('points a member without the CLI yet at the install instructions', async () => {
     const wrapper = await makeWrapper();
 
-    const link = wrapper.find('[data-testid="profiel-cli-install"]');
+    const link = wrapper.find('[data-testid="profile-cli-install"]');
     expect(link.attributes('href')).toBe(
       'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
     );
@@ -102,26 +102,26 @@ describe('Profiel: who you are', () => {
   });
 });
 
-describe('Profiel: the language choice', () => {
+describe('Profile: the language choice', () => {
   it('starts on "follow my browser" when the account holds no choice', async () => {
     const wrapper = await makeWrapper();
 
-    expect(checked(wrapper, 'taal-auto')).toBe(true);
-    expect(checked(wrapper, 'taal-nl')).toBe(false);
-    expect(checked(wrapper, 'taal-en')).toBe(false);
+    expect(checked(wrapper, 'language-auto')).toBe(true);
+    expect(checked(wrapper, 'language-nl')).toBe(false);
+    expect(checked(wrapper, 'language-en')).toBe(false);
   });
 
   it('marks the language the account carries', async () => {
     backend.data.myLanguage = 'en';
     const wrapper = await makeWrapper();
 
-    expect(checked(wrapper, 'taal-en')).toBe(true);
+    expect(checked(wrapper, 'language-en')).toBe(true);
   });
 
   it('switches the interface and stores the choice on the account', async () => {
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await untilIdle();
 
     expect(currentLocale.value).toBe('en');
@@ -132,7 +132,7 @@ describe('Profiel: the language choice', () => {
   it('follows through to the html element, for a screen reader', async () => {
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await untilIdle();
 
     expect(document.documentElement.lang).toBe('en');
@@ -142,7 +142,7 @@ describe('Profiel: the language choice', () => {
     backend.data.myLanguage = 'en';
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-auto"]').trigger('change');
+    await wrapper.find('[data-testid="language-auto"]').trigger('change');
     await untilIdle();
 
     expect(backend.data.myLanguage).toBeNull();
@@ -153,7 +153,7 @@ describe('Profiel: the language choice', () => {
   it('confirms the change', async () => {
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await untilIdle();
 
     const notice = wrapper.find('nldd-notification');
@@ -164,7 +164,7 @@ describe('Profiel: the language choice', () => {
   it('does nothing when the choice that is already on is chosen again', async () => {
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-auto"]').trigger('change');
+    await wrapper.find('[data-testid="language-auto"]').trigger('change');
     await untilIdle();
 
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
@@ -174,7 +174,7 @@ describe('Profiel: the language choice', () => {
     backend.data.myLanguage = 'en';
     const wrapper = await makeWrapper();
 
-    await wrapper.find('[data-testid="taal-nl"]').trigger('change');
+    await wrapper.find('[data-testid="language-nl"]').trigger('change');
     await untilIdle();
 
     expect(currentLocale.value).toBe('nl');
@@ -186,8 +186,8 @@ describe('Profiel: the language choice', () => {
     // first one's optimistic value as the one to roll back to.
     const wrapper = await makeWrapper();
 
-    const first = wrapper.find('[data-testid="taal-en"]').trigger('change');
-    await wrapper.find('[data-testid="taal-nl"]').trigger('change');
+    const first = wrapper.find('[data-testid="language-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-nl"]').trigger('change');
     await first;
     await untilIdle();
 
@@ -198,11 +198,11 @@ describe('Profiel: the language choice', () => {
     const wrapper = await makeWrapper();
     vi.stubGlobal('fetch', serverErrorFetch());
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await untilIdle();
 
     expect(currentLocale.value).toBe('nl');
-    expect(checked(wrapper, 'taal-auto')).toBe(true);
+    expect(checked(wrapper, 'language-auto')).toBe(true);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe('Taal niet opgeslagen');
   });
 
@@ -210,7 +210,7 @@ describe('Profiel: the language choice', () => {
     const wrapper = await makeWrapper();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('netwerkfout')));
 
-    await wrapper.find('[data-testid="taal-en"]').trigger('change');
+    await wrapper.find('[data-testid="language-en"]').trigger('change');
     await untilIdle();
 
     expect(currentLocale.value).toBe('nl');

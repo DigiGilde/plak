@@ -548,7 +548,7 @@ class KeyCreate(ApiModel):
     @classmethod
     def _plain_label(cls, value: str | None) -> str | None:
         if value is not None and _has_forbidden_characters(value):
-            raise ValueError("label mag geen stuur- of opmaaktekens bevatten")
+            raise ValueError("label must not contain control or formatting characters")
         return value
 
     @field_validator("expires_at")
@@ -1408,12 +1408,12 @@ class ReasonField(ApiModel):
         normalised = value.strip()
         if not (REASON_MIN_LENGTH <= len(normalised) <= REASON_MAX_LENGTH):
             raise ValueError(
-                f"reason moet, na spaties strippen, {REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens zijn"
+                f"reason must be {REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters after stripping whitespace"
             )
         if _has_forbidden_characters(normalised):
-            raise ValueError("reason mag geen stuur- of opmaaktekens bevatten")
+            raise ValueError("reason must not contain control or formatting characters")
         if "@" in normalised:
-            raise ValueError("noem een zaak- of ticketnummer in reason, geen e-mailadres")
+            raise ValueError("give a case or ticket number in reason, not an email address")
         return normalised
 
 
@@ -2151,7 +2151,7 @@ class IdentifierAmbiguousError(Exception):
     def __init__(self, matches: int, *, via: Literal["email", "name"] = "email") -> None:
         self.matches = matches
         self.via = via
-        super().__init__(f"{matches} verschillende subjecten voor deze identifier")
+        super().__init__(f"{matches} different subjects for this identifier")
 
 
 async def _find_member_by_identifier(db: AsyncSession, identifier: str) -> Member | None:

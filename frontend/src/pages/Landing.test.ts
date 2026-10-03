@@ -68,7 +68,7 @@ function makeWithdrawn() {
 }
 
 async function clickCheck(): Promise<void> {
-  await wrapper!.find('[data-testid="controleer-opnieuw"]').trigger('click');
+  await wrapper!.find('[data-testid="check-again"]').trigger('click');
   await flushPromises();
   await letUpdateLand();
 }
@@ -113,7 +113,7 @@ describe('Landing: access withdrawn', () => {
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
     expect(wrapper.text()).toContain('Je bent ingelogd met je organisatieaccount');
     expect(wrapper.text()).toContain('niet meer');
-    expect(wrapper.find('[data-testid="reden"]').text()).toBe(WITHDRAWN);
+    expect(wrapper.find('[data-testid="reason"]').text()).toBe(WITHDRAWN);
     expect(wrapper.text()).toContain('Je account staat er nog');
     expect(wrapper.find('nldd-button[href="/-/login"]').exists()).toBe(false);
   });
@@ -125,7 +125,7 @@ describe('Landing: access withdrawn', () => {
     });
     await letUpdateLand();
 
-    expect(wrapper.find('[data-testid="reden"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="reason"]').exists()).toBe(false);
     expect(wrapper.text()).toContain('Je bent ingelogd met je organisatieaccount');
   });
 
@@ -144,7 +144,7 @@ describe('Landing: access withdrawn', () => {
     await clickCheck();
 
     expect(wrapper.emitted('refreshed')?.[0]?.[0]).toMatchObject({ state: 'active' });
-    expect(wrapper.find('[data-testid="melding-mislukt"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="notice-failed"]').exists()).toBe(false);
   });
 
   it('reports it when access is still withdrawn, without an extra notice', async () => {
@@ -158,7 +158,7 @@ describe('Landing: access withdrawn', () => {
       state: 'awaiting-activation',
       reason: WITHDRAWN,
     });
-    expect(wrapper.find('[data-testid="melding-mislukt"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="notice-failed"]').exists()).toBe(false);
   });
 
   it('reports an expired session', async () => {
@@ -179,6 +179,6 @@ describe('Landing: access withdrawn', () => {
     await clickCheck();
 
     expect(wrapper.emitted('refreshed')).toBeUndefined();
-    expect(wrapper.find('[data-testid="melding-mislukt"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="notice-failed"]').exists()).toBe(true);
   });
 });

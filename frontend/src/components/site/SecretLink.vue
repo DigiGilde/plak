@@ -65,7 +65,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
         :text="t('site.secretLink.copyLink')"
         :accessible-label="t('site.secretLink.copyLink.label')"
         type="button"
-        :data-testid="`${prefix}-kopieren`"
+        :data-testid="`${prefix}-copy`"
         @click="
           copy(
             fullLink,
@@ -82,7 +82,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
         <nldd-link
           :href="linkWithoutCode"
           target="_blank"
-          :data-testid="`${prefix}-link-zonder-code`"
+          :data-testid="`${prefix}-link-without-code`"
           >{{ linkWithoutCode }}</nldd-link
         >
       </p>
@@ -97,7 +97,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
           start-icon="copy"
           :text="t('site.secretLink.copyLinkWithoutCode')"
           type="button"
-          :data-testid="`${prefix}-kopieren-zonder-code`"
+          :data-testid="`${prefix}-copy-without-code`"
           @click="
             copy(
               linkWithoutCode,
@@ -111,7 +111,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
           start-icon="copy"
           :text="t('site.secretLink.copyCode')"
           type="button"
-          :data-testid="`${prefix}-code-kopieren`"
+          :data-testid="`${prefix}-code-copy`"
           @click="
             copy(
               code,
@@ -128,7 +128,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
     <nldd-text
       size="sm"
       role="status"
-      :data-testid="`${prefix}-melding`"
+      :data-testid="`${prefix}-notice`"
       >{{ notice }}</nldd-text
     >
   </nldd-container>

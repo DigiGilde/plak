@@ -86,7 +86,7 @@ async def fetch_json(http: httpx.AsyncClient, url: str, *, max_bytes: int) -> An
     flagged as rate limited.
     """
     if urlsplit(url).scheme != "https":
-        raise FetchError("alleen https wordt opgehaald")
+        raise FetchError("only https is fetched")
     try:
         async with http.stream(
             "GET",
@@ -100,21 +100,21 @@ async def fetch_json(http: httpx.AsyncClient, url: str, *, max_bytes: int) -> An
                     response.status_code == 403 and response.headers.get("x-ratelimit-remaining") == "0"
                 )
                 raise FetchError(
-                    f"antwoord {response.status_code}", status=response.status_code, rate_limited=limited
+                    f"response {response.status_code}", status=response.status_code, rate_limited=limited
                 )
             body = bytearray()
             async for chunk in response.aiter_bytes():
                 body += chunk
                 if len(body) > max_bytes:
-                    raise FetchError("antwoord te groot")
+                    raise FetchError("response too large")
     except FetchError:
         raise
     except Exception as error:
-        raise FetchError(f"niet bereikbaar: {type(error).__name__}") from error
+        raise FetchError(f"unreachable: {type(error).__name__}") from error
     try:
         return json.loads(bytes(body))
     except ValueError as error:
-        raise FetchError("antwoord is geen JSON") from error
+        raise FetchError("response is not JSON") from error
 
 
 @dataclass(frozen=True)

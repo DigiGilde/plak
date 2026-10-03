@@ -586,10 +586,10 @@ plak logout
   <ErrorBanner v-else-if="error" :error="error" />
 
   <nldd-container v-else layout="stack" gap="24" class="deploy">
-    <section aria-labelledby="kop-repository">
+    <section aria-labelledby="heading-repository">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4">
-          <h2 id="kop-repository">{{ t('publish.deploy.heading') }}</h2>
+          <h2 id="heading-repository">{{ t('publish.deploy.heading') }}</h2>
           <span slot="subtitle">{{ t('publish.deploy.intro') }}</span>
         </nldd-title>
 
@@ -597,9 +597,9 @@ plak logout
              keyboard operable by itself, announces its open state, and lets the
              browser find text inside it with ctrl+F while it is closed. NLDD has
              no accordion component, so the styling hangs on its tokens. -->
-        <details class="veiligheid" data-testid="deploy-veiligheid">
+        <details class="safety" data-testid="deploy-safety">
           <summary>{{ t('publish.deploy.safety.summary') }}</summary>
-          <nldd-rich-text class="veiligheid-inhoud">
+          <nldd-rich-text class="safety-content">
             <ul>
               <li>{{ t('publish.deploy.safety.noSecret') }}</li>
               <li>{{ t('publish.deploy.safety.scoped') }}</li>
@@ -616,14 +616,14 @@ plak logout
             <template v-if="repository">
               <nldd-box>
                 <nldd-container layout="stack" gap="8" padding="16">
-                  <nldd-text data-testid="repository-naam">
+                  <nldd-text data-testid="repository-name">
                     {{ providerLabel(repository.provider) }} -
                     {{ repository.owner }}/{{ repository.repo }}
                   </nldd-text>
                   <nldd-text size="sm">
                     {{ repository.host }}
                   </nldd-text>
-                  <nldd-text size="sm" data-testid="repository-livebranch">
+                  <nldd-text size="sm" data-testid="repository-live-branch">
                     {{
                       t('publish.deploy.repo.liveBranch', {
                         branch: repository.liveBranch ?? t('publish.deploy.repo.anyBranch'),
@@ -642,7 +642,7 @@ plak logout
                     size="sm"
                     :text="t('publish.deploy.repo.unconfirmed')"
                     :supporting-text="t('publish.deploy.repo.unconfirmedDetail')"
-                    data-testid="repository-onbevestigd"
+                    data-testid="repository-unconfirmed"
                   ></nldd-banner>
                 </nldd-container>
               </nldd-box>
@@ -650,13 +650,13 @@ plak logout
                 <nldd-button
                   variant="secondary"
                   :text="t('publish.deploy.repo.change')"
-                  data-testid="repository-wijzigen"
+                  data-testid="repository-change"
                   @click="openChangeForm"
                 ></nldd-button>
                 <nldd-button
                   variant="critical-transparent"
                   :text="t('publish.deploy.repo.unlink')"
-                  data-testid="repository-ontkoppelen"
+                  data-testid="repository-unlink"
                   @click="unlinkOpen = true"
                 ></nldd-button>
               </nldd-button-group>
@@ -666,13 +666,13 @@ plak logout
                 icon="link"
                 :text="t('publish.deploy.repo.empty')"
                 :supporting-text="t('publish.deploy.repo.emptyAdmin')"
-                data-testid="repository-leeg"
+                data-testid="repository-empty"
               ></nldd-inline-dialog>
               <nldd-button
                 variant="primary"
                 :text="t('publish.deploy.repo.link')"
                 width="fit-content"
-                data-testid="repository-koppelen"
+                data-testid="repository-link"
                 @click="openLinkForm"
               ></nldd-button>
             </template>
@@ -681,12 +681,12 @@ plak logout
                 icon="link"
                 :text="t('publish.deploy.repo.empty')"
                 :supporting-text="t('publish.deploy.repo.emptyReader')"
-                data-testid="repository-leeg"
+                data-testid="repository-empty"
               ></nldd-inline-dialog>
             </template>
           </template>
 
-          <nldd-form v-else data-testid="repository-formulier" @submit.prevent="submitRepository">
+          <nldd-form v-else data-testid="repository-form" @submit.prevent="submitRepository">
             <nldd-form-field :label="t('publish.deploy.form.provider')">
               <nldd-dropdown width="180px">
                 <select
@@ -721,7 +721,7 @@ plak logout
 
             <nldd-form-field :label="t('publish.deploy.form.repo')">
               <nldd-text-field
-                name="repository-eigenaar-repo"
+                name="repository-owner-repo"
                 width="20rem"
                 :placeholder="t('publish.deploy.form.repoPlaceholder')"
                 required
@@ -729,25 +729,25 @@ plak logout
                 :invalid="ownerRepoInvalid || formError !== null || undefined"
                 :unmet="
                   repositoryReferenceError !== null
-                    ? 'repository-reference-ongeldig'
+                    ? 'repository-reference-invalid'
                     : formError !== null
                       ? 'repository-server'
                       : undefined
                 "
-                data-testid="repository-eigenaar-repo"
+                data-testid="repository-owner-repo"
                 @input="formOwnerRepo = inputValue($event)"
               ></nldd-text-field>
-              <nldd-text v-if="recognizedRepository" size="sm" data-testid="repository-herkend">
+              <nldd-text v-if="recognizedRepository" size="sm" data-testid="repository-recognized">
                 {{ recognizedRepository }}
               </nldd-text>
               <nldd-form-field-help-text>
                 {{ t('publish.deploy.form.repoHelp') }}
               </nldd-form-field-help-text>
               <nldd-validation-list>
-                <nldd-validation-item id="repository-eigenaar-repo-vereist" required>
+                <nldd-validation-item id="repository-owner-repo-required" required>
                   {{ t('publish.deploy.form.repoRequired') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="repository-reference-ongeldig">
+                <nldd-validation-item id="repository-reference-invalid">
                   {{ repositoryReferenceError }}
                 </nldd-validation-item>
                 <nldd-validation-item id="repository-server">
@@ -757,7 +757,7 @@ plak logout
             </nldd-form-field>
 
             <template v-if="idsVisible">
-              <nldd-rich-text data-testid="repository-ids-uitleg">
+              <nldd-rich-text data-testid="repository-ids-explanation">
                 <template v-if="formProvider === 'github'">
                   <p>{{ t('publish.deploy.form.idsIntroGithub') }}</p>
                   <nldd-code-viewer language="bash" data-testid="repository-ids-cli">{{
@@ -766,7 +766,7 @@ plak logout
                   <p>{{ t('publish.deploy.form.idsManual') }}</p>
                 </template>
                 <p v-else>{{ t('publish.deploy.form.idsIntro') }}</p>
-                <nldd-code-viewer language="bash" data-testid="repository-ids-commando">{{
+                <nldd-code-viewer language="bash" data-testid="repository-ids-command">{{
                   idsCommand
                 }}</nldd-code-viewer>
                 <p>{{ t('publish.deploy.form.idsWrong') }}</p>
@@ -779,25 +779,25 @@ plak logout
                   no-spellcheck
                   :value="formRepositoryId"
                   :invalid="idsError !== null || undefined"
-                  :unmet="idsError !== null ? 'repository-ids-fout' : undefined"
+                  :unmet="idsError !== null ? 'repository-ids-error' : undefined"
                   data-testid="repository-id"
                   @input="formRepositoryId = inputValue($event)"
                 ></nldd-text-field>
               </nldd-form-field>
               <nldd-form-field :label="t('publish.deploy.form.ownerId')">
                 <nldd-text-field
-                  name="repository-eigenaar-id"
+                  name="repository-owner-id"
                   width="12rem"
                   keyboard="numeric"
                   no-spellcheck
                   :value="formOwnerId"
                   :invalid="idsError !== null || undefined"
-                  :unmet="idsError !== null ? 'repository-ids-fout' : undefined"
-                  data-testid="repository-eigenaar-id"
+                  :unmet="idsError !== null ? 'repository-ids-error' : undefined"
+                  data-testid="repository-owner-id"
                   @input="formOwnerId = inputValue($event)"
                 ></nldd-text-field>
                 <nldd-validation-list>
-                  <nldd-validation-item id="repository-ids-fout">
+                  <nldd-validation-item id="repository-ids-error">
                     {{ idsError }}
                   </nldd-validation-item>
                 </nldd-validation-list>
@@ -806,11 +806,11 @@ plak logout
 
             <nldd-form-field :label="t('publish.deploy.form.branch')" optional>
               <nldd-text-field
-                name="repository-livebranch"
+                name="repository-live-branch"
                 width="20rem"
                 :placeholder="t('publish.deploy.form.branchPlaceholder')"
                 :value="formLiveBranch"
-                data-testid="repository-livebranch-invoer"
+                data-testid="repository-live-branch-input"
                 @input="formLiveBranch = inputValue($event)"
               ></nldd-text-field>
               <nldd-form-field-help-text>
@@ -821,7 +821,7 @@ plak logout
             <!-- The GitHub id explanation above names the same command already. -->
             <nldd-rich-text v-if="!(idsVisible && formProvider === 'github')" data-testid="repository-cli-hint">
               <p>{{ t('publish.deploy.form.cliHint') }}</p>
-              <nldd-code-viewer language="bash" data-testid="repository-cli-commando">{{
+              <nldd-code-viewer language="bash" data-testid="repository-cli-command">{{
                 cliLinkCommand
               }}</nldd-code-viewer>
             </nldd-rich-text>
@@ -832,7 +832,7 @@ plak logout
                   variant="secondary"
                   :text="t('publish.deploy.form.cancel')"
                   type="button"
-                  data-testid="repository-annuleren"
+                  data-testid="repository-cancel"
                   @click="closeForm"
                 ></nldd-button>
                 <nldd-button
@@ -840,7 +840,7 @@ plak logout
                   type="submit"
                   :text="t('publish.deploy.form.submit')"
                   :loading="formBusy || undefined"
-                  data-testid="repository-opslaan"
+                  data-testid="repository-save"
                 ></nldd-button>
               </nldd-button-group>
             </nldd-form-actions>
@@ -853,7 +853,7 @@ plak logout
               >{{ workflowPathHint[1]
               }}<nldd-link
                 :href="`/${group}/${site}/versions`"
-                data-testid="deploy-naar-versies"
+                data-testid="deploy-to-versions"
               >{{ t('site.tabs.versions') }}</nldd-link
               >{{ workflowPathHint[2] }}
             </p>
@@ -865,10 +865,10 @@ plak logout
       </nldd-container>
     </section>
 
-    <section aria-labelledby="kop-cli">
+    <section aria-labelledby="heading-cli">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4">
-          <h2 id="kop-cli">{{ t('publish.deploy.cli.heading') }}</h2>
+          <h2 id="heading-cli">{{ t('publish.deploy.cli.heading') }}</h2>
         </nldd-title>
         <nldd-rich-text>
           <p>
@@ -909,7 +909,7 @@ plak logout
   max-width: var(--plak-reading-width);
 }
 
-.veiligheid {
+.safety {
   border: var(--semantics-surfaces-border-width, 1px) solid
     var(--semantics-surfaces-base-border-color, #e6e8ea);
   border-radius: var(--semantics-surfaces-corner-radius, 12px);
@@ -918,21 +918,21 @@ plak logout
 
 /* No display: flex or block here: both drop the native disclosure triangle in
    Chrome and Safari, and there is no component icon to put in its place. */
-.veiligheid > summary {
+.safety > summary {
   padding: 12px 16px;
   cursor: pointer;
   color: var(--semantics-content-color, inherit);
   font: var(--primitives-font-body-md-semi-bold-snug, inherit);
 }
 
-.veiligheid > summary:focus-visible {
+.safety > summary:focus-visible {
   outline: var(--semantics-focus-ring-outline);
   outline-offset: var(--semantics-focus-ring-outline-offset);
   box-shadow: var(--semantics-focus-ring-box-shadow);
   border-radius: var(--semantics-surfaces-corner-radius, 12px);
 }
 
-.veiligheid-inhoud {
+.safety-content {
   padding: 0 16px 16px;
 }
 </style>

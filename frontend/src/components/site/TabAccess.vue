@@ -292,7 +292,7 @@ function inviteeActions(invitee: Invitee): RowAction[] {
       icon: 'trash',
       destructive: true,
       details: t('publish.access.invitees.removeHint'),
-      testid: `genodigde-verwijderen-${invitee.identifier}`,
+      testid: `invitee-delete-${invitee.identifier}`,
       run: () => void removeInvitee(invitee),
     },
   ];
@@ -344,7 +344,7 @@ function keyActions(key: Key): RowAction[] {
       icon: 'trash',
       destructive: true,
       details: t('publish.access.keys.revokeHint'),
-      testid: `sleutel-intrekken-${key.selector}`,
+      testid: `key-revoke-${key.selector}`,
       run: () => void revokeKeyRow(key),
     },
   ];
@@ -365,16 +365,16 @@ function keyActions(key: Key): RowAction[] {
     :complete="!loading || undefined"
   >
     <nldd-container layout="stack" gap="24">
-      <section aria-labelledby="kop-basis">
+      <section aria-labelledby="heading-base">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-basis">{{ t('publish.access.base.heading') }}</h2>
+            <h2 id="heading-base">{{ t('publish.access.base.heading') }}</h2>
           </nldd-title>
           <nldd-list
             type="radiogroup"
             variant="box-base"
             :accessible-label="t('publish.access.base.heading')"
-            data-testid="toegang-basis"
+            data-testid="access-base"
           >
             <nldd-list-item
               v-for="w in ACCESS_BASE_VALUES"
@@ -382,7 +382,7 @@ function keyActions(key: Key): RowAction[] {
               radio
               size="md"
               :checked="w === access?.base || undefined"
-              :data-testid="`basis-${w}`"
+              :data-testid="`base-${w}`"
               @change="chooseBase(w)"
             >
               <!-- The row is the radio itself; the button only draws the shape
@@ -407,15 +407,15 @@ function keyActions(key: Key): RowAction[] {
           <nldd-inline-dialog
             icon="eye"
             :text="summary"
-            data-testid="toegang-samenvatting"
+            data-testid="access-summary"
           ></nldd-inline-dialog>
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-uitzonderingen">
+      <section aria-labelledby="heading-exceptions">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-uitzonderingen">{{ t('publish.access.extras.heading') }}</h2>
+            <h2 id="heading-exceptions">{{ t('publish.access.extras.heading') }}</h2>
             <span slot="subtitle">{{ t('publish.access.extras.intro') }}</span>
           </nldd-title>
 
@@ -424,14 +424,14 @@ function keyActions(key: Key): RowAction[] {
             variant="neutral"
             :text="t('publish.access.extras.moot')"
             :supporting-text="t('publish.access.extras.mootDetail')"
-            data-testid="uitzonderingen-zinloos"
+            data-testid="exceptions-pointless"
           ></nldd-banner>
 
           <nldd-form-field>
             <nldd-switch-field
               :label="keysLabel()"
               :checked="access?.keys || undefined"
-              data-testid="uitzondering-sleutels"
+              data-testid="exception-keys"
               @change="toggleKeys"
             ></nldd-switch-field>
             <nldd-form-field-help-text>{{ keysHint() }}</nldd-form-field-help-text>
@@ -441,7 +441,7 @@ function keyActions(key: Key): RowAction[] {
             <nldd-switch-field
               :label="inviteesLabel()"
               :checked="access?.invitees || undefined"
-              data-testid="uitzondering-genodigden"
+              data-testid="exception-invitees"
               @change="toggleInvitees"
             ></nldd-switch-field>
             <nldd-form-field-help-text>{{ inviteesHint() }}</nldd-form-field-help-text>
@@ -449,10 +449,10 @@ function keyActions(key: Key): RowAction[] {
         </nldd-container>
       </section>
 
-      <section v-if="access?.keys" aria-labelledby="kop-sleutels">
+      <section v-if="access?.keys" aria-labelledby="heading-keys">
         <nldd-container layout="stack" gap="16">
           <nldd-title :size="4">
-            <h2 id="kop-sleutels">{{ t('access.keys') }}</h2>
+            <h2 id="heading-keys">{{ t('access.keys') }}</h2>
             <span slot="subtitle">{{ t('publish.access.keys.intro') }}</span>
           </nldd-title>
 
@@ -463,9 +463,9 @@ function keyActions(key: Key): RowAction[] {
             variant="success"
             :text="t('publish.access.keys.created')"
             :supporting-text="t('publish.access.keys.createdDetail')"
-            data-testid="nieuwe-sleutel"
+            data-testid="new-key"
           >
-            <SecretLink :value="newKeyValue" :site-url="siteAddress" prefix="nieuwe-sleutel" />
+            <SecretLink :value="newKeyValue" :site-url="siteAddress" prefix="new-key" />
             <nldd-button
               slot="actions"
               variant="secondary"
@@ -473,14 +473,14 @@ function keyActions(key: Key): RowAction[] {
               :text="t('publish.access.keys.open')"
               :href="newKeyLink"
               target="_blank"
-              data-testid="nieuwe-sleutel-openen"
+              data-testid="new-key-open"
             ></nldd-button>
           </nldd-banner>
 
           <nldd-table
-            class="toegang-tabel"
+            class="access-table"
             :accessible-label="t('access.keys')"
-            data-testid="sleutels-lijst"
+            data-testid="keys-list"
             :columns="KEY_COLUMNS"
             :sm-columns="KEY_COLUMNS_SM"
           >
@@ -504,7 +504,7 @@ function keyActions(key: Key): RowAction[] {
                    icon button says nothing, and a columnheader without a name
                    is an axe violation. -->
               <nldd-text-cell horizontal-alignment="right">
-                <span class="alleen-schermlezer">{{ t('publish.access.column.actions') }}</span>
+                <span class="visually-hidden">{{ t('publish.access.column.actions') }}</span>
               </nldd-text-cell>
             </nldd-table-row>
             <nldd-inline-dialog
@@ -512,12 +512,12 @@ function keyActions(key: Key): RowAction[] {
               icon="key"
               :text="t('publish.access.keys.empty')"
               :supporting-text="t('publish.access.keys.emptyDetail')"
-              data-testid="sleutels-leeg"
+              data-testid="keys-empty"
             ></nldd-inline-dialog>
             <nldd-table-row
               v-for="key in keys"
               :key="key.selector"
-              :data-testid="`sleutel-${key.selector}`"
+              :data-testid="`key-${key.selector}`"
             >
               <nldd-text-cell
                 :text="key.label"
@@ -552,25 +552,25 @@ function keyActions(key: Key): RowAction[] {
                not one more row of the table above. -->
           <nldd-box>
             <nldd-container layout="stack" padding="16">
-              <nldd-form data-testid="sleutel-formulier" @submit.prevent="createKey">
+              <nldd-form data-testid="key-form" @submit.prevent="createKey">
                 <nldd-form-section
                   :text="t('publish.access.keys.form.heading')"
                   :supporting-text="t('publish.access.keys.form.hint')"
                 >
                   <nldd-form-field :label="t('publish.access.keys.form.label')" optional>
                     <nldd-text-field
-                      name="sleutel-label"
+                      name="key-label"
                       :value="keyLabel"
                       :invalid="keyError !== null || undefined"
-                      :unmet="keyError !== null ? 'sleutel-server' : undefined"
-                      data-testid="sleutel-label"
+                      :unmet="keyError !== null ? 'key-server' : undefined"
+                      data-testid="key-label"
                       @input="keyLabel = inputValue($event)"
                     ></nldd-text-field>
                     <nldd-form-field-help-text>
                       {{ t('publish.access.keys.form.labelHelp') }}
                     </nldd-form-field-help-text>
                     <nldd-validation-list>
-                      <nldd-validation-item id="sleutel-server">
+                      <nldd-validation-item id="key-server">
                         {{ keyError }}
                       </nldd-validation-item>
                     </nldd-validation-list>
@@ -580,7 +580,7 @@ function keyActions(key: Key): RowAction[] {
                       <select
                         :value="keyDays"
                         :aria-label="t('publish.access.keys.form.expiry')"
-                        data-testid="sleutel-dagen"
+                        data-testid="key-days"
                         @change="keyDays = ($event.target as HTMLSelectElement).value"
                       >
                         <option value="7">
@@ -603,7 +603,7 @@ function keyActions(key: Key): RowAction[] {
                       variant="primary"
                       type="submit"
                       :text="t('publish.access.keys.form.submit')"
-                      data-testid="sleutel-aanmaken"
+                      data-testid="key-create"
                     ></nldd-button>
                   </nldd-form-actions>
                 </nldd-form-section>
@@ -613,17 +613,17 @@ function keyActions(key: Key): RowAction[] {
         </nldd-container>
       </section>
 
-      <section v-if="access?.invitees" aria-labelledby="kop-genodigden">
+      <section v-if="access?.invitees" aria-labelledby="heading-invitees">
         <nldd-container layout="stack" gap="16">
           <nldd-title :size="4">
-            <h2 id="kop-genodigden">{{ t('access.invitees') }}</h2>
+            <h2 id="heading-invitees">{{ t('access.invitees') }}</h2>
             <span slot="subtitle">{{ t('publish.access.invitees.intro') }}</span>
           </nldd-title>
 
           <nldd-table
-            class="toegang-tabel"
+            class="access-table"
             :accessible-label="t('access.invitees')"
-            data-testid="genodigden-lijst"
+            data-testid="invitees-list"
             :columns="INVITEE_COLUMNS"
             :sm-columns="INVITEE_COLUMNS_SM"
           >
@@ -636,7 +636,7 @@ function keyActions(key: Key): RowAction[] {
                 hide-below="md"
               ></nldd-text-cell>
               <nldd-text-cell horizontal-alignment="right">
-                <span class="alleen-schermlezer">{{ t('publish.access.column.actions') }}</span>
+                <span class="visually-hidden">{{ t('publish.access.column.actions') }}</span>
               </nldd-text-cell>
             </nldd-table-row>
             <nldd-inline-dialog
@@ -644,12 +644,12 @@ function keyActions(key: Key): RowAction[] {
               icon="person-2"
               :text="t('publish.access.invitees.empty')"
               :supporting-text="t('publish.access.invitees.emptyDetail')"
-              data-testid="genodigden-leeg"
+              data-testid="invitees-empty"
             ></nldd-inline-dialog>
             <nldd-table-row
               v-for="invitee in invitees"
               :key="invitee.identifier"
-              :data-testid="`genodigde-${invitee.identifier}`"
+              :data-testid="`invitee-${invitee.identifier}`"
             >
               <nldd-text-cell :text="invitee.identifier"></nldd-text-cell>
               <nldd-text-cell
@@ -667,7 +667,7 @@ function keyActions(key: Key): RowAction[] {
 
           <nldd-box>
             <nldd-container layout="stack" padding="16">
-              <nldd-form data-testid="genodigde-formulier" @submit.prevent="addInvitee">
+              <nldd-form data-testid="invitee-form" @submit.prevent="addInvitee">
                 <nldd-form-section
                   :text="t('publish.access.invitees.form.heading')"
                   :supporting-text="t('publish.access.invitees.form.hint')"
@@ -675,21 +675,21 @@ function keyActions(key: Key): RowAction[] {
                   <nldd-form-field :label="t('publish.access.invitees.form.email')">
                     <nldd-text-field
                       type="email"
-                      name="genodigde-email"
+                      name="invitee-email"
                       width="20rem"
                       required
                       :value="inviteeEmail"
                       :invalid="inviteeEmpty || inviteeError !== null || undefined"
-                      :unmet="inviteeError !== null ? 'genodigde-server' : undefined"
+                      :unmet="inviteeError !== null ? 'invitee-server' : undefined"
                       autocomplete="off"
-                      data-testid="genodigde-email"
+                      data-testid="invitee-email"
                       @input="inviteeEmail = inputValue($event)"
                     ></nldd-text-field>
                     <nldd-validation-list>
-                      <nldd-validation-item id="genodigde-email-vereist" required>
+                      <nldd-validation-item id="invitee-email-required" required>
                         {{ t('publish.access.invitees.form.required') }}
                       </nldd-validation-item>
-                      <nldd-validation-item id="genodigde-server">
+                      <nldd-validation-item id="invitee-server">
                         {{ inviteeError }}
                       </nldd-validation-item>
                     </nldd-validation-list>
@@ -699,7 +699,7 @@ function keyActions(key: Key): RowAction[] {
                       variant="primary"
                       type="submit"
                       :text="t('publish.access.invitees.form.submit')"
-                      data-testid="genodigde-toevoegen"
+                      data-testid="invitee-add"
                     ></nldd-button>
                   </nldd-form-actions>
                 </nldd-form-section>
@@ -709,31 +709,31 @@ function keyActions(key: Key): RowAction[] {
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-externe-bronnen">
+      <section aria-labelledby="heading-external-sources">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-externe-bronnen">{{ t('publish.access.external.heading') }}</h2>
+            <h2 id="heading-external-sources">{{ t('publish.access.external.heading') }}</h2>
             <span slot="subtitle">{{ t('publish.access.external.intro') }}</span>
           </nldd-title>
           <nldd-switch-field
             :label="t('publish.access.external.label')"
             :checked="externalSources || undefined"
-            data-testid="externe-bronnen"
+            data-testid="external-sources"
             @change="chooseExternalSources"
           ></nldd-switch-field>
         </nldd-container>
       </section>
 
-      <section aria-labelledby="kop-afscherming">
+      <section aria-labelledby="heading-sandbox">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">
-            <h2 id="kop-afscherming">{{ t('publish.access.sandbox.heading') }}</h2>
+            <h2 id="heading-sandbox">{{ t('publish.access.sandbox.heading') }}</h2>
             <span slot="subtitle">{{ t('publish.access.sandbox.intro') }}</span>
           </nldd-title>
           <nldd-switch-field
             :label="t('publish.access.sandbox.label')"
             :checked="sandbox || undefined"
-            data-testid="afscherming"
+            data-testid="sandbox"
             @change="chooseSandbox"
           ></nldd-switch-field>
         </nldd-container>
@@ -744,7 +744,7 @@ function keyActions(key: Key): RowAction[] {
 
 <style scoped>
 /* Same cap as the member tables, see global.css. */
-.toegang-tabel {
+.access-table {
   max-width: var(--plak-table-max-width);
 }
 </style>

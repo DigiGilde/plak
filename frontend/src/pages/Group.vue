@@ -225,7 +225,7 @@ function onGroupChanged(group: Group): void {
   <!-- The sites tab holds the wide site table; the other tabs read at the
        reading width. -->
   <nldd-simple-section
-    :class="{ leesbreedte: route.name !== 'group-sites' }"
+    :class="{ 'reading-width': route.name !== 'group-sites' }"
     @dragenter="onPageDragEnter"
     @dragover="onPageDragOver"
     @dragleave="onPageDragLeave"
@@ -235,7 +235,7 @@ function onGroupChanged(group: Group): void {
       v-if="dropTargetActive && canPublish"
       variant="accent"
       :text="t('group.drop.release')"
-      data-testid="groep-sleep-actief"
+      data-testid="group-drag-active"
     ></nldd-banner>
 
     <nldd-banner
@@ -243,7 +243,7 @@ function onGroupChanged(group: Group): void {
       variant="critical"
       dismissible
       :text="dropError"
-      data-testid="groep-sleep-fout"
+      data-testid="group-drag-error"
       @dismiss="dropError = null"
     ></nldd-banner>
 
@@ -268,7 +268,7 @@ function onGroupChanged(group: Group): void {
           variant="primary"
           :text="t('group.action.publishSite')"
           start-icon="plus"
-          data-testid="groep-publiceren"
+          data-testid="group-publish"
           @click="sheetOpen = true"
         ></nldd-button>
       </nldd-container>
@@ -278,7 +278,7 @@ function onGroupChanged(group: Group): void {
       <nldd-tab-bar
         navigation
         :accessible-label="t('group.page.tabs.label')"
-        data-testid="groep-tabs"
+        data-testid="group-tabs"
       >
         <nldd-tab-bar-item
           v-for="tab in TABS"
