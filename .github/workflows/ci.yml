@@ -149,9 +149,9 @@ jobs:
           uv run coverage combine
           uv run coverage report --skip-covered --show-missing
 
-  # .github/scripts/release.py lies outside src/plak, so the backend
-  # coverage does not measure it. Its tests run here, measured on that one
-  # file only, against the same floor.
+  # .github/scripts/release.py and rulesets.py lie outside src/plak, so the
+  # backend coverage does not measure them. Their tests run here, measured
+  # on those two files only, against the same floor.
   release-script:
     runs-on: ubuntu-latest
     steps:
@@ -166,8 +166,8 @@ jobs:
       - name: Release script tests with coverage
         working-directory: backend
         run: |
-          uv run coverage run --include='*/.github/scripts/release.py' -m pytest -q tests/test_release.py
-          uv run coverage report --include='*/.github/scripts/release.py' --show-missing --fail-under=100
+          uv run coverage run --include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py' -m pytest -q tests/test_release.py tests/test_rulesets.py
+          uv run coverage report --include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py' --show-missing --fail-under=100
 
   # cli/ is its own uv project (the `plak` command), separate from the
   # backend. Its lint runs in `pre-commit`, like the backend's.
