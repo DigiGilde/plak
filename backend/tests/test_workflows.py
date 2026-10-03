@@ -9,6 +9,7 @@ checked here, on every commit.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -46,6 +47,11 @@ def plugin() -> dict:
 @pytest.fixture(scope="module")
 def changelog() -> dict:
     return _load("changelog.yml")
+
+
+@pytest.fixture(scope="module")
+def api() -> dict:
+    return _load("api.yml")
 
 
 class TestTheCheckGate:
@@ -253,7 +259,14 @@ class TestTheScans:
         directory rather than a hand-kept list, so a new one is covered the
         moment it lands."""
         paths = sorted(WORKFLOWS.glob("*.yml"))
-        assert [p.name for p in paths] == ["changelog.yml", "ci.yml", "codeql.yml", "deploy.yml", "plugin.yml"]
+        assert [p.name for p in paths] == [
+            "api.yml",
+            "changelog.yml",
+            "ci.yml",
+            "codeql.yml",
+            "deploy.yml",
+            "plugin.yml",
+        ]
 
         for path in paths:
             workflow = _load(path.name)
@@ -710,3 +723,66 @@ class TestTheChangelogCheck:
         script = (WORKFLOWS.parent / "scripts" / "release.py").read_text(encoding="utf-8")
         step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "comment" in s.get("name", ""))
         assert f'COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script
+
+
+class TestTheApiContractCheck:
+    """What the check decides is tested in test_release.py; here only how
+    the workflow runs it."""
+
+    def test_it_runs_on_every_pull_request_and_in_the_merge_queue(self, api) -> None:
+        assert set(api[True]) == {"pull_request", "merge_group"}
+        assert api[True]["pull_request"] is None
+
+    def test_only_the_job_may_write_to_pull_requests(self, api) -> None:
+        assert api["permissions"] == {"contents": "read"}
+        assert api["jobs"]["api-contract"]["permissions"] == {"contents": "read", "pull-requests": "write"}
+
+    def test_the_actions_are_the_ones_ci_already_pins(self, ci, api) -> None:
+        pinned = {s["uses"] for job in ci["jobs"].values() for s in job.get("steps", []) if "uses" in s}
+        for step in api["jobs"]["api-contract"]["steps"]:
+            if "uses" in step:
+                assert step["uses"] in pinned, step["uses"]
+
+    def test_the_check_sees_the_tags(self, api) -> None:
+        """The contract is the schema at the newest tag."""
+        checkout = api["jobs"]["api-contract"]["steps"][0]
+        assert checkout["uses"].startswith("actions/checkout@")
+        assert checkout["with"]["fetch-depth"] == 0
+        assert checkout["with"]["persist-credentials"] is False
+
+    def test_oasdiff_is_pinned_to_a_release_and_its_checksum(self, api) -> None:
+        job = api["jobs"]["api-contract"]
+        assert re.fullmatch(r"\d+\.\d+\.\d+", job["env"]["OASDIFF_VERSION"])
+        assert re.fullmatch(r"[0-9a-f]{64}", job["env"]["OASDIFF_SHA256"])
+        step = next(s for s in job["steps"] if s.get("name") == "Install oasdiff")
+        assert 'echo "${OASDIFF_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -' in step["run"]
+        assert step["run"].index("sha256sum") < step["run"].index("tar -xzf")
+
+    def test_the_check_compares_the_schema_the_backend_prints(self, api) -> None:
+        steps = api["jobs"]["api-contract"]["steps"]
+        names = [s.get("name") for s in steps]
+        printing = steps[names.index("Print the API schema")]
+        checking = steps[names.index("Check the API contract")]
+        order = [names.index(n) for n in ("Install oasdiff", "Print the API schema", "Check the API contract")]
+        assert order == sorted(order)
+        assert printing["working-directory"] == "backend"
+        assert printing["run"] == 'uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"'
+        assert 'api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"' in checking["run"]
+        assert "${{" not in checking["run"]
+
+    def test_only_a_pull_request_gets_a_comment(self, api) -> None:
+        checking = next(s for s in api["jobs"]["api-contract"]["steps"] if s.get("name") == "Check the API contract")
+        assert 'if [ "$EVENT" = pull_request ]; then\n  args+=(--comment-file "$COMMENT_FILE")' in checking["run"]
+
+    def test_the_comment_cannot_fail_the_check(self, api) -> None:
+        """A fork or Dependabot pull request has a read-only token."""
+        step = next(s for s in api["jobs"]["api-contract"]["steps"] if "comment" in s.get("name", ""))
+        assert step["continue-on-error"] is True
+        assert "github.event_name == 'pull_request'" in step["if"]
+        assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+        assert "${{" not in step["run"]
+
+    def test_the_comment_marker_is_the_one_the_script_writes(self, api) -> None:
+        script = (WORKFLOWS.parent / "scripts" / "release.py").read_text(encoding="utf-8")
+        step = next(s for s in api["jobs"]["api-contract"]["steps"] if "comment" in s.get("name", ""))
+        assert f'API_COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script

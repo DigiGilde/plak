@@ -24,7 +24,7 @@ one line under `## [Unreleased]` per change, in the same pull request.
 
 All of it lives in one script, `.github/scripts/release.py`, tested in
 `backend/tests/test_release.py`. What is here now is the changelog, the
-script, the pull request check and the Claude Code hook.
+script, the two pull request checks and the Claude Code hook.
 
 ## Tags
 
@@ -143,11 +143,69 @@ previous tag:
   the marketplace entry carries none.
 - **`publiccode.yml`**: `softwareVersion` and `releaseDate`, on every
   release.
+- **The API**: `backend/openapi.json` and `API_VERSION` in
+  `backend/src/plak/main.py`, on every release; see below.
 
 The first release sets all of them. The CalVer versions are valid PEP 440
 and sort above the `0.x` versions before them, so an installed CLI or
 plugin sees them as an upgrade. A test-only change leaves a component's
 version alone.
+
+## The API contract
+
+The API has a SemVer version of its own, in the `API-Version` header on
+every response and in `info.version` of its schema. The CalVer of a
+release says when; the API version says whether a client still fits.
+The CLI reads only its major (`docs/publishing.md`).
+
+- **`backend/openapi.json` is the contract a release shipped.** Only the
+  release step writes it, into the release commit, so the file at a tag
+  is what clients of that release see. A pull request leaves it alone;
+  there is nothing to keep up to date by hand.
+- **The major moves by hand, together with the path.** A breaking change
+  means `/-/api/v2` and `API_VERSION = "2.0.0"` in
+  `backend/src/plak/main.py`, in the same pull request.
+  `test_openapi_file.py` holds the two to each other.
+- **Minor and patch are set by the release.** It prints the schema with
+  `python -m plak.api.openapi_file` and compares it, with
+  [oasdiff](https://github.com/oasdiff/oasdiff), with
+  `backend/openapi.json` at the previous tag:
+
+  | What changed | Version |
+  |---|---|
+  | nothing in the schema | stays |
+  | only what oasdiff does not list, such as a description | patch + 1 |
+  | something oasdiff lists as compatible, such as a new endpoint | minor + 1 |
+  | a breaking change, with the major raised | the new major, `.0.0` |
+  | a breaking change, without | the release refuses |
+
+  A minor or patch edited by hand in `API_VERSION` counts for nothing;
+  the previous release's version is the starting point.
+
+The release workflow runs it as:
+
+```bash
+(cd backend && uv run python -m plak.api.openapi_file) > "$RUNNER_TEMP/openapi.json"
+uv run --script .github/scripts/release.py promote --tag "$TAG" \
+  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"
+```
+
+A tag without `backend/openapi.json`, such as the hand-made `v2026.9.30`,
+counts as no contract yet: the release after it writes the file at the
+version the code has.
+
+### The API check
+
+`.github/workflows/api.yml` runs `release.py api-check` on every pull
+request and in the merge queue. It compares the schema of the pull
+request with `backend/openapi.json` at the newest tag and fails on a
+breaking change unless the major went up. On a pull request, every
+change oasdiff lists goes into one sticky comment, with the version the
+next release gives the API; the comment goes away when there is none.
+Until a release has written the file, the check passes with a notice.
+
+oasdiff is pinned in the workflow to a release and the SHA-256 of its
+archive, and runs with external references off.
 
 ## What's new notes
 
@@ -210,7 +268,8 @@ in CI still runs.
 `release.py notes --tag <tag>` prints the body of the GitHub Release: the
 section for that tag as it stands at the tag, then one line for the CLI
 and one for the plugin, `CLI 2026.10.1` when that release set it and
-`CLI unchanged (2026.9.3)` when it did not.
+`CLI unchanged (2026.9.3)` when it did not, and the API version at that
+tag (`API 1.4.0`).
 
 The tag itself is annotated with `Plak v2026.10.1` as its only text
 (`git tag -a v2026.10.1 -m "Plak v2026.10.1"`). The notes live in

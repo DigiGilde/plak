@@ -1,0 +1,99 @@
+# The API contract check (docs/releasing.md), run by
+# .github/scripts/release.py.
+#
+# The schema of the pull request is compared, with oasdiff, with
+# backend/openapi.json at the newest release tag: the contract that
+# release shipped. A breaking change fails unless the major of API_VERSION
+# went up. Every change oasdiff lists goes into one sticky comment, with
+# the version the next release gives the API.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference. oasdiff is pinned to a release
+# and the checksum of its archive.
+
+name: API contract
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      OASDIFF_VERSION: 1.33.0
+      OASDIFF_SHA256: 43a4e328e2d13ba1552d760aa68d2485c75c5621f309f6ff64ae895188345247
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tags have to be there: the contract is the schema at the
+          # newest one.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install oasdiff
+        run: |
+          set -euo pipefail
+          archive="oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/$archive"
+          echo "${OASDIFF_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" oasdiff
+
+      - name: Print the API schema
+        working-directory: backend
+        run: uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"
+
+      - name: Check the API contract
+        env:
+          EVENT: ${{ github.event_name }}
+          COMMENT_FILE: ${{ runner.temp }}/api-comment.md
+        run: |
+          set -euo pipefail
+          args=(api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff")
+          if [ "$EVENT" = pull_request ]; then
+            args+=(--comment-file "$COMMENT_FILE")
+          fi
+          uv run --script .github/scripts/release.py "${args[@]}"
+
+      # A pull request from a fork, and one from Dependabot, gets a
+      # read-only token: the comment fails there, and that must not fail
+      # the check. A breaking change is in the annotations and the job
+      # summary either way.
+      - name: Update the API comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          COMMENT_FILE: ${{ runner.temp }}/api-comment.md
+          MARKER: "<!-- plak-api-check -->"
+        run: |
+          set -euo pipefail
+          ids="$(gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER))) | .id')"
+          existing="${ids%%$'\n'*}"
+          if [ -s "$COMMENT_FILE" ]; then
+            if [ -n "$existing" ]; then
+              gh api --method PATCH "repos/$REPOSITORY/issues/comments/$existing" -F "body=@$COMMENT_FILE" > /dev/null
+            else
+              gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/comments" -F "body=@$COMMENT_FILE" > /dev/null
+            fi
+          elif [ -n "$existing" ]; then
+            gh api --method DELETE "repos/$REPOSITORY/issues/comments/$existing"
+          fi

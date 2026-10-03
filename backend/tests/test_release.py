@@ -61,6 +61,22 @@ BACKEND_LOCK = (
     '[[package]]\nname = "plak-api"\nversion = "0.1.0"\nsource = { editable = "." }\n\n'
     '[[package]]\nname = "plak"\nversion = "9.9.9"\nsource = { editable = "." }\n'
 )
+MAIN = 'import x\n\nAPI_VERSION = "1.0.0"\n\napp = 1\n'
+
+
+def spec_with(version: str = "1.0.0", paths: tuple[str, ...] = ("/a",), description: str = "") -> str:
+    """An API schema as plak.api.openapi_file prints it, kept small."""
+    info = {"title": "Plak API", "version": version, "description": description}
+    return json.dumps({"openapi": "3.1.0", "info": info, "paths": {path: {} for path in paths}}, indent=2) + "\n"
+
+
+SPEC = spec_with()
+
+
+def NO_CHANGES(base: str, head: str) -> list:  # noqa: N802 - reads as the constant it stands for
+    return []
+
+
 PACKAGE = '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "private": true\n}\n'
 PACKAGE_LOCK = (
     '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "lockfileVersion": 3,\n  "packages": {\n'
@@ -121,9 +137,10 @@ class Repo:
     def handle(self):
         return release.Git(self.path)
 
-    def release(self, tag: str, day: date) -> None:
+    def release(self, tag: str, day: date, spec: str | None = None, diff=None) -> None:
         """The cycle the release workflow will run: promote, commit, tag."""
-        release.promote(self.handle, tag, day)
+        spec, diff = spec or SPEC, diff or NO_CHANGES
+        release.promote(self.handle, tag, day, spec, diff)
         self.git("commit", "-q", "-m", f"Release {tag}")
         self.git("tag", tag)
 
@@ -156,7 +173,7 @@ def repo(tmp_path, monkeypatch) -> Repo:
             "plugin/.claude-plugin/plugin.json": PLUGIN,
             "plugin/skills/plak/SKILL.md": "skill\n",
             "publiccode.yml": PUBLICCODE,
-            "backend/src/plak/main.py": "app = 1\n",
+            "backend/src/plak/main.py": MAIN,
             "backend/pyproject.toml": BACKEND_PYPROJECT,
             "backend/uv.lock": BACKEND_LOCK,
             "frontend/package.json": PACKAGE,
@@ -606,7 +623,7 @@ class TestPromote:
         older = "## [2026.9.1]\n\n### Fixed\n\n- Old."
         repo.commit({"CHANGELOG.md": changelog(ENTRY, older)})
 
-        touched = release.promote(repo.handle, TAG, DAY)
+        touched = release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
 
         assert repo.read("CHANGELOG.md") == (
             "# Changelog\n\nWhat changed, newest first.\n\n## [Unreleased]\n\n"
@@ -618,7 +635,7 @@ class TestPromote:
 
     def test_the_first_release_sets_every_component_version(self, repo):
         repo.commit({"CHANGELOG.md": changelog(ENTRY)})
-        release.promote(repo.handle, TAG, DAY)
+        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
 
         assert _versions(repo) == ("2026.10.1", "2026.10.1")
         assert 'name = "plak"\nversion = "2026.10.1"' in repo.read("cli/uv.lock")
@@ -626,12 +643,13 @@ class TestPromote:
         assert _image_versions(repo) == {"2026.10.1"}
 
     def test_a_backend_change_leaves_the_cli_and_plugin_versions(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY), "backend/src/plak/main.py": "app = 2\n"})
-        touched = release.promote(released.handle, TAG, DAY)
+        released.commit({"CHANGELOG.md": changelog(ENTRY), "backend/src/plak/app.py": "app = 2\n"})
+        touched = release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
 
         assert _versions(released) == ("2026.9.1", "2026.9.1")
         assert sorted(touched) == [
             "CHANGELOG.md",
+            "backend/openapi.json",
             "backend/pyproject.toml",
             "backend/uv.lock",
             "frontend/package-lock.json",
@@ -643,7 +661,7 @@ class TestPromote:
     def test_the_image_gets_every_release_also_when_only_the_cli_changed(self, released):
         """Every tag builds and ships a new image, whatever changed."""
         released.commit({"CHANGELOG.md": changelog(ENTRY), "cli/plak_cli/__init__.py": "x = 2\n"})
-        release.promote(released.handle, TAG, DAY)
+        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert _image_versions(released) == {"2026.10.1"}
         assert 'name = "plak"\nversion = "9.9.9"' in released.read("backend/uv.lock")
 
@@ -651,7 +669,7 @@ class TestPromote:
         released.remove("frontend/package-lock.json")
         released.commit({"CHANGELOG.md": changelog(ENTRY)})
         with pytest.raises(release.ReleaseError, match=re.escape("frontend/package-lock.json is missing")):
-            release.promote(released.handle, TAG, DAY)
+            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert released.read("CHANGELOG.md") == changelog(ENTRY)
 
     @pytest.mark.parametrize(
@@ -668,7 +686,7 @@ class TestPromote:
     )
     def test_a_component_gets_a_new_version_only_when_it_changed(self, released, files, expected):
         released.commit({"CHANGELOG.md": changelog(ENTRY), **files})
-        release.promote(released.handle, TAG, DAY)
+        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert _versions(released) == expected
 
     def test_a_version_line_changed_by_hand_is_no_change(self, released):
@@ -684,7 +702,7 @@ class TestPromote:
                 ),
             }
         )
-        release.promote(released.handle, TAG, DAY)
+        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert _versions(released) == ("9.9.9", "9.9.9")
 
     def test_a_file_that_did_not_exist_at_the_last_tag_is_a_change(self, repo):
@@ -693,7 +711,7 @@ class TestPromote:
         repo.commit({"CHANGELOG.md": changelog("", section)})
         repo.git("tag", "v2026.9.1")
         repo.commit({"CHANGELOG.md": changelog(ENTRY, section), "cli/uv.lock": LOCK})
-        release.promote(repo.handle, TAG, DAY)
+        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert _versions(repo) == ("2026.10.1", "0.3.1")
 
     def test_a_shipped_change_without_an_entry_is_refused_and_writes_nothing(self, released):
@@ -701,7 +719,7 @@ class TestPromote:
         from commit subjects either."""
         released.commit({"backend/src/plak/main.py": "app = 2\n"}, "Update urllib3 to 2.8.0")
         with pytest.raises(release.ReleaseError) as refused:
-            release.promote(released.handle, TAG, DAY)
+            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert refused.value.problems == [
             "Nothing to release: [Unreleased] has no entries, and they are the release notes."
         ]
@@ -709,7 +727,7 @@ class TestPromote:
 
     def test_without_a_tag_or_entries_there_is_nothing_to_release(self, repo):
         with pytest.raises(release.ReleaseError, match="Nothing to release"):
-            release.promote(repo.handle, TAG, DAY)
+            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
 
     @pytest.mark.parametrize(
         ("unreleased", "tag", "reason"),
@@ -724,18 +742,18 @@ class TestPromote:
     def test_refusals(self, released, unreleased, tag, reason):
         released.commit({"CHANGELOG.md": changelog(unreleased)})
         with pytest.raises(release.ReleaseError, match=reason):
-            release.promote(released.handle, tag, DAY)
+            release.promote(released.handle, tag, DAY, SPEC, NO_CHANGES)
 
     def test_a_section_for_the_tag_already_in_the_changelog_is_refused(self, repo):
         repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.10.1]\n\n- x")})
         with pytest.raises(release.ReleaseError, match=f"already has a section for {TAG}"):
-            release.promote(repo.handle, TAG, DAY)
+            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
 
     def test_a_refusal_writes_nothing(self, repo):
         repo.commit({"CHANGELOG.md": changelog(ENTRY)})
         repo.remove("publiccode.yml")
         with pytest.raises(release.ReleaseError, match=re.escape("publiccode.yml is missing")):
-            release.promote(repo.handle, TAG, DAY)
+            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert repo.git("status", "--porcelain") == ""
 
     def test_notes_with_content_are_renamed_to_the_version(self, repo):
@@ -747,7 +765,7 @@ class TestPromote:
                 notes + "unreleased.en.md": "New\n",
             }
         )
-        release.promote(repo.handle, TAG, DAY)
+        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
 
         assert sorted(os.listdir(repo.path / notes)) == ["2026.10.1.en.md", "2026.10.1.nl.md"]
         assert repo.read(notes + "2026.10.1.nl.md") == "Nieuw\n"
@@ -759,24 +777,34 @@ class TestPromote:
         repo.commit(
             {"CHANGELOG.md": changelog(ENTRY), notes + "unreleased.nl.md": "", notes + "unreleased.en.md": "\n"}
         )
-        release.promote(repo.handle, TAG, DAY)
+        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert not (repo.path / notes / "unreleased.nl.md").exists()
         assert f"D  {notes}unreleased.en.md" in repo.git("status", "--porcelain").splitlines()
 
     def test_a_one_language_note_is_refused_before_anything_is_written(self, repo):
         repo.commit({"CHANGELOG.md": changelog(ENTRY), release.NOTES_DIR + "sub/unreleased.nl.md": "Nieuw\n"})
         with pytest.raises(release.ReleaseError, match=re.escape("sub/unreleased.nl.md has no sub/unreleased.en.md")):
-            release.promote(repo.handle, TAG, DAY)
+            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
         assert repo.git("status", "--porcelain") == ""
 
-    def test_main_lists_what_it_touched(self, repo, monkeypatch, capsys):
+    def test_main_lists_what_it_touched(self, repo, monkeypatch, tmp_path, capsys):
         repo.commit({"CHANGELOG.md": changelog(ENTRY)})
         monkeypatch.setattr(release, "today", lambda: DAY)
-        assert release.main(["promote", "--tag", TAG]) == 0
-        assert "updated CHANGELOG.md\n" in capsys.readouterr().out
+        (tmp_path / "openapi.json").write_text(SPEC, encoding="utf-8")
+        args = ["promote", "--tag", TAG, "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "unused"]
+        assert release.main(args) == 0
+        out = capsys.readouterr().out
+        assert "updated CHANGELOG.md\n" in out
+        assert "updated backend/openapi.json\n" in out
 
     def test_main_reports_a_refusal(self, repo, capsys):
-        assert release.main(["promote", "--tag", "v2026.1"]) == 1
+        assert release.main(["promote", "--tag", "v2026.1", "--spec", "x", "--oasdiff", "x"]) == 1
+        assert "error: x: cannot read the API schema." in capsys.readouterr().err
+
+    def test_main_reports_a_refused_tag(self, repo, tmp_path, capsys):
+        (tmp_path / "openapi.json").write_text(SPEC, encoding="utf-8")
+        args = ["promote", "--tag", "v2026.1", "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "x"]
+        assert release.main(args) == 1
         assert "error: 'v2026.1' is not a CalVer tag" in capsys.readouterr().err
 
 
@@ -786,7 +814,7 @@ class TestReleaseNotes:
         released.release(TAG, DAY)
 
         assert release.release_notes(released.handle, TAG) == (
-            "### Fixed\n\n- A fix.\n\nCLI 2026.10.1\n\nPlugin unchanged (2026.9.1)\n"
+            "### Fixed\n\n- A fix.\n\nCLI 2026.10.1\n\nPlugin unchanged (2026.9.1)\n\nAPI 1.0.0\n"
         )
 
     def test_it_reads_the_tag_not_the_working_tree(self, released):
@@ -813,7 +841,265 @@ class TestReleaseNotes:
 
     def test_main_prints_the_notes(self, released, capsys):
         assert release.main(["notes", "--tag", "v2026.9.1"]) == 0
-        assert capsys.readouterr().out.endswith("CLI 2026.9.1\n\nPlugin 2026.9.1\n")
+        assert capsys.readouterr().out.endswith("CLI 2026.9.1\n\nPlugin 2026.9.1\n\nAPI 1.0.0\n")
+
+    def test_a_tag_from_before_the_schema_has_no_api_line(self, repo):
+        """v2026.9.30 was tagged by hand, before releases wrote the schema."""
+        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
+        repo.git("tag", "v2026.9.1")
+        assert release.release_notes(repo.handle, "v2026.9.1").endswith("Plugin unchanged (0.3.1)\n")
+
+
+def change(level: int, text: str = "endpoint added", path: str = "/b", operation: str = "GET") -> dict:
+    """One entry of `oasdiff changelog --format json`."""
+    return {"id": "x", "text": text, "level": level, "operation": operation, "path": path, "section": "paths"}
+
+
+def fake_oasdiff(tmp_path: Path, stdout: str = "[]", exit_code: int = 0, stderr: str = "") -> str:
+    """A stand-in for the oasdiff binary: logs its arguments and both files,
+    then answers as told."""
+    script = tmp_path / "oasdiff"
+    log = tmp_path / "oasdiff.log"
+    script.write_text(
+        "#!/bin/sh\n"
+        f'printf "%s\\n" "$@" > "{log}"\n'
+        f'cat "$2" >> "{log}"; echo "---" >> "{log}"; cat "$3" >> "{log}"\n'
+        f"printf '%s' '{stdout}'\n"
+        f"printf '%s' '{stderr}' >&2\n"
+        f"exit {exit_code}\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return str(script)
+
+
+class TestApiVersion:
+    def test_the_first_contract_keeps_the_version_the_code_has(self):
+        assert release.next_api_version(None, json.loads(spec_with("1.4.2")), []) == "1.4.2"
+
+    def test_an_unchanged_schema_keeps_the_released_version(self):
+        """Minor and patch belong to the release: a hand edit in the code
+        is not what decides them."""
+        base, head = json.loads(spec_with("1.3.0")), json.loads(spec_with("1.9.9"))
+        assert release.next_api_version(base, head, []) == "1.3.0"
+
+    def test_a_change_oasdiff_does_not_list_is_a_patch(self):
+        base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with(description="Clearer."))
+        assert release.next_api_version(base, head, []) == "1.3.3"
+
+    @pytest.mark.parametrize("level", [1, 2], ids=["info", "warn"])
+    def test_a_change_oasdiff_lists_as_compatible_is_a_minor(self, level):
+        base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with(paths=("/a", "/b")))
+        assert release.next_api_version(base, head, [change(level)]) == "1.4.0"
+
+    def test_a_breaking_change_without_a_new_major_is_refused(self):
+        base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with(paths=()))
+        with pytest.raises(release.ReleaseError) as raised:
+            release.next_api_version(base, head, [change(3, "api path removed", "/a", "POST"), change(1)])
+        assert raised.value.problems == [
+            "Breaking API change: POST /a: api path removed.",
+            "A breaking change needs a new major: serve the API under /-/api/v2 and set API_VERSION in "
+            "backend/src/plak/main.py to '2.0.0' (docs/publishing.md).",
+        ]
+
+    def test_a_change_without_an_operation_names_its_section(self):
+        problems = release.breaking_problems([{"level": 3, "text": "t", "section": "components"}], 1)
+        assert problems[0] == "Breaking API change: components: t."
+
+    def test_a_new_major_starts_at_zero_and_may_break(self):
+        base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with("2.0.0", paths=()))
+        assert release.next_api_version(base, head, [change(3)]) == "2.0.0"
+        assert release.next_api_version(base, json.loads(spec_with("2.7.1")), []) == "2.0.0"
+
+    def test_a_major_below_the_released_one_is_refused(self):
+        with pytest.raises(release.ReleaseError, match="has major 1, below the released 2"):
+            release.next_api_version(json.loads(spec_with("2.0.0")), json.loads(spec_with("1.0.0")), [])
+
+    @pytest.mark.parametrize("version", ["1.0", "v1.0.0", "01.0.0", "1.0.0-beta", ""])
+    def test_a_version_that_is_not_major_minor_patch_is_refused(self, version):
+        with pytest.raises(release.ReleaseError, match=r"is not MAJOR\.MINOR\.PATCH"):
+            release.next_api_version(None, json.loads(spec_with(version)), [])
+        with pytest.raises(release.ReleaseError, match=r"backend/openapi\.json at the newest tag"):
+            release.next_api_version(json.loads(spec_with(version)), json.loads(SPEC), [])
+
+    def test_only_the_api_version_line_changes(self):
+        assert release.set_api_version(MAIN, "1.4.0") == MAIN.replace('"1.0.0"', '"1.4.0"')
+
+    @pytest.mark.parametrize("text", ["app = 1\n", MAIN + MAIN], ids=["none", "twice"])
+    def test_a_main_without_exactly_one_api_version_is_refused(self, text):
+        with pytest.raises(release.ReleaseError, match="expected one API_VERSION line"):
+            release.set_api_version(text, "1.4.0")
+
+    def test_the_real_api_version_line_can_be_edited(self):
+        text = (ROOT / "backend/src/plak/main.py").read_text(encoding="utf-8")
+        assert 'API_VERSION = "9.8.7"\n' in release.set_api_version(text, "9.8.7")
+
+    def test_the_release_writes_the_schema_the_way_the_module_prints_it(self):
+        """So the committed file and a fresh print only differ where the
+        API differs."""
+        from plak.api.openapi_file import render
+
+        spec = json.loads(spec_with(description="Plak publiceert één site."))
+        assert release.render_spec(spec, "1.0.0") == render(spec)
+        assert json.loads(release.render_spec(spec, "1.2.0"))["info"]["version"] == "1.2.0"
+
+    @pytest.mark.parametrize(("text", "reason"), [("{", "is not JSON"), ("[]", "is not an OpenAPI document")])
+    def test_a_schema_that_is_not_a_json_object_is_refused(self, text, reason):
+        with pytest.raises(release.ReleaseError, match=f"^The API schema {reason}"):
+            release.parse_spec(text, "The API schema")
+
+
+class TestOasdiff:
+    def test_it_compares_the_two_schemas_without_fetching_references(self, tmp_path):
+        binary = fake_oasdiff(tmp_path, json.dumps([change(1)]))
+        assert release.oasdiff(binary)("base\n", "head\n") == [change(1)]
+        log = (tmp_path / "oasdiff.log").read_text(encoding="utf-8").splitlines()
+        assert log[0] == "changelog"
+        assert log[3:6] == ["--format", "json", "--allow-external-refs=false"]
+        assert log[6:] == ["base", "---", "head"]
+
+    def test_no_output_is_no_changes(self, tmp_path):
+        assert release.oasdiff(fake_oasdiff(tmp_path, ""))("a", "b") == []
+
+    @pytest.mark.parametrize(
+        ("exit_code", "stderr", "reason"),
+        [(1, "failed to load base", "oasdiff: failed to load base"), (2, "", "oasdiff: exit 2")],
+    )
+    def test_a_failure_is_a_refusal(self, tmp_path, exit_code, stderr, reason):
+        with pytest.raises(release.ReleaseError, match=f"^{reason}$"):
+            release.oasdiff(fake_oasdiff(tmp_path, "", exit_code, stderr))("a", "b")
+
+    def test_output_that_is_not_json_is_a_refusal(self, tmp_path):
+        with pytest.raises(release.ReleaseError, match="its output is not JSON"):
+            release.oasdiff(fake_oasdiff(tmp_path, "API changes:"))("a", "b")
+
+
+class TestPromoteTheApi:
+    def test_the_first_release_commits_the_schema_at_the_version_the_code_has(self, repo):
+        def unused(base, head):
+            raise AssertionError("nothing to compare with")
+
+        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+        release.promote(repo.handle, TAG, DAY, SPEC, unused)
+        assert json.loads(repo.read("backend/openapi.json"))["info"]["version"] == "1.0.0"
+        assert repo.read("backend/src/plak/main.py") == MAIN
+
+    def test_a_hand_made_tag_without_a_schema_counts_as_the_first(self, repo):
+        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
+        repo.git("tag", "v2026.9.1")
+        repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.9.1]\n\n- x")})
+        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        assert json.loads(repo.read("backend/openapi.json"))["info"]["version"] == "1.0.0"
+
+    def test_an_addition_raises_the_minor_in_the_schema_and_the_code(self, released):
+        head = spec_with(paths=("/a", "/b"))
+        seen = []
+
+        def diff(base, revision):
+            seen.append((base, revision))
+            return [change(1)]
+
+        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        release.promote(released.handle, TAG, DAY, head, diff)
+
+        assert seen == [(released.git("show", "v2026.9.1:backend/openapi.json"), head)]
+        assert json.loads(released.read("backend/openapi.json")) == {
+            **json.loads(head),
+            "info": {**json.loads(head)["info"], "version": "1.1.0"},
+        }
+        assert 'API_VERSION = "1.1.0"' in released.read("backend/src/plak/main.py")
+
+    def test_a_breaking_change_stops_the_release_before_it_writes(self, released):
+        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        with pytest.raises(release.ReleaseError, match="Breaking API change"):
+            release.promote(released.handle, TAG, DAY, spec_with(paths=()), lambda b, h: [change(3)])
+        assert released.git("status", "--porcelain") == ""
+
+    def test_a_schema_that_is_not_json_stops_the_release(self, repo):
+        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+        with pytest.raises(release.ReleaseError, match="The API schema is not JSON"):
+            release.promote(repo.handle, TAG, DAY, "{", NO_CHANGES)
+
+    def test_a_committed_schema_that_is_not_json_stops_the_release(self, released):
+        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.git("tag", "-d", "v2026.9.1")
+        released.git("checkout", "-q", "HEAD~1")
+        released.commit({"backend/openapi.json": "{"})
+        released.git("tag", "v2026.9.1")
+        released.git("checkout", "-q", "-")
+        with pytest.raises(release.ReleaseError, match=r"backend/openapi\.json at v2026\.9\.1 is not JSON"):
+            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+
+
+class TestApiCheck:
+    def test_without_a_released_schema_there_is_nothing_to_hold_to(self, repo):
+        result = release.api_check(repo.handle, SPEC, NO_CHANGES)
+        assert (result.errors, result.comment) == ([], "")
+        assert result.notice == (
+            "No backend/openapi.json at any tag yet: the next release writes it, and checks start there."
+        )
+
+    def test_a_hand_made_tag_without_a_schema_says_so(self, repo):
+        repo.git("tag", "v2026.9.1")
+        assert "at v2026.9.1 yet" in release.api_check(repo.handle, SPEC, NO_CHANGES).notice
+
+    def test_an_unchanged_contract_passes_without_a_comment(self, released):
+        result = release.api_check(released.handle, SPEC, NO_CHANGES)
+        assert (result.errors, result.notice, result.comment) == ([], None, "")
+
+    def test_it_compares_with_the_newest_tag(self, released):
+        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.release(TAG, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
+        seen = []
+        release.api_check(released.handle, SPEC, lambda base, head: seen.append(base) or [])
+        assert json.loads(seen[0])["info"]["version"] == "1.1.0"
+
+    def test_an_addition_passes_and_says_what_the_next_release_makes_of_it(self, released):
+        result = release.api_check(released.handle, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
+        assert result.errors == []
+        assert result.comment == (
+            "<!-- plak-api-check -->\n**API:** changes against the contract of v2026.9.1.\n\n"
+            "- `GET /b`: endpoint added\n\nThe next release makes it API 1.1.0.\n"
+        )
+
+    def test_a_breaking_change_without_a_new_major_fails(self, released):
+        removed = [change(3, "api path removed", "/a")]
+        result = release.api_check(released.handle, spec_with(paths=()), lambda b, h: removed)
+        assert result.errors[0] == "Breaking API change: GET /a: api path removed."
+        assert result.comment.endswith("- `GET /a`: api path removed\n\nThis cannot be released as it is.\n")
+
+    def test_a_breaking_change_with_a_new_major_passes(self, released):
+        result = release.api_check(released.handle, spec_with("2.0.0", paths=()), lambda b, h: [change(3)])
+        assert result.errors == []
+        assert result.comment.endswith("The next release makes it API 2.0.0.\n")
+
+    def test_main_runs_oasdiff_and_fails_on_a_breaking_change(self, released, tmp_path, monkeypatch, capsys):
+        summary = tmp_path / "summary.md"
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+        (tmp_path / "head.json").write_text(spec_with(paths=()), encoding="utf-8")
+        binary = fake_oasdiff(tmp_path, json.dumps([change(3, "api path removed", "/a")]))
+        comment = tmp_path / "comment.md"
+        args = ["api-check", "--spec", str(tmp_path / "head.json"), "--oasdiff", binary, "--comment-file", str(comment)]
+
+        assert release.main(args) == 1
+        out = capsys.readouterr().out
+        assert "::error title=API contract::Breaking API change: GET /a: api path removed." in out
+        assert summary.read_text(encoding="utf-8").startswith("## API contract\n\n- Breaking API change")
+        assert comment.read_text(encoding="utf-8").startswith("<!-- plak-api-check -->\n")
+
+    def test_main_passes_an_unchanged_contract_and_empties_the_comment(self, released, tmp_path, capsys):
+        (tmp_path / "head.json").write_text(SPEC, encoding="utf-8")
+        comment = tmp_path / "comment.md"
+        comment.write_text("old", encoding="utf-8")
+        args = ["api-check", "--spec", str(tmp_path / "head.json"), "--oasdiff", fake_oasdiff(tmp_path)]
+        assert release.main([*args, "--comment-file", str(comment)]) == 0
+        assert capsys.readouterr().out == "The API contract holds.\n"
+        assert comment.read_text(encoding="utf-8") == ""
+
+    def test_main_without_a_released_schema_gives_a_notice(self, repo, tmp_path, capsys):
+        (tmp_path / "head.json").write_text(SPEC, encoding="utf-8")
+        assert release.main(["api-check", "--spec", str(tmp_path / "head.json"), "--oasdiff", "unused"]) == 0
+        assert capsys.readouterr().out.startswith("::notice title=API contract::No backend/openapi.json")
 
 
 class TestValidateTag:

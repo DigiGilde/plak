@@ -972,7 +972,9 @@ response header (for example `1.0.0`).
 
 - Within a major version the server keeps the API backward compatible, so an
   older CLI keeps working against a newer server.
-- A breaking change bumps the major, and ships together with a new CLI.
+- A breaking change bumps the major, and ships together with a new CLI. A
+  pull request check refuses one without it; minor and patch follow from
+  what a release changed in the schema (`docs/releasing.md`).
 - The CLI reads `API-Version` on every response, before it looks at the body.
   If the server's major is higher than the one the CLI supports, it stops with
   exit code 1 and `Error: this server speaks API 2.x, this plak CLI (<version>)
