@@ -637,6 +637,13 @@ plak logout
                       })
                     }}
                   </nldd-text>
+                  <nldd-banner
+                    v-if="!repository.idsConfirmed"
+                    size="sm"
+                    :text="t('publish.deploy.repo.unconfirmed')"
+                    :supporting-text="t('publish.deploy.repo.unconfirmedDetail')"
+                    data-testid="repository-onbevestigd"
+                  ></nldd-banner>
                 </nldd-container>
               </nldd-box>
               <nldd-button-group v-if="isSiteAdmin" orientation="horizontal">

@@ -5,6 +5,7 @@ group never ends up without an admin."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import pathlib
 import uuid
@@ -557,6 +558,94 @@ async def test_the_site_retention_migration_goes_down_and_up_again(postgres_cont
         conn = await asyncpg.connect(dsn)
         try:
             assert await conn.fetchval("SELECT live_versions_kept FROM sites WHERE id = $1", site_id) is None
+        finally:
+            await conn.close()
+    finally:
+        await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+        await admin.close()
+
+
+async def test_the_ids_confirmed_migration_takes_the_latest_link_audit_row(postgres_container) -> None:
+    """A link counts as confirmed only when its latest `site_repository_set`
+    row for the same ids says so; down again drops the column."""
+    base = postgres_container.get_connection_url(driver=None)
+    name = f"bevestigd_{uuid.uuid4().hex[:8]}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE DATABASE "{name}"')
+    dsn = f"{base.rsplit('/', 1)[0]}/{name}"
+    try:
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "0001_base")
+        conn = await asyncpg.connect(dsn)
+        try:
+            group_id = await _make_group(conn)
+            group_slug = await conn.fetchval("SELECT slug FROM groups WHERE id = $1", group_id)
+            # site -> the ids_confirmed of its set rows, oldest first, and the
+            # repository_id they name (1001 is the linked one).
+            cases = {
+                "confirmed": ([True], 1001),
+                "entered": ([False], 1001),
+                "relinked-unconfirmed": ([True, False], 1001),
+                "relinked-confirmed": ([False, True], 1001),
+                "other-ids": ([True], 9999),
+                "no-row": ([], 1001),
+            }
+            sites = {}
+            for case, (rows, repository_id) in cases.items():
+                site_id = await _make_site(conn, group_id)
+                sites[case] = site_id
+                site_slug = await conn.fetchval("SELECT slug FROM sites WHERE id = $1", site_id)
+                await conn.execute(
+                    """
+                    INSERT INTO site_repositories (id, site_id, provider, host, owner, repo, repository_id, owner_id)
+                    VALUES ($1, $2, 'github', 'https://github.com', 'minbzk', 'website', 1001, 2002)
+                    """,
+                    uuid.uuid4(),
+                    site_id,
+                )
+                for confirmed in rows:
+                    await conn.execute(
+                        """
+                        INSERT INTO audit_log_entries (id, actor_kind, action, result, refs)
+                        VALUES ($1, 'member', 'site_repository_set', 'allowed', $2::jsonb)
+                        """,
+                        uuid.uuid4(),
+                        json.dumps(
+                            {
+                                "group": group_slug,
+                                "site": site_slug,
+                                "repository_id": repository_id,
+                                "ids_confirmed": confirmed,
+                            }
+                        ),
+                    )
+        finally:
+            await conn.close()
+
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        conn = await asyncpg.connect(dsn)
+        try:
+            confirmed = {
+                case: await conn.fetchval("SELECT ids_confirmed FROM site_repositories WHERE site_id = $1", site_id)
+                for case, site_id in sites.items()
+            }
+        finally:
+            await conn.close()
+        assert confirmed == {
+            "confirmed": True,
+            "entered": False,
+            "relinked-unconfirmed": False,
+            "relinked-confirmed": True,
+            "other-ids": False,
+            "no-row": False,
+        }
+
+        await asyncio.to_thread(_alembic, dsn, "downgrade", "0001_base")
+        conn = await asyncpg.connect(dsn)
+        try:
+            columns = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'site_repositories'"
+            )
+            assert "ids_confirmed" not in {row["column_name"] for row in columns}
         finally:
             await conn.close()
     finally:

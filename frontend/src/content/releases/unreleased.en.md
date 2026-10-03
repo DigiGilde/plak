@@ -27,3 +27,7 @@ The Plak CLI now also runs on Windows. `plak login` keeps your session in Window
 ## Content volume
 
 As a platform administrator you now see how full the content volume is on the "Platform administration" page: used, free and the reserve. It turns red when a deploy of the maximum size would no longer fit.
+
+## Unconfirmed repository
+
+If you linked a private repository by entering its repository ID and owner ID yourself, the "Deploy" tab says "Not confirmed yet". The first publish from that repository confirms the IDs and corrects the name. When a repository is renamed, Plak takes over the new name with the next publish.

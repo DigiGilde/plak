@@ -409,6 +409,7 @@ function defaultData(): MockData {
         repositoryId: 123456,
         ownerId: 654321,
         liveBranch: 'main',
+        idsConfirmed: true,
         createdBy: 'Bea Heerder',
         createdAt: firstDeploy,
       },
@@ -1276,6 +1277,8 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             repositoryId: entered ? (body.repositoryId as number) : (existing?.repositoryId ?? nextSequenceNumber()),
             ownerId: entered ? (body.ownerId as number) : (existing?.ownerId ?? nextSequenceNumber()),
             liveBranch,
+            // The lookup does not find a private repository, so its ids stay as entered.
+            idsConfirmed: !repo.toLowerCase().startsWith('prive'),
             createdBy: 'Bea Heerder',
             createdAt: existing?.createdAt ?? now(),
           };

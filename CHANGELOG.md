@@ -32,6 +32,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   `PLAK_LIVE_VERSIONS_KEPT`; a site admin can set another number per site),
   so a site no longer gets stuck on its storage quota; the Versions tab
   shows the site's usage and this rule, and is where a site admin sets it.
+- The Deploy tab says "Nog niet bevestigd" (not confirmed yet) for a
+  repository whose IDs were entered and not confirmed by the provider,
+  until the first deploy from it confirms them; the API returns this as
+  `idsConfirmed`.
 - `GET /-/healthz` on the admin host replaces the unreachable `/healthz`:
   `ok`, `degraded` or, with an unreachable database, `fail` (503), naming
   the failing checks, among them a nearly full content volume (`storage`)

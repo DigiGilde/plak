@@ -27,3 +27,7 @@ De Plak CLI werkt nu ook op Windows. `plak login` bewaart je sessie in Windows R
 ## Contentvolume
 
 Als platformbeheerder zie je op de pagina "Platformbeheer" nu hoe vol het contentvolume is: in gebruik, vrij en de reserve. Het wordt rood zodra een deploy van de maximale omvang er niet meer bij past.
+
+## Onbevestigde repository
+
+Heb je een privérepository gekoppeld door het repository-id en het eigenaar-id zelf in te vullen, dan staat er op het tabblad "Deploy" "Nog niet bevestigd". De eerste publicatie vanuit die repository bevestigt de ids en zet de naam goed. Wordt een repository hernoemd, dan neemt Plak bij de volgende publicatie de nieuwe naam over.
