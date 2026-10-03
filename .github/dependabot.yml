@@ -15,7 +15,7 @@
 #
 # What only feeds CI and the containers (GitHub Actions, pre-commit hooks,
 # base images) shares one pull request across the three ecosystems: the
-# multi-ecosystem group `ci`. The schedule lives on the group, and
+# multi-ecosystem group `tooling`. The schedule lives on the group, and
 # `commit-message` may only be set there; on an entry it is a config error.
 #
 # And a cooldown: a new version only counts once it is a week old, majors
@@ -32,7 +32,7 @@
 version: 2
 
 multi-ecosystem-groups:
-  ci:
+  tooling:
     schedule:
       interval: weekly
       day: monday
@@ -46,7 +46,7 @@ updates:
     directories:
       - /
       - /actions/publish
-    multi-ecosystem-group: ci
+    multi-ecosystem-group: tooling
     patterns:
       - "*"
     open-pull-requests-limit: 5
@@ -150,7 +150,7 @@ updates:
 
   - package-ecosystem: pre-commit
     directory: /
-    multi-ecosystem-group: ci
+    multi-ecosystem-group: tooling
     patterns:
       - "*"
     open-pull-requests-limit: 5
@@ -163,7 +163,7 @@ updates:
       - /containers/plak
       - /containers/nginx-dev
       - /.github/oasdiff
-    multi-ecosystem-group: ci
+    multi-ecosystem-group: tooling
     patterns:
       - "*"
     open-pull-requests-limit: 5

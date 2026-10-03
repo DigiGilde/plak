@@ -1102,3 +1102,15 @@ class TestTheRulesets:
             tags = _ruleset(name)
             assert tags["target"] == "tag", name
             assert tags["conditions"]["ref_name"]["include"] == ["refs/tags/v*"], name
+
+
+class TestDependabot:
+    def test_every_multi_ecosystem_group_is_a_name_dependabot_accepts(self) -> None:
+        """Dependabot rejects a group name under three characters and then
+        runs no updates at all; the only trace is a failed check on the
+        commit. `ci` did exactly that."""
+        dependabot = yaml.safe_load((WORKFLOWS.parent / "dependabot.yml").read_text(encoding="utf-8"))
+        groups = dependabot["multi-ecosystem-groups"]
+        assert all(len(name) >= 3 for name in groups)
+        used = {u["multi-ecosystem-group"] for u in dependabot["updates"] if "multi-ecosystem-group" in u}
+        assert used == set(groups)
