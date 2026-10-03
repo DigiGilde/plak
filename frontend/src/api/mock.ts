@@ -32,6 +32,7 @@ import type {
   Site,
   SiteMember,
   SiteRepository,
+  SiteStorage,
   Version,
   Access,
   AccessBase,
@@ -111,6 +112,8 @@ interface MockData {
   siteRoles: MockSiteRole[];
   sites: Site[];
   versions: Version[];
+  /** What every site's storage endpoint reports. */
+  storage: SiteStorage;
   previews: Preview[];
   invitees: Invitee[];
   keys: Key[];
@@ -426,6 +429,7 @@ function defaultData(): MockData {
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ],
+    storage: { usedBytes: 77594624, maxBytes: 524288000, liveVersionsKept: 5 },
     myLanguage: null,
   };
 }
@@ -1252,6 +1256,12 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           );
           return empty(204);
         }
+      }
+
+      // storage
+      if (rest.length === 4 && rest[3] === 'storage' && method === 'GET') {
+        if (!siteRow) return siteNotFound();
+        return json(200, data.storage);
       }
 
       // versions

@@ -13,3 +13,7 @@ Met `plak --version` zie je welke versie van de Plak CLI je gebruikt. Spreekt de
 De publish-action kan een preview nu op GitHub bij de pull request laten zien: als deployment met een knop "View deployment", als reactie met de link, of allebei. Pull requests van bots, zoals Dependabot, slaat hij standaard over. Voor de DigiGilde-omgeving hoef je `host` niet meer op te geven.
 
 De action heet nu `actions/publish` in plaats van `actions/publiceer`. Werk je de vastgezette commit in je workflow bij, pas dan ook dat pad aan.
+
+## Oudere versies worden opgeruimd
+
+Plak bewaart de huidige live-versie van een site en de vijf versies daarvoor. Oudere live-versies worden elke nacht opgeruimd, zodat een site die vaak publiceert niet meer vastloopt op de beschikbare ruimte. Het tabblad "Versies" laat zien hoeveel ruimte de site gebruikt en hoeveel versies bewaard blijven.

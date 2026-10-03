@@ -202,6 +202,20 @@ cannot plant a pseudonym of a genuinely linked repository. For a CLI token
 session (never token material), and the actor is the same member and
 pseudonym as an ordinary login.
 
+### Nightly cleanup
+
+| Action | Result | When |
+|---|---|---|
+| `version_cleanup` | `allowed` | the nightly cleanup job (`previews/cleanup_job.py`) removed old live versions of a site, rows and files: those beyond the current live version and the `PLAK_LIVE_VERSIONS_KEPT` newest others. One row per site per run. Actor is `system`; `refs` carries group, site, `versions` (the ids removed) and `kept` (the setting at the time) |
+
+A removed live version is one somebody could have rolled back to, so its
+removal gets a row. What the same job removes besides (expired previews,
+orphaned preview versions, stale `_tmp` directories, expired CLI
+authorizations and sessions) writes none: nobody could reach those any more.
+The row is written in its own transaction after the removal committed, and a
+failure to write it is logged without stopping the cleanup of the next site,
+as with every other fail-open audit write.
+
 ### CLI pairing (`plak login`)
 
 | Action | Result | When |

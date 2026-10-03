@@ -58,6 +58,9 @@ platform is not ruled out.
 - **Site**: the published thing, with a live version and previews
   (comparable to the GitLab/Vercel model).
 - **Version**: an immutable file tree, with target `live` or `preview`.
+  Besides the current live version, the five most recent previous live
+  versions stay available to roll back to; a nightly job removes older
+  ones (`PLAK_LIVE_VERSIONS_KEPT`, `0` keeps them all).
 - **Preview**: a named temporary variant per ref (for example
   `pr-42`), pointing at a version with target `preview`.
 
@@ -280,6 +283,10 @@ serves content, the admin SPA and the host separation itself.
 - PostgreSQL and the content volume come as ZAD services, with the
   volume's size declared in the project file. For a lot of content,
   MinIO is the considered route, not a bigger volume.
+- Each site's history on that volume is bounded: a 500 MiB quota per
+  site (`PLAK_SITE_MAX_BYTES`) and a nightly cleanup of live versions
+  beyond the current one and the five before it
+  (`PLAK_LIVE_VERSIONS_KEPT`).
 - Secrets go in as user env vars (`zadctl env`), OIDC runs through the
   ZAD Keycloak, and migrations run through a job in the portal or at
   container start: ZAD has no notion of a Job.

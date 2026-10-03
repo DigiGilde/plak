@@ -2,8 +2,8 @@
 
 Going live is an atomic pointer swap in the same transaction as the
 version insert; the preview upsert is an atomic INSERT .. ON CONFLICT
-(site_id, ref); every live version is kept, replaced preview versions (row
-and files) are cleaned up.
+(site_id, ref); replaced preview versions (row and files) are cleaned up
+here, old live versions by the nightly cleanup job.
 """
 
 from __future__ import annotations
@@ -302,6 +302,12 @@ class IngestService:
         self, db: AsyncSession, site: Site, version_id: uuid.UUID
     ) -> None:
         async with db.begin():
+            # Before the lookup: the cleanup job removes old live versions
+            # under this lock, so a version it is removing reads as unknown
+            # here instead of failing the foreign key on the update below.
+            await db.execute(
+                select(Site.id).where(Site.id == site.id).with_for_update(key_share=True)
+            )
             version = (
                 await db.execute(select(Version).where(Version.id == version_id))
             ).scalar_one_or_none()

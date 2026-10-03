@@ -3,9 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import * as plak from '@/api/plak';
 import { ApiError } from '@/api/client';
-import type { Version } from '@/api/types';
+import type { SiteStorage, Version } from '@/api/types';
 import { contentUrl, formatTimestamp } from '@/format';
 import { t } from '@/i18n';
+import { formatSize } from '@/components/site/packing';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 const loading = ref(true);
 const error = ref<unknown>(null);
 const versions = ref<Version[]>([]);
+const storage = ref<SiteStorage | null>(null);
 const busyWith = ref<string | null>(null);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
@@ -29,7 +31,15 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    versions.value = await plak.versions(props.group, props.site);
+    // The usage line is an extra: when it cannot be loaded it is left out
+    // and the list carries on.
+    const [list, usage] = await Promise.allSettled([
+      plak.versions(props.group, props.site),
+      plak.siteStorage(props.group, props.site),
+    ]);
+    if (list.status === 'rejected') throw list.reason;
+    versions.value = list.value;
+    storage.value = usage.status === 'fulfilled' ? usage.value : null;
   } catch (f) {
     error.value = f;
   } finally {
@@ -39,6 +49,23 @@ async function load(): Promise<void> {
 
 onMounted(load);
 watch(() => [props.group, props.site], load);
+
+const storageText = computed(() => {
+  const s = storage.value;
+  if (!s) return '';
+  const used = formatSize(s.usedBytes);
+  const usage =
+    s.maxBytes > 0
+      ? t('site.versions.storage.quota', { used, max: formatSize(s.maxBytes) })
+      : t('site.versions.storage.noQuota', { used });
+  const retention =
+    s.liveVersionsKept === 0
+      ? t('site.versions.retention.all')
+      : s.liveVersionsKept === 1
+        ? t('site.versions.retention.one')
+        : t('site.versions.retention.many', { kept: String(s.liveVersionsKept) });
+  return `${usage} ${retention}`;
+});
 
 // History is target "live" only; preview versions live on the
 // Previews tab.
@@ -132,6 +159,10 @@ async function setLive(version: Version): Promise<void> {
         <h2 id="kop-versies">{{ t('site.versions.heading') }}</h2>
         <span slot="subtitle">{{ t('site.versions.intro') }}</span>
       </nldd-title>
+
+      <nldd-rich-text v-if="!loading && storageText" data-testid="versies-opslag">
+        <p>{{ storageText }}</p>
+      </nldd-rich-text>
 
       <!--
         The skeleton shows the shape of the rows to come straight away; the

@@ -27,6 +27,7 @@ import type {
   SiteMember,
   SiteRepository,
   SiteRepositoryInput,
+  SiteStorage,
   Version,
   Access,
 } from './types';
@@ -428,6 +429,10 @@ export function setPlatformRole(memberId: string, platformRole: PlatformRole): P
 }
 
 // -- Versions and rollback --------------------------------------------------
+
+export function siteStorage(groupSlug: string, siteSlug: string): Promise<SiteStorage> {
+  return request<SiteStorage>(`${sitePath(groupSlug, siteSlug)}/storage`);
+}
 
 export function versions(groupSlug: string, siteSlug: string): Promise<Version[]> {
   return request<Version[]>(`${sitePath(groupSlug, siteSlug)}/versions`);

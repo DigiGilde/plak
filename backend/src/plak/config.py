@@ -158,10 +158,14 @@ class Settings(BaseSettings):
     ingest_max_depth: int = Field(default=10)
     # What every version of one site together may occupy on the content
     # volume; 0 turns the quota off. The per-bundle limits above bound one
-    # deploy, this one bounds the history they leave behind: live versions are
-    # kept forever, so without it a single site fills the volume by publishing
-    # often enough.
+    # deploy, this one bounds the history they leave behind: without it a
+    # single site fills the volume by publishing often enough between two
+    # nightly cleanups, or at all when live_versions_kept is 0.
     site_max_bytes: int = Field(default=500 * 1024 * 1024)
+    # Previous live versions per site the nightly cleanup keeps besides the
+    # current live one; older live versions go, row and files. 0 keeps every
+    # live version.
+    live_versions_kept: int = Field(default=5, ge=0)
     # Free space the content volume must keep. A deploy is refused with a 503
     # before spooling when its declared size would cross it, and stopped (its
     # spool and work directory cleaned up) as soon as spooling or unpacking

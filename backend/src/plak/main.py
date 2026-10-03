@@ -161,7 +161,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.ci_verifier = CiTokenVerifier(settings, ci_http)
         app.state.ci_providers = ProviderClient(ci_http)
         try:
-            async with cleanup_job(session_factory, content_store) as cleanup_task:
+            async with cleanup_job(
+                session_factory, content_store, live_versions_kept=settings.live_versions_kept
+            ) as cleanup_task:
                 app.state.cleanup_task = cleanup_task
                 yield
         finally:
