@@ -42,6 +42,7 @@
           {"context": "ci / backend-tests"},
           {"context": "ci / backend-coverage"},
           {"context": "ci / release-script"},
+          {"context": "ci / rulesets"},
           {"context": "ci / cli"},
           {"context": "ci / cli-windows"},
           {"context": "ci / containers"},

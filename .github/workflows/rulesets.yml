@@ -1,0 +1,31 @@
+# The daily run of the ruleset drift check. The same script runs on every
+# pull request and in the merge queue as the job `rulesets` in ci.yml; this
+# one catches a ruleset edited in the UI while no pull request is open.
+#
+# Not a job in ci.yml, because a called workflow cannot carry a `schedule`
+# of its own (see codeql.yml).
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: Ruleset drift
+
+on:
+  schedule:
+    # 05:43 UTC, off the hour like the CodeQL run.
+    - cron: "43 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare the live rulesets with the files
+        run: python3 .github/scripts/rulesets.py check
+        env:
+          GH_TOKEN: ${{ github.token }}
