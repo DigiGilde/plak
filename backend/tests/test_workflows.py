@@ -156,16 +156,16 @@ class TestTheCheckGate:
         assert "coverage combine" in report
         assert "coverage report" in report
 
-    def test_the_release_script_has_a_floor_of_its_own(self, ci) -> None:
-        """release.py lies outside src/plak, which is all the merged backend
-        coverage measures. So its tests run again in a job of their own,
-        measured on that file alone."""
+    def test_the_scripts_have_a_floor_of_their_own(self, ci) -> None:
+        """release.py and rulesets.py lie outside src/plak, which is all the
+        merged backend coverage measures. So their tests run again in a job
+        of their own, measured on those files alone."""
         step = _step(ci["jobs"]["release-script"], "Release script tests with coverage")
         assert step["working-directory"] == "backend"
         run, report = step["run"].splitlines()
-        assert run.endswith("-m pytest -q tests/test_release.py")
+        assert run.endswith("-m pytest -q tests/test_release.py tests/test_rulesets.py")
         for line in (run, report):
-            assert "--include='*/.github/scripts/release.py'" in line
+            assert "--include='*/.github/scripts/release.py,*/.github/scripts/rulesets.py'" in line
         assert "--fail-under=100" in report
 
     def test_the_checks_cover_backend_cli_frontend_and_vulnerabilities(self, ci) -> None:
@@ -284,6 +284,7 @@ class TestTheScans:
             "deploy.yml",
             "plugin.yml",
             "release.yml",
+            "rulesets.yml",
         ]
 
         for path in paths:
@@ -1157,6 +1158,22 @@ class TestTheRulesets:
             tags = _ruleset(name)
             assert tags["target"] == "tag", name
             assert tags["conditions"]["ref_name"]["include"] == ["refs/tags/v*"], name
+
+    def test_the_drift_check_runs_on_pull_requests_and_daily(self) -> None:
+        """One workflow serves the pull requests, the merge queue and the
+        daily run; ci.yml cannot, because a called workflow carries no
+        schedule."""
+        workflow = _load("rulesets.yml")
+        assert workflow["permissions"] == {"contents": "read"}
+        assert set(workflow[True]) == {"pull_request", "merge_group", "schedule", "workflow_dispatch"}
+        assert workflow[True]["schedule"] == [{"cron": "43 5 * * *"}]
+        step = _step(workflow["jobs"]["rulesets"], "Compare the live rulesets with the files")
+        assert step["run"] == "python3 .github/scripts/rulesets.py check"
+        assert step["env"] == {"GH_TOKEN": "${{ github.token }}"}
+        assert "rulesets" in {
+            c["context"]
+            for c in _rule(_ruleset("beta"), "required_status_checks")["parameters"]["required_status_checks"]
+        }
 
 
 class TestDependabot:

@@ -409,3 +409,16 @@ organisation.
 A required check in `beta.json` that no job reports would block every
 merge; `test_workflows.py` fails when one names a job that does not
 exist.
+
+A file in `.github/rulesets/` only takes effect once it is applied. After
+changing one, apply it with the `gh api --method PUT` command above (with
+the ruleset's id, `gh api repos/DigiGilde/plak/rulesets` lists them) before
+the pull request merges. The `rulesets` check
+(`.github/scripts/rulesets.py`) is what catches a forgotten apply: the
+workflow *Rulesets* (`rulesets.yml`) runs it on every pull request, in the
+merge queue and daily, and it fails when a live ruleset differs from its
+file, has no file, or a file has no live ruleset. It matches by `name`, ignores
+`bypass_actors` (GitHub only shows them to those who can write the
+ruleset) and the fields GitHub adds itself, and compares the required
+checks as a set. Because it is itself a required check in `beta.json`, a
+pull request that changes `beta.json` shows red until the file is applied.
