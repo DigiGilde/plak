@@ -23,6 +23,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   skips pull requests opened by bots.
 - A deploy answers with the `url` where it can be seen, and the publish
   action passes it on as an output.
+- A deploy also answers with who may see it, and the publish action's
+  pull request comment says whether opening the link needs a sign-in.
+- `plak publish` ends with the URL and version it published, and the
+  publish action writes the same to the job summary.
 - Every night Plak removes a site's live versions beyond the current one
   and the ones before it that the site keeps (five by default, set with
   `PLAK_LIVE_VERSIONS_KEPT`; a site admin can set another number per site),

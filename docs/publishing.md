@@ -316,7 +316,10 @@ audience itself. The deploy API exists only on that host; the content host
 environment names.
 
 The action's output `url` is where the deploy can be seen, for a later step
-of your own.
+of your own. The log of the publish step ends with
+`Published: <url> (version <id>)`, and where the runner offers a step
+summary (`GITHUB_STEP_SUMMARY`; on Forgejo only when both runner and server
+support it) the action writes the same there, or the removal on teardown.
 
 #### The preview in the pull request
 
@@ -328,7 +331,8 @@ the action refuses them before it publishes):
   deployment" button. Each pull request keeps its own deployment; teardown
   marks it inactive. Needs `deployments: write`.
 - `comment-on-pr: "true"` puts the link in a comment on the pull request, updated
-  on every push and marked removed on teardown. Needs
+  on every push and marked removed on teardown. The comment says who can see
+  the deploy and whether opening it needs a sign-in. Needs
   `pull-requests: write`.
 
 ```yaml
@@ -582,9 +586,11 @@ curl -sS -X POST \
     "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
-Success: `201` with JSON body `{"versionId": "<uuid>", "url": "<url>"}`;
+Success: `201` with JSON body
+`{"versionId": "<uuid>", "url": "<url>", "access": {"base": "<base>", "keys": <bool>, "invitees": <bool>}}`;
 `url` is where the deploy can be seen, the live site here and
-`.../_preview/<ref>/` for a preview.
+`.../_preview/<ref>/` for a preview. `access` is who may see it: the
+preview's own access when it has one, else the site's.
 
 ### Preview deploy
 

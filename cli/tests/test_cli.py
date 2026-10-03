@@ -1444,6 +1444,9 @@ def _run_action(
             continue
         step_env = dict(os.environ)
         step_env.pop("PLAK_ACCESS_TOKEN", None)
+        # Set when this suite itself runs on GitHub Actions; a test that wants a
+        # summary passes its own file.
+        step_env.pop("GITHUB_STEP_SUMMARY", None)
         step_env.update({k: _render(str(v), values) for k, v in step.get("env", {}).items()})
         step_env.update(env)
         result = subprocess.run(
@@ -1518,6 +1521,7 @@ def test_action_publishes_live_and_reports_the_version_id(
         "Check OIDC access",
         "Check GitHub options",
         "Publish",
+        "Write summary",
         "Report to GitHub",
     ]
 
@@ -1590,6 +1594,7 @@ def test_action_teardown_removes_the_preview_and_publishes_nothing(
         "Check OIDC access",
         "Check GitHub options",
         "Remove preview",
+        "Write summary",
         "Report to GitHub",
     ]
     assert _deploy_requests(stub_server) == []
@@ -1919,7 +1924,14 @@ def test_action_reports_a_preview_to_github_as_deployment_and_comment(
         {
             "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
             "/-/api/v1/sites/team-aurora/website/deploys": [
-                _json_step(201, {"versionId": "11111111-2222-3333-4444-555555555555", "url": PREVIEW_URL})
+                _json_step(
+                    201,
+                    {
+                        "versionId": "11111111-2222-3333-4444-555555555555",
+                        "url": PREVIEW_URL,
+                        "access": {"base": "sso", "keys": False, "invitees": False},
+                    },
+                )
             ],
             f"{repo}/deployments": [_json_step(201, {"id": 7}), _json_step(200, [{"id": 7}])],
             f"{repo}/deployments/7/statuses": [_json_step(201, {})],
@@ -1952,7 +1964,9 @@ def test_action_reports_a_preview_to_github_as_deployment_and_comment(
     ]
     assert all(r["headers"]["Authorization"] == "Bearer ghs-token" for r in github)
     assert json.loads(github[1]["body"])["environment_url"] == PREVIEW_URL
-    assert PREVIEW_URL in json.loads(github[4]["body"])["body"]
+    comment = json.loads(github[4]["body"])["body"]
+    assert PREVIEW_URL in comment
+    assert "Sign in to open it." in comment
     assert f"url={PREVIEW_URL}" in Path(github_runner["GITHUB_OUTPUT"]).read_text()
 
 
@@ -1980,6 +1994,43 @@ def test_action_fails_the_report_when_the_server_returns_no_url(
     assert run.failed_step == "Report to GitHub"
     assert "returned no url" in run.stderr
     assert len(_deploy_requests(stub_server)) == 1
+
+
+def test_action_comments_without_access_when_the_server_sends_none(
+    stub_server, host, dist_folder, isolated_cwd, github_runner
+):
+    """A Plak from before the access field: the comment still carries the link."""
+    repo = "/repos/digigilde/website"
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/team-aurora/website/deploys": [
+                _json_step(201, {"versionId": "11111111-2222-3333-4444-555555555555", "url": PREVIEW_URL})
+            ],
+            f"{repo}/issues/42/comments": [_json_step(200, []), _json_step(201, {"id": 1})],
+        }
+    )
+
+    run = _run_action(
+        {
+            "host": host,
+            "site": "team-aurora/website",
+            "dist-path": str(dist_folder),
+            "preview-ref": "pr-42",
+            "comment-on-pr": "true",
+            "github-token": "ghs-token",
+        },
+        env=github_runner,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    [posted] = [
+        r for r in stub_server.requests if r["method"] == "POST" and r["path"] == f"{repo}/issues/42/comments"
+    ]
+    comment = json.loads(posted["body"])["body"]
+    assert PREVIEW_URL in comment
+    assert "Who can see it" not in comment
 
 
 def test_action_teardown_reports_the_removal_to_github(
@@ -2016,6 +2067,83 @@ def test_action_teardown_reports_the_removal_to_github(
         f"GET {repo}/deployments",
         f"GET {repo}/issues/42/comments",
     ]
+
+
+# --- action.yml: the step summary ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("inputs", "deploy", "line"),
+    [
+        (
+            {"preview-ref": "pr-42"},
+            {"versionId": "11111111-2222-3333-4444-555555555555", "url": PREVIEW_URL},
+            (
+                f"Preview `pr-42` of `team-aurora/website` is published: {PREVIEW_URL} "
+                "(version `11111111-2222-3333-4444-555555555555`)"
+            ),
+        ),
+        (
+            {},
+            {"versionId": "11111111-2222-3333-4444-555555555555", "url": "https://plak.example/team-aurora/website/"},
+            (
+                "Live site `team-aurora/website` is published: https://plak.example/team-aurora/website/ "
+                "(version `11111111-2222-3333-4444-555555555555`)"
+            ),
+        ),
+        # A Plak from before the url field still gets the version in the summary.
+        (
+            {},
+            {"versionId": "11111111-2222-3333-4444-555555555555"},
+            "Live site `team-aurora/website` is published (version `11111111-2222-3333-4444-555555555555`).",
+        ),
+    ],
+)
+def test_action_writes_the_deploy_to_the_step_summary(
+    stub_server, host, dist_folder, isolated_cwd, action_env, inputs, deploy, line
+):
+    _action_responder(stub_server, deploy=_json_step(201, deploy))
+    summary = isolated_cwd / "summary.md"
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), **inputs},
+        env={**action_env, "GITHUB_STEP_SUMMARY": str(summary)},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert summary.read_text() == f"### Plak\n\n{line}\n"
+    assert "Published" in run.stderr
+
+
+def test_action_writes_the_teardown_to_the_step_summary(stub_server, host, isolated_cwd, action_env):
+    _action_responder(stub_server)
+    summary = isolated_cwd / "summary.md"
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "preview-ref": "pr-42", "teardown": "true"},
+        env={**action_env, "GITHUB_STEP_SUMMARY": str(summary)},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert summary.read_text() == "### Plak\n\nPreview `pr-42` of `team-aurora/website` is removed.\n"
+
+
+def test_action_writes_no_summary_after_a_refused_deploy(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    _action_responder(stub_server, deploy=_json_step(403, {"detail": "nee"}))
+    summary = isolated_cwd / "summary.md"
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
+        env={**action_env, "GITHUB_STEP_SUMMARY": str(summary)},
+        cwd=isolated_cwd,
+    )
+
+    assert run.failed_step == "Publish"
+    assert not summary.exists()
 
 
 # --- action.yml: one repository reference, in every place that names it ----
@@ -3174,11 +3302,137 @@ def test_publish_writes_the_url_beside_the_version_id(
     )
 
 
+def test_publish_writes_the_access_beside_the_url(
+    stub_server, host, dist_folder, token_env, tmp_path
+):
+    """One line the action's report step hands on as is: the base, then the
+    extras that are on."""
+    stub_server.responder = _json_responder(
+        201,
+        {
+            "versionId": "00000000-0000-0000-0000-000000000000",
+            "url": "https://plak.example/team-aurora/website/",
+            "access": {"base": "site_team", "keys": False, "invitees": True},
+        },
+    )
+    output_file = tmp_path / "github_output.txt"
+
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "team-aurora/website",
+            "--output-file",
+            str(output_file),
+        ]
+    )
+
+    assert code == 0
+    assert output_file.read_text().splitlines()[2:] == ["access=site_team,invitees"]
+
+
+@pytest.mark.parametrize(
+    "access",
+    [
+        {"base": "site_team\nversion-id=evil", "keys": False, "invitees": False},
+        {"base": "everyone", "keys": False, "invitees": False},
+        {"base": "sso", "keys": "yes", "invitees": False},
+        "public",
+    ],
+)
+def test_publish_leaves_out_an_access_it_does_not_know(
+    stub_server, host, dist_folder, token_env, tmp_path, capsys, access
+):
+    """The deploy went through, so a CI run stays green and still gets the
+    version and the url; the comment then goes without its access line."""
+    stub_server.responder = _json_responder(
+        201,
+        {
+            "versionId": "00000000-0000-0000-0000-000000000000",
+            "url": "https://plak.example/team-aurora/website/",
+            "access": access,
+        },
+    )
+    output_file = tmp_path / "github_output.txt"
+
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "team-aurora/website",
+            "--output-file",
+            str(output_file),
+        ]
+    )
+
+    assert code == 0
+    assert "Warning: leaving out an access this CLI does not know" in capsys.readouterr().err
+    assert output_file.read_text() == (
+        "version-id=00000000-0000-0000-0000-000000000000\n"
+        "url=https://plak.example/team-aurora/website/\n"
+    )
+
+
+def test_publish_says_where_the_deploy_went_on_stderr(
+    stub_server, host, dist_folder, token_env, capsys
+):
+    """On stderr, so a script that captures stdout for the version id gets
+    the version id alone."""
+    stub_server.responder = _json_responder(
+        201,
+        {
+            "versionId": "00000000-0000-0000-0000-000000000000",
+            "url": "https://plak.example/team-aurora/website/",
+        },
+    )
+
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    out = capsys.readouterr()
+    assert out.out == "00000000-0000-0000-0000-000000000000\n"
+    assert out.err == (
+        "Published: https://plak.example/team-aurora/website/ "
+        "(version 00000000-0000-0000-0000-000000000000)\n"
+    )
+
+
+def test_publish_without_a_url_from_the_server_still_names_the_version(
+    stub_server, host, dist_folder, token_env, tmp_path, capsys
+):
+    """A Plak from before the url field: the log still shows that the deploy
+    went through, and which version it made."""
+    code = cli.main(
+        [
+            "publish",
+            str(dist_folder),
+            "--host",
+            host,
+            "--site",
+            "team-aurora/website",
+            "--output-file",
+            str(tmp_path / "github_output.txt"),
+        ]
+    )
+
+    assert code == 0
+    assert capsys.readouterr().err == "Published version 00000000-0000-0000-0000-000000000000\n"
+
+
 @pytest.mark.parametrize(
     "url",
     [
         "https://plak.example/\nversion-id=evil",
         "https://plak.example/a b/",
+        "https://x/)[Sign in again](https://evil.example",
+        "https://plak.example/<img src=x>",
+        "https://plak.example/`code`",
         "javascript:alert(1)",
         42,
     ],

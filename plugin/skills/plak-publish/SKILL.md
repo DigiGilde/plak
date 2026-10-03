@@ -219,7 +219,8 @@ Then do not go on until the terminal shows "Logged in as ...".
    ```
 
    The ref is a slug (lowercase letters, digits, hyphens). On success the CLI
-   prints only the version id and exits 0.
+   prints the version id on stdout, `Published: <url> (version <id>)` on
+   stderr, and exits 0.
 4. **Check the address yourself**, with the start page and one asset:
 
    ```bash

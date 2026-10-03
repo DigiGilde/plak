@@ -268,6 +268,56 @@ def test_a_live_deploy_on_a_pull_request_comments_under_its_own_marker(fake, run
     assert comment["body"].startswith("<!-- plak-preview team-aurora/website live -->\nLive site of")
 
 
+@pytest.mark.parametrize(
+    ("access", "line"),
+    [
+        ("public", "Anyone can open it, without signing in."),
+        ("sso", "Sign in to open it. Who can see it: anyone who signs in with SSO Rijk."),
+        (
+            "site_team,keys",
+            (
+                "Sign in to open it. Who can see it: members of the site and its group, "
+                "anyone with a secret link."
+            ),
+        ),
+        ("nobody,invitees", "Sign in to open it. Who can see it: invitees, once signed in."),
+        # A secret link is the only way in, so signing in would not help.
+        ("nobody,keys", "Who can see it: anyone with a secret link."),
+        ("nobody", "Who can see it: nobody yet."),
+    ],
+)
+def test_the_comment_says_whether_the_link_needs_a_sign_in(fake, runner_env, access, line):
+    fake.on("GET", "/issues/42/comments", [])
+    fake.on("POST", "/issues/42/comments", {"id": 3})
+
+    assert _publish_preview(fake, "--comment", "--access", access) == 0
+
+    [comment] = fake.sent("POST", "/issues/42/comments")
+    assert f"{PREVIEW_URL}\n\n{line}\n\nVersion" in comment["body"]
+
+
+def test_without_access_the_comment_leaves_the_sign_in_out(fake, runner_env):
+    """A Plak from before the access field: the link still goes in."""
+    fake.on("GET", "/issues/42/comments", [])
+    fake.on("POST", "/issues/42/comments", {"id": 3})
+
+    assert _publish_preview(fake, "--comment") == 0
+
+    [comment] = fake.sent("POST", "/issues/42/comments")
+    assert f"{PREVIEW_URL}\n\nVersion" in comment["body"]
+    assert "Who can see it" not in comment["body"]
+
+
+@pytest.mark.parametrize("access", ["everyone", "public,admins", "sso,keys,keys", ""])
+def test_an_access_value_that_is_not_ours_is_refused(fake, runner_env, capsys, access):
+    with pytest.raises(SystemExit) as exit_info:
+        _publish_preview(fake, "--comment", "--access", access)
+
+    assert exit_info.value.code == 2
+    assert "--access" in capsys.readouterr().err
+    assert fake.requests == []
+
+
 # --- teardown ---------------------------------------------------------------
 
 

@@ -69,7 +69,7 @@ from plak.api.docs import (
 )
 from plak.api.errors import WWW_AUTHENTICATE_BEARER, ApiError, error_responses
 from plak.api.origin_guard import require_admin_origin
-from plak.api.schema import ApiModel
+from plak.api.schema import ACCESS_BASE_HINT, AccessOut, ApiModel
 from plak.audit import vocabulary
 from plak.audit.ip_crypto import IpDecryptError, decrypt_ip
 from plak.audit.log import Actor, AuditLog, LookupLimitReachedError
@@ -132,12 +132,6 @@ _FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf"})
 
 def _has_forbidden_characters(value: str) -> bool:
     return any(unicodedata.category(char) in _FORBIDDEN_CATEGORIES for char in value)
-
-ACCESS_BASE_HINT = (
-    "`public` (iedereen), `sso` (elke gebruiker die inlogt met SSO Rijk), `site_team` (wie een rol "
-    "heeft op de site of op haar groep) of `nobody` (niemand standaard: alleen via de "
-    "uitzonderingen hieronder)."
-)
 
 ACCESS_EXTRAS_HINT = (
     "Naast de basis staan twee uitzonderingen die er los van elkaar bij kunnen: `keys` laat "
@@ -389,14 +383,6 @@ class AccessBody(ApiModel):
     invitees: bool = Field(
         default=False, description="Of genodigden toegang geven na inloggen met SSO Rijk."
     )
-
-
-class AccessOut(ApiModel):
-    """Wie de content mag zien: een basis plus twee uitzonderingen."""
-
-    base: AccessBase = Field(description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
-    keys: bool = Field(description="Of geheime links toegang geven, ook zonder inloggen.")
-    invitees: bool = Field(description="Of genodigden toegang geven na inloggen met SSO Rijk.")
 
 
 class ExternalSourcesBody(ApiModel):

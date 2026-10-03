@@ -83,16 +83,8 @@ async def decide_preview(
         return neutral_404(REASON_UNKNOWN_PREVIEW)
     if preview.expires_at is not None and preview.expires_at <= datetime.now(UTC):
         return neutral_404(REASON_PREVIEW_EXPIRED)
-    if preview.access_base_override is not None:
-        access = AccessPolicy(
-            AccessBase(preview.access_base_override),
-            keys=bool(preview.access_keys_override),
-            invitees=bool(preview.access_invitees_override),
-        )
-    else:
-        access = _site_access(site)
     return await _assess(
-        db, site, access, preview.version_id, visitor, login_redirect_allowed=False
+        db, site, effective_access(site, preview), preview.version_id, visitor, login_redirect_allowed=False
     )
 
 
@@ -142,6 +134,18 @@ async def _find_site(
     if site is None:
         return None, None, neutral_404(REASON_UNKNOWN_SITE)
     return group, site, None
+
+
+def effective_access(site: Site, preview: Preview | None) -> AccessPolicy:
+    """Who may see the live site, or with a preview that preview: its own
+    access when it has an override, else the site's."""
+    if preview is not None and preview.access_base_override is not None:
+        return AccessPolicy(
+            AccessBase(preview.access_base_override),
+            keys=bool(preview.access_keys_override),
+            invitees=bool(preview.access_invitees_override),
+        )
+    return _site_access(site)
 
 
 def _site_access(site: Site) -> AccessPolicy:
