@@ -122,9 +122,17 @@ already: that is how the section for the hand-made `v2026.9.30` came in.
 
 ## Component versions
 
-A release sets versions only where something changed since the previous
-tag, and to the version without the `v` (`2026.10.1`):
+A release writes the version without the `v` (`2026.10.1`). Nobody
+edits these lines by hand. The image and `publiccode.yml` get it on every
+release; the CLI and the plugin only when they changed since the
+previous tag:
 
+- **The image**: `[project] version` in `backend/pyproject.toml` and the
+  version of the editable package `plak-api` in `backend/uv.lock`;
+  `version` in `frontend/package.json` and both places it appears in
+  `frontend/package-lock.json`. Every tag builds a new image, so these
+  follow every release. What the running server and the footer show
+  still comes from the tag itself, through `PLAK_VERSION` at build time.
 - **The CLI**: `[project] version` in `cli/pyproject.toml` and the
   version of the editable package `plak` in `cli/uv.lock`, when anything
   under `cli/plak_cli/`, `cli/pyproject.toml` or `cli/uv.lock` changed,
