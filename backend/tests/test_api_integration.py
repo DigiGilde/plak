@@ -20,7 +20,7 @@ from plak.api.origin_guard import REASON_OTHER_ORIGIN
 from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
-from plak.main import create_app
+from plak.main import API_VERSION, create_app
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Site
 from plak.serving.response import NEUTRAL_404_BODY
@@ -310,7 +310,7 @@ async def test_fastapi_default_docs_disabled(client: httpx.AsyncClient) -> None:
 async def test_api_version_header_on_every_response(client: httpx.AsyncClient) -> None:
     for path in ("/-/healthz", f"{BASE}/overview", "/onbekend/site/"):
         resp = await client.get(path)
-        assert resp.headers.get("api-version") == "1.0.0", path
+        assert resp.headers.get("api-version") == API_VERSION, path
 
 
 async def test_serving_catch_all_stays_last(client: httpx.AsyncClient) -> None:
