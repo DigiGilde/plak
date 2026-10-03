@@ -89,17 +89,17 @@ function mountComponent(props: {
 type Wrapper = ReturnType<typeof mountComponent>;
 
 function details(wrapper: Wrapper) {
-  return wrapper.find('[data-testid="leden-via-groep"]');
+  return wrapper.find('[data-testid="members-via-group"]');
 }
 
 function inheritedRows(wrapper: Wrapper) {
   return wrapper
-    .find('[data-testid="leden-via-groep-lijst"]')
+    .find('[data-testid="members-via-group-list"]')
     .findAll('nldd-table-row:not([slot="header"])');
 }
 
 function siteRows(wrapper: Wrapper) {
-  return wrapper.find('[data-testid="leden-lijst"]').findAll('nldd-table-row:not([slot="header"])');
+  return wrapper.find('[data-testid="members-list"]').findAll('nldd-table-row:not([slot="header"])');
 }
 
 /** The text per cell of one row, in column order. */
@@ -143,8 +143,8 @@ function confirmation(wrapper: Wrapper) {
 
 /** Asking to remove a site role and going through with it. */
 async function removeRole(wrapper: Wrapper, identifier: string): Promise<void> {
-  await runAction(wrapper, identifier, `siterol-weghalen-${identifier}`);
-  await wrapper.find('[data-testid="bevestig-doorgaan"]').trigger('click');
+  await runAction(wrapper, identifier, `site-role-remove-${identifier}`);
+  await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
   await flushPromises();
 }
 
@@ -170,7 +170,7 @@ async function pickSuggestion(wrapper: Wrapper, identifier: string): Promise<voi
 }
 
 function suggestionItems(wrapper: Wrapper) {
-  return wrapper.find('[data-testid="siterol-suggesties"]').findAll('nldd-menu-item');
+  return wrapper.find('[data-testid="site-role-suggestions"]').findAll('nldd-menu-item');
 }
 
 /**
@@ -180,7 +180,7 @@ function suggestionItems(wrapper: Wrapper) {
 async function clickField(wrapper: Wrapper) {
   // The listeners go on once the template ref is filled, a tick after mount.
   await nextTick();
-  const menu = wrapper.find('[data-testid="siterol-suggesties"]').element as HTMLElement & {
+  const menu = wrapper.find('[data-testid="site-role-suggestions"]').element as HTMLElement & {
     showPopover?: () => void;
   };
   const opened = vi.fn();
@@ -198,14 +198,14 @@ async function afterDebounce(): Promise<void> {
 /** Typing and submitting without ever picking: what the form now refuses. */
 async function typeAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
-  await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
 }
 
 /** The whole way in: type, pick the person the list answered with, submit. */
 async function fillInAndSubmit(wrapper: Wrapper, value: string): Promise<void> {
   await typeIn(wrapper, value);
   await pickSuggestion(wrapper, value);
-  await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+  await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
 }
 
 describe('SiteMembersManager (two blocks)', () => {
@@ -244,7 +244,7 @@ describe('SiteMembersManager (two blocks)', () => {
     const wrapper = mountComponent({ members: [viaGroup, siteOnly] });
 
     expect(inheritedRows(wrapper)[0]!.find('nldd-icon-button').exists()).toBe(false);
-    const link = wrapper.find('[data-testid="leden-naar-groep"]');
+    const link = wrapper.find('[data-testid="members-to-group"]');
     expect(link.attributes('href')).toBe('/team-aurora/-/members');
     expect(link.text()).toBe('leden van de groep Team Aurora');
   });
@@ -290,10 +290,10 @@ describe('SiteMembersManager (row menu)', () => {
     ]);
     // An icon per role, so the short label can still be told apart.
     expect(
-      actionOf(wrapper, 'buiten@voorbeeld.nl', 'siterol-buiten@voorbeeld.nl-admin').attributes('icon'),
+      actionOf(wrapper, 'buiten@voorbeeld.nl', 'site-role-buiten@voorbeeld.nl-admin').attributes('icon'),
     ).toBe('key');
     expect(
-      actionOf(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl').attributes(
+      actionOf(wrapper, 'buiten@voorbeeld.nl', 'site-role-remove-buiten@voorbeeld.nl').attributes(
         'destructive',
       ),
     ).toBeDefined();
@@ -305,13 +305,13 @@ describe('SiteMembersManager (row menu)', () => {
     // Group role reader: setting reader on this site removes nothing, and
     // the short label cannot say that.
     expect(
-      actionOf(wrapper, 'zoe@voorbeeld.nl', 'siterol-zoe@voorbeeld.nl-reader').attributes(
+      actionOf(wrapper, 'zoe@voorbeeld.nl', 'site-role-zoe@voorbeeld.nl-reader').attributes(
         'details',
       ),
     ).toBe('Blijft lezer via de groep');
     // A choice that does widen speaks for itself and gets no second line.
     expect(
-      actionOf(wrapper, 'zoe@voorbeeld.nl', 'siterol-zoe@voorbeeld.nl-editor').attributes(
+      actionOf(wrapper, 'zoe@voorbeeld.nl', 'site-role-zoe@voorbeeld.nl-editor').attributes(
         'details',
       ),
     ).toBeUndefined();
@@ -322,7 +322,7 @@ describe('SiteMembersManager (row menu)', () => {
 
     for (const identifier of ['buiten@voorbeeld.nl', 'zoe@voorbeeld.nl']) {
       expect(
-        actionOf(wrapper, identifier, `siterol-weghalen-${identifier}`).attributes('details'),
+        actionOf(wrapper, identifier, `site-role-remove-${identifier}`).attributes('details'),
       ).toBeUndefined();
     }
   });
@@ -332,7 +332,7 @@ describe('SiteMembersManager (row menu)', () => {
     const setRole = vi.fn().mockResolvedValue(changed);
     const wrapper = mountComponent({ members: [siteOnly], setRole });
 
-    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-buiten@voorbeeld.nl-editor');
+    await runAction(wrapper, 'buiten@voorbeeld.nl', 'site-role-buiten@voorbeeld.nl-editor');
 
     expect(setRole).toHaveBeenCalledWith('lid-8', 'editor');
     expect(wrapper.emitted('roleChanged')?.[0]).toEqual([changed]);
@@ -388,12 +388,12 @@ describe('SiteMembersManager (confirming a removal)', () => {
     const remove = vi.fn().mockResolvedValue(undefined);
     const wrapper = mountComponent({ members: [siteOnly], remove });
 
-    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+    await runAction(wrapper, 'buiten@voorbeeld.nl', 'site-role-remove-buiten@voorbeeld.nl');
 
     expect(siteRows(wrapper)).toHaveLength(1);
     expect(remove).not.toHaveBeenCalled();
 
-    await wrapper.find('[data-testid="bevestig-annuleren"]').trigger('click');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await flushPromises();
 
     expect(remove).not.toHaveBeenCalled();
@@ -403,7 +403,7 @@ describe('SiteMembersManager (confirming a removal)', () => {
   it('names the role someone keeps through the group', async () => {
     const wrapper = mountComponent({ members: [both] });
 
-    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-weghalen-zoe@voorbeeld.nl');
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'site-role-remove-zoe@voorbeeld.nl');
 
     expect(confirmation(wrapper).attributes('text')).toBe('Siterol van Zoë de Wit weghalen?');
     expect(confirmation(wrapper).attributes('supporting-text')).toBe(
@@ -414,7 +414,7 @@ describe('SiteMembersManager (confirming a removal)', () => {
   it('says outright that someone without a group role loses this site', async () => {
     const wrapper = mountComponent({ members: [siteOnly] });
 
-    await runAction(wrapper, 'buiten@voorbeeld.nl', 'siterol-weghalen-buiten@voorbeeld.nl');
+    await runAction(wrapper, 'buiten@voorbeeld.nl', 'site-role-remove-buiten@voorbeeld.nl');
 
     expect(confirmation(wrapper).attributes('supporting-text')).toBe(
       'Bo Buiten verliest de toegang tot deze site: er is geen rol via de groep die dat opvangt.',
@@ -426,7 +426,7 @@ describe('SiteMembersManager (what the starting list says about itself)', () => 
   it('says in the list itself that typing searches beyond the group', () => {
     const wrapper = mountComponent({});
 
-    const note = wrapper.find('[data-testid="siterol-verder-zoeken"]');
+    const note = wrapper.find('[data-testid="site-role-further-search"]');
     expect(note.text()).toBe('Typ twee letters om verder te zoeken, ook buiten deze groep.');
     // Outside role="menu" and holding no control: not an option, not a tab stop.
     expect(note.element.closest('nldd-menu-item')).toBeNull();
@@ -439,7 +439,7 @@ describe('SiteMembersManager (what the starting list says about itself)', () => 
 
     await typeIn(wrapper, 'wi');
 
-    expect(wrapper.find('[data-testid="siterol-verder-zoeken"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-role-further-search"]').exists()).toBe(false);
   });
 });
 
@@ -464,9 +464,9 @@ describe('SiteMembersManager (a site role that would change nothing)', () => {
       });
 
       await pickSuggestion(wrapper, 'zoe@voorbeeld.nl');
-      await wrapper.find('[data-testid="siterol-nieuw"]').setValue(siteRole);
+      await wrapper.find('[data-testid="site-role-new"]').setValue(siteRole);
 
-      expect(wrapper.find('[data-testid="siterol-geen-effect"]').exists()).toBe(!widens);
+      expect(wrapper.find('[data-testid="site-role-no-effect"]').exists()).toBe(!widens);
     },
   );
 
@@ -476,9 +476,9 @@ describe('SiteMembersManager (a site role that would change nothing)', () => {
     const wrapper = mountComponent({ members: [both] });
 
     await pickSuggestion(wrapper, 'zoe@voorbeeld.nl');
-    await wrapper.find('[data-testid="siterol-nieuw"]').setValue('reader');
+    await wrapper.find('[data-testid="site-role-new"]').setValue('reader');
 
-    expect(wrapper.find('[data-testid="siterol-geen-effect"]').text()).toContain('lezer');
+    expect(wrapper.find('[data-testid="site-role-no-effect"]').text()).toContain('lezer');
   });
 
   it('says nothing about a role for someone the group does not know', async () => {
@@ -498,7 +498,7 @@ describe('SiteMembersManager (a site role that would change nothing)', () => {
     await vi.waitFor(() => expect(suggestionItems(wrapper)).toHaveLength(1));
     await pickSuggestion(wrapper, 'buiten@voorbeeld.nl');
 
-    expect(wrapper.find('[data-testid="siterol-geen-effect"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-role-no-effect"]').exists()).toBe(false);
   });
 });
 
@@ -516,7 +516,7 @@ describe('SiteMembersManager (granting a role)', () => {
   it('offers reader as the default role', () => {
     const wrapper = mountComponent({});
 
-    const select = wrapper.find('[data-testid="siterol-nieuw"]');
+    const select = wrapper.find('[data-testid="site-role-new"]');
     expect(select.findAll('option').map((option) => option.text().trim())).toEqual([
       'Lezer',
       'Redacteur',
@@ -608,7 +608,7 @@ describe('SiteMembersManager (nothing picked)', () => {
     const add = vi.fn();
     const wrapper = mountComponent({ add });
 
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
@@ -622,7 +622,7 @@ describe('SiteMembersManager (nothing picked)', () => {
 
     await typeIn(wrapper, 'ada');
     await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
@@ -678,7 +678,7 @@ describe('SiteMembersManager (error)', () => {
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
     const wrapper = mountComponent({ members: [both], setRole });
 
-    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-zoe@voorbeeld.nl-editor');
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'site-role-zoe@voorbeeld.nl-editor');
 
     expect(cellTexts(rowOf(wrapper, 'zoe@voorbeeld.nl'))).toEqual(['Zoë de Wit', 'Beheerder']);
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(
@@ -744,7 +744,7 @@ describe('SiteMembersManager (error)', () => {
       .mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Serverfout', status: 500 }));
     const wrapper = mountComponent({ members: [both], setRole });
 
-    await runAction(wrapper, 'zoe@voorbeeld.nl', 'siterol-zoe@voorbeeld.nl-editor');
+    await runAction(wrapper, 'zoe@voorbeeld.nl', 'site-role-zoe@voorbeeld.nl-editor');
     expect(wrapper.find('nldd-notification').exists()).toBe(true);
 
     await wrapper.find('nldd-notification').trigger('dismiss');
@@ -759,7 +759,7 @@ describe('SiteMembersManager (the bubbled native event)', () => {
 
     comboBox(wrapper).element.dispatchEvent(new Event('input'));
 
-    expect(wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text')).not.toBe(
+    expect(wrapper.find('[data-testid="site-role-suggestions"]').attributes('empty-text')).not.toBe(
       'Zoeken...',
     );
   });
@@ -828,7 +828,7 @@ describe('SiteMembersManager (the list before anything is typed)', () => {
     expect(comboBox(wrapper).attributes('text')).toBe('Ada Vermeer');
     expect(comboBox(wrapper).attributes('value')).toBe('ada@voorbeeld.nl');
 
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
@@ -837,7 +837,7 @@ describe('SiteMembersManager (the list before anything is typed)', () => {
   it('says which of the three empty lists it is looking at', async () => {
     const search = vi.fn().mockResolvedValue([]);
     const wrapper = mountComponent({ search });
-    const menu = () => wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text');
+    const menu = () => wrapper.find('[data-testid="site-role-suggestions"]').attributes('empty-text');
 
     expect(menu()).toBe('Typ twee letters om te zoeken');
 
@@ -894,7 +894,7 @@ describe('SiteMembersManager (suggestions)', () => {
     expect(comboBox(wrapper).attributes('text')).toBe('Ada Vermeer');
     expect(comboBox(wrapper).attributes('value')).toBe('ada@voorbeeld.nl');
 
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).toHaveBeenCalledWith('ada@voorbeeld.nl', 'reader');
@@ -904,7 +904,7 @@ describe('SiteMembersManager (suggestions)', () => {
   it('says nobody was found only once the answer is in', async () => {
     const search = vi.fn().mockResolvedValue([]);
     const wrapper = mountComponent({ search });
-    const menu = () => wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text');
+    const menu = () => wrapper.find('[data-testid="site-role-suggestions"]').attributes('empty-text');
 
     await typeIn(wrapper, 'ad');
     expect(menu()).toBe('Zoeken...');
@@ -972,7 +972,7 @@ describe('SiteMembersManager (suggestions)', () => {
 
     await typeIn(wrapper, 'buiten@voorbeeld.nl');
     await afterDebounce();
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(add).not.toHaveBeenCalled();
@@ -988,7 +988,7 @@ describe('SiteMembersManager (suggestions)', () => {
     await afterDebounce();
 
     expect(suggestionItems(wrapper)).toHaveLength(0);
-    expect(wrapper.find('[data-testid="siterol-suggesties"]').attributes('empty-text')).toBe(
+    expect(wrapper.find('[data-testid="site-role-suggestions"]').attributes('empty-text')).toBe(
       'Niemand gevonden',
     );
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
@@ -1041,7 +1041,7 @@ describe('SiteMembersManager (suggestions)', () => {
     await typeIn(wrapper, 'ada');
     await afterDebounce();
     await pickSuggestion(wrapper, 'ada@voorbeeld.nl');
-    await wrapper.find('[data-testid="siterol-formulier"]').trigger('submit');
+    await wrapper.find('[data-testid="site-role-form"]').trigger('submit');
     await flushPromises();
 
     expect(wrapper.find('nldd-notification').attributes('text')).toBe(

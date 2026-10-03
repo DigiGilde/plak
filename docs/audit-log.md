@@ -93,7 +93,7 @@ whoever shares a link with several people sees only that it was that link.
 | `login` | `allowed` | a session was created. `refs.kind` is `admin` or `content` |
 | `login` | `refused` | a callback was rejected; `reason_code` says why. The actor is then always `anonymous`, because there is no verified subject: a pseudonym from a token that failed validation would let an attacker plant pseudonyms of their choosing |
 | `logout` | `allowed` | a session was ended. `refs.kind` is `admin` or `content` |
-| `idp_session_ended` | `allowed` | a session was not ended by the person themselves but by the IdP: `reason_code` `IDP_SESSION_ENDED` (the periodic re-validation got `invalid_grant` back), `IDP_SUB_MISMATCH` (the id token from that re-validation was about someone else), `IDP_TOKEN_INVALID` (that id token failed validation) or `IDP_BACKCHANNEL_LOGOUT` (the IdP called the back-channel logout endpoint). `refs.kind` is `admin` or `content`. Never token material, never the `sid` |
+| `idp_session_ended` | `allowed` | a session was not ended by the person themselves but by the IdP: `reason_code` `IDP_SESSION_ENDED` (the periodic revalidation got `invalid_grant` back), `IDP_SUB_MISMATCH` (the id token from that revalidation was about someone else), `IDP_TOKEN_INVALID` (that id token failed validation) or `IDP_BACKCHANNEL_LOGOUT` (the IdP called the back-channel logout endpoint). `refs.kind` is `admin` or `content`. Never token material, never the `sid` |
 
 ### Admin
 

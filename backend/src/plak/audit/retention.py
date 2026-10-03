@@ -90,12 +90,12 @@ async def purge(dsn: str, *, batch: int = BATCH_DEFAULT) -> int:
         async with factory() as session:
             deleted_audit, audit_error = await _delete_in_batches(session, _DELETE_BATCH, batch=batch)
             if audit_error is not None:
-                _logger.error("Opruimen van audit_log_entries mislukt", exc_info=audit_error)
+                _logger.error("Purging audit_log_entries failed", exc_info=audit_error)
             deleted_viewers, viewers_error = await _delete_in_batches(
                 session, _DELETE_CONTENT_VIEWERS_BATCH, batch=batch
             )
             if viewers_error is not None:
-                _logger.error("Opruimen van content_viewers mislukt", exc_info=viewers_error)
+                _logger.error("Purging content_viewers failed", exc_info=viewers_error)
             total = deleted_audit + deleted_viewers
             if total:
                 async with session.begin():
@@ -118,10 +118,10 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     dsn = os.environ.get(DB_URL_VAR)
     if not dsn:
-        _logger.error("%s is niet gezet; de opruiming weet niet met welke database ze moet praten.", DB_URL_VAR)
+        _logger.error("%s is not set; the purge does not know which database to talk to.", DB_URL_VAR)
         return 1
     deleted = asyncio.run(purge(dsn))
-    _logger.info("Auditlog opgeruimd: %d regels verwijderd", deleted)
+    _logger.info("Audit log purged: %d rows deleted", deleted)
     return 0
 
 

@@ -229,7 +229,7 @@ async def test_an_unvouched_ip_is_marked_on_the_limited_write_too(
     assert json.loads(row["refs"]) == {"reason": "zaak-1", vocabulary.IP_UNVOUCHED: True}
 
 
-async def test_write_fails_not_on_broken_db(caplog: pytest.LogCaptureFixture) -> None:
+async def test_write_does_not_fail_on_a_broken_db(caplog: pytest.LogCaptureFixture) -> None:
     """Fail-open: an audit write failure must never reach the caller."""
     broken_engine = create_async_engine("postgresql+asyncpg://onbestaand:5432/nergens")
     broken_session_factory = make_session_factory(broken_engine)
@@ -239,7 +239,7 @@ async def test_write_fails_not_on_broken_db(caplog: pytest.LogCaptureFixture) ->
         # No exception: fail-open on the logging itself.
         await log.write("test_kapotte_db", ANONYMOUS, "refused")
 
-    assert "Auditlog-schrijffout" in caplog.text
+    assert "Audit log write error" in caplog.text
     await broken_engine.dispose()
 
 
@@ -404,7 +404,7 @@ async def test_purge_continues_the_other_table_when_one_fails(
         if statement is retention._DELETE_CONTENT_VIEWERS_BATCH:
             # _delete_in_batches never raises itself (see its docstring): it
             # reports a failure back as (deleted-so-far, error).
-            return 0, RuntimeError("content_viewers kapot")
+            return 0, RuntimeError("content_viewers broken")
         return await original(session, statement, batch=batch)
 
     monkeypatch.setattr(retention, "_delete_in_batches", _flaky)
@@ -444,7 +444,7 @@ def test_the_job_purges_and_logs_the_count_on(
     caplog.set_level("INFO")
 
     assert retention.main() == 0
-    assert "Auditlog opgeruimd" in caplog.text
+    assert "Audit log purged" in caplog.text
 
 
 class _FailingSession:
@@ -479,7 +479,7 @@ async def test_purge_logs_and_continues_when_the_audit_table_delete_fails(
 
     async def _flaky(session, statement, *, batch):
         if statement is retention._DELETE_BATCH:
-            return 0, RuntimeError("audit_log_entries kapot")
+            return 0, RuntimeError("audit_log_entries broken")
         return await original(session, statement, batch=batch)
 
     monkeypatch.setattr(retention, "_delete_in_batches", _flaky)

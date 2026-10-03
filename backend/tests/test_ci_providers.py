@@ -377,17 +377,17 @@ class TestCiForgejoHostsConfig:
             _settings(ci_forgejo_hosts="http://code.overheid.nl")
 
     def test_path_refused(self):
-        with pytest.raises(Exception, match="schema en host"):
+        with pytest.raises(Exception, match="scheme and host"):
             _settings(ci_forgejo_hosts="https://code.overheid.nl/pad")
 
     def test_query_refused(self):
-        with pytest.raises(Exception, match="schema en host"):
+        with pytest.raises(Exception, match="scheme and host"):
             _settings(ci_forgejo_hosts="https://code.overheid.nl?x=1")
 
     def test_userinfo_refused(self):
-        with pytest.raises(Exception, match="schema en host"):
+        with pytest.raises(Exception, match="scheme and host"):
             _settings(ci_forgejo_hosts="https://user:pass@code.overheid.nl")
 
     def test_invalid_port_refused(self):
-        with pytest.raises(Exception, match="poort"):
+        with pytest.raises(Exception, match="port"):
             _settings(ci_forgejo_hosts="https://code.overheid.nl:notaport")

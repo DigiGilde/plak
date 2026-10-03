@@ -102,7 +102,7 @@ class AuditLog:
         try:
             await self.write_strict(action, actor, result, reason_code=reason_code, refs=refs, ip=ip)
         except Exception:
-            _logger.exception("Auditlog-schrijffout genegeerd (fail-open): actie=%s", action)
+            _logger.exception("Audit log write error ignored (fail-open): action=%s", action)
 
     async def write_strict(
         self,
@@ -163,7 +163,7 @@ class AuditLog:
         `actor.identifier` is required (the cap is per actor).
         """
         if actor.identifier is None:
-            raise ValueError("write_strict_limited vereist een actor met identifier")
+            raise ValueError("write_strict_limited requires an actor with an identifier")
         actor_pseudonym = pseudonymise(self._pepper, actor.identifier)
         ip_truncated = truncate_ip(ip) if ip else None
         refs = _with_ip_provenance(refs, ip)

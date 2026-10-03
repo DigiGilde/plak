@@ -225,7 +225,7 @@ function actionsFor(version: Version): RowAction[] {
       text: t('site.versions.view'),
       icon: 'external-link',
       details: t('site.versions.view.details'),
-      testid: `bekijk-${version.id}`,
+      testid: `view-${version.id}`,
       run: () => void window.open(viewUrl(version), '_blank', 'noopener'),
     },
   ];
@@ -234,7 +234,7 @@ function actionsFor(version: Version): RowAction[] {
       text: t('site.versions.setLive'),
       icon: 'globe',
       disabled: busyWith.value === version.id,
-      testid: `live-zetten-${version.id}`,
+      testid: `set-live-${version.id}`,
       run: () => void setLive(version),
     });
   }
@@ -286,10 +286,10 @@ async function setLive(version: Version): Promise<void> {
 
   <ErrorBanner v-if="error" :error="error" />
 
-  <section v-else aria-labelledby="kop-versies">
+  <section v-else aria-labelledby="heading-versions">
     <nldd-container layout="stack" gap="8">
       <nldd-title :size="4">
-        <h2 id="kop-versies">{{ t('site.versions.heading') }}</h2>
+        <h2 id="heading-versions">{{ t('site.versions.heading') }}</h2>
         <span slot="subtitle">{{ t('site.versions.intro') }}</span>
       </nldd-title>
 
@@ -403,7 +403,7 @@ async function setLive(version: Version): Promise<void> {
         then dims the skeleton behind it.
       -->
       <nldd-activity-indicator v-if="loading" :text="t('site.versions.loading')">
-        <nldd-list type="form" variant="box-tinted" aria-hidden="true" data-testid="versies-skelet">
+        <nldd-list type="form" variant="box-tinted" aria-hidden="true" data-testid="versions-skeleton">
           <nldd-list-item v-for="row in 3" :key="row" size="md">
             <nldd-cell width="fit-content">
               <span class="skeleton__bar skeleton__bar--marker"></span>
@@ -416,7 +416,7 @@ async function setLive(version: Version): Promise<void> {
               </span>
             </nldd-cell>
             <nldd-cell width="fit-content">
-              <span class="skeleton__bar skeleton__bar--acties"></span>
+              <span class="skeleton__bar skeleton__bar--actions"></span>
             </nldd-cell>
           </nldd-list-item>
         </nldd-list>
@@ -427,7 +427,7 @@ async function setLive(version: Version): Promise<void> {
         icon="history"
         :text="t('site.versions.empty')"
         :supporting-text="t('site.versions.empty.hint')"
-        data-testid="versies-leeg"
+        data-testid="versions-empty"
       ></nldd-inline-dialog>
 
       <nldd-list
@@ -441,7 +441,7 @@ async function setLive(version: Version): Promise<void> {
           v-for="version in liveVersions"
           :key="version.id"
           size="md"
-          :data-testid="`versie-${version.id}`"
+          :data-testid="`version-${version.id}`"
         >
           <!-- The marker leads the row, the way the live column does on the
                site overview. Beside the buttons it read as a third button of a
@@ -525,7 +525,7 @@ async function setLive(version: Version): Promise<void> {
   border-radius: var(--primitives-corner-radius-full, 9999px);
 }
 
-.skeleton__bar--acties {
+.skeleton__bar--actions {
   width: var(--primitives-space-32, 32px);
   height: var(--primitives-space-32, 32px);
   border-radius: var(--primitives-corner-radius-md, 8px);

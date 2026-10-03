@@ -70,7 +70,7 @@ function onGroupCreated(group: Group): void {
         variant="primary"
         :text="t('group.action.newGroup')"
         start-icon="plus"
-        data-testid="groepen-aanmaken"
+        data-testid="groups-create"
         @click="sheetOpen = true"
       ></nldd-button>
     </nldd-container>

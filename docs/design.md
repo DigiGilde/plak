@@ -862,7 +862,9 @@ memberships; only a group admin may.
 API Design Rules) with `code` as the machine-readable extension: 401, 403, 404,
 409, 413, 422, 429 with `Retry-After`. The OpenAPI schema and a self-hosted docs
 UI sit on `/-/api/docs`; the assets are local files because the CSP of §9 allows
-no CDN.
+no CDN. Both come in English and Dutch: `?lang=`, then the language a signed-in
+member set on their profile, then `Accept-Language`, and otherwise English, the
+same default as problem+json (`api/openapi_i18n.py`).
 
 The workflow examples, the curl fallback and the `publiceer` action
 (`actions/publish/`) are in `docs/publishing.md`.

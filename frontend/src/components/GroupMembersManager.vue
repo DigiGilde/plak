@@ -248,14 +248,14 @@ function actionsFor(row: Row): RowAction[] {
     ...ROLES.filter((role) => role !== row.role).map((role) => ({
       text: t('group.members.action.setRole', { role: roleLabel(role).toLowerCase() }),
       icon: ROLE_ICONS[role],
-      testid: `lid-rol-${row.identifier}-${role}`,
+      testid: `member-role-${row.identifier}-${role}`,
       run: () => void onRole(row, role),
     })),
     {
       text: t('group.members.action.remove'),
       icon: 'trash',
       destructive: true,
-      testid: `lid-verwijderen-${row.identifier}`,
+      testid: `member-delete-${row.identifier}`,
       run: () => askRemove(row),
     },
   ];
@@ -376,7 +376,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
     <nldd-table
       class="member-table"
       :accessible-label="t('group.members.table.label')"
-      data-testid="leden-lijst"
+      data-testid="members-list"
       :columns="COLUMNS"
       :sm-columns="COLUMNS_SM"
     >
@@ -392,7 +392,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
              button says nothing, and a columnheader without a name is an axe
              violation. -->
         <nldd-text-cell horizontal-alignment="right">
-          <span class="alleen-schermlezer">{{ t('group.members.column.actions') }}</span>
+          <span class="visually-hidden">{{ t('group.members.column.actions') }}</span>
         </nldd-text-cell>
       </nldd-table-row>
       <nldd-inline-dialog
@@ -418,7 +418,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
          not one more row of the table above. -->
     <nldd-box>
       <nldd-container layout="stack" padding="16">
-        <nldd-form data-testid="lid-formulier" @submit.prevent="onAdd">
+        <nldd-form data-testid="member-form" @submit.prevent="onAdd">
         <!-- A real fieldset with a legend, which is what nldd-form-section
              renders in the light DOM. Without it the two fields and the button
              float under the table as three unrelated things, and a screen reader
@@ -448,14 +448,14 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
             <nldd-menu
               :empty-text="emptyText"
               :filterFn.prop="keepEverySuggestion"
-              data-testid="lid-suggesties"
+              data-testid="member-suggestions"
             >
               <nldd-menu-item
                 v-for="person in suggestions"
                 :key="person.identifier"
                 :text="suggestionText(person)"
                 :value="person.identifier"
-                :data-testid="`lid-suggestie-${person.identifier}`"
+                :data-testid="`member-suggestion-${person.identifier}`"
               ></nldd-menu-item>
             </nldd-menu>
           </nldd-combo-box>
@@ -466,7 +466,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
                control: the list re-checks on the control's `input` event, and
                picking from the menu is a `change` without one. -->
           <nldd-validation-list :value="newIdentifier">
-            <nldd-validation-item id="lid-toevoegen-vereist" required>
+            <nldd-validation-item id="member-add-required" required>
               {{ t('group.members.add.identifier.required') }}
             </nldd-validation-item>
           </nldd-validation-list>
@@ -477,7 +477,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
                promoting the deliberate step. -->
           <nldd-form-field :label="t('group.members.add.role.label')">
           <nldd-dropdown>
-            <select v-model="newRole" name="rol" data-testid="lid-rol-nieuw">
+            <select v-model="newRole" name="role" data-testid="member-role-new">
               <option v-for="role in ROLES" :key="role" :value="role">
                 {{ roleLabel(role) }}
               </option>
@@ -516,7 +516,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
         type="form"
         dividers="never"
         :accessible-label="t('group.members.confirm.remove.siteRoles.list')"
-        data-testid="siterollen-lijst"
+        data-testid="site-roles-list"
       >
         <nldd-list-item v-for="site in namedSites" :key="site.siteSlug">
           <nldd-text-cell
@@ -524,7 +524,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
             :supporting-text="roleLabel(site.role)"
           ></nldd-text-cell>
         </nldd-list-item>
-        <nldd-list-item v-if="unnamedSites > 0" data-testid="siterollen-rest">
+        <nldd-list-item v-if="unnamedSites > 0" data-testid="site-roles-rest">
           <nldd-text-cell size="sm" :text="unnamedText"></nldd-text-cell>
         </nldd-list-item>
       </nldd-list>
@@ -534,7 +534,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
       <nldd-checkbox-field
         :label="t('group.members.confirm.remove.siteRoles.also')"
         :checked="alsoSiteRoles || undefined"
-        data-testid="siterollen-meenemen"
+        data-testid="site-roles-include"
         @change="toggleSiteRoles"
       ></nldd-checkbox-field>
       <nldd-rich-text>

@@ -272,7 +272,7 @@ def test_a_line_from_before_the_per_term_chains_is_refused(older: str) -> None:
     """Those formats numbered sixteen chains of mixed terms; holding one against
     the chains per term would compare positions that describe other rows."""
     line = json.dumps({"format": older, "taken_at": "2026-09-24T10:00:00+00:00", "shards": []})
-    with pytest.raises(checkpoint.MalformedCheckpointError, match="onbekend formaat"):
+    with pytest.raises(checkpoint.MalformedCheckpointError, match="unknown format"):
         checkpoint.parse(line)
 
 
@@ -541,7 +541,7 @@ async def test_main_checks_the_database_against_a_published_line(
 
     with caplog.at_level("INFO"):
         assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 0
-    assert "komt overeen" in caplog.text
+    assert "matches the checkpoint published at" in caplog.text
 
     entry_id, _, _ = await _a_head(connection)
     await _rewrite_and_recompute(connection, entry_id)
@@ -562,7 +562,7 @@ async def test_main_reads_the_published_line_from_stdin(
 
     with caplog.at_level("INFO"):
         assert await asyncio.to_thread(checkpoint.main, ["--against", "-"]) == 0
-    assert "komt overeen" in caplog.text
+    assert "matches the checkpoint published at" in caplog.text
 
 
 async def test_main_does_not_fail_on_what_the_purge_did(
@@ -579,8 +579,8 @@ async def test_main_does_not_fail_on_what_the_purge_did(
 
     with caplog.at_level("INFO"):
         assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 0
-    assert "Opgeruimd sinds de publicatie" in caplog.text
-    assert "bewaartermijn" in caplog.text
+    assert "Purged since the checkpoint published at" in caplog.text
+    assert "retention period" in caplog.text
 
 
 async def test_main_fails_on_a_front_removed_before_its_deadline(
@@ -606,11 +606,11 @@ async def test_main_says_so_when_the_line_cannot_be_read(
     monkeypatch.setenv(checkpoint.DB_URL_VAR, migrated_dsn)
     with caplog.at_level("ERROR"):
         assert checkpoint.main(["--against", str(tmp_path / "bestaat-niet.log")]) == 1
-    assert "niet lezen" in caplog.text
+    assert "Cannot read" in caplog.text
 
     rubbish = tmp_path / "rommel.log"
     rubbish.write_text("dit is geen publicatie\n")
     caplog.clear()
     with caplog.at_level("ERROR"):
         assert checkpoint.main(["--against", str(rubbish)]) == 1
-    assert "niet lezen" in caplog.text
+    assert "Cannot read" in caplog.text

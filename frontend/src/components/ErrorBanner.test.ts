@@ -29,7 +29,7 @@ describe('ErrorBanner', () => {
     expect(prop(wrapper, 'nldd-banner', 'variant')).toBe('critical');
     expect(prop(wrapper, 'nldd-banner', 'text')).toBe('Interne fout');
     expect(prop(wrapper, 'nldd-banner', 'supportingText')).toBe('Er ging iets mis op de server.');
-    expect(wrapper.find('[data-testid="opnieuw-inloggen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(false);
   });
 
   it('does not turn an expired session into a dead end', () => {
@@ -43,8 +43,8 @@ describe('ErrorBanner', () => {
     // Not an error but a state of affairs, so no critical color.
     expect(prop(wrapper, 'nldd-banner', 'variant')).toBe('warning');
 
-    expect(prop(wrapper, '[data-testid="opnieuw-inloggen"]', 'text')).toBe('Opnieuw inloggen');
-    expect(wrapper.find('[data-testid="opnieuw-inloggen"]').attributes('slot')).toBe('actions');
+    expect(prop(wrapper, '[data-testid="sign-in-again"]', 'text')).toBe('Opnieuw inloggen');
+    expect(wrapper.find('[data-testid="sign-in-again"]').attributes('slot')).toBe('actions');
   });
 
   it('carries the current path along, so login brings you back where you were', () => {
@@ -54,7 +54,7 @@ describe('ErrorBanner', () => {
       props: { error: problem(401, 'Niet geauthenticeerd', 'Niet ingelogd.') },
     });
 
-    expect(prop(wrapper, '[data-testid="opnieuw-inloggen"]', 'href')).toBe(
+    expect(prop(wrapper, '[data-testid="sign-in-again"]', 'href')).toBe(
       '/-/login?returnTo=%2Fteam-aurora%2Fwebsite%2Faccess',
     );
   });

@@ -21,10 +21,10 @@ defineProps<{ sites: Site[] }>();
 </script>
 
 <template>
-  <section aria-labelledby="kop-sites">
+  <section aria-labelledby="heading-sites">
     <nldd-container layout="stack" gap="8">
       <nldd-title :size="4">
-        <h2 id="kop-sites">{{ t('group.sites.heading') }}</h2>
+        <h2 id="heading-sites">{{ t('group.sites.heading') }}</h2>
         <span slot="subtitle">{{ t('group.sites.intro') }}</span>
       </nldd-title>
 
@@ -34,7 +34,7 @@ defineProps<{ sites: Site[] }>();
       <nldd-table
         background="tinted"
         :accessible-label="t('group.sites.table.label')"
-        data-testid="sites-lijst"
+        data-testid="sites-list"
         :columns="SITE_COLUMNS"
         :sm-columns="SITE_COLUMNS_SM"
       >
@@ -59,7 +59,7 @@ defineProps<{ sites: Site[] }>();
           icon="rectangle-stack"
           :text="t('group.sites.table.empty')"
           :supporting-text="t('group.sites.table.empty.supportingText')"
-          data-testid="sites-leeg"
+          data-testid="sites-empty"
         ></nldd-inline-dialog>
         <SiteRow v-for="site in sites" :key="site.slug" :site="site" />
       </nldd-table>

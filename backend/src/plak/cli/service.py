@@ -201,7 +201,7 @@ async def create_device_authorization(
             await db.rollback()
             continue
         return NewDeviceAuthorization(authorization=authorization, device_code=device_code, user_code=user_code)
-    raise RuntimeError("geen unieke gebruikerscode gevonden")  # pragma: no cover - see above
+    raise RuntimeError("no unique user code found")  # pragma: no cover - see above
 
 
 async def pending_by_user_code(

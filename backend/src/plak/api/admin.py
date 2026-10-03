@@ -135,28 +135,34 @@ def _has_forbidden_characters(value: str) -> bool:
     return any(unicodedata.category(char) in _FORBIDDEN_CATEGORIES for char in value)
 
 ACCESS_EXTRAS_HINT = (
-    "Naast de basis staan twee uitzonderingen die er los van elkaar bij kunnen: `keys` laat "
-    "iedereen met een geldige geheime link binnen, ook zonder inloggen, en `invitees` laat "
-    "ingelogde adressen van de genodigdenlijst binnen. Ze verbreden de basis en versmallen hem "
-    "nooit, dus bij basis `public` veranderen ze niets."
+    "Besides the base there are two exceptions that can be added independently of each other: `keys` "
+    "lets in anyone with a valid secret link, even without signing in, and `invitees` lets in "
+    "signed-in addresses on the invitee list. They widen the base and never narrow it, so with "
+    "base `public` they change nothing."
 )
 
 ROLE_HINT = (
-    "`reader` (leest mee), `editor` (publiceert) of `admin` (bepaalt "
-    "zichtbaarheid, genodigden, sleutels en wie er in de groep zit). Een ruimere rol kan alles wat een "
-    "smallere rol kan."
+    "`reader` (views), `editor` (publishes) or `admin` (determines "
+    "access, invitees, secret links and who is in the group). A higher role can do everything a "
+    "lower role can."
+)
+
+SITE_ROLE_HINT = (
+    "`reader` (views), `editor` (publishes) or `admin` (determines "
+    "access, invitees, secret links and who has a role on the site). A higher role can do everything a "
+    "lower role can."
 )
 
 MEMBER_IDENTIFIER_HINT = (
-    "E-mailadres, SSO-subject, of de volledige naam zoals die op het beheer bekend is (hoofdletters en "
-    "spaties aan het begin of eind genegeerd). Een naam werkt alleen als hij precies overeenkomt met "
-    "één actief platformlid; komt hij bij meer dan één lid voor, dan volgt een 409 en zoek je op het "
-    "e-mailadres. Hoofdletters in een e-mailadres worden genegeerd."
+    "E-mail address, SSO subject, or the full name as known in the admin interface (case and "
+    "leading or trailing spaces ignored). A name only works if it matches exactly "
+    "one active platform member; if it matches more than one, the response is 409; use the "
+    "e-mail address instead. Case in an e-mail address is ignored."
 )
 
 
 def _timestamp_schema() -> dict[str, Any]:
-    """OpenAPI extras for a timestamp field: the API writes RFC 3339 in UTC with a Z."""
+    """OpenAPI exceptions for a timestamp field: the API writes RFC 3339 in UTC with a Z."""
     return {"format": "date-time", "examples": ["2026-09-12T09:30:00Z"]}
 
 
@@ -198,8 +204,8 @@ SearchTerm = Annotated[
     str,
     Query(
         description=(
-            "Zoekterm van minstens twee tekens. Zoekt hoofdletterongevoelig op naam en op "
-            "e-mailadres, ergens in de tekst."
+            "Search term of at least two characters. Matches name and e-mail address, case-insensitively, anywhere "
+            "in the text."
         ),
         examples=["jansen"],
     ),
@@ -209,12 +215,12 @@ SiteRolesOnRemoval = Annotated[
     Query(
         alias="siteRoles",
         description=(
-            "Wat er gebeurt met de eigen siterollen die dit lid heeft op sites in deze groep. "
-            "`keep` laat ze staan, zodat diegene bij die sites blijft kunnen; `remove` haalt ze in "
-            "dezelfde handeling weg. Weggelaten betekent `keep`: meer weghalen dan gevraagd is een "
-            "bewuste keuze.\n\n"
-            "Alleen sites in deze groep. Een siterol in een andere groep blijft buiten beeld en "
-            "buiten schot."
+            "What happens to the direct site roles that this member has on sites in this group. "
+            "`keep` leaves them in place, so they keep access to those sites; `remove` removes them in "
+            "the same action. Omitted means `keep`: removing more than was asked is a "
+            "deliberate choice.\n\n"
+            "Only sites in this group. A site role in another group stays out of view and "
+            "untouched."
         ),
         examples=["remove"],
     ),
@@ -226,48 +232,49 @@ SiteRolesOnRemoval = Annotated[
 # Every route in this router carries these three; the routes extend them with
 # whatever they can refuse themselves.
 _ERROR_SESSION = {
-    401: "Er is geen geldige beheersessie: het cookie ontbreekt, is ongeldig of is verlopen (`NO_SESSION`).",
+    401: "There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
     403: (
-        "Het verzoek komt van een andere origin dan de beheer-host, of het lid is niet (meer) actief "
-        "(`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`)."
+        "The request comes from an origin other than the admin host, or the member is not (or no "
+        "longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`)."
     ),
-    429: "Het ratelimit-budget voor deze sessie is op; probeer het later opnieuw.",
+    429: "The rate limit budget for this session is used up; try again later.",
 }
-_ERROR_CSRF = {403: "De header `X-CSRF-Token` ontbreekt of komt niet overeen met het CSRF-cookie (`CSRF_INVALID`)."}
-_ERROR_ADMIN = {403: "Alleen een platformbeheerder mag dit (`NOT_ADMIN`)."}
-_ERROR_GROUP_ROLE = {403: "Je rol in deze groep is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."}
-_ERROR_SITE_ROLE = {403: "Je rol op deze site is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."}
-_ERROR_GROUP = {404: "Onbekende groep (`UNKNOWN_GROUP`)."}
-_ERROR_SITE = {404: "Onbekende groep (`UNKNOWN_GROUP`) of onbekende site (`UNKNOWN_SITE`)."}
-_ERROR_SEARCH = {422: "De zoekterm is korter dan twee tekens (`SEARCH_TOO_SHORT`)."}
+_ERROR_CSRF = {403: "The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`)."}
+_ERROR_ADMIN = {403: "Only a platform administrator is allowed to do this (`NOT_ADMIN`)."}
+_ERROR_GROUP_ROLE = {403: "The member's role in this group is insufficient for this action (`INSUFFICIENT_ROLE`)."}
+_ERROR_SITE_ROLE = {403: "The member's role on this site is insufficient for this action (`INSUFFICIENT_ROLE`)."}
+_ERROR_GROUP = {404: "Unknown group (`UNKNOWN_GROUP`)."}
+_ERROR_SITE = {404: "Unknown group (`UNKNOWN_GROUP`) or unknown site (`UNKNOWN_SITE`)."}
+_ERROR_SEARCH = {422: "The search term is shorter than two characters (`SEARCH_TOO_SHORT`)."}
 _ERROR_AUDIT_FILTER = {
     422: (
-        "Een filter deugt niet: de cursor is onleesbaar (`CURSOR_INVALID`), `actorPseudonym` is geen "
-        "hexadecimale HMAC-waarde (`ACTOR_PSEUDONYM_INVALID`), of `limit` valt buiten 1 tot 200."
+        "A filter is invalid: the cursor is unreadable (`CURSOR_INVALID`), `actorPseudonym` is not a "
+        "hexadecimal HMAC value (`ACTOR_PSEUDONYM_INVALID`), or `limit` is outside 1 to 200."
     )
 }
 _ERROR_AUDIT_UNAVAILABLE = {
     503: (
-        "De handeling zelf schrijft een auditrij, en die schrijfactie faalde (`AUDIT_UNAVAILABLE`); "
-        "er is niets teruggegeven. Probeer het later opnieuw."
+        "The action itself writes an audit row, and that write failed (`AUDIT_UNAVAILABLE`); "
+        "nothing was returned. Try again later."
     )
 }
 _ERROR_IDENTIFIER_AMBIGUOUS = {
     409: (
-        "Het e-mailadres of de naam hoort bij meer dan één lid (`IDENTIFIER_AMBIGUOUS`); zoek bij een "
-        "meerduidige naam op het e-mailadres, bij een meerduidig e-mailadres op het SSO-subject."
+        "The e-mail address or name belongs to more than one member (`IDENTIFIER_AMBIGUOUS`); if the name is "
+        "ambiguous, use the e-mail address; if the e-mail address is ambiguous, use the SSO subject."
     )
 }
 _ERROR_REASON = {
     422: (
-        "`reason` ontbreekt, is korter dan 10 of langer dan 500 tekens (na spaties strippen), bevat een "
-        "stuur- of opmaakteken, of bevat een `@` (geen e-mailadres; noem een zaak- of ticketnummer)."
+        "`reason` is missing, is shorter than 10 or longer than 500 characters (after stripping spaces), "
+        "contains a control or formatting character, or contains an `@` (not an e-mail address; give a "
+        "case or ticket number)."
     )
 }
 _ERROR_LOOKUP_LIMIT = {
     429: (
-        "De dagelijkse limiet voor herleidingen door deze platformbeheerder is bereikt "
-        "(`LOOKUP_LIMIT_REACHED`); probeer het morgen opnieuw."
+        "The daily limit on audit lookups by this platform administrator has been reached "
+        "(`LOOKUP_LIMIT_REACHED`); try again tomorrow."
     )
 }
 
@@ -283,7 +290,7 @@ def _errors(*additions: dict[int, str]) -> dict[int | str, dict[str, Any]]:
 
 
 def _deleted(what: str) -> dict[int | str, dict[str, Any]]:
-    return {204: {"description": f"{what} Er komt geen inhoud terug."}}
+    return {204: {"description": f"{what} No content is returned."}}
 
 
 # -- Request bodies ---------------------------------------------------------
@@ -296,24 +303,24 @@ def _require_aware(value: datetime | None) -> datetime | None:
 
 
 class AccessChoice(ApiModel):
-    """Toegang bij het aanmaken: basis plus uitzonderingen. Elk veld mag weg; wat er dan geldt,
-    staat bij het veld dat dit object draagt."""
+    """Access when creating: base plus exceptions. Every field may be omitted; what then applies
+    is described on the field that uses this object."""
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"base": "nobody", "keys": True}, {"base": "public"}]}
     )
 
-    base: AccessBase | None = Field(default=None, description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
+    base: AccessBase | None = Field(default=None, description=f"The base, exactly one of: {ACCESS_BASE_HINT}")
     keys: bool | None = Field(
-        default=None, description="Of geheime links toegang geven. " + ACCESS_EXTRAS_HINT
+        default=None, description="Whether secret links grant access. " + ACCESS_EXTRAS_HINT
     )
     invitees: bool | None = Field(
-        default=None, description="Of genodigden toegang geven na inloggen met SSO Rijk."
+        default=None, description="Whether to give invitees access after signing in with SSO Rijk."
     )
 
 
 class GroupCreate(ApiModel):
-    """Een nieuwe groep."""
+    """A new group."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -324,27 +331,27 @@ class GroupCreate(ApiModel):
         }
     )
 
-    name: str = Field(description="Weergavenaam van de groep.", examples=["Team Aurora"])
+    name: str = Field(description="Display name of the group.", examples=["Team Aurora"])
     slug: str = Field(
         description=(
-            "Slug van de groep: kleine letters, cijfers en koppeltekens, hoogstens 63 tekens, en niet "
-            "gereserveerd (`robots.txt`, `favicon.ico`, `.well-known`). Dit wordt het eerste "
-            "padsegment van elke site-URL van de groep."
+            "Slug of the group: lowercase letters, digits and hyphens, at most 63 characters, and not "
+            "reserved (`robots.txt`, `favicon.ico`, `.well-known`). This becomes the first "
+            "path segment of every site URL of the group."
         ),
         examples=["aurora"],
     )
     default_access: AccessChoice | None = Field(
         default=None,
         description=(
-            "Optioneel: de standaardtoegang waarmee de groep begint. Elk weggelaten veld, of het hele "
-            "object weggelaten, krijgt de standaard: basis `site_team`, geen geheime links, geen "
-            "genodigden."
+            "Optional: the default access the group starts with. Every omitted field, or the whole "
+            "object omitted, gets the default: base `site_team`, no secret links, no "
+            "invitees."
         ),
     )
 
 
 class SiteCreate(ApiModel):
-    """Een nieuwe site binnen een groep."""
+    """A new site within a group."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -355,88 +362,88 @@ class SiteCreate(ApiModel):
         }
     )
 
-    title: str = Field(description="Weergavenaam van de site.", examples=["Documentatie"])
+    title: str = Field(description="Display name of the site.", examples=["Documentatie"])
     slug: str = Field(
-        description="Slug van de site: kleine letters, cijfers en koppeltekens, uniek binnen de groep.",
+        description="Slug of the site: lowercase letters, digits and hyphens, unique within the group.",
         examples=["docs"],
     )
     access: AccessChoice | None = Field(
         default=None,
         description=(
-            "Optioneel: de toegang waarmee de site begint. Elk weggelaten veld, of het hele object "
-            "weggelaten, neemt de standaardtoegang van de groep over, dus `{\"keys\": true}` zet alleen "
-            "geheime links aan bovenop wat de groep al voorschrijft."
+            "Optional: the access the site starts with. Every omitted field, or the whole object "
+            "omitted, inherits the default access of the group, so `{\"keys\": true}` only turns on "
+            "secret links on top of what the group already prescribes."
         ),
     )
 
 
 class AccessBody(ApiModel):
-    """Wie de content mag zien: een basis plus twee uitzonderingen."""
+    """Who may see the content: a base plus two exceptions."""
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"base": "nobody", "keys": True, "invitees": False}]}
     )
 
-    base: AccessBase = Field(description=f"De basis, precies één van: {ACCESS_BASE_HINT}")
+    base: AccessBase = Field(description=f"The base, exactly one of: {ACCESS_BASE_HINT}")
     keys: bool = Field(
-        default=False, description="Of geheime links toegang geven. " + ACCESS_EXTRAS_HINT
+        default=False, description="Whether secret links grant access. " + ACCESS_EXTRAS_HINT
     )
     invitees: bool = Field(
-        default=False, description="Of genodigden toegang geven na inloggen met SSO Rijk."
+        default=False, description="Whether to give invitees access after signing in with SSO Rijk."
     )
 
 
 class ExternalSourcesBody(ApiModel):
-    """Of de content van deze site externe bronnen mag laden."""
+    """Whether the content of this site may load external sources."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"externalSources": True}]})
 
     external_sources: bool = Field(
         description=(
-            "`true` (de standaard) laat de pagina scripts en stijlen laden van cdnjs, jsDelivr en "
-            "unpkg, en lettertypen van Google Fonts. `false` laat alleen bronnen uit de site zelf "
-            "toe, en is de veiligere keuze voor een vertrouwelijke pagina. Wat in beide standen "
-            "geblokkeerd blijft: gegevens ophalen bij of sturen naar andere hosts, afbeeldingen "
-            "van elders, een iframe, en een formulier dat elders post."
+            "`true` (the default) lets the page load scripts and styles from cdnjs, jsDelivr and "
+            "unpkg, and fonts from Google Fonts. `false` only allows sources from the site itself, "
+            "and is the safer choice for a confidential page. What stays blocked in both modes: "
+            "fetching data from or sending data to other hosts, images from elsewhere, an iframe, "
+            "and a form that posts elsewhere."
         )
     )
 
 
 class SandboxBody(ApiModel):
-    """Of de content van deze site afgeschermd wordt van de andere sites."""
+    """Whether the content of this site is isolated from the other sites."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"sandbox": True}]})
 
     sandbox: bool = Field(
         description=(
-            "`true` (de standaard) serveert de content met een CSP-sandbox zonder "
-            "`allow-same-origin`, waardoor de pagina een eigen, lege herkomst krijgt: hij kan "
-            "geen enkele andere site op deze hostnaam lezen, krijgt geen cookies mee en kan "
-            "niets in de browser bewaren. Eigen stijlen, scripts, afbeeldingen en lettertypen "
-            "laden gewoon. `false` zet de pagina terug op de gedeelde herkomst, nodig voor een "
-            "site die `localStorage`, `sessionStorage` of een cookie gebruikt."
+            "`true` (the default) serves the content with a CSP sandbox without "
+            "`allow-same-origin`, so the page gets an opaque origin: it cannot "
+            "read any other site on this hostname, receives no cookies and cannot "
+            "store anything in the browser. Its own styles, scripts, images and fonts "
+            "load as usual. `false` puts the page back on the shared origin, needed for a "
+            "site that uses `localStorage`, `sessionStorage` or a cookie."
         )
     )
 
 
 class LiveVersionsKeptBody(ApiModel):
-    """Hoeveel vorige live-versies deze site bewaart."""
+    """How many previous live versions this site keeps."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"liveVersionsKept": 3}]})
 
     live_versions_kept: int | None = Field(
         strict=True,
         description=(
-            "Het aantal vorige live-versies dat de nachtelijke opschoning naast de huidige laat "
-            "staan: een geheel getal van 0 of meer. `0` bewaart alle live-versies van deze site; "
-            "`null` laat de site de standaard van het platform volgen."
+            "The number of previous live versions that the nightly cleanup leaves in place in addition to the "
+            "current one: an integer of 0 or more. `0` keeps all live versions of this site; "
+            "`null` makes the site follow the platform default."
         ),
         json_schema_extra={"minimum": 0},
     )
 
 
 class PreviewAccessBody(ApiModel):
-    """Een afwijkende toegang voor een preview, of `null` om die af te zetten."""
+    """Separate access settings for a preview, or `null` to turn it off."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -446,27 +453,27 @@ class PreviewAccessBody(ApiModel):
 
     access: AccessBody | None = Field(
         description=(
-            "Toegang die alleen voor deze preview geldt: basis plus uitzonderingen in hun geheel. "
-            "`null` haalt de uitzondering weg, waarna de preview de site weer volgt."
+            "Access that applies only to this preview: base plus exceptions as a whole. "
+            "`null` removes the override, after which the preview follows the site again."
         )
     )
 
 
 class IdentifierBody(ApiModel):
-    """Een persoon, aangeduid met e-mailadres of SSO-subject."""
+    """A person, identified by e-mail address or SSO subject."""
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"identifier": "genodigde@example.nl"}]}
     )
 
     identifier: str = Field(
-        description="E-mailadres of SSO-subject. Hoofdletters in een e-mailadres worden genegeerd.",
+        description="E-mail address or SSO subject. Case in an e-mail address is ignored.",
         examples=["genodigde@example.nl"],
     )
 
 
 class GroupMemberAdd(IdentifierBody):
-    """Een persoon die aan de groep wordt toegevoegd, met de rol die hij daar krijgt."""
+    """A person who is added to the group, with the role they get there."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -480,13 +487,13 @@ class GroupMemberAdd(IdentifierBody):
     identifier: str = Field(description=MEMBER_IDENTIFIER_HINT, examples=["lid@example.nl"])
     role: Role = Field(
         default=Role.READER,
-        description=f"Rol die dit lid in de groep krijgt: {ROLE_HINT} Weggelaten betekent `reader`.",
+        description=f"Role this member gets in the group: {ROLE_HINT} Omitted means `reader`.",
         examples=["reader"],
     )
 
 
 class SiteMemberAdd(IdentifierBody):
-    """Een persoon die een rol op deze ene site krijgt, naast wat een groepsrol al geeft."""
+    """A person who gets a role on this one site, in addition to what a group role already gives."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -501,15 +508,15 @@ class SiteMemberAdd(IdentifierBody):
     role: Role = Field(
         default=Role.READER,
         description=(
-            f"Rol die dit lid op deze site krijgt: {ROLE_HINT} Weggelaten betekent `reader`. De rol "
-            "verbreedt alleen; iemand met een ruimere groepsrol houdt die."
+            f"Role this member gets on this site: {SITE_ROLE_HINT} Omitted means `reader`. The role "
+            "only widens; someone with a higher group role keeps that."
         ),
         examples=["reader"],
     )
 
 
 class KeyCreate(ApiModel):
-    """Een nieuwe geheime link."""
+    """A new secret link."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -523,16 +530,16 @@ class KeyCreate(ApiModel):
     label: str | None = Field(
         default=None,
         description=(
-            "Waar deze link voor is; alleen voor de beheerder zelf, hij komt niet in de URL. Laat weg "
-            "of leeg voor een naam met de datum van vandaag."
+            "What this link is for; only for the admin's own use, it does not appear in the URL. Omit "
+            "or leave empty for a name with today's date."
         ),
         examples=["reviewers"],
     )
     expires_at: datetime | None = Field(
         default=None,
         description=(
-            "Tijdstip waarna de link niet meer werkt (RFC 3339). Laat weg of `null` voor de "
-            f"standaardtermijn van 90 dagen; hoogstens {MAX_VALIDITY.days} dagen vooruit."
+            "Time after which the link stops working (RFC 3339). Omit or `null` for the "
+            f"default validity of 90 days; at most {MAX_VALIDITY.days} days ahead."
         ),
         json_schema_extra=_timestamp_schema(),
     )
@@ -541,7 +548,7 @@ class KeyCreate(ApiModel):
     @classmethod
     def _plain_label(cls, value: str | None) -> str | None:
         if value is not None and _has_forbidden_characters(value):
-            raise ValueError("label mag geen stuur- of opmaaktekens bevatten")
+            raise ValueError("label must not contain control or formatting characters")
         return value
 
     @field_validator("expires_at")
@@ -554,7 +561,7 @@ class KeyCreate(ApiModel):
 
 
 class LanguageUpdate(ApiModel):
-    """De taalkeuze van het ingelogde lid."""
+    """The language choice of the signed-in member."""
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"language": "en"}, {"language": None}]}
@@ -562,545 +569,549 @@ class LanguageUpdate(ApiModel):
 
     language: MemberLanguage | None = Field(
         description=(
-            "`nl` of `en`, of `null` om de taal weer door de browser te laten bepalen "
-            "(`Accept-Language`, met Engels als het daar niet uitkomt). De keuze hangt aan het "
-            "account, dus hij reist mee naar elk apparaat."
+            "`nl` or `en`, or `null` to let the browser decide again "
+            "(`Accept-Language`, with English if that does not settle it). The choice is tied to the "
+            "account, so it applies on every device."
         ),
         examples=["en"],
     )
 
 
 class PlatformRoleUpdate(ApiModel):
-    """De nieuwe platformrol van een lid."""
+    """The new platform role of a member."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"platformRole": "admin"}]})
 
     platform_role: PlatformRole = Field(
-        description="`admin` maakt het lid platformbeheerder, `member` haalt die rol er weer af.",
+        description="`admin` makes the member platform administrator, `member` removes that role again.",
         examples=["admin"],
     )
 
 
 class GroupRoleUpdate(ApiModel):
-    """De nieuwe rol van een lid binnen een groep."""
+    """The new role of a member within a group."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"role": "editor"}]})
 
-    role: Role = Field(description=f"Rol die dit lid in de groep krijgt: {ROLE_HINT}", examples=["editor"])
+    role: Role = Field(description=f"Role this member gets in the group: {ROLE_HINT}", examples=["editor"])
 
 
 class SiteRoleUpdate(ApiModel):
-    """De nieuwe siterol van een lid."""
+    """The new site role of a member."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"role": "editor"}]})
 
     role: Role = Field(
         description=(
-            f"Rol die dit lid op deze site krijgt: {ROLE_HINT} Een smallere rol dan de groepsrol "
-            "verandert niets: de ruimste van de twee blijft gelden."
+            f"Role this member gets on this site: {SITE_ROLE_HINT} A role lower than the group role "
+            "changes nothing: the higher of the two applies."
         ),
         examples=["editor"],
     )
 
 
 class MemberOut(ApiModel):
-    """Een platformlid."""
+    """A platform member."""
 
-    id: uuid.UUID = Field(description="Interne id van het lid.")
-    sso_subject: str = Field(description="De `sub` uit het SSO-token; daarop hangt een sessie aan een lid.")
-    email: str = Field(description="E-mailadres uit het SSO-profiel; tevens de identifier bij groepslidmaatschap.")
-    name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als de identity provider die niet stuurt.")
+    id: uuid.UUID = Field(description="Internal ID of the member.")
+    sso_subject: str = Field(description="The `sub` from the SSO token; a session is tied to a member through it.")
+    email: str = Field(description="E-mail address from the SSO profile; also the identifier for group membership.")
+    name: str = Field(description="Display name from the SSO profile; empty if the identity provider does not send it.")
     platform_role: PlatformRole = Field(
-        description="`admin` mag platformbreed inrichten, `member` alleen binnen de eigen groepen."
+        description="`admin` may configure platform-wide, `member` only within their own groups."
     )
     status: MemberStatus = Field(
         description=(
-            "`active` (mag de API gebruiken) of `deactivated` (wordt geweigerd). Alleen `active` komt "
-            "langs de API."
+            "`active` (may use the API) or `deactivated` (is refused). Only `active` gets "
+            "through to the API."
         )
     )
     is_bootstrap: bool = Field(
         default=False,
         description=(
-            "Of dit het account uit `PLAK_BOOTSTRAP_ADMIN_SUB` is. Dat account wordt bij elke login "
-            "hersteld naar beheerder-en-actief, dus status en platformrol zijn er niet te wijzigen. De "
-            "SPA gebruikt dit om die handelingen niet aan te bieden."
+            "Whether this is the account from `PLAK_BOOTSTRAP_ADMIN_SUB`. That account is restored to "
+            "administrator and active at every sign-in, so its status and platform role cannot be changed. The "
+            "SPA uses this to not offer those actions."
         ),
         examples=[False],
     )
     created_at: str = Field(
-        description="Moment waarop het lid ontstond: het eerste bezoek aan de beheeromgeving.",
+        description="When the member was created: the first visit to the admin interface.",
         json_schema_extra=_timestamp_schema(),
     )
     last_login_at: str | None = Field(
         default=None,
-        description="Laatste succesvolle login, of `null` als die er nog niet was.",
+        description="Last successful sign-in, or `null` if there was none yet.",
         json_schema_extra=_timestamp_schema(),
     )
 
 
 class VolumeOut(ApiModel):
-    """Hoe vol het contentvolume is."""
+    """How full the content volume is."""
 
-    total_bytes: int = Field(description="Grootte van het contentvolume in bytes.", examples=[1073741824])
-    used_bytes: int = Field(description="Bytes in gebruik op het volume.", examples=[536870912])
-    free_bytes: int = Field(description="Bytes die nog vrij zijn op het volume.", examples=[536870912])
+    total_bytes: int = Field(description="Size of the content volume in bytes.", examples=[1073741824])
+    used_bytes: int = Field(description="Bytes in use on the volume.", examples=[536870912])
+    free_bytes: int = Field(description="Bytes still free on the volume.", examples=[536870912])
     reserve_bytes: int = Field(
         description=(
-            "Vrije ruimte die het volume moet houden (`PLAK_STORAGE_MIN_FREE_BYTES`); daaronder wordt een "
-            "deploy geweigerd. `0` betekent dat die controle uit staat."
+            "Free space the volume must keep (`PLAK_STORAGE_MIN_FREE_BYTES`); below that a "
+            "deploy is refused. `0` means that check is off."
         ),
         examples=[104857600],
     )
     max_deploy_bytes: int = Field(
         description=(
-            "Grootste uitgepakte omvang van één deploy (`PLAK_INGEST_MAX_TOTAL`). Is het vrije volume kleiner "
-            "dan `reserveBytes` plus dit getal, dan kan een deploy van maximale omvang niet meer."
+            "Largest unpacked size of one deploy (`PLAK_INGEST_MAX_TOTAL`). If free space on the volume is less "
+            "than `reserveBytes` plus this number, a deploy of maximum size is no longer possible."
         ),
         examples=[209715200],
     )
 
 
 class MyGroupRole(ApiModel):
-    """Een groep waarin het ingelogde lid een rol heeft."""
+    """A group in which the signed-in member has a role."""
 
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
-    role: Role = Field(description=f"Rol van het lid in deze groep: {ROLE_HINT}", examples=["editor"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
+    role: Role = Field(description=f"Role of the member in this group: {ROLE_HINT}", examples=["editor"])
 
 
 class MySiteRole(ApiModel):
-    """Een site waarop het ingelogde lid een eigen siterol heeft."""
+    """A site on which the signed-in member has a direct site role."""
 
-    group_slug: str = Field(description="Slug van de groep waar deze site in zit.", examples=["aurora"])
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group this site is in.", examples=["aurora"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
     role: Role = Field(
-        description=f"De siterol zelf, los van de groepsrol: {ROLE_HINT}", examples=["editor"]
+        description=f"The site role itself, independent of the group role: {SITE_ROLE_HINT}", examples=["editor"]
     )
     effective_role: Role = Field(
         description=(
-            "Wat het lid op deze site werkelijk mag: de ruimste van zijn groepsrol en deze siterol."
+            "What the member is actually allowed to do on this site: the higher of their group role "
+            "and this site role."
         ),
         examples=["editor"],
     )
 
 
 class MyProfile(MemberOut):
-    """Het ingelogde lid, aangevuld met wat de SPA nodig heeft om links te bouwen."""
+    """The signed-in member, extended with what the SPA needs to build links."""
 
     content_base_url: str = Field(
         description=(
-            "Origin waarop de gepubliceerde content staat. De SPA bouwt hier publieke URL's, preview-links "
-            "en geheime links op. Altijd een andere host dan het beheer: content en beheer delen nooit een origin."
+            "Origin on which the published content lives. The SPA builds public URLs, preview links "
+            "and secret links on it. Always a different host than the admin interface: content and admin "
+            "never share an origin."
         ),
         examples=["https://sites.plak.example"],
     )
     group_roles: list[MyGroupRole] = Field(
         default_factory=list,
         description=(
-            "Groepen waarin dit lid een rol heeft, op slug gesorteerd. Leeg als het lid nergens groepslid is."
+            "Groups in which this member has a role, sorted by slug. Empty if the member is not a group "
+            "member anywhere."
         ),
     )
     site_roles: list[MySiteRole] = Field(
         default_factory=list,
         description=(
-            "Sites waarop dit lid een eigen siterol heeft, op groep en site gesorteerd. Alleen de sites "
-            "met zo'n eigen rol staan erin: op elke andere site van een groep geldt gewoon de groepsrol "
-            "uit `groupRoles`."
+            "Sites on which this member has a direct site role, sorted by group and site. Only the sites "
+            "with a direct site role are listed: on every other site of a group the group role "
+            "from `groupRoles` simply applies."
         ),
     )
     ci_forgejo_hosts: list[str] = Field(
         default_factory=list,
         description=(
-            "De Forgejo-instanties waarvan Plak CI-ID-tokens accepteert (`PLAK_CI_FORGEJO_HOSTS`), als "
-            "basis-URL. GitHub wordt altijd geaccepteerd en staat hier niet in."
+            "The Forgejo instances whose CI ID tokens Plak accepts (`PLAK_CI_FORGEJO_HOSTS`), as "
+            "base URL. GitHub is always accepted and is not listed here."
         ),
         examples=[["https://code.overheid.nl"]],
     )
     ci_audience: str = Field(
         default="",
         description=(
-            "De audience die een CI-workflow voor zijn ID-token moet aanvragen: precies `PLAK_BASE_URL`. Dat "
-            "is ook de waarde voor de invoer `host` van de plak-action."
+            "The audience a CI workflow must request for its ID token: exactly `PLAK_BASE_URL`. That "
+            "is also the value for the `host` input of the plak action."
         ),
         examples=["https://beheer.plak.example"],
     )
     language: MemberLanguage | None = Field(
         default=None,
         description=(
-            "De taal die dit lid zelf koos voor het beheer: `nl` of `en`. `null` betekent dat het lid "
-            "geen keuze maakte en de SPA de taal uit de browser haalt. De keuze staat op het account en "
-            "geldt dus op elk apparaat."
+            "The language this member chose for the admin interface: `nl` or `en`. `null` means the member "
+            "made no choice and the SPA takes the language from the browser. The choice is stored on the account "
+            "and so applies on every device."
         ),
         examples=["en"],
     )
 
 
 class GroupOut(ApiModel):
-    """Een groep: eigenaar van sites en de eenheid waarop lidmaatschap telt."""
+    """A group: owner of sites and the unit of membership."""
 
-    slug: str = Field(description="Slug van de groep; het eerste padsegment van elke site-URL.", examples=["aurora"])
-    name: str = Field(description="Weergavenaam van de groep.", examples=["Team Aurora"])
+    slug: str = Field(description="Slug of the group; the first path segment of every site URL.", examples=["aurora"])
+    name: str = Field(description="Display name of the group.", examples=["Team Aurora"])
     default_access: AccessOut = Field(
         description=(
-            "Toegang die een nieuwe site in deze groep meekrijgt. Bestaande sites veranderen "
-            "niet mee."
+            "Access that a new site in this group starts with. Existing sites are not affected."
         )
     )
 
 
 class SiteOut(ApiModel):
-    """Een site met de samenvatting die de SPA in lijsten toont."""
+    """A site with the summary the SPA shows in lists."""
 
-    group_slug: str = Field(description="Slug van de groep waar deze site in zit.", examples=["aurora"])
-    slug: str = Field(description="Slug van de site; het tweede padsegment van de site-URL.", examples=["docs"])
-    title: str = Field(description="Weergavenaam van de site.", examples=["Documentatie"])
-    access: AccessOut = Field(description="Wie de live content mag zien: basis plus uitzonderingen.")
+    group_slug: str = Field(description="Slug of the group this site is in.", examples=["aurora"])
+    slug: str = Field(description="Slug of the site; the second path segment of the site URL.", examples=["docs"])
+    title: str = Field(description="Display name of the site.", examples=["Documentatie"])
+    access: AccessOut = Field(description="Who may see the live content: base plus exceptions.")
     external_sources: bool = Field(
         description=(
-            "Of de content van deze site scripts, stijlen en lettertypen van een vaste lijst "
-            "externe hosts mag laden. Standaard `true`; uitzetten is een extra beperking."
+            "Whether the content of this site may load scripts, styles and fonts from a fixed list of "
+            "external hosts. `true` by default; turning it off is an extra restriction."
         )
     )
     sandbox: bool = Field(
         description=(
-            "Of de content van deze site afgeschermd wordt van de andere sites op dezelfde "
-            "hostnaam. Standaard `true`; uitzetten is nodig voor een site die iets in de "
-            "browser bewaart."
+            "Whether the content of this site is isolated from the other sites on the same "
+            "hostname. `true` by default; turning it off is needed for a site that stores something in the "
+            "browser."
         )
     )
     live_version_id: uuid.UUID | None = Field(
-        default=None, description="Versie die nu op de publieke URL staat, of `null` als er nog niets live is."
+        default=None, description="Version that is currently on the public URL, or `null` if nothing is live yet."
     )
     live_versions_kept: int | None = Field(
         default=None,
         description=(
-            "Eigen aantal vorige live-versies dat deze site bewaart, of `null` als de site de "
-            "standaard van het platform volgt. `0` bewaart alle live-versies. Het aantal dat nu "
-            "geldt staat op `GET /sites/{groupSlug}/{siteSlug}/storage`."
+            "Site-specific number of previous live versions that this site keeps, or `null` if the site follows the "
+            "platform default. `0` keeps all live versions. The number that currently "
+            "applies is at `GET /sites/{groupSlug}/{siteSlug}/storage`."
         ),
         examples=[3],
     )
     created_by: str = Field(
-        description="Id van het lid dat de site aanmaakte; leeg als dat lid inmiddels verwijderd is."
+        description="ID of the member who created the site; empty if that member has since been deleted."
     )
-    has_live_version: bool = Field(description="Kortere vorm van `liveVersionId is not null`, handig in lijsten.")
+    has_live_version: bool = Field(description="Shorter form of `liveVersionId is not null`, handy in lists.")
     last_published_at: str | None = Field(
         default=None,
-        description="Tijdstip van de meest recente deploy, live of preview; `null` als er nog niets is gedeployd.",
+        description="Time of the most recent deploy, live or preview; `null` if nothing has been deployed yet.",
         json_schema_extra=_timestamp_schema(),
     )
-    preview_count: int = Field(description="Aantal previews dat nu voor deze site bestaat.", examples=[2])
+    preview_count: int = Field(description="Number of previews that currently exist for this site.", examples=[2])
 
 
 class VersionOut(ApiModel):
-    """Een gedeployde versie: een uitgepakte bundel die live kan staan of aan een preview kan hangen."""
+    """A deployed version: an unpacked bundle that can be live or attached to a preview."""
 
-    id: uuid.UUID = Field(description="Interne id van de versie; hiermee rol je terug.")
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
-    target: VersionTarget = Field(description="`live` voor de publieke URL, `preview` voor een preview-ref.")
-    storage_ref: str = Field(description="Interne verwijzing naar de uitgepakte bestandsboom op schijf.")
+    id: uuid.UUID = Field(description="Internal ID of the version; you use it to roll back.")
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
+    target: VersionTarget = Field(description="`live` for the public URL, `preview` for a preview ref.")
+    storage_ref: str = Field(description="Internal reference to the unpacked file tree on disk.")
     origin: Literal["upload", "action"] = Field(
         description=(
-            "`upload` als een lid deze versie zelf publiceerde (in het beheer of met de CLI), `action` als "
-            "CI hem publiceerde vanuit de gekoppelde repository."
+            "`upload` if a member published this version themselves (in the admin interface or with the CLI), "
+            "`action` if CI published it from the linked repository."
         )
     )
     created_by_member: uuid.UUID | None = Field(
-        default=None, description="Lid dat deployde, of `null` bij een deploy vanuit CI."
+        default=None, description="Member who deployed, or `null` for a deploy from CI."
     )
     created_by_name: str | None = Field(
         default=None,
         description=(
-            "Naam van het lid dat deployde, of zijn e-mailadres als de identity provider geen naam "
-            "stuurde. `null` bij een deploy vanuit CI. Zonder dit veld heeft een lijst alleen het "
-            "interne id om mee te tonen, en dat zegt een lezer niets."
+            "Name of the member who deployed, or their e-mail address if the identity provider sent no "
+            "name. `null` for a deploy from CI. Without this field a list only has the "
+            "internal ID to show, and that tells a reader nothing."
         ),
         examples=["Sanne Jansen"],
     )
     created_by_repository: str | None = Field(
         default=None,
         description=(
-            "Repository waaruit CI deze versie publiceerde, als host plus `eigenaar/repo`; `null` bij een "
-            "deploy door een lid."
+            "Repository from which CI published this version, as host plus `owner/repo`; `null` for a "
+            "deploy by a member."
         ),
         examples=["github.com/minbzk/website"],
     )
     created_at: str | None = Field(
-        default=None, description="Tijdstip van de deploy.", json_schema_extra=_timestamp_schema()
+        default=None, description="Time of the deploy.", json_schema_extra=_timestamp_schema()
     )
-    is_live: bool = Field(description="Of deze versie op dit moment de live versie van de site is.")
+    is_live: bool = Field(description="Whether this version is currently the live version of the site.")
 
 
 class SiteStorageOut(ApiModel):
-    """Wat een site op het contentvolume inneemt, en hoeveel live-versies er bewaard blijven."""
+    """What a site takes up on the content volume, and how many live versions are kept."""
 
     used_bytes: int = Field(
-        description="Wat alle versies van deze site samen innemen op het contentvolume, live en preview, in bytes.",
+        description=(
+            "What all versions of this site together take up on the content volume, live and preview, in bytes."
+        ),
         examples=[77594624],
     )
     max_bytes: int = Field(
         description=(
-            "Hoeveel alle versies van een site samen mogen innemen, in bytes. Een deploy die daar "
-            "overheen zou gaan krijgt 413 (`SITE_QUOTA_EXCEEDED`). `0` betekent geen limiet."
+            "How much all versions of a site together may take up, in bytes. A deploy that would go "
+            "over that gets 413 (`SITE_QUOTA_EXCEEDED`). `0` means no limit."
         ),
         examples=[524288000],
     )
     live_versions_kept: int = Field(
         description=(
-            "Hoeveel vorige live-versies van deze site naast de huidige bewaard blijven: het eigen "
-            "aantal van de site, of anders de standaard van het platform. Oudere live-versies ruimt "
-            "de nachtelijke opschoning op, rij en bestanden. `0` betekent dat alle versies blijven."
+            "How many previous live versions of this site are kept in addition to the current one: the site's own "
+            "setting, or else the platform default. Older live versions are removed by "
+            "the nightly cleanup, row and files. `0` means all versions are kept."
         ),
         examples=[5],
     )
     live_versions_kept_is_default: bool = Field(
         description=(
-            "`true` als de site de standaard van het platform volgt, `false` als een sitebeheerder "
-            "een eigen aantal instelde."
+            "`true` if the site follows the platform default, `false` if a site admin "
+            "set a custom number."
         ),
         examples=[True],
     )
     default_live_versions_kept: int = Field(
         description=(
-            "De standaard van het platform: hoeveel vorige live-versies een site zonder eigen "
-            "aantal bewaart. `0` betekent dat zulke sites alle versies bewaren."
+            "The platform default: how many previous live versions a site without a custom number "
+            "keeps. `0` means such sites keep all versions."
         ),
         examples=[5],
     )
 
 
 class PreviewOut(ApiModel):
-    """Een preview: een tweede, tijdelijke uitgave van een site naast de live versie."""
+    """A preview: a temporary copy of a site alongside the live version."""
 
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
     ref: str = Field(
-        description="Naam van de preview, meestal het pull-requestnummer of de branchnaam als slug.",
+        description="Name of the preview, usually the pull request number or the branch name as a slug.",
         examples=["pr-42"],
     )
-    version_id: uuid.UUID = Field(description="Versie die op deze preview staat.")
+    version_id: uuid.UUID = Field(description="Version that is on this preview.")
     access_override: AccessOut | None = Field(
         default=None,
         description=(
-            "Toegang die alleen voor deze preview geldt; `null` betekent: volgt de site."
+            "Access that applies only to this preview; `null` means: follows the site."
         ),
     )
     last_updated_at: str | None = Field(
         default=None,
-        description="Tijdstip van de laatste deploy naar deze preview.",
+        description="Time of the last deploy to this preview.",
         json_schema_extra=_timestamp_schema(),
     )
     expires_at: str | None = Field(
         default=None,
         description=(
-            "Tijdstip waarop de opruimjob deze preview weggooit. Elke nieuwe deploy naar dezelfde ref schuift "
-            "het vooruit; `null` betekent dat hij niet automatisch verloopt."
+            "Time at which the cleanup job discards this preview. Every new deploy to the same ref pushes "
+            "it forward; `null` means it does not expire automatically."
         ),
         json_schema_extra=_timestamp_schema(),
     )
     url: str = Field(
-        description="Pad van de preview op de content-origin uit `contentBaseUrl`.",
+        description="Path of the preview on the content origin from `contentBaseUrl`.",
         examples=["/aurora/docs/_preview/pr-42/"],
     )
 
 
 class InviteeOut(ApiModel):
-    """Een adres op de genodigdenlijst van een site."""
+    """An address on the invitee list of a site."""
 
     id: str = Field(
-        description="Id van deze genodigde; hiermee haal je hem van de lijst.",
+        description="ID of this invitee; you use it to remove them from the list.",
         examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
     )
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
     identifier: str = Field(
-        description="E-mailadres of SSO-subject van de genodigde, genormaliseerd naar kleine letters.",
+        description="E-mail address or SSO subject of the invitee, normalised to lowercase.",
         examples=["genodigde@example.nl"],
     )
     added_by: str = Field(
-        description="Id van het lid dat de genodigde toevoegde; leeg als dat lid inmiddels verwijderd is."
+        description="ID of the member who added the invitee; empty if that member has since been deleted."
     )
     added_at: str | None = Field(
-        default=None, description="Tijdstip van toevoegen.", json_schema_extra=_timestamp_schema()
+        default=None, description="When the invitee was added.", json_schema_extra=_timestamp_schema()
     )
 
 
 class KeyOut(ApiModel):
-    """Een geheime link, zonder het geheim zelf."""
+    """A secret link, without the secret itself."""
 
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
-    label: str = Field(description="Waar deze link voor is; alleen voor de beheerder.", examples=["reviewers"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
+    label: str = Field(description="What this link is for; only for the admin.", examples=["reviewers"])
     selector: str = Field(
-        description="Eerste helft van de sleutelwaarde: de niet-geheime helft, waarmee je de sleutel opzoekt.",
+        description="First half of the key value: the non-secret half, with which you look up the key.",
         examples=["a1b2c3d4"],
     )
-    status: KeyStatus = Field(description="`active` (werkt) of `revoked` (werkt niet meer).")
+    status: KeyStatus = Field(description="`active` (works) or `revoked` (no longer works).")
     created_at: str | None = Field(
-        default=None, description="Tijdstip van aanmaken.", json_schema_extra=_timestamp_schema()
+        default=None, description="Time of creation.", json_schema_extra=_timestamp_schema()
     )
     expires_at: str | None = Field(
         default=None,
-        description="Tijdstip waarna de link niet meer werkt.",
+        description="Time after which the link stops working.",
         json_schema_extra=_timestamp_schema(),
     )
 
 
 class KeyCreated(ApiModel):
-    """De verse sleutel plus haar waarde. Dit is het enige moment waarop de waarde te zien is."""
+    """The fresh key plus its value. This is the only moment the value can be seen."""
 
-    key: KeyOut = Field(description="De aangemaakte sleutel.")
+    key: KeyOut = Field(description="The created key.")
     value: str = Field(
         description=(
-            "De volledige sleutelwaarde `<selector>.<geheim>` voor in de link. Plak bewaart alleen een hash, "
-            "dus deze waarde is hierna nergens meer op te vragen."
+            "The full key value `<selector>.<secret>` for use in the link. Plak only stores a hash, "
+            "so this value cannot be retrieved anywhere afterwards."
         ),
         examples=["a1b2c3d4.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
     )
 
 
 class GroupSiteRole(ApiModel):
-    """Een eigen rol op één site, altijd een site in de groep waar je naar kijkt."""
+    """A role of its own on one site, always a site in the group you are looking at."""
 
-    site_slug: str = Field(description="Slug van de site binnen deze groep.", examples=["jaarverslag"])
-    site_title: str = Field(description="Titel van de site, zoals die in het beheer staat.")
+    site_slug: str = Field(description="Slug of the site within this group.", examples=["jaarverslag"])
+    site_title: str = Field(description="Title of the site, as shown in the admin interface.")
     role: Role = Field(
-        description=f"Rol die alleen op deze site geldt: {ROLE_HINT}",
+        description=f"Role that applies only on this site: {SITE_ROLE_HINT}",
         examples=["editor"],
     )
 
 
 class GroupMemberOut(ApiModel):
-    """Een lid van een groep, zoals de ledenlijst van die groep het toont."""
+    """A member of a group, as the member list of that group shows it."""
 
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
     member_id: str = Field(
-        description="Id van het platformlid; hiermee haal je het uit de groep.",
+        description="ID of the platform member; you use it to remove them from the group.",
         examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
     )
     identifier: str = Field(
-        description="Waarmee je dit lid aan de groep toevoegt of zijn rol wijzigt: het e-mailadres.",
+        description="What you use to add this member to the group or change their role: the e-mail address.",
         examples=["lid@example.nl"],
     )
-    name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als die ontbreekt.")
-    email: str = Field(description="E-mailadres uit het SSO-profiel.", examples=["lid@example.nl"])
+    name: str = Field(description="Display name from the SSO profile; empty if missing.")
+    email: str = Field(description="E-mail address from the SSO profile.", examples=["lid@example.nl"])
     role: Role = Field(
-        description=f"Rol van dit lid in deze groep: {ROLE_HINT}",
+        description=f"Role of this member in this group: {ROLE_HINT}",
         examples=["reader"],
     )
     site_roles: list[GroupSiteRole] = Field(
         description=(
-            "De sites in déze groep waarop dit lid een eigen rol heeft, op slug gesorteerd. Zo'n rol "
-            "staat los van de groepsrol en blijft gelden als het lid uit de groep gaat, tenzij je hem "
-            "meeneemt (`siteRoles=remove` bij het verwijderen).\n\n"
-            "Wat dit lid in een andere groep heeft staat er niet bij: dat hoort bij die groep."
+            "The sites in this group on which this member has a direct site role, sorted by slug. Such a "
+            "role is independent of the group role and stays in force if the member leaves the group, unless you "
+            "remove it at the same time (`siteRoles=remove` when removing).\n\n"
+            "What this member has in another group is not listed: that belongs to that group."
         ),
     )
 
 
 class SiteMemberOut(ApiModel):
-    """Een rij van de ledenlijst van een site: iedereen die bij deze site kan."""
+    """A row of the member list of a site: everyone who can reach this site."""
 
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
     member_id: str = Field(
-        description="Id van het platformlid; hiermee haal je zijn siterol weg.",
+        description="ID of the platform member; you use it to remove their site role.",
         examples=["3f2a1c6e-9b4d-4f2a-8c1e-7d5b2a9f4c31"],
     )
     identifier: str = Field(
-        description="Waarmee je de siterol van dit lid zet: het e-mailadres.",
+        description="What you use to set the site role of this member: the e-mail address.",
         examples=["lid@example.nl"],
     )
-    name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als die ontbreekt.")
-    email: str = Field(description="E-mailadres uit het SSO-profiel.", examples=["lid@example.nl"])
+    name: str = Field(description="Display name from the SSO profile; empty if missing.")
+    email: str = Field(description="E-mail address from the SSO profile.", examples=["lid@example.nl"])
     group_role: Role | None = Field(
         default=None,
         description=(
-            f"Rol in de groep van deze site, of `null` als dit lid geen groepslid is: {ROLE_HINT} "
-            "Deze rol wijzig je bij de groep, niet hier."
+            f"Role in the group of this site, or `null` if this member is not a group member: {ROLE_HINT} "
+            "You change this role on the group, not here."
         ),
         examples=["reader"],
     )
     site_role: Role | None = Field(
         default=None,
         description=(
-            "Rol die alleen op deze site geldt, of `null` als dit lid er geen heeft. Dit is het enige "
-            "veld dat de siteroutes wijzigen."
+            "Role that applies only on this site, or `null` if this member has none. This is the only "
+            "field that the site routes change."
         ),
         examples=["editor"],
     )
     effective_role: Role = Field(
-        description="Wat dit lid hier werkelijk mag: de ruimste van `groupRole` en `siteRole`.",
+        description="What this member is actually allowed to do here: the higher of `groupRole` and `siteRole`.",
         examples=["editor"],
     )
 
 
 class MemberSearchOut(ApiModel):
-    """Een gevonden platformlid, zoals het zoekveld bij 'lid toevoegen' het toont."""
+    """A platform member that was found, as the search field of 'add member' shows it."""
 
     identifier: str = Field(
-        description="Waarmee je dit lid toevoegt: het e-mailadres.",
+        description="What you use to add this member: the e-mail address.",
         examples=["lid@example.nl"],
     )
-    name: str = Field(description="Weergavenaam uit het SSO-profiel; leeg als die ontbreekt.")
-    email: str = Field(description="E-mailadres uit het SSO-profiel.", examples=["lid@example.nl"])
+    name: str = Field(description="Display name from the SSO profile; empty if missing.")
+    email: str = Field(description="E-mail address from the SSO profile.", examples=["lid@example.nl"])
     already_member: bool = Field(
         description=(
-            "Of dit lid hier al een eigen rol heeft: een groepsrol bij het zoekveld van een groep, "
-            "een siterol bij dat van een site. Toevoegen doe je dan niet meer; de rol wijzig je in "
-            "de ledenlijst."
+            "Whether this member already has a direct role here: a group role in the search field of a "
+            "group, a site role in that of a site. You do not add them then; you change the role in "
+            "the member list."
         ),
         examples=[False],
     )
     group_role: Role | None = Field(
         default=None,
         description=(
-            "Alleen bij het zoekveld van een site: de rol waarmee dit lid deze site nu al via de "
-            f"groep bereikt, of `null` als het geen groepslid is: {ROLE_HINT} Een siterol verruimt "
-            "alleen, dus een even smalle of smallere siterol verandert hier niets aan. Bij het "
-            "zoekveld van een groep is dit veld altijd `null`."
+            "Only in the search field of a site: the role with which this member already reaches this site "
+            f"through the group, or `null` if they are not a group member: {ROLE_HINT} A site role only "
+            "widens, so an equally low or lower site role changes nothing here. In the "
+            "search field of a group this field is always `null`."
         ),
         examples=["reader"],
     )
 
 
 class GroupRow(ApiModel):
-    """Een groep met haar sites, zoals het overzicht die toont."""
+    """A group with its sites, as the overview shows it."""
 
-    group: GroupOut = Field(description="De groep zelf.")
+    group: GroupOut = Field(description="The group itself.")
     sites: list[SiteOut] = Field(
         description=(
-            "De sites van de groep die dit lid mag zien, op slug gesorteerd. Dat zijn ze alle, tenzij het "
-            "lid de groep alleen via een siterol bereikt: dan staan alleen die sites erin."
+            "The sites of the group that this member may see, sorted by slug. That is all of them, unless "
+            "the member only reaches the group through a site role: then only those sites are listed."
         )
     )
 
 
 class Overview(ApiModel):
-    """Het startscherm van de beheer-SPA."""
+    """The home screen of the admin SPA."""
 
     groups: list[GroupRow] = Field(
         description=(
-            "Groepen die dit lid mag zien, op slug gesorteerd: waar het een groepsrol heeft, en waar het "
-            "een rol op een site heeft. Leeg als het lid nergens een rol heeft."
+            "Groups this member may see, sorted by slug: where they have a group role, and where they have "
+            "a role on a site. Empty if the member has no role anywhere."
         )
     )
 
 
 class GroupDetail(ApiModel):
-    """Alles wat de groepspagina van de SPA in één keer nodig heeft."""
+    """Everything the group page of the SPA needs in one go."""
 
-    group: GroupOut = Field(description="De groep zelf.")
-    sites: list[SiteOut] = Field(description="Sites van de groep, op slug gesorteerd.")
-    members: list[GroupMemberOut] = Field(description="Leden van de groep, op e-mailadres gesorteerd.")
+    group: GroupOut = Field(description="The group itself.")
+    sites: list[SiteOut] = Field(description="Sites of the group, sorted by slug.")
+    members: list[GroupMemberOut] = Field(description="Members of the group, sorted by e-mail address.")
 
 
 LIVE_BRANCH_MAX_LENGTH = 255
 
 
 class SiteRepositoryBody(ApiModel):
-    """De repository waaruit CI naar deze site mag publiceren."""
+    """The repository from which CI may publish to this site."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -1117,132 +1128,135 @@ class SiteRepositoryBody(ApiModel):
         }
     )
 
-    provider: CiProvider = Field(description="`github` of `forgejo`.", examples=["github"])
+    provider: CiProvider = Field(description="`github` or `forgejo`.", examples=["github"])
     host: str | None = Field(
         default=None,
         description=(
-            "Basis-URL van de Forgejo-instantie, een van `ciForgejoHosts` uit `GET /me`. Verplicht bij "
-            "`forgejo`; bij `github` weglaten (of `https://github.com`)."
+            "Base URL of the Forgejo instance, one of `ciForgejoHosts` from `GET /me`. Required for "
+            "`forgejo`; omit for `github` (or `https://github.com`)."
         ),
         examples=["https://code.overheid.nl"],
     )
-    owner: str = Field(description="Eigenaar van de repository: gebruiker of organisatie.", examples=["minbzk"])
-    repo: str = Field(description="Naam van de repository.", examples=["website"])
+    owner: str = Field(description="Owner of the repository: user or organisation.", examples=["minbzk"])
+    repo: str = Field(description="Name of the repository.", examples=["website"])
     live_branch: str | None = Field(
         description=(
-            "De enige branch die live mag publiceren, zonder `refs/heads/`. `null` of leeg: elke branch mag "
-            "live. Live gaat hoe dan ook alleen vanuit `push`, `workflow_dispatch` of `schedule`. Previews "
-            "en het opruimen ervan mogen altijd vanaf elke branch."
+            "The only branch allowed to publish live, without `refs/heads/`. `null` or empty: any branch may "
+            "go live. Live is in any case only possible from `push`, `workflow_dispatch` or `schedule`. "
+            "Previews and their cleanup are always allowed from any branch."
         ),
         examples=["main"],
     )
     repository_id: int | None = Field(
         default=None,
         description=(
-            "Numeriek id van de repository, alleen nodig als Plak haar niet kan opzoeken omdat ze privé "
-            "is. Samen met `ownerId`, of allebei weglaten. Op te vragen met "
+            "Numeric ID of the repository, only needed if Plak cannot look it up because it is private. "
+            "Together with `ownerId`, or omit both. Can be retrieved with "
             "`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
         ),
         examples=[123456],
     )
     owner_id: int | None = Field(
         default=None,
-        description="Numeriek id van de eigenaar, samen met `repositoryId`.",
+        description="Numeric ID of the owner, together with `repositoryId`.",
         examples=[7890],
     )
 
 
 class SiteRepositoryOut(ApiModel):
-    """De gekoppelde repository van een site."""
+    """The linked repository of a site."""
 
-    group_slug: str = Field(description="Slug van de groep.", examples=["aurora"])
-    site_slug: str = Field(description="Slug van de site.", examples=["docs"])
-    provider: CiProvider = Field(description="`github` of `forgejo`.")
-    host: str = Field(description="Basis-URL van de provider.", examples=["https://github.com"])
-    owner: str = Field(description="Eigenaar zoals de provider hem spelt.", examples=["minbzk"])
-    repo: str = Field(description="Repository zoals de provider haar spelt.", examples=["website"])
+    group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
+    site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    provider: CiProvider = Field(description="`github` or `forgejo`.")
+    host: str = Field(description="Base URL of the provider.", examples=["https://github.com"])
+    owner: str = Field(description="Owner as the provider spells it.", examples=["minbzk"])
+    repo: str = Field(description="Repository as the provider spells it.", examples=["website"])
     repository_id: int = Field(
-        description="Numeriek id van de repository bij de provider; overleeft een hernoeming.", examples=[123456]
+        description="Numeric ID of the repository at the provider; survives a rename.", examples=[123456]
     )
-    owner_id: int = Field(description="Numeriek id van de eigenaar bij de provider.", examples=[7890])
+    owner_id: int = Field(description="Numeric ID of the owner at the provider.", examples=[7890])
     live_branch: str | None = Field(
-        default=None, description="De enige branch die live mag publiceren, of `null`: elke branch.", examples=["main"]
+        default=None, description="The only branch allowed to publish live, or `null`: any branch.", examples=["main"]
     )
     ids_confirmed: bool = Field(
         description=(
-            "Of de ids bevestigd zijn: door de provider bij het koppelen, of door een CI-ID-token dat ze allebei "
-            "droeg. `false` zolang ze alleen zijn zoals ze zijn ingevuld; de naam kan dan ook nog afwijken."
+            "Whether the IDs are confirmed: by the provider when linking, or by a CI ID token that carried both "
+            "of them. `false` while they have only been entered by hand; the name may then also still differ."
         ),
         examples=[True],
     )
     created_by: str = Field(
-        description="Naam of e-mailadres van wie de koppeling maakte; leeg als dat lid verwijderd is."
+        description=(
+            "Name or e-mail address of the member who linked the repository; empty if that member has been "
+            "deleted."
+        )
     )
     created_at: str | None = Field(
-        default=None, description="Tijdstip van koppelen.", json_schema_extra=_timestamp_schema()
+        default=None, description="Time of linking.", json_schema_extra=_timestamp_schema()
     )
 
 
 class UserCodeBody(ApiModel):
-    """De code uit de terminal van `plak login`."""
+    """The code from the terminal of `plak login`."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"userCode": "WDJB-MJHT"}]})
 
     user_code: str = Field(
         max_length=32,
-        description="De gebruikerscode, met of zonder koppelteken, hoofdletterongevoelig.",
+        description="The user code, with or without hyphen, case-insensitive.",
         examples=["WDJB-MJHT"],
     )
 
 
 class DeviceAuthorizationPendingOut(ApiModel):
-    """Een openstaande CLI-login, zoals het goedkeuringsscherm hem toont."""
+    """A pending CLI login, as the approval screen shows it."""
 
-    user_code: str = Field(description="De gebruikerscode, genormaliseerd.", examples=["WDJB-MJHT"])
+    user_code: str = Field(description="The user code, normalised.", examples=["WDJB-MJHT"])
     client_name: str | None = Field(
-        default=None, description="Hoe de CLI zichzelf noemde; `null` als hij niets opgaf.", examples=["plak-cli 1.2"]
+        default=None, description="How the CLI named itself; `null` if it gave nothing.", examples=["plak-cli 1.2"]
     )
     ip_truncated: str | None = Field(
         default=None,
-        description="Het netwerk waarvandaan de CLI de login begon (IPv4 /24, IPv6 /48).",
+        description="The network from which the CLI started the login (IPv4 /24, IPv6 /48).",
         examples=["203.0.113.0/24"],
     )
     created_at: str | None = Field(
-        default=None, description="Wanneer de CLI de login begon.", json_schema_extra=_timestamp_schema()
+        default=None, description="When the CLI started the login.", json_schema_extra=_timestamp_schema()
     )
     expires_at: str | None = Field(
-        default=None, description="Wanneer de code verloopt.", json_schema_extra=_timestamp_schema()
+        default=None, description="When the code expires.", json_schema_extra=_timestamp_schema()
     )
     same_network: bool | None = Field(
         default=None,
         description=(
-            "Of de CLI de login begon vanaf hetzelfde afgekapte netwerk (IPv4 /24, IPv6 /48) als waarvandaan "
-            "het lid nu goedkeurt. `false` is een reden om extra op te letten: iemand anders kan de code "
-            "gestuurd hebben. `null` als een van beide adressen onbekend is. Er komt geen volledig IP-adres "
-            "in het antwoord."
+            "Whether the CLI started the login from the same truncated network (IPv4 /24, IPv6 /48) as the one "
+            "from which the member is approving now. `false` is a reason to be extra careful: someone else may "
+            "have sent the code. `null` if one of the two addresses is unknown. No full IP address "
+            "is in the response."
         ),
         examples=[True],
     )
 
 
 class CliSessionOut(ApiModel):
-    """Een gekoppelde sessie: een goedgekeurde `plak login` van het ingelogde lid."""
+    """A linked CLI session: an approved `plak login` of the signed-in member."""
 
-    id: uuid.UUID = Field(description="Id van de CLI-sessie; hiermee trek je hem in.")
+    id: uuid.UUID = Field(description="ID of the CLI session; you use it to revoke it.")
     client_name: str | None = Field(
-        default=None, description="Hoe de CLI zichzelf noemde bij het koppelen.", examples=["plak-cli 1.2 on macOS"]
+        default=None, description="How the CLI named itself when signing in.", examples=["plak-cli 1.2 on macOS"]
     )
     created_at: str | None = Field(
-        default=None, description="Tijdstip van koppelen.", json_schema_extra=_timestamp_schema()
+        default=None, description="Time of sign-in.", json_schema_extra=_timestamp_schema()
     )
     last_used_at: str | None = Field(
         default=None,
-        description="Laatste keer dat de CLI iets deed of verversde; `null` als dat nog niet gebeurde.",
+        description="Last time the CLI did something or refreshed; `null` if that has not happened yet.",
         json_schema_extra=_timestamp_schema(),
     )
     expires_at: str | None = Field(
         default=None,
-        description="Wanneer de sessie verloopt zonder verder gebruik.",
+        description="When the session expires without further use.",
         json_schema_extra=_timestamp_schema(),
     )
 
@@ -1255,134 +1269,135 @@ REASON_MAX_LENGTH = 500
 
 
 class AuditFilters(ApiModel):
-    """Filters op het auditlog. Alles is optioneel en alles combineert met EN."""
+    """Filters on the audit log. Everything is optional and everything combines with AND."""
 
     limit: int = Field(
         default=AUDIT_PAGE_DEFAULT,
         ge=1,
         le=AUDIT_PAGE_MAX,
-        description=f"Aantal regels per pagina, 1 tot {AUDIT_PAGE_MAX}.",
+        description=f"Number of rows per page, 1 to {AUDIT_PAGE_MAX}.",
         examples=[50],
     )
     cursor: str | None = Field(
         default=None,
         description=(
-            "De `nextCursor` uit het vorige antwoord, ongewijzigd overgenomen. Laat hem weg voor de "
-            "eerste pagina."
+            "The `nextCursor` from the previous response, copied unchanged. Omit it for the "
+            "first page."
         ),
     )
     since: datetime | None = Field(
         default=None,
-        description="Alleen regels vanaf dit tijdstip (RFC 3339, inclusief). Zonder tijdzone geldt UTC.",
+        description="Only rows from this time onwards (RFC 3339, inclusive). Without a time zone, UTC applies.",
         examples=["2026-09-01T00:00:00Z"],
     )
     until: datetime | None = Field(
         default=None,
-        description="Alleen regels van vóór dit tijdstip (RFC 3339, exclusief). Zonder tijdzone geldt UTC.",
+        description="Only rows from before this time (RFC 3339, exclusive). Without a time zone, UTC applies.",
         examples=["2026-09-19T00:00:00Z"],
     )
     action: str | None = Field(
         default=None,
-        description="Exacte handeling, bijvoorbeeld `content_access`, `deploy` of `site_create`.",
+        description="Exact action, for example `content_access`, `deploy` or `site_create`.",
         examples=["content_access"],
     )
     result: str | None = Field(
         default=None,
-        description="Exacte uitkomst: `allowed`, `refused` of `login_redirect`.",
+        description="Exact outcome: `allowed`, `refused` or `login_redirect`.",
         examples=["refused"],
     )
     reason_code: str | None = Field(
         default=None,
-        description="Exacte redencode achter de uitkomst, bijvoorbeeld `UNKNOWN_SITE`.",
+        description="Exact reason code behind the outcome, for example `UNKNOWN_SITE`.",
         examples=["UNKNOWN_SITE"],
     )
     group: str | None = Field(
-        default=None, description="Slug van de groep waar de regel over gaat.", examples=["aurora"]
+        default=None, description="Slug of the group the row is about.", examples=["aurora"]
     )
     site: str | None = Field(
-        default=None, description="Slug van de site waar de regel over gaat.", examples=["docs"]
+        default=None, description="Slug of the site the row is about.", examples=["docs"]
     )
     actor_pseudonym: str | None = Field(
         default=None,
         description=(
-            "Pseudoniem van één actor, 64 hexadecimale tekens. Haal het op met "
-            "`POST /platform/audit/actor-pseudonym`. Een e-mailadres hoort hier niet: een queryparameter "
-            "belandt in proxylogs."
+            "Pseudonym of one actor, 64 hexadecimal characters. Fetch it with "
+            "`POST /platform/audit/actor-pseudonym`. An e-mail address does not belong here: a query "
+            "parameter ends up in proxy logs."
         ),
     )
 
 
 class AuditEntryOut(ApiModel):
-    """Eén regel uit het auditlog: een handeling, wie hem deed en hoe hij afliep."""
+    """One row of the audit log: an action, who did it and how it went."""
 
-    id: uuid.UUID = Field(description="Id van de auditregel; ook de tweede sorteersleutel achter `occurredAt`.")
+    id: uuid.UUID = Field(description="ID of the audit row; also the second sort key after `occurredAt`.")
     occurred_at: str | None = Field(
         default=None,
-        description="Tijdstip van de handeling.",
+        description="Time of the action.",
         json_schema_extra=_timestamp_schema(),
     )
     actor_kind: ActorKind = Field(
         description=(
-            "Soort actor: `member` (een ingelogd lid, ook via de CLI), `ci` (een CI-workflow met een ID-token), "
-            "`system` (de applicatie zelf) "
-            "of `anonymous` (een bezoeker zonder sessie)."
+            "Kind of actor: `member` (a signed-in member, including via the CLI), `ci` (a CI workflow with an ID "
+            "token), "
+            "`system` (the application itself) "
+            "or `anonymous` (a visitor without a session)."
         )
     )
     actor_pseudonym: str | None = Field(
         default=None,
         description=(
-            "Pseudoniem van de actor: HMAC-SHA256 van zijn identifier onder de audit-pepper. Gelijke "
-            "pseudoniemen betekenen dezelfde actor, zolang de pepper niet gewisseld is. `null` bij "
-            "`system` en `anonymous`."
+            "Pseudonym of the actor: HMAC-SHA256 of their identifier under the audit pepper. Equal "
+            "pseudonyms mean the same actor, as long as the pepper has not been changed. `null` for "
+            "`system` and `anonymous`."
         ),
     )
     action: str = Field(
-        description="Wat er gebeurde, bijvoorbeeld `content_access` of `site_create`.",
+        description="What happened, for example `content_access` or `site_create`.",
         examples=["content_access"],
     )
     result: str = Field(
-        description="Hoe het afliep: `allowed`, `refused` of `login_redirect`.", examples=["refused"]
+        description="How it went: `allowed`, `refused` or `login_redirect`.", examples=["refused"]
     )
     reason_code: str | None = Field(
         default=None,
-        description="Reden achter de uitkomst, bijvoorbeeld `UNKNOWN_SITE`.",
+        description="Reason behind the outcome, for example `UNKNOWN_SITE`.",
         examples=["UNKNOWN_SITE"],
     )
     refs: dict[str, Any] | None = Field(
         default=None,
-        description="Waar de handeling over ging: sleutels als `group`, `site`, `preview` en `path`.",
+        description="What the action was about: keys such as `group`, `site`, `preview` and `path`.",
         examples=[{"group": "aurora", "site": "docs"}],
     )
     ip_truncated: str | None = Field(
         default=None,
-        description="Netwerk van de bezoeker, afgeknot op /24 (IPv4) of /48 (IPv6); nooit het hele adres.",
+        description="Network of the visitor, truncated to /24 (IPv4) or /48 (IPv6); never the whole address.",
         examples=["203.0.113.0/24"],
     )
 
 
 class AuditPage(ApiModel):
-    """Eén pagina uit het auditlog, nieuwste regel eerst."""
+    """One page of the audit log, newest row first."""
 
-    entries: list[AuditEntryOut] = Field(description="De regels van deze pagina, nieuwste eerst.")
+    entries: list[AuditEntryOut] = Field(description="The rows of this page, newest first.")
     next_cursor: str | None = Field(
         default=None,
         description=(
-            "Ondoorzichtige verwijzing naar de volgende pagina; geef hem ongewijzigd terug als `cursor`. "
-            "`null` betekent dat dit de laatste pagina was."
+            "Opaque reference to the next page; pass it back unchanged as `cursor`. "
+            "`null` means this was the last page."
         ),
     )
 
 
 class ReasonField(ApiModel):
-    """Verplichte motivatie bij het herleiden van een pseudoniem of IP-adres (spec §12): komt ongewijzigd
-    in de auditrij van die herleiding te staan (zichtbaar voor elke platformbeheerder die het auditlog
-    leest), en telt mee voor de dagelijkse limiet op zulke herleidingen."""
+    """Mandatory justification when re-identifying a pseudonym or IP address (spec §12): ends up unchanged
+    in the audit row of that re-identification (visible to every platform administrator who reads the
+    audit log), and counts towards the daily limit on such re-identifications."""
 
     reason: str = Field(
         description=(
-            f"Waarom deze herleiding nodig is, {REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens. Noem "
-            "een zaak- of ticketnummer, geen e-mailadres of andere persoonsgegevens: dit veld komt "
-            "leesbaar in het auditlog te staan, voor elke platformbeheerder."
+            f"Why this re-identification is needed, {REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters. Give "
+            "a case or ticket number, not an e-mail address or other personal data: this field ends up "
+            "readable in the audit log, for every platform administrator."
         ),
         examples=["onderzoek naar melding 2026-091"],
     )
@@ -1393,17 +1408,17 @@ class ReasonField(ApiModel):
         normalised = value.strip()
         if not (REASON_MIN_LENGTH <= len(normalised) <= REASON_MAX_LENGTH):
             raise ValueError(
-                f"reason moet, na spaties strippen, {REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens zijn"
+                f"reason must be {REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters after stripping whitespace"
             )
         if _has_forbidden_characters(normalised):
-            raise ValueError("reason mag geen stuur- of opmaaktekens bevatten")
+            raise ValueError("reason must not contain control or formatting characters")
         if "@" in normalised:
-            raise ValueError("noem een zaak- of ticketnummer in reason, geen e-mailadres")
+            raise ValueError("give a case or ticket number in reason, not an email address")
         return normalised
 
 
 class ActorLookup(ReasonField):
-    """De identifier van een actor, om zijn auditpseudoniem mee op te zoeken."""
+    """The identifier of an actor, to look up their audit pseudonym with."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -1413,33 +1428,33 @@ class ActorLookup(ReasonField):
 
     identifier: str = Field(
         description=(
-            "E-mailadres of SSO-subject van een lid of content-viewer, of een gekoppelde repository als "
-            "`eigenaar/repo`, `github.com/eigenaar/repo` of `https://code.overheid.nl/eigenaar/repo`. "
-            "Een e-mailadres wordt eerst naar het SSO-subject van dat lid of die viewer vertaald, want "
-            "daarop is geaudit."
+            "E-mail address or SSO subject of a member or content viewer, or a linked repository as "
+            "`owner/repo`, `github.com/owner/repo` or `https://code.overheid.nl/owner/repo`. "
+            "An e-mail address is first translated to the SSO subject of that member or viewer, because "
+            "that is what is audited."
         ),
         examples=["lid@example.nl"],
     )
 
 
 class ActorPseudonymOut(ApiModel):
-    """Het auditpseudoniem dat bij een identifier hoort."""
+    """The audit pseudonym that belongs to an identifier."""
 
     actor_pseudonym: str = Field(
-        description="Waarde om als `actorPseudonym` mee te filteren op `GET /platform/audit`."
+        description="Value to use as `actorPseudonym` filter on `GET /platform/audit`."
     )
     resolved_as: Literal["member", "content_viewer", "ci", "unknown"] = Field(
         description=(
-            "Waar de identifier bij hoorde: `member` (vertaald naar zijn SSO-subject), `content_viewer` "
-            "(een SSO-viewer van afgeschermde content, gezien in de laatste 90 dagen), `ci` "
-            "(een repository die aan een site gekoppeld is) of `unknown` (letterlijk gepseudonimiseerd, alleen bij een "
-            "niet-e-mailadres: een e-mailadres dat nergens bij hoort geeft een 404)."
+            "What the identifier belonged to: `member` (translated to their SSO subject), `content_viewer` "
+            "(an SSO viewer of protected content, seen in the last 90 days), `ci` "
+            "(a repository linked to a site) or `unknown` (pseudonymised as given, only for an "
+            "identifier that is not an e-mail address: an e-mail address that belongs to nothing gives a 404)."
         )
     )
 
 
 class ActorIdentityLookup(ReasonField):
-    """Een auditpseudoniem, om de actor erachter mee op te zoeken."""
+    """An audit pseudonym, to look up the actor behind it."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -1450,61 +1465,61 @@ class ActorIdentityLookup(ReasonField):
     )
 
     actor_pseudonym: str = Field(
-        description=f"Het pseudoniem uit het auditlog: {AUDIT_PSEUDONYM_LENGTH} hexadecimale tekens."
+        description=f"The pseudonym from the audit log: {AUDIT_PSEUDONYM_LENGTH} hexadecimal characters."
     )
 
 
 class ActorIdentityOut(ApiModel):
-    """De actor achter een auditpseudoniem."""
+    """The actor behind an audit pseudonym."""
 
     kind: Literal["member", "content_viewer", "ci"] = Field(
-        description="Of het pseudoniem bij een lid, een content-viewer of een CI-repository hoort."
+        description="Whether the pseudonym belongs to a member, a content viewer or a CI repository."
     )
-    member_id: uuid.UUID | None = Field(default=None, description="Interne id van het lid, bij kind `member`.")
+    member_id: uuid.UUID | None = Field(default=None, description="Internal ID of the member, for kind `member`.")
     email: str | None = Field(
         default=None,
-        description="E-mailadres, bij kind `member` of `content_viewer`; `null` als er geen bekend is.",
+        description="E-mail address, for kind `member` or `content_viewer`; `null` if none is known.",
     )
     email_verified: bool | None = Field(
         default=None,
         description=(
-            "Of `email` een geverifieerde claim van de identity provider was, bij kind `content_viewer`. "
-            "De voorwaartse zoekslag (`actor-pseudonym`) matcht alleen op een geverifieerd e-mailadres."
+            "Whether `email` was a verified claim of the identity provider, for kind `content_viewer`. "
+            "The forward lookup (`actor-pseudonym`) only matches on a verified e-mail address."
         ),
     )
     name: str | None = Field(
         default=None,
-        description="Weergavenaam van het lid, bij kind `member`; leeg als de identity provider die niet stuurt.",
+        description="Display name of the member, for kind `member`; empty if the identity provider does not send it.",
     )
-    member_status: MemberStatus | None = Field(default=None, description="Status van het lid, bij kind `member`.")
+    member_status: MemberStatus | None = Field(default=None, description="Status of the member, for kind `member`.")
     last_seen_at: str | None = Field(
         default=None,
-        description="Laatste keer inloggen op de content-host, bij kind `content_viewer`.",
+        description="Last sign-in on the content host, for kind `content_viewer`.",
         json_schema_extra=_timestamp_schema(),
     )
     provider: Literal["github", "forgejo"] | None = Field(
-        default=None, description="CI-provider van de repository, bij kind `ci`."
+        default=None, description="CI provider of the repository, for kind `ci`."
     )
     host: str | None = Field(
         default=None,
-        description="Basis-URL van de provider, bij kind `ci`.",
+        description="Base URL of the provider, for kind `ci`.",
         examples=["https://github.com"],
     )
     repository: str | None = Field(
-        default=None, description="De repository als `eigenaar/repo`, bij kind `ci`.", examples=["minbzk/website"]
+        default=None, description="The repository as `owner/repo`, for kind `ci`.", examples=["minbzk/website"]
     )
     sites: list[str] | None = Field(
         default=None,
         description=(
-            "De sites waaraan deze repository nu gekoppeld is, als `groep/site`, bij kind `ci`. Een "
-            "ontkoppelde repository is niet meer te herleiden."
+            "The sites to which this repository is currently linked, as `group/site`, for kind `ci`. An "
+            "unlinked repository can no longer be traced."
         ),
         examples=[["aurora/docs"]],
     )
 
 
 class IpRevealBody(ReasonField):
-    """Motivatie om het volledige IP-adres bij één auditregel te ontsleutelen."""
+    """Justification for decrypting the full IP address of one audit row."""
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"reason": "onderzoek naar melding 2026-091"}]}
@@ -1512,9 +1527,9 @@ class IpRevealBody(ReasonField):
 
 
 class IpRevealOut(ApiModel):
-    """Het volledige IP-adres achter één auditregel."""
+    """The full IP address behind one audit row."""
 
-    ip: str = Field(description="Het volledige IP-adres zoals opgeslagen bij deze auditregel.")
+    ip: str = Field(description="The full IP address as stored with this audit row.")
 
 
 # -- Serialization ----------------------------------------------------------
@@ -2065,7 +2080,7 @@ async def _my_group_roles(db: AsyncSession, member: Member) -> list[MyGroupRole]
 
 
 async def _my_site_roles(db: AsyncSession, member: Member) -> list[MySiteRole]:
-    """Only the sites with a site role of their own; everywhere else the group role stands on its own."""
+    """Only the sites with a direct site role; everywhere else the group role stands on its own."""
     rows = await db.execute(
         select(Group.slug, Site.slug, SiteMember.role, GroupMember.role)
         .select_from(SiteMember)
@@ -2136,7 +2151,7 @@ class IdentifierAmbiguousError(Exception):
     def __init__(self, matches: int, *, via: Literal["email", "name"] = "email") -> None:
         self.matches = matches
         self.via = via
-        super().__init__(f"{matches} verschillende subjecten voor deze identifier")
+        super().__init__(f"{matches} different subjects for this identifier")
 
 
 async def _find_member_by_identifier(db: AsyncSession, identifier: str) -> Member | None:
@@ -2644,39 +2659,41 @@ def _access_refs(base: AccessBase, keys: bool, invitees: bool) -> dict:
 # -- Router -----------------------------------------------------------------
 
 
-_ERROR_REPOSITORY_NOT_SET = {404: "Aan deze site is geen repository gekoppeld (`REPOSITORY_NOT_SET`)."}
+_ERROR_REPOSITORY_NOT_SET = {404: "No repository is linked to this site (`REPOSITORY_NOT_SET`)."}
 _ERROR_APPROVAL = {
     401: (
-        "De beheersessie is ouder dan een kwartier (`SESSION_NOT_FRESH`): log opnieuw in en probeer "
-        "het nog eens."
+        "The admin session is more than fifteen minutes old (`SESSION_NOT_FRESH`): sign in again and try "
+        "again."
     ),
-    404: "De code is onbekend, verlopen of al afgehandeld (`USER_CODE_UNKNOWN`).",
-    429: "Te veel pogingen door dit lid in korte tijd (`TOO_MANY_ATTEMPTS`).",
+    404: "The code is unknown, expired or already handled (`USER_CODE_UNKNOWN`).",
+    429: "Too many attempts by this member in a short time (`TOO_MANY_ATTEMPTS`).",
 }
 _ERROR_CLI_TOKEN = {
     401: (
-        "Met een Bearer-header: het is geen CLI-token uit `plak login`, of het is ongeldig, ingetrokken of "
-        "verlopen (`TOKEN_INVALID`); het antwoord draagt dan `WWW-Authenticate: Bearer`."
+        "With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or "
+        "expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`."
     ),
-    403: "Met een CLI-token: het lid is niet (meer) actief (`MEMBER_NOT_ACTIVE`).",
+    403: "With a CLI token: the member is not (or no longer) active (`MEMBER_NOT_ACTIVE`).",
 }
 _ERROR_CREATIONS = {
     429: (
-        f"Dit lid heeft in het afgelopen uur al {CREATION_MAX_PER_WINDOW} groepen en sites samen aangemaakt "
-        "(`TOO_MANY_CREATIONS`); de header `Retry-After` zegt na hoeveel seconden het weer kan."
+        f"This member has already created {CREATION_MAX_PER_WINDOW} groups and sites combined in the past "
+        "hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed "
+        "again."
     )
 }
 _CREATION_RULE = (
-    "Behalve met de beheersessie en een geldige CSRF-header mag dit ook met een CLI-token uit "
-    "`plak login` (`Authorization: Bearer plakcli_...`), met precies dezelfde rolcontrole; de CSRF-header "
-    "vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een CI-ID-token mag het niet. "
-    f"Per lid geldt een limiet van {CREATION_MAX_PER_WINDOW} nieuwe groepen en sites samen per "
-    f"{CREATION_WINDOW_S // 60} minuten, via beheer en CLI samen."
+    "Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from "
+    "`plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header "
+    "is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID "
+    "token is not allowed. "
+    f"Each member has a limit of {CREATION_MAX_PER_WINDOW} new groups and sites combined per "
+    f"{CREATION_WINDOW_S // 60} minutes, across the admin interface and the CLI together."
 )
 _APPROVAL_RULE = (
-    "**Mag:** elk actief lid, met een beheersessie van hoogstens een kwartier oud en een geldige "
-    "CSRF-header. Per lid tellen opzoeken, goedkeuren en weigeren samen voor een limiet van "
-    f"{CLI_APPROVAL_MAX_ATTEMPTS} per {CLI_APPROVAL_WINDOW_S // 60} minuten."
+    "**Who can call this:** any active member, with an admin session no older than fifteen minutes and a "
+    "valid CSRF header. Per member, looking up, approving and denying together count towards a limit of "
+    f"{CLI_APPROVAL_MAX_ATTEMPTS} per {CLI_APPROVAL_WINDOW_S // 60} minutes."
 )
 
 
@@ -2688,18 +2705,19 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/me",
         tags=[TAG_SESSION],
-        summary="Het ingelogde lid",
-        response_description="Het lid achter de huidige sessie, met de content-origin.",
+        summary="The signed-in member",
+        response_description="The member behind the current session, with the content origin.",
         description=(
-            "Geeft het lid achter de huidige beheersessie, plus de origin waarop de SPA content-, preview- "
-            "en sleutel-links bouwt. Dit is meteen de goedkoopste manier om te controleren of de sessie nog "
-            "geldig is.\n\n"
-            "`groupRoles` en `siteRoles` zeggen waar dit lid iets mag, zodat de SPA weet wat ze aanbiedt. "
-            "`siteRoles` bevat alleen de sites met een eigen siterol; op elke andere site van een groep "
-            "geldt de groepsrol uit `groupRoles`. Een platformbeheerder kan beide lijsten leeg hebben: hij "
-            "beheert mensen en groepen, en geeft zichzelf voor content een zichtbare groepsrol.\n\n"
-            "**Mag:** elk actief lid met een geldige beheersessie. Een lid met status `deactivated` "
-            "krijgt 403, net als op elk ander endpoint."
+            "Returns the member behind the current admin session, plus the origin on which the SPA builds "
+            "content links, preview links and secret links. This is also the cheapest way to check whether the "
+            "session is still valid.\n\n"
+            "`groupRoles` and `siteRoles` say where this member is allowed to do something, so the SPA knows "
+            "what to offer. `siteRoles` only contains the sites with a direct site role; on every other "
+            "site of a group the group role from `groupRoles` applies. A platform administrator can have both "
+            "lists empty: they manage people and groups, and give themselves a group role to make content "
+            "visible to them.\n\n"
+            "**Who can call this:** any active member with a valid admin session. A member with status "
+            "`deactivated` gets 403, as on every other endpoint."
         ),
         responses=_errors(),
     )
@@ -2718,17 +2736,17 @@ def make_admin_router() -> APIRouter:
         "/me/language",
         status_code=204,
         tags=[TAG_SESSION],
-        summary="Mijn taal instellen",
+        summary="Set my language",
         description=(
-            "Legt vast in welke taal dit lid het beheer wil lezen: `nl`, `en`, of `null` om de taal "
-            "weer aan de browser over te laten. De keuze staat op het account, niet op het apparaat, "
-            "dus hij geldt overal waar dit lid inlogt.\n\n"
-            "Wat de SPA erna doet is de taal meesturen in `Accept-Language`, zodat ook een "
-            "problem+json-melding in die taal terugkomt.\n\n"
-            "**Mag:** elk actief lid, voor zichzelf, met een geldige CSRF-header."
+            "Records the language in which this member wants to read the admin interface: `nl`, `en`, or "
+            "`null` to leave the language to the browser again. The choice is stored on the account, not on "
+            "the device, so it applies everywhere this member signs in.\n\n"
+            "The SPA then sends this language in `Accept-Language`, so problem+json messages "
+            "come back in it too.\n\n"
+            "**Who can call this:** any active member, for themselves, with a valid CSRF header."
         ),
-        responses=_deleted("De taalkeuze is vastgelegd.")
-        | _errors(_ERROR_CSRF, {422: "`language` is geen ondersteunde taal en niet `null`."}),
+        responses=_deleted("The language choice has been recorded.")
+        | _errors(_ERROR_CSRF, {422: "`language` is not a supported language and not `null`."}),
     )
     async def set_my_language(
         request: Request, body: LanguageUpdate, _csrf: Csrf, member: ActiveMember, db: Db
@@ -2751,16 +2769,16 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/overview",
         tags=[TAG_OVERVIEW],
-        summary="Alle zichtbare groepen met hun sites",
-        response_description="De groepen die dit lid mag zien, elk met hun sites.",
+        summary="All visible groups with their sites",
+        response_description="The groups this member is allowed to see, each with its sites.",
         description=(
-            "Het startscherm van de beheer-SPA: per groep de sites met hun zichtbaarheid, of er iets live "
-            "staat, wanneer er voor het laatst is gedeployd en hoeveel previews er openstaan.\n\n"
-            "**Mag:** elk actief lid. Het lid ziet de groepen waar het een groepsrol in heeft, elk met al "
-            "hun sites, plus de groepen "
-            "waar het alleen een siterol heeft: daarvan verschijnen uitsluitend die sites, want een "
-            "siterol geeft niets op groepsniveau. Een platformbeheerder ziet net zo alleen zijn eigen "
-            "groepen. Wie nergens een rol heeft krijgt een lege lijst, geen 403."
+            "The home screen of the admin SPA: per group the sites with their access, whether anything "
+            "is live, when something was last deployed and how many previews are open.\n\n"
+            "**Who can call this:** any active member. The member sees the groups in which they have a group role, "
+            "each with all its sites, plus the groups "
+            "in which they only have a site role: of those only the sites in question appear, because a "
+            "site role grants nothing at group level. A platform administrator likewise only sees their own "
+            "groups. Anyone without a role anywhere gets an empty list, not a 403."
         ),
         responses=_errors(),
     )
@@ -2779,25 +2797,27 @@ def make_admin_router() -> APIRouter:
         "/groups",
         status_code=201,
         tags=[TAG_GROUPS],
-        summary="Groep aanmaken",
-        response_description="De aangemaakte groep.",
+        summary="Create a group",
+        response_description="The created group.",
         description=(
-            "Maakt een groep aan en maakt de aanmaker meteen groepsbeheerder (`admin`), zodat hij er sites "
-            "in kan zetten. De nieuwe groep begint met basis `site_team` en geen uitzonderingen, tenzij "
-            "`defaultAccess` iets anders vraagt; dat is daarna te wijzigen. Omdat de aanmaker groepsbeheerder "
-            "wordt, is de standaardtoegang meteen kiezen niets meer dan hij daarna zelf ook mag.\n\n"
-            "**Mag:** ieder actief lid, met een geldige CSRF-header. Een groep aanmaken is geen "
-            "voorbehouden handeling: wie iets wil publiceren moet daar zelf een plek voor kunnen maken. "
+            "Creates a group and makes the creator group admin (`admin`) right away, so they can put sites "
+            "in it. The new group starts with base `site_team` and no exceptions, unless "
+            "`defaultAccess` asks for something else; that can be changed afterwards. Because the creator "
+            "becomes group admin, choosing the default access right away is no more than they may do "
+            "afterwards anyway.\n\n"
+            "**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a "
+            "reserved action: anyone who wants to publish something must be able to make a place for it "
+            "themselves. "
             + _CREATION_RULE
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_CLI_TOKEN,
             _ERROR_CREATIONS,
-            {409: "Er bestaat al een groep met deze slug (`SLUG_EXISTS`)."},
+            {409: "A group with this slug already exists (`SLUG_EXISTS`)."},
             {
                 422: (
-                    "De slug is ongeldig of gereserveerd (`SLUG_INVALID`), of de naam is leeg "
+                    "The slug is invalid or reserved (`SLUG_INVALID`), or the name is empty "
                     "(`FIELD_EMPTY`)."
                 )
             },
@@ -2839,11 +2859,11 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/groups/{group_slug}",
         tags=[TAG_GROUPS],
-        summary="Groep met sites en leden",
-        response_description="De groep met haar sites en leden.",
+        summary="Group with sites and members",
+        response_description="The group with its sites and members.",
         description=(
-            "Alles wat de groepspagina van de SPA in één keer nodig heeft.\n\n"
-            "**Mag:** groepsrol `reader` of ruimer, of een platformbeheerder."
+            "Everything the group page of the SPA needs in one go.\n\n"
+            "**Who can call this:** group role `reader` or higher, or a platform administrator."
         ),
         responses=_errors(_ERROR_GROUP_ROLE, _ERROR_GROUP),
     )
@@ -2860,15 +2880,15 @@ def make_admin_router() -> APIRouter:
         "/groups/{group_slug}",
         status_code=204,
         tags=[TAG_GROUPS],
-        summary="Groep verwijderen",
+        summary="Delete a group",
         description=(
-            "Verwijdert de groep met al haar sites, en per site alles wat `DELETE /sites/{group}/{site}` "
-            "ook weghaalt: versies, previews, genodigden, geheime links, de gekoppelde repository en de "
-            "uitgepakte bestanden op schijf. Onomkeerbaar; elke URL van de groep geeft daarna 404.\n\n"
-            "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Een platformbeheerder die geen "
-            "groepsrol heeft mag het niet."
+            "Deletes the group with all its sites, and per site everything `DELETE /sites/{group}/{site}` "
+            "also removes: versions, previews, invitees, secret links, the linked repository and the "
+            "unpacked files on disk. Irreversible; every URL of the group returns 404 afterwards.\n\n"
+            "**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without "
+            "a group role is not allowed."
         ),
-        responses=_deleted("De groep en al haar sites zijn verwijderd.")
+        responses=_deleted("The group and all its sites have been deleted.")
         | _errors(_ERROR_CSRF, _ERROR_GROUP_ROLE, _ERROR_GROUP),
     )
     async def delete_group(
@@ -2896,14 +2916,14 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/groups/{group_slug}/default-access",
         tags=[TAG_GROUPS],
-        summary="Standaardtoegang van een groep zetten",
-        response_description="De groep met haar nieuwe standaardtoegang.",
+        summary="Set the default access of a group",
+        response_description="The group with its new default access.",
         description=(
-            "Zet de toegang die sites meekrijgen die hierna in deze groep worden aangemaakt: de "
-            "basis en de twee uitzonderingen in één keer. Bestaande sites veranderen niet mee; "
-            "die zet je per site.\n\n"
-            "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Dit is beleid over content, dus een "
-            "platformbeheerder die geen groepsrol heeft mag het niet."
+            "Sets the access that new sites in this group start with: the "
+            "base and the two exceptions in one go. Existing sites are not affected; "
+            "you set those per site.\n\n"
+            "**Who can call this:** group role `admin`, with a valid CSRF header. This is policy about content, so "
+            "a platform administrator without a group role is not allowed."
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_GROUP_ROLE, _ERROR_GROUP),
     )
@@ -2934,15 +2954,16 @@ def make_admin_router() -> APIRouter:
         "/groups/{group_slug}/sites",
         status_code=201,
         tags=[TAG_SITES],
-        summary="Site aanmaken",
-        response_description="Het aangemaakte site.",
+        summary="Create a site",
+        response_description="The created site.",
         description=(
-            "Maakt een site binnen een groep. De site krijgt de standaardzichtbaarheid van de groep, of wat "
-            "`access` daarvan afwijkend vraagt, en staat op `/{groupSlug}/{siteSlug}/` op de content-origin, "
-            "zodra er iets naartoe is gedeployd.\n\n"
-            "**Mag:** groepsrol `editor` of ruimer, met een geldige CSRF-header; de maker wordt `admin` van "
-            "de site die hij aanmaakt, en mag de toegang dus meteen kiezen: dat is niets meer dan hij daarna "
-            "zelf ook mag. Een platformbeheerder die geen groepsrol heeft, mag dit niet. " + _CREATION_RULE
+            "Creates a site within a group. The site gets the default access of the group, or whatever "
+            "`access` asks for instead, and is served at `/{groupSlug}/{siteSlug}/` on the content origin, "
+            "as soon as something has been deployed to it.\n\n"
+            "**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes "
+            "`admin` of the site they create, and may therefore choose the access right away: that is no "
+            "more than they may do afterwards anyway. A platform administrator without a group role is not "
+            "allowed. " + _CREATION_RULE
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -2950,8 +2971,8 @@ def make_admin_router() -> APIRouter:
             _ERROR_CREATIONS,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
-            {409: "Er bestaat al een site met deze slug in deze groep (`SLUG_EXISTS`)."},
-            {422: "De slug is ongeldig (`SLUG_INVALID`), of de titel is leeg (`FIELD_EMPTY`)."},
+            {409: "A site with this slug already exists in this group (`SLUG_EXISTS`)."},
+            {422: "The slug is invalid (`SLUG_INVALID`), or the title is empty (`FIELD_EMPTY`)."},
         ),
     )
     async def create_site(
@@ -3003,13 +3024,13 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}",
         status_code=204,
         tags=[TAG_SITES],
-        summary="Site verwijderen",
+        summary="Delete a site",
         description=(
-            "Verwijdert de site met alles eraan: versies, previews, genodigden, geheime links, "
-            "de gekoppelde repository en de uitgepakte bestanden op schijf. Onomkeerbaar; de URL geeft daarna 404.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Deletes the site with everything attached to it: versions, previews, invitees, secret links, "
+            "the linked repository and the unpacked files on disk. Irreversible; the URL returns 404 afterwards.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
-        responses=_deleted("De site en alle content zijn verwijderd.")
+        responses=_deleted("The site and all its content have been deleted.")
         | _errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE),
     )
     async def delete_site(
@@ -3030,15 +3051,15 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/access",
         tags=[TAG_SITES],
-        summary="Toegang tot een site zetten",
-        response_description="De site met zijn nieuwe toegang.",
+        summary="Set the access to a site",
+        response_description="The site with its new access.",
         description=(
-            "Bepaalt wie de live content van deze site mag zien: de basis en de twee "
-            "uitzonderingen in één keer, want ze horen bij elkaar en een bezoeker komt binnen "
-            "zodra een van de drie hem binnenlaat. De wijziging geldt onmiddellijk voor elke "
-            "volgende aanvraag van de content. Previews met een eigen `accessOverride` volgen "
-            "deze waarde niet.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Determines who may see the live content of this site: the base and the two "
+            "exceptions in one go, because they belong together and a visitor gets in "
+            "as soon as one of the three lets them in. The change applies immediately to every "
+            "subsequent request for the content. Previews with their own `accessOverride` do not follow "
+            "this value.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -3073,17 +3094,17 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/external-sources",
         tags=[TAG_SITES],
-        summary="Externe bronnen toestaan of blokkeren",
-        response_description="De site met zijn nieuwe instelling.",
+        summary="Allow or block external sources",
+        response_description="The site with its new setting.",
         description=(
-            "Bepaalt of de content van deze site scripts en stijlen mag laden van cdnjs, jsDelivr "
-            "en unpkg, en lettertypen van Google Fonts. Staat standaard aan; uitzetten is een "
-            "extra beperking en de veiligere keuze voor een vertrouwelijke pagina. De wijziging "
-            "geldt onmiddellijk voor elke volgende aanvraag van de content, voor de live site, "
-            "previews en versieweergaven. In beide standen geblokkeerd: gegevens ophalen bij of "
-            "sturen naar andere hosts, afbeeldingen van elders, een iframe, en een formulier dat "
-            "elders post.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Determines whether the content of this site may load scripts and styles from cdnjs, jsDelivr "
+            "and unpkg, and fonts from Google Fonts. On by default; turning it off is an "
+            "extra restriction and the safer choice for a confidential page. The change "
+            "applies immediately to every subsequent request for the content, for the live site, "
+            "previews and version views. Blocked in both modes: fetching data from or "
+            "sending data to other hosts, images from elsewhere, an iframe, and a form that "
+            "posts elsewhere.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -3110,19 +3131,18 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/sandbox",
         tags=[TAG_SITES],
-        summary="Afscherming van andere sites aan- of uitzetten",
-        response_description="De site met zijn nieuwe instelling.",
+        summary="Turn isolation from other sites on or off",
+        response_description="The site with its new setting.",
         description=(
-            "Alle sites delen een hostnaam. Staat deze afscherming aan, de standaard, dan wordt "
-            "de content geserveerd met een CSP-sandbox zonder `allow-same-origin`: de pagina "
-            "krijgt een eigen, lege herkomst en kan geen enkele andere site op die hostnaam "
-            "lezen, krijgt geen cookies mee en kan niets in de browser bewaren. Eigen stijlen, "
-            "scripts, afbeeldingen en lettertypen laden gewoon. Uitzetten is nodig voor een site "
-            "die `localStorage`, `sessionStorage` of een cookie gebruikt, en zet die site terug "
-            "op de herkomst die hij met alle andere sites deelt. De wijziging geldt onmiddellijk "
-            "voor elke volgende aanvraag van de content, voor de live site, previews en "
-            "versieweergaven.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "All sites share one hostname. When this isolation is on, the default, the content is served "
+            "with a CSP sandbox without `allow-same-origin`: the page gets an opaque origin and "
+            "cannot read any other site on that hostname, receives no cookies and cannot store "
+            "anything in the browser. Its own styles, scripts, images and fonts load as usual. "
+            "Turning it off is needed for a site that uses `localStorage`, `sessionStorage` or a cookie, "
+            "and puts that site back on the origin it shares with all other sites. The change "
+            "applies immediately to every subsequent request for the content, for the live site, "
+            "previews and version views.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -3149,15 +3169,15 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/live-versions-kept",
         tags=[TAG_SITES],
-        summary="Aantal bewaarde vorige versies zetten",
-        response_description="De site met zijn nieuwe instelling.",
+        summary="Set the number of previous versions kept",
+        response_description="The site with its new setting.",
         description=(
-            "Bepaalt hoeveel vorige live-versies de nachtelijke opschoning van deze site laat staan, "
-            "naast de huidige live-versie. Oudere live-versies gaan weg, rij en bestanden, en daar "
-            "kan daarna niet meer naar teruggerold worden. `0` bewaart alle live-versies, `null` "
-            "zet de site terug op de standaard van het platform. De wijziging geldt vanaf de "
-            "volgende nachtelijke opschoning.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Determines how many previous live versions the nightly cleanup of this site leaves in place, "
+            "in addition to the current live version. Older live versions are removed, row and files, and "
+            "cannot be rolled back to afterwards. `0` keeps all live versions, `null` "
+            "puts the site back on the platform default. The change takes effect at the "
+            "next nightly cleanup.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -3165,8 +3185,8 @@ def make_admin_router() -> APIRouter:
             _ERROR_SITE,
             {
                 422: (
-                    "Geen geheel getal van 0 of meer (`LIVE_VERSIONS_KEPT_INVALID`), of een getal "
-                    "dat te groot is om op te slaan (`LIVE_VERSIONS_KEPT_TOO_LARGE`)."
+                    "Not an integer of 0 or more (`LIVE_VERSIONS_KEPT_INVALID`), or a number "
+                    "that is too large to store (`LIVE_VERSIONS_KEPT_TOO_LARGE`)."
                 )
             },
         ),
@@ -3209,13 +3229,13 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/invitees",
         tags=[TAG_INVITEES],
-        summary="Genodigden van een site",
-        response_description="De genodigden, op identifier gesorteerd.",
+        summary="Invitees of a site",
+        response_description="The invitees, sorted by identifier.",
         description=(
-            "De adressen die deze site mogen zien zolang de zichtbaarheid `invitees` is. Bij een andere "
-            "zichtbaarheid blijft de lijst bestaan maar doet hij niets.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer. Deze lijst draagt e-mailadressen van externen "
-            "en ligt daarom hoger dan `reader`."
+            "The addresses that may see this site while the `invitees` exception is on. While it is off, "
+            "the list is kept but has no effect.\n\n"
+            "**Who can call this:** effective site role `editor` or higher. This list holds e-mail addresses of "
+            "external people and therefore sits above `reader`."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -3230,19 +3250,19 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/invitees",
         status_code=201,
         tags=[TAG_INVITEES],
-        summary="Genodigde toevoegen",
-        response_description="De toegevoegde genodigde.",
+        summary="Add an invitee",
+        response_description="The added invitee.",
         description=(
-            "Zet een adres op de genodigdenlijst. De identifier wordt naar kleine letters genormaliseerd; "
-            "de genodigde hoeft nog geen account te hebben, maar moet wel via SSO kunnen inloggen.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Puts an address on the invitee list. The identifier is normalised to lowercase; "
+            "the invitee does not need to have an account yet, but must be able to sign in through SSO.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             _ERROR_SITE,
-            {409: "Dit adres staat al op de genodigdenlijst (`INVITEE_EXISTS`)."},
-            {422: "De identifier is leeg (`FIELD_EMPTY`)."},
+            {409: "This address is already on the invitee list (`INVITEE_EXISTS`)."},
+            {422: "The identifier is empty (`FIELD_EMPTY`)."},
         ),
     )
     async def add_invitee(
@@ -3274,19 +3294,19 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/invitees/{invitee_id}",
         status_code=204,
         tags=[TAG_INVITEES],
-        summary="Genodigde verwijderen",
+        summary="Remove an invitee",
         description=(
-            "Haalt een adres van de genodigdenlijst. Een id dat niet bij deze site hoort, levert 404. In "
-            "het pad staat het `id` uit de genodigdenlijst, niet het adres zelf: een adres in een URL "
-            "belandt in de logregels van elke proxy ertussen.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer, met een geldige CSRF-header."
+            "Removes an address from the invitee list. An ID that does not belong to this site returns 404. The "
+            "path takes the invitee's `id` from the list, not the address itself: an address in a URL "
+            "ends up in the log lines of every proxy in between.\n\n"
+            "**Who can call this:** effective site role `editor` or higher, with a valid CSRF header."
         ),
-        responses=_deleted("De genodigde is van de lijst.")
+        responses=_deleted("The invitee has been removed from the list.")
         | _errors(
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             _ERROR_SITE,
-            {404: "Deze genodigde staat niet op de lijst van deze site (`UNKNOWN_INVITEE`)."},
+            {404: "This invitee is not on the list of this site (`UNKNOWN_INVITEE`)."},
         ),
     )
     async def remove_invitee(
@@ -3318,12 +3338,12 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/keys",
         tags=[TAG_KEYS],
-        summary="Geheime links van een site",
-        response_description="De geheime links, nieuwste eerst.",
+        summary="Secret links of a site",
+        response_description="The secret links, newest first.",
         description=(
-            "De geheime links van deze site, nieuwste eerst, inclusief de ingetrokken links. De geheime "
-            "waarde staat er niet bij: die is alleen bij het aanmaken te zien.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer."
+            "The secret links of this site, newest first, including the revoked links. The secret "
+            "value is not included: it can only be seen when the link is created.\n\n"
+            "**Who can call this:** effective site role `editor` or higher."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -3340,14 +3360,14 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/keys",
         status_code=201,
         tags=[TAG_KEYS],
-        summary="Geheime link aanmaken",
-        response_description="De aangemaakte sleutel, met eenmalig haar volledige waarde.",
+        summary="Create a secret link",
+        response_description="The created key, with its full value shown once.",
         description=(
-            "Maakt een geheime link waarmee de site zonder inloggen te zien is, zolang de zichtbaarheid "
-            "`key` is.\n\n"
-            "Het antwoord bevat eenmalig `value`: de volledige sleutel `<selector>.<geheim>`. Plak bewaart "
-            "alleen een hash, dus wie de waarde kwijt is, maakt een nieuwe sleutel aan.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Creates a secret link with which the site can be seen without signing in, while the `keys` exception is "
+            "on.\n\n"
+            "The response contains `value` once: the full key `<selector>.<secret>`. Plak only stores "
+            "a hash, so if you lose the value, create a new key.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -3355,8 +3375,8 @@ def make_admin_router() -> APIRouter:
             _ERROR_SITE,
             {
                 422: (
-                    "`expiresAt` is geen geldig tijdstip, ligt in het verleden (`EXPIRY_IN_PAST`) of "
-                    "verder vooruit dan toegestaan (`EXPIRY_TOO_FAR`)."
+                    "`expiresAt` is not a valid time, lies in the past (`EXPIRY_IN_PAST`) or "
+                    "further ahead than allowed (`EXPIRY_TOO_FAR`)."
                 )
             },
         ),
@@ -3388,19 +3408,19 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/keys/{selector}",
         status_code=204,
         tags=[TAG_KEYS],
-        summary="Geheime link intrekken",
+        summary="Revoke a secret link",
         description=(
-            "Zet de sleutel op `revoked`; de link werkt daarna niet meer. De sleutel blijft in de lijst "
-            "staan, zodat zichtbaar blijft dat hij bestond. Het pad gebruikt de `selector`, niet de volledige "
-            "sleutelwaarde.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer, met een geldige CSRF-header."
+            "Sets the key to `revoked`; the link no longer works afterwards. The key stays in the list, "
+            "so there is a record that it existed. The path uses the `selector`, not the full "
+            "key value.\n\n"
+            "**Who can call this:** effective site role `editor` or higher, with a valid CSRF header."
         ),
-        responses=_deleted("De sleutel is ingetrokken.")
+        responses=_deleted("The key has been revoked.")
         | _errors(
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             _ERROR_SITE,
-            {404: "Deze site heeft geen sleutel met deze selector (`UNKNOWN_KEY`)."},
+            {404: "This site has no key with this selector (`UNKNOWN_KEY`)."},
         ),
     )
     async def revoke_key(
@@ -3433,14 +3453,14 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/repository",
         tags=[TAG_CI],
-        summary="Gekoppelde repository van een site",
-        response_description="De repository waaruit CI naar deze site mag publiceren.",
+        summary="Linked repository of a site",
+        response_description="The repository from which CI may publish to this site.",
         description=(
-            "De repository waarvan GitHub- of Forgejo-workflows met een OIDC-ID-token naar deze site mogen "
-            "publiceren, zonder geheim. Een 404 `REPOSITORY_NOT_SET` betekent dat er nog niets gekoppeld "
-            "is.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer: wie publiceert, moet de workflow kunnen "
-            "inrichten."
+            "The repository from which GitHub or Forgejo workflows with an OIDC ID token may publish to "
+            "this site, without a secret. A 404 `REPOSITORY_NOT_SET` means nothing has been linked "
+            "yet.\n\n"
+            "**Who can call this:** effective site role `editor` or higher: whoever publishes must be able to "
+            "set up the workflow."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE, _ERROR_REPOSITORY_NOT_SET),
     )
@@ -3456,22 +3476,22 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/repository",
         tags=[TAG_CI],
-        summary="Repository aan een site koppelen",
-        response_description="De gekoppelde repository, met de ids die de provider teruggaf.",
+        summary="Link a repository to a site",
+        response_description="The linked repository, with the IDs the provider returned.",
         description=(
-            "Koppelt een GitHub- of Forgejo-repository aan deze site, of vervangt de koppeling. Plak zoekt de "
-            "repository op bij de provider (`GET /repos/{owner}/{repo}`) en bewaart haar numerieke ids: "
-            "die blijven gelijk bij een hernoeming, en een nieuwe repository onder dezelfde naam krijgt ze "
-            "niet. Een CI-ID-token uit deze repository mag daarna publiceren: een preview (en het opruimen "
-            "ervan) vanaf elke branch, live alleen vanuit `push`, `workflow_dispatch` of `schedule` en, als "
-            "die is ingesteld, alleen vanaf `liveBranch`.\n\n"
-            "Plak zoekt zonder inloggegevens, dus een privé repository vindt het niet. Geef dan zelf "
-            "`repositoryId` en `ownerId` mee (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): Plak "
-            "bewaart ze zonder opzoeking als die faalt. Een verkeerd id koppelt niets anders, het weigert "
-            "alleen elke deploy. Vindt Plak de repository wel, dan moeten de ids kloppen.\n\n"
-            "Ook met het CLI-token uit `plak login` (`plak site link`), dan zonder CSRF-header. Een "
-            "CI-ID-token koppelt niets.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header of het CLI-token."
+            "Links a GitHub or Forgejo repository to this site, or replaces the link. Plak looks the "
+            "repository up at the provider (`GET /repos/{owner}/{repo}`) and stores its numeric IDs: "
+            "these stay the same when the repository is renamed, and a new repository under the same name "
+            "does not get them. A CI ID token from this repository may publish afterwards: a preview (and "
+            "its cleanup) from any branch, live only from `push`, `workflow_dispatch` or `schedule` and, if "
+            "one is set, only from `liveBranch`.\n\n"
+            "Plak does the lookup without credentials, so it cannot see a private repository. In that case pass "
+            "`repositoryId` and `ownerId` yourself (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): If the "
+            "lookup fails, Plak stores them as given. A wrong ID does not link anything else, it only causes "
+            "every deploy to be refused. If Plak does find the repository, the IDs must match.\n\n"
+            "Also allowed with the CLI token from `plak login` (`plak site link`), then without a CSRF header. "
+            "A CI ID token links nothing.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header or the CLI token."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -3480,19 +3500,19 @@ def make_admin_router() -> APIRouter:
             _ERROR_SITE,
             {
                 422: (
-                    "Eigenaar of repository is geen geldige naam (`REPOSITORY_INVALID`), de host hoort niet "
-                    "bij de provider of staat niet in de toegestane Forgejo-instanties (`HOST_NOT_ALLOWED`), de "
-                    "live-branch is geen geldige branchnaam (`LIVE_BRANCH_INVALID`), de provider kent de "
-                    "repository niet, of niet openbaar, en er zijn geen ids meegegeven (`REPOSITORY_NOT_FOUND`), "
-                    "de ids zijn niet allebei een positief geheel getal (`REPOSITORY_IDS_INVALID`), of de "
-                    "provider geeft de repository andere ids (`REPOSITORY_IDS_MISMATCH`)."
+                    "Owner or repository is not a valid name (`REPOSITORY_INVALID`), the host does not belong "
+                    "to the provider or is not among the allowed Forgejo instances (`HOST_NOT_ALLOWED`), the "
+                    "live branch is not a valid branch name (`LIVE_BRANCH_INVALID`), the provider does not know "
+                    "the repository, or it is not public, and no IDs were passed (`REPOSITORY_NOT_FOUND`), "
+                    "the IDs are not both a positive integer (`REPOSITORY_IDS_INVALID`), or the "
+                    "provider gives the repository different IDs (`REPOSITORY_IDS_MISMATCH`)."
                 )
             },
             {
                 503: (
-                    "De provider is niet bereikbaar (`CI_PROVIDER_UNREACHABLE`) of zijn limiet voor "
-                    "anonieme verzoeken is op (`CI_PROVIDER_RATE_LIMITED`), en er zijn geen ids meegegeven; "
-                    "probeer het later opnieuw."
+                    "The provider is unreachable (`CI_PROVIDER_UNREACHABLE`) or its limit for "
+                    "anonymous requests is used up (`CI_PROVIDER_RATE_LIMITED`), and no IDs were passed; "
+                    "try again later."
                 )
             },
         ),
@@ -3583,13 +3603,13 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/repository",
         status_code=204,
         tags=[TAG_CI],
-        summary="Repository ontkoppelen",
+        summary="Unlink a repository",
         description=(
-            "Haalt de koppeling weg: CI-ID-tokens uit die repository worden daarna geweigerd. Versies die "
-            "eerder vanuit CI zijn gepubliceerd blijven staan.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Removes the link: CI ID tokens from that repository are refused afterwards. Versions that "
+            "were published from CI earlier remain.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
-        responses=_deleted("De koppeling is weg.")
+        responses=_deleted("The link has been removed.")
         | _errors(_ERROR_CSRF, _ERROR_SITE_ROLE, _ERROR_SITE, _ERROR_REPOSITORY_NOT_SET),
     )
     async def delete_site_repository(
@@ -3611,12 +3631,12 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/cli/device-authorizations/lookup",
         tags=[TAG_CLI],
-        summary="Openstaande CLI-login opzoeken",
-        response_description="Wat het goedkeuringsscherm toont.",
+        summary="Look up a pending CLI login",
+        response_description="What the approval screen shows.",
         description=(
-            "Zoekt de openstaande CLI-login achter een gebruikerscode op, zodat het beheer kan laten zien "
-            "welk programma wanneer en vanaf welk netwerk wil koppelen. Een POST en geen queryparameter, "
-            "zodat de code niet in logregels belandt.\n\n" + _APPROVAL_RULE
+            "Looks up the pending CLI login behind a user code, so the admin interface can show "
+            "which program is requesting access, when and from which network. A POST and not a query parameter, "
+            "so the code does not end up in log lines.\n\n" + _APPROVAL_RULE
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_APPROVAL),
     )
@@ -3644,13 +3664,13 @@ def make_admin_router() -> APIRouter:
         "/cli/device-authorizations/approve",
         status_code=204,
         tags=[TAG_CLI],
-        summary="CLI-login goedkeuren",
+        summary="Approve a CLI login",
         description=(
-            "Keurt de CLI-login achter deze gebruikerscode goed voor het ingelogde lid. De CLI haalt daarna "
-            "zelf zijn tokens op en handelt voortaan als dit lid, met precies diens rollen. Alleen doen als "
-            "je zelf zojuist `plak login` startte.\n\n" + _APPROVAL_RULE
+            "Approves the CLI login behind this user code for the signed-in member. The CLI then fetches "
+            "its tokens itself and from now on acts as this member, with exactly their roles. Only do this if "
+            "you just started `plak login` yourself.\n\n" + _APPROVAL_RULE
         ),
-        responses=_deleted("Goedgekeurd.") | _errors(_ERROR_CSRF, _ERROR_APPROVAL),
+        responses=_deleted("Approved.") | _errors(_ERROR_CSRF, _ERROR_APPROVAL),
     )
     async def approve_device_authorization(
         request: Request, body: UserCodeBody, _csrf: Csrf, member: ActiveMember, db: Db
@@ -3671,12 +3691,12 @@ def make_admin_router() -> APIRouter:
         "/cli/device-authorizations/deny",
         status_code=204,
         tags=[TAG_CLI],
-        summary="CLI-login weigeren",
+        summary="Deny a CLI login",
         description=(
-            "Weigert de CLI-login achter deze gebruikerscode; de CLI krijgt `ACCESS_DENIED`.\n\n"
+            "Denies the CLI login behind this user code; the CLI gets `ACCESS_DENIED`.\n\n"
             + _APPROVAL_RULE
         ),
-        responses=_deleted("Geweigerd.") | _errors(_ERROR_CSRF, _ERROR_APPROVAL),
+        responses=_deleted("Denied.") | _errors(_ERROR_CSRF, _ERROR_APPROVAL),
     )
     async def deny_device_authorization(
         request: Request, body: UserCodeBody, _csrf: Csrf, member: ActiveMember, db: Db
@@ -3696,11 +3716,11 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/me/cli-sessions",
         tags=[TAG_CLI],
-        summary="Mijn gekoppelde sessies",
-        response_description="De CLI-sessies van het ingelogde lid, nieuwste eerst.",
+        summary="My linked CLI sessions",
+        response_description="The CLI sessions of the signed-in member, newest first.",
         description=(
-            "Elke `plak login` die nog loopt, nieuwste eerst. Verlopen sessies staan er niet meer bij.\n\n"
-            "**Mag:** elk actief lid, voor zijn eigen sessies."
+            "Every `plak login` that is still active, newest first. Expired sessions are no longer listed.\n\n"
+            "**Who can call this:** any active member, for their own sessions."
         ),
         responses=_errors(),
     )
@@ -3720,13 +3740,13 @@ def make_admin_router() -> APIRouter:
         "/me/cli-sessions/{session_id}",
         status_code=204,
         tags=[TAG_CLI],
-        summary="Gekoppelde sessie intrekken",
+        summary="Revoke a linked CLI session",
         description=(
-            "Trekt een CLI-sessie in; wie hem gebruikte moet daarna opnieuw `plak login` doen.\n\n"
-            "**Mag:** elk actief lid, voor zijn eigen sessies, met een geldige CSRF-header."
+            "Revokes a CLI session; whoever used it has to run `plak login` again afterwards.\n\n"
+            "**Who can call this:** any active member, for their own sessions, with a valid CSRF header."
         ),
-        responses=_deleted("De CLI-sessie is ingetrokken.")
-        | _errors(_ERROR_CSRF, {404: "Je hebt geen CLI-sessie met dit id (`CLI_SESSION_UNKNOWN`)."}),
+        responses=_deleted("The CLI session has been revoked.")
+        | _errors(_ERROR_CSRF, {404: "You have no CLI session with this ID (`CLI_SESSION_UNKNOWN`)."}),
     )
     async def revoke_my_cli_session(
         request: Request, session_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
@@ -3743,11 +3763,11 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/groups/{group_slug}/members",
         tags=[TAG_GROUP_MEMBERS],
-        summary="Leden van een groep",
-        response_description="De leden van de groep, op e-mailadres gesorteerd.",
+        summary="Members of a group",
+        response_description="The members of the group, sorted by e-mail address.",
         description=(
-            "Wie de sites van deze groep mag beheren, op e-mailadres gesorteerd, elk met zijn rol.\n\n"
-            "**Mag:** groepsrol `reader` of ruimer, of een platformbeheerder."
+            "Who may manage the sites of this group, sorted by e-mail address, each with their role.\n\n"
+            "**Who can call this:** group role `reader` or higher, or a platform administrator."
         ),
         responses=_errors(_ERROR_GROUP_ROLE, _ERROR_GROUP),
     )
@@ -3758,21 +3778,21 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/groups/{group_slug}/members/search",
         tags=[TAG_GROUP_MEMBERS],
-        summary="Iemand zoeken om aan de groep toe te voegen",
+        summary="Find someone to add to the group",
         response_description=(
-            "Hoogstens tien actieve platformleden, op naam en daarbinnen op e-mailadres gesorteerd."
+            "At most ten active platform members, sorted by name and then by e-mail address."
         ),
         description=(
-            "Zoekt in de platformleden op naam of e-mailadres, zodat je iemand kunt toevoegen zonder "
-            "zijn adres uit het hoofd te kennen. De `identifier` uit een treffer is precies wat "
-            "`POST /groups/{group_slug}/members` verwacht.\n\n"
-            "Alleen actieve leden komen terug: wie buitengesloten is, voeg je "
-            "niet toe. Het antwoord is een shortlist van hoogstens tien namen, geen uitdraai van de "
-            "hele organisatie; wie er al in de groep zit staat er wel bij, met `alreadyMember` op "
-            "`true`.\n\n"
-            "Zoeken mag precies wie ook mag toevoegen, en Plak maakt hier net zomin een account aan: "
-            "iemand verschijnt pas zodra hij zelf op het beheer heeft ingelogd.\n\n"
-            "**Mag:** groepsrol `admin`, of een platformbeheerder."
+            "Searches the platform members by name or e-mail address, so you can add someone without "
+            "knowing their address by heart. The `identifier` of a hit is exactly what "
+            "`POST /groups/{group_slug}/members` expects.\n\n"
+            "Only active members are returned: you do not add someone who has been "
+            "deactivated. The answer is a shortlist of at most ten names, not a dump of the "
+            "whole organisation; someone who is already in the group is included, with `alreadyMember` set "
+            "to `true`.\n\n"
+            "Only those who may add members may search, and Plak does not create an account here "
+            "either: someone only appears once they have signed in to the admin interface themselves.\n\n"
+            "**Who can call this:** group role `admin`, or a platform administrator."
         ),
         responses=_errors(_ERROR_GROUP_ROLE, _ERROR_GROUP, _ERROR_SEARCH),
     )
@@ -3789,23 +3809,24 @@ def make_admin_router() -> APIRouter:
         "/groups/{group_slug}/members",
         status_code=201,
         tags=[TAG_GROUP_MEMBERS],
-        summary="Lid aan een groep toevoegen",
-        response_description="Het toegevoegde groepslid.",
+        summary="Add a member to a group",
+        response_description="The added group member.",
         description=(
-            "Voegt een bestaand platformlid aan deze groep toe, gezocht op e-mailadres of SSO-subject. Het "
-            "lid moet al eens zelf op het beheer ingelogd hebben; Plak maakt hier geen account aan.\n\n"
-            "Zonder `role` wordt het lid `reader`: wie erbij komt kijkt eerst mee, en de rol die hij nodig "
-            "heeft geef je bewust.\n\n"
-            "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header."
+            "Adds an existing platform member to this group, looked up by e-mail address or SSO subject. The "
+            "member must already have signed in to the admin interface once themselves; Plak does not "
+            "create an account here.\n\n"
+            "Without `role` the member becomes `reader`: new members start with read-only access, and you "
+            "give the role they need deliberately.\n\n"
+            "**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
             _ERROR_IDENTIFIER_AMBIGUOUS,
-            {404: "Er is geen lid met deze identifier; diegene moet eerst zelf inloggen (`UNKNOWN_MEMBER`)."},
-            {409: "Dit lid zit al in de groep (`ALREADY_GROUP_MEMBER`)."},
-            {422: "De identifier is leeg (`FIELD_EMPTY`), of `role` is geen bestaande rol."},
+            {404: "There is no member with this identifier; they must sign in themselves first (`UNKNOWN_MEMBER`)."},
+            {409: "This member is already in the group (`ALREADY_GROUP_MEMBER`)."},
+            {422: "The identifier is empty (`FIELD_EMPTY`), or `role` is not an existing role."},
         ),
     )
     async def add_group_member(
@@ -3833,34 +3854,34 @@ def make_admin_router() -> APIRouter:
         "/groups/{group_slug}/members/{member_id}",
         status_code=204,
         tags=[TAG_GROUP_MEMBERS],
-        summary="Lid uit een groep halen",
+        summary="Remove a member from a group",
         description=(
-            "Haalt iemand uit de groep. Het platformlid zelf blijft bestaan, net als zijn eventuele andere "
-            "groepslidmaatschappen. In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: "
-            "een adres in een URL belandt in de logregels van elke proxy ertussen.\n\n"
-            "Een eigen rol op een losse site staat los van de groep en blijft standaard gelden. Met "
-            "`siteRoles=remove` haal je die rollen in dezelfde handeling weg, maar alleen op sites in "
-            "deze groep; wat dit lid elders heeft blijft onaangeroerd. Alles gebeurt in één transactie, "
-            "dus het is allemaal weg of er verandert niets. Elke weggehaalde siterol levert dezelfde "
-            "auditregel op als weghalen vanaf het sitescherm (`site_member_remove`).\n\n"
-            "Het laatste lid van een groep kan er niet uit: een groep zonder leden is niet meer te beheren, "
-            "want iemand toevoegen mag alleen wie er zelf in zit. Om dezelfde reden kan de laatste "
-            "`admin` er niet uit.\n\n"
-            "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header. Wie de "
-            "groep mag beheren, mag elke siterol erin al weghalen bij de site zelf."
+            "Removes someone from the group. The member's platform account remains, as do any other group "
+            "memberships. The path holds `memberId` from the member list, not the e-mail address: "
+            "an address in a URL ends up in the log lines of every proxy in between.\n\n"
+            "A direct site role on an individual site is independent of the group and by default "
+            "stays in place. With `siteRoles=remove` you remove those roles in the same action, but only on "
+            "sites in this group; whatever this member has elsewhere is left untouched. Everything happens in "
+            "one transaction, so it is all gone or nothing changes. Each removed site role produces the same "
+            "audit row as removing it from the site screen (`site_member_remove`).\n\n"
+            "The last member of a group cannot be removed: a group without members can no longer be managed, "
+            "because only someone who is in it may add someone. For the same reason the last "
+            "`admin` cannot be removed.\n\n"
+            "**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header. "
+            "Whoever may manage the group may already remove any site role in it at the site itself."
         ),
-        responses=_deleted("Het lid zit niet meer in de groep.")
+        responses=_deleted("The member is no longer in the group.")
         | _errors(
             _ERROR_CSRF,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
             {
                 409: (
-                    "Dit is het laatste lid van de groep (`LAST_GROUP_MEMBER`), of de laatste beheerder "
-                    "ervan (`LAST_GROUP_ADMIN`)."
+                    "This is the last member of the group (`LAST_GROUP_MEMBER`), or its last admin "
+                    "(`LAST_GROUP_ADMIN`)."
                 ),
                 404: (
-                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
+                    "There is no member with this ID (`UNKNOWN_MEMBER`), or that member is not in this group "
                     "(`NOT_GROUP_MEMBER`)."
                 )
             },
@@ -3918,19 +3939,19 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/groups/{group_slug}/members/{member_id}/role",
         tags=[TAG_GROUP_MEMBERS],
-        summary="Groepsrol van een lid wijzigen",
-        response_description="Het groepslid met zijn nieuwe rol.",
+        summary="Change the group role of a member",
+        response_description="The group member with their new role.",
         description=(
-            "Geeft een lid van deze groep een andere rol. De rol bepaalt wat diegene in de hele groep mag: "
-            f"{ROLE_HINT}\n\n"
-            "Een siterol komt hier nooit uit: die zet je per site, en hij verbreedt alleen wat iemand op die "
-            "ene site mag.\n\n"
-            "De laatste `admin` van een groep kan niet gedegradeerd worden; een groep zonder beheerder is "
-            "niet meer te beheren. Jezelf degraderen kan wel: zolang er een andere beheerder is, kan die je "
-            "terugzetten.\n\n"
-            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
-            "belandt in de logregels van elke proxy ertussen.\n\n"
-            "**Mag:** groepsrol `admin`, of een platformbeheerder, met een geldige CSRF-header."
+            "Gives a member of this group a different role. The role determines what they may do in the whole "
+            f"group: {ROLE_HINT}\n\n"
+            "This never changes a site role: you set that per site, and it only widens what someone may "
+            "do on that one site.\n\n"
+            "The last `admin` of a group cannot be demoted; a group without an admin can no longer be "
+            "managed. Demoting yourself is allowed: as long as there is another admin, they can restore "
+            "you.\n\n"
+            "The path holds `memberId` from the member list, not the e-mail address: an address in a URL "
+            "ends up in the log lines of every proxy in between.\n\n"
+            "**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -3938,11 +3959,11 @@ def make_admin_router() -> APIRouter:
             _ERROR_GROUP,
             {
                 404: (
-                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid zit niet in deze groep "
+                    "There is no member with this ID (`UNKNOWN_MEMBER`), or that member is not in this group "
                     "(`NOT_GROUP_MEMBER`)."
                 )
             },
-            {409: "Dit is de laatste beheerder van de groep (`LAST_GROUP_ADMIN`)."},
+            {409: "This is the last admin of the group (`LAST_GROUP_ADMIN`)."},
         ),
     )
     async def set_group_member_role(
@@ -3981,12 +4002,12 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/platform/members",
         tags=[TAG_PLATFORM],
-        summary="Alle platformleden",
-        response_description="Alle platformleden, op e-mailadres gesorteerd.",
+        summary="All platform members",
+        response_description="All platform members, sorted by e-mail address.",
         description=(
-            "Iedereen die ooit op het beheer heeft ingelogd, op e-mailadres gesorteerd, met hun rol en status. "
-            "Hier zie je ook wie de toegang is ontzegd.\n\n"
-            "**Mag:** alleen een platformbeheerder."
+            "Everyone who has ever signed in to the admin interface, sorted by e-mail address, with their "
+            "role and status. This is also where you see who has been denied access.\n\n"
+            "**Who can call this:** only a platform administrator."
         ),
         responses=_errors(_ERROR_ADMIN),
     )
@@ -4001,17 +4022,22 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/platform/storage",
         tags=[TAG_PLATFORM],
-        summary="Vulling van het contentvolume",
-        response_description="Totaal, gebruikt en vrij op het contentvolume, met de reserve.",
+        summary="Disk usage of the content volume",
+        response_description="Total, used and free space on the content volume, with the reserve.",
         description=(
-            "Het hele contentvolume in één blik: grootte, gebruikt, vrij en de reserve waaronder een deploy "
-            "wordt geweigerd. Er staat geen site of groep in: de platformbeheerder beheert mensen en groepen "
-            "en kijkt niet in de sites.\n\n"
-            "**Mag:** alleen een platformbeheerder."
+            "The whole content volume at a glance: size, used, free and the reserve below which a deploy "
+            "is refused. It lists no site or group: the platform administrator manages people and groups "
+            "and does not look into the sites.\n\n"
+            "**Who can call this:** only a platform administrator."
         ),
         responses=_errors(
             _ERROR_ADMIN,
-            {503: "Het volume is niet te meten, bijvoorbeeld omdat de contentroot ontbreekt (`VOLUME_UNMEASURABLE`)."},
+            {
+                503: (
+                    "The volume cannot be measured, for example because the content root is missing "
+                    "(`VOLUME_UNMEASURABLE`)."
+                )
+            },
         ),
     )
     async def platform_storage(request: Request, member: PlatformAdmin) -> VolumeOut:
@@ -4052,14 +4078,14 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/platform/members/{member_id}/_activate",
         tags=[TAG_PLATFORM],
-        summary="Platformlid heractiveren",
-        response_description="Het lid met zijn nieuwe status.",
+        summary="Reactivate a platform member",
+        response_description="The member with their new status.",
         description=(
-            "Zet de status van een lid op `active`, waarmee het de beheer-API weer mag gebruiken. Voor een "
-            "lid van wie de toegang is ingetrokken (status `deactivated`).\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header."
+            "Sets the status of a member to `active`, so they may use the admin API again. For a "
+            "member whose access has been revoked (status `deactivated`).\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header."
         ),
-        responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Onbekend lid (`UNKNOWN_MEMBER`)."}),
+        responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Unknown member (`UNKNOWN_MEMBER`)."}),
     )
     async def activate_platform_member(
         request: Request, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
@@ -4069,16 +4095,16 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/platform/members/{member_id}/_deactivate",
         tags=[TAG_PLATFORM],
-        summary="Platformlid deactiveren",
-        response_description="Het lid met zijn nieuwe status.",
+        summary="Deactivate a platform member",
+        response_description="The member with their new status.",
         description=(
-            "Zet de status van een lid op `deactivated`. Elk volgend API-verzoek van dat lid krijgt 403, "
-            "ook met een sessie die nog geldig is. Groepslidmaatschappen blijven staan, zodat activeren het "
-            "lid terugbrengt zoals het was. Alle CLI-sessies (`plak login`) van het lid worden wel "
-            "ingetrokken: na heractiveren moet het opnieuw koppelen.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header."
+            "Sets the status of a member to `deactivated`. Every subsequent API request from that member gets "
+            "403, even with a session that is still valid. Group memberships remain, so activating brings "
+            "the member back as they were. All CLI sessions (`plak login`) of the member are revoked, "
+            "though: after reactivation they have to run `plak login` again.\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header."
         ),
-        responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Onbekend lid (`UNKNOWN_MEMBER`)."}),
+        responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Unknown member (`UNKNOWN_MEMBER`)."}),
     )
     async def deactivate_platform_member(
         request: Request, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
@@ -4090,24 +4116,25 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/platform/members/{member_id}/platform-role",
         tags=[TAG_PLATFORM],
-        summary="Platformrol van een lid wijzigen",
-        response_description="Het lid met zijn nieuwe platformrol.",
+        summary="Change the platform role of a member",
+        response_description="The member with their new platform role.",
         description=(
-            "Maakt een lid platformbeheerder of haalt die rol er weer af. Een platformbeheerder beheert "
-            "mensen en groepen: leden activeren en deactiveren, beheerders aanwijzen, en de ledenlijst "
-            "lezen. Hij beheert geen sites; daarvoor kent hij zichzelf een groepsrol toe.\n\n"
-            "Drie dingen kunnen niet, allemaal omdat ze het platform onbeheerbaar zouden maken: je eigen "
-            "rol afnemen, de laatste actieve beheerder degraderen, en het bootstrap-account wijzigen.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header."
+            "Makes a member platform administrator or removes that role. A platform administrator manages "
+            "people and groups: activating and deactivating members, appointing administrators, and reading "
+            "the member list. They do not manage sites; for that they give themselves a group role.\n\n"
+            "Three things are not possible, all because they would make the platform unmanageable: taking "
+            "away your own role, demoting the last active administrator, and changing the bootstrap "
+            "account.\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_ADMIN,
-            {404: "Onbekend lid (`UNKNOWN_MEMBER`)."},
+            {404: "Unknown member (`UNKNOWN_MEMBER`)."},
             {
                 409: (
-                    "Je eigen rol afnemen (`SELF_NOT_ALLOWED`), de laatste actieve beheerder "
-                    "(`LAST_PLATFORM_ADMIN`), of het bootstrap-account (`BOOTSTRAP_MEMBER`)."
+                    "Taking away your own role (`SELF_NOT_ALLOWED`), the last active administrator "
+                    "(`LAST_PLATFORM_ADMIN`), or the bootstrap account (`BOOTSTRAP_MEMBER`)."
                 )
             },
         ),
@@ -4140,22 +4167,22 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/platform/audit",
         tags=[TAG_AUDIT],
-        summary="Auditlog teruglezen",
-        response_description="Eén pagina auditregels, nieuwste eerst, met de cursor naar de volgende.",
+        summary="Read the audit log",
+        response_description="One page of audit rows, newest first, with the cursor to the next.",
         description=(
-            "Leest het auditlog terug, nieuwste eerst: weigeringen, inloggen en uitloggen, kijken op "
-            "niet-publieke content, deploys en beheerhandelingen. Woordenschat en bewaartermijnen staan in "
+            "Reads the audit log, newest first: refusals, signing in and out, viewing "
+            "non-public content, deploys and admin actions. Vocabulary and retention periods are in "
             "`docs/audit-log.md`.\n\n"
-            "**Bladeren gaat met `cursor`, niet met een paginanummer.** Het log groeit terwijl je leest, en "
-            "een verschuivende offset zou regels overslaan of dubbel tonen. Neem `nextCursor` uit het "
-            "antwoord ongewijzigd over; is die `null`, dan was dit de laatste pagina.\n\n"
-            "**Actoren staan er gepseudonimiseerd in** en worden hier niet teruggevertaald. Zoek je iemand "
-            "in het bijzonder, haal dan eerst zijn pseudoniem op met "
-            "`POST /platform/audit/actor-pseudonym` en filter daarmee op `actorPseudonym`.\n\n"
-            "**Mag:** alleen een platformbeheerder. Een groepsbeheerder ziet ook zijn eigen groep niet: de "
-            "groep van een regel staat alleen als vrije sleutel in `refs`, en daar is geen "
-            "autorisatiegrens op te bouwen. Het teruglezen zelf wordt geaudit; lukt die auditrij niet, "
-            "dan komt er geen pagina: zie de `503`."
+            "**Paging works with `cursor`, not with a page number.** The log grows while you read, and "
+            "a shifting offset would skip rows or show them twice. Take `nextCursor` from the "
+            "response unchanged; if it is `null`, this was the last page.\n\n"
+            "**Actors appear pseudonymised** and are not translated back here. If you are looking for "
+            "someone in particular, first fetch their pseudonym with "
+            "`POST /platform/audit/actor-pseudonym` and filter on `actorPseudonym` with it.\n\n"
+            "**Who can call this:** only a platform administrator. A group admin does not see even their own group: "
+            "the group of a row is only a free-form key in `refs`, and no "
+            "authorization boundary can be built on that. Reading the log is itself audited; if writing that "
+            "audit row fails, no page is returned: see the `503`."
         ),
         responses=_errors(_ERROR_ADMIN, _ERROR_AUDIT_FILTER, _ERROR_AUDIT_UNAVAILABLE),
     )
@@ -4206,27 +4233,27 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/platform/audit/actor-pseudonym",
         tags=[TAG_AUDIT],
-        summary="Pseudoniem van een actor opzoeken",
-        response_description="Het auditpseudoniem dat bij deze identifier hoort.",
+        summary="Look up the pseudonym of an actor",
+        response_description="The audit pseudonym that belongs to this identifier.",
         description=(
-            "Vertaalt een identifier naar het pseudoniem waaronder hij in het auditlog staat, zodat je op "
-            "`actorPseudonym` kunt filteren. Wie je zoekt moet je dus al bij naam kennen: het log geeft "
-            "geen namenlijst prijs. Ken je juist alleen het pseudoniem uit een logregel, gebruik dan "
-            "`POST /platform/audit/actor-identity` voor de omgekeerde richting.\n\n"
-            "Dat dit een POST is en geen queryparameter, is met opzet: een e-mailadres in een URL belandt "
-            "in de logregels van elke proxy ertussen.\n\n"
-            "Het pseudoniem hangt aan `PLAK_AUDIT_PEPPER`. Na een rotatie van die pepper vind je alleen nog "
-            "regels van ná de rotatie.\n\n"
-            "Een e-mailadres dat bij geen lid en geen geverifieerd e-mailadres van een content-viewer "
-            "hoort, wordt niet gepseudonimiseerd: dat is een 404. Een niet-e-mailadres dat nergens bij "
-            "hoort (bijvoorbeeld een los SSO-subject) wordt wel letterlijk gepseudonimiseerd, als "
-            "`unknown`. Hoort een e-mailadres bij meer dan één subject (kan alleen via e-mail, nooit via "
-            "een SSO-subject), dan is het antwoord een 409: zoek in dat geval op het SSO-subject.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header en een `reason` van "
-            f"{REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens. Het opzoeken zelf wordt geaudit, met het "
-            "pseudoniem, `resolved_as` en de reden, nooit de identifier. Lukt die auditrij niet, dan komt "
-            "er geen antwoord: zie de `503`. Telt mee voor de dagelijkse limiet op zulke opzoekingen, ook "
-            "bij een 404."
+            "Translates an identifier into the pseudonym under which it appears in the audit log, so you can "
+            "filter on `actorPseudonym`. So you must already know who you are looking for: the log does not give "
+            "away a list of names. If you only know the pseudonym from a log row, "
+            "use `POST /platform/audit/actor-identity` for the opposite direction.\n\n"
+            "That this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up "
+            "in the log lines of every proxy in between.\n\n"
+            "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper you only find "
+            "rows from after the rotation.\n\n"
+            "An e-mail address that matches neither a member nor the verified address of a "
+            "content viewer is not pseudonymised: that is a 404. An identifier that is not an e-mail address "
+            "and belongs to nothing (for example a bare SSO subject) is pseudonymised as given, as "
+            "`unknown`. If an e-mail address belongs to more than one subject (only possible via e-mail, never via "
+            "an SSO subject), the response is a 409: in that case search by the SSO subject.\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of "
+            f"{REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters. The lookup itself is audited, with the "
+            "pseudonym, `resolved_as` and the reason, never the identifier. If that audit row fails, "
+            "no response is returned: see the `503`. Counts towards the daily limit on such lookups, even "
+            "on a 404."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -4295,27 +4322,27 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/platform/audit/actor-identity",
         tags=[TAG_AUDIT],
-        summary="Actor achter een pseudoniem opzoeken",
-        response_description="Het lid, de content-viewer of de CI-repository achter dit pseudoniem.",
+        summary="Look up the actor behind a pseudonym",
+        response_description="The member, content viewer or CI repository behind this pseudonym.",
         description=(
-            "De omgekeerde richting van `POST /platform/audit/actor-pseudonym`: geef een pseudoniem uit "
-            "een logregel, krijg terug wie erachter zit. Elk lid, elke content-viewer en elke gekoppelde repository "
-            "wordt met de actuele `PLAK_AUDIT_PEPPER` opnieuw gepseudonimiseerd en vergeleken met het "
-            "opgegeven pseudoniem; er wordt niets bijgehouden om deze zoekslag te versnellen, dus reken op "
-            "een volledige doorloop van alle drie.\n\n"
-            "Levert de zoekslag niets op, dan is er geen lid, content-viewer of repository dat tot dit "
-            "pseudoniem pseudonimiseert. Meerdere oorzaken komen daarvoor in aanmerking: de pepper is "
-            "geroteerd sinds die regel geschreven werd; de actor bezocht alleen ooit content via de "
-            "content-host-SSO en dat bezoek ligt al langer dan 90 dagen terug (`content_viewers` wordt dan "
-            "net als de bijbehorende `content_access`-regels opgeruimd); of de repository is inmiddels "
-            "ontkoppeld, of met haar site of groep verwijderd (`ON DELETE CASCADE`).\n\n"
-            "Dat dit een POST is en geen queryparameter, is met opzet, net als bij de andere kant van deze "
-            "zoekslag.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header en een `reason` van "
-            f"{REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens. Het opzoeken zelf wordt geaudit, met het "
-            "opgegeven pseudoniem, `resolved_as` en de reden, nooit de gevonden identifier. Lukt die "
-            "auditrij niet, dan komt er geen antwoord: zie de `503`. Telt mee voor de dagelijkse limiet op "
-            "zulke opzoekingen, ook bij een 404."
+            "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from "
+            "a log row, get back who is behind it. Every member, every content viewer and every linked "
+            "repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and compared with the "
+            "given pseudonym; nothing is kept to speed up this lookup, so expect a "
+            "full pass over all three.\n\n"
+            "If the lookup finds nothing, there is no member, content viewer or repository that pseudonymises "
+            "to this pseudonym. Several causes are possible: the pepper has been rotated since that row was "
+            "written; the actor only ever visited content through the content-host SSO and that visit was "
+            "more than 90 days ago (`content_viewers` is then cleaned up, like the related "
+            "`content_access` rows); or the repository has since been unlinked, or deleted along with its "
+            "site or group (`ON DELETE CASCADE`).\n\n"
+            "That this is a POST and not a query parameter is deliberate, as with the other side of this "
+            "lookup.\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of "
+            f"{REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters. The lookup itself is audited, with the "
+            "given pseudonym, `resolved_as` and the reason, never the identifier found. If writing that "
+            "audit row fails, no response is returned: see the `503`. Counts towards the daily limit on "
+            "such lookups, even on a 404."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -4323,12 +4350,12 @@ def make_admin_router() -> APIRouter:
             _ERROR_AUDIT_UNAVAILABLE,
             _ERROR_REASON,
             _ERROR_LOOKUP_LIMIT,
-            {422: f"Geen {AUDIT_PSEUDONYM_LENGTH} hexadecimale tekens (`ACTOR_PSEUDONYM_INVALID`)."},
+            {422: f"Not {AUDIT_PSEUDONYM_LENGTH} hexadecimal characters (`ACTOR_PSEUDONYM_INVALID`)."},
             {
                 404: (
-                    "Geen lid, content-viewer of gekoppelde repository pseudonimiseert tot deze waarde "
-                    "(`PSEUDONYM_UNKNOWN`): de pepper is geroteerd, de content-viewer is opgeruimd na 90 "
-                    "dagen zonder bezoek, of de repository is ontkoppeld of met haar site verwijderd."
+                    "No member, content viewer or linked repository pseudonymises to this value "
+                    "(`PSEUDONYM_UNKNOWN`): the pepper has been rotated, the content viewer was cleaned up after 90 "
+                    "days without a visit, or the repository was unlinked or deleted along with its site."
                 )
             },
         ),
@@ -4390,17 +4417,17 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/platform/audit/entries/{entry_id}/ip",
         tags=[TAG_AUDIT],
-        summary="Volledig IP-adres van een auditregel achterhalen",
-        response_description="Het volledige IP-adres bij deze auditregel.",
+        summary="Reveal the full IP address of an audit row",
+        response_description="The full IP address for this audit row.",
         description=(
-            "`GET /platform/audit` toont per regel alleen het afgeknotte netwerk (`ipTruncated`); dit "
-            "endpoint ontsleutelt het volledige adres dat er versleuteld naast staat (`PLAK_AUDIT_IP_KEY`, "
-            "een andere sleutel dan de auditpepper). Bedoeld voor het uiterste geval waarin het netwerk "
-            "niet volstaat, bijvoorbeeld bij een incidentonderzoek.\n\n"
-            "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header en een `reason` van "
-            f"{REASON_MIN_LENGTH} tot {REASON_MAX_LENGTH} tekens. Het ontsleutelen zelf wordt geaudit, met "
-            "het regel-id en de reden, nooit het IP-adres. Lukt die auditrij niet, dan komt er geen "
-            "antwoord: zie de `503`. Telt mee voor de dagelijkse limiet op zulke opzoekingen, ook bij een "
+            "`GET /platform/audit` only shows the truncated network per row (`ipTruncated`); this "
+            "endpoint decrypts the full address stored encrypted next to it (`PLAK_AUDIT_IP_KEY`, "
+            "a different key from the audit pepper). Intended as a last resort, when the truncated network "
+            "is not enough, for example in an incident investigation.\n\n"
+            "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of "
+            f"{REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters. The decryption itself is audited, with "
+            "the row ID and the reason, never the IP address. If that audit row fails, no "
+            "response is returned: see the `503`. Counts towards the daily limit on such lookups, even on a "
             "404."
         ),
         responses=_errors(
@@ -4409,12 +4436,12 @@ def make_admin_router() -> APIRouter:
             _ERROR_AUDIT_UNAVAILABLE,
             _ERROR_REASON,
             _ERROR_LOOKUP_LIMIT,
-            {404: "Geen auditregel met dit id, of er staat geen versleuteld IP-adres bij (`AUDIT_IP_UNKNOWN`)."},
+            {404: "No audit row with this ID, or it has no encrypted IP address (`AUDIT_IP_UNKNOWN`)."},
         ),
     )
     async def audit_ip_reveal(
         request: Request,
-        entry_id: Annotated[uuid.UUID, Path(description="Id van de auditregel (`AuditEntryOut.id`).")],
+        entry_id: Annotated[uuid.UUID, Path(description="ID of the audit row (`AuditEntryOut.id`).")],
         body: IpRevealBody,
         _csrf: Csrf,
         member: PlatformAdmin,
@@ -4452,15 +4479,15 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/members",
         tags=[TAG_SITE_MEMBERS],
-        summary="Leden van een site",
-        response_description="Iedereen die bij deze site kan, met de rol waarmee.",
+        summary="Members of a site",
+        response_description="Everyone who can reach this site, each with the role that grants access.",
         description=(
-            "Iedereen die bij deze site kan, niet alleen wie hier een eigen rol heeft. Per regel staat "
-            "de groepsrol, de siterol en de rol die daaruit volgt: de ruimste van de twee wint, want een "
-            "siterol verbreedt alleen en neemt nooit iets af.\n\n"
-            "Een lijst met alleen de siterollen zou de groepsleden weglaten en lezen alsof veel minder "
-            "mensen erbij kunnen dan werkelijk het geval is.\n\n"
-            "**Mag:** effectieve siterol `lezer`."
+            "Everyone who can reach this site, not only those with a direct role here. Each row shows "
+            "the group role, the site role and the resulting role: the higher of the two "
+            "wins, because a site role only widens and never takes anything away.\n\n"
+            "A list with only the site roles would leave out the group members and read as if far fewer "
+            "people can reach the site than is actually the case.\n\n"
+            "**Who can call this:** effective site role `reader`."
         ),
         responses=_errors(_ERROR_SITE),
     )
@@ -4473,23 +4500,24 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/members/search",
         tags=[TAG_SITE_MEMBERS],
-        summary="Iemand zoeken om een rol op deze site te geven",
+        summary="Find someone to give a role on this site",
         response_description=(
-            "Hoogstens tien actieve platformleden, op naam en daarbinnen op e-mailadres gesorteerd."
+            "At most ten active platform members, sorted by name and then by e-mail address."
         ),
         description=(
-            "Zoekt in de platformleden op naam of e-mailadres, zodat je iemand een rol op deze site "
-            "kunt geven zonder zijn adres uit het hoofd te kennen. De `identifier` uit een treffer is "
-            "precies wat `POST /sites/{group_slug}/{site_slug}/members` verwacht.\n\n"
-            "Alleen actieve leden komen terug: wie buitengesloten is, voeg je "
-            "niet toe. Het antwoord is een shortlist van hoogstens tien namen, geen uitdraai van de "
-            "hele organisatie; wie hier al een eigen siterol heeft staat er wel bij, met "
-            "`alreadyMember` op `true`.\n\n"
-            "Groepsleden kun je hier gewoon kiezen: een siterol verruimt wat zij via de groep al "
-            "mogen. Wat dat is staat in `groupRole`, zodat je ziet of een siterol iets toevoegt.\n\n"
-            "Zoeken mag precies wie ook mag toevoegen, en Plak maakt hier net zomin een account aan: "
-            "iemand verschijnt pas zodra hij zelf op het beheer heeft ingelogd.\n\n"
-            "**Mag:** effectieve siterol `beheerder`."
+            "Searches the platform members by name or e-mail address, so you can give someone a role on this "
+            "site without knowing their address by heart. The `identifier` of a hit is "
+            "exactly what `POST /sites/{group_slug}/{site_slug}/members` expects.\n\n"
+            "Only active members are returned: you do not add someone who has been "
+            "deactivated. The answer is a shortlist of at most ten names, not a dump of the "
+            "whole organisation; someone who already has a direct site role here is included, with "
+            "`alreadyMember` set to `true`.\n\n"
+            "You can simply pick group members here: a site role widens what they may already do "
+            "through the group. What that is appears in `groupRole`, so you can see whether a site role "
+            "adds anything.\n\n"
+            "Only those who may add members may search, and Plak does not create an account here "
+            "either: someone only appears once they have signed in to the admin interface themselves.\n\n"
+            "**Who can call this:** effective site role `admin`."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE, _ERROR_SEARCH),
     )
@@ -4510,22 +4538,23 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/members",
         status_code=201,
         tags=[TAG_SITE_MEMBERS],
-        summary="Lid een rol op deze site geven",
-        response_description="Het lid met zijn nieuwe siterol.",
+        summary="Give a member a role on this site",
+        response_description="The member with their new site role.",
         description=(
-            "Geeft een bestaand platformlid een rol op deze ene site. Dat kan een ruimere rol zijn dan "
-            "zijn groepsrol; smaller heeft geen effect, want de ruimste van de twee blijft gelden. Iemand "
-            "hoeft geen groepslid te zijn: zo geef je een buitenstaander toegang tot precies deze site.\n\n"
-            "Een groepsrol wijzig je niet hier maar bij de groep.\n\n"
-            "**Mag:** effectieve siterol `beheerder`, met een geldige CSRF-header."
+            "Gives an existing platform member a role on this one site. That can be a higher role than "
+            "their group role; lower has no effect, because the higher of the two applies. Someone "
+            "does not need to be a group member: this is how you give an outsider access to exactly this "
+            "site.\n\n"
+            "A group role is changed on the group, not here.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE,
             _ERROR_IDENTIFIER_AMBIGUOUS,
-            {404: "Er is geen lid met deze identifier; diegene moet eerst zelf inloggen (`UNKNOWN_MEMBER`)."},
-            {409: "Dit lid heeft al een rol op deze site (`ALREADY_SITE_MEMBER`)."},
-            {422: "De identifier is leeg (`FIELD_EMPTY`)."},
+            {404: "There is no member with this identifier; they must sign in themselves first (`UNKNOWN_MEMBER`)."},
+            {409: "This member already has a role on this site (`ALREADY_SITE_MEMBER`)."},
+            {422: "The identifier is empty (`FIELD_EMPTY`)."},
         ),
     )
     async def add_site_member(
@@ -4558,22 +4587,22 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/members/{member_id}/role",
         tags=[TAG_SITE_MEMBERS],
-        summary="Siterol van een lid wijzigen",
-        response_description="Het lid met zijn nieuwe siterol.",
+        summary="Change the site role of a member",
+        response_description="The member with their new site role.",
         description=(
-            "Geeft een lid een andere rol op deze ene site. Werkt alleen op een siterol; wie hier staat "
-            "omdat hij groepslid is, wijzig je bij de groep.\n\n"
-            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
-            "belandt in de logregels van elke proxy ertussen.\n\n"
-            "**Mag:** effectieve siterol `beheerder`, met een geldige CSRF-header."
+            "Gives a member a different role on this one site. Only applies to a direct site role; for someone listed "
+            "through their group membership, change the role on the group.\n\n"
+            "The path holds `memberId` from the member list, not the e-mail address: an address in a URL "
+            "ends up in the log lines of every proxy in between.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE,
             {
                 404: (
-                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
-                    "rol op deze site (`NOT_SITE_MEMBER`)."
+                    "There is no member with this ID (`UNKNOWN_MEMBER`), or that member has no direct "
+                    "site role on this site (`NOT_SITE_MEMBER`)."
                 )
             },
         ),
@@ -4613,24 +4642,24 @@ def make_admin_router() -> APIRouter:
         "/sites/{group_slug}/{site_slug}/members/{member_id}",
         status_code=204,
         tags=[TAG_SITE_MEMBERS],
-        summary="Siterol van een lid weghalen",
+        summary="Remove the site role of a member",
         description=(
-            "Haalt de rol weg die alleen op deze site gold. Een groepsrol blijft staan, dus wie via de "
-            "groep bij deze site kan, kan dat daarna nog steeds.\n\n"
-            "In het pad staat `memberId` uit de ledenlijst, niet het e-mailadres: een adres in een URL "
-            "belandt in de logregels van elke proxy ertussen.\n\n"
-            "Er is hier geen laatste-beheerder-bescherming zoals bij een groep: de beheerders van de "
-            "groep kunnen altijd bij deze site, dus een site zonder eigen beheerder is niet onbeheerbaar."
-            "\n\n**Mag:** effectieve siterol `beheerder`, met een geldige CSRF-header."
+            "Removes the role that applied only to this site. A group role remains, so whoever can reach "
+            "this site through the group still can afterwards.\n\n"
+            "The path holds `memberId` from the member list, not the e-mail address: an address in a URL "
+            "ends up in the log lines of every proxy in between.\n\n"
+            "There is no last-admin protection here as there is for a group: the admins of the "
+            "group can always reach this site, so a site without an admin of its own is not unmanageable."
+            "\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
-        responses=_deleted("Het lid heeft geen eigen rol meer op deze site.")
+        responses=_deleted("The member no longer has a direct site role on this site.")
         | _errors(
             _ERROR_CSRF,
             _ERROR_SITE,
             {
                 404: (
-                    "Er is geen lid met dit id (`UNKNOWN_MEMBER`), of dat lid heeft geen eigen "
-                    "rol op deze site (`NOT_SITE_MEMBER`)."
+                    "There is no member with this ID (`UNKNOWN_MEMBER`), or that member has no direct "
+                    "site role on this site (`NOT_SITE_MEMBER`)."
                 )
             },
         ),
@@ -4669,13 +4698,13 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/versions",
         tags=[TAG_VERSIONS],
-        summary="Deployhistorie van een site",
-        response_description="De versies van de site, nieuwste eerst.",
+        summary="Deploy history of a site",
+        response_description="The versions of the site, newest first.",
         description=(
-            "Alle versies van deze site, nieuwste eerst, met hun doel (`live` of `preview`) en herkomst "
-            "(`upload` door een lid of `action` door CI). Precies een versie heeft `isLive`, tenzij er nog "
-            "niets live staat.\n\n"
-            "**Mag:** effectieve siterol `reader` of ruimer."
+            "All versions of this site, newest first, with their target (`live` or `preview`) and origin "
+            "(`upload` by a member or `action` by CI). Exactly one version has `isLive`, unless "
+            "nothing is live yet.\n\n"
+            "**Who can call this:** effective site role `reader` or higher."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -4697,15 +4726,15 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/storage",
         tags=[TAG_VERSIONS],
-        summary="Opslag en bewaarregel van een site",
-        response_description="Het gebruik, de limiet en het aantal bewaarde live-versies.",
+        summary="Storage and retention rule of a site",
+        response_description="The usage, the limit and the number of live versions kept.",
         description=(
-            "Hoeveel ruimte de versies van deze site nu innemen, hoeveel ze samen mogen innemen, en "
-            "hoeveel vorige live-versies de nachtelijke opschoning laat staan. De huidige live-versie "
-            "blijft altijd, ook na terugrollen naar een oudere versie. De limiet geldt voor het hele "
-            "platform; het aantal bewaarde versies is de standaard van het platform, tenzij een "
-            "sitebeheerder voor deze site een eigen aantal instelde.\n\n"
-            "**Mag:** effectieve siterol `reader` of ruimer."
+            "How much space the versions of this site currently take up, how much they may take up together, "
+            "and how many previous live versions the nightly cleanup leaves in place. The current live version "
+            "always stays, even after rolling back to an older version. The limit applies to the whole "
+            "platform; the number of versions kept is the platform default, unless a "
+            "site admin set a custom number for this site.\n\n"
+            "**Who can call this:** effective site role `reader` or higher."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -4727,24 +4756,24 @@ def make_admin_router() -> APIRouter:
     @router.post(
         "/sites/{group_slug}/{site_slug}/versions/{version_id}/_set-live",
         tags=[TAG_VERSIONS],
-        summary="Terugrollen naar een eerdere versie",
-        response_description="De site met de nieuwe live versie.",
+        summary="Roll back to an earlier version",
+        response_description="The site with the new live version.",
         description=(
-            "Zet een bestaande versie (terug) op de publieke URL. Er wordt niets opnieuw geüpload: de "
-            "uitgepakte bestanden van die versie staan er al. De wissel geldt onmiddellijk.\n\n"
-            "Alleen versies met doel `live` kunnen live staan; een preview-versie levert 422.\n\n"
-            "**Mag:** effectieve siterol `editor` of ruimer, met een geldige CSRF-header."
+            "Puts an existing version (back) on the public URL. Nothing is uploaded again: the "
+            "unpacked files of that version are already there. The switch applies immediately.\n\n"
+            "Only versions with target `live` can be live; a preview version returns 422.\n\n"
+            "**Who can call this:** effective site role `editor` or higher, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             {
                 404: (
-                    "Onbekende groep (`UNKNOWN_GROUP`), onbekende site (`UNKNOWN_SITE`), of de versie "
-                    "bestaat niet of hoort bij een ander site (`UNKNOWN_VERSION`, `VERSION_OTHER_SITE`)."
+                    "Unknown group (`UNKNOWN_GROUP`), unknown site (`UNKNOWN_SITE`), or the version "
+                    "does not exist or belongs to another site (`UNKNOWN_VERSION`, `VERSION_OTHER_SITE`)."
                 )
             },
-            {422: "Deze versie kan niet live: het is bijvoorbeeld een preview-versie."},
+            {422: "This version cannot go live, for example because it is a preview version."},
         ),
     )
     async def set_version_live(
@@ -4779,12 +4808,12 @@ def make_admin_router() -> APIRouter:
     @router.get(
         "/sites/{group_slug}/{site_slug}/previews",
         tags=[TAG_PREVIEWS],
-        summary="Previews van een site",
-        response_description="De previews van de site, op ref gesorteerd.",
+        summary="Previews of a site",
+        response_description="The previews of the site, sorted by ref.",
         description=(
-            "De previews die nu voor deze site bestaan, op ref gesorteerd, met hun URL op de content-origin "
-            "en het tijdstip waarop de opruimjob ze weggooit.\n\n"
-            "**Mag:** effectieve siterol `reader` of ruimer."
+            "The previews that currently exist for this site, sorted by ref, with their URL on the content "
+            "origin and the time at which the cleanup job discards them.\n\n"
+            "**Who can call this:** effective site role `reader` or higher."
         ),
         responses=_errors(_ERROR_SITE_ROLE, _ERROR_SITE),
     )
@@ -4798,22 +4827,22 @@ def make_admin_router() -> APIRouter:
     @router.put(
         "/sites/{group_slug}/{site_slug}/previews/{ref}/access",
         tags=[TAG_PREVIEWS],
-        summary="Toegang tot een preview zetten",
-        response_description="De preview met haar nieuwe toegang.",
+        summary="Set the access to a preview",
+        response_description="The preview with its new access.",
         description=(
-            "Geeft deze ene preview een eigen toegang, los van de site: zo kan een preview ruimer "
-            "of juist strenger staan dan de live site. Het is basis plus uitzonderingen in hun "
-            "geheel, nooit een basis van de preview met uitzonderingen van de site. "
-            "`access: null` haalt de uitzondering weg, waarna de preview de site weer volgt.\n\n"
-            "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+            "Gives this preview its own access settings, independent of the site: so a preview can be "
+            "broader or stricter than the live site. It is base plus exceptions as a whole, "
+            "never a base of the preview with exceptions of the site. "
+            "`access: null` removes the override, after which the preview follows the site again.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
         responses=_errors(
             _ERROR_CSRF,
             _ERROR_SITE_ROLE,
             {
                 404: (
-                    "Onbekende groep (`UNKNOWN_GROUP`), onbekende site (`UNKNOWN_SITE`), of dit "
-                    "site heeft geen preview met deze ref (`UNKNOWN_PREVIEW`)."
+                    "Unknown group (`UNKNOWN_GROUP`), unknown site (`UNKNOWN_SITE`), or this "
+                    "site has no preview with this ref (`UNKNOWN_PREVIEW`)."
                 )
             },
         ),

@@ -57,7 +57,7 @@ export const routes = [
   {
     path: '/-/profile',
     name: 'profile',
-    component: () => import('./pages/Profiel.vue'),
+    component: () => import('./pages/Profile.vue'),
     meta: { titleKey: 'profile.title' },
   },
   {
@@ -71,7 +71,7 @@ export const routes = [
   {
     path: '/cli-link',
     name: 'cli-link',
-    component: () => import('./pages/CliKoppelen.vue'),
+    component: () => import('./pages/CliLink.vue'),
     meta: { public: true, titleKey: 'page.cliPair.title' },
   },
   // The group page's tabs live under the "-" segment, like the platform

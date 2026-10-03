@@ -92,6 +92,12 @@ NL: Final[dict[str, str]] = {
     "footer.accessibility": "Toegankelijkheid",
     "footer.privacy": "Privacy",
     "footer.api": "API-documentatie",
+    # The API documentation page (api/docs.py). `docs.language` is the name of
+    # the language in that language itself: the switch shows the other one.
+    "docs.title": "Plak API-documentatie",
+    "docs.back": "Naar het beheer",
+    "docs.schema": "OpenAPI-schema",
+    "docs.language": "Nederlands",
     "login.failed": "Inloggen is mislukt. Probeer het opnieuw.",
     # The page that asks for the code of a secret link shared without it
     # (serving/code_page.py). It names neither the site nor the group: it is
@@ -154,6 +160,10 @@ EN: Final[dict[str, str]] = {
     "footer.accessibility": "Accessibility",
     "footer.privacy": "Privacy",
     "footer.api": "API documentation",
+    "docs.title": "Plak API documentation",
+    "docs.back": "To the admin interface",
+    "docs.schema": "OpenAPI schema",
+    "docs.language": "English",
     "login.failed": "Signing in failed. Please try again.",
     "code.title": "Code required",
     "code.heading": "Enter the code",

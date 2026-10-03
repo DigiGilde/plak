@@ -590,7 +590,7 @@ watch(
               size="sm"
               :text="t('publish.sheet.close')"
               type="button"
-              data-testid="publiceer-sluiten"
+              data-testid="publish-close"
               @click="onClose"
             ></nldd-button>
           </nldd-title>
@@ -599,7 +599,7 @@ watch(
             v-if="dropTargetActive"
             variant="accent"
             :text="t('publish.sheet.drop')"
-            data-testid="publiceer-sleep-actief"
+            data-testid="publish-drag-active"
           ></nldd-banner>
 
           <nldd-banner
@@ -607,7 +607,7 @@ watch(
             variant="critical"
             dismissible
             :text="dropError"
-            data-testid="publiceer-sleep-fout"
+            data-testid="publish-drag-error"
             @dismiss="dropError = null"
           ></nldd-banner>
 
@@ -619,7 +619,7 @@ watch(
             size="sm"
             :text="t('publish.sheet.halfway.title')"
             :supporting-text="t('publish.sheet.halfway.detail')"
-            data-testid="publiceer-halfweg"
+            data-testid="publish-halfway"
           ></nldd-banner>
 
           <nldd-form @submit.prevent="putOnline">
@@ -629,11 +629,11 @@ watch(
             >
               <nldd-file-field
                 ref="fileField"
-                name="bestand"
+                name="file"
                 accept=".zip,.tar.gz,.tgz,.html"
                 :required="fieldRequired || undefined"
                 :invalid="fileMissing || undefined"
-                data-testid="publiceer-bestand"
+                data-testid="publish-file"
                 @change="onFileChoice"
               ></nldd-file-field>
               <!-- The fallback for a file the field could not be given: then
@@ -642,7 +642,7 @@ watch(
                 v-if="chosenFile"
                 control="dismiss"
                 :dismiss-text="t('publish.sheet.file.clear')"
-                data-testid="publiceer-bestand-gekozen"
+                data-testid="publish-file-chosen"
                 @dismiss="clearFile"
                 >{{ chosenFile }}</nldd-token
               >
@@ -650,7 +650,7 @@ watch(
                    has none: without this value the required rule fails even with
                    a file present. -->
               <nldd-validation-list :value="file?.name ?? ''">
-                <nldd-validation-item id="publiceer-bestand-vereist" required>
+                <nldd-validation-item id="publish-file-required" required>
                   {{ t('publish.sheet.file.required') }}
                 </nldd-validation-item>
               </nldd-validation-list>
@@ -658,15 +658,15 @@ watch(
 
             <nldd-form-field :label="t('publish.sheet.title.label')">
               <nldd-text-field
-                name="titel"
+                name="title"
                 :value="title"
                 required
                 :invalid="titleEmpty || undefined"
-                data-testid="publiceer-titel"
+                data-testid="publish-title"
                 @input="(e: CustomEvent) => { title = (e.detail?.value ?? (e.target as HTMLInputElement).value); titleEmpty = false; onTitleInput(); }"
               ></nldd-text-field>
               <nldd-validation-list :value="title">
-                <nldd-validation-item id="publiceer-titel-vereist" required>
+                <nldd-validation-item id="publish-title-required" required>
                   {{ t('publish.sheet.title.required') }}
                 </nldd-validation-item>
               </nldd-validation-list>
@@ -678,7 +678,7 @@ watch(
                 <!-- v-model, not :value: a select picks through its options, and
                      those do not exist yet at the moment a bound value would be
                      set. -->
-                <select v-model="groupSlug" name="groep">
+                <select v-model="groupSlug" name="group">
                   <option v-for="group in eligibleGroups" :key="group.slug" :value="group.slug">
                     {{ group.name }}
                   </option>
@@ -700,19 +700,19 @@ watch(
               "
             >
               <nldd-text-field
-                name="groepnaam"
+                name="group-name"
                 :value="groupName"
                 required
                 :invalid="groupNameEmpty || groupServerError !== null || undefined"
-                :unmet="groupServerError !== null ? 'publiceer-groep-server' : undefined"
-                data-testid="publiceer-groepnaam"
+                :unmet="groupServerError !== null ? 'publish-group-server' : undefined"
+                data-testid="publish-group-name"
                 @input="(e: CustomEvent) => { groupName = (e.detail?.value ?? (e.target as HTMLInputElement).value); groupNameEmpty = false; }"
               ></nldd-text-field>
               <nldd-validation-list :value="groupName">
-                <nldd-validation-item id="publiceer-groepnaam-vereist" required>
+                <nldd-validation-item id="publish-group-name-required" required>
                   {{ t('publish.sheet.groupName.required') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="publiceer-groep-server">
+                <nldd-validation-item id="publish-group-server">
                   {{ groupServerError }}
                 </nldd-validation-item>
               </nldd-validation-list>
@@ -731,30 +731,30 @@ watch(
                 required
                 :pattern="SLUG_PATTERN"
                 :invalid="slugInvalid || slugServerError !== null || undefined"
-                :unmet="slugServerError !== null ? 'publiceer-slug-server' : undefined"
-                data-testid="publiceer-slug"
+                :unmet="slugServerError !== null ? 'publish-slug-server' : undefined"
+                data-testid="publish-slug"
                 @input="(e: CustomEvent) => onSlugInput(e.detail?.value ?? (e.target as HTMLInputElement).value)"
               ></nldd-text-field>
               <!-- The list normally reads the value off the field on every input
                    event; here the address is also derived from the title, and it
                    does not see that change. -->
               <nldd-validation-list :value="slug">
-                <nldd-validation-item id="publiceer-slug-vereist" required>
+                <nldd-validation-item id="publish-slug-required" required>
                   {{ t('publish.sheet.address.required') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="publiceer-slug-vorm" hint :match="SLUG_MATCH">
+                <nldd-validation-item id="publish-slug-format" hint :match="SLUG_MATCH">
                   {{ t('publish.sheet.address.form') }}
                 </nldd-validation-item>
-                <nldd-validation-item id="publiceer-slug-server">
+                <nldd-validation-item id="publish-slug-server">
                   {{ slugServerError }}
                 </nldd-validation-item>
               </nldd-validation-list>
               <nldd-form-field-help-text>
-                <span v-if="addressKnown" data-testid="publiceer-adres"
+                <span v-if="addressKnown" data-testid="publish-address"
                   >{{ addressSentence.before }}<strong>{{ address }}</strong
                   >{{ addressSentence.after }}</span
                 >
-                <span v-else data-testid="publiceer-adres-leeg">
+                <span v-else data-testid="publish-address-empty">
                   {{ t('publish.sheet.address.empty') }}
                 </span>
               </nldd-form-field-help-text>
@@ -767,7 +767,7 @@ watch(
                 type="radiogroup"
                 variant="box-base"
                 :accessible-label="t('publish.sheet.visibility.label')"
-                data-testid="publiceer-zichtbaarheid"
+                data-testid="publish-visibility"
               >
                 <nldd-list-item
                   v-for="w in ACCESS_BASE_VALUES"
@@ -775,7 +775,7 @@ watch(
                   radio
                   size="md"
                   :checked="w === effectiveAccess.base || undefined"
-                  :data-testid="`publiceer-zichtbaarheid-${w}`"
+                  :data-testid="`publish-visibility-${w}`"
                   @change="chooseBase(w)"
                 >
                   <!-- The row is the radio itself; the button only draws the
@@ -814,7 +814,7 @@ watch(
                 <nldd-switch-field
                   :label="keysLabel()"
                   :checked="effectiveAccess.keys || undefined"
-                  data-testid="publiceer-uitzondering-sleutels"
+                  data-testid="publish-exception-keys"
                   @change="toggleKeys"
                 ></nldd-switch-field>
                 <nldd-form-field-help-text>{{ keysHint() }}</nldd-form-field-help-text>
@@ -824,7 +824,7 @@ watch(
                 <nldd-switch-field
                   :label="inviteesLabel()"
                   :checked="effectiveAccess.invitees || undefined"
-                  data-testid="publiceer-uitzondering-genodigden"
+                  data-testid="publish-exception-invitees"
                   @change="toggleInvitees"
                 ></nldd-switch-field>
                 <nldd-form-field-help-text>{{ inviteesHint() }}</nldd-form-field-help-text>
@@ -835,7 +835,7 @@ watch(
               <nldd-inline-dialog
                 icon="eye"
                 :text="accessExplanation"
-                data-testid="publiceer-toegang-uitleg"
+                data-testid="publish-access-explanation"
               ></nldd-inline-dialog>
             </nldd-form-section>
 
@@ -845,7 +845,7 @@ watch(
                 :text="t('publish.sheet.submit')"
                 type="submit"
                 :loading="busy || undefined"
-                data-testid="publiceer-indienen"
+                data-testid="publish-submit"
               ></nldd-button>
             </nldd-form-actions>
           </nldd-form>

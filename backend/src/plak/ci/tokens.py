@@ -262,10 +262,10 @@ class CiTokenVerifier:
             self._http, issuer.issuer + "/.well-known/openid-configuration", max_bytes=MAX_METADATA_BYTES
         )
         if not isinstance(metadata, dict) or metadata.get("issuer") != issuer.issuer:
-            raise FetchError("discovery-document hoort niet bij deze issuer")
+            raise FetchError("discovery document does not belong to this issuer")
         jwks_uri = metadata.get("jwks_uri")
         if not isinstance(jwks_uri, str) or not _same_origin(jwks_uri, issuer.issuer):
-            raise FetchError("jwks_uri ligt buiten de origin van de issuer")
+            raise FetchError("jwks_uri lies outside the origin of the issuer")
         jwks = await fetch_json(self._http, jwks_uri, max_bytes=MAX_JWKS_BYTES)
         return KeySet.import_key_set(jwks)
 

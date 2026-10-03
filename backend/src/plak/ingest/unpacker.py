@@ -121,7 +121,7 @@ def _unreadable(error: Exception) -> str:
     Never `str(error)`: an OSError names the absolute path of the spool file
     on the server, and a problem+json `detail` carries no internal details.
     """
-    _logger.warning("Archief onleesbaar", exc_info=error)
+    _logger.warning("Archive unreadable", exc_info=error)
     return type(error).__name__
 
 

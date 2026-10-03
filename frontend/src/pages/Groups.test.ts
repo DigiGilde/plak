@@ -217,7 +217,7 @@ describe('Groups', () => {
     const notice = wrapper.find('nldd-list nldd-inline-dialog[slot="empty"]');
     expect(property(notice.element, 'text')).toBe('Je zit nog in geen enkele groep.');
     expect(wrapper.findAll('nldd-list-item')).toHaveLength(0);
-    expect(wrapper.find('[data-testid="groepen-aanmaken"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="groups-create"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -230,7 +230,7 @@ describe('Groups', () => {
     expect(wrapper.find('nldd-banner').exists()).toBe(true);
     expect(wrapper.find('nldd-list').exists()).toBe(false);
     // A page that could not load its groups offers no action on them either.
-    expect(wrapper.find('[data-testid="groepen-aanmaken"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="groups-create"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -244,8 +244,8 @@ describe('Groups', () => {
 
     // Beside the h1, like on the overview: below a long list the action ends
     // up out of reach.
-    const button = wrapper.find('[data-testid="groepen-aanmaken"]');
-    expect(wrapper.find('.page-header [data-testid="groepen-aanmaken"]').exists()).toBe(true);
+    const button = wrapper.find('[data-testid="groups-create"]');
+    expect(wrapper.find('.page-header [data-testid="groups-create"]').exists()).toBe(true);
     expect(property(button.element, 'variant')).toBe('primary');
 
     await button.trigger('click');
@@ -253,7 +253,7 @@ describe('Groups', () => {
 
     const form = wrapper.find('nldd-sheet[accessible-label="Nieuwe groep"]').element;
     for (const [name, value] of [
-      ['naam', 'Team'],
+      ['name', 'Team'],
       ['slug', 'team'],
     ]) {
       [...form.querySelectorAll('nldd-text-field')]

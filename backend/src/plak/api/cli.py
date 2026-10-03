@@ -53,7 +53,7 @@ _BEARER = {"security": [{SECURITY_BEARER: []}]}
 
 
 class DeviceAuthorizationRequest(ApiModel):
-    """Het begin van `plak login`."""
+    """The start of `plak login`."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"clientName": "plak-cli 1.2 on macOS"}, {}]})
 
@@ -61,40 +61,40 @@ class DeviceAuthorizationRequest(ApiModel):
         default=None,
         max_length=cli.CLIENT_NAME_MAX_LENGTH,
         description=(
-            "Hoe de CLI zichzelf noemt; staat op het goedkeuringsscherm en in de lijst gekoppelde sessies. "
-            f"Hoogstens {cli.CLIENT_NAME_MAX_LENGTH} tekens; stuur- en opmaaktekens worden eruit gehaald."
+            "How the CLI names itself; shown on the approval screen and in the list of linked CLI sessions. "
+            f"At most {cli.CLIENT_NAME_MAX_LENGTH} characters; control and formatting characters are stripped."
         ),
         examples=["plak-cli 1.2 on macOS"],
     )
 
 
 class DeviceAuthorizationOut(ApiModel):
-    """Wat de CLI nodig heeft om het inloggen af te maken (RFC 8628 3.2)."""
+    """What the CLI needs to finish signing in (RFC 8628 3.2)."""
 
     device_code: str = Field(
-        description="Geheim voor de CLI zelf: hiermee vraagt hij de tokens op. Nooit tonen of loggen."
+        description="Secret for the CLI itself: it uses this to request the tokens. Never show or log it."
     )
     user_code: str = Field(
         description=(
-            "Code om in de terminal te tonen en in het beheer te vergelijken of in te tikken: acht tekens "
-            "zonder 0, O, 1 en I, met een koppelteken in het midden. Hoofdletterongevoelig."
+            "Code to show in the terminal and to compare or type in the admin interface: eight characters "
+            "without 0, O, 1 and I, with a hyphen in the middle. Case-insensitive."
         ),
         examples=["WDJB-MJHT"],
     )
     verification_uri: str = Field(
-        description="Pagina in het beheer waar het lid de code invoert.",
+        description="Page in the admin interface where the member enters the code.",
         examples=["https://beheer.plak.example/cli-link"],
     )
     verification_uri_complete: str = Field(
-        description="Dezelfde pagina met de code al ingevuld; om in de browser te openen.",
+        description="The same page with the code already filled in; for opening in a browser.",
         examples=["https://beheer.plak.example/cli-link?code=WDJB-MJHT"],
     )
-    expires_in: int = Field(description="Seconden tot de codes verlopen.", examples=[600])
-    interval: int = Field(description="Seconden die de CLI minstens tussen twee pogingen wacht.", examples=[5])
+    expires_in: int = Field(description="Seconds until the codes expire.", examples=[600])
+    interval: int = Field(description="Minimum number of seconds the CLI waits between attempts.", examples=[5])
 
 
 class TokenRequest(ApiModel):
-    """Een apparaatcode inwisselen, of een verversingstoken."""
+    """Exchange a device code, or a refresh token."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -106,47 +106,47 @@ class TokenRequest(ApiModel):
     )
 
     grant_type: Literal["device_code", "refresh_token"] = Field(
-        description="`device_code` na het goedkeuren, `refresh_token` om te verversen.",
+        description="`device_code` after approval, `refresh_token` to refresh.",
         examples=["device_code"],
     )
     device_code: str | None = Field(
-        default=None, max_length=200, description="De `deviceCode`, bij `grantType` `device_code`."
+        default=None, max_length=200, description="The `deviceCode`, for `grantType` `device_code`."
     )
     refresh_token: str | None = Field(
-        default=None, max_length=200, description="Het laatste verversingstoken, bij `grantType` `refresh_token`."
+        default=None, max_length=200, description="The latest refresh token, for `grantType` `refresh_token`."
     )
 
 
 class CliMemberOut(ApiModel):
-    """Het lid achter een CLI-sessie."""
+    """The member behind a CLI session."""
 
-    email: str = Field(description="E-mailadres van het lid.", examples=["lid@example.nl"])
-    name: str = Field(description="Weergavenaam; leeg als de identity provider die niet stuurt.", examples=["Sanne"])
+    email: str = Field(description="E-mail address of the member.", examples=["lid@example.nl"])
+    name: str = Field(description="Display name; empty if the identity provider does not send one.", examples=["Sanne"])
 
 
 class TokensOut(ApiModel):
-    """Een verse set tokens. Het verversingstoken is na gebruik ongeldig: bewaar steeds het nieuwe."""
+    """A fresh set of tokens. The refresh token is invalid after use: always keep the new one."""
 
-    access_token: str = Field(description="Toegangstoken `plakcli_...` voor `Authorization: Bearer`.")
+    access_token: str = Field(description="Access token `plakcli_...` for `Authorization: Bearer`.")
     refresh_token: str = Field(
         description=(
-            "Verversingstoken `plakclr_...`. Eenmalig: wie een al gebruikt verversingstoken nog eens "
-            "aanbiedt, trekt daarmee de hele CLI-sessie in."
+            "Refresh token `plakclr_...`. Single use: presenting a refresh token that has already been used "
+            "revokes the entire CLI session."
         )
     )
-    token_type: Literal["Bearer"] = Field(description="Altijd `Bearer`.", examples=["Bearer"])
-    expires_in: int = Field(description="Seconden tot het toegangstoken verloopt.", examples=[3600])
-    member: CliMemberOut = Field(description="Het lid namens wie de CLI nu handelt.")
+    token_type: Literal["Bearer"] = Field(description="Always `Bearer`.", examples=["Bearer"])
+    expires_in: int = Field(description="Seconds until the access token expires.", examples=[3600])
+    member: CliMemberOut = Field(description="The member on whose behalf the CLI now acts.")
 
 
 class WhoamiOut(ApiModel):
-    """Wie de CLI is, en tot wanneer."""
+    """The CLI's member and session expiry."""
 
-    member: CliMemberOut = Field(description="Het lid namens wie de CLI handelt.")
+    member: CliMemberOut = Field(description="The member on whose behalf the CLI acts.")
     expires_at: str = Field(
         description=(
-            "Tijdstip waarop de CLI-sessie verloopt als hij niet meer ververst wordt: 30 dagen na het laatste "
-            "verversen, en nooit later dan 90 dagen na het koppelen."
+            "Time at which the CLI session expires if it is no longer refreshed: 30 days after the last "
+            "refresh, and never later than 90 days after sign-in."
         ),
         json_schema_extra={"format": "date-time", "examples": ["2026-10-19T09:30:00Z"]},
     )
@@ -193,20 +193,20 @@ def _factory(request: Request) -> async_sessionmaker[AsyncSession]:
     "/cli/device-authorizations",
     tags=[TAG_CLI],
     openapi_extra=_NO_AUTH,
-    summary="Inloggen met de CLI beginnen",
-    response_description="De apparaatcode voor de CLI en de gebruikerscode voor het lid.",
+    summary="Start signing in with the CLI",
+    response_description="The device code for the CLI and the user code for the member.",
     description=(
-        "Stap 1 van `plak login` (RFC 8628). De CLI krijgt een geheime `deviceCode` en toont de `userCode` "
-        "plus `verificationUri`; het lid opent die pagina in het beheer, vergelijkt de code en keurt goed. "
-        "Intussen vraagt de CLI elke `interval` seconden `POST /cli/tokens`. De codes verlopen na tien "
-        "minuten.\n\n"
-        "**Mag:** iedereen, zonder authenticatie. Per IP-adres geldt een eigen limiet op het aantal "
-        "aanvragen, naast de algemene ratelimit."
+        "Step 1 of `plak login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` "
+        "plus `verificationUri`; the member opens that page in the admin interface, compares the code and "
+        "approves. Meanwhile the CLI calls `POST /cli/tokens` every `interval` seconds. The codes expire "
+        "after ten minutes.\n\n"
+        "**Who can call this:** anyone, without authentication. Each IP address has its own limit on the number "
+        "of requests, on top of the general rate limit."
     ),
     responses=error_responses(
         {
-            422: f"`clientName` is langer dan {cli.CLIENT_NAME_MAX_LENGTH} tekens.",
-            429: "Te veel aanvragen vanaf dit adres (`TOO_MANY_REQUESTS`); probeer het later opnieuw.",
+            422: f"`clientName` is longer than {cli.CLIENT_NAME_MAX_LENGTH} characters.",
+            429: "Too many requests from this address (`TOO_MANY_REQUESTS`); try again later.",
         }
     ),
 )
@@ -240,29 +240,30 @@ async def create_device_authorization(
     "/cli/tokens",
     tags=[TAG_CLI],
     openapi_extra=_NO_AUTH,
-    summary="Tokens ophalen of verversen",
-    response_description="Een toegangstoken en een nieuw verversingstoken.",
+    summary="Fetch or refresh tokens",
+    response_description="An access token and a new refresh token.",
     description=(
-        "Met `grantType` `device_code`: de CLI vraagt of het lid al heeft goedgekeurd. Zolang dat niet zo is "
-        "volgt 400 `AUTHORIZATION_PENDING`; wie sneller vraagt dan `interval` krijgt `SLOW_DOWN` en wacht "
-        "voortaan vijf seconden langer. Na goedkeuring komen er eenmalig tokens terug; daarna is de "
-        "apparaatcode op.\n\n"
-        "Met `grantType` `refresh_token`: een nieuw toegangstoken en een nieuw verversingstoken. Het oude "
-        "verversingstoken is daarna ongeldig. Wordt het zojuist vervangen verversingstoken binnen tien "
-        "seconden nog eens aangeboden (twee verversingen tegelijk), dan volgt `INVALID_GRANT` en blijft de "
-        "sessie staan. Komt een al gebruikt verversingstoken later of ouder terug, dan hebben twee partijen "
-        "dezelfde sessie in handen: Plak trekt de hele CLI-sessie in en schrijft `cli_refresh_reuse` in het "
-        "auditlog. Een CLI-sessie verloopt 30 dagen na het laatste verversen en "
-        "hoe dan ook 90 dagen na het koppelen.\n\n"
-        "**Mag:** iedereen met een geldige apparaatcode of verversingstoken; er is verder geen "
-        "authenticatie."
+        "With `grantType` `device_code`: the CLI asks whether the member has approved yet. Until then, the "
+        "response is 400 `AUTHORIZATION_PENDING`; polling faster than `interval` returns `SLOW_DOWN`, and the CLI "
+        "must then wait five seconds longer between polls. After approval the tokens are returned once; after "
+        "that the device code is spent.\n\n"
+        "With `grantType` `refresh_token`: a new access token and a new refresh token. The old "
+        "refresh token is invalid afterwards. If the refresh token that was just replaced is presented again "
+        "within ten seconds (two refreshes at the same time), the response is `INVALID_GRANT` and the "
+        "session remains valid. If a used refresh token is presented after that window, or an older one is "
+        "presented, two parties "
+        "hold the same session: Plak revokes the entire CLI session and writes `cli_refresh_reuse` to the "
+        "audit log. A CLI session expires 30 days after the last refresh and "
+        "in any case 90 days after sign-in.\n\n"
+        "**Who can call this:** anyone with a valid device code or refresh token; there is no other "
+        "authentication."
     ),
     responses=error_responses(
         {
             400: (
-                "Nog niet goedgekeurd (`AUTHORIZATION_PENDING`), te snel gevraagd (`SLOW_DOWN`), de "
-                "apparaatcode is verlopen (`EXPIRED_TOKEN`), het lid weigerde (`ACCESS_DENIED`), of de code "
-                "of het verversingstoken is onbekend, al gebruikt, verlopen of hoort bij een niet-actief lid "
+                "Not approved yet (`AUTHORIZATION_PENDING`), asked too fast (`SLOW_DOWN`), the "
+                "device code has expired (`EXPIRED_TOKEN`), the member refused (`ACCESS_DENIED`), or the code "
+                "or the refresh token is unknown, already used, expired or belongs to an inactive member "
                 "(`INVALID_GRANT`)."
             ),
         }
@@ -315,13 +316,13 @@ async def tokens(request: Request, body: TokenRequest) -> TokensOut:
 
 _BEARER_ERRORS = {
     401: (
-        "Geen of een ongeldig, verlopen of ingetrokken toegangstoken (`TOKEN_INVALID`). Het antwoord draagt "
+        "Missing, invalid, expired or revoked access token (`TOKEN_INVALID`). The response carries "
         "`WWW-Authenticate: Bearer`."
     ),
 }
 _WHOAMI_ERRORS = {
     **_BEARER_ERRORS,
-    403: "Het lid achter deze CLI-sessie is niet (meer) actief (`MEMBER_NOT_ACTIVE`).",
+    403: "The member behind this CLI session is no longer active (`MEMBER_NOT_ACTIVE`).",
 }
 
 
@@ -333,12 +334,12 @@ def _access_token(request: Request) -> str:
 
 
 class LogoutRequest(ApiModel):
-    """Uitloggen met het verversingstoken, voor als er geen (geldig) toegangstoken meer is."""
+    """Sign out with the refresh token, for when there is no (valid) access token any more."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"refreshToken": "plakclr_..."}]})
 
     refresh_token: str = Field(
-        max_length=200, description="Een verversingstoken van de sessie, het huidige of een al gebruikt."
+        max_length=200, description="A refresh token of the session, the current one or one that was already used."
     )
 
 
@@ -347,21 +348,22 @@ class LogoutRequest(ApiModel):
     status_code=204,
     tags=[TAG_CLI],
     openapi_extra={"security": [{SECURITY_BEARER: []}, {}]},
-    summary="Uitloggen met de CLI",
+    summary="Sign out with the CLI",
     description=(
-        "Trekt de CLI-sessie in (`plak logout`), met al haar tokens; ze verdwijnt uit de lijst "
-        "gekoppelde sessies. Noem de sessie op een van twee manieren:\n\n"
-        "* `Authorization: Bearer plakcli_...`: het toegangstoken, ook als het al verlopen is, zolang het "
-        "echt is en de sessie nog bestaat;\n"
-        "* een JSON-lichaam `{\"refreshToken\": \"plakclr_...\"}` (zoals RFC 7009), het huidige of een al "
-        "gebruikt verversingstoken.\n\n"
-        "Het antwoord is altijd 204, ook voor een onbekend of al ingetrokken token: zo verraadt het niet "
-        "welke tokens bestaan. Het auditlog onderscheidt de twee gevallen wel (`cli_logout` met `allowed` "
-        "of `refused`).\n\n"
-        "**Mag:** iedereen die een token van de sessie heeft; ook een lid dat inmiddels gedeactiveerd is."
+        "Revokes the CLI session (`plak logout`), with all its tokens; it disappears from the list of linked CLI "
+        "sessions. Identify the session in one of two ways:\n\n"
+        "* `Authorization: Bearer plakcli_...`: the access token, even if it has already expired, as long as "
+        "it is genuine and the session still exists;\n"
+        "* a JSON body `{\"refreshToken\": \"plakclr_...\"}` (as in RFC 7009), the current refresh token or "
+        "one that was already used.\n\n"
+        "The response is always 204, even for an unknown or already revoked token: this way it does not "
+        "reveal which tokens exist. The audit log does distinguish the two cases (`cli_logout` with "
+        "`allowed` or `refused`).\n\n"
+        "**Who can call this:** anyone who holds a token of the session; also a member who has been deactivated "
+        "in the meantime."
     ),
-    responses={204: {"description": "De CLI-sessie bestaat niet (meer). Er komt geen inhoud terug."}}
-    | error_responses({422: "Het lichaam is geen object met een `refreshToken` van hoogstens 200 tekens."}),
+    responses={204: {"description": "The CLI session does not exist (any more). No content is returned."}}
+    | error_responses({422: "The body is not an object with a `refreshToken` of at most 200 characters."}),
 )
 async def logout(request: Request, body: Annotated[LogoutRequest | None, Body()] = None) -> Response:
     access_token = bearer_from_request(request) or None
@@ -399,12 +401,12 @@ async def logout(request: Request, body: Annotated[LogoutRequest | None, Body()]
     "/cli/whoami",
     tags=[TAG_CLI],
     openapi_extra=_BEARER,
-    summary="Wie is de CLI",
-    response_description="Het lid achter dit toegangstoken en wanneer de sessie verloopt.",
+    summary="Show the signed-in CLI member",
+    response_description="The member behind this access token and when the session expires.",
     description=(
-        "Het lid namens wie de CLI handelt (`plak whoami`), en tot wanneer de CLI-sessie loopt als hij niet "
-        "meer ververst wordt. Het lid moet nog actief zijn, net als bij elke deploy.\n\n"
-        "**Mag:** de houder van een geldig CLI-toegangstoken (`Authorization: Bearer plakcli_...`)."
+        "The member on whose behalf the CLI acts (`plak whoami`), and when the CLI session expires if it "
+        "is not refreshed. The member must still be active, as with every deploy.\n\n"
+        "**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer plakcli_...`)."
     ),
     responses=error_responses(_WHOAMI_ERRORS),
 )

@@ -47,13 +47,13 @@ describe('TabSites', () => {
     // Two buttons for the same task, one blue and one grey, only invite
     // the question of which of the two you need.
     expect(wrapper.findAll('nldd-button')).toHaveLength(0);
-    expect(wrapper.find('[data-testid="sites-publiceren"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sites-publish"]').exists()).toBe(false);
   });
 
   it('shows the empty state in the list\'s empty slot when there are no sites', () => {
     const { wrapper } = makeWrapper();
 
-    const empty = wrapper.find('[data-testid="sites-leeg"]');
+    const empty = wrapper.find('[data-testid="sites-empty"]');
     expect(empty.attributes('slot')).toBe('empty');
     expect((empty.element as HTMLElement & { text?: string }).text).toBe(
       'Nog geen sites in deze groep',

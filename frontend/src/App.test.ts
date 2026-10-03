@@ -158,7 +158,7 @@ describe('App', () => {
 
     // Above the skip link's target: whoever jumps to the content wants the
     // content, not this notice.
-    const content = wrapper.find('#hoofdinhoud').element;
+    const content = wrapper.find('#main-content').element;
     expect(
       bar.element.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -236,9 +236,9 @@ describe('App', () => {
     const app = await mountApp();
 
     const skipLink = app.find('nldd-skip-link');
-    expect(property<string>(skipLink.element, 'href')).toBe('#hoofdinhoud');
+    expect(property<string>(skipLink.element, 'href')).toBe('#main-content');
     expect(property<string>(skipLink.element, 'text')).toBe('Direct naar de inhoud');
-    const target = app.find('#hoofdinhoud');
+    const target = app.find('#main-content');
     expect(target.exists()).toBe(true);
     // A div is not focusable, so without tabindex the skip link only moves the
     // scroll position and focus stays at the top.

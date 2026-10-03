@@ -204,7 +204,7 @@ function accessAction(member: Member): RowAction {
   return {
     text: active ? t('admin.members.action.revoke') : t('admin.members.action.restore'),
     icon: active ? 'lock' : 'lock-open',
-    testid: `lid-toegang-${member.id}`,
+    testid: `member-access-${member.id}`,
     run: () => void toggle(member),
   };
 }
@@ -239,7 +239,7 @@ function actionsFor(member: Member): RowAction[] {
       icon: admin ? 'person' : 'person-2',
       disabled: Boolean(blocked) && admin,
       details: blocked && admin ? blocked : undefined,
-      testid: `lid-rol-${member.id}`,
+      testid: `member-role-${member.id}`,
       run: () => void changeRole(member, admin ? 'member' : 'admin'),
     },
   ];
@@ -331,8 +331,8 @@ onMounted(() => {
         v-if="!loading && !errorMessage"
         :accessible-label="t('admin.members.search.label')"
         :placeholder="t('admin.members.search.placeholder')"
-        name="zoeken"
-        data-testid="leden-zoeken"
+        name="search"
+        data-testid="members-search"
         @input="onSearch"
       ></nldd-search-field>
     </nldd-container>
@@ -392,7 +392,7 @@ onMounted(() => {
              name is an axe violation (empty-table-header) and leaves a screen
              reader announcing the menu cell with no column to hang it on. -->
         <nldd-text-cell horizontal-alignment="right">
-          <span class="alleen-schermlezer">{{ t('admin.column.actions') }}</span>
+          <span class="visually-hidden">{{ t('admin.column.actions') }}</span>
         </nldd-text-cell>
       </nldd-table-row>
 

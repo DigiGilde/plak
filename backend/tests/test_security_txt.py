@@ -1,13 +1,13 @@
-"""security.txt onder /.well-known/ (RFC 9116, BIO2 5.24.08).
+"""security.txt under /.well-known/ (RFC 9116, BIO2 5.24.08).
 
-Drie eigenschappen dragen dit bestand, en elk heeft hieronder zijn eigen test:
+This file rests on three properties, and each has its own test below:
 
-1. het is geldig volgens de norm, ook over de tijd heen: Expires wordt per
-   verzoek berekend, want een vastgelegde datum maakt het bestand op een dag
-   ongeldig in plaats van alleen oud;
-2. het staat op beide hosts met hetzelfde document, zodat de ophaal-URL altijd
-   door een Canonical-regel wordt gedekt;
-3. het opent precies een pad; de rest van /.well-known/ blijft de neutrale 404.
+1. it is valid according to the standard, and stays valid over time: Expires is computed
+   per request, because a fixed date makes the file invalid on some day
+   instead of merely old;
+2. it is served on both hosts with the same document, so the fetch URL is
+   always covered by a Canonical line;
+3. it opens exactly one path; the rest of /.well-known/ stays the neutral 404.
 """
 
 from __future__ import annotations

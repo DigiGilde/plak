@@ -88,9 +88,10 @@ class AccessBase(enum.StrEnum):
     """The base answer to "who can look at this site": exactly one per site,
     and never the whole story.
 
-    NOBODY grants nothing by itself. A site on that base is unreachable unless
-    one of the two extras beside it (secret links, invitees) is on, which is
-    what makes "alleen via de uitzonderingen hieronder" expressible at all.
+    `nobody` grants no access on its own. A site on that base is unreachable unless
+    one of the two exceptions beside it (secret links, invitees) is on, which is
+    what makes "alleen via de uitzonderingen hieronder" ("only through the exceptions below")
+    expressible at all.
     """
 
     PUBLIC = "public"

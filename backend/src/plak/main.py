@@ -130,18 +130,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        # Names the IdP coupling in the log, so a wrong issuer or client id is
+        # Names the IdP configuration in the log, so a wrong issuer or client id is
         # visible in the first lines instead of only in a failing login. Never
         # the client secret or the private key.
         _logger.info(
-            "OIDC-koppeling: issuer %s, client_id %s",
+            "OIDC configuration: issuer %s, client_id %s",
             settings.oidc_issuer,
             settings.oidc_client_id,
         )
         if not spa_available(settings.spa_path):
             _logger.warning(
-                "Beheer-SPA niet gevonden in %s (PLAK_SPA_PATH): de beheer-host antwoordt 503 "
-                "tot de gebouwde frontend daar staat",
+                "Admin SPA not found in %s (PLAK_SPA_PATH): the admin host answers 503 "
+                "until the built frontend is there",
                 settings.spa_path,
             )
         engine = make_engine(settings)
@@ -186,7 +186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Plak API",
-        summary="Statische sites publiceren en delen, met previews per pull request.",
+        summary="Publish and share static sites, with previews per pull request.",
         description=docs.API_DESCRIPTION,
         version=API_VERSION,
         contact={

@@ -66,7 +66,7 @@ describe('Done (the address is the answer)', () => {
     await flushPromises();
 
     expect(wrapper.find('h1').text()).toBe('Je site staat online');
-    const link = wrapper.find('[data-testid="klaar-adres-link-site"]');
+    const link = wrapper.find('[data-testid="done-address-link-site"]');
     expect(link.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(link.text()).toBe('https://sites.plak.test/team-aurora/website/');
     expect(link.attributes('target')).toBe('_blank');
@@ -78,9 +78,9 @@ describe('Done (the address is the answer)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    const copy = wrapper.find('[data-testid="klaar-kopieer-site"]');
+    const copy = wrapper.find('[data-testid="done-copy-site"]');
     expect(copy.attributes('text')).toBe('Kopieer adres');
-    const openButtons = wrapper.find('[data-testid="klaar-open-site"]');
+    const openButtons = wrapper.find('[data-testid="done-open-site"]');
     expect(openButtons.attributes('text')).toBe('Open site');
     expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
@@ -93,8 +93,8 @@ describe('Done (the address is the answer)', () => {
     await flushPromises();
 
     // Today there is one address; the structure is the one for more.
-    expect(wrapper.findAll('[data-testid="klaar-adres"]')).toHaveLength(1);
-    expect(wrapper.find('[data-testid="klaar-adres"]').text()).toContain('Adres van je site');
+    expect(wrapper.findAll('[data-testid="done-address"]')).toHaveLength(1);
+    expect(wrapper.find('[data-testid="done-address"]').text()).toContain('Adres van je site');
 
     wrapper.unmount();
   });
@@ -104,13 +104,13 @@ describe('Done (the address is the answer)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-kopieermelding-site"]').text()).toBe('');
+    expect(wrapper.find('[data-testid="done-copy-notice-site"]').text()).toBe('');
 
-    await wrapper.find('[data-testid="klaar-kopieer-site"]').trigger('click');
+    await wrapper.find('[data-testid="done-copy-site"]').trigger('click');
     await flushPromises();
 
     expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
-    const notice = wrapper.find('[data-testid="klaar-kopieermelding-site"]');
+    const notice = wrapper.find('[data-testid="done-copy-notice-site"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line, so a screen reader gets the confirmation too.
     expect(notice.attributes('role')).toBe('status');
@@ -127,10 +127,10 @@ describe('Done (the address is the answer)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    await wrapper.find('[data-testid="klaar-kopieer-site"]').trigger('click');
+    await wrapper.find('[data-testid="done-copy-site"]').trigger('click');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-kopieermelding-site"]').text()).toContain(
+    expect(wrapper.find('[data-testid="done-copy-notice-site"]').text()).toContain(
       'Selecteer het adres',
     );
 
@@ -144,10 +144,10 @@ describe('Done (who can see this)', () => {
     await flushPromises();
 
     expect(wrapper.text()).not.toContain('Publieke URL');
-    expect(wrapper.find('[data-testid="klaar-zichtbaarheid"]').text()).toContain(
+    expect(wrapper.find('[data-testid="done-visibility"]').text()).toContain(
       'Iedereen kan de site bekijken',
     );
-    expect(wrapper.find('[data-testid="klaar-zichtbaarheid-wijzigen"]').attributes('href')).toBe(
+    expect(wrapper.find('[data-testid="done-visibility-change"]').attributes('href')).toBe(
       '/team-aurora/website/access',
     );
 
@@ -159,7 +159,7 @@ describe('Done (who can see this)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    const row = wrapper.find('[data-testid="klaar-zichtbaarheid"]').text();
+    const row = wrapper.find('[data-testid="done-visibility"]').text();
     expect(row).toContain('Alleen wie een rol heeft op deze site');
 
     wrapper.unmount();
@@ -169,10 +169,10 @@ describe('Done (who can see this)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-naar-site"]').attributes('href')).toBe(
+    expect(wrapper.find('[data-testid="done-to-site"]').attributes('href')).toBe(
       '/team-aurora/website',
     );
-    expect(wrapper.find('[data-testid="klaar-naar-overzicht"]').attributes('href')).toBe('/');
+    expect(wrapper.find('[data-testid="done-to-overview"]').attributes('href')).toBe('/');
 
     wrapper.unmount();
   });
@@ -198,7 +198,7 @@ describe('Done (reload and share)', () => {
     await flushPromises();
 
     expect(wrapper.find('nldd-inline-dialog[variant="loading"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="done-address-link-site"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -252,7 +252,7 @@ describe('Done (reload and share)', () => {
     await router.push('/team-aurora/tweede/done');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').attributes('href')).toBe(
+    expect(wrapper.find('[data-testid="done-address-link-site"]').attributes('href')).toBe(
       'https://sites.plak.test/team-aurora/tweede/',
     );
 
@@ -267,7 +267,7 @@ describe('Done (what goes wrong)', () => {
 
     const banner = wrapper.find('nldd-banner[variant="critical"]');
     expect(banner.attributes('text')).toBe('Onbekende site');
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="done-address-link-site"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -304,10 +304,10 @@ describe('Done (what goes wrong)', () => {
     await flushPromises();
 
     expect(wrapper.find('h1').text()).toBe('Je site staat nog niet online');
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="klaar-geen-versie"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="done-address-link-site"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="done-no-version"]').exists()).toBe(true);
     // The visibility stays on screen: it applies before anything is there.
-    expect(wrapper.find('[data-testid="klaar-zichtbaarheid"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="done-visibility"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -317,7 +317,7 @@ describe('Done (what goes wrong)', () => {
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').attributes('href')).toBe(
+    expect(wrapper.find('[data-testid="done-address-link-site"]').attributes('href')).toBe(
       '/team-aurora/website/',
     );
 
@@ -347,10 +347,10 @@ describe('Done (secret link)', () => {
     await flushPromises();
 
     expect(keyPostCalls(spy)).toBe(0);
-    expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="done-key"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="done-key-error"]').exists()).toBe(false);
     // The rest of the screen is there as usual.
-    expect(wrapper.find('[data-testid="klaar-adres-link-site"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="done-address-link-site"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -366,11 +366,11 @@ describe('Done (secret link)', () => {
     await flushPromises();
 
     expect(keyPostCalls(spy)).toBe(1);
-    const banner = wrapper.find('[data-testid="klaar-sleutel"]');
+    const banner = wrapper.find('[data-testid="done-key"]');
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('supporting-text')).toContain('maar één keer');
     expect(banner.attributes('supporting-text')).toContain('Toegang');
-    const link = wrapper.find('[data-testid="klaar-sleutel-link"]');
+    const link = wrapper.find('[data-testid="done-key-link"]');
     expect(link.text()).toContain('?key=');
     expect(link.text()).toContain('https://sites.plak.test/team-aurora/website/');
 
@@ -385,11 +385,11 @@ describe('Done (secret link)', () => {
     await flushPromises();
     await flushPromises();
 
-    await wrapper.find('[data-testid="klaar-sleutel-kopieren"]').trigger('click');
+    await wrapper.find('[data-testid="done-key-copy"]').trigger('click');
     await flushPromises();
 
     expect(write).toHaveBeenCalled();
-    expect(wrapper.find('[data-testid="klaar-sleutel-melding"]').text()).toBe('Link gekopieerd.');
+    expect(wrapper.find('[data-testid="done-key-notice"]').text()).toBe('Link gekopieerd.');
 
     wrapper.unmount();
   });
@@ -401,12 +401,12 @@ describe('Done (secret link)', () => {
     await flushPromises();
     await flushPromises();
 
-    const bare = wrapper.find('[data-testid="klaar-sleutel-link-zonder-code"]');
+    const bare = wrapper.find('[data-testid="done-key-link-without-code"]');
     expect(bare.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
-    const code = wrapper.find('[data-testid="klaar-sleutel-code"]').text();
+    const code = wrapper.find('[data-testid="done-key-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);
-    expect(wrapper.find('[data-testid="klaar-sleutel-code-kopieren"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="done-key-code-copy"]').exists()).toBe(true);
 
     wrapper.unmount();
   });
@@ -422,7 +422,7 @@ describe('Done (secret link)', () => {
     await flushPromises();
 
     expect(keyPostCalls(spy)).toBe(0);
-    expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="done-key"]').exists()).toBe(false);
 
     // Simulate navigating away and back to the same site's Done screen.
     await router.push('/team-aurora/website');
@@ -447,7 +447,7 @@ describe('Done (secret link)', () => {
       await flushPromises();
 
       expect(keyPostCalls(spy)).toBe(0);
-      expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="done-key"]').exists()).toBe(false);
 
       wrapper.unmount();
     },
@@ -479,7 +479,7 @@ describe('Done (secret link)', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').attributes('supporting-text')).toBe(
+    expect(wrapper.find('[data-testid="done-key-error"]').attributes('supporting-text')).toBe(
       'De sleutel kon niet worden aangemaakt.',
     );
 
@@ -507,7 +507,7 @@ describe('Done (secret link)', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-sleutel-fout"]').attributes('supporting-text')).toBe(
+    expect(wrapper.find('[data-testid="done-key-error"]').attributes('supporting-text')).toBe(
       'Interne fout',
     );
 
@@ -530,11 +530,11 @@ describe('Done (secret link)', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="klaar-sleutel"]').exists()).toBe(false);
-    const fallback = wrapper.find('[data-testid="klaar-sleutel-fout"]');
+    expect(wrapper.find('[data-testid="done-key"]').exists()).toBe(false);
+    const fallback = wrapper.find('[data-testid="done-key-error"]');
     expect(fallback.exists()).toBe(true);
     expect(
-      wrapper.find('[data-testid="klaar-sleutel-naar-toegang"]').attributes('href'),
+      wrapper.find('[data-testid="done-key-to-access"]').attributes('href'),
     ).toBe('/team-aurora/website/access');
 
     wrapper.unmount();
