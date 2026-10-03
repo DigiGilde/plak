@@ -72,7 +72,7 @@ from plak.security_headers import SecurityHeadersMiddleware, is_https
 from plak.serving.code_page import router as code_router
 from plak.serving.router import router as serving_router
 
-API_VERSION = "1.0.0"
+API_VERSION = "1.1.0"
 
 _logger = logging.getLogger(__name__)
 
