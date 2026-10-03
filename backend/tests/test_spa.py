@@ -26,7 +26,7 @@ from starlette.responses import PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
 from plak.config import Settings
-from plak.main import create_app
+from plak.main import API_VERSION, create_app
 from plak.platform.spa import (
     ADMIN_CSP,
     CACHE_ASSETS,
@@ -420,7 +420,7 @@ class TestFullApp:
         # The full app lets the logout form pass the content host
         # (platform/pages.py, logout); everything else is the strict regime.
         assert index.headers["content-security-policy"] == admin_csp(CONTENT_URL)
-        assert index.headers["api-version"] == "1.0.0"
+        assert index.headers["api-version"] == API_VERSION
         assert asset.headers["cache-control"] == CACHE_ASSETS
         # An unknown or mistyped app path never gets index.html: it falls
         # through to the app, where nothing claims it and the neutral 404 is
