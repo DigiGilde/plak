@@ -55,6 +55,19 @@ PLUGIN = (
     '  "author": {\n    "name": "Plak team"\n  },\n  "keywords": ["plak"]\n}\n'
 )
 PUBLICCODE = 'name: Plak\n\nsoftwareVersion: "0.0.0"\nreleaseDate: "2026-07-18"\n\nlegal:\n  license: EUPL-1.2\n'
+BACKEND_PYPROJECT = '[project]\nname = "plak-api"\nversion = "0.1.0"\n\n[build-system]\nrequires = ["hatchling"]\n'
+BACKEND_LOCK = (
+    "version = 1\n\n"
+    '[[package]]\nname = "plak-api"\nversion = "0.1.0"\nsource = { editable = "." }\n\n'
+    '[[package]]\nname = "plak"\nversion = "9.9.9"\nsource = { editable = "." }\n'
+)
+PACKAGE = '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "private": true\n}\n'
+PACKAGE_LOCK = (
+    '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "lockfileVersion": 3,\n  "packages": {\n'
+    '    "": {\n      "name": "plak-frontend",\n      "version": "0.1.0",\n'
+    '      "dependencies": {\n        "vue": "^3.5.0"\n      }\n    },\n'
+    '    "node_modules/vue": {\n      "version": "3.5.13"\n    }\n  }\n}\n'
+)
 
 
 def changelog(unreleased: str = "", released: str = "") -> str:
@@ -144,6 +157,10 @@ def repo(tmp_path, monkeypatch) -> Repo:
             "plugin/skills/plak/SKILL.md": "skill\n",
             "publiccode.yml": PUBLICCODE,
             "backend/src/plak/main.py": "app = 1\n",
+            "backend/pyproject.toml": BACKEND_PYPROJECT,
+            "backend/uv.lock": BACKEND_LOCK,
+            "frontend/package.json": PACKAGE,
+            "frontend/package-lock.json": PACKAGE_LOCK,
             "README.md": "readme\n",
         },
         "Start",
@@ -165,6 +182,20 @@ def _versions(repo: Repo) -> tuple[str, str]:
         release.pyproject_version(repo.read("cli/pyproject.toml")),
         json.loads(repo.read("plugin/.claude-plugin/plugin.json"))["version"],
     )
+
+
+def _image_versions(repo: Repo) -> set[str]:
+    """Every version the image's packages carry: the backend project and
+    its lock entry, package.json and both places in package-lock.json."""
+    lock = repo.read("backend/uv.lock")
+    package_lock = json.loads(repo.read("frontend/package-lock.json"))
+    return {
+        release.pyproject_version(repo.read("backend/pyproject.toml"), "backend/pyproject.toml"),
+        lock.split('name = "plak-api"\nversion = "')[1].split('"')[0],
+        json.loads(repo.read("frontend/package.json"))["version"],
+        package_lock["version"],
+        package_lock["packages"][""]["version"],
+    }
 
 
 class TestTags:
@@ -394,6 +425,38 @@ class TestVersionEdits:
         with pytest.raises(release.ReleaseError, match="no top-level"):
             release.set_plugin_version(text, "2026.10.1")
 
+    def test_a_pyproject_refusal_names_the_file(self):
+        with pytest.raises(release.ReleaseError, match=r"^backend/pyproject\.toml: no version"):
+            release.set_pyproject_version('[project]\nname = "plak-api"\n', "2026.10.1", "backend/pyproject.toml")
+
+    def test_the_lock_edit_picks_the_named_root_package(self):
+        edited = release.set_lock_version(BACKEND_LOCK, "2026.10.1", "plak-api", "backend/uv.lock")
+        assert edited == BACKEND_LOCK.replace('"plak-api"\nversion = "0.1.0"', '"plak-api"\nversion = "2026.10.1"')
+        with pytest.raises(release.ReleaseError, match=r"^backend/uv\.lock: expected one editable package 'plak-api'"):
+            release.set_lock_version(LOCK, "2026.10.1", "plak-api", "backend/uv.lock")
+
+    def test_package_json_keeps_its_formatting(self):
+        edited = release.set_package_version(PACKAGE, "2026.10.1")
+        assert edited == PACKAGE.replace('"version": "0.1.0"', '"version": "2026.10.1"')
+
+    def test_package_lock_gets_the_version_twice_and_leaves_the_dependencies(self):
+        edited = release.set_package_version(PACKAGE_LOCK, "2026.10.1", "frontend/package-lock.json")
+        assert edited == PACKAGE_LOCK.replace('"version": "0.1.0"', '"version": "2026.10.1"')
+        assert '"node_modules/vue": {\n      "version": "3.5.13"' in edited
+
+    @pytest.mark.parametrize(
+        ("text", "reason"),
+        [
+            ('{\n  "name": "plak-frontend"\n}\n', 'no top-level "version"'),
+            ('{\n  "a": {\n  "version": "1"\n}}\n', 'no top-level "version"'),
+            (PACKAGE_LOCK.replace('      "version": "0.1.0",\n', ""), 'no "version" line in the root package'),
+        ],
+        ids=["no-version", "nested-version", "lock-without-root-version"],
+    )
+    def test_a_package_file_without_its_version_lines_is_refused(self, text, reason):
+        with pytest.raises(release.ReleaseError, match="^" + re.escape(f"frontend/package-lock.json: {reason}")):
+            release.set_package_version(text, "2026.10.1", "frontend/package-lock.json")
+
     def test_publiccode_gets_the_version_and_the_date(self):
         edited = release.set_publiccode(PUBLICCODE, "2026.10.1", DAY)
         assert 'softwareVersion: "2026.10.1"\nreleaseDate: "2026-10-01"\n' in edited
@@ -416,6 +479,22 @@ class TestVersionEdits:
         assert lock_diff == {'version = "2026.10.1"', f'version = "{release.pyproject_version(pyproject)}"'}
         assert json.loads(release.set_plugin_version(plugin, "2026.10.1"))["version"] == "2026.10.1"
         assert 'softwareVersion: "2026.10.1"' in release.set_publiccode(publiccode, "2026.10.1", DAY)
+
+        backend = (ROOT / "backend/pyproject.toml").read_text(encoding="utf-8")
+        backend_lock = (ROOT / "backend/uv.lock").read_text(encoding="utf-8")
+        package = (ROOT / "frontend/package.json").read_text(encoding="utf-8")
+        package_lock = (ROOT / "frontend/package-lock.json").read_text(encoding="utf-8")
+
+        edited = release.set_pyproject_version(backend, "2026.10.1", "backend/pyproject.toml")
+        assert release.pyproject_version(edited, "backend/pyproject.toml") == "2026.10.1"
+        lock_diff = set(release.set_lock_version(backend_lock, "2026.10.1", "plak-api").splitlines())
+        lock_diff ^= set(backend_lock.splitlines())
+        assert lock_diff == {'version = "2026.10.1"', f'version = "{release.pyproject_version(backend)}"'}
+        assert json.loads(release.set_package_version(package, "2026.10.1"))["version"] == "2026.10.1"
+        edited = release.set_package_version(package_lock, "2026.10.1", "frontend/package-lock.json")
+        lock = json.loads(edited)
+        assert (lock["version"], lock["packages"][""]["version"]) == ("2026.10.1", "2026.10.1")
+        assert sum(a != b for a, b in zip(edited.splitlines(), package_lock.splitlines(), strict=True)) == 2
 
 
 class TestNotes:
@@ -544,14 +623,36 @@ class TestPromote:
         assert _versions(repo) == ("2026.10.1", "2026.10.1")
         assert 'name = "plak"\nversion = "2026.10.1"' in repo.read("cli/uv.lock")
         assert 'softwareVersion: "2026.10.1"\nreleaseDate: "2026-10-01"' in repo.read("publiccode.yml")
+        assert _image_versions(repo) == {"2026.10.1"}
 
     def test_a_backend_change_leaves_the_cli_and_plugin_versions(self, released):
         released.commit({"CHANGELOG.md": changelog(ENTRY), "backend/src/plak/main.py": "app = 2\n"})
         touched = release.promote(released.handle, TAG, DAY)
 
         assert _versions(released) == ("2026.9.1", "2026.9.1")
-        assert sorted(touched) == ["CHANGELOG.md", "publiccode.yml"]
+        assert sorted(touched) == [
+            "CHANGELOG.md",
+            "backend/pyproject.toml",
+            "backend/uv.lock",
+            "frontend/package-lock.json",
+            "frontend/package.json",
+            "publiccode.yml",
+        ]
         assert 'softwareVersion: "2026.10.1"' in released.read("publiccode.yml")
+
+    def test_the_image_gets_every_release_also_when_only_the_cli_changed(self, released):
+        """Every tag builds and ships a new image, whatever changed."""
+        released.commit({"CHANGELOG.md": changelog(ENTRY), "cli/plak_cli/__init__.py": "x = 2\n"})
+        release.promote(released.handle, TAG, DAY)
+        assert _image_versions(released) == {"2026.10.1"}
+        assert 'name = "plak"\nversion = "9.9.9"' in released.read("backend/uv.lock")
+
+    def test_a_missing_image_package_file_stops_the_release(self, released):
+        released.remove("frontend/package-lock.json")
+        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        with pytest.raises(release.ReleaseError, match=re.escape("frontend/package-lock.json is missing")):
+            release.promote(released.handle, TAG, DAY)
+        assert released.read("CHANGELOG.md") == changelog(ENTRY)
 
     @pytest.mark.parametrize(
         ("files", "expected"),

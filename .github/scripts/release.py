@@ -71,6 +71,10 @@ CLI_PATHS = ("cli/plak_cli/", CLI_PYPROJECT, CLI_LOCK)
 PLUGIN_MANIFEST = "plugin/.claude-plugin/plugin.json"
 PLUGIN_PATHS = ("plugin/",)
 PUBLICCODE = "publiccode.yml"
+BACKEND_PYPROJECT = "backend/pyproject.toml"
+BACKEND_LOCK = "backend/uv.lock"
+FRONTEND_PACKAGE = "frontend/package.json"
+FRONTEND_LOCK = "frontend/package-lock.json"
 
 NOTES_DIR = "frontend/src/content/releases/"
 NOTE_NAME = re.compile(r"^(?P<key>.+)\.(?P<lang>nl|en)\.md$")
@@ -85,14 +89,23 @@ GH_PR_CREATE = re.compile(r"\bgh\s+pr\s+create\b")
 # The version lines a release writes itself. Left out when comparing a file
 # with the previous release, so the bump of that release is not a change.
 PYPROJECT_VERSION = re.compile(r'^version = "[^"\n]*"$', re.MULTILINE)
-LOCK_VERSION = re.compile(
-    r'^(\[\[package\]\]\nname = "plak"\nversion = ")[^"\n]*("\nsource = \{ editable = "\." \})$', re.MULTILINE
-)
-PLUGIN_VERSION = re.compile(r'^(  "version": ")[^"\n]*(",?)$', re.MULTILINE)
+
+
+def _lock_version(name: str) -> re.Pattern[str]:
+    return re.compile(
+        rf'^(\[\[package\]\]\nname = "{re.escape(name)}"\nversion = ")[^"\n]*("\nsource = \{{ editable = "\." \}})$',
+        re.MULTILINE,
+    )
+
+
+LOCK_VERSION = _lock_version("plak")
+JSON_VERSION = re.compile(r'^(  "version": ")[^"\n]*(",?)$', re.MULTILINE)
+# The root package of package-lock.json, under "packages": { "": { ... } }.
+NPM_ROOT_VERSION = re.compile(r'^(    "": \{\n(?:      [^\n]*\n)*?      "version": ")[^"\n]*(",?)$', re.MULTILINE)
 IGNORING_VERSION = {
     CLI_PYPROJECT: lambda text: PYPROJECT_VERSION.sub("", text),
     CLI_LOCK: lambda text: LOCK_VERSION.sub(r"\1\2", text),
-    PLUGIN_MANIFEST: lambda text: PLUGIN_VERSION.sub(r"\1\2", text),
+    PLUGIN_MANIFEST: lambda text: JSON_VERSION.sub(r"\1\2", text),
 }
 
 
@@ -265,41 +278,55 @@ def is_shipped(path: str) -> bool:
     return _under(path, SHIPPED_PATHS) and not _under(path, NOT_SHIPPED) and not is_test_path(path)
 
 
-def _project_table(text: str) -> tuple[int, int]:
+def _project_table(text: str, path: str) -> tuple[int, int]:
     table = re.search(r"^\[project\]$", text, re.MULTILINE)
     if not table:
-        raise ReleaseError(f"{CLI_PYPROJECT}: no [project] table.")
+        raise ReleaseError(f"{path}: no [project] table.")
     following = re.search(r"^\[", text[table.end() :], re.MULTILINE)
     return table.end(), table.end() + following.start() if following else len(text)
 
 
-def set_pyproject_version(text: str, version: str) -> str:
-    start, end = _project_table(text)
+def set_pyproject_version(text: str, version: str, path: str = CLI_PYPROJECT) -> str:
+    start, end = _project_table(text, path)
     body, count = PYPROJECT_VERSION.subn(f'version = "{version}"', text[start:end], count=1)
     if not count:
-        raise ReleaseError(f"{CLI_PYPROJECT}: no version in [project].")
+        raise ReleaseError(f"{path}: no version in [project].")
     return text[:start] + body + text[end:]
 
 
-def pyproject_version(text: str) -> str:
-    start, end = _project_table(text)
+def pyproject_version(text: str, path: str = CLI_PYPROJECT) -> str:
+    start, end = _project_table(text, path)
     match = PYPROJECT_VERSION.search(text, start, end)
     if not match:
-        raise ReleaseError(f"{CLI_PYPROJECT}: no version in [project].")
+        raise ReleaseError(f"{path}: no version in [project].")
     return match.group(0).split('"')[1]
 
 
-def set_lock_version(text: str, version: str) -> str:
-    edited, count = LOCK_VERSION.subn(rf"\g<1>{version}\g<2>", text)
+def set_lock_version(text: str, version: str, name: str = "plak", path: str = CLI_LOCK) -> str:
+    edited, count = _lock_version(name).subn(rf"\g<1>{version}\g<2>", text)
     if count != 1:
-        raise ReleaseError(f"{CLI_LOCK}: expected one editable package 'plak', found {count}.")
+        raise ReleaseError(f"{path}: expected one editable package '{name}', found {count}.")
     return edited
 
 
 def set_plugin_version(text: str, version: str) -> str:
-    edited, count = PLUGIN_VERSION.subn(rf"\g<1>{version}\g<2>", text)
+    edited, count = JSON_VERSION.subn(rf"\g<1>{version}\g<2>", text)
     if count != 1 or json.loads(edited).get("version") != version:
         raise ReleaseError(f"{PLUGIN_MANIFEST}: no top-level \"version\" line to set.")
+    return edited
+
+
+def set_package_version(text: str, version: str, path: str = FRONTEND_PACKAGE) -> str:
+    """package.json, or package-lock.json, which repeats the version in its
+    root package."""
+    edited, count = JSON_VERSION.subn(rf"\g<1>{version}\g<2>", text)
+    data = json.loads(edited) if count == 1 else {}
+    if data.get("version") != version:
+        raise ReleaseError(f"{path}: no top-level \"version\" line to set.")
+    if "packages" in data:
+        edited, count = NPM_ROOT_VERSION.subn(rf"\g<1>{version}\g<2>", edited, count=1)
+        if not count:
+            raise ReleaseError(f'{path}: no "version" line in the root package to set.')
     return edited
 
 
@@ -471,6 +498,11 @@ def promote(git: Git, tag: str, day: date) -> list[str]:
     if previous is None or component_changed(git, previous, changed, PLUGIN_PATHS):
         writes[PLUGIN_MANIFEST] = set_plugin_version(_read(git, PLUGIN_MANIFEST), version)
     writes[PUBLICCODE] = set_publiccode(_read(git, PUBLICCODE), version, day)
+    # Every tag builds a new image, so its packages follow every release.
+    writes[BACKEND_PYPROJECT] = set_pyproject_version(_read(git, BACKEND_PYPROJECT), version, BACKEND_PYPROJECT)
+    writes[BACKEND_LOCK] = set_lock_version(_read(git, BACKEND_LOCK), version, "plak-api", BACKEND_LOCK)
+    writes[FRONTEND_PACKAGE] = set_package_version(_read(git, FRONTEND_PACKAGE), version)
+    writes[FRONTEND_LOCK] = set_package_version(_read(git, FRONTEND_LOCK), version, FRONTEND_LOCK)
     operations = note_operations(_working_tree_notes(git.root), version)
 
     for path, content in writes.items():
