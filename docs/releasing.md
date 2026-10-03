@@ -402,16 +402,9 @@ organisation.
    gh api --method POST repos/DigiGilde/plak/rulesets --input .github/rulesets/release-tags-fixed.json
    ```
 
-8. **Check them under *Settings, Rules, Rulesets*:** the App has to show
-   up by name in the bypass list of `beta` and `release tags`, and
-   nowhere else. GitHub documents `actor_id` only as "the ID of the
-   actor"; if the list shows no App, the value was the wrong ID.
-
-Two things the GitHub documentation does not settle, and that the first
-release therefore shows: that a bypass actor may push past the merge
-queue rule, and the `actor_id` above. If the push in `release` is
-refused, nothing is half done (the push is atomic); fix the ruleset and
-push to `beta` again, or rerun the job.
+8. **Check them under *Settings, Rules, Rulesets*:** the App shows up by
+   name in the bypass list of `beta` and `release tags`, and nowhere
+   else.
 
 A required check in `beta.json` that no job reports would block every
 merge; `test_workflows.py` fails when one names a job that does not
