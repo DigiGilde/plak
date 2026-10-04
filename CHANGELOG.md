@@ -12,6 +12,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Changed
+
+- The publish action's pull request comment calls the version it shows
+  "Plak version": Plak's id for that upload, next to the commit.
+
 ## [2026.10.4]
 
 ### Added

@@ -222,7 +222,7 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
                     number,
                     _marker(args.site, preview_ref or "live"),
                     f"**{what}:** {args.url}\n\n{access}"
-                    f"Commit {_head_sha(event)[:7]}, version `{args.version_id}`.",
+                    f"Commit {_head_sha(event)[:7]}, Plak version `{args.version_id}`.",
                     create=True,
                 )
         else:

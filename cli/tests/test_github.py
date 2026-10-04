@@ -214,7 +214,7 @@ def test_the_first_deploy_of_a_pull_request_places_a_comment(fake, runner_env):
     [comment] = fake.sent("POST", "/issues/42/comments")
     # The url already names the site and the ref; the comment does not repeat them.
     assert comment["body"] == (
-        f"{MARKER}\n**Preview:** {PREVIEW_URL}\n\nCommit abcdef0, version `{VERSION}`."
+        f"{MARKER}\n**Preview:** {PREVIEW_URL}\n\nCommit abcdef0, Plak version `{VERSION}`."
     )
     assert ("POST", "/deployments") not in fake.calls()
 
