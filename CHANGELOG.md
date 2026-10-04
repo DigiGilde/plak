@@ -10,6 +10,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
+## [2026.10.4]
+
 ### Added
 
 - A public What's new page at `/-/whats-new`, linked from the footer

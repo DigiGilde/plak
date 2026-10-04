@@ -1,6 +1,6 @@
 [project]
 name = "plak-api"
-version = "0.1.0"
+version = "2026.10.4"
 description = "Plak API - statische sites publiceren en delen met previews per PR"
 requires-python = ">=3.12"
 dependencies = [
