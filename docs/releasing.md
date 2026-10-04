@@ -12,8 +12,8 @@ one line under `## [Unreleased]` per change, in the same pull request.
   push a release.** The release step turns `[Unreleased]` into a
   versioned section, sets the component versions, commits that as
   `Release vYYYY.M.D` and gives it an annotated tag `vYYYY.M.D[.N]`.
-  The tag goes to production, and once it runs there it gets a GitHub
-  Release with that section as its notes.
+  The tag gets a GitHub Release with that section as its notes, and
+  then goes to production.
 - **Nothing under `[Unreleased]` means no release.** A release needs
   notes, and the entries are the notes; nothing is made up from commit
   subjects.
@@ -24,8 +24,8 @@ one line under `## [Unreleased]` per change, in the same pull request.
 
 All of it lives in one script, `.github/scripts/release.py`, tested in
 `backend/tests/test_release.py`. `.github/workflows/release.yml` runs it
-on every push to `beta`; `deploy.yml` takes the tag to production and
-publishes the GitHub Release.
+on every push to `beta`; `deploy.yml` publishes the GitHub Release for
+the tag and then takes it to production.
 
 ## Tags
 
@@ -247,8 +247,9 @@ unlike `GITHUB_TOKEN`, starts workflows with its pushes.
 
 ### Production and the GitHub Release
 
-`deploy.yml` builds the image for the tag and rolls it out to
-`productie` after four guards, each of which fails the job:
+`deploy.yml` tests, builds, scans and attests the image for the tag.
+Then the job `github-release` publishes the GitHub Release, after four
+guards, each of which fails the job:
 
 - the tag has the CalVer form,
 - the tagged commit is on `beta`,
@@ -257,9 +258,12 @@ unlike `GITHUB_TOKEN`, starts workflows with its pushes.
 - the tagged commit has its section in `CHANGELOG.md`, so a tag set by
   hand on any other commit goes nowhere.
 
-Once production runs it and the attestations are on the image, the job
-`github-release` publishes the GitHub Release: the notes of
-`release.py notes`, with the image and how to verify it.
+The release holds the notes of `release.py notes`, with the image and
+how to verify it. Only then does `production` roll the image out to
+`productie`: what runs there has been released. It runs the same four
+guards again, right before the rollout and within its one-at-a-time
+queue, since a newer tag may have arrived while it waited. A rerun finds
+the release already there and goes on to production.
 
 ## What's new notes
 
