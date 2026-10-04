@@ -12,6 +12,7 @@
     check --base REF    the pull request check on CHANGELOG.md and the notes
     api-check           the pull request check on the API contract
     hook                the Claude Code PreToolUse hook for `gh pr create`
+    links               write the link references at the bottom of CHANGELOG.md
 
 Run from anywhere inside the repository. docs/releasing.md has the model.
 """
@@ -29,6 +30,7 @@ import tempfile
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -43,6 +45,7 @@ RELEASED_HEADING = re.compile(r"^## \[(?P<version>[^\]]+)\]$")
 # The form before releases wrote headings themselves: `## [v2026.9.1] - 2026-09-01`.
 TAGGED_HEADING = re.compile(r"^## \[v[^\]]*\]")
 SECTION_TITLE = re.compile(r"^## \[([^\]]+)\]")
+LINK_REFERENCE = re.compile(r"^\[[^\]]+\]: \S+$")
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
 #: What ends up in what we ship: the image, the CLI, the plugin, the action.
@@ -153,10 +156,11 @@ def split_sections(text: str) -> list[Section]:
     """Every `## ` section, without judging it. The title is what sits
     between the brackets, so `Unreleased` or the tag."""
     lines = text.splitlines()
-    starts = [i for i, line in enumerate(lines) if line.startswith("## ")]
+    bottom = _links_start(lines)
+    starts = [i for i, line in enumerate(lines[:bottom]) if line.startswith("## ")]
     sections = []
     for n, start in enumerate(starts):
-        end = starts[n + 1] if n + 1 < len(starts) else len(lines)
+        end = starts[n + 1] if n + 1 < len(starts) else bottom
         heading = lines[start].rstrip()
         match = SECTION_TITLE.match(heading)
         title = match.group(1) if match else heading[3:].strip()
@@ -238,6 +242,11 @@ def changelog_problems(text: str) -> list[str]:
         elif error := tag_error("v" + match["version"]):
             problems.append(f"{CHANGELOG}: '{section.heading}': {error}")
         seen.add(section.title)
+    if not problems and text != with_links(text):
+        problems.append(
+            f"{CHANGELOG}: the link references at the bottom are not the ones its headings need; "
+            "`release.py links` writes them."
+        )
     return problems
 
 
@@ -264,7 +273,37 @@ def promote_text(text: str, tag: str, body: str) -> str:
     unreleased = split_sections(text)[0]
     released = [UNRELEASED, "", f"## [{tag[1:]}]", "", *body.splitlines(), ""]
     rest = lines[unreleased.end :]
-    return "\n".join([*lines[: unreleased.start], *released, *rest]).rstrip("\n") + "\n"
+    return with_links("\n".join([*lines[: unreleased.start], *released, *rest]))
+
+
+def _links_start(lines: list[str]) -> int:
+    """Where the link references at the bottom begin, blank lines included;
+    len(lines) when there are none."""
+    start = len(lines)
+    while start and (not lines[start - 1].strip() or LINK_REFERENCE.match(lines[start - 1])):
+        start -= 1
+    return start
+
+
+def changelog_links(titles: list[str]) -> list[str]:
+    """The link references that make the headings links, newest first: a
+    compare view for [Unreleased] and each version, the tag for the first."""
+    versions = [title for title in titles if title != "Unreleased"]
+    if not versions:
+        return []
+    base = f"https://github.com/{REPOSITORY}"
+    links = [f"[Unreleased]: {base}/compare/v{versions[0]}...HEAD"]
+    links += [f"[{newer}]: {base}/compare/v{older}...v{newer}" for newer, older in pairwise(versions)]
+    return [*links, f"[{versions[-1]}]: {base}/releases/tag/v{versions[-1]}"]
+
+
+def with_links(text: str) -> str:
+    """The changelog with its link references written anew from its
+    headings."""
+    lines = text.splitlines()
+    body = "\n".join(lines[: _links_start(lines)]).rstrip("\n")
+    links = changelog_links([section.title for section in split_sections(text)])
+    return body + "\n" + ("\n" + "\n".join(links) + "\n" if links else "")
 
 
 # --- Paths and versions -----------------------------------------------------
@@ -1020,6 +1059,7 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--spec", type=Path, required=True, help="the schema `python -m plak.api.openapi_file` prints")
         command.add_argument("--oasdiff", required=True, help="the oasdiff binary")
     commands.add_parser("hook", help="Claude Code PreToolUse hook, reads the event on stdin")
+    commands.add_parser("links", help="write the link references at the bottom of CHANGELOG.md")
     args = parser.parse_args(argv)
 
     if args.command == "hook":
@@ -1046,6 +1086,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "notes":
             print(release_notes(git, args.tag, args.image, args.digest), end="")
+            return 0
+        if args.command == "links":
+            path = git.root / CHANGELOG
+            path.write_text(with_links(_read(git, CHANGELOG)), encoding="utf-8")
+            print(f"updated {CHANGELOG}")
             return 0
         if args.command == "verify-staged":
             if problems := verify_staged(git, args.tag):
