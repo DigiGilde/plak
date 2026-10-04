@@ -121,6 +121,14 @@ correction goes under `[Unreleased]` as a new line. A section that only
 the pull request adds is new, not edited, even for a tag that exists
 already: that is how the section for the hand-made `v2026.9.30` came in.
 
+### Links
+
+The headings are links, through the link references at the bottom of
+`CHANGELOG.md`: `[Unreleased]` and each version to the compare view with
+the version before it, the first version to its tag. A release writes
+them anew; nobody edits them by hand. The check fails when they do not
+match the headings, and `release.py links` writes them.
+
 ## Component versions
 
 A release writes the version without the `v` (`2026.10.1`). Nobody

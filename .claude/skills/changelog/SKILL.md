@@ -112,3 +112,5 @@ the answer is yes.
   tag `v2026.9.30`, without the v and without a date); the check fails
   on it. A correction is a new line under `[Unreleased]`.
 - Never add a version section or change a version number by hand.
+- Never edit the link references at the bottom (`[2026.10.4]: https://…`);
+  the release writes them, and `release.py links` restores them.

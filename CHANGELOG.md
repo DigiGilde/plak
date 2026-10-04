@@ -10,6 +10,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
+<!-- release: hold -->
+
 ## [2026.10.4]
 
 ### Added
@@ -95,3 +97,7 @@ The first tagged version: what ran in production on 30 September 2026.
   encrypted IP addresses.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
+
+[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.4...HEAD
+[2026.10.4]: https://github.com/DigiGilde/plak/compare/v2026.9.30...v2026.10.4
+[2026.9.30]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.30

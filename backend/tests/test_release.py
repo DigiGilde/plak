@@ -92,7 +92,7 @@ def changelog(unreleased: str = "", released: str = "") -> str:
         text += "\n" + unreleased.strip("\n") + "\n"
     if released:
         text += "\n" + released.strip("\n") + "\n"
-    return text
+    return release.with_links(text)
 
 
 def with_entry(repo: Repo, entry: str = ENTRY) -> str:
@@ -272,6 +272,61 @@ class TestTags:
         assert Version("2026.10.1") > Version("0.3.1")
         assert Version("2026.10.1.1") > Version("2026.10.1")
         assert Version("2026.10.1") > Version("2026.9.30")
+
+
+class TestChangelogLinks:
+    """Keep a Changelog headings are links: `## [2026.10.1]` needs a
+    `[2026.10.1]: <url>` at the bottom, or it shows its brackets."""
+
+    BASE = "https://github.com/DigiGilde/plak"
+
+    def test_each_version_compares_with_the_one_before_and_the_first_is_its_tag(self):
+        assert release.changelog_links(["Unreleased", "2026.10.4.1", "2026.10.4", "2026.9.30"]) == [
+            f"[Unreleased]: {self.BASE}/compare/v2026.10.4.1...HEAD",
+            f"[2026.10.4.1]: {self.BASE}/compare/v2026.10.4...v2026.10.4.1",
+            f"[2026.10.4]: {self.BASE}/compare/v2026.9.30...v2026.10.4",
+            f"[2026.9.30]: {self.BASE}/releases/tag/v2026.9.30",
+        ]
+
+    def test_without_a_release_there_is_nothing_to_link(self):
+        assert release.changelog_links(["Unreleased"]) == []
+        text = "# Changelog\n\n## [Unreleased]\n\n[Unreleased]: https://example.org\n"
+        assert release.with_links(text) == "# Changelog\n\n## [Unreleased]\n"
+
+    def test_the_links_are_written_anew_and_nothing_else_moves(self):
+        stale = changelog(ENTRY, "## [2026.9.1]\n\n- Old.").replace("v2026.9.1...HEAD", "v2026.1.1...HEAD")
+        fresh = release.with_links(stale)
+        assert fresh == changelog(ENTRY, "## [2026.9.1]\n\n- Old.")
+        assert release.with_links(fresh) == fresh
+
+    def test_the_links_are_no_part_of_the_last_section(self):
+        """So the oldest release's notes and its freeze ignore them."""
+        sections = release.split_sections(changelog("", "## [2026.9.1]\n\n- Old."))
+        assert sections[-1].body == "- Old."
+
+    @pytest.mark.parametrize(
+        "edit",
+        [
+            lambda text: text[: text.index("\n[Unreleased]: ")] + "\n",
+            lambda text: text.replace("/releases/tag/v2026.9.1", "/releases/tag/v2026.9.2"),
+            lambda text: text + "[extra]: https://example.org\n",
+        ],
+        ids=["missing", "wrong", "extra"],
+    )
+    def test_links_that_do_not_follow_the_headings_fail_the_check(self, edit):
+        text = edit(changelog(ENTRY, "## [2026.9.1]\n\n- Old."))
+        assert release.changelog_problems(text) == [
+            "CHANGELOG.md: the link references at the bottom are not the ones its headings need; "
+            "`release.py links` writes them."
+        ]
+
+    def test_main_writes_them(self, repo, capsys):
+        (repo.path / "CHANGELOG.md").write_text(
+            changelog(ENTRY, "## [2026.9.1]\n\n- Old.").split("\n[Unreleased]: ")[0] + "\n", encoding="utf-8"
+        )
+        assert release.main(["links"]) == 0
+        assert capsys.readouterr().out == "updated CHANGELOG.md\n"
+        assert repo.read("CHANGELOG.md") == changelog(ENTRY, "## [2026.9.1]\n\n- Old.")
 
 
 class TestChangelogStructure:
@@ -627,7 +682,10 @@ class TestPromote:
 
         assert repo.read("CHANGELOG.md") == (
             "# Changelog\n\nWhat changed, newest first.\n\n## [Unreleased]\n\n"
-            f"## [2026.10.1]\n\n{ENTRY}\n\n{older}\n"
+            f"## [2026.10.1]\n\n{ENTRY}\n\n{older}\n\n"
+            "[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.1...HEAD\n"
+            "[2026.10.1]: https://github.com/DigiGilde/plak/compare/v2026.9.1...v2026.10.1\n"
+            "[2026.9.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.1\n"
         )
         assert release.changelog_problems(repo.read("CHANGELOG.md")) == []
         staged = repo.git("diff", "--cached", "--name-only").split()
@@ -1407,7 +1465,8 @@ class TestCheck:
         ids=["body", "renamed", "removed"],
     )
     def test_editing_a_released_section_fails(self, branch, edit):
-        branch.commit({"CHANGELOG.md": edit(branch.read("CHANGELOG.md"))})
+        """With the links following the edit, so only the freeze is left."""
+        branch.commit({"CHANGELOG.md": release.with_links(edit(branch.read("CHANGELOG.md")))})
         [error] = release.check(branch.handle, "beta").errors
         assert error == (
             "CHANGELOG.md: [2026.9.1] was released as v2026.9.1 and is frozen; put the change under [Unreleased]."
