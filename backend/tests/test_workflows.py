@@ -68,7 +68,7 @@ class TestTheCheckGate:
         """BIO2 8.31.02: significant changes are tested before they go to
         production. With only `needs: build` a push to main went straight
         to production, tested or not."""
-        assert deploy["jobs"]["production"]["needs"] == ["ci", "build"]
+        assert deploy["jobs"]["production"]["needs"] == ["ci", "build", "github-release"]
 
     def test_only_a_release_tag_deploys_to_production(self, deploy) -> None:
         """A push to `beta` still builds, scans and attests its image, but
@@ -429,8 +429,10 @@ class TestTheReleaseGuards:
     repositories."""
 
     @pytest.fixture
-    def production(self, deploy) -> dict:
-        return deploy["jobs"]["production"]
+    def guarded(self, deploy) -> dict:
+        """The job that releases a tag, and with it the one production
+        waits for."""
+        return deploy["jobs"]["github-release"]
 
     @pytest.fixture
     def release_tag(self, deploy) -> str:
@@ -462,27 +464,41 @@ class TestTheReleaseGuards:
         _git(tmp_path, "clone", "-q", str(tmp_path / "origin.git"), str(runner))
         return runner
 
-    def test_the_guards_run_after_a_full_checkout_and_before_the_rollout(
-        self, production
+    def test_the_guards_run_after_a_full_checkout_and_before_the_release(
+        self, guarded
     ) -> None:
         """Ancestry and the newest tag need the whole history and every tag;
         a shallow checkout would refuse every release or pass the wrong one.
-        The token stays out of .git/config: this job holds the ZAD api-key,
-        and the repository is public, so the fetches need no credentials."""
+        The token stays out of .git/config: the repository is public, so the
+        fetches need no credentials."""
+        steps = guarded["steps"]
+        assert steps[0]["uses"].startswith("actions/checkout@")
+        assert steps[0]["with"] == {"fetch-depth": 0, "persist-credentials": False}
+        assert [s.get("name") for s in steps[1:]] == [*GUARDS, "Publish the GitHub Release"]
+        assert guarded["env"]["TAG"] == "${{ github.ref_name }}"
+        for name in GUARDS:
+            assert "${{" not in _step(guarded, name)["run"], name
+
+    def test_production_checks_again_right_before_the_rollout(self, guarded, deploy) -> None:
+        """A newer tag can arrive while production waits in its concurrency
+        group; checked only at release time, an older tag could still roll
+        out last. So production runs the same guards, after its own full
+        checkout and immediately before the rollout."""
+        production = deploy["jobs"]["production"]
         steps = production["steps"]
         assert steps[0]["uses"].startswith("actions/checkout@")
         assert steps[0]["with"] == {"fetch-depth": 0, "persist-credentials": False}
         assert [s.get("name") for s in steps[1:]] == [*GUARDS, "Roll out to ZAD"]
         assert production["env"] == {"TAG": "${{ github.ref_name }}"}
         for name in GUARDS:
-            assert "${{" not in _step(production, name)["run"], name
+            assert _step(production, name)["run"] == _step(guarded, name)["run"], name
 
     @pytest.mark.parametrize("tag", ["v2026.10.1", "v2026.9.30", "v2026.12.31.2"])
     def test_a_calver_tag_passes_the_format_check(
-        self, production, release_tag, tmp_path, tag
+        self, guarded, release_tag, tmp_path, tag
     ) -> None:
         result = _run(
-            _step(production, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
+            _step(guarded, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
         )
         assert result.returncode == 0, result.stdout
 
@@ -500,40 +516,40 @@ class TestTheReleaseGuards:
             "2026.10.1",
         ],
     )
-    def test_any_other_tag_is_refused(self, production, release_tag, tmp_path, tag) -> None:
+    def test_any_other_tag_is_refused(self, guarded, release_tag, tmp_path, tag) -> None:
         result = _run(
-            _step(production, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
+            _step(guarded, "Check the tag format"), tmp_path, TAG=tag, RELEASE_TAG=release_tag
         )
         assert _refused(result), result.stdout
 
-    def test_a_commit_on_beta_passes_the_ancestry_check(self, production, work, tmp_path) -> None:
+    def test_a_commit_on_beta_passes_the_ancestry_check(self, guarded, work, tmp_path) -> None:
         """Including one that reached beta after the checkout: the guard
         fetches beta itself."""
         runner = self._checkout(tmp_path)
         _git(work, "commit", "-q", "--allow-empty", "-m", "three")
         _git(work, "push", "-q", "origin", "beta")
         result = _run(
-            _step(production, "Check that the tagged commit is on beta"),
+            _step(guarded, "Check that the tagged commit is on beta"),
             runner,
             TAG="v2026.10.1",
             GITHUB_SHA=_git(work, "rev-parse", "HEAD"),
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
-    def test_a_commit_off_beta_is_refused(self, production, work, tmp_path) -> None:
+    def test_a_commit_off_beta_is_refused(self, guarded, work, tmp_path) -> None:
         """A tag on a branch that never merged would ship unreviewed code."""
         _git(work, "switch", "-q", "-c", "side", "HEAD~1")
         _git(work, "commit", "-q", "--allow-empty", "-m", "unreviewed")
         _git(work, "push", "-q", "origin", "side")
         result = _run(
-            _step(production, "Check that the tagged commit is on beta"),
+            _step(guarded, "Check that the tagged commit is on beta"),
             self._checkout(tmp_path),
             TAG="v2026.10.1",
             GITHUB_SHA=_git(work, "rev-parse", "HEAD"),
         )
         assert _refused(result), result.stdout
 
-    def test_a_commit_dropped_from_beta_is_refused(self, production, work, tmp_path) -> None:
+    def test_a_commit_dropped_from_beta_is_refused(self, guarded, work, tmp_path) -> None:
         """The runner's own origin/beta may be older than beta is now; the
         guard overwrites it rather than trusting it."""
         dropped = _git(work, "rev-parse", "HEAD")
@@ -541,20 +557,20 @@ class TestTheReleaseGuards:
         _git(work, "reset", "-q", "--hard", "HEAD~1")
         _git(work, "push", "-q", "--force", "origin", "beta")
         result = _run(
-            _step(production, "Check that the tagged commit is on beta"),
+            _step(guarded, "Check that the tagged commit is on beta"),
             runner,
             TAG="v2026.10.1",
             GITHUB_SHA=dropped,
         )
         assert _refused(result), result.stdout
 
-    def test_the_newest_tag_passes(self, production, release_tag, work, tmp_path) -> None:
+    def test_the_newest_tag_passes(self, guarded, release_tag, work, tmp_path) -> None:
         """Ordered as numbers, not text: as text v2026.9.30 sorts after
         v2026.10.1. A tag that is not a release does not count."""
         self._tag(work, "v2026.10.1")
         self._tag(work, "v2026.12.1-rc1")
         result = _run(
-            _step(production, "Check that the tag is the newest release"),
+            _step(guarded, "Check that the tag is the newest release"),
             self._checkout(tmp_path),
             TAG="v2026.10.1",
             RELEASE_TAG=release_tag,
@@ -562,12 +578,12 @@ class TestTheReleaseGuards:
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_an_older_tag_pushed_again_is_refused(
-        self, production, release_tag, work, tmp_path
+        self, guarded, release_tag, work, tmp_path
     ) -> None:
         """Otherwise re-pushing an old tag rolls production back."""
         self._tag(work, "v2026.10.1")
         result = _run(
-            _step(production, "Check that the tag is the newest release"),
+            _step(guarded, "Check that the tag is the newest release"),
             self._checkout(tmp_path),
             TAG="v2026.9.30",
             RELEASE_TAG=release_tag,
@@ -575,7 +591,7 @@ class TestTheReleaseGuards:
         assert _refused(result), result.stdout
 
     def test_a_newer_tag_the_checkout_missed_still_refuses(
-        self, production, release_tag, work, tmp_path
+        self, guarded, release_tag, work, tmp_path
     ) -> None:
         """The guard fetches the tags itself, so one pushed after the
         checkout counts too."""
@@ -583,7 +599,7 @@ class TestTheReleaseGuards:
         runner = self._checkout(tmp_path)
         self._tag(work, "v2026.10.1.1")
         result = _run(
-            _step(production, "Check that the tag is the newest release"),
+            _step(guarded, "Check that the tag is the newest release"),
             runner,
             TAG="v2026.10.1",
             RELEASE_TAG=release_tag,
@@ -604,19 +620,19 @@ class TestTheReleaseGuards:
         _git(work, "add", "-A")
         _git(work, "commit", "-q", "-m", "Release")
 
-    def test_a_tag_on_its_release_commit_passes(self, production, work, tmp_path) -> None:
+    def test_a_tag_on_its_release_commit_passes(self, guarded, work, tmp_path) -> None:
         self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n## [2026.10.1]\n\n### Added\n\n- A thing.\n")
         self._tag(work, "v2026.10.1")
-        result = _run(_step(production, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
+        result = _run(_step(guarded, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
         assert result.returncode == 0, result.stdout + result.stderr
 
-    def test_a_tag_without_its_section_is_refused(self, production, work, tmp_path) -> None:
+    def test_a_tag_without_its_section_is_refused(self, guarded, work, tmp_path) -> None:
         """A tag set by hand on an ordinary commit, whose changelog only has
         [Unreleased]; a section that lands on beta later does not count."""
         self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A thing.\n")
         self._tag(work, "v2026.10.1")
         self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n## [2026.10.1]\n\n### Added\n\n- A thing.\n")
-        result = _run(_step(production, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
+        result = _run(_step(guarded, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
         assert _refused(result), result.stdout
 
 
@@ -1072,10 +1088,14 @@ class TestTheGitHubRelease:
     def job(self, deploy) -> dict:
         return deploy["jobs"]["github-release"]
 
-    def test_it_follows_production_and_the_attestations(self, job) -> None:
-        """The notes tell you to verify the attestations, and the release
-        says the tag is what runs; both have to be true first."""
-        assert job["needs"] == ["build", "provenance", "production"]
+    def test_it_comes_before_production_and_after_the_tests_and_attestations(self, job, deploy) -> None:
+        """What production runs has been released, and a release is tested
+        and carries the attestations its notes tell you to verify. It needs
+        no ZAD project: the release is the image, wherever it runs."""
+        assert job["needs"] == ["ci", "build", "provenance"]
+        assert " ".join(job["if"].split()) == "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
+        production = deploy["jobs"]["production"]
+        assert "github-release" in production["needs"]
         assert job["permissions"] == {"contents": "write"}
         assert job["env"] == {
             "TAG": "${{ github.ref_name }}",
@@ -1094,6 +1114,36 @@ class TestTheGitHubRelease:
         )
         assert 'gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"' in publish["run"]
         assert "${{" not in publish["run"]
+
+    @pytest.mark.parametrize(("exists", "created"), [(True, False), (False, True)], ids=["rerun", "first-run"])
+    def test_a_rerun_leaves_the_release_and_lets_production_go_on(self, job, tmp_path, exists, created) -> None:
+        """Run with `gh` and the notes stubbed: a release that is there
+        already is no reason to fail, or production would never follow."""
+        stubs = tmp_path / "bin"
+        stubs.mkdir()
+        log = tmp_path / "gh.log"
+        (stubs / "gh").write_text(
+            f'#!/bin/sh\necho "$*" >> "{log}"\n[ "$1 $2" = "release view" ] && exit {0 if exists else 1}\nexit 0\n',
+            encoding="utf-8",
+        )
+        (stubs / "gh").chmod(0o755)
+        (stubs / "python3").write_text("#!/bin/sh\necho notes\n", encoding="utf-8")
+        (stubs / "python3").chmod(0o755)
+
+        result = _run(
+            _step(job, "Publish the GitHub Release"),
+            tmp_path,
+            PATH=f"{stubs}:{os.environ['PATH']}",
+            TAG="v2026.10.4",
+            IMAGE="ghcr.io/digigilde/plak",
+            DIGEST="sha256:" + "a" * 64,
+            RUNNER_TEMP=str(tmp_path),
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        calls = log.read_text(encoding="utf-8").splitlines()
+        assert calls[0] == "release view v2026.10.4"
+        assert any(call.startswith("release create v2026.10.4") for call in calls) is created
 
 
 def _ruleset(name: str) -> dict:

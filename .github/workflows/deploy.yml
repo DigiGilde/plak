@@ -231,20 +231,99 @@ jobs:
           push-to-registry: true
 
 
-  # Only a release tag reaches production, never a branch push. Without a
-  # ZAD_PROJECT_ID there is no project to deploy to, and the action would
-  # fail on an empty api-key instead of standing down.
+  # A release tag becomes a GitHub Release once it is tested, built, scanned
+  # and attested, and once the guards below hold. Production follows the
+  # release, never the other way round: what runs there has been released.
   #
-  # The guards below run from the workflow file of the tagged commit, so
-  # they catch a mistaken tag, not someone who edits them on that commit:
-  # that takes a tag ruleset and the deployment rules of `productie`.
+  # The guards run from the workflow file of the tagged commit, so they
+  # catch a mistaken tag, not someone who edits them on that commit: that
+  # takes the tag rulesets and the deployment rules of `productie`.
+  #
+  # The notes are the section for the tag in CHANGELOG.md at the tagged
+  # commit; release.py checks the image name and digest before they go in.
+  github-release:
+    if: >-
+      github.event_name == 'push'
+      && startsWith(github.ref, 'refs/tags/v')
+    needs: [ci, build, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      IMAGE: ${{ needs.build.outputs.name }}
+      DIGEST: ${{ needs.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag format
+        run: |
+          if [[ ! "${TAG}" =~ ${RELEASE_TAG} ]]; then
+            echo "::error::${TAG} is not a release tag of the form vYYYY.M.D[.N]"
+            exit 1
+          fi
+
+      - name: Check that the tagged commit is on beta
+        run: |
+          git fetch --no-tags origin +refs/heads/beta:refs/remotes/origin/beta
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/beta; then
+            echo "::error::${TAG} points at ${GITHUB_SHA}, which is not on beta"
+            exit 1
+          fi
+
+      # An old tag pushed again would otherwise roll production back.
+      - name: Check that the tag is the newest release
+        run: |
+          git fetch --force --tags origin
+          newest=$(git tag -l 'v[0-9]*' | grep -E "${RELEASE_TAG}" | sort -V | tail -1)
+          if [ "${newest}" != "${TAG}" ]; then
+            echo "::error::${TAG} is not the newest release tag (${newest} is)"
+            exit 1
+          fi
+
+      # A release carries its notes: the section for its version in
+      # CHANGELOG.md at the tagged commit, which the release step writes. A
+      # tag set by hand on any other commit goes nowhere.
+      - name: Check that the tagged commit has its release notes
+        run: |
+          if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then
+            echo "::error::${TAG} has no section in CHANGELOG.md at the tagged commit"
+            exit 1
+          fi
+
+      # A rerun of the workflow finds the release already there; it leaves
+      # it as it is and lets production go on.
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::notice::${TAG} is released already"
+            exit 0
+          fi
+          notes="$RUNNER_TEMP/release-notes.md"
+          python3 .github/scripts/release.py notes --tag "$TAG" --image "$IMAGE" --digest "$DIGEST" > "$notes"
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"
+
+  # Only a released tag reaches production, never a branch push. Without a
+  # ZAD_PROJECT_ID there is no project to deploy to, and the action would
+  # fail on an empty api-key instead of standing down; the GitHub Release
+  # goes up regardless.
+  #
+  # The guards run again here, inside the concurrency group and right before
+  # the rollout: a newer tag can arrive while this job waits its turn, and
+  # what github-release checked before then no longer holds.
   production:
     if: >-
       github.event_name == 'push'
       && startsWith(github.ref, 'refs/tags/v')
       && vars.ZAD_PROJECT_ID != ''
     runs-on: ubuntu-latest
-    needs: [ci, build]
+    needs: [ci, build, github-release]
     permissions:
       contents: read
     environment:
@@ -307,31 +386,3 @@ jobs:
           deployment-name: productie
           component: beheer
           image: ${{ needs.build.outputs.image }}
-
-  # The GitHub Release goes up once the tag runs in production and its image
-  # carries the attestations its notes tell you to verify. The notes are the
-  # section for the tag in CHANGELOG.md at the tagged commit; release.py
-  # checks the image name and digest before they go in.
-  github-release:
-    needs: [build, provenance, production]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      TAG: ${{ github.ref_name }}
-      IMAGE: ${{ needs.build.outputs.name }}
-      DIGEST: ${{ needs.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Publish the GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          notes="$RUNNER_TEMP/release-notes.md"
-          python3 .github/scripts/release.py notes --tag "$TAG" --image "$IMAGE" --digest "$DIGEST" > "$notes"
-          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"
