@@ -436,8 +436,9 @@ describe('CliLink: looking up the code via the url', () => {
       return inner(input, init);
     });
 
-    await wrapper.find('[data-testid="code-link"]').trigger('click');
-    await wrapper.find('[data-testid="code-deny"]').trigger('click');
+    // Both clicks in the same tick: the second arrives while the first is running.
+    wrapper.find('[data-testid="code-link"]').element.dispatchEvent(new Event('click'));
+    wrapper.find('[data-testid="code-deny"]').element.dispatchEvent(new Event('click'));
     await untilIdle();
 
     expect(answers).toHaveLength(1);

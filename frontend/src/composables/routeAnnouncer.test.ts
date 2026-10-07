@@ -21,7 +21,7 @@ const Page = (title: string) =>
 const SlowPage = defineComponent({
   setup() {
     const loaded = ref(false);
-    onMounted(() => setTimeout(() => (loaded.value = true), 0));
+    onMounted(() => setTimeout(() => (loaded.value = true), 30));
     return () => h('div', loaded.value ? [h('h1', 'Traag')] : [h('p', 'Laden')]);
   },
 });
@@ -56,8 +56,8 @@ function makeRouter(): Router {
   });
 }
 
-async function mountShell(router: Router) {
-  await router.push('/');
+async function mountShell(router: Router, start = '/') {
+  await router.push(start);
   await router.isReady();
   const Shell = defineComponent({
     setup() {
@@ -124,7 +124,7 @@ describe('useRouteAnnouncer', () => {
     expect(document.querySelector('h1')).toBeNull();
     expect(status()).toBe('');
 
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 60));
     await flushPromises();
 
     expect(document.activeElement).toBe(document.querySelector('h1'));
@@ -139,7 +139,7 @@ describe('useRouteAnnouncer', () => {
     await flushPromises();
     await router.push('/groups');
     await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 60));
     await flushPromises();
 
     expect(document.activeElement!.textContent).toBe('Groepen');
@@ -147,8 +147,7 @@ describe('useRouteAnnouncer', () => {
 
   it('moves focus to the tab panel, not the heading, when only the tab changes', async () => {
     const router = makeRouter();
-    await router.push('/team/website');
-    await mountShell(router);
+    await mountShell(router, '/team/website');
     document.title = 'Een site - Versies - Plak';
 
     await router.push('/team/website/versions');
@@ -161,8 +160,7 @@ describe('useRouteAnnouncer', () => {
 
   it('treats another site as another page: focus goes to the heading', async () => {
     const router = makeRouter();
-    await router.push('/team/website');
-    await mountShell(router);
+    await mountShell(router, '/team/website');
 
     await router.push('/team/other');
     await flushPromises();

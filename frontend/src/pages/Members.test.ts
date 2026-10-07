@@ -121,6 +121,14 @@ async function runAction(name: string, testid: string): Promise<void> {
   await waitUntilLoaded();
 }
 
+/** A notification moves itself into the body and outlives the page it came from. */
+async function dismissAllNotices(): Promise<void> {
+  for (const notice of document.querySelectorAll('nldd-notification')) {
+    notice.dispatchEvent(new CustomEvent('dismiss'));
+  }
+  await flushPromises();
+}
+
 async function search(term: string): Promise<void> {
   const field = wrapper!.find('[data-testid="members-search"]');
   field.element.dispatchEvent(new CustomEvent('input', { detail: { value: term } }));
@@ -214,6 +222,7 @@ describe('Platform management (filled)', () => {
     // Nothing was sent: the member is as she was.
     expect(backend.data.members.find((l) => l.id === 'lid-1')?.status).toBe('active');
     expect(backend.data.members.find((l) => l.id === 'lid-1')?.platformRole).toBe('admin');
+    await dismissAllNotices();
   });
 
   it('shows who is platform admin and makes that changeable from the menu', async () => {
@@ -418,6 +427,7 @@ describe('Platform management (filled)', () => {
       | null;
     expect(notice?.supportingText).toBe('Er moet minstens één actieve beheerder overblijven.');
     expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('admin');
+    await dismissAllNotices();
   });
 
   it('demotes a platform admin back to member', async () => {

@@ -165,7 +165,10 @@ describe('UploadZone: choosing a folder without dragging', () => {
     await wrapper.find('[data-testid="upload-folder"]').trigger('click');
 
     expect(click).toHaveBeenCalledOnce();
-    expect(wrapper.find('[data-testid="upload-folder"]').attributes('text')).toBe('Kies een map');
+    const button = wrapper.find('[data-testid="upload-folder"]').element as HTMLElement & {
+      text?: string;
+    };
+    expect(button.text).toBe('Kies een map');
     expect(input.hasAttribute('webkitdirectory')).toBe(true);
 
     wrapper.unmount();
