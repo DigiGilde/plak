@@ -16,7 +16,6 @@ API rather than OAuth's own JSON error shape.
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Request
@@ -28,9 +27,10 @@ from plak import net
 from plak.api.deploys import bearer_from_request, cli_member
 from plak.api.docs import SECURITY_BEARER, TAG_CLI
 from plak.api.errors import WWW_AUTHENTICATE_BEARER, ApiError, error_responses
-from plak.api.schema import ApiModel
+from plak.api.schema import ApiModel, iso_utc
+from plak.audit import request as audit_request
 from plak.audit import vocabulary
-from plak.audit.log import Actor, AuditLog
+from plak.audit.log import Actor
 from plak.audit.pseudonymisation import truncate_ip
 from plak.cli import service as cli
 from plak.models.audit import ActorKind
@@ -150,10 +150,6 @@ class WhoamiOut(ApiModel):
         ),
         json_schema_extra={"format": "date-time", "examples": ["2026-10-19T09:30:00Z"]},
     )
-
-
-def _iso(value: datetime) -> str:
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _member_out(member: Member) -> CliMemberOut:
@@ -281,15 +277,14 @@ async def tokens(request: Request, body: TokenRequest) -> TokensOut:
                     raise cli.GrantError(f"{cli.INVALID_GRANT}.refresh_token_missing")
                 issued = await cli.refresh(db, body.refresh_token)
     except cli.RefreshReuseError as error:
-        log: AuditLog = request.app.state.audit_log
         actor = Actor(ActorKind.MEMBER, error.member_sub) if error.member_sub else Actor(ActorKind.ANONYMOUS)
-        await log.write(
+        await audit_request.write(
+            request,
             vocabulary.CLI_REFRESH_REUSE,
             actor,
             vocabulary.REFUSED,
             reason_code=cli.INVALID_GRANT,
             refs={"via": vocabulary.VIA_CLI},
-            ip=net.client_ip_from_request(request),
         )
         raise ApiError(400, error.message.key, params=error.message.params) from None
     except cli.GrantError as error:
@@ -297,13 +292,12 @@ async def tokens(request: Request, body: TokenRequest) -> TokensOut:
     if body.grant_type == "device_code":
         # The approval (cli_login) says who allowed it; this row says the
         # credential actually left Plak, and which session it belongs to.
-        log: AuditLog = request.app.state.audit_log
-        await log.write(
+        await audit_request.write(
+            request,
             vocabulary.CLI_TOKEN_ISSUED,
-            Actor(ActorKind.MEMBER, issued.member.sso_subject),
+            audit_request.member_actor(issued.member),
             vocabulary.ALLOWED,
             refs={"via": vocabulary.VIA_CLI, "cli_session": str(issued.session.id)},
-            ip=net.client_ip_from_request(request),
         )
     return TokensOut(
         access_token=issued.access_token,
@@ -375,24 +369,22 @@ async def logout(request: Request, body: Annotated[LogoutRequest | None, Body()]
         member = await db.get(Member, session.member_id) if session is not None else None
         if session is not None:
             await cli.revoke(db, session.id)
-    log: AuditLog = request.app.state.audit_log
-    ip = net.client_ip_from_request(request)
     if session is None:
-        await log.write(
+        await audit_request.write(
+            request,
             vocabulary.CLI_LOGOUT,
             Actor(ActorKind.ANONYMOUS),
             vocabulary.REFUSED,
             reason_code="TOKEN_INVALID",
             refs={"via": vocabulary.VIA_CLI},
-            ip=ip,
         )
         return Response(status_code=204)
-    await log.write(
+    await audit_request.write(
+        request,
         vocabulary.CLI_LOGOUT,
-        Actor(ActorKind.MEMBER, member.sso_subject) if member is not None else Actor(ActorKind.ANONYMOUS),
+        audit_request.member_actor(member) if member is not None else Actor(ActorKind.ANONYMOUS),
         vocabulary.ALLOWED,
         refs={"via": vocabulary.VIA_CLI, "cli_session": str(session.id)},
-        ip=ip,
     )
     return Response(status_code=204)
 
@@ -414,7 +406,7 @@ async def whoami(request: Request) -> WhoamiOut:
     plaintext = _access_token(request)
     async with _factory(request)() as db:
         session, member = await cli_member(request, db, plaintext)
-    return WhoamiOut(member=_member_out(member), expires_at=_iso(min(session.expires_at, session.max_expires_at)))
+    return WhoamiOut(member=_member_out(member), expires_at=iso_utc(min(session.expires_at, session.max_expires_at)))
 
 
 __all__ = ["VERIFICATION_PATH", "router"]

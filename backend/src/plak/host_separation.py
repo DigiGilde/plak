@@ -48,11 +48,6 @@ def host_from_scope(scope: Scope) -> str:
     return Headers(scope=scope).get("host", "").split(":")[0].lower()
 
 
-def belongs_to_admin(path: str) -> bool:
-    # Everything here is either an app path or an SPA path.
-    return True
-
-
 def belongs_to_content(path: str) -> bool:
     # `/` is not carved out: the root of the content host redirects to the
     # admin landing page (platform/pages.py). Everything the content world does not
@@ -79,8 +74,8 @@ class HostSeparationMiddleware:
             return
         host = host_from_scope(scope)
         path: str = scope["path"]
-        allowed = belongs_to_content(path) if host == self.content_host else belongs_to_admin(path)
-        if allowed:
+        # Every path on the admin host is an app or an SPA path.
+        if host != self.content_host or belongs_to_content(path):
             await self.app(scope, receive, send)
             return
         await neutral_404_response()(scope, receive, send)
@@ -88,7 +83,6 @@ class HostSeparationMiddleware:
 
 __all__ = [
     "HostSeparationMiddleware",
-    "belongs_to_admin",
     "belongs_to_content",
     "host_from_scope",
 ]
