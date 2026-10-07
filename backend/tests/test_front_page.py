@@ -20,6 +20,7 @@ from pathlib import Path
 import httpx
 import pytest_asyncio
 from fastapi import FastAPI
+from helpers_csp import assert_runs_no_script_and_only_its_own_style, directives
 from helpers_oidc import make_client_jwk
 
 from plak import i18n
@@ -31,7 +32,7 @@ from plak.platform.pages import (
     FRONT_PAGE_NAME_STORY,
     front_page_html,
 )
-from plak.serving.response import CONTENT_CSP, NEUTRAL_404_BODY
+from plak.serving.response import NEUTRAL_404_BODY
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"
@@ -179,11 +180,24 @@ class TestOnTheContentHost:
         assert '<html lang="en">' in injected.text
         assert "<script" not in injected.text.lower()
 
-    async def test_page_carries_the_content_headers(self, two_hosts) -> None:
+    async def test_no_script_runs_and_only_the_own_style_applies(self, two_hosts) -> None:
+        """The page shares its origin with every published site, so it gets
+        nothing the content policy grants: in either language, the one
+        `<style>` it carries is the only thing its policy admits."""
+        _, content = two_hosts
+        for lang in ("nl", "en"):
+            response = await content.get(f"/?lang={lang}")
+            assert response.status_code == 200, lang
+            assert_runs_no_script_and_only_its_own_style(response.text, response.headers["content-security-policy"])
+
+    async def test_page_carries_the_platform_headers(self, two_hosts) -> None:
         _, content = two_hosts
         response = await content.get("/")
 
-        assert response.headers["content-security-policy"] == CONTENT_CSP
+        policy = response.headers["content-security-policy"]
+        assert directives(policy)["form-action"] == ["'none'"]
+        assert directives(policy)["frame-ancestors"] == ["'none'"]
+        assert directives(policy)["base-uri"] == ["'none'"]
         assert response.headers["x-content-type-options"] == "nosniff"
         assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
         assert response.headers["cache-control"] == "no-cache"

@@ -7,6 +7,8 @@ without touching the store.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import uuid
 from pathlib import Path
 
@@ -96,6 +98,27 @@ _CONTENT_POLICIES: dict[tuple[bool, bool], str] = {
 def content_csp(*, external_sources: bool, sandbox: bool) -> str:
     return _CONTENT_POLICIES[(external_sources, sandbox)]
 
+
+def platform_csp(*, style: str | None = None, form: bool = False) -> str:
+    """The policy for the platform's own pages on the content host: no script
+    at all, the one inline `<style>` by its hash, and a form only where the
+    page has one. They share the origin with every published site, so they
+    get nothing the content policy grants.
+
+    A hash covers a `<style>` element, not a `style=""` attribute: these
+    pages may not grow one."""
+    directives: dict[str, tuple[str, ...]] = {"default-src": ("'none'",)}
+    if style is not None:
+        digest = base64.b64encode(hashlib.sha256(style.encode()).digest()).decode()
+        directives["style-src"] = (f"'sha256-{digest}'",)
+    directives["base-uri"] = ("'none'",)
+    directives["form-action"] = ("'self'",) if form else ("'none'",)
+    directives["frame-ancestors"] = ("'none'",)
+    return _serialise(directives)
+
+
+PLATFORM_CSP = platform_csp()
+
 NOINDEX = "noindex, nofollow"
 
 NEUTRAL_404_BODY = b"Niet gevonden\n"
@@ -106,8 +129,8 @@ def neutral_404_response() -> Response:
     that is what keeps all neutral 404s byte-identical, headers included
     (anti-enumeration).
 
-    It keeps the strict CONTENT_CSP whatever a site allows: a policy that
-    followed the site's own switches would say which site the refusal
+    It carries the platform's PLATFORM_CSP whatever a site allows: a policy
+    that followed the site's own switches would say which site the refusal
     belonged to, which is what this response exists to hide."""
     return Response(
         content=NEUTRAL_404_BODY,
@@ -116,7 +139,7 @@ def neutral_404_response() -> Response:
         headers={
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": CONTENT_CSP,
+            "Content-Security-Policy": PLATFORM_CSP,
             "Referrer-Policy": "no-referrer",
         },
     )

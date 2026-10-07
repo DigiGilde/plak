@@ -17,6 +17,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from helpers_csp import assert_runs_no_script_and_only_its_own_style, directives
 from helpers_oidc import set_content_session_cookie
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -223,8 +224,20 @@ class TestTheCodePageAppears:
         assert response.headers["referrer-policy"] == "same-origin"
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
         assert response.headers["x-content-type-options"] == "nosniff"
-        assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+        assert directives(response.headers["content-security-policy"])["frame-ancestors"] == ["'none'"]
         assert response.headers["vary"] == "Accept-Language"
+
+    async def test_no_script_runs_and_only_the_own_style_applies(self, client, environment):
+        """The page sits on the content origin, beside every published site,
+        and asks for the code that opens one: no script may run on it."""
+        response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
+        assert response.status_code == 200
+        assert_runs_no_script_and_only_its_own_style(response.text, response.headers["content-security-policy"])
+
+    async def test_the_form_may_post_to_this_origin_only(self, client, environment):
+        response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
+        assert directives(response.headers["content-security-policy"])["form-action"] == ["'self'"]
+        assert directives(response.headers["content-security-policy"])["base-uri"] == ["'none'"]
 
     async def test_english_accept_language_gets_the_english_page(self, client, environment):
         response = await client.get(
@@ -458,6 +471,7 @@ class TestHandingInTheCode:
         assert response.status_code == 200
         assert "De code klopt niet" in response.text
         assert KEY_COOKIE not in response.cookies
+        assert_runs_no_script_and_only_its_own_style(response.text, response.headers["content-security-policy"])
 
     async def test_a_wrong_code_is_audited_without_the_code(self, client, environment):
         await self._post(client, environment, code="fout")

@@ -301,8 +301,8 @@ is heuristically cacheable. Code: `serving/response.py` (`cache_control`),
 
 Refusal and non-existence are one byte-identical answer, headers included:
 status 404, body `Niet gevonden\n`, `Cache-Control: no-store`, `nosniff`, the
-strict content CSP and `Referrer-Policy: no-referrer`. It has a single
-construction point, which is what keeps it identical; it keeps the strict CSP
+platform CSP (§5.7) and `Referrer-Policy: no-referrer`. It has a single
+construction point, which is what keeps it identical; it keeps that CSP
 whatever a site allows, because a policy that followed the site would say which
 site the refusal was about.
 
@@ -363,11 +363,25 @@ shielding off is back on the shared origin, so the platform is not isolated by
 this, only defaulted safe.
 
 Every policy comes out of one directive table with one addition per switch, so
-the four combinations cannot drift apart. The neutral 404 always carries the
-plain policy, without either addition (§5.6).
+the four combinations cannot drift apart.
+
+The platform's own answers on the content host, the front page, the code page
+for a secret link and the neutral 404 (§5.6), carry a policy of their own
+(`platform_csp`): they run no script and share the origin with every
+published site, so they get nothing the content policy grants.
+
+```
+default-src 'none'; style-src 'sha256-…'; base-uri 'none';
+form-action 'none'; frame-ancestors 'none'
+```
+
+`style-src` holds the hash of the page's one inline `<style>` and is absent
+where there is none (the 404); `form-action` is `'self'` on the code page only.
+A hash covers a `<style>` element, not a `style=""` attribute, so these pages
+carry none.
 
 Code: `serving/response.py` (`_CONTENT_DIRECTIVES`, `EXTERNAL_SOURCES`,
-`SANDBOX`, `content_csp`), `api/admin.py` (`PUT .../external-sources`,
+`SANDBOX`, `content_csp`, `platform_csp`), `api/admin.py` (`PUT .../external-sources`,
 `PUT .../sandbox`). Guarded by: `test_serving.py`, `test_security_headers.py`,
 `test_admin_api.py`.
 

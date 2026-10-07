@@ -33,6 +33,7 @@ from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
+from plak.serving.response import PLATFORM_CSP
 from plak.serving.router import router as serving_router
 
 BASE_URL = "https://plak.example"
@@ -892,7 +893,7 @@ class TestExternalSources:
         become a way to tell which site a path belonged to."""
         response = await client.get("/aurora/extern/bestaat-niet/")
         assert response.status_code == 404
-        assert response.headers["content-security-policy"] == FULL_CSP
+        assert response.headers["content-security-policy"] == PLATFORM_CSP
 
 
 class TestSandbox:
@@ -937,7 +938,7 @@ class TestSandbox:
         a way to tell which site a path belonged to."""
         response = await client.get("/aurora/afgeschermd/bestaat-niet/")
         assert response.status_code == 404
-        assert response.headers["content-security-policy"] == FULL_CSP
+        assert response.headers["content-security-policy"] == PLATFORM_CSP
 
 
 class TestSandboxedOwnSubresource:
