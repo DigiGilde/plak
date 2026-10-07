@@ -9,11 +9,13 @@ outside every servable path, on the volume instead of in memory.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import stat
+import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -89,6 +91,10 @@ class ContentStore:
         self._tmp = self._root / TMP_DIRNAME
         self._tmp.mkdir(parents=True, exist_ok=True)
         self._reclaimed = self._root / RECLAIMED_DIRNAME
+        # Deletes run in worker threads; holding this keeps them from
+        # removing a directory while `reclaim` walks or moves it, so the
+        # walk sees one consistent volume.
+        self._removing = threading.Lock()
 
     @property
     def root(self) -> Path:
@@ -161,15 +167,30 @@ class ContentStore:
 
     def delete_version(self, storage_ref: str) -> None:
         path = self._version_root(storage_ref)
-        if path.exists():
-            shutil.rmtree(path)
+        with self._removing:
+            if path.exists():
+                shutil.rmtree(path)
 
     def delete_site(self, site_id: uuid.UUID) -> None:
         """Every version of one site, and whatever else lies in its directory.
 
         Never raises on the removal itself: the rows are gone by now, and what
         stays behind is reclaimed by the nightly cleanup."""
-        shutil.rmtree(self._version_root(str(site_id)), ignore_errors=True)
+        path = self._version_root(str(site_id))
+        with self._removing:
+            shutil.rmtree(path, ignore_errors=True)
+
+    async def delete_versions(self, storage_refs: Iterable[str]) -> None:
+        """Removes versions from disk in a worker thread: the app serves from
+        one event loop, and an rmtree of a version with thousands of files
+        would hold up every page view meanwhile."""
+        refs = list(storage_refs)
+        if refs:
+            await asyncio.to_thread(self._delete_all, refs)
+
+    def _delete_all(self, storage_refs: list[str]) -> None:
+        for storage_ref in storage_refs:
+            self.delete_version(storage_ref)
 
     def sweep_tmp(self, older_than: timedelta) -> int:
         boundary = datetime.now(tz=UTC) - older_than
@@ -196,6 +217,10 @@ class ContentStore:
         (a first publish that stopped halfway, every version deleted) has
         nothing to disagree with, so its old directories are ordinary orphans.
         """
+        with self._removing:
+            return self._reclaim(site_ids, storage_refs, older_than)
+
+    def _reclaim(self, site_ids: set[str], storage_refs: set[str], older_than: timedelta) -> Reclaimed:
         boundary = datetime.now(tz=UTC) - older_than
         sites_with_rows = {ref.split("/", 1)[0] for ref in storage_refs}
         kept = 0

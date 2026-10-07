@@ -771,8 +771,8 @@ class TestLimits:
         with pytest.raises(BundleError) as error:
             _write_entry(source, "leugen.bin", 100, tree, DirDestination(tmp_path), tight)
         assert reason_of(error) == "FILE_TOO_LARGE"
-        # Aborted well before the end: at most the limit plus one chunk.
-        assert (tmp_path / "leugen.bin").stat().st_size <= 10_000 + 8192
+        # Counted before each write: nothing past the limit reaches the disk.
+        assert (tmp_path / "leugen.bin").stat().st_size <= 10_000
         assert tree.count == 0
 
     def test_cumulative_limit(self, unpack: UnpackFn):
@@ -1110,7 +1110,7 @@ def _write_large_targz_wrapped(path: Path, chunk: bytes, count: int) -> None:
 )
 def test_peak_memory_does_not_grow_with_the_archive(tmp_path: Path, filename: str, write) -> None:
     """200 MB unpacked: peak memory during unpack stays orders of magnitude
-    below the archive (streaming in 8KB chunks, no dict[str, bytes])."""
+    below the archive (streaming in 64 KiB chunks, no dict[str, bytes])."""
     chunk = b"\0" * (1024 * 1024)
     source = tmp_path / filename
     write(source, chunk, LARGE // len(chunk))
