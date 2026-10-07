@@ -159,6 +159,21 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.workflow.path':
     'Save this file at {path} in the repository. After a push to the live branch, the new version shows up in {link}.',
 
+  // -- Deploy tab: the site id ------------------------------------------------------
+  'publish.deploy.siteId.label': 'Site ID',
+  'publish.deploy.siteId.copy': 'Copy site ID',
+  'publish.deploy.siteId.copied': 'Site ID copied.',
+  'publish.deploy.siteId.copyFailed':
+    'Copying did not work. Select the site ID above and copy it yourself.',
+  'publish.deploy.siteId.optional':
+    "This link also accepts workflows that do not name the site ID. Put {code} in your workflow, then choose 'Only publish with the site ID'.",
+  'publish.deploy.siteId.optionalReader':
+    'This link also accepts workflows that do not name the site ID. Only an admin of this site can restrict that.',
+  'publish.deploy.siteId.required': 'Only workflows that name the site ID can publish.',
+  'publish.deploy.siteId.require': 'Only publish with the site ID',
+  'publish.deploy.siteId.requireFailed': 'Site ID not required',
+  'publish.deploy.siteId.requireFailedDetail': 'Requiring the site ID did not work.',
+
   // -- Deploy tab: why this is safe ------------------------------------------------
   'publish.deploy.safety.summary': 'Why is this safe?',
   'publish.deploy.safety.noSecret':
@@ -188,6 +203,13 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'This site can no longer publish from CI without a secret until a new repository is linked.',
   'publish.deploy.unlink.keep': 'Keep the link',
   'publish.deploy.unlink.confirm': 'Unlink repository',
+
+  // -- Deploy tab: requiring the site id -----------------------------------------------
+  'publish.deploy.requireSiteId.title': 'Only publish with the site ID from now on?',
+  'publish.deploy.requireSiteId.text':
+    'Workflows without "site-id" can no longer publish to this site after this. You cannot undo this.',
+  'publish.deploy.requireSiteId.keep': 'Keep the current link',
+  'publish.deploy.requireSiteId.confirm': 'Only with site ID',
 
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Loading access settings',

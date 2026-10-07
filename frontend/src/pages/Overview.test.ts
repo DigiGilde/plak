@@ -45,6 +45,7 @@ const filledData: OverviewData = {
       group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
       sites: [
         {
+          id: '3f2b8a1e-5d4c-4e9a-9b6f-7c1d2e3a4b5c',
           groupSlug: 'team-aurora',
           slug: 'website',
           title: 'Team Aurora website',
@@ -361,6 +362,7 @@ describe('Overview', () => {
 
   describe('publishing from the overview', () => {
     const newSite: Site = {
+      id: 'b4e7d2c1-8a36-4f09-9d15-6c3a0e8f2b57',
       groupSlug: 'team-aurora',
       slug: 'handboek',
       title: 'Handboek',

@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tarfile
 import threading
+import urllib.parse
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -1245,6 +1246,169 @@ def test_explicit_plak_access_token_takes_priority_over_oidc(
     assert deploy_requests[0]["headers"]["Authorization"] == "Bearer expliciet-token"
 
 
+SITE_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
+
+
+def _audience(record: dict) -> str:
+    query = urllib.parse.urlsplit(record["path"]).query
+    return urllib.parse.parse_qs(query)["audience"][0]
+
+
+def _oidc_requests(stub_server) -> list[dict]:
+    return [r for r in stub_server.requests if r["path"].startswith("/oidc-token")]
+
+
+@pytest.fixture
+def ci_runner(stub_server, host, isolated_cwd, monkeypatch) -> None:
+    """A runner that offers an ID token, and a server that takes the deploy
+    and the removal."""
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/team-aurora/website/deploys": [
+                _json_step(201, {"versionId": "00000000-0000-0000-0000-000000000000"})
+            ],
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [lambda _record: (204, None, "text/plain")],
+        }
+    )
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
+    monkeypatch.delenv("PLAK_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("PLAK_SITE_ID", raising=False)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["publish", "DIST", "--site", "team-aurora/website"],
+        ["preview-remove", "pr-42", "--site", "team-aurora/website"],
+    ],
+)
+@pytest.mark.parametrize(
+    ("flag", "environment", "bound"),
+    [
+        (None, None, False),
+        (None, "", False),
+        (SITE_ID, None, True),
+        (SITE_ID.upper(), None, True),
+        (None, SITE_ID, True),
+        (None, SITE_ID.upper(), True),
+        (SITE_ID, "11111111-2222-3333-4444-555555555555", True),
+    ],
+)
+def test_the_id_token_names_the_site_id_when_there_is_one(
+    stub_server, host, dist_folder, ci_runner, monkeypatch, capsys, command, flag, environment, bound
+):
+    """With a site id the token is valid for that one site only: the audience
+    is the host plus /-/sites/ and the id, lowercase, the one form Plak
+    accepts. --site-id wins over PLAK_SITE_ID; an empty one is none."""
+    if environment is not None:
+        monkeypatch.setenv("PLAK_SITE_ID", environment)
+    argv = [str(dist_folder) if part == "DIST" else part for part in command] + ["--host", host]
+    if flag is not None:
+        argv += ["--site-id", flag]
+
+    assert cli.main(argv) == 0
+
+    [oidc] = _oidc_requests(stub_server)
+    assert _audience(oidc) == (f"{host}/-/sites/{SITE_ID}" if bound else host)
+    assert "Warning" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "website",
+        SITE_ID.replace("-", ""),
+        "{" + SITE_ID + "}",
+        "urn:uuid:" + SITE_ID,
+        " " + SITE_ID,
+        SITE_ID + "\n",
+        SITE_ID[:-1],
+        SITE_ID[:-1] + "g",
+        "",
+    ],
+)
+@pytest.mark.parametrize("command", ["publish", "preview-remove"])
+def test_a_site_id_that_is_no_uuid_stops_before_any_token_is_asked_for(
+    stub_server, host, dist_folder, ci_runner, capsys, value, command
+):
+    first = str(dist_folder) if command == "publish" else "pr-42"
+    code = cli.main([command, first, "--site", "team-aurora/website", "--host", host, "--site-id", value])
+
+    assert code == 2
+    assert stub_server.requests == []
+    assert f"Error: --site-id must be a site id (a UUID, from the Deploy tab of the site), got: {value!r}" in (
+        capsys.readouterr().err
+    )
+
+
+def test_an_invalid_plak_site_id_is_named_as_such(stub_server, host, dist_folder, ci_runner, monkeypatch, capsys):
+    monkeypatch.setenv("PLAK_SITE_ID", "team-aurora/website")
+
+    code = cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host])
+
+    assert code == 2
+    assert stub_server.requests == []
+    assert "Error: PLAK_SITE_ID must be a site id" in capsys.readouterr().err
+
+
+def test_a_site_id_is_checked_also_where_no_id_token_is_asked_for(stub_server, host, dist_folder, token_env, capsys):
+    """Outside CI, or with PLAK_ACCESS_TOKEN, the id names no audience, but a
+    typo in it is still one: better now than on the runner."""
+    code = cli.main(
+        ["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host, "--site-id", "website"]
+    )
+
+    assert code == 2
+    assert stub_server.requests == []
+
+
+SITE_ID_IGNORED = (
+    "Warning: --site-id (or PLAK_SITE_ID) only binds the CI ID token the CLI asks for; "
+    "ignored with a session or PLAK_ACCESS_TOKEN."
+)
+
+
+@pytest.mark.parametrize("command", ["publish", "preview-remove"])
+@pytest.mark.parametrize("credential", ["PLAK_ACCESS_TOKEN", "session"])
+@pytest.mark.parametrize(("source", "warnings"), [("flag", 1), ("environment", 1), (None, 0)])
+def test_a_site_id_beside_a_member_credential_is_ignored_with_a_warning(
+    stub_server, host, dist_folder, isolated_cwd, monkeypatch, capsys, command, credential, source, warnings
+):
+    """A session or an explicit token is not the ID token the CLI asks for,
+    so the site id binds nothing there: say so once, and carry on."""
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/sites/team-aurora/website/deploys": [
+                _json_step(201, {"versionId": "00000000-0000-0000-0000-000000000000"})
+            ],
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [lambda _record: (204, None, "text/plain")],
+        }
+    )
+    for name in ("ACTIONS_ID_TOKEN_REQUEST_URL", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "PLAK_SITE_ID"):
+        monkeypatch.delenv(name, raising=False)
+    if credential == "PLAK_ACCESS_TOKEN":
+        monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+        sent = "Bearer tok"
+    else:
+        monkeypatch.delenv("PLAK_ACCESS_TOKEN", raising=False)
+        _store_session(host)
+        sent = "Bearer access-1"
+    first = str(dist_folder) if command == "publish" else "pr-42"
+    argv = [command, first, "--site", "team-aurora/website", "--host", host]
+    if source == "flag":
+        argv += ["--site-id", SITE_ID]
+    elif source == "environment":
+        monkeypatch.setenv("PLAK_SITE_ID", SITE_ID)
+
+    assert cli.main(argv) == 0
+
+    assert capsys.readouterr().err.count(SITE_ID_IGNORED) == warnings
+    [request] = stub_server.requests
+    assert request["headers"]["Authorization"] == sent
+
+
 @posix_only
 def test_hosts_file_is_never_readable_by_others_even_if_it_was(capsys):
     """An existing world-readable hosts.json is replaced, never written in
@@ -1608,6 +1772,71 @@ def test_action_teardown_removes_the_preview_and_publishes_nothing(
     assert removals[0]["path"] == "/-/api/v1/sites/team-aurora/website/previews/pr-42"
     assert removals[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
     assert Path(action_env["GITHUB_OUTPUT"]).read_text() == ""
+
+
+@pytest.mark.parametrize(
+    ("inputs", "audience"),
+    [
+        ({}, "{host}"),
+        ({"site-id": SITE_ID.upper()}, "{host}/-/sites/" + SITE_ID),
+        ({"teardown": "true", "preview-ref": "pr-42"}, "{host}"),
+        ({"teardown": "true", "preview-ref": "pr-42", "site-id": SITE_ID}, "{host}/-/sites/" + SITE_ID),
+    ],
+)
+def test_action_hands_the_site_id_to_the_cli_for_the_token(
+    stub_server, host, dist_folder, isolated_cwd, action_env, inputs, audience
+):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), **inputs},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    [oidc] = [r for r in stub_server.requests if r["path"].startswith("/oidc-token")]
+    assert _audience(oidc) == audience.format(host=host)
+
+
+def test_action_without_a_site_id_input_leaves_plak_site_id_to_the_cli(
+    stub_server, host, dist_folder, isolated_cwd, action_env
+):
+    """Like PLAK_HOST: a site id the job sets in its environment still counts
+    when the input is left empty."""
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
+        env={**action_env, "PLAK_SITE_ID": SITE_ID},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    [oidc] = [r for r in stub_server.requests if r["path"].startswith("/oidc-token")]
+    assert _audience(oidc) == f"{host}/-/sites/{SITE_ID}"
+
+
+def test_action_leaves_plak_host_and_plak_site_id_of_the_job_alone():
+    """On a runner a step's env shadows the job's, so the inputs go in under
+    names of their own and become flags only when filled; a PLAK_HOST or
+    PLAK_SITE_ID the job sets still reaches the CLI."""
+    for step in _action_definition()["runs"]["steps"]:
+        assert not {"PLAK_HOST", "PLAK_SITE_ID"} & set(step.get("env", {})), step["name"]
+
+
+def test_action_stops_on_a_site_id_that_is_no_uuid(stub_server, host, dist_folder, isolated_cwd, action_env):
+    _action_responder(stub_server)
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), "site-id": "website"},
+        env=action_env,
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 2
+    assert run.failed_step == "Publish"
+    assert stub_server.requests == []
 
 
 def test_action_refuses_a_teardown_without_a_preview_ref(
@@ -2117,6 +2346,38 @@ def test_action_writes_the_deploy_to_the_step_summary(
     assert run.returncode == 0, run.stderr
     assert summary.read_text() == f"### Plak\n\n{line}\n"
     assert "Published" in run.stderr
+
+
+@pytest.mark.parametrize(
+    ("inputs", "line"),
+    [
+        (
+            {"site-id": SITE_ID},
+            (
+                f"Live site `team-aurora/website` (site id `{SITE_ID}`) is published "
+                "(version `11111111-2222-3333-4444-555555555555`)."
+            ),
+        ),
+        (
+            {"site-id": SITE_ID, "teardown": "true", "preview-ref": "pr-42"},
+            f"Preview `pr-42` of `team-aurora/website` (site id `{SITE_ID}`) is removed.",
+        ),
+    ],
+)
+def test_action_names_the_site_id_beside_the_site_in_the_summary(
+    stub_server, host, dist_folder, isolated_cwd, action_env, inputs, line
+):
+    _action_responder(stub_server)
+    summary = isolated_cwd / "summary.md"
+
+    run = _run_action(
+        {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder), **inputs},
+        env={**action_env, "GITHUB_STEP_SUMMARY": str(summary)},
+        cwd=isolated_cwd,
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert summary.read_text() == f"### Plak\n\n{line}\n"
 
 
 def test_action_writes_the_teardown_to_the_step_summary(stub_server, host, isolated_cwd, action_env):
@@ -4432,6 +4693,43 @@ def test_site_link_asks_gh_for_the_ids_so_a_private_repository_links(
         "IDs from gh: repository 5005, owner 6006.",
         f"Set up the workflow: {host}/team/docs/deploy",
     ]
+
+
+def test_site_link_prints_the_site_id_and_how_a_workflow_names_it(
+    stub_server, host, token_env, fake_run, capsys
+):
+    stub_server.responder = _json_responder(200, _link_answer(siteId=SITE_ID))
+
+    code = cli.main(["site", "link", "team/docs", "minbzk/prive", "--live-branch", "main", "--host", host])
+
+    assert code == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "Linked github.com/MinBZK/Prive to team/docs.",
+        "Live: only from 'main', on a push, a manual run or a schedule. Previews: from any branch.",
+        "IDs from gh: repository 5005, owner 6006.",
+        f"Site id: {SITE_ID}",
+        (
+            f"In the workflow, beside 'site: team/docs': 'site-id: {SITE_ID}' (action) or "
+            f"'--site-id {SITE_ID}' (CLI)."
+        ),
+        f"Set up the workflow: {host}/team/docs/deploy",
+    ]
+
+
+@pytest.mark.parametrize("site_id", ["abc", 7, None, SITE_ID + "\x1b[31m", SITE_ID + "\n"])
+def test_site_link_prints_no_site_id_it_cannot_vouch_for(stub_server, host, token_env, fake_run, capsys, site_id):
+    """A Plak from before the site id sends none; anything else that is not
+    a lowercase UUID is not printed, so the server cannot write into the
+    terminal through it."""
+    answer = _link_answer() if site_id is None else _link_answer(siteId=site_id)
+    stub_server.responder = _json_responder(200, answer)
+
+    code = cli.main(["site", "link", "team/docs", "minbzk/prive", "--host", host])
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "Site id" not in out
+    assert "site-id" not in out
 
 
 def test_site_link_takes_the_origin_of_the_checkout_without_a_repository(

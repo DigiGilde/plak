@@ -835,7 +835,9 @@ ID token its forge mints (`Authorization: Bearer <JWT>` from GitHub or Forgejo
 Actions). The token is accepted when its `iss` is one of the configured issuers,
 the signing key comes from that issuer's own discovery document and JWKS over
 https, the algorithm is RS256, `exp` and `iat` are present within 60 seconds of
-leeway, and `aud` is exactly `PLAK_BASE_URL`. Every URL fetched on a provider's
+leeway, and `aud` is exactly one value: `PLAK_BASE_URL`, or
+`PLAK_BASE_URL/-/sites/{site id}` with the id in its canonical lowercase
+form, which binds the token to that one site. Every URL fetched on a provider's
 behalf is built from configuration, never from a token or a request, which is
 the SSRF defence, together with https only, no redirects, a timeout and a size
 cap.
@@ -857,6 +859,28 @@ or `schedule` and, when one is configured, the live branch; previews and
 teardown accept any ref and any event. Claims copied into the audit record
 (`repository`, `ref`, `sha`, `run_id`, `workflow`, `event_name`) are each length
 capped.
+
+**Bound to the site, not to its address.** The site links the repository,
+and the workflow names the site's fixed id (`site-id` in the action,
+`--site-id` for the CLI), which the CLI puts in the audience of the ID
+token: consent from both sides, given to the site rather than to an address
+that may come to mean another site (deleted and created again, a typo).
+A bound token is used on its own site or not at all, and is decided on that
+site first, whatever the address: a repository not linked to it gets the
+401 `CI_AUDIENCE_MISMATCH` of a token for another site at every address,
+the site's own included, so the address tells it nothing; the linked
+repository publishes at the site's own address and gets 409 `SITE_MOVED`
+with the site's current address anywhere else. No answer names a site id
+(`api/deploys.py`, `_target_site`). A token without
+a site id is accepted only by a link from before migration 0004 of a
+repository linked to that one site (`site_repositories.site_id_required`
+false; a repository linked to several sites lost it on every link, since
+one may be someone else's, planted from their own site), elsewhere it gets 403
+`CI_SITE_ID_REQUIRED`, and only once the repository itself matched. That
+exemption only ends: when another repository is linked, or when a site
+admin requires the site id (`PUT .../repository/site-id-required`), and a
+trigger of migration 0004 holds the database to that as well. A member's
+CLI token is not affected: its role decides.
 
 **CLI login.** `plak login` is an OAuth 2.0 device authorization grant (RFC
 8628) Plak runs itself on top of the admin SSO login: the CLI asks for a device

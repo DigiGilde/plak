@@ -8,6 +8,7 @@ import asyncio
 import base64
 import json
 import time
+import uuid
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ from plak.audit import vocabulary
 from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer
 from plak.ci.tokens import (
     MAX_TOKEN_LENGTH,
+    SITE_AUDIENCE_PATH,
     CiTokenError,
     CiTokenVerifier,
     VerifiedCiToken,
@@ -304,6 +306,75 @@ class TestAudience:
         with pytest.raises(CiTokenError) as exc:
             await _verifier(ci, settings=settings).verify(token)
         assert exc.value.reason == vocabulary.CI_AUDIENCE_MISMATCH
+
+
+SITE_ID = uuid.UUID("0f8fad5b-d9cb-469f-a165-70867728950e")
+BOUND = f"{AUDIENCE}{SITE_AUDIENCE_PATH}{SITE_ID}"
+
+
+class TestBoundAudience:
+    """Two audiences are accepted, each exactly: the instance itself, or the
+    instance plus one site id in its canonical form."""
+
+    async def test_the_instance_audience_binds_no_site(self):
+        ci = MockCi()
+        verified = await _verifier(ci).verify(ci.token("github", aud=AUDIENCE))
+        assert verified.bound_site_id is None
+
+    async def test_a_site_audience_binds_that_site(self):
+        ci = MockCi()
+        verified = await _verifier(ci).verify(ci.token("github", aud=BOUND))
+        assert verified.bound_site_id == SITE_ID
+        assert verified.claim("repository") == "minbzk/website"
+
+    @pytest.mark.parametrize(("aud", "bound"), [([AUDIENCE], None), ([BOUND], SITE_ID)])
+    async def test_a_list_of_one_counts_as_that_one(self, aud, bound):
+        ci = MockCi()
+        verified = await _verifier(ci).verify(ci.token("github", aud=aud))
+        assert verified.bound_site_id == bound
+
+    @pytest.mark.parametrize(
+        "aud",
+        [
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}{str(SITE_ID).upper()}",
+            f"{BOUND}/",
+            f"{AUDIENCE}/{SITE_AUDIENCE_PATH}{SITE_ID}",
+            f"{BOUND}/extra",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}website",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}{SITE_ID.hex}",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}{{{SITE_ID}}}",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH}urn:uuid:{SITE_ID}",
+            f"{AUDIENCE}{SITE_AUDIENCE_PATH} {SITE_ID}",
+            f"{BOUND}?x=1",
+            f"{AUDIENCE}/-/site/{SITE_ID}",
+            f"https://elsewhere.example{SITE_AUDIENCE_PATH}{SITE_ID}",
+            f" {BOUND}",
+            [BOUND, AUDIENCE],
+            [BOUND, f"{AUDIENCE}{SITE_AUDIENCE_PATH}{uuid.uuid4()}"],
+            [],
+        ],
+    )
+    async def test_anything_else_is_a_mismatch(self, aud):
+        ci = MockCi()
+        with pytest.raises(CiTokenError) as exc:
+            await _verifier(ci).verify(ci.token("github", aud=aud))
+        assert exc.value.reason == vocabulary.CI_AUDIENCE_MISMATCH
+        assert exc.value.status == 401
+
+    async def test_the_mismatch_names_both_forms_but_no_site(self):
+        ci = MockCi()
+        with pytest.raises(CiTokenError) as exc:
+            await _verifier(ci).verify(ci.token("github", aud=f"{BOUND}/"))
+        assert f"{AUDIENCE}/-/sites/" in str(exc.value)
+        assert str(SITE_ID) not in str(exc.value)
+
+    async def test_without_a_base_url_a_site_audience_is_refused_too(self):
+        ci = MockCi()
+        with pytest.raises(CiTokenError) as exc:
+            await _verifier(ci, settings=_settings(base_url=None)).verify(ci.token("github", aud=BOUND))
+        assert exc.value.reason == vocabulary.CI_AUDIENCE_MISMATCH
+        assert exc.value.message.key == f"{vocabulary.CI_AUDIENCE_MISMATCH}.no_base_url"
 
 
 class TestKidSelection:

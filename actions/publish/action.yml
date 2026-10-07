@@ -17,6 +17,14 @@ inputs:
   site:
     description: 'Slug of group and site, in the form group/site.'
     required: true
+  site-id:
+    description: >-
+      Fixed id of the site, from the Deploy tab in Plak. With it, the ID
+      token is valid for that one site only; a new repository link
+      requires it. Empty means PLAK_SITE_ID from the environment, else a
+      token without a site id.
+    required: false
+    default: ''
   dist-path:
     description: >-
       Path to the dist directory to publish, or to a single
@@ -180,6 +188,7 @@ runs:
       env:
         PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
+        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
         PLAK_INPUT_DIST_PATH: ${{ inputs.dist-path }}
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
         PLAK_INPUT_BASE_PATH: ${{ inputs.base-path }}
@@ -190,9 +199,13 @@ runs:
           exit 2
         fi
         ARGS=(publish "$PLAK_INPUT_DIST_PATH" --site "$PLAK_SITE")
-        # Without --host the CLI takes PLAK_HOST, then its default instance.
+        # Without --host the CLI takes PLAK_HOST, then its default instance;
+        # without --site-id it takes PLAK_SITE_ID.
         if [ -n "$PLAK_INPUT_HOST" ]; then
           ARGS+=(--host "$PLAK_INPUT_HOST")
+        fi
+        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
+          ARGS+=(--site-id "$PLAK_INPUT_SITE_ID")
         fi
         if [ -n "$PLAK_PREVIEW_REF" ]; then
           ARGS+=(--preview "$PLAK_PREVIEW_REF")
@@ -216,6 +229,7 @@ runs:
       env:
         PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
+        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
       run: |
         set -euo pipefail
@@ -227,6 +241,9 @@ runs:
         if [ -n "$PLAK_INPUT_HOST" ]; then
           ARGS+=(--host "$PLAK_INPUT_HOST")
         fi
+        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
+          ARGS+=(--site-id "$PLAK_INPUT_SITE_ID")
+        fi
         uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
 
     # Forgejo shows a summary only where both runner and server support it;
@@ -237,6 +254,7 @@ runs:
       env:
         PLAK_INPUT_TEARDOWN: ${{ inputs.teardown }}
         PLAK_SITE: ${{ inputs.site }}
+        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
         PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
         PLAK_URL: ${{ steps.publish.outputs.url }}
         PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
@@ -245,10 +263,14 @@ runs:
         if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
           exit 0
         fi
+        SITE="\`$PLAK_SITE\`"
+        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
+          SITE="$SITE (site id \`$PLAK_INPUT_SITE_ID\`)"
+        fi
         if [ -n "$PLAK_PREVIEW_REF" ]; then
-          WHAT="Preview \`$PLAK_PREVIEW_REF\` of \`$PLAK_SITE\`"
+          WHAT="Preview \`$PLAK_PREVIEW_REF\` of $SITE"
         else
-          WHAT="Live site \`$PLAK_SITE\`"
+          WHAT="Live site $SITE"
         fi
         if [ "$PLAK_INPUT_TEARDOWN" = "true" ]; then
           LINE="$WHAT is removed."

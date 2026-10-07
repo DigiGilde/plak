@@ -75,8 +75,11 @@ There are two ways to identify yourself, and every endpoint accepts exactly one 
   `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site
   and on linking a repository. The token is one of two kinds:
   * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin
-    URL of Plak (`PLAK_BASE_URL`). It is valid only for the sites the repository of that workflow is linked
-    to (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep;
+    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only
+    for that site, and only while the repository of that workflow is linked to it
+    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before
+    the site id existed, of a repository linked to that one site, also takes a token whose audience is
+    the admin URL itself, until another repository is linked or a site admin requires the site id;
   * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who
     signed in, with exactly their roles.
 
@@ -91,7 +94,7 @@ and so pass that guard unhindered.
 Who may do what depends on the group: **group members** manage the sites of their own group according to
 their role, and any active member may create a group. A **platform administrator** also activates and
 deactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the
-site, and for a live deploy the live branch.
+site, the site id the workflow names, and for a live deploy the live branch.
 
 ## Errors
 

@@ -86,6 +86,10 @@ async def _add_repository(
     owner_id: int = 2002,
     live_branch: str | None = None,
     ids_confirmed: bool = False,
+    # False by default: most tests here are about matching the repository,
+    # with a token whose audience is the instance, as a link from before
+    # migration 0004 accepts.
+    site_id_required: bool = False,
 ) -> SiteRepository:
     row = SiteRepository(
         id=uuid.uuid4(),
@@ -98,6 +102,7 @@ async def _add_repository(
         owner_id=owner_id,
         live_branch=live_branch,
         ids_confirmed=ids_confirmed,
+        site_id_required=site_id_required,
     )
     async with factory() as db:
         db.add(row)
@@ -179,6 +184,78 @@ class TestTrustedRepositoryIdPath:
         async with factory() as db:
             with pytest.raises(CiTokenError) as exc:
                 await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+
+class TestSiteBinding:
+    """A token bound to a site matches only that site; a token without a
+    site id matches only a link that still accepts one, and is refused only
+    once the repository itself matched."""
+
+    async def test_a_token_without_a_site_id_is_refused_where_the_link_requires_one(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, site_id_required=True)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001", repository_owner_id="2002")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_SITE_ID_REQUIRED
+        assert exc.value.status == 403
+        assert str(site.id) not in str(exc.value)
+
+    async def test_a_token_without_a_site_id_is_trusted_where_the_link_still_accepts_one(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, site_id_required=False)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="1001", repository_owner_id="2002")
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.repository_id == 1001
+
+    @pytest.mark.parametrize("required", [True, False])
+    async def test_a_token_bound_to_this_site_is_trusted_either_way(self, factory, required):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, site_id_required=required)
+        token = VerifiedCiToken(
+            issuer=GITHUB_ISSUER_OBJ, claims={"repository_id": "1001"}, bound_site_id=site.id
+        )
+        async with factory() as db:
+            trusted = await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert trusted.repository_id == 1001
+
+    async def test_a_token_bound_to_another_site_never_matches_this_one(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, site_id_required=False)
+        token = VerifiedCiToken(
+            issuer=GITHUB_ISSUER_OBJ, claims={"repository_id": "1001"}, bound_site_id=uuid.uuid4()
+        )
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_AUDIENCE_MISMATCH
+        assert exc.value.status == 401
+
+    async def test_another_repository_is_refused_as_such_before_the_site_id_is_asked_for(self, factory):
+        site = await _make_site(factory)
+        await _add_repository(factory, site, site_id_required=True)
+        token = _token(GITHUB_ISSUER_OBJ, repository_id="9999")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(MockCi().client()))
+        assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
+
+    async def test_a_forgejo_name_token_is_rechecked_before_the_site_id_is_asked_for(self, factory):
+        """A repository recreated under the linked name is another repository,
+        not a workflow that forgot its site id."""
+        site = await _make_site(factory)
+        await _add_repository(
+            factory, site, provider=CiProvider.FORGEJO, host=FORGEJO_HOST, site_id_required=True
+        )
+        ci = MockCi()
+        ci.add_forgejo("minbzk", "website", 9999, 2002)
+        token = _token(FORGEJO_ISSUER_OBJ, repository="minbzk/website")
+        async with factory() as db:
+            with pytest.raises(CiTokenError) as exc:
+                await trusted_repository(db, token, site, ProviderClient(ci.client()))
         assert exc.value.reason == vocabulary.CI_REPOSITORY_NOT_TRUSTED
 
 
@@ -487,7 +564,16 @@ class TestAuditAndIdentifiers:
         assert refs["provider"] == "github"
         assert refs["sha"] == "a" * 200
         assert refs["run_id"] == "4242"
-        assert set(refs) <= {"provider", *AUDIT_CLAIMS}
+        assert set(refs) <= {"provider", "site_bound", "bound_site_id", *AUDIT_CLAIMS}
+
+    @pytest.mark.parametrize(("bound_site_id", "site_bound"), [(None, False), (uuid.uuid4(), True)])
+    def test_audit_refs_say_whether_the_token_named_a_site_and_which(self, bound_site_id, site_bound):
+        """The id goes into the audit row; it never goes into a response,
+        which test_ci_binding.py holds every answer to."""
+        token = VerifiedCiToken(issuer=GITHUB_ISSUER_OBJ, claims={}, bound_site_id=bound_site_id)
+        refs = audit_refs(token)
+        assert refs["site_bound"] is site_bound
+        assert refs.get("bound_site_id") == (str(bound_site_id) if site_bound else None)
 
     def test_audit_refs_skips_absent_claims(self):
         token = _token(GITHUB_ISSUER_OBJ, repository="minbzk/website")

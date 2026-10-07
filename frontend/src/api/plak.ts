@@ -252,6 +252,18 @@ export function setSiteRepository(
   });
 }
 
+/**
+ * Makes the link accept only workflows that name the site id. One way: there
+ * is no call to undo it. Needs site role admin.
+ */
+export function requireSiteId(groupSlug: string, siteSlug: string): Promise<SiteRepository> {
+  return request<SiteRepository>(`${sitePath(groupSlug, siteSlug)}/repository/site-id-required`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ siteIdRequired: true }),
+  });
+}
+
 /** Unlinks the site's trusted repository. Needs site role admin. */
 export function deleteSiteRepository(groupSlug: string, siteSlug: string): Promise<void> {
   return request<void>(`${sitePath(groupSlug, siteSlug)}/repository`, { method: 'DELETE' });

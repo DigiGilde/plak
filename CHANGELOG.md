@@ -10,6 +10,24 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
+### Security
+
+- A workflow that names its site id publishes only to that site: Plak
+  accepts a CI token bound to it, so a renamed, deleted or mistyped
+  address can no longer send its build to someone else's site.
+
+### Added
+
+- `site-id` for the publish action and `--site-id` for the CLI; the site
+  id on the Deploy tab and in the API.
+
+### Changed
+
+- A new repository link requires the site id, and so does every
+  existing link of a repository that is linked to several sites; other
+  existing links keep working without it until another repository is
+  linked or a site admin requires it.
+
 ### Fixed
 
 - Files left behind by an interrupted publish, cleanup or delete no

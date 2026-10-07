@@ -33,6 +33,7 @@ vi.mock('../api/plak', () => ({
 
 function site(slug: string, live: boolean): Site {
   return {
+    id: `id-${slug}`,
     groupSlug: 'team-aurora',
     slug,
     title: slug,
