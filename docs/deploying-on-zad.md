@@ -424,20 +424,14 @@ with `RijksICTGilde/zad-actions`. Both are pinned to commit SHAs.
 Production follows release tags only. A push to `beta` builds, scans and
 attests its image and deploys nowhere. A tag
 `vYYYY.M.D` (or `vYYYY.M.D.N` for a second release that day) rolls out to
-`productie`, with the image tagged `YYYY.M.D` next to its commit SHA and that
-version baked in as `PLAK_VERSION`. Until a release workflow exists, cut one by
-hand on a commit that is on `beta`:
-
-```sh
-git tag -a v2026.10.1 -m "Plak v2026.10.1"
-git push origin v2026.10.1
-```
+`productie` as the image tagged `YYYY.M.D`, its only tag, with that version
+baked in as `PLAK_VERSION`. The release workflow sets the tag
+(`docs/releasing.md`); the tag rulesets let nobody else.
 
 Before rolling out, the `production` job refuses the tag, and goes red, when it
 does not match `vYYYY.M.D[.N]` (no leading zeros), when the tagged commit is not
-on `beta`, or when it is not the newest release tag, so pushing an old tag again
-never rolls production back. A person (or later a GitHub App) pushes the tag: a
-tag pushed with `GITHUB_TOKEN` starts no workflow.
+on `beta` or has no section in `CHANGELOG.md`, or when it is not the newest
+release tag, so pushing an old tag again never rolls production back.
 
 There are no preview deployments. A pull request builds, scans and attests
 its image and stops there; what runs on ZAD is production, from a release tag.

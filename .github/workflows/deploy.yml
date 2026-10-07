@@ -61,7 +61,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image: ${{ steps.tag.outputs.image }}
+      image: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
       name: ${{ steps.tag.outputs.name }}
       digest: ${{ steps.push.outputs.digest }}
     steps:
@@ -82,13 +82,17 @@ jobs:
       # The tag name goes through env and is checked before it is used: git
       # allows characters in a tag that the tag list below reads as a
       # separator.
+      #
+      # A release builds and pushes only its version tag, and everything
+      # after the push follows that tag. The release commit is also a push to
+      # beta, whose build pushes the commit tag without PLAK_VERSION; sharing
+      # that tag, the last build to finish decided what production ran.
       - name: Determine the release version
         id: release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
           NAME: ${{ steps.tag.outputs.name }}
-          IMAGE: ${{ steps.tag.outputs.image }}
         run: |
           if [[ ! "${TAG}" =~ ${RELEASE_TAG} ]]; then
             echo "::error::${TAG} is not a release tag of the form vYYYY.M.D[.N]"
@@ -96,12 +100,7 @@ jobs:
           fi
           version="${TAG#v}"
           echo "build-args=PLAK_VERSION=${version}" >> "$GITHUB_OUTPUT"
-          {
-            echo "tags<<EOF"
-            echo "${IMAGE}"
-            echo "${NAME}:${version}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "image=${NAME}:${version}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -125,7 +124,7 @@ jobs:
           context: .
           file: containers/plak/Containerfile
           push: true
-          tags: ${{ steps.release.outputs.tags || steps.tag.outputs.image }}
+          tags: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
           build-args: ${{ steps.release.outputs.build-args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -133,7 +132,7 @@ jobs:
       - name: Generate the SBOM (CycloneDX)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.tag.outputs.image }}
+          image-ref: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
           format: cyclonedx
           output: sbom.cdx.json
           version: ${{ env.TRIVY_VERSION }}
@@ -152,7 +151,7 @@ jobs:
       - name: Scan the image, full report (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.tag.outputs.image }}
+          image-ref: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
           trivyignores: .trivyignore.yaml
           format: table
           exit-code: "0"
@@ -163,7 +162,7 @@ jobs:
       - name: Scan the image, gate on high and critical (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.tag.outputs.image }}
+          image-ref: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           ignore-unfixed: true
