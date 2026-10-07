@@ -194,7 +194,7 @@ class IngestService:
                     update(Site).where(Site.id == site.id).values(live_version_id=version_id)
                 )
         except BaseException:
-            self._content_store.delete_version(storage_ref)
+            await self._content_store.delete_versions([storage_ref])
             raise
         return version_id
 
@@ -268,10 +268,10 @@ class IngestService:
                     # the FK previews.version_id cascades on delete.
                     await db.execute(delete(Version).where(Version.id == old_version_id))
         except BaseException:
-            self._content_store.delete_version(storage_ref)
+            await self._content_store.delete_versions([storage_ref])
             raise
         if old_storage_ref is not None:
-            self._content_store.delete_version(old_storage_ref)
+            await self._content_store.delete_versions([old_storage_ref])
         return version_id
 
     async def delete_preview(self, db: AsyncSession, site: Site, ref: str) -> bool:
@@ -295,7 +295,7 @@ class IngestService:
             await db.delete(preview)
             await db.flush()
             await db.execute(delete(Version).where(Version.id == version_id))
-        self._content_store.delete_version(storage_ref)
+        await self._content_store.delete_versions([storage_ref])
         return True
 
     async def rollback_to(

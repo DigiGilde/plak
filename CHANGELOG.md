@@ -23,12 +23,16 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- Large files on a published site and large deploys go through in fewer,
+  bigger reads.
 
 ### Fixed
 
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- Published sites keep answering while old versions are removed from disk,
+  for example when a preview is redeployed or a site is deleted.
 
 ### Security
 

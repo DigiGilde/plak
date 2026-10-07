@@ -248,6 +248,10 @@ class _ContentFileResponse(FileResponse):
     alone, as FileResponse does for a real HEAD, instead of reading the whole
     file only to throw it away."""
 
+    # Uvicorn offers no pathsend, so Starlette reads the file itself, one
+    # worker-thread hop per chunk; its 64 KiB default makes a 4 MB file 64 hops.
+    chunk_size = 512 * 1024
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get(HEAD_SCOPE_KEY):
             scope = {**scope, "method": "HEAD"}

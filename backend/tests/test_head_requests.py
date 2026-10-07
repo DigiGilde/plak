@@ -64,7 +64,7 @@ async def test_a_file_answers_a_head_without_reading_the_file(tmp_path: Path) ->
     into GET gets the same headers and one empty body, so repeating it costs
     the server no more than the answer."""
     big = tmp_path / "groot.bin"
-    big.write_bytes(b"x" * (5 * 64 * 1024))
+    big.write_bytes(b"x" * (3 * 512 * 1024))
     version_id = uuid.uuid4()
 
     async def sent_for(scope: Scope) -> list[Message]:

@@ -73,8 +73,7 @@ async def _cleanup_expired_previews(
                         delete(Version).where(Version.id.in_(version_ids)).returning(Version.storage_ref)
                     )
                 ).all()
-        for storage_ref in storage_refs:
-            store.delete_version(storage_ref)
+        await store.delete_versions(storage_refs)
         return len(version_ids)
 
 
@@ -91,8 +90,7 @@ async def _cleanup_orphan_preview_versions(
             ids = [row.id for row in rows]
             if ids:
                 await db.execute(delete(Version).where(Version.id.in_(ids)))
-        for row in rows:
-            store.delete_version(row.storage_ref)
+        await store.delete_versions(row.storage_ref for row in rows)
         return len(rows)
 
 
@@ -140,8 +138,7 @@ async def _cleanup_site_live_versions(
                     .returning(Version.id, Version.storage_ref)
                 )
             ).all()
-        for row in removed:
-            store.delete_version(row.storage_ref)
+        await store.delete_versions(row.storage_ref for row in removed)
         return [row.id for row in removed], site.kept
 
 
@@ -212,7 +209,7 @@ async def delete_expired(
     expired = await _cleanup_expired_previews(factory, store, now)
     orphans = await _cleanup_orphan_preview_versions(factory, store)
     old_live = await _cleanup_old_live_versions(factory, store, live_versions_kept)
-    swept = store.sweep_tmp(tmp_older_than)
+    swept = await asyncio.to_thread(store.sweep_tmp, tmp_older_than)
     async with factory() as db:
         authorizations, cli_sessions = await cli.delete_expired(db, now)
     return CleanupResult(
