@@ -721,6 +721,47 @@ describe('App', () => {
     });
   });
 
+  it('has a status region for the title announced after a navigation', async () => {
+    const wrapper = await mountApp();
+
+    const region = wrapper.find('[data-testid="route-announcer"]');
+    expect(region.attributes('role')).toBe('status');
+    expect(region.classes()).toContain('visually-hidden');
+  });
+
+  describe('document title', () => {
+    afterEach(() => {
+      _setLocaleForTest('nl');
+      document.title = '';
+    });
+
+    it('follows a language switch on a page whose title comes from the route', async () => {
+      router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', meta: { titleKey: 'nav.overview' }, component: { template: '<div />' } },
+        ],
+      });
+      await mountApp();
+      document.title = 'Overzicht - Plak';
+
+      _setLocaleForTest('en');
+      await flushPromises();
+
+      expect(document.title).toBe('Overview - Plak');
+    });
+
+    it('leaves a title that the page sets itself to that page', async () => {
+      await mountApp();
+      document.title = 'Team Aurora - Plak';
+
+      _setLocaleForTest('en');
+      await flushPromises();
+
+      expect(document.title).toBe('Team Aurora - Plak');
+    });
+  });
+
   // A var() with a non-existent token name falls back silently and, in the
   // source, looks as if the design system is being followed; only a comparison
   // against the shipped CSS catches it.

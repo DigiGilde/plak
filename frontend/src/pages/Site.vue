@@ -173,16 +173,19 @@ function afterRemoval(): void {
 
       <nldd-spacer size="24"></nldd-spacer>
 
-      <router-view v-slot="{ Component }">
-        <component
-          :is="Component"
-          :group="groupSlug"
-          :site="siteSlug"
-          :content-base="contentBase"
-          @removed="afterRemoval"
-          @changed="refresh"
-        />
-      </router-view>
+      <!-- Where focus goes when only the tab changes (routeAnnouncer.ts). -->
+      <div data-tab-panel>
+        <router-view v-slot="{ Component }">
+          <component
+            :is="Component"
+            :group="groupSlug"
+            :site="siteSlug"
+            :content-base="contentBase"
+            @removed="afterRemoval"
+            @changed="refresh"
+          />
+        </router-view>
+      </div>
     </template>
   </nldd-simple-section>
 </template>

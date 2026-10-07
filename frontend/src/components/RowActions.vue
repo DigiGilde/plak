@@ -22,7 +22,6 @@ export interface RowAction {
   text: string;
   /** Marks a destructive action; the menu draws it in the critical colour. */
   destructive?: boolean;
-  disabled?: boolean;
   icon?: string;
   /** Short second label on the right of the item, for a consequence in one or two words. */
   details?: string;
@@ -95,7 +94,6 @@ const props = defineProps<{
         :icon="action.icon"
         :details="action.details"
         :destructive="action.destructive || undefined"
-        :disabled="action.disabled || undefined"
         :data-testid="action.testid"
         @select="action.run()"
       ></nldd-menu-item>

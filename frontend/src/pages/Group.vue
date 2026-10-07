@@ -293,21 +293,24 @@ function onGroupChanged(group: Group): void {
 
       <nldd-spacer size="24"></nldd-spacer>
 
-      <router-view v-slot="{ Component }">
-        <component
-          :is="Component"
-          :group="groupSlug"
-          :sites="detail.sites"
-          :members="detail.members"
-          :access="detail.group.defaultAccess"
-          :can-delete="canDeleteGroup"
-          @member-added="onMemberAdded"
-          @member-removed="onMemberRemoved"
-          @member-role-changed="onMemberRoleChanged"
-          @group-changed="onGroupChanged"
-          @removed="afterRemoval"
-        />
-      </router-view>
+      <!-- Where focus goes when only the tab changes (routeAnnouncer.ts). -->
+      <div data-tab-panel>
+        <router-view v-slot="{ Component }">
+          <component
+            :is="Component"
+            :group="groupSlug"
+            :sites="detail.sites"
+            :members="detail.members"
+            :access="detail.group.defaultAccess"
+            :can-delete="canDeleteGroup"
+            @member-added="onMemberAdded"
+            @member-removed="onMemberRemoved"
+            @member-role-changed="onMemberRoleChanged"
+            @group-changed="onGroupChanged"
+            @removed="afterRemoval"
+          />
+        </router-view>
+      </div>
 
       <PublishSheet
         v-model:open="sheetOpen"

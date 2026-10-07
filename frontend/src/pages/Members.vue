@@ -84,7 +84,7 @@ const sortKey = ref<SortKey>('name');
 const direction = ref<Direction>('ascending');
 const query = ref('');
 
-const { notices, notify, dismissNotice } = useNotices();
+const { notices, notify, explain, dismissNotice } = useNotices();
 const { member: me } = currentMemberState();
 
 /** Name and email both, because an admin looking someone up has one or the other. */
@@ -194,6 +194,17 @@ function isLastAdmin(member: Member): boolean {
   );
 }
 
+const BLOCKED = {
+  bootstrap: {
+    reason: 'admin.members.blocked.bootstrap',
+    explanation: 'admin.members.blocked.bootstrap.explanation',
+  },
+  lastAdmin: {
+    reason: 'admin.members.blocked.lastAdmin',
+    explanation: 'admin.members.blocked.lastAdmin.explanation',
+  },
+} as const;
+
 /**
  * The access action, named after what happens to the person rather than after
  * the column in the database. Two states, two verbs: someone who has access
@@ -214,33 +225,37 @@ function accessAction(member: Member): RowAction {
  *
  * Your own row is left bare: the API refuses both changes there, and you do
  * not need telling that you are yourself. The other two refusals are not
- * self-evident, so those items stay and say why, greyed out.
+ * self-evident, so those items stay: the item names the reason and choosing it
+ * explains.
  */
 function actionsFor(member: Member): RowAction[] {
   if (isMe(member)) return [];
 
   const admin = member.platformRole === 'admin';
   const blocked = member.isBootstrap
-    ? t('admin.members.blocked.bootstrap')
+    ? BLOCKED.bootstrap
     : isLastAdmin(member)
-      ? t('admin.members.blocked.lastAdmin')
+      ? BLOCKED.lastAdmin
       : undefined;
+  // The item stays enabled; choosing it says why it cannot be done.
+  const refuse = () =>
+    explain(
+      t('admin.members.blocked.title', { name: member.name }),
+      t(blocked!.explanation),
+    );
 
   const access = accessAction(member);
   const withdrawing = member.status === 'active';
   return [
-    {
-      ...access,
-      disabled: Boolean(blocked) && withdrawing,
-      details: blocked && withdrawing ? blocked : access.details,
-    },
+    blocked && withdrawing
+      ? { ...access, details: t(blocked.reason), run: refuse }
+      : access,
     {
       text: admin ? t('admin.members.action.demote') : t('admin.members.action.promote'),
       icon: admin ? 'person' : 'person-2',
-      disabled: Boolean(blocked) && admin,
-      details: blocked && admin ? blocked : undefined,
+      details: blocked && admin ? t(blocked.reason) : undefined,
       testid: `member-role-${member.id}`,
-      run: () => void changeRole(member, admin ? 'member' : 'admin'),
+      run: blocked && admin ? refuse : () => void changeRole(member, admin ? 'member' : 'admin'),
     },
   ];
 }
