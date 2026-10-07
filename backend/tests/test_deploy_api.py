@@ -781,7 +781,7 @@ async def test_refused_bundle_leaves_nothing_behind(environment: Environment) ->
     assert live_id is None
     assert row.result == "refused"
     assert row.reason_code == "NO_INDEX"
-    assert not (environment.settings.content_root / "team-aurora").exists()
+    assert not (environment.settings.content_root / str(environment.site.id)).exists()
     assert list(_tmp_dir(environment).iterdir()) == []
 
 
@@ -1691,7 +1691,7 @@ async def test_concurrent_same_ref_deploys_give_one_preview_row(environment: Env
     assert versions[0].id == previews[0].version_id
 
     # Only the file tree of the winning versie is left.
-    sitedir = environment.settings.content_root / "team-aurora" / "website"
+    sitedir = environment.settings.content_root / str(environment.site.id)
     assert {entry.name for entry in sitedir.iterdir()} == {str(previews[0].version_id)}
 
 
@@ -1775,7 +1775,7 @@ async def _assert_storage_refusal(environment: Environment, resp: httpx.Response
     assert row.result == "refused"
     assert row.reason_code == "STORAGE_UNAVAILABLE"
     assert list(_tmp_dir(environment).iterdir()) == []
-    assert not (environment.settings.content_root / "team-aurora").exists()
+    assert not (environment.settings.content_root / str(environment.site.id)).exists()
 
 
 async def test_a_declared_size_without_room_is_503_before_the_body_is_read(

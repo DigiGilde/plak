@@ -4,8 +4,9 @@ Cleans up: expired previews (row, version row and file tree), orphaned
 preview versions (target=preview without a matching preview row, left behind
 by an interrupted upsert/teardown), live versions older than the ones a
 site keeps (its own number, else PLAK_LIVE_VERSIONS_KEPT; row and file tree),
-stale `_tmp` directories in the ContentStore, and expired CLI device
-authorizations and CLI sessions.
+stale `_tmp` directories in the ContentStore, version and site directories that
+lost their row (set aside in `_reclaimed` first, removed a week later), and
+expired CLI device authorizations and CLI sessions.
 
 `delete_expired` is the core and can be called on its own by tests; main.py
 starts the background loop through `cleanup_job()`, an async context manager,
@@ -35,6 +36,13 @@ from plak.models.publication import Preview, Site, Version, VersionTarget
 
 TIMESTAMP_DEFAULT = time(3, 0)
 TMP_OLDER_THAN_DEFAULT = timedelta(hours=24)
+# A directory without a row is left alone this long, so a publish between its
+# rename and its insert is never touched.
+ORPHAN_OLDER_THAN = timedelta(hours=24)
+# How long a reclaimed directory waits in `_reclaimed` before it is removed:
+# the time to put it back when the database turns out to be the one that is
+# wrong.
+RECLAIMED_KEPT = timedelta(days=7)
 
 _logger = logging.getLogger(__name__)
 
@@ -47,6 +55,9 @@ class CleanupResult:
     cli_device_authorizations: int = 0
     cli_sessions: int = 0
     old_live_versions: int = 0
+    orphan_directories: int = 0
+    held_directories: int = 0
+    reclaimed_swept: int = 0
 
 
 async def _cleanup_expired_previews(
@@ -197,6 +208,30 @@ async def _cleanup_old_live_versions(
     return total
 
 
+async def _reclaim_orphan_directories(
+    factory: async_sessionmaker[AsyncSession], store: ContentStore
+) -> tuple[int, int, int]:
+    async with factory() as db:
+        site_ids = {str(site_id) for site_id in await db.scalars(select(Site.id))}
+        storage_refs = set(await db.scalars(select(Version.storage_ref)))
+    # On the event loop, not in a thread: a site deleted through the API then
+    # cannot remove a directory halfway through this walk.
+    reclaimed = store.reclaim(site_ids, storage_refs, ORPHAN_OLDER_THAN)
+    if reclaimed.moved:
+        _logger.warning(
+            "Moved %d directories without a row into _reclaimed: %s",
+            len(reclaimed.moved),
+            ", ".join(reclaimed.moved),
+        )
+    if reclaimed.held:
+        _logger.error(
+            "Left %d directories without a row in place, the database and the content volume disagree: %s",
+            len(reclaimed.held),
+            ", ".join(reclaimed.held),
+        )
+    return len(reclaimed.moved), len(reclaimed.held), store.sweep_reclaimed(RECLAIMED_KEPT)
+
+
 async def delete_expired(
     factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
@@ -215,6 +250,7 @@ async def delete_expired(
     swept = store.sweep_tmp(tmp_older_than)
     async with factory() as db:
         authorizations, cli_sessions = await cli.delete_expired(db, now)
+    orphan_directories, held_directories, reclaimed_swept = await _reclaim_orphan_directories(factory, store)
     return CleanupResult(
         expired_previews=expired,
         orphan_versions=orphans,
@@ -222,6 +258,9 @@ async def delete_expired(
         cli_device_authorizations=authorizations,
         cli_sessions=cli_sessions,
         old_live_versions=old_live,
+        orphan_directories=orphan_directories,
+        held_directories=held_directories,
+        reclaimed_swept=reclaimed_swept,
     )
 
 

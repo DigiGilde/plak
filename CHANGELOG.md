@@ -10,6 +10,13 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Files left behind by an interrupted publish, cleanup or delete no
+  longer count against a site's storage quota: the nightly cleanup sets
+  them aside and removes them a week later, and a site created again
+  under a deleted name starts empty.
+
 ## [2026.10.7]
 
 ### Security
