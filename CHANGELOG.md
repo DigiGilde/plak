@@ -12,6 +12,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Security
+
+- The container runs on a Python base image with patched Perl packages
+  (CVE-2026-13221, CVE-2026-8376, CVE-2026-42496 and four more), and the
+  admin build uses source-map-js 1.2.2 (GHSA-68fv-2mgg-jv7q).
+
 ### Changed
 
 - The publish action's pull request comment calls the version it shows
