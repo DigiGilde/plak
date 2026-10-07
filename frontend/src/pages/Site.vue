@@ -6,6 +6,7 @@ import * as plak from '@/api/plak';
 import { ApiError } from '@/api/client';
 import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
 import { groupPath } from '@/composables/slug';
 import { setDocumentTitle } from '@/title';
@@ -116,9 +117,18 @@ const TABS = computed<readonly TabDefinition[]>(() => [
   { name: 'site-access', label: t('site.tabs.access'), path: 'access', testid: 'tab-access' },
   { name: 'site-members', label: t('site.tabs.members'), path: 'members', testid: 'tab-members' },
   { name: 'site-deploy', label: t('site.tabs.deploy'), path: 'deploy', testid: 'tab-deploy' },
+  {
+    name: 'site-settings',
+    label: t('site.tabs.settings'),
+    path: 'settings',
+    testid: 'tab-settings',
+  },
 ]);
 
 const currentTab = computed(() => TABS.value.find((tab) => tab.name === route.name));
+
+const tabsScroll = ref<HTMLElement | null>(null);
+useCurrentTabInView(tabsScroll, () => TABS.value.findIndex((tab) => tab.name === route.name));
 
 // The site name is the distinguishing part, so it comes first; the tab is
 // dropped on the overview, where it would only repeat the page itself.
@@ -169,17 +179,19 @@ function afterRemoval(): void {
 
       <nldd-spacer size="16"></nldd-spacer>
 
-      <nldd-tab-bar navigation :accessible-label="t('site.tabs.label')" data-testid="site-tabs">
-        <nldd-tab-bar-item
-          v-for="tab in TABS"
-          :key="tab.name"
-          :text="tab.label"
-          :href="tabPath(tab)"
-          :current="route.name === tab.name || undefined"
-          :data-testid="tab.testid"
-          @click.prevent="goToTab(tab)"
-        ></nldd-tab-bar-item>
-      </nldd-tab-bar>
+      <div ref="tabsScroll" class="tabs-scroll">
+        <nldd-tab-bar navigation :accessible-label="t('site.tabs.label')" data-testid="site-tabs">
+          <nldd-tab-bar-item
+            v-for="tab in TABS"
+            :key="tab.name"
+            :text="tab.label"
+            :href="tabPath(tab)"
+            :current="route.name === tab.name || undefined"
+            :data-testid="tab.testid"
+            @click.prevent="goToTab(tab)"
+          ></nldd-tab-bar-item>
+        </nldd-tab-bar>
+      </div>
 
       <nldd-spacer size="24"></nldd-spacer>
 

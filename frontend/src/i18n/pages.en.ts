@@ -74,7 +74,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.privacy.data.account':
     'Account data: name, e-mail address and organisation, through signing in.',
   'page.privacy.data.audit':
-    'Audit data: who published or changed what and when, and who signed in when.',
+    'Audit data: who published or changed what and when, and who signed in when. If you rename a group or site, the previous name or title is in that entry.',
   'page.privacy.data.visits':
     'Visit data: which pages of a restricted site you looked at. Nothing is recorded for public sites.',
   'page.privacy.retention.heading': 'Retention period',
@@ -86,7 +86,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'If you view restricted content after signing in with your organisation, Plak keeps your SSO ID and e-mail address until ninety days after the last time you signed in. That is needed to trace an entry in the audit log back to a person, for instance during the investigation into a leak.',
   'page.privacy.visibility.heading': 'Who can see what',
   'page.privacy.visibility.body':
-    'The audit log can only be viewed by a platform administrator. The entries hold no name and no e-mail address, but a pseudonym: an encrypted representation of your SSO ID. A platform administrator can look up which pseudonym belongs to a person, and the other way round who is behind a pseudonym. That is only possible with a stated reason, which is itself recorded, and there is a maximum number of lookups per day. The administrator of a site sees none of this.',
+    'The audit log can only be viewed by a platform administrator. The entries hold neither your name nor your e-mail address, but a pseudonym: an encrypted representation of your SSO ID. The exception is the previous name of a group or the previous title of a site: that text is readable in the entry. A platform administrator can look up which pseudonym belongs to a person, and the other way round who is behind a pseudonym. That is only possible with a stated reason, which is itself recorded, and there is a maximum number of lookups per day. The administrator of a site sees none of this.',
   'page.privacy.rights.heading': 'Your rights',
   'page.privacy.rights.bodyBeforeEmail':
     'You may request which data Plak processes about you, have it corrected, and object to the processing. Deletion is not always possible: the audit log is fixed for as long as the retention period runs, because it serves to make misuse investigable. Ask your question at',

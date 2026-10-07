@@ -15,3 +15,7 @@ Een nieuwe koppeling vraagt het site-ID meteen. Bestaande koppelingen blijven we
 ## Toegang zonder herhaling
 
 Onder de keuze voor toegang staat niet meer nog eens wat je net hebt gekozen. Kan niemand de site bekijken, dan zegt een waarschuwing dat. Bij de standaardtoegang van een groep staan geheime links en genodigden nu onder "Uitzonderingen", net als op het tabblad "Toegang" van een site.
+
+## Naam van een groep en titel van een site wijzigen
+
+Een beheerder van een groep kan de naam van de groep wijzigen, en een beheerder van een site de titel van de site. Dat doe je op het tabblad "Instellingen", en het wordt vanzelf opgeslagen zodra je het veld verlaat of even stopt met typen. Ook een site heeft nu dat tabblad, en daar staat voortaan "Site verwijderen". Dat stond eerder op het tabblad "Overzicht".

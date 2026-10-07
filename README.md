@@ -97,7 +97,7 @@ free for groups.
 | `/{group}/{site}/_version/{version-id}/...` | view an old version (active group members only) |
 | `/admin` | site overview (start page after login) |
 | `/admin/{group}` | group page |
-| `/admin/{group}/{site}` | site detail, tab Overzicht (overview); other tabs: `/access`, `/previews`, `/versions`, `/deploy` |
+| `/admin/{group}/{site}` | site detail, tab Overzicht (overview); other tabs: `/access`, `/previews`, `/versions`, `/deploy`, `/settings` |
 | `/admin/-/platform` | platform administration: member activation |
 | `/admin/-/privacy`, `/admin/-/toegankelijkheid`, `/admin/-/over` | platform pages (publicly accessible, no login) |
 | `/-/login` | starts the OIDC login; `/-/oauth2/callback` is the redirect URI |
