@@ -11,3 +11,7 @@ Een nieuwe koppeling vraagt het site-ID meteen. Bestaande koppelingen blijven we
 ## Service workers en de parameter `key`
 
 Een gepubliceerde site kan geen service worker meer registreren, dus een PWA-plugin maakt een site niet meer offline bruikbaar. Staat er in het adres van een pagina een `key` die op een geheime link lijkt, dan haalt Plak die weg voordat de pagina laadt; geef een eigen queryparameter een andere naam.
+
+## Naam van een groep en titel van een site wijzigen
+
+Een beheerder van een groep kan de naam van de groep wijzigen, en een beheerder van een site de titel van de site. Dat doe je op het tabblad "Instellingen". Een site heeft nu zo'n tabblad; daar staat ook "Site verwijderen", dat eerder op het tabblad "Overzicht" stond.

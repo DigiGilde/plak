@@ -121,6 +121,18 @@ export const groupNl = {
   'group.members.add.submit': 'Lid toevoegen',
 
   // -- Group page: settings tab --------------------------------------------
+  'group.settings.name.heading': 'Naam van de groep',
+  'group.settings.name.label': 'Naam',
+  'group.settings.name.required': 'Een naam is nodig',
+  'group.settings.name.tooLong': 'Een naam is hoogstens 200 tekens lang',
+  'group.settings.name.controlCharacters':
+    'Een naam bevat geen onzichtbare tekens of regeleinden, die vaak meekomen met gekopieerde tekst',
+  'group.settings.name.save': 'Bewaar naam',
+  'group.settings.name.readOnly': 'Alleen een beheerder van de groep kan de naam wijzigen.',
+  'group.settings.name.saved': 'Naam opgeslagen. De groep heet nu {name}.',
+  'group.settings.name.unchanged': 'De naam is niet gewijzigd.',
+  'group.settings.name.saveFailed': 'Naam niet opgeslagen',
+  'group.settings.name.saveFailed.detail': 'Opslaan is niet gelukt.',
   'group.settings.heading': 'Standaardtoegang voor nieuwe sites',
   'group.settings.intro':
     'Hiermee begint een nieuwe site in deze groep. Per site blijft de toegang daarna los instelbaar, op het tabblad Toegang van die site. Bestaande sites veranderen niet mee.',

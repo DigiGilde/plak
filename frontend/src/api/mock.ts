@@ -85,6 +85,47 @@ function resolveExpiry(requested: string | null): ExpiryResolution {
   return { ok: true, expiresAt: requested };
 }
 
+// Mirrors _validate_text in api/admin.py plus the cap of the name and title
+// routes, in its order: strip, not empty, at most 200 characters (code points,
+// as Python counts them), no control or format characters.
+const TEXT_MAX_LENGTH = 200;
+const FORBIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+
+type TextResolution = { ok: true; text: string } | { ok: false; response: Response };
+
+function resolveText(requested: string, field: string): TextResolution {
+  const text = requested.trim();
+  if (text === '') {
+    return {
+      ok: false,
+      response: problem(422, 'Onverwerkbare invoer', `Veld '${field}' mag niet leeg zijn.`, 'FIELD_EMPTY'),
+    };
+  }
+  if ([...text].length > TEXT_MAX_LENGTH) {
+    return {
+      ok: false,
+      response: problem(
+        422,
+        'Onverwerkbare invoer',
+        `Veld '${field}' mag hoogstens ${TEXT_MAX_LENGTH} tekens lang zijn.`,
+        'FIELD_TOO_LONG',
+      ),
+    };
+  }
+  if (FORBIDDEN_CHARACTERS.test(text)) {
+    return {
+      ok: false,
+      response: problem(
+        422,
+        'Onverwerkbare invoer',
+        `Veld '${field}' mag geen stuur- of opmaaktekens bevatten.`,
+        'FIELD_CONTROL_CHARACTERS',
+      ),
+    };
+  }
+  return { ok: true, text };
+}
+
 /**
  * Content origin the mock hands out in `/me`. Deliberately a different host
  * from the tests' admin origin (https://plak.test), so that a link built on
@@ -682,6 +723,20 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
     const findGroup = (slug: string): Group | undefined =>
       data.groups.find((g) => g.slug === slug);
 
+    // Only the name and title routes check who is asking. Like the backend
+    // they answer in this order: no session (401), no such group or site
+    // (404), a site nobody gave you a role on (404, the same as for a site
+    // that is not there; a platform admin is spared that), too narrow a role
+    // (403, a platform admin has no way round it).
+    const loggedInMember = (): Member | undefined =>
+      data.members.find((l) => l.id === data.loggedInMemberId);
+
+    const notLoggedIn = (): Response =>
+      problem(401, 'Niet ingelogd', 'Er is geen actieve sessie.', 'NO_SESSION');
+
+    const insufficientRole = (): Response =>
+      problem(403, 'Geen toegang', 'Hiervoor heb je minimaal de rol beheerder nodig.', 'INSUFFICIENT_ROLE');
+
     // GET /me
     if (method === 'GET' && rest.length === 1 && rest[0] === 'me') {
       const loggedIn = data.members.find((l) => l.id === data.loggedInMemberId);
@@ -775,6 +830,23 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         data.keys = data.keys.filter((k) => k.groupSlug !== groupSlug);
         data.siteRoles = data.siteRoles.filter((r) => r.groupSlug !== groupSlug);
         return empty(204);
+      }
+
+      // PUT /groups/{group}/name
+      if (method === 'PUT' && rest.length === 3 && rest[2] === 'name') {
+        const caller = loggedInMember();
+        if (!caller) return notLoggedIn();
+        if (!groupRow) {
+          return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`, 'UNKNOWN_GROUP');
+        }
+        const groupAdmin = myRoles(data, caller).groupRoles.some(
+          (r) => r.groupSlug === groupSlug && r.role === 'admin',
+        );
+        if (!groupAdmin) return insufficientRole();
+        const resolved = resolveText(String(readJson().name ?? ''), 'name');
+        if (!resolved.ok) return resolved.response;
+        groupRow.name = resolved.text;
+        return json(200, groupRow);
       }
 
       // PUT /groups/{group}/default-access
@@ -997,7 +1069,12 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       const siteSlug = rest[2]!;
       const siteRow = findSite(groupSlug, siteSlug);
       const siteNotFound = (): Response =>
-        problem(404, 'Onbekende site', `Geen site "${siteSlug}" in groep "${groupSlug}".`);
+        problem(
+          404,
+          'Onbekende site',
+          `Geen site "${siteSlug}" in groep "${groupSlug}".`,
+          'UNKNOWN_SITE',
+        );
 
       if (method === 'DELETE' && rest.length === 3) {
         if (!siteRow) return siteNotFound();
@@ -1014,6 +1091,23 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           (r) => !(r.groupSlug === groupSlug && r.siteSlug === siteSlug),
         );
         return empty(204);
+      }
+
+      if (method === 'PUT' && rest.length === 4 && rest[3] === 'title') {
+        const caller = loggedInMember();
+        if (!caller) return notLoggedIn();
+        if (!siteRow) return siteNotFound();
+        const roles = myRoles(data, caller);
+        const groupRole = roles.groupRoles.find((r) => r.groupSlug === groupSlug)?.role;
+        const siteRole = roles.siteRoles.find(
+          (r) => r.groupSlug === groupSlug && r.siteSlug === siteSlug,
+        );
+        if (caller.platformRole !== 'admin' && !groupRole && !siteRole) return siteNotFound();
+        if (groupRole !== 'admin' && siteRole?.effectiveRole !== 'admin') return insufficientRole();
+        const resolved = resolveText(String(readJson().title ?? ''), 'title');
+        if (!resolved.ok) return resolved.response;
+        siteRow.title = resolved.text;
+        return json(200, siteDerived(data, siteRow));
       }
 
       if (method === 'PUT' && rest.length === 4 && rest[3] === 'external-sources') {

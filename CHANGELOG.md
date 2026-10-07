@@ -16,6 +16,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 - `site-id` for the publish action and `--site-id` for the CLI; the site
   id on the Deploy tab and in the API.
+- A group admin can change a group's name and a site admin a site's title,
+  on the group's and the site's Settings tab; the audit log keeps the
+  previous name or title.
 
 ### Changed
 
@@ -32,6 +35,7 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   existing link of a repository that is linked to several sites; other
   existing links keep working without it until another repository is
   linked or a site admin requires it.
+- Deleting a site moved from the site's Overview tab to its new Settings tab.
 
 ### Fixed
 
@@ -42,6 +46,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   longer count against a site's storage quota: the nightly cleanup sets
   them aside and removes them a week later, and a site created again
   under a deleted name starts empty.
+- A lone surrogate in a group name, site title, identifier, secret link
+  label or audit lookup reason is refused with a 422 instead of a server
+  error.
 
 ### Security
 

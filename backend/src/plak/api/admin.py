@@ -125,10 +125,15 @@ KEY_NOT_GROUP_MEMBER = "NOT_GROUP_MEMBER.you"
 _SQLSTATE_RAISE_EXCEPTION = "P0001"
 
 # Unicode categories no text a member types may contain: Cc (control, e.g.
-# NUL, tab, newline) and Cf (format, e.g. U+202E right-to-left override, which
-# reverses the reading order of everything after it) - a plain ASCII space is
-# category Zs, not Cc/Cf, so ordinary spacing is unaffected.
-_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf"})
+# NUL, tab, newline), Cf (format, e.g. U+202E right-to-left override, which
+# reverses the reading order of everything after it) and Cs (a lone surrogate,
+# which asyncpg cannot encode: a 500) - a plain ASCII space is category Zs,
+# not Cc/Cf, so ordinary spacing is unaffected.
+_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
+
+# Longest group name or site title a rename accepts. Not applied on create: a
+# new `maxLength` on an existing request field is a breaking change for clients.
+TEXT_MAX_LENGTH = 200
 
 
 def _has_forbidden_characters(value: str) -> bool:
@@ -374,6 +379,34 @@ class SiteCreate(ApiModel):
             "omitted, inherits the default access of the group, so `{\"keys\": true}` only turns on "
             "secret links on top of what the group already prescribes."
         ),
+    )
+
+
+class GroupNameBody(ApiModel):
+    """The new display name of a group."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"name": "Team Aurora"}]})
+
+    name: str = Field(
+        description=(
+            f"New display name, 1 to {TEXT_MAX_LENGTH} characters after trimming spaces; no control or "
+            "formatting characters."
+        ),
+        json_schema_extra={"maxLength": TEXT_MAX_LENGTH},
+    )
+
+
+class SiteTitleBody(ApiModel):
+    """The new display title of a site."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"title": "Documentatie"}]})
+
+    title: str = Field(
+        description=(
+            f"New display title, 1 to {TEXT_MAX_LENGTH} characters after trimming spaces; no control or "
+            "formatting characters."
+        ),
+        json_schema_extra={"maxLength": TEXT_MAX_LENGTH},
     )
 
 
@@ -1809,6 +1842,21 @@ async def _site_with_role(
     return group, site
 
 
+async def _reread_locked(db: AsyncSession, row: Group | Site) -> None:
+    """Reads `row` again under FOR NO KEY UPDATE: another change of the row
+    waits, a row that points at it does not. A row deleted since the role
+    check is the 404 of one that was never there (`db.refresh` would raise)."""
+    model = type(row)
+    found = await db.scalar(
+        select(model)
+        .where(model.id == row.id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+    if found is None:
+        raise ApiError(404, "UNKNOWN_GROUP" if model is Group else "UNKNOWN_SITE")
+
+
 def _require_admin(member: Member) -> None:
     if member.platform_role != PlatformRole.ADMIN:
         raise ApiError(403, KEY_ADMIN_ONLY)
@@ -1890,10 +1938,13 @@ def _validate_slug(slug: str, *, reserved_refused: bool = False) -> str:
     return normalised
 
 
-def _validate_text(value: str, field: str) -> str:
+def _validate_text(value: str, field: str, *, max_length: int | None = None) -> str:
     normalised = value.strip()
     if not normalised:
         raise ApiError(422, "FIELD_EMPTY", params={"field": field})
+    # Before the scan below: a huge text is refused without being read again.
+    if max_length is not None and len(normalised) > max_length:
+        raise ApiError(422, "FIELD_TOO_LONG", params={"field": field, "max": max_length})
     if _has_forbidden_characters(normalised):
         raise ApiError(422, "FIELD_CONTROL_CHARACTERS", params={"field": field})
     return normalised
@@ -2947,6 +2998,51 @@ def make_admin_router() -> APIRouter:
         return Response(status_code=204)
 
     @router.put(
+        "/groups/{group_slug}/name",
+        tags=[TAG_GROUPS],
+        summary="Change the name of a group",
+        response_description="The group with its new name.",
+        description=(
+            "Sets the display name of the group. The slug, and with it every URL of the group, does not "
+            "change. The audit log keeps the previous name, in full. Sending the name the group already has "
+            "(after trimming spaces) changes nothing and writes no audit row.\n\n"
+            "**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator "
+            "without a group role is not allowed."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_GROUP_ROLE,
+            _ERROR_GROUP,
+            {
+                422: (
+                    "The name is empty (`FIELD_EMPTY`), contains control or formatting characters "
+                    f"(`FIELD_CONTROL_CHARACTERS`) or is longer than {TEXT_MAX_LENGTH} characters "
+                    "(`FIELD_TOO_LONG`)."
+                )
+            },
+        ),
+    )
+    async def set_group_name(
+        request: Request, group_slug: str, body: GroupNameBody, _csrf: Csrf, member: ActiveMember, db: Db
+    ) -> GroupOut:
+        group = await _group_with_role(db, member, group_slug, Role.ADMIN)
+        name = _validate_text(body.name, "name", max_length=TEXT_MAX_LENGTH)
+        # Locked and read again: the audit row must name the value this change
+        # replaces, not the one read before a rename that committed meanwhile.
+        await _reread_locked(db, group)
+        previous = group.name
+        if name != previous:
+            group.name = name
+            await db.commit()
+            await _audit(
+                request,
+                member,
+                "group_name",
+                {"group": group_slug, "group_id": str(group.id), "previous_name": previous},
+            )
+        return _group_json(group)
+
+    @router.put(
         "/groups/{group_slug}/default-access",
         tags=[TAG_GROUPS],
         summary="Set the default access of a group",
@@ -3076,6 +3172,56 @@ def make_admin_router() -> APIRouter:
         request.app.state.content_store.delete_site(site_id)
         await _audit(request, member, "site_delete", {"group": group_slug, "site": site_slug})
         return Response(status_code=204)
+
+    @router.put(
+        "/sites/{group_slug}/{site_slug}/title",
+        tags=[TAG_SITES],
+        summary="Change the title of a site",
+        response_description="The site with its new title.",
+        description=(
+            "Sets the display title of the site. The slug, and with it every URL of the site, does not "
+            "change. The audit log keeps the previous title, in full. Sending the title the site already has "
+            "(after trimming spaces) changes nothing and writes no audit row.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_SITE_ROLE,
+            _ERROR_SITE,
+            {
+                422: (
+                    "The title is empty (`FIELD_EMPTY`), contains control or formatting characters "
+                    f"(`FIELD_CONTROL_CHARACTERS`) or is longer than {TEXT_MAX_LENGTH} characters "
+                    "(`FIELD_TOO_LONG`)."
+                )
+            },
+        ),
+    )
+    async def set_site_title(
+        request: Request,
+        group_slug: str,
+        site_slug: str,
+        body: SiteTitleBody,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+    ) -> SiteOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        title = _validate_text(body.title, "title", max_length=TEXT_MAX_LENGTH)
+        # Locked and read again: the audit row must name the value this change
+        # replaces, not the one read before a change that committed meanwhile.
+        await _reread_locked(db, site)
+        previous = site.title
+        if title != previous:
+            site.title = title
+            await db.commit()
+            await _audit(
+                request,
+                member,
+                "site_title",
+                {"group": group_slug, "site": site_slug, "site_id": str(site.id), "previous_title": previous},
+            )
+        return (await _sites_json(db, group, [site]))[0]
 
     @router.put(
         "/sites/{group_slug}/{site_slug}/access",

@@ -8,7 +8,13 @@ import TabSettings from '@/components/group/TabSettings.vue';
 import TabMembers from '@/components/group/TabMembers.vue';
 import TabSites from '@/components/group/TabSites.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
-import { serverErrorFetch, untilIdle, fireDetailEvent } from '@/components/site/testHelpers';
+import {
+  fakeTabBarLayout,
+  fireDetailEvent,
+  serverErrorFetch,
+  stubFrames,
+  untilIdle,
+} from '@/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import { _resetAddActions, useAddActions } from '@/composables/addActions';
@@ -135,7 +141,10 @@ describe('Group: layout', () => {
       ['/team-aurora', ['Sites']],
       ['/team-aurora/-/members', ['Leden']],
       // The logged-in member is group admin, so the danger zone is there too.
-      ['/team-aurora/-/settings', ['Standaardtoegang voor nieuwe sites', 'Gevarenzone']],
+      [
+        '/team-aurora/-/settings',
+        ['Naam van de groep', 'Standaardtoegang voor nieuwe sites', 'Gevarenzone'],
+      ],
     ] as const) {
       await router.push(path);
       await untilIdle();
@@ -222,6 +231,48 @@ describe('Group: tab navigation', () => {
 
     expect(wrapper.find('[data-testid="group-tabs"]').element).toBe(bar);
     expect(wrapper.find('h1').element).toBe(title);
+  });
+});
+
+describe('Group: tab bar', () => {
+  // Three tabs of 100 in a bar that shows 150.
+  const LAYOUT = { barWidth: 150, tabWidth: 100 };
+
+  function scroller(wrapper: ReturnType<typeof mount>): HTMLElement {
+    return wrapper.find('.tabs-scroll').element as HTMLElement;
+  }
+
+  it('lets the bar scroll in a wrapper of its own instead of squeezing its labels', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora');
+
+    const bar = wrapper.find('[data-testid="group-tabs"]');
+    expect(bar.element.parentElement?.classList.contains('tabs-scroll')).toBe(true);
+    expect(wrapper.findAll('.tabs-scroll')).toHaveLength(1);
+  });
+
+  it('brings the current tab into view when the page opens on it', async () => {
+    const frames = stubFrames();
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    fakeTabBarLayout(scroller(wrapper), LAYOUT);
+
+    frames.run();
+
+    // The third tab ends at 300 and the bar shows 150.
+    expect(scroller(wrapper).scrollLeft).toBe(150);
+  });
+
+  it('follows the route to the next tab', async () => {
+    const frames = stubFrames();
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    fakeTabBarLayout(scroller(wrapper), LAYOUT);
+    frames.run();
+
+    await router.push('/team-aurora/-/members');
+    await untilIdle();
+    frames.run();
+
+    // The second tab spans 100 to 200, behind the 150 to 300 the bar showed.
+    expect(scroller(wrapper).scrollLeft).toBe(100);
   });
 });
 
@@ -664,6 +715,75 @@ describe('Group: settings', () => {
       invitees: false,
     });
     expect(wrapper.find('nldd-notification').exists()).toBe(false);
+  });
+});
+
+describe('Group: renaming the group', () => {
+  async function rename(wrapper: ReturnType<typeof mount>, name: string): Promise<void> {
+    fireDetailEvent(wrapper.find('[data-testid="group-name"]').element, 'input', { value: name });
+    await wrapper.find('[data-testid="group-name-form"]').trigger('submit');
+    await untilIdle();
+  }
+
+  it('offers it to a group admin, and the header, the crumb and the title follow', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    expect(wrapper.find('[data-testid="group-name"]').attributes('value')).toBe('Team Aurora');
+
+    await rename(wrapper, 'Team Zonsopgang');
+
+    expect(backend.data.groups[0]!.name).toBe('Team Zonsopgang');
+    expect(wrapper.find('h1').text()).toBe('Team Zonsopgang');
+    expect(breadcrumbsFor('/team-aurora/-/settings')).toEqual([
+      { text: 'Overzicht', href: '/' },
+      { text: 'Team Zonsopgang' },
+    ]);
+    expect(document.title).toBe('Team Zonsopgang - Instellingen - Plak');
+    expect(wrapper.find('[data-testid="group-name-notice"]').text()).toBe(
+      'Naam opgeslagen. De groep heet nu Team Zonsopgang.',
+    );
+    expect(wrapper.find('[data-testid="group-name"]').attributes('value')).toBe('Team Zonsopgang');
+  });
+
+  it('can be undone straight away, because the page holds the new name', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    await rename(wrapper, 'Team Zonsopgang');
+
+    await rename(wrapper, 'Team Aurora');
+
+    expect(backend.data.groups[0]!.name).toBe('Team Aurora');
+    expect(wrapper.find('h1').text()).toBe('Team Aurora');
+  });
+
+  it('keeps the new name when the member leaves the tab and comes back', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    await rename(wrapper, 'Team Zonsopgang');
+
+    await router.push('/team-aurora/-/members');
+    await untilIdle();
+    await router.push('/team-aurora/-/settings');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="group-name"]').attributes('value')).toBe('Team Zonsopgang');
+  });
+
+  it('shows the name as text to an editor of the group', async () => {
+    // lid-3 (Ada Vermeer) is editor on team-aurora.
+    backend.data.loggedInMemberId = 'lid-3';
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-name-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-name-text"]').text()).toBe('Team Aurora');
+    expect(wrapper.text()).toContain('Alleen een beheerder van de groep kan de naam wijzigen.');
+  });
+
+  it('shows the name as text while the role is unknown', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/me') ? serverErrorFetch()(input, init) : backend.fetch(input, init),
+    );
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-name-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-name-text"]').text()).toBe('Team Aurora');
   });
 });
 

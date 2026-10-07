@@ -58,6 +58,7 @@ describe('router: every configured route resolves and mounts its component', () 
     ['/team-aurora/website/access', 'site-access'],
     ['/team-aurora/website/members', 'site-members'],
     ['/team-aurora/website/deploy', 'site-deploy'],
+    ['/team-aurora/website/settings', 'site-settings'],
   ])('mounts %s as %s', async (path, name) => {
     const { wrapper, testRouter } = mountRouterView();
     await testRouter.push(path);

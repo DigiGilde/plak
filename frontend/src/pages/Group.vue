@@ -28,6 +28,7 @@ import type { Group, GroupDetail, GroupMember, Me, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { resolveDroppedFile, useDropState, useWindowDropGuard } from '@/composables/fileDrop';
 import { goToDone } from '@/composables/publishedMark';
 import { isGroupAdmin, mayCreateSiteIn } from '@/composables/roles';
@@ -57,6 +58,8 @@ const me = ref<Me | null>(null);
 const canPublish = computed(() => me.value == null || mayCreateSiteIn(me.value, groupSlug.value));
 // Unlike canPublish, an unknown role hides it: deleting is not a flow to strand.
 const canDeleteGroup = computed(() => isGroupAdmin(me.value, groupSlug.value));
+// Same for renaming: with the role unknown the name is shown, not offered.
+const canRenameGroup = computed(() => isGroupAdmin(me.value, groupSlug.value));
 
 async function loadGroup(): Promise<void> {
   loading.value = true;
@@ -103,6 +106,9 @@ const TABS: readonly TabDefinition[] = [
 ];
 
 const currentTab = computed(() => TABS.find((tab) => tab.name === route.name));
+
+const tabsScroll = ref<HTMLElement | null>(null);
+useCurrentTabInView(tabsScroll, () => TABS.findIndex((tab) => tab.name === route.name));
 
 watchEffect(() => {
   setDocumentTitle(detail.value?.group.name ?? groupSlug.value, currentTab.value?.path ? t(currentTab.value.labelKey) : null);
@@ -275,21 +281,23 @@ function onGroupChanged(group: Group): void {
 
       <nldd-spacer size="16"></nldd-spacer>
 
-      <nldd-tab-bar
-        navigation
-        :accessible-label="t('group.page.tabs.label')"
-        data-testid="group-tabs"
-      >
-        <nldd-tab-bar-item
-          v-for="tab in TABS"
-          :key="tab.name"
-          :text="t(tab.labelKey)"
-          :href="tabPath(tab)"
-          :current="route.name === tab.name || undefined"
-          :data-testid="tabTestId(tab)"
-          @click.prevent="goToTab(tab)"
-        ></nldd-tab-bar-item>
-      </nldd-tab-bar>
+      <div ref="tabsScroll" class="tabs-scroll">
+        <nldd-tab-bar
+          navigation
+          :accessible-label="t('group.page.tabs.label')"
+          data-testid="group-tabs"
+        >
+          <nldd-tab-bar-item
+            v-for="tab in TABS"
+            :key="tab.name"
+            :text="t(tab.labelKey)"
+            :href="tabPath(tab)"
+            :current="route.name === tab.name || undefined"
+            :data-testid="tabTestId(tab)"
+            @click.prevent="goToTab(tab)"
+          ></nldd-tab-bar-item>
+        </nldd-tab-bar>
+      </div>
 
       <nldd-spacer size="24"></nldd-spacer>
 
@@ -297,10 +305,12 @@ function onGroupChanged(group: Group): void {
         <component
           :is="Component"
           :group="groupSlug"
+          :group-name="detail.group.name"
           :sites="detail.sites"
           :members="detail.members"
           :access="detail.group.defaultAccess"
           :can-delete="canDeleteGroup"
+          :can-rename="canRenameGroup"
           @member-added="onMemberAdded"
           @member-removed="onMemberRemoved"
           @member-role-changed="onMemberRoleChanged"

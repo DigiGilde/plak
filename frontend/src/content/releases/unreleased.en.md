@@ -11,3 +11,7 @@ A new link asks for the site ID from the start. Existing links keep working with
 ## Service workers and the `key` parameter
 
 Published sites can no longer register a service worker, so a PWA plugin no longer makes a site work offline. When the address of a page carries a `key` that looks like a secret link, Plak removes it before the page loads; give a query parameter of your own another name.
+
+## Change the name of a group and the title of a site
+
+A group administrator can change the name of the group, and a site administrator the title of the site. You do that on the "Settings" tab. A site now has that tab too; it is also where "Delete site" is, which used to be on the "Overview" tab.

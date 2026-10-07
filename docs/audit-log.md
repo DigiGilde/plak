@@ -20,7 +20,7 @@ in step.
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
-| `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string |
+| `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string; an exception is free text that members write: `group_name` and `site_title` keep the previous name or title as `previous_name` and `previous_title` (see "Admin"), and an audit lookup keeps its justification as `reason` |
 | `ip_truncated` | IPv4 truncated to /24, IPv6 to /48; an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) counts as IPv4 |
 | `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
@@ -106,9 +106,9 @@ who attempted it, and more personal data adds little for investigation.
 
 | Action | Result |
 |---|---|
-| `group_create`, `group_delete`, `group_default_visibility` | `allowed` |
+| `group_create`, `group_delete`, `group_name`, `group_default_visibility` | `allowed` |
 | `group_member_add`, `group_member_remove`, `group_member_role` | `allowed` |
-| `site_create`, `site_delete`, `site_visibility`, `version_set_live` | `allowed` |
+| `site_create`, `site_delete`, `site_title`, `site_visibility`, `version_set_live` | `allowed` |
 | `site_external_sources`, `site_sandbox`, `site_live_versions_kept` | `allowed` |
 | `site_member_add`, `site_member_remove`, `site_member_role` | `allowed` |
 | `preview_visibility` | `allowed` |
@@ -161,6 +161,21 @@ their site needs browser storage.
 nightly cleanup keeps for this site (set on the site's Versions tab):
 `refs.live_versions_kept` is the new number, `0` for keeping all, or `null`
 when the site went back to the platform default `PLAK_LIVE_VERSIONS_KEPT`.
+
+`group_name` and `site_title` are about the display name of a group and the
+display title of a site (set on the Settings tab of each). `refs` carries
+`group`, `group_id` and `previous_name` for a name, and `group`, `site`,
+`site_id` and `previous_title` for a title: the text the change replaced, in
+full and not truncated. The new text is not in the row: it stands on the
+group or site itself, where it stays correctable. Saving the text that is
+already there (after trimming spaces) writes no row. Two changes of the same
+group or site close together can be written in the opposite order of their
+commits, because the row is written after the commit: their order follows
+from the chain of previous texts (the `previous_name` or `previous_title` of
+the later row is what the earlier one wrote), not from `occurred_at`. The
+previous text is free text that members choose and can hold a person's name;
+a row cannot be corrected, so it stays until its retention term is over
+(`docs/privacy.md`).
 
 `group_create` and `site_create` record the access the new group or site
 starts with, in the same three fields as below: `refs.base`, `refs.keys` and

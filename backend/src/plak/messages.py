@@ -104,6 +104,7 @@ NL: Final[dict[str, str]] = {
     "SLUG_INVALID": "Slug is ongeldig of gereserveerd: {slug!r}.",
     "FIELD_EMPTY": "Veld {field!r} mag niet leeg zijn.",
     "FIELD_CONTROL_CHARACTERS": "Veld {field!r} mag geen stuur- of opmaaktekens bevatten.",
+    "FIELD_TOO_LONG": "Veld {field!r} mag hoogstens {max} tekens lang zijn.",
     "INVITEE_EXISTS": "{identifier!r} staat al op de genodigdenlijst.",
     "SELF_NOT_ALLOWED.deactivate": (
         "Je kunt jezelf niet deactiveren. Laat een andere platformbeheerder dat doen."
@@ -389,6 +390,7 @@ EN: Final[dict[str, str]] = {
     "SLUG_INVALID": "Slug is invalid or reserved: {slug!r}.",
     "FIELD_EMPTY": "Field {field!r} must not be empty.",
     "FIELD_CONTROL_CHARACTERS": "Field {field!r} must not contain control or formatting characters.",
+    "FIELD_TOO_LONG": "Field {field!r} may be at most {max} characters long.",
     "INVITEE_EXISTS": "{identifier!r} is already on the invitee list.",
     "SELF_NOT_ALLOWED.deactivate": (
         "You cannot deactivate yourself. Have another platform administrator do that."
