@@ -42,7 +42,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import ConfigDict, Field, field_validator
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
@@ -70,10 +70,11 @@ from plak.api.docs import (
 )
 from plak.api.errors import WWW_AUTHENTICATE_BEARER, ApiError, error_responses
 from plak.api.origin_guard import require_admin_origin
-from plak.api.schema import ACCESS_BASE_HINT, AccessOut, ApiModel
+from plak.api.schema import ACCESS_BASE_HINT, AccessOut, ApiModel, iso_utc
+from plak.audit import request as audit_request
 from plak.audit import vocabulary
 from plak.audit.ip_crypto import IpDecryptError, decrypt_ip
-from plak.audit.log import Actor, AuditLog, LookupLimitReachedError
+from plak.audit.log import LookupLimitReachedError
 from plak.audit.pseudonymisation import pseudonymise, truncate_ip
 from plak.auth import sessions
 from plak.auth.members import require_active_member
@@ -1531,12 +1532,6 @@ class IpRevealOut(ApiModel):
 # -- Serialization ----------------------------------------------------------
 
 
-def _iso(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
-
-
 def _member_json(member: Member, *, bootstrap_sub: str = "") -> MemberOut:
     return MemberOut(
         id=member.id,
@@ -1546,8 +1541,8 @@ def _member_json(member: Member, *, bootstrap_sub: str = "") -> MemberOut:
         platform_role=member.platform_role,
         status=member.status,
         is_bootstrap=bool(bootstrap_sub) and member.sso_subject == bootstrap_sub,
-        created_at=_iso(member.created_at) or "",
-        last_login_at=_iso(member.last_login_at),
+        created_at=iso_utc(member.created_at) or "",
+        last_login_at=iso_utc(member.last_login_at),
     )
 
 
@@ -1580,7 +1575,7 @@ def _site_json(
         live_version_id=site.live_version_id,
         created_by=str(site.created_by) if site.created_by else "",
         has_live_version=site.live_version_id is not None,
-        last_published_at=_iso(last_published_at),
+        last_published_at=iso_utc(last_published_at),
         preview_count=preview_count,
     )
 
@@ -1598,7 +1593,7 @@ def _version_json(
         created_by_member=version.member_id,
         created_by_name=(deployer.name or deployer.email) if deployer is not None else None,
         created_by_repository=version.ci_repository,
-        created_at=_iso(version.created_at),
+        created_at=iso_utc(version.created_at),
         is_live=version.id == site.live_version_id,
     )
 
@@ -1618,8 +1613,8 @@ def _preview_json(preview: Preview, group_slug: str, site_slug: str) -> PreviewO
                 invitees=bool(preview.access_invitees_override),
             )
         ),
-        last_updated_at=_iso(preview.last_updated_at),
-        expires_at=_iso(preview.expires_at),
+        last_updated_at=iso_utc(preview.last_updated_at),
+        expires_at=iso_utc(preview.expires_at),
         url=f"/{group_slug}/{site_slug}/_preview/{preview.ref}/",
     )
 
@@ -1631,7 +1626,7 @@ def _invitee_json(invitee: Invitee, group_slug: str, site_slug: str) -> InviteeO
         group_slug=group_slug,
         identifier=invitee.identifier,
         added_by=str(invitee.added_by) if invitee.added_by else "",
-        added_at=_iso(invitee.added_at),
+        added_at=iso_utc(invitee.added_at),
     )
 
 
@@ -1642,8 +1637,8 @@ def _key_json(key: AccessKey, group_slug: str, site_slug: str) -> KeyOut:
         label=key.label,
         selector=key.selector,
         status=key.status,
-        created_at=_iso(key.created_at),
-        expires_at=_iso(key.expires_at),
+        created_at=iso_utc(key.created_at),
+        expires_at=iso_utc(key.expires_at),
     )
 
 
@@ -1692,7 +1687,7 @@ def _site_member_json(
 def _audit_entry_json(entry: AuditLogEntry) -> AuditEntryOut:
     return AuditEntryOut(
         id=entry.id,
-        occurred_at=_iso(entry.occurred_at),
+        occurred_at=iso_utc(entry.occurred_at),
         actor_kind=entry.actor_kind,
         actor_pseudonym=entry.actor_pseudonym,
         action=entry.action,
@@ -1807,6 +1802,44 @@ async def _refuse_last_admin(db: AsyncSession, target: Member) -> None:
         raise ApiError(409, "LAST_PLATFORM_ADMIN")
 
 
+async def _refuse_taking_platform_rights(
+    request: Request, db: AsyncSession, target: Member, member: Member, what: str
+) -> None:
+    """The three refusals before a member loses platform rights, by
+    deactivation or demotion, in the order they are checked."""
+    _refuse_self(target, member, what)
+    _refuse_bootstrap(request, target)
+    await _refuse_last_admin(db, target)
+
+
+async def _member_or_404(db: AsyncSession, member_id: uuid.UUID) -> Member:
+    target = await db.get(Member, member_id)
+    if target is None:
+        raise ApiError(404, "UNKNOWN_MEMBER")
+    return target
+
+
+async def _commit_or_409(
+    db: AsyncSession, key: str, *, params: Mapping[str, object] | None = None, flush: bool = False
+) -> None:
+    """Commits, or with `flush` only flushes inside a longer transaction; a
+    unique violation rolls back and becomes the 409 `key`."""
+    try:
+        await (db.flush() if flush else db.commit())
+    except IntegrityError:
+        await db.rollback()
+        raise ApiError(409, key, params=params) from None
+
+
+async def _write_one_or_404(db: AsyncSession, statement: Any, key: str) -> None:
+    """Runs a DELETE or UPDATE ... RETURNING aimed at one row and commits it;
+    when it finds no row, rolls back and raises the 404 `key` instead."""
+    if (await db.execute(statement)).first() is None:
+        await db.rollback()
+        raise ApiError(404, key)
+    await db.commit()
+
+
 async def _is_last_group_member(db: AsyncSession, group_id: uuid.UUID, member_id: uuid.UUID) -> bool:
     """True when this member is the only one in the group. A group that empties
     out is unmanageable: adding someone requires membership yourself."""
@@ -1852,17 +1885,7 @@ def _validate_text(value: str, field: str) -> str:
 
 
 async def _audit(request: Request, member: Member, action: str, refs: dict) -> None:
-    log: AuditLog | None = getattr(request.app.state, "audit_log", None)
-    if log is None:
-        return
-    ip = net.client_ip_from_request(request)
-    await log.write(
-        action,
-        Actor(ActorKind.MEMBER, member.sso_subject),
-        "allowed",
-        refs=refs,
-        ip=ip,
-    )
+    await audit_request.write(request, action, audit_request.member_actor(member), vocabulary.ALLOWED, refs=refs)
 
 
 async def _audit_strict(request: Request, member: Member, action: str, refs: dict) -> None:
@@ -1873,7 +1896,7 @@ async def _audit_strict(request: Request, member: Member, action: str, refs: dic
     ApiError (e.g. an unknown pseudonym) does not also pick up a generic
     admin_access row from api/errors.py::_audit_refusal.
     """
-    log: AuditLog | None = getattr(request.app.state, "audit_log", None)
+    log = audit_request.audit_log(request)
     request.state.audit_written = True
     if log is None:
         raise ApiError(503, "AUDIT_UNAVAILABLE")
@@ -1881,8 +1904,8 @@ async def _audit_strict(request: Request, member: Member, action: str, refs: dic
     try:
         await log.write_strict(
             action,
-            Actor(ActorKind.MEMBER, member.sso_subject),
-            "allowed",
+            audit_request.member_actor(member),
+            vocabulary.ALLOWED,
             refs=refs,
             ip=ip,
         )
@@ -1925,6 +1948,10 @@ async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list
         _site_json(site, group.slug, last.get(site.id), counts.get(site.id, 0))
         for site in sites
     ]
+
+
+async def _one_site_json(db: AsyncSession, group: Group, site: Site) -> SiteOut:
+    return (await _sites_json(db, group, [site]))[0]
 
 
 async def _group_sites(db: AsyncSession, group: Group) -> list[Site]:
@@ -2349,7 +2376,7 @@ async def _audit_strict_limited(request: Request, member: Member, action: str, r
     `AuditLog.write_strict_limited` for how the count and the write are kept
     from racing (TOCTOU)."""
     request.state.audit_written = True
-    log: AuditLog | None = getattr(request.app.state, "audit_log", None)
+    log = audit_request.audit_log(request)
     if log is None:
         raise ApiError(503, "AUDIT_UNAVAILABLE")
     settings = request.app.state.settings
@@ -2357,8 +2384,8 @@ async def _audit_strict_limited(request: Request, member: Member, action: str, r
     try:
         await log.write_strict_limited(
             action,
-            Actor(ActorKind.MEMBER, member.sso_subject),
-            "allowed",
+            audit_request.member_actor(member),
+            vocabulary.ALLOWED,
             refs=refs,
             ip=ip,
             limit=settings.audit_lookup_daily_limit,
@@ -2431,7 +2458,7 @@ _HEX = "0123456789abcdef"
 
 
 def _audit_cursor(entry: AuditLogEntry) -> str:
-    raw = f"{_iso(entry.occurred_at)}|{entry.id}"
+    raw = f"{iso_utc(entry.occurred_at)}|{entry.id}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
 
 
@@ -2548,7 +2575,7 @@ async def _repository_json(db: AsyncSession, repository: SiteRepository, group_s
         live_branch=repository.live_branch,
         ids_confirmed=repository.ids_confirmed,
         created_by=(creator.name or creator.email) if creator is not None else "",
-        created_at=_iso(repository.created_at),
+        created_at=iso_utc(repository.created_at),
     )
 
 
@@ -2623,7 +2650,7 @@ async def require_creator(request: Request, db: Db) -> Creator:
     creator = Creator(member=member, cli_session_id=session.id)
     # A refusal after this point (role, rate limit) is audited by
     # api/errors.py, which cannot see this member through a session cookie.
-    request.state.audit_actor = Actor(ActorKind.MEMBER, member.sso_subject)
+    request.state.audit_actor = audit_request.member_actor(member)
     request.state.audit_refs = creator.audit_refs()
     return creator
 
@@ -2844,11 +2871,7 @@ def make_admin_router() -> APIRouter:
             default_access_invitees=invitees,
         )
         db.add(group)
-        try:
-            await db.flush()
-        except IntegrityError:
-            await db.rollback()
-            raise ApiError(409, "SLUG_EXISTS.group", params={"slug": slug}) from None
+        await _commit_or_409(db, "SLUG_EXISTS.group", params={"slug": slug}, flush=True)
         # The creator becomes group beheerder in the same transaction, otherwise
         # they cannot create a site in their own fresh group (403).
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
@@ -3003,11 +3026,7 @@ def make_admin_router() -> APIRouter:
             created_by=member.id,
         )
         db.add(site)
-        try:
-            await db.flush()
-        except IntegrityError:
-            await db.rollback()
-            raise ApiError(409, "SLUG_EXISTS.site", params={"slug": slug}) from None
+        await _commit_or_409(db, "SLUG_EXISTS.site", params={"slug": slug}, flush=True)
         # The creator becomes site beheerder of what they create.
         db.add(
             SiteMember(
@@ -3090,7 +3109,7 @@ def make_admin_router() -> APIRouter:
                 "invitees": body.invitees,
             },
         )
-        return (await _sites_json(db, group, [site]))[0]
+        return await _one_site_json(db, group, site)
 
     @router.put(
         "/sites/{group_slug}/{site_slug}/external-sources",
@@ -3127,7 +3146,7 @@ def make_admin_router() -> APIRouter:
             "site_external_sources",
             {"group": group_slug, "site": site_slug, "external_sources": body.external_sources},
         )
-        return (await _sites_json(db, group, [site]))[0]
+        return await _one_site_json(db, group, site)
 
     @router.put(
         "/sites/{group_slug}/{site_slug}/sandbox",
@@ -3165,7 +3184,7 @@ def make_admin_router() -> APIRouter:
             "site_sandbox",
             {"group": group_slug, "site": site_slug, "sandbox": body.sandbox},
         )
-        return (await _sites_json(db, group, [site]))[0]
+        return await _one_site_json(db, group, site)
 
     @router.put(
         "/sites/{group_slug}/{site_slug}/live-versions-kept",
@@ -3223,7 +3242,7 @@ def make_admin_router() -> APIRouter:
             "site_live_versions_kept",
             {"group": group_slug, "site": site_slug, "live_versions_kept": kept},
         )
-        return (await _sites_json(db, group, [site]))[0]
+        return await _one_site_json(db, group, site)
 
     # -- Invitees --
 
@@ -3279,13 +3298,7 @@ def make_admin_router() -> APIRouter:
         identifier = _validate_text(body.identifier, "identifier").lower()
         invitee = Invitee(site_id=site.id, identifier=identifier, added_by=member.id)
         db.add(invitee)
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            raise ApiError(
-                409, "INVITEE_EXISTS", params={"identifier": identifier}
-            ) from None
+        await _commit_or_409(db, "INVITEE_EXISTS", params={"identifier": identifier})
         await _audit(
             request, member, "invitee_add", {"group": group_slug, "site": site_slug}
         )
@@ -3320,15 +3333,11 @@ def make_admin_router() -> APIRouter:
         db: Db,
     ) -> Response:
         _, site = await _site_with_role(db, member, group_slug, site_slug, Role.EDITOR)
-        result = await db.execute(
-            delete(Invitee).where(
-                Invitee.site_id == site.id,
-                Invitee.id == invitee_id,
-            )
+        await _write_one_or_404(
+            db,
+            delete(Invitee).where(Invitee.site_id == site.id, Invitee.id == invitee_id).returning(Invitee.id),
+            "UNKNOWN_INVITEE",
         )
-        await db.commit()
-        if result.rowcount == 0:
-            raise ApiError(404, "UNKNOWN_INVITEE")
         await _audit(
             request, member, "invitee_remove", {"group": group_slug, "site": site_slug}
         )
@@ -3434,13 +3443,14 @@ def make_admin_router() -> APIRouter:
         db: Db,
     ) -> Response:
         _, site = await _site_with_role(db, member, group_slug, site_slug, Role.EDITOR)
-        key = await db.scalar(
-            select(AccessKey).where(AccessKey.site_id == site.id, AccessKey.selector == selector)
+        await _write_one_or_404(
+            db,
+            update(AccessKey)
+            .where(AccessKey.site_id == site.id, AccessKey.selector == selector)
+            .values(status=KeyStatus.REVOKED)
+            .returning(AccessKey.id),
+            "UNKNOWN_KEY",
         )
-        if key is None:
-            raise ApiError(404, "UNKNOWN_KEY")
-        key.status = KeyStatus.REVOKED
-        await db.commit()
         await _audit(
             request,
             member,
@@ -3617,13 +3627,11 @@ def make_admin_router() -> APIRouter:
         request: Request, group_slug: str, site_slug: str, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
         _, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
-        result = await db.execute(
-            delete(SiteRepository).where(SiteRepository.site_id == site.id).returning(SiteRepository.id)
+        await _write_one_or_404(
+            db,
+            delete(SiteRepository).where(SiteRepository.site_id == site.id).returning(SiteRepository.id),
+            "REPOSITORY_NOT_SET",
         )
-        if result.scalar() is None:
-            await db.rollback()
-            raise ApiError(404, "REPOSITORY_NOT_SET")
-        await db.commit()
         await _audit(request, member, "site_repository_remove", {"group": group_slug, "site": site_slug})
         return Response(status_code=204)
 
@@ -3657,8 +3665,8 @@ def make_admin_router() -> APIRouter:
             user_code=cli.format_user_code(cli.normalise_user_code(body.user_code) or ""),
             client_name=authorization.client_name,
             ip_truncated=authorization.ip_truncated,
-            created_at=_iso(authorization.created_at),
-            expires_at=_iso(authorization.expires_at),
+            created_at=iso_utc(authorization.created_at),
+            expires_at=iso_utc(authorization.expires_at),
         )
 
     @router.post(
@@ -3730,9 +3738,9 @@ def make_admin_router() -> APIRouter:
             CliSessionOut(
                 id=session.id,
                 client_name=session.client_name,
-                created_at=_iso(session.created_at),
-                last_used_at=_iso(session.last_used_at),
-                expires_at=_iso(min(session.expires_at, session.max_expires_at)),
+                created_at=iso_utc(session.created_at),
+                last_used_at=iso_utc(session.last_used_at),
+                expires_at=iso_utc(min(session.expires_at, session.max_expires_at)),
             )
             for session in await cli.sessions_of(db, member.id)
         ]
@@ -3838,11 +3846,7 @@ def make_admin_router() -> APIRouter:
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER.must_sign_in")
         db.add(GroupMember(group_id=group.id, member_id=target.id, role=body.role))
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            raise ApiError(409, "ALREADY_GROUP_MEMBER") from None
+        await _commit_or_409(db, "ALREADY_GROUP_MEMBER")
         await _audit(
             request,
             member,
@@ -3898,9 +3902,7 @@ def make_admin_router() -> APIRouter:
         site_roles: SiteRolesOnRemoval = "keep",
     ) -> Response:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN, platform_admin=True)
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
+        target = await _member_or_404(db, member_id)
         # Read before anything is deleted: the two deletes share one
         # transaction, so a rowcount afterwards can no longer be the thing that
         # decides whether this member was in the group at all.
@@ -3977,9 +3979,7 @@ def make_admin_router() -> APIRouter:
         db: Db,
     ) -> GroupMemberOut:
         group = await _group_with_role(db, member, group_slug, Role.ADMIN, platform_admin=True)
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
+        target = await _member_or_404(db, member_id)
         membership = await db.scalar(
             select(GroupMember).where(
                 GroupMember.group_id == group.id, GroupMember.member_id == target.id
@@ -4057,13 +4057,9 @@ def make_admin_router() -> APIRouter:
     async def _set_member_status(
         request: Request, member_id: uuid.UUID, status: MemberStatus, action: str, member: Member, db: AsyncSession
     ) -> MemberOut:
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
+        target = await _member_or_404(db, member_id)
         if status != MemberStatus.ACTIVE:
-            _refuse_self(target, member, "deactivate")
-            _refuse_bootstrap(request, target)
-            await _refuse_last_admin(db, target)
+            await _refuse_taking_platform_rights(request, db, target, member, "deactivate")
         target.status = status
         refs: dict[str, Any] = {"member_id": str(member_id)}
         if status == MemberStatus.DEACTIVATED:
@@ -4146,13 +4142,9 @@ def make_admin_router() -> APIRouter:
         member: PlatformAdmin,
         db: Db,
     ) -> MemberOut:
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
+        target = await _member_or_404(db, member_id)
         if body.platform_role != PlatformRole.ADMIN:
-            _refuse_self(target, member, "demote")
-            _refuse_bootstrap(request, target)
-            await _refuse_last_admin(db, target)
+            await _refuse_taking_platform_rights(request, db, target, member, "demote")
         target.platform_role = body.platform_role
         await db.commit()
         await _audit(
@@ -4385,7 +4377,7 @@ def make_admin_router() -> APIRouter:
                     kind="content_viewer",
                     email=matched_viewer.email,
                     email_verified=matched_viewer.email_verified,
-                    last_seen_at=_iso(matched_viewer.last_seen_at),
+                    last_seen_at=iso_utc(matched_viewer.last_seen_at),
                 )
             else:
                 matched_ci = await _match_ci_by_pseudonym(db, pepper, pseudonym)
@@ -4569,11 +4561,7 @@ def make_admin_router() -> APIRouter:
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER.must_sign_in")
         db.add(SiteMember(site_id=site.id, member_id=target.id, role=body.role))
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            raise ApiError(409, "ALREADY_SITE_MEMBER") from None
+        await _commit_or_409(db, "ALREADY_SITE_MEMBER")
         await _audit(
             request,
             member,
@@ -4618,9 +4606,7 @@ def make_admin_router() -> APIRouter:
         # The site check first, so a refusal tells an outsider nothing about
         # what exists here.
         group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
+        target = await _member_or_404(db, member_id)
         row = await db.scalar(
             select(SiteMember).where(SiteMember.site_id == site.id, SiteMember.member_id == target.id)
         )
@@ -4674,15 +4660,14 @@ def make_admin_router() -> APIRouter:
         # The site check first, so a refusal tells an outsider nothing about
         # what exists here.
         _, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
-        target = await db.get(Member, member_id)
-        if target is None:
-            raise ApiError(404, "UNKNOWN_MEMBER")
-        result = await db.execute(
-            delete(SiteMember).where(SiteMember.site_id == site.id, SiteMember.member_id == target.id)
+        target = await _member_or_404(db, member_id)
+        await _write_one_or_404(
+            db,
+            delete(SiteMember)
+            .where(SiteMember.site_id == site.id, SiteMember.member_id == target.id)
+            .returning(SiteMember.member_id),
+            "NOT_SITE_MEMBER",
         )
-        await db.commit()
-        if result.rowcount == 0:
-            raise ApiError(404, "NOT_SITE_MEMBER")
         await _audit(
             request,
             member,
@@ -4799,7 +4784,7 @@ def make_admin_router() -> APIRouter:
             "version_set_live",
             {"group": group_slug, "site": site_slug, "version_id": str(version_id)},
         )
-        return (await _sites_json(db, group, [refreshed]))[0]
+        return await _one_site_json(db, group, refreshed)
 
     # -- Previews --
 
