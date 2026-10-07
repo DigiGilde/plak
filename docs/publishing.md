@@ -921,6 +921,22 @@ no half upload. The live site stays as it was.
   browser storage throws, which a build from Astro or Vite (Vue, React,
   Svelte) runs into straight away. What breaks, how it shows and what to do
   is in §2, "Shielding: what a build tool has to know".
+- **No service workers**: Plak refuses the script of a service worker on
+  every site, with the shielding on or off, so registering one fails and a
+  PWA plugin brings no offline support. A service worker would see every
+  navigation under its path before Plak does, a secret link in the address
+  included. One that your site registered before this change stays installed
+  in your visitors' browsers and keeps answering: a failed update does not
+  remove a registration that already has a worker. If your site used one,
+  publish code that unregisters it (`navigator.serviceWorker.getRegistrations()`
+  and `unregister()` on each), with the shielding off for that release: a
+  shielded page cannot reach the service worker API.
+- **The query parameter `key` belongs to Plak**: when a `key` value starts
+  like a secret link (eight letters or digits, a dot, thirty-two letters or
+  digits), Plak takes every `key` out of the address before the page loads;
+  on a page the visitor may see, it does the same for a value of exactly
+  eight letters or digits (a link shared without its code). Do not use `key`
+  as a query parameter of your own site.
 - **Absolute base under `_version`**: if your site was built with an
   absolute base (for example hardcoded `https://voorbeeld.nl/pad/`), then
   that absolute base inside a `_version/{version-id}/` view still

@@ -52,6 +52,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - A workflow that names its site id publishes only to that site: Plak
   accepts a CI token bound to it, so a renamed, deleted or mistyped
   address can no longer send its build to someone else's site.
+- A page never sees a secret link that was not meant for it: Plak takes a
+  `key` in the shape of a secret link out of the address before it answers,
+  also on a refusal, and refuses service worker scripts, which could read a
+  link before Plak does.
 
 ## [2026.10.7]
 
