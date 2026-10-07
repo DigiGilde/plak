@@ -47,12 +47,37 @@ class AccessDecision:
     reason_code: str
     # Selector of the secret link that granted access; never the verifier.
     key_selector: str | None = None
+    # The key a `?key=` in the URL proved, for the serving layer to redeem
+    # into the key cookie; None when access came in any other way.
+    redeem_key_id: uuid.UUID | None = None
+    # What serving needs of the allowed version and its site, read with the
+    # decision so serving looks nothing up again.
+    storage_ref: str | None = None
+    external_sources: bool = False
+    sandbox: bool = False
 
 
 def allow(
-    version_id: uuid.UUID, access: AccessPolicy, *, key_selector: str | None = None
+    version_id: uuid.UUID,
+    access: AccessPolicy,
+    *,
+    storage_ref: str | None = None,
+    external_sources: bool = False,
+    sandbox: bool = False,
+    key_selector: str | None = None,
+    redeem_key_id: uuid.UUID | None = None,
 ) -> AccessDecision:
-    return AccessDecision(DecisionKind.ALLOW, version_id, access, REASON_OK, key_selector)
+    return AccessDecision(
+        DecisionKind.ALLOW,
+        version_id,
+        access,
+        REASON_OK,
+        key_selector=key_selector,
+        redeem_key_id=redeem_key_id,
+        storage_ref=storage_ref,
+        external_sources=external_sources,
+        sandbox=sandbox,
+    )
 
 
 def neutral_404(reason_code: str) -> AccessDecision:

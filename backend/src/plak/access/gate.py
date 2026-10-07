@@ -17,7 +17,6 @@ so that answer leaks nothing either.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -38,35 +37,32 @@ from plak.access.decision import (
     login_redirect,
     neutral_404,
 )
+from plak.auth.sessions import Visitor
 from plak.constants import AccessBase, AccessPolicy
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
 from plak.models.publication import Invitee, Preview, Site, Version
-
-
-@dataclass(frozen=True)
-class Visitor:
-    """Derived from session plus request; no member lookup up front."""
-
-    sub: str | None = None
-    email: str | None = None
-    email_verified: bool = False
-    key_cookie: str | None = None
-    key_query: str | None = None
 
 
 async def decide(
     db: AsyncSession, group_slug: str, site_slug: str, visitor: Visitor
 ) -> AccessDecision:
     """Access decision for live content."""
-    _, site, refusal = await _find_site(db, group_slug, site_slug)
-    if refusal is not None:
-        return refusal
+    found = await _find_site(db, group_slug, site_slug)
+    if isinstance(found, AccessDecision):
+        return found
+    site, live_storage_ref = found
     if site.live_version_id is None:
         # Also on base publiek: without a live version the site
         # does not exist to the outside world (spec §5.6).
         return neutral_404(REASON_NO_LIVE_VERSION)
     return await _assess(
-        db, site, _site_access(site), site.live_version_id, visitor, login_redirect_allowed=True
+        db,
+        site,
+        _site_access(site),
+        site.live_version_id,
+        live_storage_ref,
+        visitor,
+        login_redirect_allowed=True,
     )
 
 
@@ -75,16 +71,30 @@ async def decide_preview(
 ) -> AccessDecision:
     """Access decision for preview content; the expiry check happens here
     itself, the cleanup job is only the safety net."""
-    _, site, refusal = await _find_site(db, group_slug, site_slug)
-    if refusal is not None:
-        return refusal
-    preview = await db.scalar(select(Preview).where(Preview.site_id == site.id, Preview.ref == ref))
-    if preview is None:
+    found = await _find_site(db, group_slug, site_slug)
+    if isinstance(found, AccessDecision):
+        return found
+    site, _ = found
+    row = (
+        await db.execute(
+            select(Preview, Version.storage_ref)
+            .join(Version, Version.id == Preview.version_id)
+            .where(Preview.site_id == site.id, Preview.ref == ref)
+        )
+    ).one_or_none()
+    if row is None:
         return neutral_404(REASON_UNKNOWN_PREVIEW)
+    preview, storage_ref = row
     if preview.expires_at is not None and preview.expires_at <= datetime.now(UTC):
         return neutral_404(REASON_PREVIEW_EXPIRED)
     return await _assess(
-        db, site, effective_access(site, preview), preview.version_id, visitor, login_redirect_allowed=False
+        db,
+        site,
+        effective_access(site, preview),
+        preview.version_id,
+        storage_ref,
+        visitor,
+        login_redirect_allowed=False,
     )
 
 
@@ -94,9 +104,10 @@ async def decide_version(
     """_version view: active members of the site's group only, whatever the
     site's access setting; for anyone else (also without a session) the neutral
     404, never a login redirect."""
-    _, site, refusal = await _find_site(db, group_slug, site_slug)
-    if refusal is not None:
-        return refusal
+    found = await _find_site(db, group_slug, site_slug)
+    if isinstance(found, AccessDecision):
+        return found
+    site, _ = found
     # Membership before the version lookup: non-members cannot probe for the
     # existence of version ids.
     if visitor.sub is None or not await _belongs_to_site(db, site, visitor.sub):
@@ -104,7 +115,13 @@ async def decide_version(
     version = await db.scalar(select(Version).where(Version.id == version_id, Version.site_id == site.id))
     if version is None:
         return neutral_404(REASON_UNKNOWN_VERSION)
-    return allow(version.id, AccessPolicy(AccessBase.SITE_TEAM))
+    return allow(
+        version.id,
+        AccessPolicy(AccessBase.SITE_TEAM),
+        storage_ref=version.storage_ref,
+        external_sources=bool(site.external_sources),
+        sandbox=bool(site.sandbox),
+    )
 
 
 async def code_page_needed(db: AsyncSession, group_slug: str, site_slug: str, selector: str) -> bool:
@@ -116,9 +133,10 @@ async def code_page_needed(db: AsyncSession, group_slug: str, site_slug: str, se
     on the secret link, and the selector has to belong to a key of this site
     that is neither revoked nor expired.
     """
-    _, site, refusal = await _find_site(db, group_slug, site_slug)
-    if refusal is not None:
+    found = await _find_site(db, group_slug, site_slug)
+    if isinstance(found, AccessDecision):
         return False
+    site, _ = found
     if site.live_version_id is None or not site.access_keys:
         return False
     return await keys.selector_usable(db, site.id, selector)
@@ -126,14 +144,27 @@ async def code_page_needed(db: AsyncSession, group_slug: str, site_slug: str, se
 
 async def _find_site(
     db: AsyncSession, group_slug: str, site_slug: str
-) -> tuple[Group, Site, None] | tuple[None, None, AccessDecision]:
-    group = await db.scalar(select(Group).where(Group.slug == group_slug))
-    if group is None:
-        return None, None, neutral_404(REASON_UNKNOWN_GROUP)
-    site = await db.scalar(select(Site).where(Site.group_id == group.id, Site.slug == site_slug))
+) -> tuple[Site, str | None] | AccessDecision:
+    """The site and the storage of its live version, or the refusal.
+
+    One statement: the group row comes back with or without a site, so an
+    unknown group and an unknown site still carry their own reason.
+    """
+    row = (
+        await db.execute(
+            select(Group.id, Site, Version.storage_ref)
+            .select_from(Group)
+            .outerjoin(Site, (Site.group_id == Group.id) & (Site.slug == site_slug))
+            .outerjoin(Version, Version.id == Site.live_version_id)
+            .where(Group.slug == group_slug)
+        )
+    ).one_or_none()
+    if row is None:
+        return neutral_404(REASON_UNKNOWN_GROUP)
+    _, site, live_storage_ref = row
     if site is None:
-        return None, None, neutral_404(REASON_UNKNOWN_SITE)
-    return group, site, None
+        return neutral_404(REASON_UNKNOWN_SITE)
+    return site, live_storage_ref
 
 
 def effective_access(site: Site, preview: Preview | None) -> AccessPolicy:
@@ -159,6 +190,7 @@ async def _assess(
     site: Site,
     access: AccessPolicy,
     version_id: uuid.UUID,
+    storage_ref: str | None,
     visitor: Visitor,
     *,
     login_redirect_allowed: bool,
@@ -166,22 +198,34 @@ async def _assess(
     """The decision table in one place: every way in is tried before any
     refusal is chosen, because the base and the extras are an OR and stopping
     at the first closed door would turn that into an AND."""
+
+    def granted(key_selector: str | None = None, redeem_key_id: uuid.UUID | None = None) -> AccessDecision:
+        return allow(
+            version_id,
+            access,
+            storage_ref=storage_ref,
+            external_sources=bool(site.external_sources),
+            sandbox=bool(site.sandbox),
+            key_selector=key_selector,
+            redeem_key_id=redeem_key_id,
+        )
+
     if access.base is AccessBase.PUBLIC:
-        return allow(version_id, access)
+        return granted()
 
     key_presented = visitor.key_query is not None or visitor.key_cookie is not None
     if access.keys and key_presented:
-        selector = await _valid_key_selector(db, site.id, visitor)
-        if selector is not None:
-            return allow(version_id, access, key_selector=selector)
+        key = await _valid_key(db, site.id, visitor)
+        if key is not None:
+            return granted(*key)
 
     if visitor.sub is not None:
         if access.base is AccessBase.SSO:
-            return allow(version_id, access)
+            return granted()
         if access.base is AccessBase.SITE_TEAM and await _belongs_to_site(db, site, visitor.sub):
-            return allow(version_id, access)
+            return granted()
         if access.invitees and await _is_invitee(db, site.id, visitor):
-            return allow(version_id, access)
+            return granted()
         return neutral_404(REASON_NO_ACCESS)
 
     # Anonymous, and no secret link got them in.
@@ -196,15 +240,19 @@ async def _assess(
     return neutral_404(REASON_NO_ACCESS)
 
 
-async def _valid_key_selector(db: AsyncSession, site_id: uuid.UUID, visitor: Visitor) -> str | None:
+async def _valid_key(
+    db: AsyncSession, site_id: uuid.UUID, visitor: Visitor
+) -> tuple[str, uuid.UUID | None] | None:
+    """The selector of the key that lets this visitor in, plus its id when the
+    key came in the URL and is still to be redeemed into the cookie."""
     if visitor.key_query is not None:
         key = await keys.verify(db, site_id, visitor.key_query)
         if key is not None:
-            return key.selector
+            return key.selector, key.id
     if visitor.key_cookie is not None:
         key = await keys.validate_cookie(db, site_id, visitor.key_cookie)
         if key is not None:
-            return key.selector
+            return key.selector, None
     return None
 
 
