@@ -411,10 +411,12 @@ async def test_a_stranger_bound_to_a_site_gets_the_same_answer_at_every_address(
     cannot use the token to find out which address is that site."""
     await binding.link(binding.y, OTHER_REPOSITORY, required=True)
     await binding.link(binding.x, REPOSITORY, required=False)
-    token = binding.token(True)
+    # A token of its own per address: a GitHub token is accepted once.
     async with binding.client() as client:
         answers = [
-            await client.post(f"/-/api/v1/sites/{GROUP}/{slug}/deploys", files=_upload(), headers=_bearer(token))
+            await client.post(
+                f"/-/api/v1/sites/{GROUP}/{slug}/deploys", files=_upload(), headers=_bearer(binding.token(True))
+            )
             for slug in SLUGS.values()
         ]
     assert {answer.status_code for answer in answers} == {401}

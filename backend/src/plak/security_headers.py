@@ -7,8 +7,10 @@ front of the app to set them.
   `X-Content-Type-Options: nosniff` on every response. When the response does
   not carry a CSP yet, HTML (such as the API docs) gets the full admin CSP
   plus `X-Robots-Tag: noindex`, and everything else (JSON API) gets
-  `frame-ancestors 'none'`. The SPA and the neutral 404 carry their own full
-  CSP; content keeps the content CSP from serving/response.py.
+  `frame-ancestors 'none'`, `Referrer-Policy: strict-origin-when-cross-origin`
+  and `X-Frame-Options: DENY`, the last for clients that predate
+  frame-ancestors. The SPA and the neutral 404 carry their own full CSP;
+  content keeps the content CSP from serving/response.py.
 
 The regime follows the HOST, not the path. Following the path would make a
 refusal on the content host tell tales: `/admin/x` refused with
@@ -34,6 +36,8 @@ COOP = "same-origin"
 FRAME_ANCESTORS_CSP = "frame-ancestors 'none'"
 NOSNIFF = "nosniff"
 NOINDEX = "noindex, nofollow"
+REFERRER_POLICY = "strict-origin-when-cross-origin"
+FRAME_OPTIONS = "DENY"
 
 
 def is_https(base_url: str | None) -> bool:
@@ -74,6 +78,10 @@ class SecurityHeadersMiddleware:
                         headers["Content-Security-Policy"] = self.admin_csp if html else FRAME_ANCESTORS_CSP
                     if html and "x-robots-tag" not in headers:
                         headers["X-Robots-Tag"] = NOINDEX
+                    if not html and "referrer-policy" not in headers:
+                        headers["Referrer-Policy"] = REFERRER_POLICY
+                    if not html and "x-frame-options" not in headers:
+                        headers["X-Frame-Options"] = FRAME_OPTIONS
             await send(message)
 
         await self.app(scope, receive, send_met_headers)
@@ -82,10 +90,12 @@ class SecurityHeadersMiddleware:
 __all__ = [
     "COOP",
     "FRAME_ANCESTORS_CSP",
+    "FRAME_OPTIONS",
     "HSTS",
     "NOINDEX",
     "NOSNIFF",
     "PERMISSIONS_POLICY",
+    "REFERRER_POLICY",
     "SecurityHeadersMiddleware",
     "is_html",
     "is_https",
