@@ -129,6 +129,7 @@ platform administrator may do without a group role (§3.4).
 | Create a group; the creator becomes group `admin` | active member |
 | Read a group, read its member list | group `reader`, or platform administrator |
 | Add a group member, change a group role, remove a group member | group `admin`, or platform administrator |
+| Change the group name | group `admin` |
 | Change the group default access | group `admin` |
 | Delete a group, with every site in it | group `admin` |
 | Create a site | group `editor`; the creator becomes site `admin` |
@@ -138,6 +139,7 @@ platform administrator may do without a group role (§3.4).
 | Add an invitee, create a secret link, change access, change a preview override | effective site `admin` |
 | Link or unlink a repository, change external sources | effective site `admin` |
 | Add, change, remove a site member | effective site `admin` |
+| Change the site title | effective site `admin` |
 | Delete a site | effective site `admin` |
 | Read the audit log, resolve a pseudonym, reveal an IP | platform administrator |
 | Read how full the content volume is (`GET /platform/storage`) | platform administrator |
@@ -147,7 +149,8 @@ site rather than a 403: without that, the API would list which sites exist in a
 group they have nothing to do with.
 
 Code: `api/admin.py`, `api/deploys.py`, `api/authorization.py`. Guarded by:
-`test_admin_api.py`, `test_deploy_api.py`, `test_audit_api.py`.
+`test_admin_api.py`, `test_deploy_api.py`, `test_audit_api.py`,
+`test_names_and_titles.py`.
 
 ## 4. URL design
 

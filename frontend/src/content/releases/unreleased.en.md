@@ -15,3 +15,7 @@ A new link asks for the site ID from the start. Existing links keep working with
 ## Access without repetition
 
 Under the access choice you no longer read again what you just chose. When nobody can view the site, a warning says so. For the default access of a group, secret links and invitees now sit under "Exceptions", just like on the "Access" tab of a site.
+
+## Change the name of a group and the title of a site
+
+A group administrator can change the name of the group, and a site administrator the title of the site. You do that on the "Settings" tab, and it saves by itself as soon as you leave the field or stop typing for a moment. A site now has that tab too, and "Delete site" lives there from now on. It used to be on the "Overview" tab.

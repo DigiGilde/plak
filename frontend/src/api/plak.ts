@@ -90,6 +90,14 @@ export function deleteGroup(slug: string): Promise<void> {
   return request<void>(groupPath(slug), { method: 'DELETE' });
 }
 
+export function setGroupName(groupSlug: string, name: string): Promise<Group> {
+  return request<Group>(`${groupPath(groupSlug)}/name`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
 export function setGroupDefaultAccess(slug: string, access: Access): Promise<Group> {
   return request<Group>(`${groupPath(slug)}/default-access`, {
     method: 'PUT',
@@ -110,6 +118,18 @@ export function createSite(groupSlug: string, title: string, slug: string): Prom
 
 export function deleteSite(groupSlug: string, siteSlug: string): Promise<void> {
   return request<void>(sitePath(groupSlug, siteSlug), { method: 'DELETE' });
+}
+
+export function setSiteTitle(
+  groupSlug: string,
+  siteSlug: string,
+  title: string,
+): Promise<Site> {
+  return request<Site>(`${sitePath(groupSlug, siteSlug)}/title`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
 }
 
 export function setAccess(

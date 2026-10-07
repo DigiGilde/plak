@@ -24,11 +24,6 @@ function makeWrapper() {
   });
 }
 
-/** Types the site's address, which the delete dialog asks for. */
-function typeAddress(wrapper: ReturnType<typeof makeWrapper>, value = 'team-aurora/website'): void {
-  fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', { value });
-}
-
 /** Picks a file in nldd-file-field: the value arrives in `event.detail`. */
 function chooseFile(wrapper: ReturnType<typeof makeWrapper>, file: File): void {
   fireDetailEvent(wrapper.find('[data-testid="upload-input"]').element, 'change', {
@@ -73,8 +68,17 @@ describe('TabOverview: states', () => {
     expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
     // The address sits in a block of its own, not as a line among the rest.
-    expect(wrapper.find('nldd-box[background=\'critical\']').exists()).toBe(true);
-    expect(wrapper.findAll('nldd-box').length).toBe(2);
+    expect(wrapper.findAll('nldd-box').length).toBe(1);
+  });
+
+  it('no longer holds the danger zone: deleting the site moved to the Instellingen tab', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.text()).not.toContain('Gevarenzone');
+    expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="delete-site"]').exists()).toBe(false);
+    expect(wrapper.findComponent(ConfirmModal).exists()).toBe(false);
   });
 
   it('calls the address public as long as it is public', async () => {
@@ -242,119 +246,5 @@ describe('TabOverview: upload', () => {
 
     expect(wrapper.html()).toContain('Serverfout');
     expect(wrapper.find('nldd-notification[text="Versie gepubliceerd"]').exists()).toBe(false);
-  });
-});
-
-describe('TabOverview: danger zone', () => {
-  it('deletes the site only after explicit confirmation', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    // Confirming while the dialog is not open does nothing.
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    await untilIdle();
-    expect(backend.data.sites).toHaveLength(1);
-    expect(wrapper.emitted('removed')).toBeFalsy();
-
-    // Open the dialog, type the address and confirm: now the site really
-    // disappears.
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    await untilIdle();
-
-    expect(backend.data.sites).toHaveLength(0);
-    expect(backend.data.versions).toHaveLength(0);
-    expect(backend.data.previews).toHaveLength(0);
-    expect(wrapper.emitted('removed')).toBeTruthy();
-  });
-
-  it('asks for the address of the site and deletes nothing on a click alone', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    expect(wrapper.findComponent(ConfirmModal).props('confirmPhrase')).toBe('team-aurora/website');
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    typeAddress(wrapper, 'website');
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    await untilIdle();
-
-    expect(backend.data.sites).toHaveLength(1);
-    expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.find('[data-testid="confirm-phrase"]').attributes('invalid')).toBeDefined();
-  });
-
-  it('the safe way out is at the top and is the primary button', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    const actions = wrapper.findAll('nldd-modal-dialog nldd-button');
-    expect(actions[0]!.attributes('data-testid')).toBe('confirm-cancel');
-    expect(actions[0]!.attributes('variant')).toBe('primary');
-    expect(actions[0]!.attributes('text')).toBe('Behoud site');
-    expect(actions[1]!.attributes('data-testid')).toBe('confirm-continue');
-    expect(actions[1]!.attributes('variant')).toBe('destructive');
-    expect(actions[1]!.attributes('disabled')).toBeUndefined();
-  });
-
-  it('Behoud site closes the dialog without deleting', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
-    await untilIdle();
-
-    expect(backend.data.sites).toHaveLength(1);
-    expect(wrapper.emitted('removed')).toBeFalsy();
-  });
-
-  it('closes the dialog and reports it when deleting fails', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    vi.stubGlobal('fetch', serverErrorFetch());
-    typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    await untilIdle();
-
-    // The modal renders the page below it inert: the notification can only be
-    // read once the dialog is closed.
-    expect(wrapper.findComponent(ConfirmModal).props('open')).toBe(false);
-    const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');
-    expect(notice.exists()).toBe(true);
-    expect(notice.attributes('variant')).toBe('critical');
-    expect(notice.attributes('supporting-text')).toBe('Serverfout');
-    expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('loading')).toBeUndefined();
-  });
-
-  it('reports a generic failure when deleting throws something other than an ApiError', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
-    typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
-    await untilIdle();
-
-    const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');
-    expect(notice.attributes('supporting-text')).toBe('Verwijderen is niet gelukt.');
-  });
-
-  it('puts the danger zone in an nldd-box with a critical background', async () => {
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    // The address block is an nldd-box too; the danger zone is the one with
-    // the critical background.
-    const box = wrapper.find('nldd-box[background="critical"]');
-    expect(box.attributes('background')).toBe('critical');
-    expect(box.find('nldd-container').exists()).toBe(true);
-    expect(box.text()).toContain('Gevarenzone');
   });
 });

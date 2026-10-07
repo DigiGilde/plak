@@ -144,6 +144,11 @@ export const routes = [
         name: 'site-deploy',
         component: () => import('./components/site/TabDeploy.vue'),
       },
+      {
+        path: 'settings',
+        name: 'site-settings',
+        component: () => import('./components/site/TabSettings.vue'),
+      },
     ],
   },
 ];

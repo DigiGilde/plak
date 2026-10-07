@@ -41,7 +41,7 @@ such rather than assumed.
 | `content_viewers` (`models/audit.py`) | `sso_subject`, `email` (nullable, may be unverified), `email_verified`, `last_seen_at` | makes a content-host SSO login traceable to a person for the audit log; a content-only viewer gets no `members` row | SSO Rijk OIDC claims, on every successful content-host login | 90 days from `last_seen_at`, purged by `audit/retention.py` (`docs/audit-log.md`, "Retention") |
 | `invitees` (`models/publication.py`) | `identifier` (email address or `sub`, lowercased), `added_by`, `added_at` | per-site invitee access list | admin input | until removed by an admin; no automatic expiry |
 | `access_keys` (`models/publication.py`) | `label`, `selector`, `verifier_hash` (SHA-256 of a random secret) | secret-link credential, not itself tied to a person | generated on creation | mandatory `expires_at`, 90 days default, 365 days maximum (BIO2 5.18.02, `docs/security.md`) |
-| `audit_log_entries` (`models/audit.py`) | `actor_pseudonym` (HMAC-SHA256 of the actor identifier under `PLAK_AUDIT_PEPPER`), `ip_truncated` (/24 IPv4, /48 IPv6), `ip_encrypted` (AES-256-GCM, reversible, under the separate `PLAK_AUDIT_IP_KEY`), `action`, `result`, `reason_code`, `refs` | security and access audit trail | every login, access decision, admin action and CLI event | 90 days for pure viewing/login-success actions, 3 years for everything else, including every refusal, admin operation and publication (`docs/audit-log.md`, "Retention"; enforced in the database by `audit_log_retention()`, `backend/alembic/versions/0001_base.py`) |
+| `audit_log_entries` (`models/audit.py`) | `actor_pseudonym` (HMAC-SHA256 of the actor identifier under `PLAK_AUDIT_PEPPER`), `ip_truncated` (/24 IPv4, /48 IPv6), `ip_encrypted` (AES-256-GCM, reversible, under the separate `PLAK_AUDIT_IP_KEY`), `action`, `result`, `reason_code`, `refs` (for `group_name` and `site_title` also the previous name or title: free text that members choose, see below) | security and access audit trail | every login, access decision, admin action and CLI event | 90 days for pure viewing/login-success actions, 3 years for everything else, including every refusal, admin operation and publication (`docs/audit-log.md`, "Retention"; enforced in the database by `audit_log_retention()`, `backend/alembic/versions/0001_base.py`) |
 | Admin/content sessions (`auth/sessions.py`) | `sub`, `email`, `name`, refresh token (kept in process memory only, `repr=False`, never logged) | keeps someone logged in | OIDC login | in-memory only, not persisted to the database; expires after 12 hours (`MAX_SESSION_AGE`) or on logout; lost entirely on a restart (`docs/security.md`, "Sessions do not survive a restart") |
 | `cli_device_authorizations` (`models/cli.py`) | `device_hash`, `user_code_hash`, `client_name`, `ip_truncated`, `member_id` | `plak login` device pairing | CLI device flow (RFC 8628) | short-lived: expires after 10 minutes, deleted once exchanged, swept by the cleanup job |
 | `cli_sessions` / `cli_refresh_tokens` (`models/cli.py`) | `member_id`, `client_name`, token selector/hash pairs | CLI publishing sessions | approved by a member in an admin session | access token 1 hour; session up to 30 days after last refresh, 90 days absolute (`docs/security.md`, "CI id token"/"CLI device flow") |
@@ -52,6 +52,19 @@ slugs, ids), not raw personal data; this was spot-checked for `invitee_add`/
 `invitee_remove` (`backend/src/plak/api/admin.py`) but was not audited
 exhaustively across every action, so this is a strong indication, not a
 guarantee.
+
+An exception is known: `group_name` and `site_title` write the previous name
+of a group and the previous title of a site into `refs` (`previous_name`,
+`previous_title`), in full and not truncated. That is text members choose, so
+it can be a person's name. Only the previous text is written, never the new
+one, which stays on the group or site where it can be corrected at once. The
+row is an admin operation and so is kept for 3 years, and an audit row cannot
+be corrected, so a name corrected on the group or site stays readable in the
+log until its term ends. A name or title that a rename sets is at most 200
+characters (`TEXT_MAX_LENGTH` in `backend/src/plak/api/admin.py`). The create
+routes accept longer ones: they have no maximum, because adding one would be a
+breaking change that needs a new API major. So the text a rename replaces can
+be longer than 200 characters, and a rename can write it into the log once.
 
 ## Proposed legal basis (AVG art. 6)
 
@@ -155,6 +168,10 @@ as the code supports it:
   (`audit_ip_reveal`), both themselves audited acts subject to a daily rate
   limit (`backend/src/plak/api/admin.py`, `docs/audit-log.md`). There is no
   self-service report a data subject can request through the product itself.
+- **A person's name in a group name or site title**: the admin of the group
+  or site corrects the current value at once (`PUT /groups/{group}/name`,
+  `PUT /sites/{group}/{site}/title`). The previous values in the audit log
+  cannot be changed and expire with the retention term, 3 years.
 - **Erasure from published content**: entirely the publisher's
   responsibility; Plak has no mechanism to locate or redact personal data
   inside a published site.
@@ -195,12 +212,17 @@ to Plak's actual design.
 | R.6 | Re-identification of a person from a logged identifier or IP address | actor pseudonymisation (HMAC-SHA256, keyed pepper), IP truncation by default with reversible encryption gated behind an explicitly audited reveal action (`audit/pseudonymisation.py`, `audit/ip_crypto.py`) | the reveal key (`PLAK_AUDIT_IP_KEY`) and the pepper are operational secrets whose handling (rotation, storage) falls outside this repository |
 | R.7 | Personal data in published content transferred outside the EEA | content never enters the container image or GHCR; content lives on the ZAD content volume (verified, see "Published content" above) | whether the ZAD platform/region itself guarantees EEA storage is unverified |
 | R.8 | Audit log tampering hides unlawful access or a data subject's history | append-only triggers, hash chain per shard, published chain head for external verification (`docs/audit-log.md`) | the schema owner (the one database account Plak has on ZAD) can disable the triggers, the `TRUNCATE` guard among them, and then empty the table; this is a documented, not a closed, gap (`docs/audit-log.md`, "Known gaps") |
+| R.9 | Member-chosen text in a log that cannot be corrected: the previous name of a group or title of a site stays readable in the audit log after it is corrected on the group or site, and it can be a person's name | only the previous text is logged, never the new one; a name or title that a rename sets is at most 200 characters (`TEXT_MAX_LENGTH`); like every admin operation the row expires after 3 years (`docs/audit-log.md`, "Retention") | an audit row cannot be changed or removed before its term ends. Residual risk: the create routes have no maximum (adding one needs a new API major), so an active member could create a group with a very long name and rename it, which writes that text once into a row kept 1096 days (3 years). That is bounded by the creation budget (20 per hour, groups and sites together) and by the request body limit of whatever stands in front of Plak (the application sets none for JSON requests), and it is traceable to the member through the `group_create` and `group_name` rows (`site_create` and `site_title` for a site). Whether keeping the previous text is necessary and proportionate is for the DPIA (open action 1) |
 
 ## Open actions
 
 1. Commission the full DPIA (Model DPIA Rijksdienst), with FG consultation
    (art. 35(2)), before production go-live; this document is the input, not
-   the assessment.
+   the assessment. Input for the necessity and proportionality assessment
+   (art. 35(7)(b)): the audit log keeps the previous name of a group and the
+   previous title of a site, in full, for 3 years, so that a rename can be
+   traced; that text is chosen by members, can hold a person's name and cannot
+   be corrected in the log (R.9).
 2. Confirm the legal basis (art. 6) and, if special categories of data are
    expected to appear structurally in published content, the art. 9
    exception that applies.
@@ -210,7 +232,10 @@ to Plak's actual design.
    audit log and member/invitee data.
 5. Determine whether ZAD (or a service it depends on) is a processor and, if
    so, put a processor agreement (art. 28) in place.
-6. Register the processing in the controller's verwerkingsregister.
+6. Register the processing in the controller's verwerkingsregister. Input for
+   the categories of personal data (art. 30(1)(c)): labels that members choose,
+   such as group names and site titles, may contain a person's name; they stand
+   on the group or site and, as previous values, in the audit log.
 7. Publish a privacy statement (art. 13) reachable from the login and access
    screens.
 8. Define and document a self-service or FG-mediated process for access,
