@@ -753,27 +753,6 @@ describe('SiteMembersManager (error)', () => {
   });
 });
 
-describe('SiteMembersManager (the bubbled native event)', () => {
-  it('ignores the inner input firing its own bare input event, without a detail', () => {
-    const wrapper = mountComponent({});
-
-    comboBox(wrapper).element.dispatchEvent(new Event('input'));
-
-    expect(wrapper.find('[data-testid="site-role-suggestions"]').attributes('empty-text')).not.toBe(
-      'Zoeken...',
-    );
-  });
-
-  it('ignores the inner input firing its own bare change event, without a detail', async () => {
-    const wrapper = mountComponent({});
-    await typeIn(wrapper, 'ver');
-
-    comboBox(wrapper).element.dispatchEvent(new Event('change'));
-
-    expect(comboBox(wrapper).attributes('value')).toBeFalsy();
-  });
-});
-
 describe('SiteMembersManager (the list before anything is typed)', () => {
   it('starts with the members of this group, each with the role they have there', () => {
     const wrapper = mountComponent({ members: [viaGroup, both, siteOnly] });

@@ -12,6 +12,7 @@ import Notices from '@/components/site/Notices.vue';
 import UploadZone from '@/components/site/UploadZone.vue';
 import SectionHeading from '@/components/SectionHeading.vue';
 import CopyNotice from '@/components/CopyNotice.vue';
+import { useConfirm } from '@/composables/confirm';
 
 // The tabs have several roots (notifications beside the content); nothing
 // should fall through to the markup.
@@ -30,8 +31,6 @@ const notices = ref<InstanceType<typeof Notices> | null>(null);
 const uploadBusy = ref(false);
 const uploadError = ref<unknown>(null);
 
-const deleteOpen = ref(false);
-const deleteBusy = ref(false);
 
 const liveUrl = computed(() => siteUrl(props.contentBase, props.group, props.site));
 
@@ -81,24 +80,25 @@ async function publish(file: File): Promise<void> {
 }
 
 async function deleteSite(): Promise<void> {
-  deleteBusy.value = true;
   try {
     await plak.deleteSite(props.group, props.site);
-    deleteOpen.value = false;
     emit('removed');
   } catch (f) {
-    // The modal sits in the top layer and renders the page below it inert; a
-    // notification there would be unreachable. So close first, then notify.
-    deleteOpen.value = false;
     notices.value?.notify(
       'critical',
       t('site.overview.delete.failed'),
       errorText(f, t('site.overview.delete.failed.detail')),
     );
-  } finally {
-    deleteBusy.value = false;
   }
 }
+
+const {
+  open: deleteOpen,
+  busy: deleteBusy,
+  ask: askDelete,
+  cancel: cancelDelete,
+  confirm: confirmDelete,
+} = useConfirm<true>(deleteSite);
 
 </script>
 
@@ -210,7 +210,7 @@ async function deleteSite(): Promise<void> {
                 variant="destructive"
                 :text="t('site.overview.danger.action')"
                 data-testid="delete-site"
-                @click="deleteOpen = true"
+                @click="askDelete(true)"
               ></nldd-button>
             </nldd-button-group>
           </nldd-container>
@@ -224,8 +224,8 @@ async function deleteSite(): Promise<void> {
         :confirm-label="t('site.overview.danger.confirm.confirm')"
         :confirm-phrase="`${props.group}/${props.site}`"
         :busy="deleteBusy"
-        @confirm="deleteSite"
-        @close="deleteOpen = false"
+        @confirm="confirmDelete"
+        @close="cancelDelete"
       />
     </section>
   </nldd-container>

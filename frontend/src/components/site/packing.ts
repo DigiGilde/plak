@@ -430,13 +430,15 @@ function readBytes(file: File): Promise<Bytes> {
   });
 }
 
-async function gzip(bytes: Bytes): Promise<Bytes> {
+async function gzip(parts: Bytes[]): Promise<Bytes> {
   const stream = new CompressionStream('gzip');
   // Set up the read first, only then write: a large input does not fit in the
   // stream's queue and blocks without a consumer.
   const packed = new Response(stream.readable).arrayBuffer();
   const writer = stream.writable.getWriter();
-  await writer.write(bytes);
+  // Part by part, so the archive never exists as one whole array before it is
+  // compressed.
+  for (const part of parts) await writer.write(part);
   await writer.close();
   return new Uint8Array(await packed);
 }
@@ -450,11 +452,10 @@ function archiveName(name: string): string {
   return bare === '' ? 'site' : bare;
 }
 
-/** Builds the tar without compression; exposed so it can be tested. */
-export async function makeTar(
+async function tarParts(
   files: BundleFile[],
   onProgress?: (done: number, total: number) => void,
-): Promise<Bytes> {
+): Promise<Bytes[]> {
   const timestamp = Math.floor(Date.now() / 1000);
   const parts: Bytes[] = [];
   for (const [index, item] of files.entries()) {
@@ -464,7 +465,15 @@ export async function makeTar(
   }
   // Two empty blocks terminate a tar.
   parts.push(new Uint8Array(2 * BLOCK));
-  return concat(parts);
+  return parts;
+}
+
+/** Builds the tar without compression, as one array; exposed so it can be tested. */
+export async function makeTar(
+  files: BundleFile[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Bytes> {
+  return concat(await tarParts(files, onProgress));
 }
 
 /** Packs the bundle into one `.tar.gz` the deploy API can handle. */
@@ -473,7 +482,7 @@ export async function pack(
   files: BundleFile[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<File> {
-  const tar = await makeTar(files, onProgress);
+  const tar = await tarParts(files, onProgress);
   return new File([await gzip(tar)], `${archiveName(name)}.tar.gz`, {
     type: 'application/gzip',
   });

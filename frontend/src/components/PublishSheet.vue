@@ -46,6 +46,7 @@ import {
   keysLabel,
 } from '@/format';
 import { t } from '@/i18n';
+import { useSheetOpen } from '@/composables/sheetOpen';
 
 const props = defineProps<{
   open: boolean;
@@ -538,18 +539,12 @@ watch(
   { immediate: true },
 );
 
-watch(
+useSheetOpen(
   () => props.open,
-  async (open) => {
-    if (!open) {
-      sheetEl.value?.hide?.();
-      return;
-    }
+  sheetEl,
+  () => {
     if (props.initialFile) setFile(props.initialFile);
-    await nextTick();
-    sheetEl.value?.show?.();
   },
-  { immediate: true },
 );
 </script>
 
