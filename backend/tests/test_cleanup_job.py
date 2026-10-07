@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from helpers_store import store_version
 from sqlalchemy import event, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.util import await_only
@@ -94,8 +95,12 @@ async def _make_preview_version(
     """Creates a versie with doel=preview and, when ref is set, a matching
     preview row; returns (version_id, storage_ref)."""
     version_id = uuid.uuid4()
-    storage_ref = environment.store.store_version(
-        environment.group.slug, environment.site.slug, version_id, {"index.html": b"<h1>preview</h1>"}
+    storage_ref = store_version(
+        environment.store,
+        environment.group.slug,
+        environment.site.slug,
+        version_id,
+        {"index.html": b"<h1>preview</h1>"}
     )
     async with environment.session_factory() as session, session.begin():
         session.add(
@@ -303,8 +308,12 @@ async def _make_live_versions(
     async with environment.session_factory() as session, session.begin():
         for index in range(count):
             version_id = uuid.uuid4()
-            storage_ref = environment.store.store_version(
-                environment.group.slug, site.slug, version_id, {"index.html": f"<h1>{index}</h1>".encode()}
+            storage_ref = store_version(
+                environment.store,
+                environment.group.slug,
+                site.slug,
+                version_id,
+                {"index.html": f"<h1>{index}</h1>".encode()}
             )
             session.add(
                 Version(

@@ -137,15 +137,6 @@ class ContentStore:
             shutil.rmtree(workdir, ignore_errors=True)
             raise
 
-    def store_version(
-        self, group: str, site: str, version_id: uuid.UUID, files: dict[str, bytes]
-    ) -> str:
-        with self.write_version(group, site, version_id) as writer:
-            for rel_path, content in files.items():
-                with writer.open_file(rel_path) as out:
-                    out.write(content)
-        return writer.storage_ref
-
     def file_path(self, storage_ref: str, rel_path: str) -> Path | None:
         try:
             base = self._version_root(storage_ref)

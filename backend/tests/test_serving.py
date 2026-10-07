@@ -20,7 +20,8 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import set_content_session_cookie, set_session_cookie
-from sqlalchemy import select
+from helpers_store import store_version
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from plak.access import gate, keys
@@ -193,7 +194,7 @@ async def _seed(factory, store: ContentStore) -> World:
 
         def new_version(site: Site, files: dict[str, bytes], target=VersionTarget.LIVE) -> Version:
             version_id = uuid.uuid4()
-            storage_ref = store.store_version(group.slug, site.slug, version_id, files)
+            storage_ref = store_version(store, group.slug, site.slug, version_id, files)
             return Version(
                 id=version_id, site_id=site.id, target=target, storage_ref=storage_ref, member_id=member.id
             )
@@ -430,6 +431,26 @@ class TestLiveServing:
         assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
         assert "x-robots-tag" not in response.headers
 
+    async def test_a_public_page_view_costs_one_query(self, client, environment):
+        """The site, its group and its live version in one statement; serving
+        asks the database nothing after the gate has decided."""
+        engine = environment.factory.kw["bind"].sync_engine
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            response = await client.get("/aurora/site/")
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+
+        assert response.status_code == 200
+        # The fixture's savepoints go through the same cursor; only the queries count.
+        queries = [statement for statement in statements if "SAVEPOINT" not in statement]
+        assert len(queries) == 1, statements
+
     async def test_asset_immutable_cache(self, client):
         response = await client.get("/aurora/site/stijl.css")
         assert response.status_code == 200
@@ -525,21 +546,6 @@ class TestInconsistentDecision:
         assert response.content == b"Niet gevonden\n"
         rows = await _audit_rows(environment)
         assert rows[-1].reason_code == "UNKNOWN_STORAGE"
-
-    async def test_a_key_selector_for_a_site_that_does_not_exist_sets_no_cookie(
-        self, client, environment, monkeypatch
-    ):
-        # decision.key_selector set and a ?key= query present, but the group
-        # and site the request names have no row of their own: the second,
-        # independent site_id lookup inside _key_cookie_value finds nothing.
-        async def fake_decide(db, group_slug, site_slug, visitor):
-            return allow(uuid.uuid4(), AccessPolicy(AccessBase.PUBLIC), key_selector="AbCdEfGh")
-
-        monkeypatch.setattr(gate, "decide", fake_decide)
-        response = await client.get("/aurora/nietbestaand/?key=AbCdEfGh.dummy")
-        assert response.status_code == 404
-        assert response.content == b"Niet gevonden\n"
-        assert "set-cookie" not in response.headers
 
 
 class TestEtag304:
@@ -819,6 +825,24 @@ class TestKey:
         assert followed.headers["cache-control"] == "private, no-cache, must-revalidate"
         assert followed.headers["referrer-policy"] == "same-origin"
         assert "set-cookie" not in followed.headers
+
+    async def test_a_redeem_verifies_the_key_once(self, client, environment, monkeypatch):
+        """The gate proves the key; the cookie is signed from what it proved."""
+        verified: list[str] = []
+        verify = keys.verify
+
+        async def counting_verify(db, site_id, value):
+            verified.append(value)
+            return await verify(db, site_id, value)
+
+        monkeypatch.setattr(keys, "verify", counting_verify)
+        response = await client.get(f"/aurora/geheim/?key={environment.world.key_plain}")
+
+        assert response.status_code == 302
+        assert verified == [environment.world.key_plain]
+        cookie_value = response.headers["set-cookie"].split(";", 1)[0].removeprefix(f"{KEY_COOKIE}=")
+        secret = environment.app.state.settings.session_secret
+        assert check_signature(secret, cookie_value) == f"key:{environment.world.key_id}"
 
     async def test_redeem_keeps_other_query_parameters_and_deep_path(self, client, environment):
         response = await client.get(f"/aurora/geheim/map/?utm=x&key={environment.world.key_plain}&b=1")

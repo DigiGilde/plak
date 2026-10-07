@@ -19,6 +19,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from helpers_csp import assert_runs_no_script_and_only_its_own_style, directives
 from helpers_oidc import set_content_session_cookie
+from helpers_store import store_version
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -119,7 +120,7 @@ async def _seed(factory, store: ContentStore) -> World:
 
         def new_version(site: Site, body: bytes, target=VersionTarget.LIVE) -> Version:
             version_id = uuid.uuid4()
-            storage_ref = store.store_version(group.slug, site.slug, version_id, {"index.html": body})
+            storage_ref = store_version(store, group.slug, site.slug, version_id, {"index.html": body})
             return Version(
                 id=version_id, site_id=site.id, target=target, storage_ref=storage_ref, member_id=member.id
             )

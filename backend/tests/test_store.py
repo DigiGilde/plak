@@ -11,6 +11,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from helpers_store import store_version
 
 from plak.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError
 
@@ -31,29 +32,29 @@ FILES = {"index.html": b"<html>", "assets/stijl.css": b"body{}"}
 class TestStoreVersion:
     def test_writes_and_returns_ref(self, store: ContentStore, root: Path):
         version_id = uuid.uuid4()
-        ref = store.store_version("group", "site", version_id, FILES)
+        ref = store_version(store, "group", "site", version_id, FILES)
         assert ref == f"group/site/{version_id}"
         assert (root / ref / "index.html").read_bytes() == b"<html>"
         assert (root / ref / "assets" / "stijl.css").read_bytes() == b"body{}"
 
     def test_tmp_empty_after_success(self, store: ContentStore, root: Path):
-        store.store_version("g", "p", uuid.uuid4(), FILES)
+        store_version(store, "g", "p", uuid.uuid4(), FILES)
         assert list((root / "_tmp").iterdir()) == []
 
     def test_tmp_cleaned_up_after_error(self, store: ContentStore, root: Path):
         with pytest.raises(StoreError):
-            store.store_version("g", "p", uuid.uuid4(), {"../x": b"1"})
+            store_version(store, "g", "p", uuid.uuid4(), {"../x": b"1"})
         assert list((root / "_tmp").iterdir()) == []
         assert not (root / "g").exists()
 
     def test_refuses_unsafe_relative_paths(self, store: ContentStore):
         for path in ("/abs", "a/../b", "", "a\\b", "a\x00b", "./a"):
             with pytest.raises(StoreError):
-                store.store_version("g", "p", uuid.uuid4(), {path: b"1"})
+                store_version(store, "g", "p", uuid.uuid4(), {path: b"1"})
 
     def test_refuses_ref_outside_root(self, store: ContentStore):
         with pytest.raises(StoreError):
-            store.store_version("..", "p", uuid.uuid4(), FILES)
+            store_version(store, "..", "p", uuid.uuid4(), FILES)
 
 
 class TestRoot:
@@ -138,20 +139,20 @@ class TestSpoolFile:
 
 class TestFilePath:
     def test_finds_file(self, store: ContentStore, root: Path):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         path = store.file_path(ref, "assets/stijl.css")
         assert path == root / ref / "assets" / "stijl.css"
 
     def test_none_on_absent_file(self, store: ContentStore):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         assert store.file_path(ref, "bestaat-niet.html") is None
 
     def test_none_on_directory(self, store: ContentStore):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         assert store.file_path(ref, "assets") is None
 
     def test_none_on_traversal_in_rel_path(self, store: ContentStore, root: Path):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         (root / "g" / "geheim.txt").write_bytes(b"geheim")
         assert store.file_path(ref, "../../geheim.txt") is None
         assert store.file_path(ref, "/etc/passwd") is None
@@ -163,7 +164,7 @@ class TestFilePath:
         assert store.file_path("..", "buiten.txt") is None
 
     def test_none_on_symlink_that_escapes(self, store: ContentStore, root: Path):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         outside = root.parent / "buiten.txt"
         outside.write_bytes(b"geheim")
         (root / ref / "ontsnap").symlink_to(outside)
@@ -177,12 +178,12 @@ class TestFilePath:
 
 class TestDeleteVersion:
     def test_deletes_tree(self, store: ContentStore, root: Path):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         store.delete_version(ref)
         assert not (root / ref).exists()
 
     def test_idempotent(self, store: ContentStore):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         store.delete_version(ref)
         store.delete_version(ref)
 
@@ -202,12 +203,12 @@ class TestDeleteVersion:
 
 class TestDeleteVersions:
     async def test_deletes_every_tree(self, store: ContentStore, root: Path):
-        refs = [store.store_version("g", "p", uuid.uuid4(), FILES) for _ in range(3)]
+        refs = [store_version(store, "g", "p", uuid.uuid4(), FILES) for _ in range(3)]
         await store.delete_versions(refs)
         assert not any((root / ref).exists() for ref in refs)
 
     async def test_runs_off_the_event_loop_thread(self, store: ContentStore, monkeypatch):
-        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        ref = store_version(store, "g", "p", uuid.uuid4(), FILES)
         threads = []
         real = store.delete_version
 
@@ -272,18 +273,18 @@ class TestMeasuring:
     def test_site_bytes_counts_every_version_and_is_zero_without_one(self, root: Path):
         store = ContentStore(root)
         assert store.site_bytes("groep", "site") == 0
-        store.store_version("groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
-        store.store_version("groep", "site", uuid.uuid4(), {"b.html": b"y" * 5})
+        store_version(store, "groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
+        store_version(store, "groep", "site", uuid.uuid4(), {"b.html": b"y" * 5})
         assert store.site_bytes("groep", "site") == 15
         # Another site on the same volume does not count towards it.
-        store.store_version("groep", "andere", uuid.uuid4(), {"c.html": b"z" * 99})
+        store_version(store, "groep", "andere", uuid.uuid4(), {"c.html": b"z" * 99})
         assert store.site_bytes("groep", "site") == 15
 
     def test_a_file_that_disappears_during_the_walk_is_not_counted(self, root: Path, monkeypatch):
         """The cleanup job removes an expired preview while a deploy is being
         measured: the race may not make the deploy fail."""
         store = ContentStore(root)
-        store.store_version("groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
+        store_version(store, "groep", "site", uuid.uuid4(), {"a.html": b"x" * 10})
 
         def gone(_path):
             raise FileNotFoundError
