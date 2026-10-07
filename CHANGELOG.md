@@ -17,6 +17,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The What's new page no longer opens with the version you use; the footer
   shows it.
 
+### Fixed
+
+- Production runs the image its release names, so the footer shows the
+  version instead of "Wat is er nieuw"; it ran a build of the same commit
+  without its version.
+
 ## [2026.10.7]
 
 ### Security

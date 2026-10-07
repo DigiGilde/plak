@@ -637,8 +637,8 @@ class TestTheReleaseGuards:
 
 
 class TestTheReleaseImage:
-    """A release tag gets its version as a second image tag and as
-    PLAK_VERSION in the image; any other push builds as before."""
+    """A release tag gets its version as its only image tag and as
+    PLAK_VERSION in the image; any other push builds the commit tag."""
 
     @pytest.fixture
     def build(self, deploy) -> dict:
@@ -657,15 +657,25 @@ class TestTheReleaseImage:
 
         push = _step(build, "Build and push the image")
         assert push["with"]["build-args"] == "${{ steps.release.outputs.build-args }}"
-        assert push["with"]["tags"] == (
-            "${{ steps.release.outputs.tags || steps.tag.outputs.image }}"
-        )
-        # Scans and attestation keep following the commit tag.
-        assert build["outputs"]["image"] == "${{ steps.tag.outputs.image }}"
 
-    def test_a_release_tag_gets_both_image_tags_and_the_version(
-        self, build, deploy, tmp_path
-    ) -> None:
+    def test_everything_after_the_push_follows_the_one_image_it_pushed(self, build, deploy) -> None:
+        """The release commit is a push to beta as well as a tag. Both builds
+        once pushed the commit tag, the beta one without PLAK_VERSION, and
+        production rolled out whichever finished last: v2026.10.4 and
+        v2026.10.7 ran as `dev`, not as the image their release named. A
+        release now pushes its version tag alone, and the scans, the SBOM,
+        the attestations and production all take that one."""
+        image = "${{ steps.release.outputs.image || steps.tag.outputs.image }}"
+        assert _step(build, "Build and push the image")["with"]["tags"] == image
+        assert build["outputs"]["image"] == image
+        for step in build["steps"]:
+            if "image-ref" in step.get("with", {}):
+                assert step["with"]["image-ref"] == image, step.get("name")
+        assert _step(deploy["jobs"]["production"], "Roll out to ZAD")["with"]["image"] == (
+            "${{ needs.build.outputs.image }}"
+        )
+
+    def test_a_release_tag_builds_only_its_version_tag(self, build, deploy, tmp_path) -> None:
         output = tmp_path / "output"
         output.touch()
         result = _run(
@@ -673,17 +683,13 @@ class TestTheReleaseImage:
             tmp_path,
             TAG="v2026.10.1",
             NAME="ghcr.io/digigilde/plak",
-            IMAGE="ghcr.io/digigilde/plak:abc123",
             RELEASE_TAG=deploy["env"]["RELEASE_TAG"],
             GITHUB_OUTPUT=str(output),
         )
         assert result.returncode == 0, result.stdout
         assert output.read_text().splitlines() == [
             "build-args=PLAK_VERSION=2026.10.1",
-            "tags<<EOF",
-            "ghcr.io/digigilde/plak:abc123",
-            "ghcr.io/digigilde/plak:2026.10.1",
-            "EOF",
+            "image=ghcr.io/digigilde/plak:2026.10.1",
         ]
 
     def test_a_malformed_tag_builds_nothing(self, build, deploy, tmp_path) -> None:
