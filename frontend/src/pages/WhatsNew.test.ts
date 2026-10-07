@@ -1,15 +1,12 @@
 import '@nldd/design-system';
 
 import { flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
 import { expectNoAxeViolations } from '../../tests/a11y';
 import { _setLocaleForTest } from '@/i18n';
-import { appVersion } from '../version';
 import WhatsNew from './WhatsNew.vue';
-
-vi.mock('../version', () => ({ appVersion: vi.fn(() => 'dev') }));
 
 const SOURCE = {
   './content/releases/2026.9.30.nl.md': '## Nieuw\n\nEen **zin**.',
@@ -26,7 +23,6 @@ let wrapper: ReturnType<typeof mount> | null = null;
 afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
-  vi.mocked(appVersion).mockReturnValue('dev');
   _setLocaleForTest('nl');
   document.body.innerHTML = '';
 });
@@ -46,60 +42,20 @@ async function mountPage(source?: Record<string, string>) {
 }
 
 describe('WhatsNew', () => {
-  it('says nothing about the version on a dev build', async () => {
+  it('leaves the version to the footer and starts with the newest date', async () => {
     _setLocaleForTest('en');
-    const page = await mountPage(SOURCE);
-
-    expect(page.text()).not.toContain('You are using');
-  });
-
-  it('names the version above the first date, and nothing more, when its day is the newest', async () => {
-    _setLocaleForTest('en');
-    vi.mocked(appVersion).mockReturnValue('2026.10.1.3');
     const page = await mountPage(SOURCE);
 
     const rich = page.find('nldd-rich-text').element;
-    expect(rich.children[0]!.tagName.toLowerCase()).toBe('p');
-    expect(rich.children[0]!.textContent).toBe('You are using version 2026.10.1.3.');
-    expect(rich.children[1]!.tagName.toLowerCase()).toBe('h2');
+    expect(rich.children[0]!.tagName.toLowerCase()).toBe('h2');
+    expect(page.text()).not.toContain('You are using');
   });
 
-  it('says nothing you would notice changed since the newest note when the version is later', async () => {
+  it('shows only the empty state when there are no notes', async () => {
     _setLocaleForTest('en');
-    vi.mocked(appVersion).mockReturnValue('2026.10.5');
-    const page = await mountPage(SOURCE);
-
-    expect(page.find('p').text()).toBe(
-      'You are using version 2026.10.5. Nothing you would notice has changed since 1 October 2026.',
-    );
-  });
-
-  it('says it in Dutch too', async () => {
-    vi.mocked(appVersion).mockReturnValue('2026.10.5');
-    const page = await mountPage(SOURCE);
-
-    expect(page.find('p').text()).toBe(
-      'Je gebruikt versie 2026.10.5. Sinds 1 oktober 2026 is er niets veranderd dat je merkt.',
-    );
-  });
-
-  it('treats a version that is not a CalVer as having no notes for its day', async () => {
-    _setLocaleForTest('en');
-    vi.mocked(appVersion).mockReturnValue('2026.10.1-5-g1a2b3c4');
-    const page = await mountPage(SOURCE);
-
-    expect(page.find('p').text()).toContain('Nothing you would notice has changed since 1 October 2026.');
-  });
-
-  it('shows only the first sentence next to the empty state when there are no notes', async () => {
-    _setLocaleForTest('en');
-    vi.mocked(appVersion).mockReturnValue('2026.10.5');
     const page = await mountPage({});
 
-    expect(page.findAll('p').map((p) => p.text())).toEqual([
-      'You are using version 2026.10.5.',
-      'No releases yet.',
-    ]);
+    expect(page.findAll('p').map((p) => p.text())).toEqual(['No releases yet.']);
   });
 
   it('groups releases under a date heading, newest first, in the language on screen', async () => {
