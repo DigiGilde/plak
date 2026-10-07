@@ -126,6 +126,17 @@ describe('Site: structure', () => {
     expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(false);
   });
 
+  it('recovers when the route moves from an unknown site to a real one', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/bestaat-niet');
+    expect(wrapper.html()).toContain('Onbekende site');
+
+    await router.push('/team-aurora/website');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(true);
+    expect(wrapper.html()).not.toContain('Onbekende site');
+  });
+
   it('loads nothing without group and site in the route', async () => {
     const { wrapper } = await makeWrapper('/-/los');
 
