@@ -300,7 +300,9 @@ as `NO_SESSION`, `CSRF_INVALID`, `ORIGIN_REFUSED`, `MEMBER_DEACTIVATED`,
 `TOKEN_INVALID` (unknown, revoked or expired token, or the member no longer
 active); for a CI ID token `CI_ISSUER_UNKNOWN` (the `iss` belongs to no
 configured provider), `CI_TOKEN_INVALID` (not a valid JWT, wrong algorithm,
-signature or claims are wrong), `CI_AUDIENCE_MISMATCH` (the `aud` is not
+signature or claims are wrong), `CI_TOKEN_REPLAYED` (a token with a `jti`
+that was already used once; the response still carries the code
+`CI_TOKEN_INVALID`), `CI_AUDIENCE_MISMATCH` (the `aud` is not
 exactly `PLAK_BASE_URL`), `CI_REPOSITORY_NOT_TRUSTED` (no repository, or a
 different one, linked to the site), `CI_BRANCH_NOT_ALLOWED` (a live deploy
 from an event other than `push`, `workflow_dispatch` or `schedule`, without

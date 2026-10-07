@@ -356,7 +356,7 @@ async def test_a_ci_token_used_a_second_time_is_refused_and_audited(environment:
     assert replayed.headers["www-authenticate"].startswith("Bearer")
     async with environment.session_factory() as db:
         rows = (await db.execute(select(AuditLogEntry).order_by(AuditLogEntry.occurred_at))).scalars().all()
-    assert [(row.result, row.reason_code) for row in rows] == [("allowed", None), ("refused", "CI_TOKEN_INVALID")]
+    assert [(row.result, row.reason_code) for row in rows] == [("allowed", None), ("refused", "CI_TOKEN_REPLAYED")]
 
 
 async def test_ci_token_never_lands_in_the_audit_log(environment: Environment) -> None:

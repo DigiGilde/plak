@@ -139,6 +139,7 @@ IP_UNVOUCHED: Final = "ip_unvouched"
 # Why a CI ID token was refused on a deploy or preview teardown.
 CI_ISSUER_UNKNOWN: Final = "CI_ISSUER_UNKNOWN"
 CI_TOKEN_INVALID: Final = "CI_TOKEN_INVALID"  # noqa: S105 - a reason code, not a secret
+CI_TOKEN_REPLAYED: Final = "CI_TOKEN_REPLAYED"  # noqa: S105 - a reason code, not a secret
 CI_AUDIENCE_MISMATCH: Final = "CI_AUDIENCE_MISMATCH"
 CI_REPOSITORY_NOT_TRUSTED: Final = "CI_REPOSITORY_NOT_TRUSTED"
 CI_BRANCH_NOT_ALLOWED: Final = "CI_BRANCH_NOT_ALLOWED"
@@ -148,6 +149,7 @@ CI_REASONS: Final = frozenset(
     {
         CI_ISSUER_UNKNOWN,
         CI_TOKEN_INVALID,
+        CI_TOKEN_REPLAYED,
         CI_AUDIENCE_MISMATCH,
         CI_REPOSITORY_NOT_TRUSTED,
         CI_BRANCH_NOT_ALLOWED,

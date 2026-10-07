@@ -79,16 +79,16 @@ class CiTokenError(Exception):
     language it is rendered in: it never echoes the token or a claim."""
 
     def __init__(
-        self, key: str, *, params: Mapping[str, object] | None = None, status: int = 401
+        self, key: str, *, params: Mapping[str, object] | None = None, status: int = 401, reason: str | None = None
     ) -> None:
         self.message = Msg(key, dict(params or {}))
-        self.reason = messages.code_of(key)
+        self.reason = reason or messages.code_of(key)
         self.status = status
         super().__init__(messages.render(i18n.API_DEFAULT, self.message))
 
 
-def _invalid(variant: str) -> CiTokenError:
-    return CiTokenError(f"{vocabulary.CI_TOKEN_INVALID}.{variant}")
+def _invalid(variant: str, *, reason: str | None = None) -> CiTokenError:
+    return CiTokenError(f"{vocabulary.CI_TOKEN_INVALID}.{variant}", reason=reason)
 
 
 def _unreachable() -> CiTokenError:
@@ -185,7 +185,7 @@ class CiTokenVerifier:
             and jti
             and self._replays.seen_before(f"{issuer.issuer} {jti}", until=claims["exp"] + LEEWAY_S, now=time.time())
         ):
-            raise _invalid("replayed")
+            raise _invalid("replayed", reason=vocabulary.CI_TOKEN_REPLAYED)
         return VerifiedCiToken(issuer=issuer, claims=dict(claims))
 
     async def _decode(self, issuer: Issuer, token: str):

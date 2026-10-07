@@ -513,7 +513,9 @@ def _token_invalid() -> ApiError:
 
 def ci_error(error: CiTokenError) -> ApiError:
     headers = WWW_AUTHENTICATE_BEARER if error.status == 401 else None
-    return ApiError(error.status, error.message.key, params=error.message.params, headers=headers)
+    return ApiError(
+        error.status, error.message.key, params=error.message.params, headers=headers, reason=error.reason
+    )
 
 
 async def cli_member(request: Request, db: AsyncSession, plaintext: str) -> tuple[cli.CliSession, Member]:
