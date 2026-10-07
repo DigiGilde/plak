@@ -90,6 +90,8 @@ const shared = {
   'footer.accessibility': 'Accessibility',
   'footer.privacy': 'Privacy',
   'footer.api': 'API documentation',
+  'footer.language.en': 'English',
+  'footer.language.nl': 'Nederlands',
 
   'profile.title': 'Profile',
   'profile.subtitle': 'Your account, and how the admin adapts itself to you.',

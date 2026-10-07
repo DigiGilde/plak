@@ -3,7 +3,7 @@ exist only on the content host, the API only on the admin host, the login and
 its callback on both (they share one spelling and the host picks the flow), and
 on the admin host the SPA answers everything the app does not claim itself.
 No database needed: every path used here is answered before the DB (lexical
-301, SPA, front page, robots, healthz, login redirect, neutral 404).
+301, SPA, root redirect, robots, healthz, login redirect, neutral 404).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ class TestClassification:
             "/-/oauth2/callback",
             # The code of a secret link shared without it (serving/code_page.py).
             "/-/code",
-            # The public front page (platform/pages.py) lives here.
+            # The redirect to the admin landing page (platform/pages.py) lives here.
             "/",
             # `admin` and `beheer` are not reserved slugs, so on this
             # host they are ordinary content paths.
@@ -224,13 +224,12 @@ class TestContentHost:
         assert response.headers["location"] == "/admin/site/"
         assert await _is_neutral_404(content, "/admin")
 
-    async def test_root_is_the_public_front_page(self, two_hosts) -> None:
+    async def test_root_redirects_to_the_admin_landing_page(self, two_hosts) -> None:
         # The one path on this host that is not content and not the neutral
-        # 404; test_front_page.py holds it to its content (spec §4a).
+        # 404; test_front_door.py holds it to its details (spec §4a).
         _, content = two_hosts
         response = await content.get("/")
-        assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/html")
+        assert response.status_code == 302
 
     async def test_content_path_reaches_the_serving_router(self, two_hosts) -> None:
         _, content = two_hosts

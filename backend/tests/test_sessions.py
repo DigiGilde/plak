@@ -291,7 +291,7 @@ class TestLoginFlow:
 
     async def test_a_refusal_speaks_the_language_of_the_browser(self, client, idp):
         """There is no session yet at this point, so Accept-Language is all
-        there is to go on: the same source the front page reads."""
+        there is to go on."""
         await start_login(client, idp)
         response = await client.get(
             "/-/oauth2/callback",
@@ -514,7 +514,7 @@ class TestContentLogout:
         assert response.headers["location"] == "/"
 
     async def test_from_is_a_token_not_an_address(self, content_client):
-        """Anything but the fixed value lands on the content front page, so the
+        """Anything but the fixed value lands on the content host's root, so the
         parameter cannot be turned into an open redirect."""
         for value in ("https://evil.example/", "//evil.example", "beheer.evil"):
             response = await content_client.get("/-/logout", params={"from": value})

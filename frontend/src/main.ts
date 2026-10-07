@@ -1,5 +1,7 @@
 import '@nldd/design-system';
-import '@nldd/design-system/styles';
+// The system-font build: RijksSans is licensed for Rijksoverheid publications
+// only, and anyone may run Plak.
+import '@nldd/design-system/styles/system-font';
 import './global.css';
 
 import { VueQueryPlugin } from '@tanstack/vue-query';

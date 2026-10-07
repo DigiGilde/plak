@@ -91,7 +91,7 @@ class TestServing:
 
     async def test_the_rest_of_well_known_keeps_the_neutral_404(self, two_hosts) -> None:
         """Opening one fixed path gives nothing away, the way /robots.txt and
-        the front page already do not. Everything around it has to stay the
+        the root redirect already do not. Everything around it has to stay the
         byte-identical refusal, or this becomes an enumeration channel."""
         _, content = two_hosts
 

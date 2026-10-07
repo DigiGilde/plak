@@ -14,6 +14,7 @@ import { makeMockBackend, type MockBackend } from './api/mock';
 import App from './App.vue';
 import { _resetCurrentMemberCache } from './composables/currentMember';
 import { _resetBreadcrumbs, setBreadcrumbs } from './composables/breadcrumbs';
+import { _setLocaleForTest } from './i18n';
 import { appVersion } from './version';
 
 vi.mock('./version', () => ({ appVersion: vi.fn(() => 'dev') }));
@@ -230,6 +231,55 @@ describe('App', () => {
     } finally {
       vi.mocked(appVersion).mockReturnValue('dev');
     }
+  });
+
+  describe('language switch in the footer', () => {
+    it('is offered to a visitor without an account, in the other language', async () => {
+      backend.data.loggedInMemberId = null;
+      await router.push('/-/groups?x=1');
+      const app = await mountApp();
+      await router.push('/-/groups?x=1');
+      await flushPromises();
+
+      const item = app.find('[data-testid="language-switch"]');
+      expect(item.exists()).toBe(true);
+      expect(item.attributes('slot')).toBe('end');
+      expect(item.attributes('lang')).toBe('en');
+      expect(property<string>(item.element, 'text')).toBe('English');
+      const href = property<string>(item.element, 'href');
+      expect(href).toContain('/-/groups');
+      expect(href).toContain('x=1');
+      expect(href).toContain('lang=en');
+    });
+
+    it('offers Dutch when the interface is English', async () => {
+      backend.data.loggedInMemberId = null;
+      _setLocaleForTest('en');
+      try {
+        const app = await mountApp();
+
+        const item = app.find('[data-testid="language-switch"]');
+        expect(item.attributes('lang')).toBe('nl');
+        expect(property<string>(item.element, 'text')).toBe('Nederlands');
+        expect(property<string>(item.element, 'href')).toContain('lang=nl');
+      } finally {
+        _setLocaleForTest('nl');
+      }
+    });
+
+    it('is not offered to a signed-in member, who sets it on the profile', async () => {
+      const app = await mountApp();
+
+      expect(app.find('[data-testid="language-switch"]').exists()).toBe(false);
+    });
+
+    it('is not offered before the session has been looked up', async () => {
+      vi.stubGlobal('fetch', () => new Promise(() => {}));
+
+      const app = await mountApp();
+
+      expect(app.find('[data-testid="language-switch"]').exists()).toBe(false);
+    });
   });
 
   it('has a skip link to the main content', async () => {

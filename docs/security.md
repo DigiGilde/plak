@@ -118,7 +118,7 @@ X-Accel path and no nginx logic.
 | Item | Status |
 |---|---|
 | Content CSP (§5.7 regime) on all content routes | implemented: `serving/response.py` (`CONTENT_CSP`), `backend/tests/test_serving.py` |
-| Platform CSP on the platform's own answers on the content host (front page, code page, neutral 404): no script, the one inline `<style>` by hash, no `'unsafe-inline'` | implemented: `serving/response.py` (`platform_csp`, `PLATFORM_CSP`), `platform/pages.py`, `serving/code_page.py`, `backend/tests/test_security_headers.py` (`TestPlatformCsp`), `test_front_page.py`, `test_code_page.py`. See "The platform's own pages" below |
+| Platform CSP on the platform's own answers on the content host (root redirect, code page, neutral 404): no script, the one inline `<style>` by hash, no `'unsafe-inline'` | implemented: `serving/response.py` (`platform_csp`, `PLATFORM_CSP`), `platform/pages.py`, `serving/code_page.py`, `backend/tests/test_security_headers.py` (`TestPlatformCsp`), `test_front_door.py`, `test_code_page.py`. See "The platform's own pages" below |
 | External sources per site (on by default) | implemented: `sites.external_sources`, `serving/response.py` (`CONTENT_CSP_EXTERNAL`), `api/admin.py` (`PUT /sites/{group}/{site}/external-sources`, site role admin, CSRF, audit action `site_external_sources`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "External sources" below |
 | Shielding from other sites per site (on by default) | implemented: `sites.sandbox`, `serving/response.py` (`SANDBOX`, `CONTENT_CSP_SANDBOX`), `api/admin.py` (`PUT /sites/{group}/{site}/sandbox`, site role admin, CSRF, audit action `site_sandbox`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "Shielding from other sites" below |
 | WebAssembly on every site (`'wasm-unsafe-eval'` in `script-src`, never `'unsafe-eval'`) | implemented: `serving/response.py` (`_CONTENT_DIRECTIVES`), `backend/tests/test_security_headers.py` (`test_webassembly_compiles_but_javascript_eval_stays_shut`), `test_serving.py`. See "WebAssembly" below |
@@ -262,7 +262,7 @@ it is a page of the platform itself.
 
 ### The platform's own pages
 
-The front page, the code page for a secret link and the neutral 404 are
+The root redirect, the code page for a secret link and the neutral 404 are
 answers of the platform itself on the content host, the origin every
 published site shares. None of them runs script, so their policy allows none
 (`platform_csp` in `serving/response.py`):
@@ -285,11 +285,13 @@ This meets NCSC's ICT-beveiligingsrichtlijnen voor webapplicaties, U/PW.03,
 which asks for `default-src` `'none'` or `'self'` and no `unsafe-inline`,
 `unsafe-eval` or `unsafe-hashes`; this policy uses `'none'`. It passes
 internet.nl's CSP check, run with its own checker code against these three
-policies. internet.nl tests the root of a host, which on the content host is
-the front page; its verdict says nothing about the policy of the published
-sites, which keeps `'unsafe-inline'`. Verified in Chromium, Firefox and
-WebKit: the stylesheet applies on both pages and the code form posts and
-follows its redirect. Firefox no longer requests `/favicon.ico` for these
+policies. internet.nl tests the root of a host without following redirects
+(`http_headers_check` requests it with `allow_redirects=False`), so on the
+content host it judges the headers of the redirect to the admin host, which
+carries `PLATFORM_CSP`; its verdict says nothing about the policy of the
+published sites, which keeps `'unsafe-inline'`. Verified in Chromium, Firefox
+and WebKit: the stylesheet applies on the code page and the code form posts
+and follows its redirect. Firefox no longer requests `/favicon.ico` for these
 pages; there is none to fetch on this host.
 
 ### WebAssembly
@@ -759,27 +761,24 @@ for the admin flow; the host decides which of the two you get. The two E2E
 scenarios that were waiting on this (group member via `_version`, invitee with
 a deep link) now run without a skip.
 
-**Public front page on the root of the content host.**
+**The root of the content host redirects to the admin landing page.**
 Without it, `/` would be the neutral 404 there and anyone who heard the name of
-the service and typed the address would hit a dead end. That root carries a
-server-rendered front
-page (`platform/pages.py`, `front_page_html`): what Plak is, where the name
-comes from, a button to the admin host and the footer with Over Plak,
-Toegankelijkheid, Privacy and the API documentation. The page carries **no
-authority whatsoever**, because this is the origin on which uploaded sites run
-their own JavaScript (see `api/origin_guard.py`): no script, no
-session reading, no API call, no CSRF token, no SPA. Its own CSS sits
-inline, admitted by its hash in the platform CSP (a separate file would
-require a route under `/-/` and host separation keeps exactly that away
-here), and every link is absolute to the admin origin from
-`PLAK_BASE_URL`, never from the `Host` header. Without that setting the root
-stays the neutral 404, because then there is no address to point to. The rest
-of the content host does not change: a refusal stays the byte-identical
-neutral 404, and the front page betrays nothing, because it always exists and
-sits at a fixed address. A side benefit: the accessibility statement has to be
-legally reachable and only sat on the admin host, behind an address that nobody
-guesses; this footer is the first place where it is publicly findable.
-Tests: `backend/tests/test_front_page.py`.
+the service and typed the address would hit a dead end. That root answers with
+a 302 to the root of the admin host (`platform/pages.py`,
+`front_door_response`), whose public landing page says what Plak is and
+carries the footer with Over Plak, Toegankelijkheid, Privacy and the API
+documentation. The redirect carries **no authority whatsoever**, because this
+is the origin on which uploaded sites run their own JavaScript (see
+`api/origin_guard.py`): no body to speak of, no cookie, no session reading.
+The target is the admin origin from `PLAK_BASE_URL`, never the `Host` header,
+and the only thing from the request that travels along is `?lang=nl` or
+`?lang=en`, matched against our own codes rather than echoed. Without that
+setting the root stays the neutral 404, because then there is no address to
+point to. The rest of the content host does not change: a refusal stays the
+byte-identical neutral 404, and the redirect betrays nothing, because it
+always exists and sits at a fixed address. The admin host keeps
+`Disallow: /` in its `robots.txt`, so the landing page is not meant to be
+indexed. Tests: `backend/tests/test_front_door.py`.
 
 **Secret link: redeem and redirect.** A valid `?key=`
 is redeemed: the app sets the `__Secure-plak-key` cookie and answers with

@@ -16,6 +16,13 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 - The What's new page no longer opens with the version you use; the footer
   shows it.
+- The root of the content host redirects to the landing page of the admin
+  environment, which now also says where the name comes from and lets a
+  visitor without an account switch between Dutch and English.
+- The header of the API docs uses the colours, wordmark and text sizes of the
+  admin environment, in light and in dark mode.
+- The admin environment uses the system font instead of RijksSans, which is
+  licensed for Rijksoverheid publications only.
 
 ### Fixed
 

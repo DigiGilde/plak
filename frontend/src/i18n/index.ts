@@ -11,10 +11,12 @@
  * Where the choice comes from, narrowest first:
  *   1. what this member set in their profile, which lives on their account
  *      (`GET /me` -> `language`) and so travels to every device they use
- *   2. what the browser asks for, `nl` or `en`
- *   3. English, the fallback for a browser that asks for neither
+ *   2. what a visitor without an account picked in the footer, which arrives
+ *      as `?lang=` and is cached in this browser (`adoptLanguageParam`)
+ *   3. what the browser asks for, `nl` or `en`
+ *   4. English, the fallback for a browser that asks for neither
  *
- * Step 3 is English rather than Dutch on purpose. A browser that asks for
+ * Step 4 is English rather than Dutch on purpose. A browser that asks for
  * French has said it does not read Dutch, and a browser that asks for nothing
  * has said nothing at all; English is the wider of the two languages this
  * interface has. Whoever wants Dutch either asks for it or sets it once.
@@ -140,6 +142,20 @@ export function setLocale(next: LanguageChoice): void {
  */
 export function applyMemberLanguage(value: string | null | undefined): void {
   setLocale(isLocale(value) ? value : null);
+}
+
+/**
+ * Take the language from `?lang=` in the address, then drop the parameter so
+ * the URL stays clean. An unsupported value is dropped without effect. A
+ * member's account still wins: `/me` overwrites this choice.
+ */
+export function adoptLanguageParam(): void {
+  const url = new URL(window.location.href);
+  const value = url.searchParams.get('lang');
+  if (value === null) return;
+  if (isLocale(value)) setLocale(value);
+  url.searchParams.delete('lang');
+  window.history.replaceState(window.history.state, '', url);
 }
 
 /**

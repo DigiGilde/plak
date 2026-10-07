@@ -87,6 +87,8 @@ async function checkAgain(): Promise<void> {
       </ol>
       <h2>{{ t('page.landing.site.heading') }}</h2>
       <p>{{ t('page.landing.site.body') }}</p>
+      <h2>{{ t('page.about.name.heading') }}</h2>
+      <p>{{ t('page.about.name.body') }}</p>
     </nldd-rich-text>
   </nldd-simple-section>
 </template>

@@ -18,7 +18,7 @@ NAMED: dict[str, frozenset[str]] = {
             "test_cleanup_job.py",
             "test_code_page.py",
             "test_deploy_api.py",
-            "test_front_page.py",
+            "test_front_door.py",
             "test_host_separation.py",
             "test_ingest_service.py",
             "test_keys.py",

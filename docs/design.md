@@ -169,7 +169,7 @@ The slug is the stable identifier, in the API too; renaming is out of scope.
 | `/-/groups`, `/-/platform`, `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/sessions` | SPA pages inside the platform namespace |
 | `/cli-link` | SPA page the CLI device flow opens by URL |
 | `/` on the admin host | the SPA |
-| `/` on the content host | public front page |
+| `/` on the content host | 302 to the admin host's landing page |
 | `/robots.txt`, `/favicon.ico`, `/.well-known/...` | the locations the web pins down, on both hosts |
 | `/-/healthz` | public liveness answer, admin host only |
 
@@ -199,7 +199,7 @@ and content stand on separate origins:
   login, callback, logout, back-channel logout. Carries the admin session
   cookie (`__Host-plak-session`, SameSite=Strict) and the CSRF cookie.
 - **content host** (`<domain>`, `PLAK_CONTENT_BASE_URL`): published sites,
-  previews and version views, the public front page, and of the platform
+  previews and version views, a redirect to the admin host on `/`, and of the platform
   namespace exactly four paths: content login, its callback, content logout and
   `/-/code`. Restricted content gets a content session (SameSite=Lax) without
   any admin authority, in a cookie scoped to the site it is for (§5.10).
@@ -323,7 +323,7 @@ with status 404.
 
 Code: `serving/response.py` (`neutral_404_response`), `access/gate.py`,
 `access/decision.py`. Guarded by: `test_access_gate.py`, `test_serving.py`,
-`test_front_page.py`.
+`test_front_door.py`.
 
 ### 5.7 The content CSP
 
@@ -376,7 +376,7 @@ this, only defaulted safe.
 Every policy comes out of one directive table with one addition per switch, so
 the four combinations cannot drift apart.
 
-The platform's own answers on the content host, the front page, the code page
+The platform's own answers on the content host, the root redirect, the code page
 for a secret link and the neutral 404 (§5.6), carry a policy of their own
 (`platform_csp`): they run no script and share the origin with every
 published site, so they get nothing the content policy grants.
@@ -416,7 +416,7 @@ disallows nothing.
 
 Code: `serving/router.py`, `platform/spa.py` (`spa_headers`),
 `platform/pages.py` (`ROBOTS_TXT_ADMIN`, `ROBOTS_TXT_CONTENT`). Guarded by:
-`test_serving.py`, `test_spa.py`, `test_front_page.py`.
+`test_serving.py`, `test_spa.py`, `test_front_door.py`.
 
 ### 5.10 Subresources of another site
 

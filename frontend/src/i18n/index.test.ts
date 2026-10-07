@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   _setLocaleForTest,
+  adoptLanguageParam,
   applyMemberLanguage,
   currentLocale,
   setLocale,
@@ -134,5 +135,47 @@ describe('Interface language', () => {
     const reloaded = await import('./index');
     expect(reloaded.currentLocale.value).toBe('nl');
     expect(() => reloaded.setLocale('en')).not.toThrow();
+  });
+});
+
+describe('Language from the address', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('adopts a supported language and strips it, keeping path and other parameters', () => {
+    window.history.replaceState({ keep: 1 }, '', '/-/about?x=1&lang=en#top');
+
+    adoptLanguageParam();
+
+    expect(currentLocale.value).toBe('en');
+    expect(window.localStorage.getItem('plak-taal')).toBe('en');
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+      '/-/about?x=1#top',
+    );
+    expect(window.history.state).toEqual({ keep: 1 });
+  });
+
+  it('ignores an unsupported language but still strips it', () => {
+    setLocale('nl');
+    window.history.replaceState(null, '', '/?lang=fr');
+
+    adoptLanguageParam();
+
+    expect(currentLocale.value).toBe('nl');
+    expect(window.location.search).toBe('');
+  });
+
+  it('leaves the address and the language alone without the parameter', () => {
+    setLocale('nl');
+    window.history.replaceState(null, '', '/-/about?x=1');
+    const replace = vi.spyOn(window.history, 'replaceState');
+
+    adoptLanguageParam();
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(currentLocale.value).toBe('nl');
+    expect(window.location.search).toBe('?x=1');
+    replace.mockRestore();
   });
 });
