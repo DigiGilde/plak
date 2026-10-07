@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
+from fastapi import Request
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -30,3 +33,10 @@ def violated_constraint(error: DBAPIError) -> str | None:
             return name
         cause = cause.__cause__
     return None
+
+
+async def request_db(request: Request) -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency: one database session per request, shared by every
+    dependency and the handler that ask for it."""
+    async with request.app.state.session_factory() as session:
+        yield session

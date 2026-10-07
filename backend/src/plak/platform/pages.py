@@ -40,6 +40,7 @@ from plak.api.origin_guard import REASON_OTHER_ORIGIN, admin_origin_ok
 from plak.audit import vocabulary
 from plak.audit.log import ANONYMOUS, Actor, AuditLog
 from plak.auth.content_viewers import upsert_content_viewer
+from plak.auth.members import record_admin_login
 from plak.auth.oidc import OidcClient, OidcError
 from plak.auth.sessions import (
     CONTENT_LOGIN_COOKIE,
@@ -388,6 +389,11 @@ async def _handle_callback(request: Request, profile: _LoginProfile) -> Redirect
             )
         except Exception:
             _logger.exception("Updating content_viewers skipped (fail-open)")
+    else:
+        try:
+            await record_admin_login(request.app.state.session_factory, session.sub)
+        except Exception:
+            _logger.exception("Recording the admin login skipped (fail-open)")
 
     target = valid_return_to(attempt.return_to, profile.default_return_to)
     response = RedirectResponse(target, status_code=303)
