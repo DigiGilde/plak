@@ -158,6 +158,15 @@ def _json_step(status: int, data: dict[str, Any]) -> Callable[[dict], tuple[int,
 
 
 @pytest.fixture(autouse=True)
+def _fresh_client(monkeypatch):
+    """The CLI keeps one httpx client per run; every test starts without one."""
+    monkeypatch.setattr(cli, "_client", None)
+    yield
+    if cli._client is not None:
+        cli._client.close()
+
+
+@pytest.fixture(autouse=True)
 def _no_real_sleep(monkeypatch):
     """The login poll waits `interval` seconds between polls; the stub server
     answers at once, so waiting for real only slows the suite. A test that
@@ -3223,7 +3232,7 @@ def test_python_dash_m_entry_point_uses_the_same_main():
 def test_publish_connection_failure_gives_exit_1(
     stub_server, host, dist_folder, token_env, monkeypatch, capsys
 ):
-    monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
@@ -3548,7 +3557,7 @@ def test_publish_empty_folder_gives_exit_2_without_a_request(
 def test_preview_remove_connection_failure_gives_exit_1(
     stub_server, host, token_env, monkeypatch, capsys
 ):
-    monkeypatch.setattr(cli.httpx, "delete", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
 
@@ -3560,7 +3569,7 @@ def test_preview_remove_connection_failure_gives_exit_1(
 def test_whoami_connection_failure_gives_exit_1(
     stub_server, host, token_env, monkeypatch, capsys
 ):
-    monkeypatch.setattr(cli.httpx, "get", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["whoami", "--host", host])
 
@@ -3625,7 +3634,7 @@ def test_refresh_connection_failure_gives_exit_2(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
     _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
-    monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["whoami", "--host", host])
 
@@ -3656,7 +3665,7 @@ def test_oidc_connection_failure_gives_exit_2_without_a_deploy(
 ):
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
-    monkeypatch.setattr(cli.httpx, "get", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
@@ -3706,7 +3715,7 @@ def test_oidc_answer_without_a_value_gives_exit_2(
 def test_login_connection_failure_at_the_start_gives_exit_1(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
-    monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["login", "--host", host, "--no-open"])
 
@@ -3814,14 +3823,14 @@ def test_login_gives_up_when_the_device_code_expires(
 def test_login_connection_failure_while_polling_gives_exit_1(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
-    real_post = cli.httpx.post
+    real_request = cli.httpx.Client.request
 
-    def flaky_post(url, *args, **kwargs):
+    def flaky_request(self, method, url, **kwargs):
         if url.endswith("/-/api/v1/cli/tokens"):
             _raise_connect_error()
-        return real_post(url, *args, **kwargs)
+        return real_request(self, method, url, **kwargs)
 
-    monkeypatch.setattr(cli.httpx, "post", flaky_post)
+    monkeypatch.setattr(cli.httpx.Client, "request", flaky_request)
     stub_server.responder = _sequence_responder(
         {"/-/api/v1/cli/device-authorizations": [_device_start_step(host)]}
     )
@@ -3990,7 +3999,7 @@ def test_logout_with_an_unreachable_server_still_clears_locally(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
     _store_session(host)
-    monkeypatch.setattr(cli.httpx, "request", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["logout", "--host", host])
 
@@ -4154,7 +4163,7 @@ def test_group_create_shows_the_problem_detail_and_gives_exit_1(stub_server, hos
 
 
 def test_group_create_connection_failure_gives_exit_1(stub_server, host, token_env, monkeypatch, capsys):
-    monkeypatch.setattr(cli.httpx, "post", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
 
@@ -4345,7 +4354,7 @@ def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_ar
     if answer is not None:
         stub_server.responder = _json_responder(200 if argv[0] == "whoami" else 201, answer)
     if unreachable is not None:
-        monkeypatch.setattr(cli.httpx, unreachable, _raise_connect_error)
+        monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     cli.main(argv)
 
@@ -4810,7 +4819,7 @@ def test_site_link_shows_any_other_refusal_on_its_own(stub_server, host, token_e
 
 
 def test_site_link_connection_failure_gives_exit_1(stub_server, host, token_env, fake_run, monkeypatch, capsys):
-    monkeypatch.setattr(cli.httpx, "put", _raise_connect_error)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
 
     code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
@@ -4828,3 +4837,292 @@ def test_site_link_names_the_repository_as_sent_without_one_in_the_answer_and_cl
     stub_server.responder = _json_responder(200, _link_answer(repo="Prive\x1b[31m"))
     cli.main(["site", "link", "team/docs", "o/r", "--host", host])
     assert capsys.readouterr().out.splitlines()[0] == "Linked github.com/MinBZK/Prive [31m to team/docs."
+
+
+# -- one client, retries, streaming upload ------------------------------------------
+
+
+def _flaky_once(monkeypatch, error: Exception) -> list[str]:
+    """The first request through the client fails with `error`, the rest go on
+    to the stub server; returns the methods that were attempted."""
+    real_request = cli.httpx.Client.request
+    attempts: list[str] = []
+
+    def request(self, method, url, **kwargs):
+        attempts.append(method)
+        if len(attempts) == 1:
+            raise error
+        return real_request(self, method, url, **kwargs)
+
+    monkeypatch.setattr(cli.httpx.Client, "request", request)
+    return attempts
+
+
+def _recorded_sleeps(monkeypatch) -> list[float]:
+    sleeps: list[float] = []
+    monkeypatch.setattr(cli.time, "sleep", sleeps.append)
+    return sleeps
+
+
+def test_every_request_of_a_run_goes_through_one_client(stub_server, host, token_env):
+    stub_server.responder = _json_responder(200, {"member": {"email": "a@b.nl"}})
+
+    assert cli.main(["whoami", "--host", host]) == 0
+    first = cli._client
+    assert cli.main(["whoami", "--host", host]) == 0
+
+    assert first is not None
+    assert cli._client is first
+
+
+def test_a_delete_with_a_body_still_goes_out(stub_server, host, isolated_cwd):
+    _store_session(host, access="access-1", refresh="refresh-1")
+    stub_server.responder = _empty_responder(204)
+
+    assert cli.main(["logout", "--host", host]) == 0
+
+    request = stub_server.requests[0]
+    assert request["method"] == "DELETE"
+    assert json.loads(request["body"]) == {"refreshToken": "refresh-1"}
+
+
+def test_preview_remove_tries_again_after_a_connection_error(
+    stub_server, host, token_env, monkeypatch
+):
+    stub_server.responder = _empty_responder(204)
+    attempts = _flaky_once(monkeypatch, httpx.ConnectError("refused"))
+    sleeps = _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    assert attempts == ["DELETE", "DELETE"]
+    assert sleeps == [cli.RETRY_DELAY_S]
+    assert len(stub_server.requests) == 1
+
+
+def test_preview_remove_tries_again_after_a_read_timeout(
+    stub_server, host, token_env, monkeypatch
+):
+    stub_server.responder = _empty_responder(204)
+    attempts = _flaky_once(monkeypatch, httpx.ReadTimeout("slow"))
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    assert attempts == ["DELETE", "DELETE"]
+
+
+def test_preview_remove_tries_again_after_a_503(stub_server, host, token_env, monkeypatch):
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [
+                _json_step(503, {"status": 503}),
+                lambda _record: (204, None, "text/plain"),
+            ]
+        }
+    )
+    sleeps = _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    assert len(stub_server.requests) == 2
+    assert sleeps == [cli.RETRY_DELAY_S]
+
+
+def test_preview_remove_tries_again_with_a_fresh_oidc_token(
+    stub_server, host, isolated_cwd, monkeypatch
+):
+    """The server accepts a CI ID token once, and the first try may have
+    reached it before the 503: the retry must not send the same token."""
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [
+                _json_step(200, {"value": "oidc-token-1"}),
+                _json_step(200, {"value": "oidc-token-2"}),
+            ],
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [
+                _json_step(503, {"status": 503}),
+                lambda _record: (204, None, "text/plain"),
+            ],
+        }
+    )
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    deletes = [r for r in stub_server.requests if r["method"] == "DELETE"]
+    assert [r["headers"]["Authorization"] for r in deletes] == [
+        "Bearer oidc-token-1",
+        "Bearer oidc-token-2",
+    ]
+
+
+def test_preview_remove_gives_up_after_one_more_try(
+    stub_server, host, token_env, monkeypatch, capsys
+):
+    attempts: list[str] = []
+
+    def request(self, method, url, **kwargs):
+        attempts.append(method)
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(cli.httpx.Client, "request", request)
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 1
+    assert len(attempts) == 2
+    assert "could not connect to" in capsys.readouterr().err
+
+
+def test_preview_remove_shows_the_answer_of_a_second_503(
+    stub_server, host, token_env, monkeypatch, capsys
+):
+    stub_server.responder = _json_responder(503, {"status": 503, "detail": "Back soon."})
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 1
+    assert len(stub_server.requests) == 2
+    assert "Error: Back soon." in capsys.readouterr().err
+
+
+def test_publish_is_never_tried_again(stub_server, host, dist_folder, token_env, monkeypatch):
+    stub_server.responder = _empty_responder(503)
+    sleeps = _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 1
+    assert len(stub_server.requests) == 1
+    assert sleeps == []
+
+
+def test_publish_does_not_try_again_after_a_connection_error(
+    stub_server, host, dist_folder, token_env, monkeypatch
+):
+    attempts: list[str] = []
+
+    def request(self, method, url, **kwargs):
+        attempts.append(method)
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(cli.httpx.Client, "request", request)
+
+    assert cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]) == 1
+    assert attempts == ["POST"]
+
+
+def test_a_refresh_is_tried_again_when_the_request_never_left(
+    stub_server, host, isolated_cwd, monkeypatch
+):
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
+    stub_server.responder = _sequence_responder(
+        {
+            "/-/api/v1/cli/tokens": [
+                _json_step(
+                    200,
+                    {"accessToken": "fresh-access", "refreshToken": "refresh-new", "expiresIn": 3600},
+                )
+            ],
+            "/-/api/v1/cli/whoami": [_json_step(200, {"member": {"email": "a@b.nl"}})],
+        }
+    )
+    attempts = _flaky_once(monkeypatch, httpx.ConnectTimeout("no route"))
+    _recorded_sleeps(monkeypatch)
+
+    assert cli.main(["whoami", "--host", host]) == 0
+
+    assert attempts[:2] == ["POST", "POST"]
+    assert _stored_tokens(host) == ("fresh-access", "refresh-new")
+
+
+def test_a_refresh_is_not_repeated_after_a_read_timeout(
+    stub_server, host, isolated_cwd, monkeypatch, capsys
+):
+    """The server may have rotated the refresh token already; sending the old
+    one again could cost the session."""
+    _store_session(host, access="expired-access", refresh="refresh-old", expires_at=1.0)
+    attempts = _flaky_once(monkeypatch, httpx.ReadTimeout("slow"))
+
+    code = cli.main(["whoami", "--host", host])
+
+    assert code == 2
+    assert attempts == ["POST"]
+    assert "Could not refresh the session" in capsys.readouterr().err
+    assert _stored_tokens(host) == ("expired-access", "refresh-old")
+
+
+def test_the_oidc_request_is_tried_again_after_a_read_timeout(
+    stub_server, host, dist_folder, isolated_cwd, monkeypatch
+):
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [_json_step(200, {"value": "oidc-jwt-token"})],
+            "/-/api/v1/sites/team-aurora/website/deploys": [
+                _json_step(201, {"versionId": "00000000-0000-0000-0000-000000000000"})
+            ],
+        }
+    )
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
+    attempts = _flaky_once(monkeypatch, httpx.ReadTimeout("slow"))
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    assert attempts[:3] == ["GET", "GET", "POST"]
+
+
+def test_a_folder_is_packed_into_a_file_that_is_closed_after_the_upload(
+    stub_server, host, dist_folder, token_env, monkeypatch
+):
+    packed = []
+    real_pack = cli._pack_folder
+
+    def pack(folder):
+        archive = real_pack(folder)
+        packed.append(archive)
+        return archive
+
+    monkeypatch.setattr(cli, "_pack_folder", pack)
+
+    assert cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"]) == 0
+
+    assert not isinstance(packed[0], bytes)
+    assert packed[0].closed
+    request = stub_server.requests[0]
+    assert int(request["headers"]["Content-Length"]) == len(request["body"])
+    fields = _parse_multipart(request["headers"]["Content-Type"], request["body"])
+    with tarfile.open(fileobj=io.BytesIO(fields["file"]["content"]), mode="r:gz") as tar:
+        assert "index.html" in tar.getnames()
+
+
+def test_a_single_file_is_streamed_from_disk_and_closed_also_when_the_server_is_unreachable(
+    stub_server, host, tmp_path, token_env, monkeypatch
+):
+    page = tmp_path / "page.html"
+    page.write_text("<h1>hoi</h1>")
+    opened = []
+    real_determine = cli._determine_upload
+
+    def determine(path):
+        upload = real_determine(path)
+        opened.append(upload[0])
+        return upload
+
+    monkeypatch.setattr(cli, "_determine_upload", determine)
+    monkeypatch.setattr(cli.httpx.Client, "request", _raise_connect_error)
+
+    assert cli.main(["publish", str(page), "--host", host, "--site", "team-aurora/website"]) == 1
+
+    assert opened[0].closed

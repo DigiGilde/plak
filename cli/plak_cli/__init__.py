@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
-import io
 import json
 import os
 import platform
@@ -60,8 +59,9 @@ import tempfile
 import time
 import urllib.parse
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 import httpx
 import keyring
@@ -477,18 +477,74 @@ def _check_api_version(response: httpx.Response) -> None:
         )
 
 
-def _http(method: str, url: str, **kwargs: Any) -> httpx.Response:
+_client: Any = None
+
+# What a retry may follow, for calls that pass `retry_on`. A request that
+# never left (connect errors) is safe to repeat whatever it does; any
+# transport error, a read timeout included, only for a call that is
+# idempotent.
+RETRY_NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout)
+RETRY_ANY_TRANSPORT = (httpx.TransportError,)
+RETRY_STATUSES = frozenset({502, 503, 504})
+RETRY_DELAY_S = 1.0
+
+
+def _http(
+    method: str,
+    url: str,
+    retry_on: tuple[type[Exception], ...] = (),
+    retry_headers: Callable[[], dict[str, str]] | None = None,
+    **kwargs: Any,
+) -> httpx.Response:
     """The one way out to the server: sets the User-Agent and refuses a server
-    with a newer API major before any caller reads the response."""
+    with a newer API major before any caller reads the response.
+
+    One client for the whole run, so a login poll or a refresh followed by a
+    request reuses the connection instead of a new TLS handshake each time.
+    A call that passes `retry_on` is tried once more after RETRY_DELAY_S
+    when it fails with one of those errors or the server answers 502, 503
+    or 504; nothing else is ever retried. `retry_headers` replaces headers
+    for that second try."""
+    global _client
+    if _client is None:
+        _client = httpx.Client()
+    client = _client
     headers = {**kwargs.pop("headers", {}), "User-Agent": f"plak-cli/{VERSION}"}
-    if method == "DELETE" and "json" in kwargs:
-        # httpx.delete() itself refuses a body (the old DELETE-has-no-body
-        # convention); httpx.request() does not.
-        response = httpx.request(method, url, headers=headers, **kwargs)
+
+    def send(extra: dict[str, str] | None = None) -> httpx.Response:
+        return client.request(method, url, headers={**headers, **(extra or {})}, **kwargs)
+
+    def send_again() -> httpx.Response:
+        time.sleep(RETRY_DELAY_S)
+        return send(retry_headers() if retry_headers else None)
+
+    try:
+        response = send()
+    except retry_on:
+        response = send_again()
     else:
-        response = getattr(httpx, method.lower())(url, headers=headers, **kwargs)
+        if retry_on and response.status_code in RETRY_STATUSES:
+            response = send_again()
     _check_api_version(response)
     return response
+
+
+def _request(host: str, method: str, url: str, **kwargs: Any) -> httpx.Response | None:
+    """`_http`, except that a connection failure is printed and answered with
+    None instead of raised."""
+    try:
+        return _http(method, url, **kwargs)
+    except httpx.HTTPError as error:
+        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+        return None
+
+
+def _setup(args: argparse.Namespace) -> str:
+    """The host a command talks to, checked for https; a UsageError ends in
+    `main` as an error line and exit code 2."""
+    host = _resolve_host(args)
+    _require_https(host)
+    return host
 
 
 def _problem_data(response: httpx.Response) -> dict:
@@ -506,6 +562,7 @@ def _refresh_token(host: str, refresh_token: str, entry: dict) -> str:
             f"{host}/-/api/v1/cli/tokens",
             json={"grantType": "refresh_token", "refreshToken": refresh_token},
             timeout=30.0,
+            retry_on=RETRY_NOT_SENT,
         )
     except httpx.HTTPError as error:
         raise UsageError(f"Could not refresh the session: {error}") from error
@@ -571,7 +628,10 @@ def _fetch_oidc_token(host: str) -> str | None:
     try:
         response = _http(
             "GET",
-            url, headers={"Authorization": f"bearer {request_token}"}, timeout=30.0
+            url,
+            headers={"Authorization": f"bearer {request_token}"},
+            timeout=30.0,
+            retry_on=RETRY_ANY_TRANSPORT,
         )
     except httpx.HTTPError as error:
         raise UsageError(f"Could not fetch an OIDC token: {error}") from error
@@ -652,7 +712,7 @@ def _file_extension(path: Path) -> str:
     return path.suffix.lower()
 
 
-def _pack_folder(dist_folder: Path) -> bytes:
+def _pack_folder(dist_folder: Path) -> IO[bytes]:
     files = []
     for path in sorted(dist_folder.rglob("*")):
         relative = path.relative_to(dist_folder)
@@ -664,15 +724,19 @@ def _pack_folder(dist_folder: Path) -> bytes:
             files.append((path, relative))
     if not files:
         raise UsageError(f"Folder is empty, nothing to publish: {dist_folder}")
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+    # A file on disk, not a buffer in memory: httpx reads it in chunks while
+    # it uploads, so a large dist folder is never held whole.
+    archive = tempfile.TemporaryFile()  # noqa: SIM115 - the caller closes it
+    with tarfile.open(fileobj=archive, mode="w:gz") as tar:
         for file_path, relative_path in files:
             tar.add(file_path, arcname=str(relative_path))
-    return buffer.getvalue()
+    archive.seek(0)
+    return archive
 
 
-def _determine_upload(dist_path: Path) -> tuple[bytes, str, str]:
-    """Returns (content, filename, content type) for the upload.
+def _determine_upload(dist_path: Path) -> tuple[IO[bytes], str, str]:
+    """Returns (open file, filename, content type) for the upload; the caller
+    closes the file.
 
     A directory is always packed into dist.tar.gz with paths relative to the
     directory itself; a single file with an allowed extension goes along
@@ -691,7 +755,7 @@ def _determine_upload(dist_path: Path) -> tuple[bytes, str, str]:
             "Unknown file type, expected a folder or a "
             f".html/.zip/.tar.gz/.tgz file: {dist_path}"
         )
-    content = dist_path.read_bytes()
+    content = dist_path.open("rb")
     content_type = CONTENT_TYPES.get(extension, "application/octet-stream")
     return content, dist_path.name, content_type
 
@@ -756,20 +820,15 @@ def _print_problem_detail(response: httpx.Response) -> None:
 
 def cmd_publish(args: argparse.Namespace) -> int:
     dist_path = Path(args.dist_path)
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        token = _get_bearer_token(host)
-        group, site = _split_site(args.site)
-        if args.preview:
-            _valid_slug(args.preview, "preview-ref")
-        base_path = (
-            _valid_base_path(args.base_path) if args.base_path is not None else None
-        )
-        content, file_name, content_type = _determine_upload(dist_path)
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    token = _get_bearer_token(host)
+    group, site = _split_site(args.site)
+    if args.preview:
+        _valid_slug(args.preview, "preview-ref")
+    base_path = (
+        _valid_base_path(args.base_path) if args.base_path is not None else None
+    )
+    content, file_name, content_type = _determine_upload(dist_path)
 
     url = f"{host}/-/api/v1/sites/{group}/{site}/deploys"
 
@@ -779,8 +838,9 @@ def cmd_publish(args: argparse.Namespace) -> int:
     if base_path is not None:
         form_fields["basePath"] = base_path
 
-    try:
-        response = _http(
+    with content:
+        response = _request(
+            host,
             "POST",
             url,
             headers={"Authorization": f"Bearer {token}"},
@@ -788,8 +848,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
             data=form_fields,
             timeout=120.0,
         )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    if response is None:
         return 1
 
     if response.status_code == 201:
@@ -848,27 +907,26 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
 
 def cmd_preview_remove(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        token = _get_bearer_token(host)
-        group, site = _split_site(args.site)
-        _valid_slug(args.ref, "preview-ref")
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    token = _get_bearer_token(host)
+    group, site = _split_site(args.site)
+    _valid_slug(args.ref, "preview-ref")
 
     url = f"{host}/-/api/v1/sites/{group}/{site}/previews/{args.ref}"
 
-    try:
-        response = _http(
-            "DELETE",
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=60.0,
-        )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    # The server accepts a CI ID token with a `jti` once, and the first try
+    # may have reached it, so the retry asks for the token again: in CI that
+    # is a fresh one.
+    response = _request(
+        host,
+        "DELETE",
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=60.0,
+        retry_on=RETRY_ANY_TRANSPORT,
+        retry_headers=lambda: {"Authorization": f"Bearer {_get_bearer_token(host)}"},
+    )
+    if response is None:
         return 1
 
     if response.status_code in (200, 204):
@@ -942,16 +1000,15 @@ def _print_access(access: tuple[str, bool, bool], label: str, change_url: str) -
 def _create(host: str, token: str, path: str, body: dict[str, object]) -> dict | None:
     """POSTs to a creation route; the answer on 201, None after an error has
     been printed."""
-    try:
-        response = _http(
-            "POST",
-            f"{host}{path}",
-            headers={"Authorization": f"Bearer {token}"},
-            json=body,
-            timeout=30.0,
-        )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    response = _request(
+        host,
+        "POST",
+        f"{host}{path}",
+        headers={"Authorization": f"Bearer {token}"},
+        json=body,
+        timeout=30.0,
+    )
+    if response is None:
         return None
     if response.status_code != 201:
         _print_problem_detail(response)
@@ -960,14 +1017,9 @@ def _create(host: str, token: str, path: str, body: dict[str, object]) -> dict |
 
 
 def cmd_group_create(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        token = _get_member_token(host)
-        group = _valid_slug(args.group, "group")
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    token = _get_member_token(host)
+    group = _valid_slug(args.group, "group")
 
     body: dict[str, object] = {"slug": group, "name": args.name}
     access = _access_body(args)
@@ -987,14 +1039,9 @@ def cmd_group_create(args: argparse.Namespace) -> int:
 
 
 def cmd_site_create(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        token = _get_member_token(host)
-        group, site = _split_site(args.site, "The site")
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    token = _get_member_token(host)
+    group, site = _split_site(args.site, "The site")
 
     body: dict[str, object] = {"slug": site, "title": args.title}
     access = _access_body(args)
@@ -1130,20 +1177,15 @@ def _github_repository(owner: str, repo: str) -> tuple[str, str, int, int]:
 
 
 def cmd_site_link(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        group, site = _split_site(args.site, "The site")
-        if (args.repository_id is None) != (args.owner_id is None):
-            raise UsageError("Pass --repository-id and --owner-id together, or neither")
-        for value in (args.repository_id, args.owner_id):
-            if value is not None and not 0 < value <= MAX_PROVIDER_ID:
-                raise UsageError("--repository-id and --owner-id must be positive whole numbers")
-        hostname, owner, repo = _parse_repository(args.repository or _git_origin())
-        token = _get_member_token(host)
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    group, site = _split_site(args.site, "The site")
+    if (args.repository_id is None) != (args.owner_id is None):
+        raise UsageError("Pass --repository-id and --owner-id together, or neither")
+    for value in (args.repository_id, args.owner_id):
+        if value is not None and not 0 < value <= MAX_PROVIDER_ID:
+            raise UsageError("--repository-id and --owner-id must be positive whole numbers")
+    hostname, owner, repo = _parse_repository(args.repository or _git_origin())
+    token = _get_member_token(host)
 
     body: dict[str, object] = {"owner": owner, "repo": repo, "liveBranch": args.live_branch}
     if hostname == GITHUB_HOSTNAME:
@@ -1168,16 +1210,15 @@ def cmd_site_link(args: argparse.Namespace) -> int:
         except NoIdsFromGh as error:
             no_ids = str(error)
 
-    try:
-        response = _http(
-            "PUT",
-            f"{host}/-/api/v1/sites/{group}/{site}/repository",
-            headers={"Authorization": f"Bearer {token}"},
-            json=body,
-            timeout=30.0,
-        )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    response = _request(
+        host,
+        "PUT",
+        f"{host}/-/api/v1/sites/{group}/{site}/repository",
+        headers={"Authorization": f"Bearer {token}"},
+        json=body,
+        timeout=30.0,
+    )
+    if response is None:
         return 1
     if response.status_code != 200:
         code = _problem_data(response).get("code")
@@ -1245,24 +1286,18 @@ AUTH_ERROR_MESSAGES = {
 
 
 def cmd_login(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
 
     print(f"Logging in at {host}", file=sys.stderr)
     client_name = f"plak-cli {VERSION} on {platform.system()}"
-    try:
-        response = _http(
-            "POST",
-            f"{host}/-/api/v1/cli/device-authorizations",
-            json={"clientName": client_name},
-            timeout=30.0,
-        )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    response = _request(
+        host,
+        "POST",
+        f"{host}/-/api/v1/cli/device-authorizations",
+        json={"clientName": client_name},
+        timeout=30.0,
+    )
+    if response is None:
         return 1
     if response.status_code not in (200, 201):
         _print_problem_detail(response)
@@ -1318,15 +1353,14 @@ def cmd_login(args: argparse.Namespace) -> int:
             print("Error: login attempt expired before it was approved", file=sys.stderr)
             return 1
         time.sleep(interval)
-        try:
-            response = _http(
-                "POST",
-                f"{host}/-/api/v1/cli/tokens",
-                json={"grantType": "device_code", "deviceCode": device_code},
-                timeout=30.0,
-            )
-        except httpx.HTTPError as error:
-            print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+        response = _request(
+            host,
+            "POST",
+            f"{host}/-/api/v1/cli/tokens",
+            json={"grantType": "device_code", "deviceCode": device_code},
+            timeout=30.0,
+        )
+        if response is None:
             return 1
         if response.status_code == 200:
             break
@@ -1376,12 +1410,7 @@ def cmd_login(args: argparse.Namespace) -> int:
 
 
 def cmd_logout(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
 
     entry = _host_entry(_read_hosts(), host)
     try:
@@ -1425,23 +1454,17 @@ def cmd_logout(args: argparse.Namespace) -> int:
 
 
 def cmd_whoami(args: argparse.Namespace) -> int:
-    try:
-        host = _resolve_host(args)
-        _require_https(host)
-        token = _get_bearer_token(host)
-    except UsageError as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 2
+    host = _setup(args)
+    token = _get_bearer_token(host)
 
-    try:
-        response = _http(
-            "GET",
-            f"{host}/-/api/v1/cli/whoami",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30.0,
-        )
-    except httpx.HTTPError as error:
-        print(f"Error: could not connect to {host}: {error}", file=sys.stderr)
+    response = _request(
+        host,
+        "GET",
+        f"{host}/-/api/v1/cli/whoami",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30.0,
+    )
+    if response is None:
         return 1
 
     if response.status_code == 200:
@@ -1619,6 +1642,9 @@ def main(argv: list[str] | None = None) -> int:
         return code
     try:
         return args.func(args)
+    except UsageError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
     except IncompatibleServer as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

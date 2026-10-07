@@ -23,6 +23,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- `plak publish` streams the bundle from a temporary file instead of
+  holding it in memory three times.
+- The CLI reuses one connection per run, and retries once, after a
+  second, a token refresh that never reached the server, a preview
+  removal, and the CI token request. A publish is never retried.
 
 ### Fixed
 
