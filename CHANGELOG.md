@@ -41,6 +41,14 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The publish action runs the CLI with `uv run --locked`, so it fails
   instead of resolving dependencies the lockfile does not pin.
 
+### Changed
+
+- `plak publish` streams the bundle from a temporary file instead of
+  holding it in memory three times.
+- The CLI reuses one connection per run, and retries once, after a
+  second, a token refresh that never reached the server, a preview
+  removal, and the CI token request. A publish is never retried.
+
 ## [2026.10.7]
 
 ### Security
