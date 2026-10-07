@@ -2,7 +2,7 @@
 
 Fail-closed: anything that is not explicitly a regular file with a safe
 relative path is refused. The source is a file on disk (the spooled upload)
-and every entry streams in 8KB chunks straight to the destination; nothing is
+and every entry streams in 64 KiB chunks straight to the destination; nothing is
 held in memory as a whole.
 
 The root of the site is settled in three steps:
@@ -73,7 +73,7 @@ from plak.messages import Msg
 
 _logger = logging.getLogger(__name__)
 
-READ_CHUNK = 8192
+READ_CHUNK = 64 * 1024
 
 # Upper bound on the proposal in the error response: enough to recognise the
 # right directory, short enough to fit in an error message and in constant
@@ -912,7 +912,7 @@ def _unpack_tar(source: Path, destination: Destination, limits: Limits, base: tu
     try:
         loop = _start_loop(_tar_scan(source, limits, base), limits)
         # Deliberately a GzipFile and not the stream mode r|gz: GzipFile
-        # decompresses per read with max_length (8KB), the stream mode per
+        # decompresses per read with max_length (READ_CHUNK), the stream mode per
         # whole gzip block, which for highly compressible data can be tens of
         # MB per block. Members are read in order, so GzipFile never has to
         # seek back.

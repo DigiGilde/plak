@@ -28,6 +28,7 @@ usable key of this site (serving/code_page.py). An allow is audited for
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
@@ -361,7 +362,8 @@ async def _serve(
         await _audit(request, visitor, vocabulary.ALLOWED, decision.reason_code, refs)
 
     store: ContentStore = request.app.state.content_store
-    outcome_ = resolution.resolve(store, storage_ref, rel)
+    # Resolving stats every path component: in a thread, like the read itself.
+    outcome_ = await asyncio.to_thread(resolution.resolve, store, storage_ref, rel)
 
     if outcome_.kind is resolution.ResolutionKind.DIRECTORY_REDIRECT:
         # Directory 301 inside a site: only after an allow decision.
@@ -400,7 +402,7 @@ async def _serve(
             sandbox=sandbox,
         )
 
-    path_404 = resolution.find_404_page(store, storage_ref)
+    path_404 = await asyncio.to_thread(resolution.find_404_page, store, storage_ref)
     if path_404 is None:
         return response.neutral_404_response()
     # The version's root 404.html, for authorised visitors only.

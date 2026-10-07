@@ -9,10 +9,11 @@ outside every servable path, on the volume instead of in memory.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -161,6 +162,18 @@ class ContentStore:
         path = self._version_root(storage_ref)
         if path.exists():
             shutil.rmtree(path)
+
+    async def delete_versions(self, storage_refs: Iterable[str]) -> None:
+        """Removes versions from disk in a worker thread: the app serves from
+        one event loop, and an rmtree of a version with thousands of files
+        would hold up every page view meanwhile."""
+        refs = list(storage_refs)
+        if refs:
+            await asyncio.to_thread(self._delete_all, refs)
+
+    def _delete_all(self, storage_refs: list[str]) -> None:
+        for storage_ref in storage_refs:
+            self.delete_version(storage_ref)
 
     def sweep_tmp(self, older_than: timedelta) -> int:
         boundary = datetime.now(tz=UTC) - older_than

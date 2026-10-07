@@ -3,7 +3,9 @@ spool files, containment and the tmp sweeper."""
 
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -196,6 +198,37 @@ class TestDeleteVersion:
         # functions and come back as an unhandled ValueError.
         with pytest.raises(StoreError):
             store.delete_version("g/p/\x00")
+
+
+class TestDeleteVersions:
+    async def test_deletes_every_tree(self, store: ContentStore, root: Path):
+        refs = [store.store_version("g", "p", uuid.uuid4(), FILES) for _ in range(3)]
+        await store.delete_versions(refs)
+        assert not any((root / ref).exists() for ref in refs)
+
+    async def test_runs_off_the_event_loop_thread(self, store: ContentStore, monkeypatch):
+        ref = store.store_version("g", "p", uuid.uuid4(), FILES)
+        threads = []
+        real = store.delete_version
+
+        def recording(storage_ref: str) -> None:
+            threads.append(threading.current_thread())
+            real(storage_ref)
+
+        monkeypatch.setattr(store, "delete_version", recording)
+        await store.delete_versions(iter([ref]))
+        assert threads and threading.main_thread() not in threads
+
+    async def test_nothing_to_delete_starts_no_thread(self, store: ContentStore, monkeypatch):
+        def refuse(*_args, **_kwargs):
+            raise AssertionError("no thread for an empty list")
+
+        monkeypatch.setattr(asyncio, "to_thread", refuse)
+        await store.delete_versions([])
+
+    async def test_a_refused_ref_surfaces(self, store: ContentStore):
+        with pytest.raises(StoreError):
+            await store.delete_versions(["../extern"])
 
 
 class TestSweepTmp:
