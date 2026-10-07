@@ -6,6 +6,7 @@ import { flushPromises } from '@vue/test-utils';
 import { computed, ref } from 'vue';
 
 import { groupDetailOf, type MockBackend } from '@/api/mock';
+import * as plak from '@/api/plak';
 import { SITE_GROUP, type SiteGroup } from '@/composables/siteGroup';
 
 /** Drains the microtask queue a few times (nested awaits inside load()). */
@@ -119,6 +120,20 @@ export function provideSiteGroup(
 ): Record<symbol, SiteGroup> {
   const groupRow = backend.data.groups.find((g) => g.slug === group)!;
   const detail = ref(groupDetailOf(backend.data, groupRow));
+  return {
+    [SITE_GROUP as symbol]: {
+      detail,
+      site: computed(() => detail.value.sites.find((p) => p.slug === site)!),
+    },
+  };
+}
+
+/** The same, read through whatever `fetch` is stubbed in at that moment. */
+export async function provideSiteGroupFromApi(
+  group = 'team-aurora',
+  site = 'website',
+): Promise<Record<symbol, SiteGroup>> {
+  const detail = ref(await plak.group(group));
   return {
     [SITE_GROUP as symbol]: {
       detail,

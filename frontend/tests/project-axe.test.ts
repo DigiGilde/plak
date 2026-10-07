@@ -25,7 +25,7 @@ import TabPreviews from '../src/components/site/TabPreviews.vue';
 import TabAccess from '../src/components/site/TabAccess.vue';
 import TabMembers from '../src/components/site/TabMembers.vue';
 import TabVersions from '../src/components/site/TabVersions.vue';
-import { untilIdle } from '../src/components/site/testHelpers';
+import { provideSiteGroupFromApi, untilIdle } from '../src/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import Site from '../src/pages/Site.vue';
 
@@ -100,12 +100,13 @@ async function expectNoViolationsIn(element: Element): Promise<void> {
 }
 
 async function expectNoViolations(component: Component): Promise<void> {
+  const provide = await provideSiteGroupFromApi();
   const wrapper = mount(component, {
     props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
     attachTo: document.body,
     // Stubbed teleports keep the edit sheets inside the checked fragment, so
     // axe sees the forms in them too.
-    global: { stubs: { teleport: true } },
+    global: { stubs: { teleport: true }, provide },
   });
   await untilIdle();
   await expectNoViolationsIn(wrapper.element);
