@@ -31,24 +31,27 @@ def insufficient_role_params(minimum: Role) -> dict[str, object]:
     return {"role": minimum.value}
 
 
-async def require_group_role(db: AsyncSession, member: Member, group_id: uuid.UUID, minimum: Role) -> None:
-    """Demands a group role of at least `minimum`; a site role never counts here."""
-    role = await roles.group_role(db, group_id, member.id)
+def require_at_least(role: Role | None, minimum: Role) -> None:
+    """Refuses with the 403 when `role` is narrower than `minimum`, or absent."""
     if not roles.at_least(role, minimum):
         raise ApiError(403, REASON_INSUFFICIENT_ROLE, params=insufficient_role_params(minimum))
+
+
+async def require_group_role(db: AsyncSession, member: Member, group_id: uuid.UUID, minimum: Role) -> None:
+    """Demands a group role of at least `minimum`; a site role never counts here."""
+    require_at_least(await roles.group_role(db, group_id, member.id), minimum)
 
 
 async def require_site_role(db: AsyncSession, member: Member, site: Site, minimum: Role) -> None:
     """Demands an effective site role of at least `minimum`: the widest of
     group role and site role."""
-    role = await roles.effective_site_role(db, site, member.id)
-    if not roles.at_least(role, minimum):
-        raise ApiError(403, REASON_INSUFFICIENT_ROLE, params=insufficient_role_params(minimum))
+    require_at_least(await roles.effective_site_role(db, site, member.id), minimum)
 
 
 __all__ = [
     "REASON_INSUFFICIENT_ROLE",
     "insufficient_role_params",
+    "require_at_least",
     "require_group_role",
     "require_site_role",
 ]

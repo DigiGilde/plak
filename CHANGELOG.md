@@ -25,6 +25,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   licensed for Rijksoverheid publications only.
 - Large files on a published site and large deploys go through in fewer,
   bigger reads.
+- The admin pages load with fewer database round trips, and an admin request
+  no longer writes to the database; a member's last login is now the moment
+  they signed in rather than their latest request.
 
 ### Fixed
 
@@ -33,6 +36,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   without its version.
 - Published sites keep answering while old versions are removed from disk,
   for example when a preview is redeployed or a site is deleted.
+- Adding or changing a site role for a member without a verified e-mail
+  address answers with that member, not with another member without one.
 
 ### Security
 

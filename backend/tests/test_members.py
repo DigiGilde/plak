@@ -5,6 +5,7 @@ from helpers_oidc."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from unittest.mock import AsyncMock
 
@@ -15,6 +16,7 @@ from helpers_oidc import (
     MockIdP,
     complete_login,
     make_app,
+    make_content_test_client,
     make_settings,
     make_test_client,
     set_session_cookie,
@@ -29,6 +31,7 @@ from plak.auth.members import REASON_DEACTIVATED, get_or_create_member, require_
 from plak.auth.sessions import SessionStore
 from plak.db import make_session_factory
 from plak.models.identity import Member, MemberStatus, PlatformRole
+from plak.platform import pages
 
 BOOTSTRAP_SUB = "bootstrap-beheerder-sub"
 
@@ -196,6 +199,93 @@ class TestRequireActiveMember:
             await client.get("/admin")
         members = await _members(factory)
         assert [member.email for member in members] == ["gebruiker@example.nl"]
+
+
+_LONG_AGO = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+async def _set_last_login(factory, sub: str, moment: datetime | None) -> None:
+    async with factory() as db:
+        await db.execute(
+            text("UPDATE members SET last_login_at = :moment WHERE sso_subject = :sub"),
+            {"moment": moment, "sub": sub},
+        )
+        await db.commit()
+
+
+class TestLastLogin:
+    """`last_login_at` is the moment of signing in, not of the last request."""
+
+    async def test_a_new_member_takes_the_moment_of_its_login(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            session = set_session_cookie(client, app)
+            assert (await client.get("/admin")).status_code == 200
+        members = await _members(factory)
+        assert members[0].last_login_at == session.created_at
+
+    async def test_an_admin_request_leaves_it_alone(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app)
+            assert (await client.get("/admin")).status_code == 200
+            await _set_last_login(factory, "gebruiker-1", _LONG_AGO)
+            assert (await client.get("/admin")).status_code == 200
+        members = await _members(factory)
+        assert members[0].last_login_at == _LONG_AGO
+
+    async def test_an_unchanged_member_costs_no_write(self, idp, db_environment):
+        _, factory = db_environment
+        store = SessionStore()
+        session = store.create_session(sub="stil", email="s@example.nl", email_verified=True, acr="urn:acr:hoog")
+        async with factory() as db:
+            await get_or_create_member(db, session, "")
+
+        async with factory() as db:
+            db.commit = AsyncMock()
+            member = await get_or_create_member(db, session, "")
+            db.commit.assert_not_awaited()
+        assert member.sso_subject == "stil"
+
+    async def test_an_admin_login_stamps_an_existing_member(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app)
+            assert (await client.get("/admin")).status_code == 200
+            await _set_last_login(factory, "gebruiker-1", _LONG_AGO)
+
+            before = datetime.now(UTC)
+            assert (await complete_login(client, idp)).status_code == 303
+        members = await _members(factory)
+        assert len(members) == 1
+        assert members[0].last_login_at >= before
+
+    async def test_a_content_login_does_not_count_as_an_admin_login(self, idp, db_environment):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        async with make_test_client(app) as client:
+            set_session_cookie(client, app)
+            assert (await client.get("/admin")).status_code == 200
+        await _set_last_login(factory, "gebruiker-1", _LONG_AGO)
+
+        async with make_content_test_client(app) as client:
+            assert (await complete_login(client, idp)).status_code == 303
+        members = await _members(factory)
+        assert members[0].last_login_at == _LONG_AGO
+
+    async def test_a_failing_stamp_does_not_block_the_login(self, idp, db_environment, monkeypatch):
+        _, factory = db_environment
+        app = _make_admin_app(idp, factory)
+        stamp = AsyncMock(side_effect=RuntimeError("database gone"))
+        monkeypatch.setattr(pages, "record_admin_login", stamp)
+        async with make_test_client(app) as client:
+            response = await complete_login(client, idp)
+        assert response.status_code == 303
+        stamp.assert_awaited_once()
+        assert await _members(factory) == []
 
 
 class TestBootstrap:
