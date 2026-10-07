@@ -34,10 +34,12 @@ from plak.platform.spa import ADMIN_CSP, admin_csp
 from plak.security_headers import (
     COOP,
     FRAME_ANCESTORS_CSP,
+    FRAME_OPTIONS,
     HSTS,
     NOINDEX,
     NOSNIFF,
     PERMISSIONS_POLICY,
+    REFERRER_POLICY,
     SecurityHeadersMiddleware,
     is_html,
     is_https,
@@ -181,6 +183,8 @@ async def _inner(scope: Scope, receive: Receive, send: Send) -> None:
                 "Permissions-Policy": "camera=(self)",
                 "Strict-Transport-Security": "max-age=1",
                 "Cross-Origin-Opener-Policy": "unsafe-none",
+                "Referrer-Policy": "no-referrer",
+                "X-Frame-Options": "SAMEORIGIN",
             },
         )
     else:
@@ -232,11 +236,15 @@ class TestMiddleware:
         assert on_admin.headers["cross-origin-opener-policy"] == COOP, path
         assert on_admin.headers["x-content-type-options"] == NOSNIFF, path
         assert on_admin.headers["content-security-policy"] == FRAME_ANCESTORS_CSP, path
+        assert on_admin.headers["referrer-policy"] == REFERRER_POLICY, path
+        assert on_admin.headers["x-frame-options"] == FRAME_OPTIONS, path
         assert "x-robots-tag" not in on_admin.headers, path
 
         assert "cross-origin-opener-policy" not in on_content.headers, path
         assert "x-content-type-options" not in on_content.headers, path
         assert "content-security-policy" not in on_content.headers, path
+        assert "referrer-policy" not in on_content.headers, path
+        assert "x-frame-options" not in on_content.headers, path
 
     async def test_html_on_the_admin_host_gets_full_admin_csp_and_noindex(self) -> None:
         async with _client(hsts=True) as client:
@@ -245,6 +253,9 @@ class TestMiddleware:
         assert response.headers["x-content-type-options"] == NOSNIFF
         assert response.headers["x-robots-tag"] == NOINDEX
         assert response.headers["cross-origin-opener-policy"] == COOP
+        # A page sets its own Referrer-Policy, and its CSP already forbids framing.
+        assert "referrer-policy" not in response.headers
+        assert "x-frame-options" not in response.headers
 
     def test_form_action_widens_only_for_the_logout_chain(self, tmp_path: Path) -> None:
         """Chrome checks each redirect of a form navigation against
@@ -283,6 +294,8 @@ class TestMiddleware:
         assert own_everything.headers["permissions-policy"] == "camera=(self)"
         assert own_everything.headers["strict-transport-security"] == "max-age=1"
         assert own_everything.headers["cross-origin-opener-policy"] == "unsafe-none"
+        assert own_everything.headers["referrer-policy"] == "no-referrer"
+        assert own_everything.headers["x-frame-options"] == "SAMEORIGIN"
 
 
 def _settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -338,6 +351,8 @@ class TestFullApp:
         assert response.status_code == 401
         assert response.headers["content-security-policy"] == FRAME_ANCESTORS_CSP
         assert response.headers["x-content-type-options"] == NOSNIFF
+        assert response.headers["referrer-policy"] == REFERRER_POLICY
+        assert response.headers["x-frame-options"] == FRAME_OPTIONS
         assert response.headers["cross-origin-opener-policy"] == COOP
         assert response.headers["strict-transport-security"] == HSTS
 

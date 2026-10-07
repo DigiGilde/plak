@@ -37,6 +37,7 @@ from joserfc.jwt import JWTClaimsRegistry
 
 from plak.audit import vocabulary
 from plak.config import ConfigurationError
+from plak.remote_cache import RemoteCache, RemoteUnavailableError
 
 if TYPE_CHECKING:
     import httpx
@@ -124,6 +125,11 @@ class _UnknownKid(Exception):  # noqa: N818 - internal marker, never surfaces as
 # that a stream of invalid tokens does not turn into a fetch storm against the
 # IdP.
 _JWKS_REFRESH_COOLDOWN_S = 60
+# The discovery document and the JWKS are fetched again after this long, so a
+# key the IdP withdraws stops being trusted without a restart; a failed fetch
+# is not retried for FETCH_FAILURE_TTL_S.
+REMOTE_TTL_S = 3600
+FETCH_FAILURE_TTL_S = 30
 
 
 @dataclass(frozen=True)
@@ -238,13 +244,24 @@ def _json_object(response: httpx.Response) -> dict[str, Any] | None:
 
 
 class OidcClient:
-    def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:
+    def __init__(self, settings: Settings, http: httpx.AsyncClient, *, clock=time.monotonic) -> None:
         self._settings = settings
         self._http = http
         self._registry = JWSRegistry(algorithms=list(ALG_ALLOWLIST))
-        self._metadata: dict[str, Any] | None = None
-        self._keyset = None
-        self._last_kid_refresh: float | None = None
+        self._metadata: RemoteCache[dict[str, Any]] = RemoteCache(
+            self._fetch_metadata,
+            ttl_s=REMOTE_TTL_S,
+            failure_ttl_s=FETCH_FAILURE_TTL_S,
+            errors=(Exception,),
+            clock=clock,
+        )
+        self._keys: RemoteCache[KeySet] = RemoteCache(
+            self._fetch_jwks,
+            ttl_s=REMOTE_TTL_S,
+            failure_ttl_s=FETCH_FAILURE_TTL_S,
+            errors=(Exception,),
+            clock=clock,
+        )
 
         self.required_acr = tuple(
             acr.strip() for acr in settings.oidc_required_acr.split(",") if acr.strip()
@@ -279,37 +296,35 @@ class OidcClient:
                 )
 
     async def metadata(self) -> dict[str, Any]:
-        if self._metadata is None:
-            url = self._settings.oidc_issuer.rstrip("/") + "/.well-known/openid-configuration"
-            try:
-                response = await self._http.get(url)
-                response.raise_for_status()
-                data_ = response.json()
-            except Exception as error:
-                raise OidcError(
-                    f"discovery metadata cannot be fetched: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
-                ) from error
-            if data_.get("issuer") != self._settings.oidc_issuer:
-                raise OidcError(
-                    "issuer in discovery metadata differs from the configuration",
-                    reason=vocabulary.LOGIN_IDP_UNREACHABLE,
-                )
-            self._metadata = data_
-        return self._metadata
+        try:
+            return await self._metadata.get(self._settings.oidc_issuer)
+        except RemoteUnavailableError as error:
+            raise OidcError(
+                f"discovery metadata cannot be fetched: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE
+            ) from error
+
+    async def _fetch_metadata(self, issuer: str) -> dict[str, Any]:
+        response = await self._http.get(issuer.rstrip("/") + "/.well-known/openid-configuration")
+        response.raise_for_status()
+        data_ = response.json()
+        if not isinstance(data_, dict) or data_.get("issuer") != issuer:
+            raise OidcError(
+                "issuer in discovery metadata differs from the configuration",
+                reason=vocabulary.LOGIN_IDP_UNREACHABLE,
+            )
+        return data_
 
     async def _fetch_keyset(self, *, force: bool = False):
-        if self._keyset is not None and not force:
-            return self._keyset
-        meta = await self.metadata()
         try:
-            response = await self._http.get(meta["jwks_uri"])
-            response.raise_for_status()
-            self._keyset = KeySet.import_key_set(response.json())
-        except OidcError:  # pragma: no cover - nothing above raises OidcError, only httpx/joserfc errors
-            raise
-        except Exception as error:
+            return await self._keys.get(self._settings.oidc_issuer, force=force)
+        except RemoteUnavailableError as error:
             raise OidcError(f"JWKS cannot be fetched: {error}", reason=vocabulary.LOGIN_IDP_UNREACHABLE) from error
-        return self._keyset
+
+    async def _fetch_jwks(self, issuer: str) -> KeySet:
+        meta = await self.metadata()
+        response = await self._http.get(meta["jwks_uri"])
+        response.raise_for_status()
+        return KeySet.import_key_set(response.json())
 
     async def start_login(self, redirect_uri: str) -> LoginStart:
         meta = await self.metadata()
@@ -543,21 +558,15 @@ class OidcClient:
         try:
             return await self._decode_id_token(token)
         except _UnknownKid as error:
-            if not self._may_refresh_kid():
+            if not self._keys.claim_forced_refresh(self._settings.oidc_issuer, _JWKS_REFRESH_COOLDOWN_S):
                 raise OidcError(
                     "token refers to an unknown key (kid); JWKS refresh cooldown active"
                 ) from error
-            self._last_kid_refresh = time.monotonic()
             await self._fetch_keyset(force=True)
             try:
                 return await self._decode_id_token(token)
             except _UnknownKid as inner:
                 raise OidcError(f"token invalid: {inner}") from inner
-
-    def _may_refresh_kid(self) -> bool:
-        if self._last_kid_refresh is None:
-            return True
-        return (time.monotonic() - self._last_kid_refresh) >= _JWKS_REFRESH_COOLDOWN_S
 
     async def _decode_id_token(self, id_token: str):
         keyset = await self._fetch_keyset()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from dataclasses import dataclass, field
 
 import httpx
@@ -159,6 +160,8 @@ class MockCi:
         if provider == "github":
             claims["repository_id"] = "1001"
             claims["repository_owner_id"] = "2002"
+            # GitHub gives every token its own jti; Forgejo sends none.
+            claims["jti"] = str(uuid.uuid4())
         for name, value in overrides.items():
             if value is OMIT:
                 claims.pop(name, None)

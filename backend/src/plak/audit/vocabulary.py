@@ -95,10 +95,6 @@ ACTIONS: Final = frozenset(
 
 RESULTS: Final = frozenset({ALLOWED, REFUSED, LOGIN_REDIRECT})
 
-# refs["kind"] on login and logout: which of the two session kinds.
-SESSION_ADMIN: Final = "admin"
-SESSION_CONTENT: Final = "content"
-
 # Why a login callback was refused. Coarse on purpose: a peak is what BIO2
 # 5.17.01 asks to detect, and which check tripped adds nothing to that. Never
 # the value that tripped it (BIO2 8.15.02).
@@ -130,15 +126,6 @@ IDP_SESSION_ENDED: Final = "IDP_SESSION_ENDED"
 IDP_SUB_MISMATCH: Final = "IDP_SUB_MISMATCH"
 IDP_TOKEN_INVALID: Final = "IDP_TOKEN_INVALID"  # noqa: S105 - a reason code, not a secret
 IDP_BACKCHANNEL_LOGOUT: Final = "IDP_BACKCHANNEL_LOGOUT"
-
-IDP_SESSION_REASONS: Final = frozenset(
-    {
-        IDP_SESSION_ENDED,
-        IDP_SUB_MISMATCH,
-        IDP_TOKEN_INVALID,
-        IDP_BACKCHANNEL_LOGOUT,
-    }
-)
 
 # refs["via"] on a deploy, a preview teardown, or a group or site creation by a
 # member through `plak login`.

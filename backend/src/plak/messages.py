@@ -165,6 +165,7 @@ NL: Final[dict[str, str]] = {
     "CI_TOKEN_INVALID.unknown_key": "Het CI-token is ondertekend met een onbekende sleutel.",
     "CI_TOKEN_INVALID.expired": "Het CI-token is ongeldig of verlopen.",
     "CI_TOKEN_INVALID.no_lifetime": "Het CI-token mist exp of iat.",
+    "CI_TOKEN_INVALID.replayed": "Dit CI-token is al gebruikt; vraag voor elke aanroep een nieuw token aan.",
     "CI_ISSUER_UNKNOWN": (
         "Het CI-token komt niet van GitHub of van een geconfigureerde Forgejo-instantie."
     ),
@@ -443,6 +444,7 @@ EN: Final[dict[str, str]] = {
     "CI_TOKEN_INVALID.unknown_key": "The CI token is signed with an unknown key.",
     "CI_TOKEN_INVALID.expired": "The CI token is invalid or expired.",
     "CI_TOKEN_INVALID.no_lifetime": "The CI token is missing exp or iat.",
+    "CI_TOKEN_INVALID.replayed": "This CI token has been used already; request a new token for every call.",
     "CI_ISSUER_UNKNOWN": (
         "The CI token does not come from GitHub or from a configured Forgejo instance."
     ),

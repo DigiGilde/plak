@@ -11,20 +11,23 @@ What decides whether a token is accepted, in order:
 - RS256 only: `none`, HS* and every other algorithm is refused before a key
   is looked at;
 - `exp` and `iat` are required, `exp`/`nbf`/`iat` get 60 seconds of leeway;
-- `aud` must be exactly PLAK_BASE_URL, as configured (no normalisation).
+- `aud` must be exactly PLAK_BASE_URL, as configured (no normalisation);
+- a token with a `jti` is accepted once: a second use within its lifetime is
+  refused as replayed. GitHub tokens carry one; Forgejo tokens do not, and
+  two jobs of one run that ask in the same second get byte-identical tokens,
+  so without a `jti` there is nothing to tell a replay from a second job.
 
 Whether the verified token may deploy to a given site is trust.py's question.
 """
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import re
 import time
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -45,6 +48,7 @@ from plak.ci.providers import (
     known_issuers,
 )
 from plak.messages import Msg
+from plak.remote_cache import RemoteCache, RemoteUnavailableError
 
 if TYPE_CHECKING:
     import httpx
@@ -115,10 +119,20 @@ class VerifiedCiToken:
 
 
 @dataclass
-class _Keys:
-    keyset: Any
-    fetched_at: float
-    last_kid_refresh: float | None = None
+class ReplayCache:
+    """Tokens already accepted, each until its `exp` plus the leeway: after
+    that the token is refused as expired anyway."""
+
+    _seen: dict[str, float] = field(default_factory=dict)
+
+    def seen_before(self, key: str, *, until: float, now: float) -> bool:
+        for seen, expiry in list(self._seen.items()):
+            if expiry <= now:
+                del self._seen[seen]
+        if key in self._seen:
+            return True
+        self._seen[key] = until
+        return False
 
 
 class _UnknownKid(Exception):  # noqa: N818 - internal marker, never leaves this module
@@ -129,15 +143,16 @@ class CiTokenVerifier:
     def __init__(self, settings: Settings, http: httpx.AsyncClient, *, clock=time.monotonic) -> None:
         self._settings = settings
         self._http = http
-        self._clock = clock
         self._issuers = known_issuers(settings)
         self._registry = JWSRegistry(algorithms=[ALGORITHM])
-        # Bounded by construction: one entry per configured issuer at most,
-        # in all three.
-        self._keys: dict[str, _Keys] = {}
-        self._failed_at: dict[str, float] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._fetches: dict[str, int] = {}
+        self._keys: RemoteCache[KeySet] = RemoteCache(
+            self._fetch_keyset_of,
+            ttl_s=KEYS_TTL_S,
+            failure_ttl_s=FETCH_FAILURE_TTL_S,
+            errors=(FetchError, JoseError, ValueError, TypeError, KeyError),
+            clock=clock,
+        )
+        self._replays = ReplayCache()
 
     async def verify(self, token: str) -> VerifiedCiToken:
         if len(token) > MAX_TOKEN_LENGTH or not looks_like_jwt(token):
@@ -162,17 +177,23 @@ class CiTokenVerifier:
 
         claims = await self._decode(issuer, token)
         self._check_claims(issuer, claims)
+        # Only now, with signature and claims checked: an unverified token must
+        # not burn the id of one the issuer has yet to hand out.
+        jti = claims.get("jti")
+        if (
+            isinstance(jti, str)
+            and jti
+            and self._replays.seen_before(f"{issuer.issuer} {jti}", until=claims["exp"] + LEEWAY_S, now=time.time())
+        ):
+            raise _invalid("replayed")
         return VerifiedCiToken(issuer=issuer, claims=dict(claims))
 
     async def _decode(self, issuer: Issuer, token: str):
         try:
             return await self._decode_with(issuer, token, await self._keyset(issuer))
         except _UnknownKid:
-            keys = self._keys[issuer.issuer]
-            now = self._clock()
-            if keys.last_kid_refresh is not None and now - keys.last_kid_refresh < KID_REFRESH_COOLDOWN_S:
+            if not self._keys.claim_forced_refresh(issuer.issuer, KID_REFRESH_COOLDOWN_S):
                 raise _invalid("unknown_key") from None
-            keys.last_kid_refresh = now
             keyset = await self._keyset(issuer, force=True)
             try:
                 return await self._decode_with(issuer, token, keyset)
@@ -218,44 +239,14 @@ class CiTokenVerifier:
             raise CiTokenError(f"{vocabulary.CI_AUDIENCE_MISMATCH}.no_base_url")
 
     async def _keyset(self, issuer: Issuer, *, force: bool = False):
-        """The issuer's keyset: cached for KEYS_TTL_S, fetched by one request
-        at a time per issuer (the others wait and share the result), and not
-        refetched for FETCH_FAILURE_TTL_S after a failure."""
-        cached = self._keys.get(issuer.issuer)
-        if cached is not None and not force and self._clock() - cached.fetched_at < KEYS_TTL_S:
-            return cached.keyset
-        fetches_before = self._fetches.get(issuer.issuer, 0)
-        lock = self._locks.setdefault(issuer.issuer, asyncio.Lock())
-        async with lock:
-            now = self._clock()
-            cached = self._keys.get(issuer.issuer)
-            if cached is not None:
-                fresh = now - cached.fetched_at < KEYS_TTL_S
-                # Someone else fetched while this request waited for the lock.
-                if (not force and fresh) or (force and self._fetches.get(issuer.issuer, 0) > fetches_before):
-                    return cached.keyset
-            failed_at = self._failed_at.get(issuer.issuer)
-            if failed_at is not None and now - failed_at < FETCH_FAILURE_TTL_S:
-                if cached is not None and not force:
-                    return cached.keyset
-                raise _unreachable()
-            try:
-                keyset = await self._fetch_keyset(issuer)
-            except (FetchError, JoseError, ValueError, TypeError, KeyError) as error:
-                self._failed_at[issuer.issuer] = now
-                if cached is not None and not force:
-                    # A stale keyset beats refusing every deploy while the
-                    # provider hiccups; the TTL is about rotation, not
-                    # revocation. Restarting its clock keeps every request
-                    # from retrying the fetch.
-                    cached.fetched_at = now
-                    return cached.keyset
-                raise _unreachable() from error
-            self._failed_at.pop(issuer.issuer, None)
-            self._fetches[issuer.issuer] = self._fetches.get(issuer.issuer, 0) + 1
-            last_kid_refresh = cached.last_kid_refresh if cached is not None else None
-            self._keys[issuer.issuer] = _Keys(keyset=keyset, fetched_at=now, last_kid_refresh=last_kid_refresh)
-            return keyset
+        """The issuer's keyset, through the shared cache (plak/remote_cache.py)."""
+        try:
+            return await self._keys.get(issuer.issuer, force=force)
+        except RemoteUnavailableError as error:
+            raise _unreachable() from error
+
+    async def _fetch_keyset_of(self, issuer: str):
+        return await self._fetch_keyset(self._issuers[issuer])
 
     async def _fetch_keyset(self, issuer: Issuer):
         metadata = await fetch_json(
