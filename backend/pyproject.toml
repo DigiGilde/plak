@@ -3,6 +3,7 @@ name = "plak-api"
 version = "2026.10.7"
 description = "Plak API - statische sites publiceren en delen met previews per PR"
 requires-python = ">=3.12"
+license = "EUPL-1.2"
 dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.34,<1",
@@ -78,7 +79,7 @@ concurrency = ["thread", "greenlet"]
 fail_under = 100
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
