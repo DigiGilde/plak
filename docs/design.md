@@ -848,7 +848,14 @@ https, the algorithm is RS256, `exp` and `iat` are present within 60 seconds of
 leeway, and `aud` is exactly `PLAK_BASE_URL`. Every URL fetched on a provider's
 behalf is built from configuration, never from a token or a request, which is
 the SSRF defence, together with https only, no redirects, a timeout and a size
-cap.
+cap. The discovery documents and signing keys, of the CI issuers and of the
+OIDC provider alike, are cached for an hour and then fetched again, so a key
+the issuer withdraws stops being trusted within that hour.
+
+A token that carries a `jti` (GitHub's do) is accepted once: a second use
+within its lifetime is refused as replayed and audited as `CI_TOKEN_REPLAYED`.
+Forgejo tokens carry no `jti`, so they are not checked for replay. The memory
+of used tokens is in process, like the sessions, and is gone after a restart.
 
 Whether a verified token may deploy is a separate question: a site names one
 repository (`site_repositories`). A token matches when its issuer is that
@@ -1020,7 +1027,8 @@ Guarded by: `test_zad_project_file.py`, `test_workflows.py`,
 
 PostgreSQL with Alembic migrations: the schema is migration `0001_base`, and
 `0002_retention_and_repo_ids` adds `sites.live_versions_kept` and
-`site_repositories.ids_confirmed`.
+`site_repositories.ids_confirmed`; `0003_versions_and_keys_indexes` indexes
+`versions (site_id, created_at DESC)` and `access_keys (site_id)`.
 Tables: `members`, `groups`, `group_members`, `sites`, `site_members`,
 `site_repositories`, `versions`, `previews`, `invitees`, `access_keys`,
 `audit_log_entries`, `content_viewers`, `cli_device_authorizations`,

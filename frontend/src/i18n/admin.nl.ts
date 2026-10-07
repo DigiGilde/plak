@@ -23,7 +23,7 @@ export const adminNl = {
 
   // -- Platform administration ----------------------------------------------
   'admin.members.column.created': 'Aangemaakt',
-  'admin.members.column.activity': 'Laatste activiteit',
+  'admin.members.column.activity': 'Laatst ingelogd',
   'admin.members.search.label': 'Zoek een lid op naam of e-mailadres',
   'admin.members.search.placeholder': 'Zoek een lid',
   'admin.members.loading': 'Leden laden...',
