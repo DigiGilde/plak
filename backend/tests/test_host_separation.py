@@ -16,10 +16,11 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import MockIdP, make_client_jwk, make_oidc_client
+from starlette.responses import PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
 from plak.config import Settings
-from plak.host_separation import HostSeparationMiddleware, belongs_to_admin, belongs_to_content
+from plak.host_separation import HostSeparationMiddleware, belongs_to_content
 from plak.main import create_app
 from plak.serving.response import NEUTRAL_404_BODY
 
@@ -49,8 +50,16 @@ class TestClassification:
             "/beheer/aurora",
         ],
     )
-    def test_admin_paths(self, path: str) -> None:
-        assert belongs_to_admin(path)
+    async def test_admin_paths(self, path: str) -> None:
+        """The admin host claims every path: the app and the SPA answer them all."""
+
+        async def inner(scope: Scope, receive: Receive, send: Send) -> None:
+            await PlainTextResponse("app")(scope, receive, send)
+
+        middleware = HostSeparationMiddleware(inner, content_host="plak.example")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=middleware), base_url=ADMIN) as client:
+            response = await client.get(path)
+        assert response.text == "app"
 
     @pytest.mark.parametrize(
         "path",
@@ -81,7 +90,6 @@ class TestClassification:
         assert not belongs_to_content(path)
 
     def test_healthz_belongs_to_the_admin_host_only(self) -> None:
-        assert belongs_to_admin("/-/healthz")
         assert not belongs_to_content("/-/healthz")
 
     async def test_non_http_scope_is_passed_through_untouched(self) -> None:

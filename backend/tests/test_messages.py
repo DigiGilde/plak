@@ -178,6 +178,9 @@ _KEY_ARGUMENT = {
     "Msg": 0,
     # ci/tokens.py: a shorthand that prefixes the code itself.
     "_invalid": 0,
+    # api/admin.py: helpers that raise the key they are handed.
+    "_commit_or_409": 1,
+    "_write_one_or_404": 2,
 }
 
 
