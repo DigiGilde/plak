@@ -5,7 +5,7 @@ Deployment, self-service application deployment, the RijksICTGilde platform).
 The example project file is in `deploy/plak-project.example.yaml`; the
 workflows in `.github/workflows/` do the build and the rollout.
 
-**Status: preparatory.** Plak does not run on ZAD yet. This document describes
+**Status: in production, as a beta.** Plak runs on ZAD. This document describes
 the route as it follows from the ZAD project schema, the service catalogue and
 the platform documentation, with the open questions named explicitly in §10.
 
@@ -596,6 +596,37 @@ is not there:
    realm?** None was found; the sandbox authenticates against the production
    realm. For now: the mock OIDC in the dev stack, plus the production realm
    for the real check.
+
+## 11. Exit strategy
+
+Plak holds three things, and each one can be taken off ZAD:
+
+- **The image.** An OCI image, built from `containers/plak/Containerfile` and
+  published to GHCR, attested and with an SBOM (`docs/security.md`, "Supply
+  chain"). Any container platform can run it; nothing in it is specific to ZAD.
+- **The database.** A PostgreSQL 16 database, `pg_dump` and `pg_restore` move
+  it. The app runs the migrations itself at start (§7), so an empty database
+  gets the current schema.
+- **The content.** The files on the content volume (`PLAK_CONTENT_ROOT`), a
+  plain directory tree: copy it, keeping the layout, to the new volume.
+
+What ties them together is the environment contract of §5: the `PLAK_*`
+variables, the secrets (`PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER`,
+`PLAK_AUDIT_IP_KEY`, the OIDC client) and one OIDC provider with the two
+redirect URIs of §6. Carry the pepper and the IP key over unchanged, or the
+pseudonyms in the audit log stop matching and the encrypted IP addresses can
+no longer be read.
+
+Two properties to know when planning a move or a failure:
+
+- **State lives in process memory.** Sessions and the replay cache of the
+  back-channel logout sit in the process, so Plak runs
+  as one replica, and a restart logs everyone out (`docs/security.md`,
+  "Sessions do not survive a restart").
+- **The probe is a TCP probe.** It only sees that the port answers, not that
+  the app is healthy, so a degraded app stays in rotation. That is an
+  availability risk we accept for now; `/-/healthz` shows the state but
+  nothing on the platform reads it (§5, "Content volume").
 
 ## See also
 

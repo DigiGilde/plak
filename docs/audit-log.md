@@ -682,6 +682,51 @@ a copied ciphertext onto another row does not decrypt there. On a key
 rotation (`docs/security.md`) older rows stay readable as long as
 `PLAK_AUDIT_IP_KEY_PREVIOUS` carries the previous key.
 
+## Logboek Dataverwerkingen
+
+The audit log is a security log in the sense of the BIO. It is not a
+Logboek Dataverwerkingen (the Logius standard for logging processing
+operations on personal data, [v1.0.0](https://gitdocumentatie.logius.nl/publicatie/logboek/dataverwerkingen/1.0.0/)),
+but it already follows the intent of that standard:
+
+- **Pseudonymised data subject.** The actor is an HMAC-SHA256 under a keyed
+  pepper, never a readable identifier ("Fields"). The standard asks for an
+  encrypted, identifying code of the data subject.
+- **Fixed vocabulary.** Actions, results and reasons are a contract
+  (`vocabulary.py`), not free text.
+- **Retention.** 90 days or three years, enforced in the database
+  ("Retention").
+- **Reading is logged.** `audit_read`, `audit_actor_lookup`,
+  `audit_actor_identity` and `audit_ip_reveal` each write a row with a
+  mandatory reason ("The audit log itself").
+- **Integrity.** An append-only table with a hash chain and a published chain
+  head ("The integrity chain").
+
+How the action categories map to the processing they belong to, which is
+what a `processing_activity_id` would point at:
+
+| Action category | Processing |
+|---|---|
+| Viewing content (`content_access`), logging in and out (`login`, `logout`, `idp_session_ended`) | access control for published sites: deciding who may see a page |
+| Admin (members, groups, sites, access, invitees, keys) and "My own account" | administering who may do what, and who may see what |
+| Publishing (`deploy`, `version_set_live`, `preview_*`) and the nightly cleanup (`version_cleanup`) | publishing and removing site versions |
+| CLI pairing (`cli_*`) | authorising a person's command line to publish |
+| The audit log itself (`audit_*`) | oversight of the log |
+
+The data subject identifier type is `sso_subject`: the `sub` claim of the
+OIDC login, from which `actor_pseudonym` is derived.
+
+What is not there yet, and why:
+
+- **No `processing_activity_id`.** It is a URI into the controller's register
+  (the AVG register of BZK). Plak has no entry there yet; the attribute is
+  added to each row, or derived from the action category above, once it has
+  one (`docs/privacy.md`, open action 6).
+- **No OTLP and no `traceparent`.** The standard's trace context exists to
+  follow a processing across organisations. Plak exchanges no data with other
+  government systems, so there is no `foreign_operation` to record and no
+  trace to propagate.
+
 ## Known gaps
 
 - Plak runs with one account, and that is the owner of the tables: `ALTER

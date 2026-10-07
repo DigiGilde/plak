@@ -346,3 +346,7 @@ ZAD environment to deploy to yet.
 ## Licence
 
 EUPL-1.2, see `LICENSE`.
+
+Copyright Ministerie van Binnenlandse Zaken en Koninkrijksrelaties.
+
+See `CONTRIBUTING.md` to contribute and `CODE_OF_CONDUCT.md` for how we work together.

@@ -12,7 +12,7 @@ approved it.
 
 This table lists the security requirements from the design spec and their
 current state. Whatever is still open below is open because it falls outside
-the app or was deliberately postponed (base image digests, DPIA, pentest).
+the app or was deliberately postponed (DPIA, pentest).
 
 ## Authentication and session
 
@@ -479,7 +479,7 @@ unnecessary at once.
 
 | Item | Status |
 |---|---|
-| Base images pinned on digest | open: `containers/plak/Containerfile` (node 22, uv 0.5/python 3.12, python 3.12-slim-bookworm) pins on fixed tags; digests are a production prerequisite. `containers/nginx-dev/Containerfile` is only the dev proxy and falls outside this |
+| Base images pinned on digest | done: every `FROM` in `containers/plak/Containerfile` carries a `@sha256:` digest next to its tag (node 22-bookworm-slim, uv 0.9 on python 3.12-bookworm-slim, python 3.12-slim-bookworm), and Dependabot's docker ecosystem bumps tag and digest together. `containers/nginx-dev/Containerfile` is only the dev proxy and falls outside this |
 | CI actions pinned on commit SHA | done: every `uses:` in `ci.yml` and `deploy.yml` sits on a commit SHA, fixed by `test_workflows.py`. Handled on the user side: `docs/publishing.md` pins every `uses:` on a commit SHA, and the one nested `uses:` in `actions/publish/action.yml` (`astral-sh/setup-uv`) sits on a commit SHA too, fixed by `cli/tests/test_cli.py` |
 | Lockfiles (uv.lock, package-lock.json) | implemented |
 | Vendored files pinned on hash | done since 2026-09-28: `backend/src/plak/static/docs/SHA256SUMS` records the sha256 of the two Swagger UI files, `just refresh-swagger-ui` checks its download against it, and `test_api_documentation.py` checks the shipped bytes without a network call. Before this the recipe printed a truncated hash and compared it to nothing, which read as verification. It hid a real change: a repo-wide rename of `project` to `site` had edited a URI-scheme list inside the minified bundle. Both files were restored from the npm registry tarball of the pinned version. Weight: 1.5 MB of minified JavaScript, served from the admin origin under `script-src 'self'`, so fully trusted script beside the session cookie, arriving in git as a diff nobody reads |
@@ -491,6 +491,30 @@ unnecessary at once.
 | Static analysis in CI | done: `codeql.yml` runs CodeQL over `actions`, `javascript-typescript` and `python`, each with `build-mode: none`, on every pull request, on a push to `beta` and weekly. Its own workflow and not a job in `ci.yml`, because a called workflow carries no schedule; `security-events: write` sits on the analyse job alone. Findings land in the security tab; the analyse job itself only goes red on an analysis that breaks. What can go red on a pull request is the separate `Code scanning results / CodeQL` check GitHub adds, on newly introduced alerts above the threshold in Settings |
 | Image scan in CI | done: `deploy.yml` runs trivy twice on the built image, first a full report in the log and then the gate on CRITICAL and HIGH with `ignore-unfixed`. A red scan fails `build`, so nothing gets deployed |
 | `security.txt` (RFC 9116) under `/.well-known/` | done: both hosts serve the same document from `platform/security_txt.py`, with a `Canonical` per https origin and an `Expires` that is set 90 days ahead per request. `test_security_txt.py` runs it through `sectxt`. The GitHub advisory form is the first `Contact` and `SECURITY.md` the first `Policy`, both reachable since the repository went public with private vulnerability reporting on. No `Encryption` field: it cannot be tied to one `Contact`, and NCSC-NL's key would read as the Plak team's (`SECURITY.md`) |
+
+## Deviations we explain
+
+Where Plak departs from a standard the Dutch government applies, it says so
+here, with the reason.
+
+- **Refusals are neutral 404s, not 401 or 403.** The API Design Rules ask
+  for 401 and 403 on a refused request. On the content host a refusal is the
+  same 404, byte for byte, as a page that does not exist, so that nobody can
+  find out which sites exist or what their access level is. That is a
+  security requirement of Plak (see "Access to content").
+- **OIDC with a client secret, not `private_key_jwt`.** The NL GOV OIDC
+  profile asks for `private_key_jwt` or mTLS. The ZAD Keycloak only creates
+  clients with a client secret, so production runs
+  `PLAK_OIDC_CLIENT_AUTH=client_secret_post` (`docs/deploying-on-zad.md`).
+  `private_key_jwt` stays the default and is what the dev stack uses (see
+  "Authentication and session").
+- **The SSO access level is "whoever the ZAD Keycloak realm lets in".** It
+  is not an assurance level. The ZAD Keycloak only supplies `acr` `0` or
+  `1`, which is not an eIDAS level (low, substantial, high), so
+  `PLAK_OIDC_REQUIRED_ACR` stays empty in production. Plak also does not
+  check which upstream identity provider the login came from; it trusts
+  the realm. Read "SSO Rijk" in the interface as "a login the ZAD realm
+  accepts".
 
 ## Production prerequisites (organisational)
 
