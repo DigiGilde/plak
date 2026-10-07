@@ -67,51 +67,134 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'The name comes from plakkaat, Dutch for a placard: an announcement you put up nearby so that others can see it. A placard can hang in a public space, visible to everyone, or in a closed room only a small group enters. That is exactly what Plak does.',
 
   // -- Privacy --------------------------------------------------------------
-  'page.privacy.title': 'Privacy',
+  'page.privacy.title':
+    'Privacy',
   'page.privacy.intro':
-    'Plak processes personal data to arrange access to published sites: an e-mail address when you sign in through your organisation, and possibly the e-mail address of an invited person when access is by invitation.',
-  'page.privacy.data.heading': 'Which data',
+    'This statement describes how Plak handles personal data and which rights you have. We work under the General Data Protection Regulation (GDPR, in Dutch the AVG). Plak processes personal data to arrange access to published sites: an e-mail address when you sign in through your organisation, and possibly the e-mail address of an invited person when access is by invitation.',
+  'page.privacy.draft':
+    'This is a draft. This statement has not been legally reviewed yet, not even by the Data Protection Officer.',
+  'page.privacy.controller.heading':
+    'Who is responsible',
+  'page.privacy.controller.body':
+    'The Digi Gilde, which builds and runs Plak, is part of the Rijksorganisatie voor Ontwikkeling, Digitalisering en Innovatie (ODI), which falls under the Ministry of the Interior and Kingdom Relations (BZK). The minister and the state secretary of BZK are the controller of the personal data processed through Plak.',
+  'page.privacy.data.heading':
+    'Which data',
   'page.privacy.data.account':
-    'Account data: name, e-mail address and organisation, through signing in.',
+    'Account data: name and e-mail address, through signing in, and your role in a group or site.',
+  'page.privacy.data.invitees':
+    'Invitees: the e-mail address or SSO ID of whoever an administrator puts on the list of a site, even if that person never signs in.',
   'page.privacy.data.audit':
     'Audit data: who published or changed what and when, and who signed in when.',
   'page.privacy.data.visits':
     'Visit data: which pages of a restricted site you looked at. Nothing is recorded for public sites.',
-  'page.privacy.retention.heading': 'Retention period',
+  'page.privacy.data.content':
+    'Published content: may contain personal data, but that belongs to the maker of the site. Plak does not read, classify or filter that content; the publishing organisation is responsible for it.',
+  'page.privacy.purpose.heading':
+    'Purpose and legal basis',
+  'page.privacy.purpose.body':
+    'We process this data to show published sites only to those who may see them, and to keep the platform secure and misuse investigable. The legal basis is article 6(1)(e) of the GDPR: the performance of a task carried out in the public interest.',
+  'page.privacy.processors.heading':
+    'Processors and hosting',
+  'page.privacy.processors.body':
+    'Plak runs on ZAD, the hosting platform of the Dutch central government, using the database and file volume of that platform. Signing in goes through the Keycloak of ZAD, which forwards to SSO Rijk. Plak uses no web analytics and shares no data with other parties. The agreements with the hosting platform are still to be put in writing.',
+  'page.privacy.retention.heading':
+    'Retention period',
   'page.privacy.retention.body':
     'Visit data and sign-in moments are deleted after 90 days. Other audit data, such as refused access and administrative actions, is kept for three years, because it may become part of the investigation into a security incident. Only a platform administrator can view it, and every viewing is itself recorded, with a mandatory reason that every platform administrator can read. Your name and e-mail address are not in there in readable form. Previews and their access data expire automatically after thirty days without a new deploy.',
   'page.privacy.retention.ip':
     'Every audit entry also carries the IP address something happened from: a truncated network (not the full address) is simply in the log, kept as long as the entry itself. The full address sits beside it, encrypted, kept just as long, and only a platform administrator can request it, with the same mandatory, recorded reason.',
   'page.privacy.retention.session':
     'If you view restricted content after signing in with your organisation, Plak keeps your SSO ID and e-mail address until ninety days after the last time you signed in. That is needed to trace an entry in the audit log back to a person, for instance during the investigation into a leak.',
-  'page.privacy.visibility.heading': 'Who can see what',
+  'page.privacy.visibility.heading':
+    'Who can see what',
   'page.privacy.visibility.body':
     'The audit log can only be viewed by a platform administrator. The entries hold no name and no e-mail address, but a pseudonym: an encrypted representation of your SSO ID. A platform administrator can look up which pseudonym belongs to a person, and the other way round who is behind a pseudonym. That is only possible with a stated reason, which is itself recorded, and there is a maximum number of lookups per day. The administrator of a site sees none of this.',
-  'page.privacy.rights.heading': 'Your rights',
-  'page.privacy.rights.bodyBeforeEmail':
-    'You may request which data Plak processes about you, have it corrected, and object to the processing. Deletion is not always possible: the audit log is fixed for as long as the retention period runs, because it serves to make misuse investigable. Ask your question at',
-  'page.privacy.rights.bodyAfterEmail':
-    '; you will get a reply within ten working days. If you disagree with what we do, you can lodge a complaint with the Dutch Data Protection Authority.',
+  'page.privacy.rights.heading':
+    'Your rights',
+  'page.privacy.rights.body':
+    'You have the right to access your data, to have it corrected or deleted, and to object to or ask for restriction of the processing. Deletion is not always possible: the audit log is fixed for as long as the retention period runs, because it serves to make misuse investigable.',
+  'page.privacy.rights.request.before':
+    'Send a request to the Ministry of the Interior and Kingdom Relations through the ',
+  'page.privacy.rights.request.link':
+    'contact form of the Dutch central government',
+  'page.privacy.rights.request.after':
+    ', or by post: Ministerie van Binnenlandse Zaken en Koninkrijksrelaties, Postbus 20011, 2500 EA Den Haag.',
+  'page.privacy.rights.register.before':
+    'The processing operations of the central government are listed in the ',
+  'page.privacy.rights.register.link':
+    'AVG register of the Rijksoverheid',
+  'page.privacy.rights.register.after':
+    '.',
+  'page.privacy.fg.heading':
+    'Data Protection Officer',
+  'page.privacy.fg.before':
+    'The Ministry of the Interior and Kingdom Relations has a Data Protection Officer (in Dutch the Functionaris Gegevensbescherming, FG) who supervises compliance with the GDPR. You can reach the DPO at ',
+  'page.privacy.fg.after':
+    '.',
+  'page.privacy.complaint.heading':
+    'Lodging a complaint',
+  'page.privacy.complaint.before':
+    'Do you disagree with how we handle your data? You can lodge a complaint with the ',
+  'page.privacy.complaint.link':
+    'Dutch Data Protection Authority (Autoriteit Persoonsgegevens)',
+  'page.privacy.complaint.after':
+    '.',
+  'page.privacy.contact.heading':
+    'Contact',
+  'page.privacy.contact.before':
+    'Do you have a question about this statement or about Plak? Mail us at ',
+  'page.privacy.contact.after':
+    '; you will get a reply within ten working days. Privacy requests and complaints go through the addresses above, so that they reach the right place within the ministry.',
 
   // -- Accessibility --------------------------------------------------------
-  'page.accessibility.title': 'Accessibility',
+  'page.accessibility.title':
+    'Accessibility',
   'page.accessibility.intro':
-    'We think it matters that Plak works well for everyone. Plak aims for WCAG 2.1, level AA, as the Dutch decree on digital accessibility of government (EN 301 549) requires. The admin interface is built with the NLDD Design System, which builds accessibility into the components: ARIA, focus order and keyboard operation.',
-  'page.accessibility.works.heading': 'What already works',
-  'page.accessibility.works.keyboard': 'Everything can be operated with the keyboard.',
-  'page.accessibility.works.skipLink': 'Every page starts with a link to the main content.',
-  'page.accessibility.works.colorScheme':
-    'The interface follows your preference for a light or dark screen.',
-  'page.accessibility.works.checks':
-    'Automated accessibility checks run along with every change.',
-  'page.accessibility.todo.heading': 'What is not finished yet',
-  'page.accessibility.todo.body':
-    'Plak is a beta version and has not been audited yet. So there is no statement in the national register at toegankelijkheidsverklaring.nl either; that will follow as soon as Plak goes into production. Pages that you or your colleagues publish belong to their makers: Plak does not check their accessibility.',
-  'page.accessibility.report.heading': 'Reporting a problem',
+    'This statement describes to what extent Plak meets the accessibility requirements for government websites. The legal norm is WCAG 2.1 level AA, through EN 301 549 and mandatory under the Besluit digitale toegankelijkheid overheid (the Dutch decree on digital accessibility of government). It concerns the admin interface of Plak; pages that you or your colleagues publish belong to their makers, and Plak does not check their accessibility.',
+  'page.accessibility.draft.before':
+    "This is a draft. The status below rests on the team's own tests. An investigation by an independent party has not taken place. The final statement still has to be drawn up with the form assistant at ",
+  'page.accessibility.draft.link':
+    'toegankelijkheidsverklaring.nl',
+  'page.accessibility.draft.after':
+    ' and published in the register there. Until that is done, this is not a legally valid statement.',
+  'page.accessibility.status.heading':
+    'Compliance status',
+  'page.accessibility.status.body':
+    'Status C in the DigiToegankelijk model: the accessibility of Plak has not been fully investigated yet. It has been tested (see below), but there is no complete, documented investigation against all success criteria of WCAG 2.1 AA yet.',
+  'page.accessibility.tested.heading':
+    'How this was tested',
+  'page.accessibility.tested.components':
+    'The admin interface is built from the components of the NLDD Design System. They bring their own keyboard behaviour, focus indication, colour contrast and ARIA attributes. Every page starts with a link to the main content and the interface follows your preference for a light or dark screen.',
+  'page.accessibility.tested.automated':
+    'Automated, with every change: the admin tests run axe-core on the group page, the site page and the profile, in Dutch and in English, and a change with a violation fails. The language of the page is set on the html element, so that a screen reader picks the right pronunciation.',
+  'page.accessibility.tested.notDone':
+    'Not done: an investigation by an independent party, a test with screen readers per page and a full pass through all success criteria of WCAG 2.1 AA.',
+  'page.accessibility.limits.heading':
+    'Known limitations',
+  'page.accessibility.limits.contrast':
+    'Colour contrast is not measured in the automated tests, because the test environment has no rendering. The contrast rests on the colours of the design system.',
+  'page.accessibility.limits.pages':
+    'Not every page has an automated test of its own; the coverage is not complete yet.',
+  'page.accessibility.limits.shadow':
+    'The components of the design system draw landmarks and lists, among other things, in their shadow DOM. Support for that differs per screen reader and has not been verified per screen reader.',
+  'page.accessibility.limits.published':
+    'Published sites fall outside this statement: their makers are responsible for the accessibility of what they publish.',
+  'page.accessibility.report.heading':
+    'Reporting an accessibility problem',
   'page.accessibility.report.bodyBeforeEmail':
-    'Did you run into something that does not work, or do you have an idea for an improvement? Get in touch at',
+    'Did you run into something that does not work, or do you have a question about accessibility? Let us know at',
   'page.accessibility.report.bodyAfterEmail':
     '. You will get a reply within ten working days. We work on improving accessibility continuously.',
+  'page.accessibility.enforcement.heading':
+    'Enforcement',
+  'page.accessibility.enforcement.before':
+    'Are you not satisfied with how we handle your report, or do you get no reply? Then you can lodge a complaint with the ',
+  'page.accessibility.enforcement.link':
+    'College voor de Rechten van de Mens (the Netherlands Institute for Human Rights)',
+  'page.accessibility.enforcement.after':
+    '.',
+  'page.accessibility.prepared':
+    'This statement was prepared on 7 October 2026.',
 
   // -- Linking a CLI session (plak login) -----------------------------------
   'page.cliPair.loading': 'Loading',

@@ -1,8 +1,8 @@
 # Plak
 
-**Status: under development.** Plak is not in production yet; this
-document describes the design and the state of the build, not a
-finished product.
+**Status: beta, in production.** Plak runs in production on ZAD and is
+still a beta: the design and the interface can change, as the disclaimer
+below says.
 
 Plak is a platform that lets government organisations (among them
 MinBZK and the Nederlandse Digitale Dienst) publish and share static
@@ -14,8 +14,8 @@ preview of its own.
 
 Read this before you use anything here.
 
-- **Experimental, not in production.** Plak runs nowhere for real
-  users. There is no support, no service level and no guarantee of any
+- **Beta, in production.** Plak runs in production for real users, as a
+  beta. There is no support, no service level and no guarantee of any
   kind. The HTTP contract, the URL design, the database schema and the
   configuration can change without notice and without a migration path.
 - **Not independently reviewed.** No external security review, no
@@ -36,6 +36,11 @@ Read this before you use anything here.
 - **Licence.** EUPL-1.2 (see `LICENSE` and `publiccode.yml`). That
   licence grants the software as is, without warranty of any kind and
   without liability, to the extent the law allows.
+
+Plak is not an archive. It deletes old live versions every night and
+lets administrators delete sites, so a published page can disappear.
+The publishing organisation keeps its own records under its selection
+list (Archiefwet); see §8 of `docs/publishing.md`.
 
 The name comes from `plakkaat`, the Dutch word for a placard. Placards
 used to be put up to share something with more people than you could
@@ -86,26 +91,25 @@ uploading, setting access) does require an activated member record; see
 
 ## URL design
 
-Content owns the top level; everything belonging to the platform lives
-under a single prefix `/admin`, so that the top level stays maximally
-free for groups.
+Content owns the top level of the content host. Everything belonging to
+the platform lives under the single segment `-`, which is not a valid
+slug and so can never collide with a group. The admin SPA sits on the
+root of the admin host, without a path prefix; see `docs/design.md` §4.
 
 | Path | Meaning |
 |---|---|
-| `/{group}/{site}/...` | live content |
+| `/{group}/{site}/...` | live content (content host) |
 | `/{group}/{site}/_preview/{ref}/...` | preview content |
-| `/{group}/{site}/_version/{version-id}/...` | view an old version (active group members only) |
-| `/admin` | site overview (start page after login) |
-| `/admin/{group}` | group page |
-| `/admin/{group}/{site}` | site detail, tab Overzicht (overview); other tabs: `/access`, `/previews`, `/versions`, `/deploy` |
-| `/admin/-/platform` | platform administration: member activation |
-| `/admin/-/privacy`, `/admin/-/toegankelijkheid`, `/admin/-/over` | platform pages (publicly accessible, no login) |
-| `/-/login` | starts the OIDC login; `/-/oauth2/callback` is the redirect URI |
-| `/-/logout` | POST, ends the session |
-| `/-/api/v1/...` | JSON and deploy API |
+| `/{group}/{site}/_version/{version-id}/...` | view an old version (site team only) |
+| `/` (admin host) | the SPA: landing page or site overview |
+| `/{group}` | group page (admin host); other tabs: `/{group}/-/members`, `/{group}/-/settings` |
+| `/{group}/{site}` | site detail (admin host); other tabs: `/previews`, `/versions`, `/access`, `/members`, `/deploy` |
+| `/-/groups`, `/-/platform`, `/-/sessions`, `/-/profile` | platform pages (admin host; `/-/platform` for platform administrators) |
+| `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/whats-new` | platform pages (publicly accessible, no login) |
+| `/cli-link` | where `plak login` sends you to approve a CLI session |
+| `/-/login`, `/-/oauth2/callback`, `/-/logout` | OIDC login, the redirect URI and logout (POST on the admin host) |
+| `/-/api/v1/...` | JSON and deploy API (admin host only) |
 | `/-/api/docs` | API documentation (OpenAPI, self-hosted UI, publicly readable) |
-| `/admin/assets/...` | SPA assets (Vite base `/admin/`) |
-| `/` (admin host) | 303 to `/admin`; the SPA chooses there between landing page and overview |
 | `/` (content host) | 302 to the admin host, whose landing page says what Plak is |
 
 ## Quickstart: local development
@@ -119,7 +123,7 @@ cd plak
 This starts the full stack (nginx + app + PostgreSQL + mock OIDC)
 through Podman compose on port `8080`. The stack has two hosts and
 separates them on the `Host` header: `beheer.plak.localhost` for
-`/admin` and `plak.localhost` for content. On most systems both resolve
+the admin and `plak.localhost` for content. On most systems both resolve
 to 127.0.0.1 by themselves; if they do not, put them in `/etc/hosts`.
 
 Log in through `http://beheer.plak.localhost:8080/-/login`; the mock

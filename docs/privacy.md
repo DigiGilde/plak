@@ -172,13 +172,13 @@ Open items, to be completed by the controller before go-live:
   (verwerkersovereenkomst, art. 28).
 - Registration of this processing in the controller's processing register
   ("verwerkingsregister").
-- A privacy statement (privacyverklaring, art. 13) reachable from the login
-  and access screens, covering the controller, FG contact, purposes and
-  legal basis, categories of personal data, recipients/processors, retention
-  terms, data subject rights and the right to complain to the Autoriteit
-  Persoonsgegevens. Plak does not currently serve one; `/admin/-/privacy` is
-  listed as a platform page in `README.md` but its content was not verified
-  as part of this document.
+- A privacy statement (privacyverklaring, art. 13) is served by the admin
+  SPA at `/-/privacy` (texts in `frontend/src/i18n/pages.nl.ts` and
+  `pages.en.ts`, keys `page.privacy.*`), reachable without logging in. It
+  names the controller (the minister and state secretary of BZK), the legal
+  basis, the FG, the route for rights requests, the Autoriteit
+  Persoonsgegevens and the hosting on ZAD. It has not been reviewed by the
+  FG; the statement of the Digi Gilde handbook served as its model.
 
 ## Risks
 
@@ -211,8 +211,7 @@ to Plak's actual design.
 5. Determine whether ZAD (or a service it depends on) is a processor and, if
    so, put a processor agreement (art. 28) in place.
 6. Register the processing in the controller's verwerkingsregister.
-7. Publish a privacy statement (art. 13) reachable from the login and access
-   screens.
+7. Have the FG review the privacy statement served at `/-/privacy`.
 8. Define and document a self-service or FG-mediated process for access,
    rectification and erasure requests, including how a member row is
    actually deleted (not only deactivated).
