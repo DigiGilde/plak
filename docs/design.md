@@ -234,9 +234,20 @@ Order per request: path validation, access decision, audit, key redeem,
 `If-None-Match`, file resolution, response. The lexical 301 sits before all of
 it (§5.2).
 
+On the content host HEAD is the GET without the body (`head_requests.py`): the
+app gets a GET, the client gets its headers, so the gate, the audit and a
+refusal's neutral 404 are the same as for the GET. The routes themselves take
+GET only, because a content route such as `/{group}/{site}/{rest:path}` also
+matches `/-/...` on the admin host, where HEAD on a GET-only route has to keep
+its 405. A file response still sends a HEAD its headers alone, without reading
+the file (`HEAD_SCOPE_KEY`), so a HEAD on a large file costs no more than its
+answer. Under `/-/` on the content host HEAD is not turned into GET either:
+the content login, callback and logout act on a GET, and a HEAD must never
+start a login.
+
 Code: `serving/router.py`, `serving/response.py`, `serving/resolution.py`,
-`serving/mime.py`. Guarded by: `test_serving.py`, `test_resolution.py`,
-`test_mime.py`.
+`serving/mime.py`, `head_requests.py`. Guarded by: `test_serving.py`,
+`test_resolution.py`, `test_mime.py`, `test_head_requests.py`.
 
 The nine behaviour requirements below are the same numbers as §5.1 to §5.9.
 

@@ -55,6 +55,10 @@ INDEX_FILE = "index.html"
 PLATFORM_SEGMENT = "-"
 PLATFORM_PREFIX = f"/{PLATFORM_SEGMENT}"
 
+# Set on the scope by head_requests.py when it hands the app a HEAD as GET, so
+# a file response can still send its headers alone.
+HEAD_SCOPE_KEY = "plak.head"
+
 # Login path prefixes: shared between platform/pages.py (route
 # registration) and ratelimit.py (class assignment), so a route change can
 # never silently shift the rate-limit class of the login routes.

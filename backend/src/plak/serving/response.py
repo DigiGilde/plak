@@ -13,8 +13,9 @@ import uuid
 from pathlib import Path
 
 from starlette.responses import FileResponse, Response
+from starlette.types import Receive, Scope, Send
 
-from plak.constants import AccessPolicy
+from plak.constants import HEAD_SCOPE_KEY, AccessPolicy
 from plak.serving import mime
 
 # Every content policy comes out of this one table, so the variants cannot
@@ -242,6 +243,17 @@ def make_304(
     return Response(status_code=304, headers=headers)
 
 
+class _ContentFileResponse(FileResponse):
+    """Answers a HEAD that head_requests.py turned into GET with the headers
+    alone, as FileResponse does for a real HEAD, instead of reading the whole
+    file only to throw it away."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get(HEAD_SCOPE_KEY):
+            scope = {**scope, "method": "HEAD"}
+        await super().__call__(scope, receive, send)
+
+
 def make_content_response(
     *,
     rel_path: str,
@@ -264,4 +276,4 @@ def make_content_response(
         external_sources=external_sources,
         sandbox=sandbox,
     )
-    return FileResponse(file_path, status_code=status_code, headers=headers, media_type=content_type)
+    return _ContentFileResponse(file_path, status_code=status_code, headers=headers, media_type=content_type)

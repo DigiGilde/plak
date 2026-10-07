@@ -59,6 +59,7 @@ from plak.ci.tokens import CiTokenVerifier
 from plak.config import Settings, load_settings
 from plak.constants import PATH_HEALTHZ
 from plak.db import make_engine, make_session_factory
+from plak.head_requests import ContentHeadMiddleware
 from plak.host_separation import HostSeparationMiddleware
 from plak.ingest.storage_health import content_root_complaint, storage_check_job, storage_watch
 from plak.ingest.store import ContentStore
@@ -207,6 +208,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Innermost middleware: a Bearer header outside the two deploy endpoints is
     # refused, but only after ratelimit and TrustedHost have done their work.
     app.add_middleware(BearerOutsideDeploysMiddleware)
+
+    # Just outside the routes, so everything further out still sees the HEAD
+    # the client sent.
+    app.add_middleware(ContentHeadMiddleware, content_host=content_host)
 
     # Inside the SPA and the rate limit: static assets and refused requests
     # never cost a call to the IdP.
