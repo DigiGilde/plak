@@ -2,9 +2,8 @@
 
 ## Responsible disclosure
 
-Plak is still under development and is not running in production yet
-(see `README.md`, status: under development). If you have found a
-security vulnerability anyway, report it responsibly:
+Plak runs in production as a beta (see `README.md`). If you have found a
+security vulnerability, report it responsibly:
 
 - Report vulnerabilities privately, not through a public GitHub issue.
 - Preferably through
@@ -18,8 +17,10 @@ security vulnerability anyway, report it responsibly:
 - Do not take any action beyond what is needed to demonstrate the
   vulnerability (no data exfiltration, no disruption of the service).
 
-We confirm receipt as soon as we can and keep you posted on the
-progress until the problem is solved.
+We confirm receipt within 5 working days and keep you posted on the
+progress until the problem is solved. We aim to have a fix or a
+mitigation within 90 days of the report, sooner for a serious problem,
+and agree a date with you if it will take longer.
 
 ## security.txt
 
@@ -55,6 +56,6 @@ Four things to know:
 ## Scope
 
 This policy covers the code in this repository, the CLI (`cli/`) and the
-`publiceer` action (`actions/`) included. Vulnerabilities in underlying
+`actions/publish` action (`actions/`) included. Vulnerabilities in underlying
 infrastructure (ZAD, the OIDC provider in use, and so on) you report to
 the administrator of that service.
