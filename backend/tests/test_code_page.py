@@ -281,9 +281,12 @@ class TestEverythingElseStaysTheNeutral404:
 
     async def test_a_public_site_never_asks_for_a_code(self, client, environment):
         response = await client.get(f"/aurora/open/?key={environment.world.public_site_selector}")
-        # Public content is simply served; the key plays no part there.
-        assert response.status_code == 200
-        assert b"open" in response.content
+        # Public content is served; the selector only leaves the address first.
+        assert response.status_code == 302
+        assert response.headers["location"] == "/aurora/open/"
+        followed = await client.get(response.headers["location"])
+        assert followed.status_code == 200
+        assert b"open" in followed.content
 
     async def test_unknown_site(self, client, environment):
         response = await client.get(f"/aurora/bestaat-niet/?key={environment.world.key_selector}")
@@ -370,14 +373,17 @@ class TestTheCodePageBeatsTheLoginRedirect:
 
     async def test_somebody_the_base_already_lets_in_simply_sees_the_site(self, client, environment):
         """A session on base sso: the allow comes first and the selector never
-        reaches the code page."""
+        reaches the code page; it leaves the address before the page loads."""
         await _set_access(environment, AccessBase.SSO)
         set_content_session_cookie(
             client, environment.app, sub="willekeurige-kijker", sites=("/aurora/geheim/",)
         )
         response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
-        assert response.status_code == 200
-        assert response.content == SECRET_INDEX
+        assert response.status_code == 302
+        assert response.headers["location"] == "/aurora/geheim/"
+        followed = await client.get(response.headers["location"])
+        assert followed.status_code == 200
+        assert followed.content == SECRET_INDEX
 
     @pytest.mark.parametrize(
         ("base", "invitees", "login_helps"),

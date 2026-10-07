@@ -42,6 +42,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The image patches OpenSSL (CVE-2026-84782) and moves certifi to
   2026.10.23 (PYSEC-2026-4320), also in the CLI; the SPA builds with
   vite 8.3.5 and undici 8.12.3.
+- A page never sees a secret link that was not meant for it: Plak takes a
+  `key` in the shape of a secret link out of the address before it answers,
+  also on a refusal, and refuses service worker scripts, which could read a
+  link before Plak does.
 
 ## [2026.10.7]
 

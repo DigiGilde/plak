@@ -46,10 +46,11 @@ always stays usable to find someone again, verified email address or not.
 | Action | Result | When |
 |---|---|---|
 | `content_access` | `allowed` | an HTML page on non-public content (key, SSO, site team, invitees) has been served, and every `_version` view. Individual files (css, images, scripts) not: a page with fifty parts is one view, not fifty |
-| `content_access` | `refused` | a request was refused; the visitor got the neutral 404 |
+| `content_access` | `refused` | a request was refused; the visitor got the neutral 404, or with a secret link in the query the 302 that takes it out (design.md §7.4). A refused secret link therefore writes two rows: the refusal with its own reason (`KEY_INVALID`, say), then the row of the request that follows without the key |
 | `content_access` | `login_redirect` | an anonymous visitor was sent to log in. On live content the reason is `LOGIN_REQUIRED`; on a preview or `_version` view, where every anonymous refusal becomes this redirect, it is the reason that refused (`NO_ACCESS`, `UNKNOWN_PREVIEW` and so on) |
 
-Public content is never logged.
+Public content is never logged. Neither is the script request of a service
+worker: it is refused before any access decision, like a routing miss.
 
 Every `content_access` row carries `refs.fetch_dest` and `refs.fetch_site`: the
 `Sec-Fetch-Dest` and `Sec-Fetch-Site` the browser sent, or `null` when it sent
