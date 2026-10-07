@@ -22,6 +22,7 @@ import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 import { PLAK_LOGIN_DOCS_URL } from '@/urls';
 import SectionHeading from '@/components/SectionHeading.vue';
+import { useConfirm } from '@/composables/confirm';
 
 const route = useRoute();
 
@@ -34,8 +35,6 @@ const subtitle = computed(() => t('admin.sessions.subtitle').split('{command}'))
 const sessions = ref<CliSession[]>([]);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
-const revoking = ref<CliSession | null>(null);
-const revokeBusy = ref(false);
 
 const { loading, error } = useLoader(cliSessions, (list) => {
   sessions.value = list;
@@ -61,29 +60,26 @@ function supportingText(session: CliSession): string {
   });
 }
 
-async function confirmRevoke(): Promise<void> {
-  const session = revoking.value;
-  /* v8 ignore start -- the modal only confirms while it is open, so there is a session. */
-  if (!session) return;
-  /* v8 ignore stop */
-  revokeBusy.value = true;
+async function revoke(session: CliSession): Promise<void> {
   try {
     await revokeCliSession(session.id);
     sessions.value = sessions.value.filter((s) => s.id !== session.id);
-    revoking.value = null;
   } catch (f) {
-    // The modal sits in the top layer and renders the page below it inert; a
-    // notification there would be unreachable. So close first, then notify.
-    revoking.value = null;
     notices.value?.notify(
       'critical',
       t('admin.sessions.revokeFailed', { name: clientName(session) }),
       errorText(f, t('admin.sessions.revokeFailed.detail')),
     );
-  } finally {
-    revokeBusy.value = false;
   }
 }
+
+const {
+  target: revoking,
+  busy: revokeBusy,
+  ask: askRevoke,
+  cancel: cancelRevoke,
+  confirm: confirmRevoke,
+} = useConfirm<CliSession>(revoke);
 </script>
 
 <template>
@@ -127,7 +123,7 @@ async function confirmRevoke(): Promise<void> {
             button
             :accessible-label="t('admin.sessions.revoke.label', { name: clientName(session) })"
             :data-testid="`session-revoke-${session.id}`"
-            @click="revoking = session"
+            @click="askRevoke(session)"
           >
             <nldd-text-cell
               :text="t('admin.sessions.revoke')"
@@ -163,7 +159,7 @@ async function confirmRevoke(): Promise<void> {
       :confirm-label="t('admin.sessions.confirm.confirm')"
       :busy="revokeBusy"
       @confirm="confirmRevoke"
-      @close="revoking = null"
+      @close="cancelRevoke"
     />
   </nldd-simple-section>
 </template>

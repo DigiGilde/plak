@@ -14,7 +14,7 @@
  * a group in its menu. The menu in the toolbar carries navigation and account
  * only.
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { createGroup, overview, createSite, setAccess, upload } from '../api/plak';
@@ -24,7 +24,7 @@ import NewGroupSheet from '../components/NewGroupSheet.vue';
 import SiteRow, { SITE_COLUMNS, SITE_COLUMNS_SM } from '../components/SiteRow.vue';
 import PublishSheet from '../components/PublishSheet.vue';
 import { fetchCurrentMember } from '../composables/currentMember';
-import { resolveDroppedFile, useDropState, useWindowDropGuard } from '../composables/fileDrop';
+import { usePageDrop } from '../composables/fileDrop';
 import { goToDone } from '../composables/publishedMark';
 import { mayCreateSiteIn } from '../composables/roles';
 import { t } from '@/i18n';
@@ -112,49 +112,14 @@ const canPublishHere = computed(
 );
 
 const {
-  isOver: dropTargetActive,
-  onDragEnter: dropOnDragEnter,
-  onDragOver: dropOnDragOver,
-  onDragLeave: dropOnDragLeave,
-  reset: resetDropState,
-} = useDropState();
-const droppedFile = ref<File | null>(null);
-const dropError = ref<string | null>(null);
-
-useWindowDropGuard(canPublishHere);
-
-function onPageDragEnter(event: DragEvent): void {
-  if (canPublishHere.value) dropOnDragEnter(event);
-}
-
-function onPageDragOver(event: DragEvent): void {
-  if (canPublishHere.value) dropOnDragOver(event);
-}
-
-function onPageDragLeave(event: DragEvent): void {
-  if (canPublishHere.value) dropOnDragLeave(event);
-}
-
-function onPageDrop(event: DragEvent): void {
-  if (!canPublishHere.value) return;
-  event.preventDefault();
-  resetDropState();
-  const { file, error: rejection } = resolveDroppedFile(event.dataTransfer);
-  if (rejection) {
-    dropError.value = rejection;
-    return;
-  }
-  if (!file) return;
-  dropError.value = null;
-  droppedFile.value = file;
-  siteSheetOpen.value = true;
-}
-
-// The sheet has consumed it once it applies it on open; drop it here too so
-// reopening later through the button does not silently carry it along.
-watch(siteSheetOpen, (open) => {
-  if (!open) droppedFile.value = null;
-});
+  dropTargetActive,
+  droppedFile,
+  dropError,
+  onPageDragEnter,
+  onPageDragOver,
+  onPageDragLeave,
+  onPageDrop,
+} = usePageDrop(canPublishHere, siteSheetOpen);
 </script>
 
 <template>

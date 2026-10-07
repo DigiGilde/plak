@@ -20,6 +20,7 @@ import Notices from '@/components/site/Notices.vue';
 import { accessBaseHint, accessBaseLabel, accessSummary, inviteesLabel, keysLabel } from '@/format';
 import { t } from '@/i18n';
 import SectionHeading from '@/components/SectionHeading.vue';
+import { useConfirm } from '@/composables/confirm';
 
 // The tab has several roots (notifications beside the content) and receives
 // the props of every tab; none of them should fall through to the markup.
@@ -64,9 +65,6 @@ async function save(next: Access): Promise<void> {
   }
 }
 
-const deleteOpen = ref(false);
-const deleteBusy = ref(false);
-
 /** Named in the dialog; beyond that a count, so a big group keeps it short. */
 const SITES_NAMED = 5;
 const namedSites = computed(() => props.sites.slice(0, SITES_NAMED));
@@ -78,24 +76,25 @@ const unnamedText = computed(() =>
 );
 
 async function deleteGroup(): Promise<void> {
-  deleteBusy.value = true;
   try {
     await api.deleteGroup(props.group);
-    deleteOpen.value = false;
     emit('removed');
   } catch (f) {
-    // Close first: the modal renders the page below it inert, so a
-    // notification there would be unreachable (see site/TabOverview).
-    deleteOpen.value = false;
     notices.value?.notify(
       'critical',
       t('group.settings.delete.failed'),
       errorText(f, t('group.settings.delete.failed.detail')),
     );
-  } finally {
-    deleteBusy.value = false;
   }
 }
+
+const {
+  open: deleteOpen,
+  busy: deleteBusy,
+  ask: askDelete,
+  cancel: cancelDelete,
+  confirm: confirmDelete,
+} = useConfirm<true>(deleteGroup);
 
 function chooseBase(base: AccessBase): void {
   if (base === chosen.value.base) return;
@@ -184,7 +183,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
                 variant="destructive"
                 :text="t('group.settings.danger.action')"
                 data-testid="delete-group"
-                @click="deleteOpen = true"
+                @click="askDelete(true)"
               ></nldd-button>
             </nldd-button-group>
           </nldd-container>
@@ -202,8 +201,8 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
         :confirm-label="t('group.settings.danger.confirm.confirm')"
         :confirm-phrase="props.group"
         :busy="deleteBusy"
-        @confirm="deleteGroup"
-        @close="deleteOpen = false"
+        @confirm="confirmDelete"
+        @close="cancelDelete"
       >
         <!-- type="form": facts, not actions, as in GroupMembersManager. -->
         <nldd-list
