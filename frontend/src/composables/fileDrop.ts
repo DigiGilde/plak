@@ -16,7 +16,7 @@ const ACCEPTED_EXTENSIONS = ['.tar.gz', '.tgz', '.zip', '.html'] as const;
  * A function, not a constant: a constant is built once, when the module is
  * imported, and would freeze the language of whoever loaded the page first.
  */
-export function dropFileHint(): string {
+function dropFileHint(): string {
   return t('publish.drop.oneFile');
 }
 

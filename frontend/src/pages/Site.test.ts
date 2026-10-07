@@ -126,6 +126,17 @@ describe('Site: structure', () => {
     expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(false);
   });
 
+  it('recovers when the route moves from an unknown site to a real one', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/bestaat-niet');
+    expect(wrapper.html()).toContain('Onbekende site');
+
+    await router.push('/team-aurora/website');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(true);
+    expect(wrapper.html()).not.toContain('Onbekende site');
+  });
+
   it('loads nothing without group and site in the route', async () => {
     const { wrapper } = await makeWrapper('/-/los');
 
@@ -138,6 +149,26 @@ describe('Site: structure', () => {
     const { wrapper } = await makeWrapper('/team-aurora/website');
 
     expect(wrapper.html()).toContain('Serverfout');
+  });
+});
+
+describe('Site: the group is fetched once', () => {
+  it('asks for the group once for a whole visit across the tabs', async () => {
+    const realFetch = backend.fetch;
+    const groupRequests: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/-/api/v1/groups/team-aurora') groupRequests.push(url);
+      return realFetch(input, init);
+    });
+    const { router } = await makeWrapper('/team-aurora/website');
+
+    for (const path of ['previews', 'versions', 'access', 'deploy', '']) {
+      await router.push(`/team-aurora/website/${path}`);
+      await untilIdle();
+    }
+
+    expect(groupRequests).toHaveLength(1);
   });
 });
 

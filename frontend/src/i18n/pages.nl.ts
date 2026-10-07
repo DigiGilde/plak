@@ -159,8 +159,6 @@ export const pagesNl = {
   'page.done.loading': 'Resultaat wordt geladen…',
   'page.done.heading.online': 'Je site staat online',
   'page.done.heading.offline': 'Je site staat nog niet online',
-  'page.done.error.unknownSite.title': 'Onbekende site',
-  'page.done.error.unknownSite.detail': 'Geen site "{site}" in groep "{group}".',
   'page.done.address.site': 'Adres van je site',
   'page.done.copy.button': 'Kopieer adres',
   'page.done.copy.ok': 'Adres gekopieerd.',

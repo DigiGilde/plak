@@ -93,7 +93,7 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
 }
 
 /** The elements worth looking for, as one selector. */
-export const TRANSLATED_ELEMENTS = Object.keys(wordsPerElement());
+const TRANSLATED_ELEMENTS = Object.keys(wordsPerElement());
 
 const SELECTOR = TRANSLATED_ELEMENTS.join(',');
 

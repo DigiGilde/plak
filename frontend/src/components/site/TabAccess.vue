@@ -12,7 +12,7 @@
  * subject of this tab, so putting them behind a "Beheren" button would hide
  * the one thing the page is about.
  */
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import * as plak from '@/api/plak';
 import type { Access, AccessBase, Invitee, Key } from '@/api/types';
@@ -29,7 +29,9 @@ import {
   siteUrl,
 } from '@/format';
 import { t } from '@/i18n';
-import { ApiError } from '@/api/client';
+import { errorText } from '@/api/client';
+import { useLoader } from '@/composables/loader';
+import { useSiteGroup } from '@/composables/siteGroup';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
@@ -52,8 +54,6 @@ const KEY_COLUMNS_SM = 'minmax(0, 1fr) 3rem';
 const INVITEE_COLUMNS = 'minmax(10rem, 1fr) 9rem 3rem';
 const INVITEE_COLUMNS_SM = 'minmax(0, 1fr) 3rem';
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const access = ref<Access | null>(null);
@@ -89,47 +89,24 @@ const summary = computed(() => (access.value ? accessSummary(access.value) : '')
  */
 const extrasAreMoot = computed(() => access.value?.base === 'public');
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    const [detail, inviteeList, keyList] = await Promise.all([
-      plak.group(props.group),
-      plak.invitees(props.group, props.site),
-      plak.keys(props.group, props.site),
-    ]);
-    const siteRow = detail.sites.find((p) => p.slug === props.site);
-    if (!siteRow) {
-      error.value = new ApiError({
-        type: 'about:blank',
-        title: t('publish.access.unknownSite.title'),
-        status: 404,
-        detail: t('publish.access.unknownSite.detail', { site: props.site, group: props.group }),
-      });
-      return;
-    }
+const siteGroup = useSiteGroup();
+
+const { loading, error } = useLoader(
+  () => Promise.all([plak.invitees(props.group, props.site), plak.keys(props.group, props.site)]),
+  ([inviteeList, keyList]) => {
+    const siteRow = siteGroup.site.value;
     access.value = siteRow.access;
     externalSources.value = siteRow.externalSources;
     sandbox.value = siteRow.sandbox;
     invitees.value = inviteeList;
     keys.value = keyList;
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
-watch(() => [props.group, props.site], load);
+  },
+  () => [props.group, props.site],
+);
 
 function inputValue(event: Event): string {
   const detail = (event as CustomEvent<{ value?: string }>).detail;
   return detail?.value ?? (event.target as HTMLInputElement | null)?.value ?? '';
-}
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
 }
 
 /**

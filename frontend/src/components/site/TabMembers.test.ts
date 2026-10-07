@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeMockBackend, type MockBackend } from '@/api/mock';
 import { SEARCH_DEBOUNCE_MS } from '@/composables/memberSearch';
 import TabMembers from './TabMembers.vue';
-import { serverErrorFetch, untilIdle } from './testHelpers';
+import { provideSiteGroup, serverErrorFetch, untilIdle } from './testHelpers';
 
 let backend: MockBackend;
 
@@ -20,7 +20,7 @@ afterEach(() => {
 function makeWrapper() {
   return mount(TabMembers, {
     props: { group: 'team-aurora', site: 'website' },
-    global: { stubs: { teleport: true } },
+    global: { stubs: { teleport: true }, provide: provideSiteGroup(backend) },
   });
 }
 

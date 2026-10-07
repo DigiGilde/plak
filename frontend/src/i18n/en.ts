@@ -124,7 +124,6 @@ const shared = {
   'profile.sessions.install.link': 'Here is how to install and use it.',
   'profile.sessions.link': 'View linked CLI sessions',
 
-  'language.label': 'Language',
   'language.nl': 'Dutch',
   'language.en': 'English',
 };

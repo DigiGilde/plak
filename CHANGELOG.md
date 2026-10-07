@@ -29,6 +29,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- The site pages fetch the group once instead of once per tab, and a slow
+  answer no longer overwrites a newer one when you switch quickly.
 
 ### Security
 

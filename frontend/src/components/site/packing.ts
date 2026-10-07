@@ -20,7 +20,7 @@ import { t } from '@/i18n';
  * `ingest_max_total`). They appear in no API response, so this is a copy; if
  * the server is configured more strictly it refuses anyway, to the same effect.
  */
-export const LIMITS = {
+const LIMITS = {
   files: 1000,
   depth: 10,
   file: 50 * 1024 * 1024,
