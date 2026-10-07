@@ -1,11 +1,11 @@
 """Interface language for the pages the server renders itself.
 
 The beheer SPA carries its own catalogue; this one covers what a browser gets
-before any JavaScript runs: the public front page, and the screens a visitor
-meets while logging in or while being refused.
+before any JavaScript runs: the screens a visitor meets while logging in or
+while being refused, and the code page of a secret link.
 
-There is no session to read a preference from on the content host, and the
-front page is public, so the language comes from `Accept-Language` alone. A
+There is no session to read a preference from on the content host, and these
+pages are public, so the language comes from `Accept-Language` alone. A
 member who set a language in the beheer environment keeps that setting there;
 the two are deliberately separate, because a page without a session cannot
 know about it.
@@ -28,8 +28,8 @@ SUPPORTED: Final[tuple[str, ...]] = ("nl", "en")
 # are not the same question.
 #
 # Nothing asked for (a crawler, curl, a browser that sends no header): keep the
-# language of the service. Plak is a Dutch government platform, the front page
-# is what an index stores, and there is nothing here that says otherwise.
+# language of the service. Plak is a Dutch government platform, and there is
+# nothing here that says otherwise.
 #
 # Asked for a language we do not have (fr, de, pl): that visitor has told us
 # they do not read Dutch. English is the wider of the two we do have, so it is
@@ -41,57 +41,11 @@ FOREIGN: Final[str] = "en"
 # script. "Nothing asked for" is then a caller that never considered language
 # at all, and English is what such a caller is likeliest to read, so the API
 # hands this to `negotiate` as its `default`. The negotiation itself is the
-# same one: whoever asks for Dutch gets Dutch, on the front page and in
+# same one: whoever asks for Dutch gets Dutch, on these pages and in
 # problem+json alike.
 API_DEFAULT: Final[str] = "en"
 
 NL: Final[dict[str, str]] = {
-    "page.title": "Plak",
-    "front.intro": (
-        "Snel en eenvoudig een HTML-pagina delen. Een rapport, analyse of "
-        "overzicht, zelf gemaakt of met een AI-assistent: zet het op Plak en "
-        "deel de link. Jij bepaalt wie het mag zien."
-    ),
-    "front.lead": "Log in met je Rijksoverheid-account om te beginnen.",
-    "front.login": "Inloggen",
-    "front.steps.heading": "Zo deel je een pagina",
-    "front.steps.1": (
-        "Zet je HTML-bestand op Plak door het te uploaden, of laat je AI-assistent "
-        "dit doen."
-    ),
-    "front.steps.2": (
-        "Kies wie het mag zien: iedereen, collega's die inloggen, alleen wie je "
-        "uitnodigt, of wie de geheime link heeft."
-    ),
-    "front.steps.3": "Deel de link.",
-    "front.steps.4": (
-        "Wil je iets wijzigen, dan upload je een nieuwe versie. Je collega's zien "
-        "altijd de laatste, en oude versies blijven beschikbaar."
-    ),
-    "front.site.heading": "Ook voor een hele site",
-    "front.site.body": (
-        "Werk je aan een site met meerdere pagina's in een repository? Publiceer "
-        "dan vanuit GitHub of code.overheid.nl, met een preview per pull request."
-    ),
-    "front.name.heading": "Waar de naam vandaan komt",
-    "front.name.story": (
-        "De naam komt van plakkaat. Vroeger werden plakkaten opgehangen om iets "
-        "met meer mensen te delen dan je zelf kon bereiken. Dat is wat Plak ook "
-        "doet. En net als een plakkaat kan het in de openbare ruimte hangen, "
-        "zichtbaar voor iedereen, of op een afgesloten plek waar alleen een "
-        "kleinere groep komt."
-    ),
-    # One line, because it goes in a status bar that shows one line and cuts
-    # the rest off with an ellipsis. The first word carries the message, so it
-    # survives the truncation on a narrow screen.
-    "beta.bar": "Bètaversie - Plak is in ontwikkeling en kan fouten bevatten",
-    "footer.label": "Over deze dienst",
-    "footer.whatsNew": "Wat is er nieuw",
-    "footer.version": "Versie {version}",
-    "footer.about": "Over Plak",
-    "footer.accessibility": "Toegankelijkheid",
-    "footer.privacy": "Privacy",
-    "footer.api": "API-documentatie",
     # The API documentation page (api/docs.py). `docs.language` is the name of
     # the language in that language itself: the switch shows the other one.
     "docs.title": "Plak API-documentatie",
@@ -116,50 +70,6 @@ NL: Final[dict[str, str]] = {
 }
 
 EN: Final[dict[str, str]] = {
-    "page.title": "Plak",
-    "front.intro": (
-        "Share an HTML page quickly and easily. A report, analysis or overview, "
-        "made yourself or with an AI assistant: put it on Plak and share the "
-        "link. You decide who gets to see it."
-    ),
-    "front.lead": "Sign in with your Dutch central government account to get started.",
-    "front.login": "Sign in",
-    "front.steps.heading": "How to share a page",
-    "front.steps.1": (
-        "Put your HTML file on Plak by uploading it, or have your AI assistant do "
-        "it for you."
-    ),
-    "front.steps.2": (
-        "Choose who gets to see it: everyone, colleagues who sign in, only "
-        "people you invite, or whoever has the secret link."
-    ),
-    "front.steps.3": "Share the link.",
-    "front.steps.4": (
-        "To change something, upload a new version. Your colleagues always see the "
-        "latest one, and older versions stay available."
-    ),
-    "front.site.heading": "A whole site too",
-    "front.site.body": (
-        "Working on a site with multiple pages in a repository? Publish it from "
-        "GitHub or code.overheid.nl instead, with a preview for every pull "
-        "request."
-    ),
-    "front.name.heading": "Where the name comes from",
-    "front.name.story": (
-        "The name comes from plakkaat, the Dutch word for a placard. Placards used "
-        "to be put up to share something with more people than you could reach "
-        "yourself. That is what Plak does. And like a placard it can hang in the "
-        "open, visible to everyone, or in a closed room only a smaller group "
-        "enters."
-    ),
-    "beta.bar": "Beta - Plak is under development and may contain errors",
-    "footer.label": "About this service",
-    "footer.whatsNew": "What's new",
-    "footer.version": "Version {version}",
-    "footer.about": "About Plak",
-    "footer.accessibility": "Accessibility",
-    "footer.privacy": "Privacy",
-    "footer.api": "API documentation",
     "docs.title": "Plak API documentation",
     "docs.back": "To the admin interface",
     "docs.schema": "OpenAPI schema",

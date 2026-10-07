@@ -6,7 +6,7 @@ import {
 } from 'vue-router';
 
 import { fetchCurrentMember, isPlatformAdmin } from './composables/currentMember';
-import { t, type MessageKey } from './i18n';
+import { adoptLanguageParam, t, type MessageKey } from './i18n';
 import { setDocumentTitle } from './title';
 
 export const routes = [
@@ -170,6 +170,10 @@ export const platformAdminGuard: NavigationGuardWithThis<undefined> = async (to)
 
 /** A link with a hash (the footer's version) scrolls to its target; every other navigation keeps the default. */
 export const scrollBehavior: RouterScrollBehavior = (to) => (to.hash ? { el: to.hash } : undefined);
+
+// Before the history is created: it reads the address now, and the first
+// navigation writes that address back, which would restore ?lang=.
+adoptLanguageParam();
 
 const router = createRouter({
   history: createWebHistory('/'),

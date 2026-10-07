@@ -62,7 +62,7 @@ _AUDIT_PATH_MAX = 200
 MAX_BODY_BYTES = 4096
 FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 
-# Its own small stylesheet, like the front page has: the content host carries
+# Its own small stylesheet: the content host carries
 # no design system and a stylesheet of its own would need a route under `/-/`.
 # Sizes in rem and em, so everything grows with the text at 200 percent, and
 # nothing has a fixed width, so 320 CSS px needs no horizontal scrolling.
@@ -226,7 +226,7 @@ def code_page_html(selector: str, path: str, error: str = "", locale: str = i18n
 
 def code_page_response(request: Request, selector: str, path: str, error: str = "") -> Response:
     """The code page in the visitor's language; `Accept-Language` is all there
-    is to go on, the same source the front page reads."""
+    is to go on."""
     locale = i18n.negotiate(request.headers.get("accept-language"))
     return Response(
         content=code_page_html(selector, path, error, locale),

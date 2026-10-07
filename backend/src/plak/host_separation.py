@@ -5,8 +5,8 @@ to. The SPA sits on the root of the admin host, so the two worlds do not
 differ in which paths exist there, but in what answers them: on the
 admin host the SPA is the fallback for the whole path space, with the app's
 own paths carved out of it (platform/spa.py). On the content host only content exists
-(`/{group}/{site}/...`), robots.txt, favicon.ico, .well-known, the public
-front page on `/` (platform/pages.py) and of the platform namespace exactly
+(`/{group}/{site}/...`), robots.txt, favicon.ico, .well-known, the redirect
+to the admin landing page on `/` (platform/pages.py) and of the platform namespace exactly
 four paths: the content login, its callback, the content logout and the code
 of a secret link shared without it (the segment `-` is never a slug).
 Everything else under `/-/` is refused there, the API included - without that
@@ -54,8 +54,8 @@ def belongs_to_admin(path: str) -> bool:
 
 
 def belongs_to_content(path: str) -> bool:
-    # `/` is not carved out: the root of the content host carries the public
-    # front page (platform/pages.py). Everything the content world does not
+    # `/` is not carved out: the root of the content host redirects to the
+    # admin landing page (platform/pages.py). Everything the content world does not
     # own is carved out below; what is left over is content.
     if path_under(path, PLATFORM_PREFIX):
         # Only the content login, its callback, logout and the code of a

@@ -16,9 +16,10 @@ Both hosts spell those two paths the same way, so the host decides which flow
 a request enters (`_profile_for`). On top of that the login attempt carries
 the kind, so a callback can never redeem an attempt from the other flow.
 
-The root of the content host is answered here too, with the public front page
-(see front_page_html). The root of the admin host is not: since the SPA moved
-there the SPA middleware answers it, and this router never sees it.
+The root of the content host is answered here too, with a redirect to the
+admin host's public landing page (see front_door_response). The root of the
+admin host is not: since the SPA moved there the SPA middleware answers it,
+and this router never sees it.
 """
 
 from __future__ import annotations
@@ -27,12 +28,10 @@ import hmac
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import partial
-from html import escape
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from starlette.responses import Response
 
 from plak import i18n, net
@@ -71,7 +70,7 @@ from plak.constants import (
 )
 from plak.models.audit import ActorKind
 from plak.platform.security_txt import PATH_SECURITY_TXT, security_txt
-from plak.serving.response import neutral_404_response, platform_csp
+from plak.serving.response import PLATFORM_CSP, neutral_404_response
 
 if TYPE_CHECKING:
     from plak.config import Settings
@@ -87,7 +86,7 @@ def _login_failed(request: Request) -> str:
     """The sentence a failed login shows, in the visitor's language.
 
     There is no session yet at this point, so `Accept-Language` is all there
-    is to go on; the same source the front page reads.
+    is to go on.
     """
     return i18n.t(i18n.negotiate(request.headers.get("accept-language")), "login.failed")
 
@@ -149,397 +148,54 @@ def _redirect_uri(request: Request, profile: _LoginProfile) -> str:
     return base + profile.callback_path
 
 
-# --- Public front page on the root of the content host ---------------------
+# --- The root of the content host ---------------------------------------------
 
-# The same sentence the admin environment carries above its pages, so someone
-# who meets Plak on either side is told the same thing.
-BETA_NOTICE = i18n.NL["beta.bar"]
+# Whoever hears the name of the service and types the content host into the
+# address bar would otherwise land on the neutral 404. The root sends them on
+# to the admin host, whose landing page is public and says what Plak is. That
+# page is the SPA, with the design system and its one copy of the text; the
+# content host cannot carry it, because it shares its origin with every
+# published site and so runs no platform script at all.
 #
-# Without it, whoever hears the name of the service and types the content
-# host into the address bar would land on the neutral 404. This page catches
-# that guess and hands over the one thing that host cannot do itself: the way
-# to the admin environment.
-#
-# It carries NO authority whatsoever. This is the content origin, the same
-# origin as uploaded sites with their own JavaScript (see api/origin_guard.py:
-# the admin API refuses that origin precisely because a browser counts it as
-# same-site). So: plain server-rendered HTML, no script at all, no session
-# read, no API call, no CSRF token, no SPA. The stylesheet is inline, admitted
-# by its hash in the platform CSP, because a file of its own would need a route
-# under `/-/`, which host separation keeps off this host on purpose. The
-# button to the admin environment is a plain link to the other origin.
-#
-# This is not a landing page for the ADMIN host: the SPA already carries one
-# there (Start.vue picks between landing and overview based on the session),
-# and a server-rendered page on that host would leave two, with logging out
-# landing on the server-rendered one as a blank page. No SPA runs on the
-# content host, so here this page is the only landing there is.
-
-# The name of each language, written in that language: an English reader has to
-# recognise the way out without reading Dutch first.
-_LANGUAGE_NAMES = {"nl": "Nederlands", "en": "English"}
+# The target is the configured admin origin (PLAK_BASE_URL), never the Host
+# header: that one belongs to the content host here, and is client-controlled
+# besides.
 
 # A parameter rather than the /en prefix NCSC.nl uses: this host owns
-# /{group}/{site}, so a path prefix would cost a group slug.
+# /{group}/{site}, so a path prefix would cost a group slug. The SPA reads the
+# same parameter and drops it from the address again.
 LANG_PARAM = "lang"
 
-# Path plus the catalogue key for its label: the same links in the same
-# order as the SPA footer (frontend/src/App.vue). They are public SPA routes
-# (`meta: { public: true }` in frontend/src/router.ts), so this footer is the
-# first place where the accessibility statement - which has to be publicly
-# reachable by law - can be found without knowing the address.
-_FOOTER_LINKS = (
-    ("/-/about", "footer.about"),
-    ("/-/accessibility", "footer.accessibility"),
-    ("/-/privacy", "footer.privacy"),
-    ("/-/api/docs", "footer.api"),
-)
-
-# Own CSS in the style of the API docs shell (static/docs/docs.css): the
-# wordmark with the block, Rijksblauw, and a dark variant that follows the
-# reader's preference. Sizes in rem and em, so everything grows along with the
-# text at 200%; nothing has a fixed width, so 320 CSS px needs no horizontal
-# scrolling.
-_FRONT_PAGE_CSS = """
-:root {
-  color-scheme: light;
-  --plak-ground: #fff;
-  --plak-text: #1c2022;
-  --plak-muted: #46535a;
-  --plak-brand: #154273;
-  --plak-brand-contrast: #fff;
-  --plak-line: #d4d4d4;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --plak-ground: #1c2022;
-    --plak-text: #e7eaec;
-    --plak-muted: #b3bcc1;
-    /* Rijksblauw reaches only 3:1 on this ground; this lighter tint 6.5:1. */
-    --plak-brand: #8fb8e0;
-    --plak-brand-contrast: #1c2022;
-    --plak-line: #3b4245;
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--plak-ground);
-  color: var(--plak-text);
-  font-family: "RO Sans", "Segoe UI", system-ui, sans-serif;
-  line-height: 1.6;
-  overflow-wrap: break-word;
-}
-
-.page {
-  max-width: 42rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 2rem;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-  margin: 0 0 1.5rem;
-  color: var(--plak-brand);
-  font-size: 2rem;
-  line-height: 1.2;
-}
-
-.brand__block {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.4em;
-  height: 1.4em;
-  border-radius: 0.15em;
-  background: var(--plak-brand);
-  color: var(--plak-brand-contrast);
-  font-size: 0.85em;
-  font-weight: 700;
-  line-height: 1;
-}
-
-/* The wordmark is drawn in two pieces; this gives a screen reader the name
-   once and whole, instead of "P" and "lak" beside each other. */
-.brand__name {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.intro {
-  font-size: 1.15rem;
-}
-
-/* The beta notice, hand-built because this page carries no design system: it is
-   server-rendered HTML with its own small stylesheet. The measurements are
-   nldd-status-bar's own, so the notice looks the same on both hosts: 24px high
-   (--semantics-controls-xs-min-size), 8px inline padding, centred, one line
-   cut off with an ellipsis, in body-xs-medium.
-
-   #db6d00 with black text is what the warning variant resolves to, in light
-   AND in dark mode: the background token takes oranje-400 in light and
-   oranje-600 in dark, and those two swap, so both land on the same colour.
-   Black on it measures 6.2:1.
-
-   The outline rather than the fill alone keeps the bar visible in
-   forced-colors mode, where background colours are dropped. */
-.beta {
-  display: flex;
-  margin: 0;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding-inline: 8px;
-  outline: 1px solid transparent;
-  background: #db6d00;
-  color: #000;
-  font-size: 0.889rem;
-  font-weight: 500;
-}
-
-/* min-height rather than a fixed height, so the bar grows when the text does.
-   The admin host reaches the same end through the component's own token
-   (--components-status-bar-height in frontend/src/global.css); this page has
-   no design system, so it says it in plain CSS.
-
-   The truncation sits on the span, not on the bar: text-overflow does not
-   reach the anonymous box that a flex container wraps bare text in. */
-.beta > span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-h2 {
-  margin-top: 2.5rem;
-  font-size: 1.25rem;
-}
-
-ol {
-  padding-left: 1.3em;
-}
-
-ol li + li {
-  margin-top: 0.5em;
-}
-
-a {
-  color: var(--plak-brand);
-}
-
-.button {
-  display: inline-block;
-  padding: 0.6em 1.2em;
-  border-radius: 0.25em;
-  background: var(--plak-brand);
-  color: var(--plak-brand-contrast);
-  font-size: 1.05rem;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.button:hover {
-  text-decoration: underline;
-}
-
-a:focus-visible {
-  outline: 3px solid var(--plak-text);
-  outline-offset: 2px;
-}
-
-.site-footer {
-  margin-top: 3rem;
-  border-top: 1px solid var(--plak-line);
-  padding-top: 1rem;
-  color: var(--plak-muted);
-}
-
-/* Under the footer nav rather than in it: switching language is not one of
-   the pages that nav is labelled for. */
-.language-switch {
-  margin: 1rem 0 0;
-}
-
-.site-footer ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* A flex item gets min-width: auto, and `overflow-wrap: break-word` on the body
-   does not lower that minimum: the item stays as wide as its longest word. At
-   320px with the text enlarged and user spacing applied, "Toegankelijkheid"
-   then runs past the right edge. Zero lets it shrink, after which break-word
-   does its work. */
-.site-footer li {
-  min-width: 0;
-}
-"""
-
-FRONT_PAGE_HEADERS = {
+FRONT_DOOR_HEADERS = {
     "Cache-Control": "no-cache",
-    # The body depends on Accept-Language, so a cache that keys on the URL
-    # alone would hand the Dutch page to an English visitor and the other way
-    # round.
-    "Vary": "Accept-Language",
-    "Content-Security-Policy": platform_csp(style=_FRONT_PAGE_CSS),
+    "Content-Security-Policy": PLATFORM_CSP,
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
 }
 
-# The wordmark in two pieces, with the name once more for a screen reader
-# (see .brand__name in the CSS). The pieces sit against each other without
-# whitespace on purpose: the gap between them comes from the CSS.
-_WORDMARK = (
-    '<h1 class="brand"><span class="brand__block" aria-hidden="true">P</span>'
-    '<span aria-hidden="true">lak</span><span class="brand__name">Plak</span></h1>'
-)
 
-FRONT_PAGE_INTRO = i18n.NL["front.intro"]
+def front_door_response(settings: Settings, lang: str | None = None) -> Response:
+    """The redirect to the admin host's landing page, or the neutral 404 when
+    there is no admin origin configured to point at.
 
-FRONT_PAGE_NAME_STORY = i18n.NL["front.name.story"]
-
-
-def _language_links(content_origin: str, locale: str) -> tuple[str, str]:
-    """The alternates for the head, and the switch for the footer.
-
-    Both are empty without a content origin: an hreflang without an absolute
-    URL is worse than none, and there is nothing to point the switch at.
-    """
-    if not content_origin:
-        return "", ""
-    root = escape(content_origin.rstrip("/"), quote=True)
-    # x-default is the address that negotiates, which is the bare root.
-    alternates = [f'<link rel="alternate" hreflang="x-default" href="{root}/">']
-    alternates += [
-        f'<link rel="alternate" hreflang="{code}" href="{root}/?{LANG_PARAM}={code}">'
-        for code in i18n.SUPPORTED
-    ]
-    other = next(code for code in i18n.SUPPORTED if code != locale)
-    switch = (
-        f'<p class="language-switch"><a href="{root}/?{LANG_PARAM}={other}" hreflang="{other}" '
-        f'lang="{other}">{_LANGUAGE_NAMES[other]}</a></p>'
-    )
-    return "\n".join(alternates), switch
-
-
-def front_page_html(
-    admin_origin: str,
-    locale: str = i18n.DEFAULT,
-    content_origin: str = "",
-    *,
-    version: str = "dev",
-) -> str:
-    """The front page, with every link to the admin host absolute.
-
-    `admin_origin` is the configured admin origin (PLAK_BASE_URL) without a
-    trailing slash, never the Host header: that one belongs to the content
-    host here, and is client-controlled besides. `content_origin` is this
-    host's own address, needed for the hreflang alternates.
-    """
-    origin = escape(admin_origin, quote=True)
-    # The notes live in the SPA bundle, so there is no day to point at here.
-    version_text = (
-        i18n.t(locale, "footer.whatsNew")
-        if version == "dev"
-        else i18n.t(locale, "footer.version").replace("{version}", escape(version))
-    )
-    footer = "\n".join(
-        [f'<li><a href="{origin}/-/whats-new">{version_text}</a></li>']
-        + [f'<li><a href="{origin}{path}">{i18n.t(locale, key)}</a></li>' for path, key in _FOOTER_LINKS]
-    )
-    alternates, switch = _language_links(content_origin, locale)
-    say = partial(i18n.t, locale)
-    return f"""<!doctype html>
-<html lang="{locale}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{say("page.title")}</title>
-{alternates}
-<style>{_FRONT_PAGE_CSS}</style>
-</head>
-<body>
-<p class="beta"><span>{say("beta.bar")}</span></p>
-<div class="page">
-<main>
-{_WORDMARK}
-<p class="intro">{say("front.intro")}</p>
-<p>{say("front.lead")}</p>
-<p><a class="button" href="{origin}{PATH_LOGIN}">{say("front.login")}</a></p>
-<h2>{say("front.steps.heading")}</h2>
-<ol>
-<li>{say("front.steps.1")}</li>
-<li>{say("front.steps.2")}</li>
-<li>{say("front.steps.3")}</li>
-<li>{say("front.steps.4")}</li>
-</ol>
-<h2>{say("front.site.heading")}</h2>
-<p>{say("front.site.body")}</p>
-<h2>{say("front.name.heading")}</h2>
-<p>{say("front.name.story")}</p>
-</main>
-<footer class="site-footer">
-<nav aria-label="{say("footer.label")}">
-<ul>
-{footer}
-</ul>
-</nav>
-{switch}
-</footer>
-</div>
-</body>
-</html>
-"""
-
-
-def front_page_response(settings: Settings, locale: str = i18n.DEFAULT) -> Response:
-    """The front page, or the neutral 404 when there is nothing to point at.
-
-    Without a configured admin origin the login button and the footer links
-    have no address: the content host cannot derive the admin host, and
-    guessing it from the Host header would hand a visitor a link they supplied
-    themselves. The root then stays what it was.
+    A supported `lang` travels along, so an old link to `/?lang=en` still opens
+    in English. Anything else is dropped rather than echoed into the Location
+    header.
     """
     origin = (settings.base_url or "").rstrip("/")
     if not origin:
         return neutral_404_response()
-    return HTMLResponse(
-        front_page_html(origin, locale, settings.content_base_url, version=settings.version),
-        headers=FRONT_PAGE_HEADERS,
-    )
+    chosen = next((code for code in i18n.SUPPORTED if code == lang), None)
+    target = f"{origin}/?{LANG_PARAM}={chosen}" if chosen else f"{origin}/"
+    return RedirectResponse(target, status_code=302, headers=FRONT_DOOR_HEADERS)
 
 
 @router.get("/", include_in_schema=False, response_model=None)
-async def front_page(request: Request, lang: str | None = None) -> Response:
-    """The public front page. Only the content host gets here: on the admin
-    host the SPA middleware answers `/` itself, with the interface, where
-    Start.vue picks between landing and overview based on the session.
-
-    `?lang=` beats the header, so the switch in the footer works for someone
-    whose browser asks for a language they cannot read. A value we do not
-    have falls through to the header rather than being echoed anywhere.
-    """
-    # Our own constant rather than `lang`: the locale goes into the markup unescaped.
-    chosen = next((code for code in i18n.SUPPORTED if code == lang), None)
-    locale = chosen or i18n.negotiate(request.headers.get("accept-language"))
-    return front_page_response(request.app.state.settings, locale)
+async def front_door(request: Request, lang: str | None = None) -> Response:
+    """Only the content host gets here: on the admin host the SPA middleware
+    answers `/` itself, where Start.vue picks between landing and overview
+    based on the session."""
+    return front_door_response(request.app.state.settings, lang)
 
 
 @router.get("/robots.txt", include_in_schema=False)
@@ -834,12 +490,9 @@ async def _content_logout(request: Request) -> Response:
 
 
 __all__ = [
-    "FRONT_PAGE_HEADERS",
-    "FRONT_PAGE_INTRO",
-    "FRONT_PAGE_NAME_STORY",
+    "FRONT_DOOR_HEADERS",
     "MESSAGE_LOGIN_FAILED",
-    "front_page_html",
-    "front_page_response",
+    "front_door_response",
     "on_content_host",
     "router",
 ]

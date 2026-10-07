@@ -111,6 +111,8 @@ const shared = {
   'footer.accessibility': 'Toegankelijkheid',
   'footer.privacy': 'Privacy',
   'footer.api': 'API-documentatie',
+  'footer.language.en': 'English',
+  'footer.language.nl': 'Nederlands',
 
   // -- Profile --------------------------------------------------------------
   'profile.title': 'Profiel',

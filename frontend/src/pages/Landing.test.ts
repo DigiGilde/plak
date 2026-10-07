@@ -91,10 +91,23 @@ describe('Landing: no session', () => {
     await letUpdateLand();
 
     const headings = wrapper.findAll('h2').map((h) => h.text());
-    expect(headings).toEqual(['Zo deel je een pagina', 'Ook voor een hele site']);
+    expect(headings).toEqual([
+      'Zo deel je een pagina',
+      'Ook voor een hele site',
+      'Wist je dat',
+    ]);
     expect(wrapper.find('ol').findAll('li')).toHaveLength(4);
     expect(wrapper.text()).toContain('oude versies blijven beschikbaar');
     expect(wrapper.text()).toContain('preview per pull request');
+  });
+
+  it('tells where the name comes from, in the same words as the about page', async () => {
+    wrapper = mount(Landing, { attachTo: document.body });
+    await letUpdateLand();
+
+    const headings = wrapper.findAll('h2').map((h) => h.text());
+    expect(headings.at(-1)).toBe('Wist je dat');
+    expect(wrapper.text()).toContain('De naam komt van plakkaat');
   });
 
   it('has no axe violations', async () => {

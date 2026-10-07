@@ -106,7 +106,7 @@ free for groups.
 | `/-/api/docs` | API documentation (OpenAPI, self-hosted UI, publicly readable) |
 | `/admin/assets/...` | SPA assets (Vite base `/admin/`) |
 | `/` (admin host) | 303 to `/admin`; the SPA chooses there between landing page and overview |
-| `/` (content host) | public front page: explanation, login button to the admin host and the footer |
+| `/` (content host) | 302 to the admin host, whose landing page says what Plak is |
 
 ## Quickstart: local development
 

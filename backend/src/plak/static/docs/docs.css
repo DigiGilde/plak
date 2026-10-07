@@ -9,8 +9,12 @@
   --docs-grond: #fff;
   --docs-kop-grond: #f3f3f3;
   --docs-kop-rand: #d4d4d4;
-  --docs-merk: #154273;
-  --docs-merk-contrast: #fff;
+  /* What the wordmark and link tokens of @nldd/design-system resolve to on the
+     admin host, see frontend/src/App.vue. */
+  --docs-tekst: oklch(0.348 0.02 257.4);
+  --docs-merk: oklch(0.387 0.097 253.4);
+  --docs-merk-contrast: oklch(1 0 0);
+  --docs-link: oklch(0.491 0.097 253.4);
 }
 
 :root.dark-mode {
@@ -18,15 +22,16 @@
   --docs-grond: #1c2022;
   --docs-kop-grond: #2a2f31;
   --docs-kop-rand: #3b4245;
-  /* Rijksblauw reaches only 3:1 on this ground; this lighter tint 6.5:1. */
-  --docs-merk: #8fb8e0;
-  --docs-merk-contrast: #1c2022;
+  --docs-tekst: oklch(0.898 0.011 257.4);
+  --docs-merk: oklch(0.491 0.097 253.4);
+  --docs-merk-contrast: oklch(1 0 0);
+  --docs-link: oklch(0.678 0.097 253.4);
 }
 
 body {
   margin: 0;
   background: var(--docs-grond);
-  font-family: "RO Sans", "Segoe UI", system-ui, sans-serif;
+  font-family: RijksSans, system-ui, sans-serif;
 }
 
 .docs-header {
@@ -42,22 +47,23 @@ body {
 .docs-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--docs-merk);
+  gap: 4px;
+  font-size: 1.602rem;
+  font-weight: 600;
+  line-height: 1.125;
+  color: var(--docs-tekst);
 }
 
 .docs-brand__block {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   background: var(--docs-merk);
   color: var(--docs-merk-contrast);
-  font-size: 20px;
+  font-size: 1.424rem;
   line-height: 1;
 }
 
@@ -66,7 +72,7 @@ body {
 }
 
 .docs-header a {
-  color: var(--docs-merk);
+  color: var(--docs-link);
   font-size: 16px;
 }
 

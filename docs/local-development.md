@@ -162,13 +162,13 @@ sidecar, shared volume or
 ConfigMap; there is no X-Accel-Redirect.
 
 One path on the content host is neither content nor a 404: the root `/`
-carries the public front page (`platform/pages.py`),
-with the login button and the footer to the admin host from `PLAK_BASE_URL`.
+redirects to the landing page on the admin host from `PLAK_BASE_URL`
+(`platform/pages.py`).
 The root of the admin host stays a 303 to `/admin/`, where the SPA shows the
 landing itself. To check without a browser:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/          # 200, front page
+curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/          # 302 to the admin host
 curl -s -o /dev/null -w '%{http_code}\n' http://beheer.plak.localhost:8080/   # 303 to /admin/
 ```
 

@@ -85,9 +85,9 @@ MAX_LOGIN_ATTEMPT_AGE = timedelta(minutes=10)
 
 # The root of the admin host, where the SPA lives (platform/spa.py).
 DEFAULT_RETURN_TO = "/"
-# The root of the content host is the public front page (platform/pages.py);
-# a content login without a valid returnTo (which the serving router always
-# supplies) lands there.
+# The root of the content host, which redirects to the admin landing page
+# (platform/pages.py); a content login without a valid returnTo (which the
+# serving router always supplies) lands there.
 DEFAULT_CONTENT_RETURN_TO = "/"
 
 

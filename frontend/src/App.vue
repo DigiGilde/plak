@@ -14,7 +14,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { fetchCurrentMember, currentMemberState, isPlatformAdmin } from './composables/currentMember';
 import { breadcrumbsFor } from './composables/breadcrumbs';
-import { currentLocale, t } from './i18n';
+import { currentLocale, t, type Locale } from './i18n';
 import { dayAnchor, groupByDate, loadReleases, versionDay } from './releases';
 import { appVersion } from './version';
 
@@ -27,7 +27,7 @@ interface MenuChoice {
 
 const route = useRoute();
 const router = useRouter();
-const { member } = currentMemberState();
+const { member, loaded } = currentMemberState();
 const logoutForm = ref<HTMLFormElement | null>(null);
 
 // A build without a version (`dev`) names none. The link points at the day of
@@ -44,6 +44,18 @@ const versionHref = computed(() => {
   );
   return hasNotes ? `/-/whats-new#${dayAnchor(version)}` : '/-/whats-new';
 });
+
+// A visitor without an account has no profile to set a language on; the footer
+// link carries the choice as ?lang=, which adoptLanguageParam picks up on load.
+const otherLocale = computed<Locale>(() => (currentLocale.value === 'nl' ? 'en' : 'nl'));
+const showLanguageSwitch = computed(() => loaded.value && member.value === null);
+const languageHref = computed(
+  () =>
+    router.resolve({
+      path: route.path,
+      query: { ...route.query, lang: otherLocale.value },
+    }).href,
+);
 
 const crumbs = computed(() => breadcrumbsFor(route.path));
 const admin = computed(() => isPlatformAdmin(member.value));
@@ -289,6 +301,14 @@ function logout(): void {
             slot="end"
             href="/-/api/docs"
             :text="t('footer.api')"
+          ></nldd-page-footer-legal-bar-item>
+          <nldd-page-footer-legal-bar-item
+            v-if="showLanguageSwitch"
+            slot="end"
+            :lang="otherLocale"
+            :href="languageHref"
+            :text="t(`footer.language.${otherLocale}`)"
+            data-testid="language-switch"
           ></nldd-page-footer-legal-bar-item>
         </nldd-page-footer-legal-bar>
       </nldd-page-footer>

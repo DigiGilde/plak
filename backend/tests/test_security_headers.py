@@ -129,7 +129,7 @@ class TestContentCspComposition:
 
 
 class TestPlatformCsp:
-    """The platform's own answers on the content host (the front page, the
+    """The platform's own answers on the content host (the root redirect, the
     code page, the neutral 404) share that origin with every published site,
     so their policy grants nothing the content policy does."""
 
@@ -418,11 +418,11 @@ class TestFullApp:
         assert response.headers["x-content-type-options"] == NOSNIFF
         assert response.headers["content-security-policy"] == PLATFORM_CSP
 
-    async def test_front_page_robots_and_security_txt_get_only_the_general_headers(self, app_clients) -> None:
+    async def test_root_robots_and_security_txt_get_only_the_general_headers(self, app_clients) -> None:
         _, content = app_clients
-        for path in ("/", "/robots.txt", "/.well-known/security.txt"):
+        for path, status in (("/", 302), ("/robots.txt", 200), ("/.well-known/security.txt", 200)):
             response = await content.get(path)
-            assert response.status_code == 200, path
+            assert response.status_code == status, path
             assert response.headers["permissions-policy"] == PERMISSIONS_POLICY
             assert response.headers["strict-transport-security"] == HSTS
             assert "cross-origin-opener-policy" not in response.headers

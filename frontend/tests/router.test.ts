@@ -109,3 +109,22 @@ describe('router: scrollBehavior', () => {
     expect(call('')).toBeUndefined();
   });
 });
+
+describe('Language parameter on first load', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+    vi.resetModules();
+  });
+
+  it('is gone from the address after the first navigation writes it back', async () => {
+    window.history.replaceState(null, '', '/-/about?x=1&lang=en');
+    vi.resetModules();
+    const fresh = (await import('../src/router')).default;
+
+    await fresh.push(window.location.pathname + window.location.search);
+    await fresh.isReady();
+
+    expect(window.location.pathname + window.location.search).toBe('/-/about?x=1');
+    expect(fresh.currentRoute.value.query).toEqual({ x: '1' });
+  });
+});
