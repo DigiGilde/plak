@@ -17,6 +17,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The container runs on a Python base image with patched Perl packages
   (CVE-2026-13221, CVE-2026-8376, CVE-2026-42496 and four more), and the
   admin build uses source-map-js 1.2.2 (GHSA-68fv-2mgg-jv7q).
+- Published sites may run WebAssembly (`'wasm-unsafe-eval'`), so a
+  Pagefind search works on a site with "Shield from other sites" off;
+  JavaScript `eval()` stays blocked.
+- A 304 carries the same content CSP and Referrer-Policy as the full
+  answer, so turning a site switch or secret links on or off reaches pages
+  a visitor already has in their cache.
 
 ### Changed
 

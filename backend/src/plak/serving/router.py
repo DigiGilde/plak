@@ -386,6 +386,8 @@ async def _serve(
                 access,
                 version_view=version_view,
                 noindex=noindex,
+                external_sources=external_sources,
+                sandbox=sandbox,
             )
         return response.make_content_response(
             rel_path=outcome_.rel_path,

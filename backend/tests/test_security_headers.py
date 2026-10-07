@@ -105,6 +105,16 @@ class TestContentCspComposition:
         for name, values in strict.items():
             assert sandboxed[name] == values, name
 
+    def test_webassembly_compiles_but_javascript_eval_stays_shut(self) -> None:
+        """'wasm-unsafe-eval' is the narrow keyword: it lets a page compile
+        WebAssembly (a static search index such as Pagefind's) and nothing
+        more. 'unsafe-eval' would also open eval() and new Function() to
+        JavaScript, in every policy and whatever a site switches."""
+        for policy in (CONTENT_CSP, CONTENT_CSP_EXTERNAL, CONTENT_CSP_SANDBOX, CONTENT_CSP_EXTERNAL_SANDBOX):
+            script_src = _directives(policy)["script-src"]
+            assert "'wasm-unsafe-eval'" in script_src
+            assert "'unsafe-eval'" not in script_src
+
     def test_the_two_switches_are_independent(self) -> None:
         """Both on is both additions and nothing more, so no combination can
         quietly lose a directive the other one brought."""

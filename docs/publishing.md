@@ -136,6 +136,7 @@ visitor's cookie. Plak sends no CORS headers, so the browser refuses them:
 | A module script from your own site: `<script type="module" src>`, `<link rel="modulepreload">`, a dynamic `import()` | **Refused** |
 | A web font from your own site (`@font-face` with a `url()` into your dist, including fonts bundled from `@fontsource`) | **Refused** |
 | `fetch` or XHR to a file of your own site (JSON data, a search index such as Pagefind's) | **Refused** |
+| A Web Worker from a file of your own site (`new Worker(...)`) | **Refused**: an opaque origin may not start a worker from a URL at all |
 | `localStorage`, `sessionStorage`, `document.cookie` | Throw a `SecurityError` |
 | Scripts and fonts from cdnjs, jsDelivr, unpkg and Google Fonts (with "Externe bronnen toestaan" on) | Load: those hosts send `Access-Control-Allow-Origin: *` |
 
@@ -164,6 +165,17 @@ Under the shielding that one file is refused, and a single-page app shows
 a blank page. A Vue app that keeps state in `localStorage` (a theme choice,
 a persisted Pinia store) stops at the first read even when it loads.
 
+**Pagefind, and so Starlight's built-in search.** Pagefind loads
+`pagefind/pagefind.js` with a dynamic `import()`, starts
+`pagefind/pagefind-worker.js` as a Web Worker, fetches its index and
+compiles a WebAssembly module. Under the shielding the import is refused
+already, so the search box stays empty or answers nothing, and the
+console shows `Failed to fetch dynamically imported module`. Pagefind's
+`noWorker: true` does not help: the import and the index fetch are refused
+just the same. With the shielding off the search works: Plak allows
+WebAssembly (`'wasm-unsafe-eval'`) on every site, and the worker gets that
+policy with its own response.
+
 What you can do:
 
 - **Keep the shielding and stay within it.** For a few small scripts in
@@ -172,11 +184,12 @@ What you can do:
   a font from Google Fonts or a library from one of the CDNs above instead
   of from your dist. This does not stretch to a Vite application.
 - **Turn the shielding off** for the site on the tab "Toegang". Module
-  scripts, own fonts, `fetch` and storage then work. The price: your site
-  shares its origin again with every other site whose shielding is off,
-  and the code on your pages can reach what the visitor may see there. Do
-  that only for a site whose content you trust. The CLI does not offer this
-  switch; it is a decision for the site's admin in the admin environment.
+  scripts, own fonts, `fetch`, workers and storage then work, and so does
+  a Pagefind search. The price: your site shares its origin again with
+  every other site whose shielding is off, and the code on your pages can
+  reach what the visitor may see there. Do that only for a site whose
+  content you trust. The CLI does not offer this switch; it is a decision
+  for the site's admin in the admin environment.
 
 ## 3. Publishing from CI with an OIDC ID token
 
