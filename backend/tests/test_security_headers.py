@@ -384,6 +384,29 @@ class TestFullApp:
             assert response.content == NEUTRAL_404_BODY, path
             assert _header_set(response) == _header_set(reference), path
 
+    async def test_head_on_the_admin_host_keeps_its_405(self, app_clients) -> None:
+        """HEAD is turned into GET on the content host only: on the admin host
+        a GET-only route keeps answering HEAD with its 405."""
+        admin, _ = app_clients
+        for path in ("/-/healthz", "/-/api/v1/me", "/-/login", "/robots.txt", "/.well-known/security.txt"):
+            response = await admin.head(path)
+            assert response.status_code == 405, path
+
+    async def test_head_on_the_content_host_answers_like_the_get(self, app_clients) -> None:
+        _, content = app_clients
+        for path in ("/onbekend", "/robots.txt/x", "/-/onbekend"):
+            get = await content.get(path)
+            head = await content.head(path)
+            assert head.status_code == get.status_code == 404, path
+            assert _header_set(head) == _header_set(get), path
+
+    async def test_head_never_starts_a_content_login(self, app_clients) -> None:
+        _, content = app_clients
+        response = await content.head("/-/login")
+        assert response.status_code == 405
+        assert "set-cookie" not in response.headers
+        assert "location" not in response.headers
+
     async def test_the_same_refusal_on_the_admin_host_carries_the_admin_regime(self, app_clients) -> None:
         # The other side of the rule: weakening the content host may not
         # weaken the admin host, where every answer keeps COOP and nosniff.

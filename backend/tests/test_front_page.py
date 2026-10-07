@@ -190,6 +190,17 @@ class TestOnTheContentHost:
             assert response.status_code == 200, lang
             assert_runs_no_script_and_only_its_own_style(response.text, response.headers["content-security-policy"])
 
+    async def test_head_answers_with_the_headers_of_the_get(self, two_hosts) -> None:
+        """A link checker or a monitor asks with HEAD; it gets what a browser
+        would, without the body, here and on robots.txt and security.txt."""
+        _, content = two_hosts
+        for path in ("/", "/robots.txt", "/.well-known/security.txt"):
+            get = await content.get(path)
+            head = await content.head(path)
+            assert head.status_code == 200, path
+            assert head.headers["content-type"] == get.headers["content-type"], path
+            assert head.headers["content-length"] == get.headers["content-length"], path
+
     async def test_page_carries_the_platform_headers(self, two_hosts) -> None:
         _, content = two_hosts
         response = await content.get("/")

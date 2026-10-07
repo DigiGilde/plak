@@ -29,6 +29,7 @@ from plak.audit.log import AuditLog
 from plak.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
 from plak.config import Settings
 from plak.constants import AccessBase, AccessPolicy, Role
+from plak.head_requests import ContentHeadMiddleware
 from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
@@ -113,6 +114,8 @@ def _make_app(settings: Settings, factory, store: ContentStore) -> FastAPI:
     app.state.content_store = store
     app.state.audit_log = AuditLog(factory, settings.audit_pepper, settings.audit_ip_key_bytes)
     app.include_router(serving_router)
+    # As in main.py: on the content host HEAD reaches the routes as GET.
+    app.add_middleware(ContentHeadMiddleware, content_host="plak.example")
     return app
 
 
@@ -318,7 +321,9 @@ async def client(environment: Environment) -> AsyncIterator[httpx.AsyncClient]:
         yield c
 
 
-async def _raw_request(app: FastAPI, raw_path: str) -> tuple[int, list[tuple[str, str]], bytes]:
+async def _raw_request(
+    app: FastAPI, raw_path: str, method: str = "GET"
+) -> tuple[int, list[tuple[str, str]], bytes]:
     """Sends a request with an exactly given raw path, the way a real ASGI
     server delivers it (path URL-decoded once). Needed because httpx can
     normalise percent-encoded dot segments away by itself."""
@@ -326,7 +331,7 @@ async def _raw_request(app: FastAPI, raw_path: str) -> tuple[int, list[tuple[str
         "type": "http",
         "asgi": {"version": "3.0", "spec_version": "2.3"},
         "http_version": "1.1",
-        "method": "GET",
+        "method": method,
         "scheme": "https",
         "path": unquote(raw_path),
         "raw_path": raw_path.encode("ascii"),
@@ -685,6 +690,108 @@ class TestEtag304Refused:
         assert response.status_code == 404
         assert response.content == reference.content
         assert _header_list(response) == _header_list(reference)
+
+
+class TestHead:
+    """HEAD is GET without the body (RFC 9110 §9.3.2): the same decision and
+    the same headers, so a link checker or a monitor sees what a browser
+    would, and a refusal stays the one neutral 404 (head_requests.py).
+
+    httpx drops a HEAD body itself, so the empty body is asserted where the
+    raw ASGI messages are read: here in the invalid-path test, and in
+    test_head_requests.py."""
+
+    async def test_a_page_answers_with_the_headers_of_the_get(self, client):
+        for path in ("/aurora/site/", "/aurora/extern/stijl.css", "/aurora/site/_preview/pr-42/"):
+            get = await client.get(path)
+            head = await client.head(path)
+            assert head.status_code == 200, path
+            assert _header_list(head) == _header_list(get), path
+
+    async def test_a_range_head_answers_like_the_range_get(self, client):
+        get = await client.get("/aurora/site/diep/map/bestand.txt", headers={"Range": "bytes=1-2"})
+        head = await client.head("/aurora/site/diep/map/bestand.txt", headers={"Range": "bytes=1-2"})
+        assert head.status_code == get.status_code == 206
+        assert _header_list(head) == _header_list(get)
+
+    async def test_every_refusal_is_the_neutral_404_of_the_get(self, client):
+        reference = await client.get("/aurora/bestaat-niet/")
+        for path in (
+            "/nergens/niks/",
+            "/aurora/bestaat-niet/",
+            "/aurora/geheim/",
+            "/aurora/site/_preview/pr-999/",
+            "/aurora/site/_version/geen-uuid/",
+            "/aurora/zonder404/bestaat-niet",
+            "/robots.txt/onbekend",
+            "/aurora",
+            "/bestaat-niet",
+        ):
+            head = await client.head(path)
+            assert head.status_code == 404, path
+            assert _header_list(head) == _header_list(reference), path
+
+    async def test_an_invalid_path_is_the_neutral_404_too(self, client, environment):
+        reference = await client.get("/aurora/bestaat-niet/")
+        status, headers, body = await _raw_request(environment.app, "/aurora/site/..%2fx", method="HEAD")
+        assert status == 404
+        assert body == b""
+        assert headers == _header_list(reference)
+
+    async def test_a_foreign_subresource_is_refused_like_the_get(self, client):
+        headers = {
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
+            "Referer": f"{BASE_URL}/aurora/site/",
+        }
+        reference = await client.get("/aurora/bestaat-niet/")
+        head = await client.head("/aurora/intern/stijl.css", headers=headers)
+        assert head.status_code == 404
+        assert _header_list(head) == _header_list(reference)
+
+    async def test_an_anonymous_navigation_to_a_preview_gets_the_login_redirect(self, client):
+        navigation = {"Sec-Fetch-Dest": "document"}
+        get = await client.get("/aurora/site/_preview/pr-besloten/", headers=navigation)
+        head = await client.head("/aurora/site/_preview/pr-besloten/", headers=navigation)
+        assert head.status_code == get.status_code == 302
+        assert head.headers["location"] == get.headers["location"]
+
+    async def test_the_slash_redirect_and_the_304_answer_head_too(self, client, environment):
+        redirect = await client.head("/aurora/site")
+        assert redirect.status_code == 301
+        assert redirect.headers["location"] == "/aurora/site/"
+        etag = f'"{environment.world.site_live_id}"'
+        conditional = await client.head("/aurora/site/", headers={"If-None-Match": etag})
+        assert conditional.status_code == 304
+
+    async def test_the_code_page_answers_head_without_its_form(self, client, environment):
+        get = await client.get(f"/aurora/geheim/?key={environment.world.key_plain.split('.')[0]}")
+        head = await client.head(f"/aurora/geheim/?key={environment.world.key_plain.split('.')[0]}")
+        assert head.status_code == get.status_code == 200
+        assert _header_list(head) == _header_list(get)
+
+    async def test_a_secret_link_redeemed_by_head_sets_the_cookie_like_the_get(self, client, environment):
+        """Redemption only checks the key and sets a cookie; nothing is used
+        up, so a HEAD from a link previewer does what the click would."""
+        head = await client.head(f"/aurora/geheim/?key={environment.world.key_plain}")
+        assert head.status_code == 302
+        assert head.headers["location"] == "/aurora/geheim/"
+        assert head.headers["set-cookie"].startswith(f"{KEY_COOKIE}=")
+
+    async def test_a_head_on_protected_content_counts_as_a_look(self, client, environment):
+        """The gate does not tell HEAD from GET, so neither does the audit: a
+        HEAD on non-public content is one row, like the page itself."""
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
+        assert (await client.head("/aurora/intern/")).status_code == 200
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.refs["site"]) for row in rows] == [("allowed", "intern")]
+
+    async def test_a_head_without_a_session_gets_the_refusal_of_the_get(self, client):
+        get = await client.get("/aurora/intern/")
+        head = await client.head("/aurora/intern/")
+        assert head.status_code == get.status_code
+        assert head.headers.get("location") == get.headers.get("location")
 
 
 class TestKey:

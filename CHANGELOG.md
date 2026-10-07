@@ -23,6 +23,13 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
 
+### Security
+
+- On the content host a HEAD request gets the headers of the GET instead
+  of a 405, under the same gate and audit, so link checkers and monitors
+  see what a browser sees. The admin host and the login paths are
+  unchanged.
+
 ## [2026.10.7]
 
 ### Security
