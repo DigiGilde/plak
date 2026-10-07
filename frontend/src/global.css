@@ -102,15 +102,3 @@ h6 {
   hyphens: auto;
   overflow-wrap: break-word;
 }
-
-/* nldd-status-bar pins its height to 24px (--primitives-space-24, hard pixels)
-   while its text is 0.889rem and grows with it. At 200 percent text a 28px
-   line sits in a 24px box with overflow: hidden, and the bar clips its own
-   glyphs, short labels included (WCAG 1.4.4). The component offers no
-   attribute or documented property for this; the token reaches through the
-   shadow boundary but is not a public knob, so this goes once
-   NederlandseDigitaleDienst/design-system#249 is fixed. max() keeps the 24px
-   the design means and grows only when the text no longer fits. */
-nldd-status-bar {
-  --components-status-bar-height: max(24px, 1.5em);
-}

@@ -12,6 +12,7 @@ import { SITE_GROUP, siteNotFound } from '@/composables/siteGroup';
 import { setDocumentTitle } from '@/title';
 import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -152,10 +153,7 @@ function afterRemoval(): void {
         Title and tab bar together form the page header (16); the content below
         starts at the section distance (24).
       -->
-      <nldd-title :size="2">
-        <h1>{{ site.title || site.slug }}</h1>
-        <span slot="subtitle">{{ groupSlug }}/{{ siteSlug }}</span>
-      </nldd-title>
+      <SectionHeading :level="1" :size="2" :text="site.title || site.slug" :intro="`${groupSlug}/${siteSlug}`" />
 
       <nldd-spacer size="16"></nldd-spacer>
 

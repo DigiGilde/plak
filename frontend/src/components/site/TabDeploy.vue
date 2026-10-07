@@ -10,6 +10,8 @@ import Notices from '@/components/site/Notices.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { useLoader } from '@/composables/loader';
 import { type MessageKey, t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
+import DisclosureBox from '@/components/DisclosureBox.vue';
 
 /**
  * A sentence cut apart at the placeholders that stand for an element rather
@@ -568,18 +570,10 @@ plak logout
   <nldd-container v-else layout="stack" gap="24" class="deploy">
     <section aria-labelledby="heading-repository">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4">
-          <h2 id="heading-repository">{{ t('publish.deploy.heading') }}</h2>
-          <span slot="subtitle">{{ t('publish.deploy.intro') }}</span>
-        </nldd-title>
+        <SectionHeading id="heading-repository" :text="t('publish.deploy.heading')" :intro="t('publish.deploy.intro')" />
 
-        <!-- A native details/summary rather than a toggle of our own: it is
-             keyboard operable by itself, announces its open state, and lets the
-             browser find text inside it with ctrl+F while it is closed. NLDD has
-             no accordion component, so the styling hangs on its tokens. -->
-        <details class="safety" data-testid="deploy-safety">
-          <summary>{{ t('publish.deploy.safety.summary') }}</summary>
-          <nldd-rich-text class="safety-content">
+        <DisclosureBox :summary="t('publish.deploy.safety.summary')" data-testid="deploy-safety">
+          <nldd-rich-text>
             <ul>
               <li>{{ t('publish.deploy.safety.noSecret') }}</li>
               <li>{{ t('publish.deploy.safety.scoped') }}</li>
@@ -589,7 +583,7 @@ plak logout
               <li>{{ t('publish.deploy.safety.unlink') }}</li>
             </ul>
           </nldd-rich-text>
-        </details>
+        </DisclosureBox>
 
         <nldd-container layout="stack" gap="16">
           <template v-if="!editing">
@@ -847,9 +841,7 @@ plak logout
 
     <section aria-labelledby="heading-cli">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4">
-          <h2 id="heading-cli">{{ t('publish.deploy.cli.heading') }}</h2>
-        </nldd-title>
+        <SectionHeading id="heading-cli" :text="t('publish.deploy.cli.heading')" />
         <nldd-rich-text>
           <p>
             {{ cliInstall[0]
@@ -887,32 +879,5 @@ plak logout
    text at 720 px and lets a code viewer run to the full work width. */
 .deploy nldd-container > :not(nldd-container, nldd-rich-text) {
   max-width: var(--plak-reading-width);
-}
-
-.safety {
-  border: var(--semantics-surfaces-border-width, 1px) solid
-    var(--semantics-surfaces-base-border-color, #e6e8ea);
-  border-radius: var(--semantics-surfaces-corner-radius, 12px);
-  background: var(--semantics-surfaces-tinted-background-color, #f6f7f8);
-}
-
-/* No display: flex or block here: both drop the native disclosure triangle in
-   Chrome and Safari, and there is no component icon to put in its place. */
-.safety > summary {
-  padding: 12px 16px;
-  cursor: pointer;
-  color: var(--semantics-content-color, inherit);
-  font: var(--primitives-font-body-md-semi-bold-snug, inherit);
-}
-
-.safety > summary:focus-visible {
-  outline: var(--semantics-focus-ring-outline);
-  outline-offset: var(--semantics-focus-ring-outline-offset);
-  box-shadow: var(--semantics-focus-ring-box-shadow);
-  border-radius: var(--semantics-surfaces-corner-radius, 12px);
-}
-
-.safety-content {
-  padding: 0 16px 16px;
 }
 </style>

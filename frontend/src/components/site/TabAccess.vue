@@ -36,6 +36,7 @@ import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import SecretLink from '@/components/site/SecretLink.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
 defineOptions({ inheritAttrs: false });
@@ -344,9 +345,7 @@ function keyActions(key: Key): RowAction[] {
     <nldd-container layout="stack" gap="24">
       <section aria-labelledby="heading-base">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-base">{{ t('publish.access.base.heading') }}</h2>
-          </nldd-title>
+          <SectionHeading id="heading-base" :text="t('publish.access.base.heading')" />
           <nldd-list
             type="radiogroup"
             variant="box-base"
@@ -391,10 +390,7 @@ function keyActions(key: Key): RowAction[] {
 
       <section aria-labelledby="heading-exceptions">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-exceptions">{{ t('publish.access.extras.heading') }}</h2>
-            <span slot="subtitle">{{ t('publish.access.extras.intro') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-exceptions" :text="t('publish.access.extras.heading')" :intro="t('publish.access.extras.intro')" />
 
           <nldd-banner
             v-if="extrasAreMoot"
@@ -428,10 +424,7 @@ function keyActions(key: Key): RowAction[] {
 
       <section v-if="access?.keys" aria-labelledby="heading-keys">
         <nldd-container layout="stack" gap="16">
-          <nldd-title :size="4">
-            <h2 id="heading-keys">{{ t('access.keys') }}</h2>
-            <span slot="subtitle">{{ t('publish.access.keys.intro') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-keys" :text="t('access.keys')" :intro="t('publish.access.keys.intro')" />
 
           <!-- A successful action should not look like an error: this is the
                link the user came here for. -->
@@ -592,10 +585,7 @@ function keyActions(key: Key): RowAction[] {
 
       <section v-if="access?.invitees" aria-labelledby="heading-invitees">
         <nldd-container layout="stack" gap="16">
-          <nldd-title :size="4">
-            <h2 id="heading-invitees">{{ t('access.invitees') }}</h2>
-            <span slot="subtitle">{{ t('publish.access.invitees.intro') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-invitees" :text="t('access.invitees')" :intro="t('publish.access.invitees.intro')" />
 
           <nldd-table
             class="access-table"
@@ -688,10 +678,7 @@ function keyActions(key: Key): RowAction[] {
 
       <section aria-labelledby="heading-external-sources">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-external-sources">{{ t('publish.access.external.heading') }}</h2>
-            <span slot="subtitle">{{ t('publish.access.external.intro') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-external-sources" :text="t('publish.access.external.heading')" :intro="t('publish.access.external.intro')" />
           <nldd-switch-field
             :label="t('publish.access.external.label')"
             :checked="externalSources || undefined"
@@ -703,10 +690,7 @@ function keyActions(key: Key): RowAction[] {
 
       <section aria-labelledby="heading-sandbox">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-sandbox">{{ t('publish.access.sandbox.heading') }}</h2>
-            <span slot="subtitle">{{ t('publish.access.sandbox.intro') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-sandbox" :text="t('publish.access.sandbox.heading')" :intro="t('publish.access.sandbox.intro')" />
           <nldd-switch-field
             :label="t('publish.access.sandbox.label')"
             :checked="sandbox || undefined"

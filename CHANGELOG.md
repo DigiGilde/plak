@@ -28,6 +28,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- The admin runs on design system 0.8.93: the status bar at 200% text and the
+  form buttons (a row on wide screens, stacked on narrow ones) follow the
+  new defaults.
 
 ### Fixed
 

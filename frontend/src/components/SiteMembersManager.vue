@@ -33,6 +33,7 @@ import {
 } from '@/composables/suggestionField';
 import { roleLabel, ROLES, ROLE_ICONS, siteRoleHint } from '@/format';
 import { t } from '@/i18n';
+import DisclosureBox from '@/components/DisclosureBox.vue';
 
 const props = defineProps<{
   members: SiteMember[];
@@ -452,14 +453,13 @@ async function onRemove(row: Row): Promise<void> {
 
 <template>
   <nldd-container layout="stack" gap="24">
-    <!-- A native details/summary rather than a toggle of our own: it is
-         keyboard operable by itself, announces its open state, and lets the
-         browser find text inside it with ctrl+F while it is closed. NLDD has
-         no accordion component, so the styling hangs on its tokens. -->
-    <details v-if="inherited.length > 0" class="via-group" data-testid="members-via-group">
-      <summary data-testid="members-via-group-summary">{{ inheritedSummary }}</summary>
-
-      <nldd-container layout="stack" gap="8" class="via-group-content">
+    <DisclosureBox
+      v-if="inherited.length > 0"
+      :summary="inheritedSummary"
+      summary-testid="members-via-group-summary"
+      data-testid="members-via-group"
+    >
+      <nldd-container layout="stack" gap="8">
         <nldd-text size="sm">
           {{ inheritedNote[0]
           }}<nldd-link
@@ -493,7 +493,7 @@ async function onRemove(row: Row): Promise<void> {
           </nldd-table-row>
         </nldd-table>
       </nldd-container>
-    </details>
+    </DisclosureBox>
 
     <nldd-container layout="stack" gap="16">
       <nldd-table
@@ -671,33 +671,5 @@ async function onRemove(row: Row): Promise<void> {
 /* Same cap as the group's member table, see global.css. */
 .member-table {
   max-width: var(--plak-table-max-width);
-}
-
-.via-group {
-  max-width: var(--plak-table-max-width);
-  border: var(--semantics-surfaces-border-width, 1px) solid
-    var(--semantics-surfaces-base-border-color, #e6e8ea);
-  border-radius: var(--semantics-surfaces-corner-radius, 12px);
-  background: var(--semantics-surfaces-tinted-background-color, #f6f7f8);
-}
-
-/* No display: flex or block here: both drop the native disclosure triangle in
-   Chrome and Safari, and there is no component icon to put in its place. */
-.via-group > summary {
-  padding: 12px 16px;
-  cursor: pointer;
-  color: var(--semantics-content-color, inherit);
-  font: var(--primitives-font-body-md-semi-bold-snug, inherit);
-}
-
-.via-group > summary:focus-visible {
-  outline: var(--semantics-focus-ring-outline);
-  outline-offset: var(--semantics-focus-ring-outline-offset);
-  box-shadow: var(--semantics-focus-ring-box-shadow);
-  border-radius: var(--semantics-surfaces-corner-radius, 12px);
-}
-
-.via-group-content {
-  padding: 0 16px 16px;
 }
 </style>

@@ -10,6 +10,7 @@ import type { Volume } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { formatBytes } from '@/format';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const volume = ref<Volume | null>(null);
 const loading = ref(true);
@@ -37,7 +38,7 @@ onMounted(async () => {
 
 <template>
   <section data-testid="content-volume">
-    <nldd-title :size="2"><h2>{{ t('admin.volume.heading') }}</h2></nldd-title>
+    <SectionHeading :size="2" :text="t('admin.volume.heading')" />
 
     <nldd-spacer size="16"></nldd-spacer>
 

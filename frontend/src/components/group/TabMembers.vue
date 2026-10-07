@@ -12,6 +12,7 @@ import * as api from '@/api/plak';
 import type { GroupMember, MemberSuggestion, Role } from '@/api/types';
 import GroupMembersManager from '@/components/GroupMembersManager.vue';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // The tabs receive the props of every tab; none of them should fall through
 // to the markup.
@@ -45,10 +46,7 @@ function search(query: string): Promise<MemberSuggestion[]> {
 <template>
   <section aria-labelledby="heading-members">
     <nldd-container layout="stack" gap="8">
-      <nldd-title :size="4">
-        <h2 id="heading-members">{{ t('group.members.heading') }}</h2>
-        <span slot="subtitle">{{ t('group.members.intro') }}</span>
-      </nldd-title>
+      <SectionHeading id="heading-members" :text="t('group.members.heading')" :intro="t('group.members.intro')" />
 
       <GroupMembersManager
         :members="members"

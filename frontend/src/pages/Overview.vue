@@ -28,6 +28,7 @@ import { resolveDroppedFile, useDropState, useWindowDropGuard } from '../composa
 import { goToDone } from '../composables/publishedMark';
 import { mayCreateSiteIn } from '../composables/roles';
 import { t } from '@/i18n';
+import PageHeader from '@/components/PageHeader.vue';
 
 type State = 'loading' | 'filled' | 'empty' | 'error';
 
@@ -184,8 +185,7 @@ watch(siteSheetOpen, (open) => {
          and pushes the button outside the viewport (measured: h1 0 px wide,
          scrollWidth 352 at clientWidth 320). A wrap container lets the button
          drop a line as soon as it no longer fits beside the title. -->
-    <nldd-container layout="wrap" gap="16" vertical-alignment="center" class="page-header">
-      <nldd-title :size="1"><h1>{{ t('group.overview.heading') }}</h1></nldd-title>
+    <PageHeader :text="t('group.overview.heading')">
       <!-- A split button, not two buttons: publishing is the action people come
            for, creating a group is the rarer one. Below the list it would mean
            scrolling to the bottom to reach it on a long list; in the chevron
@@ -207,7 +207,7 @@ watch(siteSheetOpen, (open) => {
           ></nldd-menu-item>
         </nldd-menu>
       </nldd-split-button>
-    </nldd-container>
+    </PageHeader>
 
     <nldd-spacer size="24"></nldd-spacer>
 

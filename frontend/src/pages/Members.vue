@@ -40,6 +40,7 @@ import { currentMemberState, fetchCurrentMember } from '../composables/currentMe
 import { useNotices } from '../composables/notices';
 import { formatDate, formatTimestamp } from '../format';
 import { t } from '../i18n';
+import PageHeader from '@/components/PageHeader.vue';
 
 type SortKey = 'name' | 'role' | 'created' | 'activity';
 type Direction = 'ascending' | 'descending';
@@ -340,8 +341,7 @@ onMounted(() => {
 
 <template>
   <nldd-simple-section>
-    <nldd-container layout="wrap" gap="16" vertical-alignment="center" class="page-header">
-      <nldd-title :size="1"><h1>{{ t('nav.platform') }}</h1></nldd-title>
+    <PageHeader :text="t('nav.platform')">
       <nldd-search-field
         v-if="!loading && !errorMessage"
         :accessible-label="t('admin.members.search.label')"
@@ -350,7 +350,7 @@ onMounted(() => {
         data-testid="members-search"
         @input="onSearch"
       ></nldd-search-field>
-    </nldd-container>
+    </PageHeader>
 
     <nldd-spacer size="24"></nldd-spacer>
 

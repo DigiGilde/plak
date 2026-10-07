@@ -19,6 +19,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue';
 import Notices from '@/components/site/Notices.vue';
 import { accessBaseHint, accessBaseLabel, accessSummary, inviteesLabel, keysLabel } from '@/format';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // The tab has several roots (notifications beside the content) and receives
 // the props of every tab; none of them should fall through to the markup.
@@ -113,10 +114,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
 
   <section aria-labelledby="heading-default-access">
     <nldd-container layout="stack" gap="8">
-      <nldd-title :size="4">
-        <h2 id="heading-default-access">{{ t('group.settings.heading') }}</h2>
-        <span slot="subtitle">{{ t('group.settings.intro') }}</span>
-      </nldd-title>
+      <SectionHeading id="heading-default-access" :text="t('group.settings.heading')" :intro="t('group.settings.intro')" />
 
       <nldd-list
         type="radiogroup"
@@ -176,9 +174,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
     <section aria-labelledby="heading-danger-zone-group">
       <nldd-box background="critical">
         <nldd-container layout="stack" gap="8" padding="16">
-          <nldd-title :size="4">
-            <h2 id="heading-danger-zone-group">{{ t('group.settings.danger.heading') }}</h2>
-          </nldd-title>
+          <SectionHeading id="heading-danger-zone-group" :text="t('group.settings.danger.heading')" />
           <nldd-container layout="stack" gap="16">
             <nldd-rich-text>
               <p>{{ t('group.settings.danger.body') }}</p>
