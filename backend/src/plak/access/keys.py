@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -114,6 +116,21 @@ def bare_selector(value: str | None) -> str | None:
     if not all(character in _ALPHABET for character in value):
         return None
     return value
+
+
+_FULL_KEY_AT_START = re.compile(rf"[{_ALPHABET}]{{{SELECTOR_LENGTH}}}\.[{_ALPHABET}]{{{VERIFIER_LENGTH}}}")
+
+
+def carries_full_key(values: Iterable[str]) -> bool:
+    """Whether any of the `key` query values starts with a whole secret link
+    (selector.verifier). Starts with, not equals: a link copied out of a mail
+    often carries a closing bracket or full stop, and the page sees it anyway."""
+    return any(_FULL_KEY_AT_START.match(value) for value in values)
+
+
+def carries_bare_selector(values: Iterable[str]) -> bool:
+    """Whether any of the `key` query values is a selector without its code."""
+    return any(bare_selector(value) is not None for value in values)
 
 
 async def verify_parts(

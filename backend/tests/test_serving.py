@@ -1137,6 +1137,390 @@ class TestNeutral404ByteIdentical:
         assert headers == _header_list(via_client)
 
 
+class TestServiceWorkerScript:
+    """A service worker that a site registers on its own path sees every
+    navigation under that path before the server does, a secret link in the
+    query included. No site gets to register one: the script request is the
+    neutral 404, before anything else and without an audit row, like a
+    routing miss."""
+
+    REGISTRATIONS: ClassVar[list[dict[str, str]]] = [
+        {"Service-Worker": "script"},
+        {"Sec-Fetch-Dest": "serviceworker"},
+        {"Service-Worker": " SCRIPT "},
+    ]
+
+    @staticmethod
+    def _served_paths(environment: Environment) -> list[str]:
+        return [
+            "/aurora/site/",
+            "/aurora/site/app.mjs",
+            "/aurora/site/_preview/pr-42/",
+            f"/aurora/site/_version/{environment.world.site_live_id}/",
+        ]
+
+    @staticmethod
+    def _site_member(client, environment: Environment) -> None:
+        # So that the _version view, too, is served without the header.
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
+
+    async def test_a_registration_gets_the_neutral_404(self, client, environment):
+        reference = await client.get("/nergens/niks/")
+        self._site_member(client, environment)
+        for path in self._served_paths(environment):
+            for headers in self.REGISTRATIONS:
+                response = await client.get(path, headers=headers)
+                assert response.status_code == 404, (path, headers)
+                assert response.content == reference.content, (path, headers)
+                assert _header_list(response) == _header_list(reference), (path, headers)
+
+    async def test_the_same_paths_are_served_without_it(self, client, environment):
+        self._site_member(client, environment)
+        for path in self._served_paths(environment):
+            assert (await client.get(path)).status_code == 200, path
+
+    async def test_content_varies_on_the_header(self, client, environment):
+        """A registration may be answered from the HTTP cache
+        (`updateViaCache: 'all'`); without `Vary` that is whatever a plain
+        request for the same script left there, and the refusal never runs."""
+        etag = f'"{environment.world.site_live_id}"'
+        for path, headers in (
+            ("/aurora/site/", {}),
+            ("/aurora/site/app.mjs", {}),
+            ("/aurora/site/app.mjs", {"If-None-Match": etag}),
+        ):
+            response = await client.get(path, headers=headers)
+            assert response.status_code in (200, 304), path
+            assert response.headers["vary"] == "Service-Worker", (path, headers)
+
+    async def test_a_refused_registration_writes_no_audit_row(self, client, environment):
+        """Not for an allowed _version view, not for a login redirect and not
+        for an unknown site, all of which the gate would otherwise log."""
+        self._site_member(client, environment)
+        for path in [*self._served_paths(environment), "/aurora/intern/", "/aurora/bestaat-niet/"]:
+            for headers in self.REGISTRATIONS:
+                assert (await client.get(path, headers=headers)).status_code == 404, (path, headers)
+        assert await _audit_rows(environment) == []
+
+
+class TestKeyNeverReachesAPage:
+    """A page can read its own address, and the tab's history keeps it for
+    every later page on this host. So a `key` in the shape of a secret link
+    leaves the URL on every answer but two: its redemption on its own site,
+    and the login redirect, which never carried it. A selector alone leaves
+    an allowed page too, and stays on a refusal, where the code page needs
+    it."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
+    SUBRESOURCE: ClassVar[dict[str, str]] = {
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+        "Referer": f"{BASE_URL}/aurora/site/",
+    }
+
+    @staticmethod
+    def _selector(environment: Environment) -> str:
+        return environment.world.key_plain.split(".")[0]
+
+    @classmethod
+    def _wrong_key(cls, environment: Environment) -> str:
+        """The secret-link site's own selector with a code that is not its own."""
+        return f"{cls._selector(environment)}.{'A' * keys.VERIFIER_LENGTH}"
+
+    @staticmethod
+    def _assert_taken_out(response: httpx.Response, location: str) -> None:
+        assert response.status_code == 302
+        assert response.headers["location"] == location
+        assert response.headers["cache-control"] == "no-store"
+        assert "set-cookie" not in response.headers
+        assert response.content == b""
+
+    @staticmethod
+    def _without_location(response: httpx.Response) -> list[tuple[str, str]]:
+        return [(k, v) for k, v in _header_list(response) if k != "location"]
+
+    async def test_a_link_for_another_site_leaves_a_public_page(self, client, environment):
+        response = await client.get(f"/aurora/site/docs/?a=1&key={environment.world.key_plain}&b=2")
+        self._assert_taken_out(response, "/aurora/site/docs/?a=1&b=2")
+        followed = await client.get(response.headers["location"])
+        assert followed.status_code == 200
+        assert followed.content == b"<h1>docs</h1>"
+
+    async def test_a_selector_alone_leaves_an_allowed_page(self, client, environment):
+        response = await client.get(f"/aurora/site/?key={self._selector(environment)}&x=1")
+        self._assert_taken_out(response, "/aurora/site/?x=1")
+
+    @pytest.mark.parametrize("query", ["key={key}&key=foo", "key=foo&key={key}"])
+    async def test_every_key_value_counts(self, client, environment, query):
+        """The gate reads the last `key` and a page's URLSearchParams the
+        first: whichever of them carries the link, it goes."""
+        response = await client.get(f"/aurora/site/?{query.format(key=environment.world.key_plain)}")
+        self._assert_taken_out(response, "/aurora/site/")
+
+    @pytest.mark.parametrize("junk", [")", ".", "%20", "%3E"])
+    async def test_a_link_with_what_a_mail_client_left_behind_leaves_too(self, client, environment, junk):
+        response = await client.get(f"/aurora/site/?key={environment.world.key_plain}{junk}")
+        self._assert_taken_out(response, "/aurora/site/")
+
+    async def test_a_logged_in_visitor_loses_a_link_meant_for_another_site(self, client, environment):
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
+        response = await client.get(f"/aurora/intern/?key={environment.world.key_plain}", headers=self.NAVIGATION)
+        self._assert_taken_out(response, "/aurora/intern/")
+        followed = await client.get(response.headers["location"], headers=self.NAVIGATION)
+        assert followed.status_code == 200
+        assert followed.content == b"<h1>intern</h1>"
+
+    @pytest.mark.parametrize("shape", ["link", "selector"])
+    async def test_a_preview_and_a_version_view_lose_it_too(self, client, environment, shape):
+        value = environment.world.key_plain if shape == "link" else self._selector(environment)
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
+        for path in ("/aurora/site/_preview/pr-42/", f"/aurora/site/_version/{environment.world.site_live_id}/"):
+            self._assert_taken_out(await client.get(f"{path}?key={value}"), path)
+            assert (await client.get(path)).status_code == 200, path
+
+    async def test_one_look_is_one_audit_row(self, client, environment):
+        """The answer that takes the key out is no view yet; the request it
+        sends the visitor on to is, as after a redeemed link."""
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
+        path = f"/aurora/site/_version/{environment.world.site_live_id}/"
+        await client.get(f"{path}?key={environment.world.key_plain}")
+        assert await _audit_rows(environment) == []
+        await client.get(path)
+        assert [row.result for row in await _audit_rows(environment)] == ["allowed"]
+
+    async def test_it_leaves_before_the_site_answers_for_itself(self, client, environment):
+        """A directory redirect would carry the query along, a 304 would leave
+        the address as it is, and the site's own 404.html is a page of the
+        site like any other."""
+        key = environment.world.key_plain
+        self._assert_taken_out(await client.get(f"/aurora/site/docs?key={key}"), "/aurora/site/docs")
+        self._assert_taken_out(await client.get(f"/aurora/site/bestaat-niet?key={key}"), "/aurora/site/bestaat-niet")
+        etag = f'"{environment.world.site_live_id}"'
+        conditional = await client.get(f"/aurora/site/?key={key}", headers={"If-None-Match": etag})
+        self._assert_taken_out(conditional, "/aurora/site/")
+
+    async def test_a_refused_link_leaves_once_the_refusal_is_logged(self, client, environment):
+        response = await client.get(f"/aurora/geheim/?key={self._wrong_key(environment)}", headers=self.NAVIGATION)
+        self._assert_taken_out(response, "/aurora/geheim/")
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [("refused", "KEY_INVALID")]
+        followed = await client.get(response.headers["location"], headers=self.NAVIGATION)
+        assert followed.status_code == 404
+        assert followed.content == b"Niet gevonden\n"
+        # Two rows for one refused link: the refusal, then the request without it.
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [
+            ("refused", "KEY_INVALID"),
+            ("refused", "NO_ACCESS"),
+        ]
+
+    async def test_a_link_beside_a_selector_leaves_with_the_refusal_of_the_gate(self, client, environment):
+        """No code page beside a whole link: the gate's own refusal stands,
+        and that is the reason the log keeps."""
+        query = f"key={self._wrong_key(environment)}&key={self._selector(environment)}"
+        response = await client.get(f"/aurora/geheim/?{query}")
+        self._assert_taken_out(response, "/aurora/geheim/")
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [("refused", "KEY_INVALID")]
+
+    async def test_a_link_beside_a_selector_keeps_the_login_redirect(self, client, environment):
+        async with environment.factory() as db:
+            site = await db.scalar(select(Site).where(Site.slug == "geheim"))
+            site.access_base = AccessBase.SSO
+            await db.commit()
+        query = f"key={self._wrong_key(environment)}&key={self._selector(environment)}"
+        response = await client.get(f"/aurora/geheim/?{query}", headers=self.NAVIGATION)
+        assert response.status_code == 302
+        assert response.headers["location"] == "/-/login?returnTo=%2Faurora%2Fgeheim%2F"
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code) for row in rows] == [("login_redirect", "LOGIN_REQUIRED")]
+
+    async def test_a_foreign_subresource_gets_the_answer_of_a_site_that_does_not_exist(self, client, environment):
+        """Were this refusal the neutral 404 while every other answer to a
+        link is the 302, the difference would say which sites exist."""
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
+        key = environment.world.key_plain
+        response = await client.get(f"/aurora/intern/stijl.css?key={key}", headers=self.SUBRESOURCE)
+        unknown = await client.get(f"/aurora/bestaat-niet/stijl.css?key={key}", headers=self.SUBRESOURCE)
+        self._assert_taken_out(response, "/aurora/intern/stijl.css")
+        self._assert_taken_out(unknown, "/aurora/bestaat-niet/stijl.css")
+        assert self._without_location(response) == self._without_location(unknown)
+        rows = await _audit_rows(environment)
+        assert [row.reason_code for row in rows] == ["FOREIGN_SUBRESOURCE", "UNKNOWN_SITE"]
+
+    async def test_an_invalid_path_loses_it_too(self, client, environment):
+        response = await client.get(f"/aurora/site/a%5cb?key={environment.world.key_plain}")
+        self._assert_taken_out(response, "/aurora/site/a%5Cb")
+        assert [row.reason_code for row in await _audit_rows(environment)] == ["PATH_INVALID"]
+
+    async def test_an_inconsistent_allow_loses_it_too(self, client, environment, monkeypatch):
+        async def fake_decide(db, group_slug, site_slug, visitor):
+            return allow(uuid.uuid4(), AccessPolicy(AccessBase.PUBLIC))
+
+        monkeypatch.setattr(gate, "decide", fake_decide)
+        response = await client.get(f"/aurora/site/?key={environment.world.key_plain}")
+        self._assert_taken_out(response, "/aurora/site/")
+        assert [row.reason_code for row in await _audit_rows(environment)] == ["UNKNOWN_STORAGE"]
+
+    async def test_a_refused_preview_or_version_view_then_goes_to_the_login(self, client, environment):
+        """With the key out, the anonymous navigation that follows is one the
+        first-visit rule answers, as it does for every such path."""
+        for path in ("/aurora/site/_preview/pr-besloten/", f"/aurora/site/_version/{environment.world.site_live_id}/"):
+            response = await client.get(f"{path}?key={environment.world.key_plain}", headers=self.NAVIGATION)
+            self._assert_taken_out(response, path)
+            followed = await client.get(path, headers=self.NAVIGATION)
+            assert followed.status_code == 302, path
+            assert followed.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}", path
+
+    async def test_the_answer_does_not_depend_on_what_exists(self, client, environment):
+        """The same 302 for an address with nothing behind it as for a real
+        site, refused or allowed: byte for byte, apart from the Location that
+        is the requested path itself."""
+        key = environment.world.key_plain
+        requests_ = [
+            ("/nergens/niks/", key),  # unknown group
+            ("/aurora/bestaat-niet/", key),  # unknown site
+            ("/aurora/leeg/", key),  # site without a live version
+            ("/aurora/geheim/", self._wrong_key(environment)),  # secret-link site, wrong code
+            ("/aurora/geheim/", "Zz99Yy88." + "A" * keys.VERIFIER_LENGTH),  # unknown selector
+            ("/aurora/site/_preview/pr-999/", key),  # unknown preview
+            ("/aurora/site/_version/geen-uuid/", key),  # invalid version id
+            ("/aurora/site/", key),  # public page, allowed
+        ]
+        responses_ = [await client.get(f"{path}?key={value}", headers=self.NAVIGATION) for path, value in requests_]
+        reference = responses_[0]
+        for (path, _), response in zip(requests_, responses_, strict=True):
+            self._assert_taken_out(response, path)
+            assert response.content == reference.content, path
+            assert self._without_location(response) == self._without_location(reference), path
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/robots.txt/onbekend/",  # platform namespace: a reserved slug
+            "/-/x/y/",  # platform namespace: the platform segment
+            "/aurora",  # a path no route claims
+            "//evil.example/x/",  # and one that starts with an empty segment
+        ],
+    )
+    async def test_a_path_that_cannot_be_a_site_keeps_the_neutral_404(self, client, environment, path):
+        """No link is meant for such a path, and a target built from one
+        could leave the host: `//evil.example/x/` is protocol-relative."""
+        reference = await client.get("/nergens/niks/")
+        response = await client.get(f"{BASE_URL}{path}?key={environment.world.key_plain}")
+        assert response.status_code == 404
+        assert response.content == reference.content
+        assert _header_list(response) == _header_list(reference)
+
+    async def test_its_own_site_still_redeems_it_and_drops_every_key(self, client, environment):
+        response = await client.get(f"/aurora/geheim/?key=foo&key={environment.world.key_plain}&x=1")
+        assert response.status_code == 302
+        assert response.headers["location"] == "/aurora/geheim/?x=1"
+        assert "Path=/aurora/geheim/" in response.headers["set-cookie"]
+
+    async def test_the_login_redirect_never_carried_it(self, client, environment):
+        response = await client.get(
+            f"/aurora/intern/?key={environment.world.key_plain}&x=1", headers=self.NAVIGATION
+        )
+        assert response.status_code == 302
+        assert response.headers["location"] == "/-/login?returnTo=%2Faurora%2Fintern%2F%3Fx%3D1"
+
+    async def test_a_selector_alone_stays_where_the_code_page_needs_it(self, client, environment):
+        selector = self._selector(environment)
+        response = await client.get(f"/aurora/geheim/?key={selector}")
+        assert response.status_code == 200
+        assert 'name="code"' in response.text
+        assert f'value="{selector}"' in response.text
+
+    async def test_a_selector_alone_on_a_refused_preview_stays_the_neutral_404(self, client, environment):
+        async with environment.factory() as db:
+            site = await db.scalar(select(Site).where(Site.slug == "geheim"))
+            db.add(Preview(site_id=site.id, ref="pr-7", version_id=environment.world.secret_live_id))
+            await db.commit()
+        reference = await client.get("/nergens/niks/")
+        response = await client.get(
+            f"/aurora/geheim/_preview/pr-7/?key={self._selector(environment)}", headers=self.NAVIGATION
+        )
+        assert response.status_code == 404
+        assert response.content == reference.content
+        assert _header_list(response) == _header_list(reference)
+
+    @pytest.mark.parametrize("query", ["key=foo", "key=fout.fout", "key=abcdefgh.kort", "KEY={key}"])
+    async def test_what_is_no_secret_link_stays(self, client, environment, query):
+        """Another value under `key`, or the link under another spelling of
+        the name: redeeming is case-sensitive, and so is this."""
+        response = await client.get(f"/aurora/site/?{query.format(key=environment.world.key_plain)}")
+        assert response.status_code == 200
+        assert response.content == SITE_INDEX
+
+
+class TestRedirectTargets:
+    """Every target serving builds out of the request (the 302 that takes a
+    key out, a login returnTo, both slash redirects) keeps the path as it
+    was asked for. An encoded `?` or `#` in the path may not move part of it
+    into the query or the fragment, where an encoded `?` turned `key=` into a
+    parameter named `?key` that no filter recognised; nor may `%25` come
+    back as a bare `%`."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
+
+    @staticmethod
+    def _directory(environment: Environment, name: str) -> None:
+        directory = environment.store.root / environment.world.site_storage / name
+        directory.mkdir()
+        (directory / "index.html").write_bytes(b"<h1>map</h1>")
+
+    async def test_an_encoded_question_mark_cannot_smuggle_the_link_past_the_filter(self, client, environment):
+        key = environment.world.key_plain
+
+        taken_out = await client.get(f"/aurora/site/a%3F?key={key}")
+        assert taken_out.status_code == 302
+        assert taken_out.headers["location"] == "/aurora/site/a%3F"
+        followed = await client.get(taken_out.headers["location"])
+        assert followed.status_code == 404
+        assert followed.content == SITE_404
+        assert "key" not in str(followed.request.url)
+
+        login = await client.get(f"/aurora/intern/a%3F?key={key}", headers=self.NAVIGATION)
+        assert login.status_code == 302
+        assert login.headers["location"] == "/-/login?returnTo=%2Faurora%2Fintern%2Fa%253F"
+
+        # The lexical 301 passes the link on under its own name, so the
+        # request after it can take it out.
+        slash = await client.get(f"/aurora/site%3F?key={key}")
+        assert slash.status_code == 301
+        assert slash.headers["location"] == f"/aurora/site%3F/?key={key}"
+        after_slash = await client.get(slash.headers["location"])
+        assert after_slash.status_code == 302
+        assert after_slash.headers["location"] == "/aurora/site%3F/"
+
+    @pytest.mark.parametrize(("encoded", "name"), [("a%23x", "a#x"), ("a%2541", "a%41")])
+    async def test_an_encoded_hash_or_percent_stays_encoded(self, client, environment, encoded, name):
+        key = environment.world.key_plain
+        taken_out = await client.get(f"/aurora/site/{encoded}?key={key}")
+        assert taken_out.headers["location"] == f"/aurora/site/{encoded}"
+
+        login = await client.get(f"/aurora/intern/{encoded}?x=1", headers=self.NAVIGATION)
+        assert login.headers["location"] == f"/-/login?returnTo={quote(f'/aurora/intern/{encoded}?x=1', safe='')}"
+
+        lexical = await client.get(f"/aurora/{encoded}")
+        assert lexical.status_code == 301
+        assert lexical.headers["location"] == f"/aurora/{encoded}/"
+
+        self._directory(environment, name)
+        directory = await client.get(f"/aurora/site/{encoded}")
+        assert directory.status_code == 301
+        assert directory.headers["location"] == f"/aurora/site/{encoded}/"
+        assert (await client.get(directory.headers["location"])).content == b"<h1>map</h1>"
+
+    @pytest.mark.parametrize("path", ["/aurora/site/docs", "/aurora/site"])
+    async def test_a_slash_redirect_passes_the_query_on_as_it_came(self, client, path):
+        response = await client.get(f"{path}?x=a+b%2Bc&y&key=foo")
+        assert response.status_code == 301
+        assert response.headers["location"] == f"{path}/?x=a+b%2Bc&y&key=foo"
+
+
 class TestSiteScopedSession:
     """The content session cookie carries `Path=/{group}/{site}/`, so a
     request aimed at a site this browser has not opened carries no session and
@@ -1715,6 +2099,7 @@ class TestHeaderSet:
             "x-content-type-options",
             "content-security-policy",
             "referrer-policy",
+            "vary",
         }
 
     async def test_preview_noindex(self, client, environment):

@@ -230,9 +230,9 @@ where the server offers it, Range requests) and answers conditional requests
 without touching the store. There is no X-Accel-Redirect and no nginx datapath;
 nginx exists only in the dev compose stack, passing the `Host` through.
 
-Order per request: path validation, access decision, audit, key redeem,
-`If-None-Match`, file resolution, response. The lexical 301 sits before all of
-it (§5.2).
+Order per request: service worker refusal, path validation, access decision,
+audit, key redeem or removal (§7.4), file resolution, `If-None-Match`,
+response. The lexical 301 sits before all of it (§5.2).
 
 On the content host HEAD is the GET without the body (`head_requests.py`): the
 app gets a GET, the client gets its headers, so the gate, the audit and a
@@ -284,8 +284,9 @@ more). Unknown is `application/octet-stream`. Every content response carries
 with a 304, after resolution has found a file: a 304 for a path without a file
 would let an intermediary treat a non-existent resource as fresh. The 304
 carries the header set of the 200 apart from `Content-Type`: `ETag`,
-`Cache-Control`, `nosniff`, the content CSP, `Referrer-Policy` and, where it
-applies, `X-Robots-Tag`. A browser keeps what it stored with the 200 and
+`Cache-Control`, `nosniff`, the content CSP, `Referrer-Policy`,
+`Vary: Service-Worker` (§7.4) and, where it applies, `X-Robots-Tag`. A browser
+keeps what it stored with the 200 and
 overwrites only the headers a 304 repeats (RFC 9111 §3.2, verified in
 Chromium, Firefox and WebKit), and turning a site switch or secret links on
 or off changes the CSP or the Referrer-Policy without changing the version, so
@@ -316,6 +317,16 @@ platform CSP (§5.7) and `Referrer-Policy: no-referrer`. It has a single
 construction point, which is what keeps it identical; it keeps that CSP
 whatever a site allows, because a policy that followed the site would say which
 site the refusal was about.
+
+One answer stands in for it on purpose: on a path of a site
+(`/{group}/{site}/...`), when the query carries a `key` in the shape of a
+secret link, a refusal is a 302 to the same URL without `key` instead (§7.4);
+a service worker script still gets the 404 there. That 302 is one answer as
+well, for a site that refuses, a site that allows and an address with nothing
+behind it, so it says no more about what exists than the 404 does. Every other
+path keeps the neutral 404, key or not: no link is meant for a path that cannot
+be a site, and a target built from one could leave the host
+(`//evil.example/`).
 
 A site without a live version is a neutral 404 for everyone, public base
 included. A version's own root `404.html` is shown to authorised visitors only,
@@ -461,7 +472,8 @@ check on `/-/code` (§7.4).
 
 This leans on the site's own pages supplying a `Referer`, which is why
 `Referrer-Policy` on a site with secret links is `same-origin` and no longer
-`no-referrer` (§7.2). A refusal is the neutral 404 (§5.6), audited with reason
+`no-referrer` (§7.2). A refusal is the neutral 404 (§5.6), or with a secret link
+in the query the 302 that takes it out (§7.4), audited with reason
 `FOREIGN_SUBRESOURCE`.
 
 The check sits before the login redirect, so it decides the same way with a
@@ -623,8 +635,9 @@ cleanup job is only the safety net.
 for this site), not on the way this visitor got in, so the header does not vary
 per visitor; everything else gets `strict-origin-when-cross-origin`. Both send
 nothing to another origin, and the page URL never carries the verifier: a
-`?key=` is redeemed with a 302 that strips it. Not `no-referrer`, because the
-guard of §5.10 needs a site's own pages to identify themselves.
+`?key=` is redeemed, or taken out, with a 302 that strips it (§7.4). Not
+`no-referrer`, because the guard of §5.10 needs a site's own pages to identify
+themselves.
 
 Code: `access/gate.py` (`decide`, `decide_preview`, `_assess`),
 `access/decision.py`, `serving/response.py`. Guarded by: `test_access_gate.py`
@@ -663,9 +676,37 @@ same-origin only, a hard limit per selector on top of the per-IP `code` rate
 limit class, and the fact that a successful POST only sets a cookie for a key
 whose code the caller just proved to know.
 
+A page never sees a secret link that is not redeemed for its own site. A page
+reads its own address, and a later page on the content host can read the tab's
+history, so a link left in either reaches whichever site answers it. Whenever,
+on a path of a site (`/{group}/{site}/...`), one of the `key` values starts
+with a whole secret link (eight letters or digits, a dot and thirty-two more,
+also with what a mail client leaves stuck to it) and the answer is not its
+redemption, serving answers with the same 302 to the URL without any `key`,
+with `no-store` and without a cookie: on an allowed page and on the neutral 404
+alike. Beside a whole link the code page does not appear; the gate's own answer
+stands. The decision is audited first, so `KEY_INVALID` stays visible. Every
+value counts, because the gate reads the last `key` and a page's
+`URLSearchParams` the first. Only the login redirect keeps its answer; it never
+carried the key. A selector alone leaves an allowed page the same way and stays
+on a refusal, where the code page needs it. `KEY=` and other spellings of the
+name are left alone: redeeming is case-sensitive. Every other path keeps the
+neutral 404 (§5.6).
+
+The content host refuses service workers: a request with
+`Service-Worker: script` or `Sec-Fetch-Dest: serviceworker` gets the neutral
+404 before anything else and without an audit row, like a routing miss. A
+worker that a site registers on its own path would see every navigation under
+that path before the server does, secret links included. A shielded page
+(§5.7) could not register one anyway: its origin is opaque. Content responses
+carry `Vary: Service-Worker`: a registration may be answered from the HTTP
+cache (`updateViaCache: 'all'`), and without it from what a plain request for
+the same file left there, so the refusal would never run.
+
 Code: `access/keys.py`, `serving/code_page.py`, `serving/router.py`
-(`_redeem_key`). Guarded by: `test_keys.py`, `test_code_page.py`,
-`test_serving.py`.
+(`_redeem_key`, `_strip_key_redirect`, `_refuse`, `_is_service_worker_script`).
+Guarded by: `test_keys.py`, `test_code_page.py`, `test_serving.py`,
+`test_key_stripping_matrix.py`.
 
 ### 7.5 Looking creates no member record
 
@@ -738,7 +779,9 @@ it, so guessing paths teaches nothing. It does that only for a top-level
 navigation, not when a `?key=` or key cookie came along (its holder may have no
 SSO account), and not for a path that is no `/{group}/{site}/` of slugs, where
 the login could set no site cookie and the visitor would loop. Everything else
-keeps the byte-identical neutral 404.
+keeps the byte-identical neutral 404, or with a secret link in the query the
+302 that takes it out (§7.4); the navigation that follows that 302 carries no
+key and so gets the redirect.
 
 The logout clears the anchor and the site cookie at every path the
 session handed one out for (the session remembers up to 32 of them). Past that
@@ -1078,7 +1121,8 @@ Code: `alembic/versions/`, `models/`. Guarded by:
   access matrix (base times extras times visitor class times
   live/preview/`_version`/no-live-version/expired-preview/revoked-key-with-cookie,
   including byte-level equality of the neutral 404 and the slash redirect
-  behaviour), serving path validation including percent-encoded traversal,
+  behaviour) and the same matrix over HTTP for every visitor with a secret link
+  in the query, serving path validation including percent-encoded traversal,
   fail-closed ingest, serving (redirects, MIME, 304, header set), rate limiting,
   the deploy API (CI trust, idempotent teardown, concurrent preview upsert,
   problem+json), storage lifecycle, host separation, origin guarding, OIDC, the
