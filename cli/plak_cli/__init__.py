@@ -476,7 +476,7 @@ def _check_api_version(response: httpx.Response) -> None:
         )
 
 
-_client: httpx.Client | None = None
+_client: Any = None
 
 # What a retry may follow, for calls that pass `retry_on`. A request that
 # never left (connect errors) is safe to repeat whatever it does; any
