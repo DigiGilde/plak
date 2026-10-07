@@ -35,6 +35,7 @@ import { crumbOverview, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t, type MessageKey } from '@/i18n';
 import { setDocumentTitle } from '@/title';
 import { useAddActions } from '@/composables/addActions';
+import PageHeader from '@/components/PageHeader.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -261,8 +262,7 @@ function onGroupChanged(group: Group): void {
            site page, see the comment there. -->
       <!-- See Overview.vue: the end slot of nldd-title does not let the button
            drop and squashes the title flat on a narrow screen. -->
-      <nldd-container layout="wrap" gap="16" vertical-alignment="center" class="page-header">
-        <nldd-title :size="3"><h1>{{ detail.group.name }}</h1></nldd-title>
+      <PageHeader :text="detail.group.name" :size="3">
         <nldd-button
           v-if="canPublish"
           variant="primary"
@@ -271,7 +271,7 @@ function onGroupChanged(group: Group): void {
           data-testid="group-publish"
           @click="sheetOpen = true"
         ></nldd-button>
-      </nldd-container>
+      </PageHeader>
 
       <nldd-spacer size="16"></nldd-spacer>
 

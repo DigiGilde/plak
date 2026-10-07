@@ -11,6 +11,7 @@ import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import RowActions, { type RowAction, type RowChoice } from '@/components/RowActions.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
 defineOptions({ inheritAttrs: false });
@@ -152,10 +153,7 @@ async function remove(preview: Preview): Promise<void> {
 
   <section v-else aria-labelledby="heading-previews">
     <nldd-container layout="stack" gap="8">
-      <nldd-title :size="4">
-        <h2 id="heading-previews">{{ t('site.previews.heading') }}</h2>
-        <span slot="subtitle">{{ t('site.previews.intro') }}</span>
-      </nldd-title>
+      <SectionHeading id="heading-previews" :text="t('site.previews.heading')" :intro="t('site.previews.intro')" />
 
       <nldd-inline-dialog
         v-if="previews.length === 0"

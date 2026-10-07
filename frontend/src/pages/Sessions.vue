@@ -21,6 +21,7 @@ import { useLoader } from '@/composables/loader';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const route = useRoute();
 
@@ -89,10 +90,9 @@ async function confirmRevoke(): Promise<void> {
   <nldd-simple-section class="reading-width">
     <Notices ref="notices" />
 
-    <nldd-title :size="1">
-      <h1>{{ t('nav.sessions') }}</h1>
-      <span slot="subtitle">{{ subtitle[0] }}<code>plak login</code>{{ subtitle[1] }}</span>
-    </nldd-title>
+    <SectionHeading :level="1" :size="1" :text="t('nav.sessions')">
+      <template #intro>{{ subtitle[0] }}<code>plak login</code>{{ subtitle[1] }}</template>
+    </SectionHeading>
 
     <nldd-spacer size="24"></nldd-spacer>
 

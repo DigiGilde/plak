@@ -10,6 +10,8 @@ import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import UploadZone from '@/components/site/UploadZone.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
+import CopyNotice from '@/components/CopyNotice.vue';
 
 // The tabs have several roots (notifications beside the content); nothing
 // should fall through to the markup.
@@ -106,7 +108,7 @@ async function deleteSite(): Promise<void> {
   <nldd-container layout="stack" gap="24">
     <section aria-labelledby="heading-status">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4"><h2 id="heading-status">{{ t('site.overview.status.heading') }}</h2></nldd-title>
+        <SectionHeading id="heading-status" :text="t('site.overview.status.heading')" />
         <nldd-container layout="stack" gap="16">
           <template v-if="siteInfo.hasLiveVersion">
             <!-- Both facts about the state of this site, side by side: is it
@@ -158,14 +160,7 @@ async function deleteSite(): Promise<void> {
                   ></nldd-button>
                 </nldd-button-group>
 
-                <!-- A status line, not a toast: it belongs to these buttons
-                     and has to be announced when it appears after the copy too. -->
-                <nldd-text
-                  size="sm"
-                  role="status"
-                  data-testid="copy-notice"
-                  >{{ copyNotice }}</nldd-text
-                >
+                <CopyNotice :text="copyNotice" data-testid="copy-notice" />
 
                 <nldd-text size="sm" data-testid="visible-to">
                   {{ accessSummary(siteInfo.access) }}
@@ -194,7 +189,7 @@ async function deleteSite(): Promise<void> {
 
     <section aria-labelledby="heading-upload">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4"><h2 id="heading-upload">{{ t('site.overview.publish.heading') }}</h2></nldd-title>
+        <SectionHeading id="heading-upload" :text="t('site.overview.publish.heading')" />
         <nldd-container layout="stack" gap="16">
           <UploadZone :busy="uploadBusy" @file="publish" />
           <ErrorBanner v-if="uploadError" :error="uploadError" />
@@ -205,7 +200,7 @@ async function deleteSite(): Promise<void> {
     <section aria-labelledby="heading-danger-zone">
       <nldd-box background="critical">
         <nldd-container layout="stack" gap="8" padding="16">
-          <nldd-title :size="4"><h2 id="heading-danger-zone">{{ t('site.overview.danger.heading') }}</h2></nldd-title>
+          <SectionHeading id="heading-danger-zone" :text="t('site.overview.danger.heading')" />
           <nldd-container layout="stack" gap="16">
             <nldd-rich-text>
               <p>{{ t('site.overview.danger.body') }}</p>

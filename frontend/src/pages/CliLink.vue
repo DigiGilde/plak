@@ -21,6 +21,7 @@ import { fetchSession, type Session } from '@/composables/currentMember';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 /**
  * What the page shows. The lookup stage carries the authorization it shows,
@@ -190,7 +191,7 @@ function clientLine(authorization: DeviceAuthorization): string {
     <ErrorBanner v-else-if="view.stage === 'error'" :error="view.error" />
 
     <template v-else-if="view.stage === 'login'">
-      <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
+      <SectionHeading :level="1" :size="1" :text="t('page.cliPair.title')" />
       <nldd-rich-text>
         <p>{{ t('page.cliPair.login.intro') }}</p>
         <p>{{ t('page.cliPair.login.afterwards') }}</p>
@@ -205,7 +206,7 @@ function clientLine(authorization: DeviceAuthorization): string {
     </template>
 
     <template v-else-if="view.stage === 'code-entry'">
-      <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
+      <SectionHeading :level="1" :size="1" :text="t('page.cliPair.title')" />
       <nldd-rich-text>
         <p>{{ t('page.cliPair.codeEntry.intro') }}</p>
         <p>
@@ -253,7 +254,7 @@ function clientLine(authorization: DeviceAuthorization): string {
     </template>
 
     <template v-else-if="view.stage === 'lookup'">
-      <nldd-title :size="1"><h1>{{ t('page.cliPair.title') }}</h1></nldd-title>
+      <SectionHeading :level="1" :size="1" :text="t('page.cliPair.title')" />
       <nldd-rich-text>
         <p>{{ t('page.cliPair.confirm.question') }}</p>
       </nldd-rich-text>

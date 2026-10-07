@@ -29,6 +29,7 @@ import {
   type LanguageChoice,
 } from '@/i18n';
 import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const route = useRoute();
 const { member } = currentMemberState();
@@ -107,20 +108,14 @@ onMounted(() => {
   <nldd-simple-section class="reading-width">
     <Notices ref="notices" />
 
-    <nldd-title :size="1">
-      <h1>{{ t('profile.title') }}</h1>
-      <span slot="subtitle">{{ t('profile.subtitle') }}</span>
-    </nldd-title>
+    <SectionHeading :level="1" :size="1" :text="t('profile.title')" :intro="t('profile.subtitle')" />
 
     <nldd-spacer size="24"></nldd-spacer>
 
     <nldd-container layout="stack" gap="24">
       <section aria-labelledby="heading-account">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-account">{{ t('profile.account.heading') }}</h2>
-            <span slot="subtitle">{{ t('profile.account.hint') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-account" :text="t('profile.account.heading')" :intro="t('profile.account.hint')" />
           <nldd-list variant="box-tinted" :accessible-label="t('profile.account.heading')">
             <nldd-list-item size="md" data-testid="profile-name">
               <nldd-text-cell
@@ -146,10 +141,7 @@ onMounted(() => {
 
       <section aria-labelledby="heading-language">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-language">{{ t('profile.language.heading') }}</h2>
-            <span slot="subtitle">{{ t('profile.language.subtitle') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-language" :text="t('profile.language.heading')" :intro="t('profile.language.subtitle')" />
           <nldd-list
             type="radiogroup"
             variant="box-base"
@@ -186,10 +178,7 @@ onMounted(() => {
 
       <section aria-labelledby="heading-sessions">
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="4">
-            <h2 id="heading-sessions">{{ t('profile.sessions.heading') }}</h2>
-            <span slot="subtitle">{{ t('profile.sessions.body') }}</span>
-          </nldd-title>
+          <SectionHeading id="heading-sessions" :text="t('profile.sessions.heading')" :intro="t('profile.sessions.body')" />
           <nldd-rich-text>
             <p>
               {{ t('profile.sessions.install.before')
