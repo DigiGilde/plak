@@ -3,6 +3,10 @@
  * events the way the nldd components fire them in the browser.
  */
 import { flushPromises } from '@vue/test-utils';
+import { computed, ref } from 'vue';
+
+import { groupDetailOf, type MockBackend } from '@/api/mock';
+import { SITE_GROUP, type SiteGroup } from '@/composables/siteGroup';
 
 /** Drains the microtask queue a few times (nested awaits inside load()). */
 export async function untilIdle(): Promise<void> {
@@ -101,4 +105,24 @@ export function serverErrorFetch(): typeof fetch {
         { status: 500, headers: { 'content-type': 'application/problem+json' } },
       ),
     );
+}
+
+/**
+ * What a site page hands its tabs, as `global.provide` for a tab mounted on
+ * its own. Read from the backend at call time, so a test that changes the data
+ * first gets the changed site.
+ */
+export function provideSiteGroup(
+  backend: MockBackend,
+  group = 'team-aurora',
+  site = 'website',
+): Record<symbol, SiteGroup> {
+  const groupRow = backend.data.groups.find((g) => g.slug === group)!;
+  const detail = ref(groupDetailOf(backend.data, groupRow));
+  return {
+    [SITE_GROUP as symbol]: {
+      detail,
+      site: computed(() => detail.value.sites.find((p) => p.slug === site)!),
+    },
+  };
 }

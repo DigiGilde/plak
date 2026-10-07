@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import * as plak from '@/api/plak';
 import { ApiError } from '@/api/client';
@@ -7,6 +7,7 @@ import type { Me, SiteStorage, Version } from '@/api/types';
 import { contentUrl, formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { useLoader } from '@/composables/loader';
 import { isSiteAdmin } from '@/composables/roles';
 import { formatSize } from '@/components/site/packing';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -22,8 +23,6 @@ const emit = defineEmits<{
   changed: [];
 }>();
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const versions = ref<Version[]>([]);
 const storage = ref<SiteStorage | null>(null);
 const busyWith = ref<string | null>(null);
@@ -37,10 +36,8 @@ const retentionError = ref<string | null>(null);
 /** Why the last choice of an option was not saved, shown under the options. */
 const choiceError = ref<string | null>(null);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
+const { loading, error, reload } = useLoader(
+  async () => {
     // The usage line is an extra: when it cannot be loaded it is left out
     // and the list carries on.
     const [list, usage, member] = await Promise.allSettled([
@@ -49,7 +46,10 @@ async function load(): Promise<void> {
       fetchCurrentMember(),
     ]);
     if (list.status === 'rejected') throw list.reason;
-    versions.value = list.value;
+    return { list: list.value, usage, member };
+  },
+  ({ list, usage, member }) => {
+    versions.value = list;
     storage.value = usage.status === 'fulfilled' ? usage.value : null;
     canEditRetention.value =
       member.status === 'fulfilled' && isSiteAdmin(member.value as Me | null, props.group, props.site);
@@ -59,15 +59,9 @@ async function load(): Promise<void> {
       retentionError.value = null;
       choiceError.value = null;
     }
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
-watch(() => [props.group, props.site], load);
+  },
+  () => [props.group, props.site],
+);
 
 function retentionRule(kept: number): string {
   if (kept === 0) return t('site.versions.retention.all');
@@ -266,7 +260,7 @@ async function setLive(version: Version): Promise<void> {
       t('site.versions.setLive.done.detail', { timestamp: formatTimestamp(version.createdAt) }),
     );
     emit('changed');
-    await load();
+    await reload();
   } catch (f) {
     notices.value?.notify(
       'critical',

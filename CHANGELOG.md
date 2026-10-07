@@ -37,6 +37,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   see what a browser sees. The admin host and the login paths are
   unchanged.
 
+### Fixed
+
+- The site pages fetch the group once instead of once per tab, and a slow
+  answer no longer overwrites a newer one when you switch quickly.
+
 ## [2026.10.7]
 
 ### Security

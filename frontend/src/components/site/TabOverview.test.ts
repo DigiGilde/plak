@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import TabOverview from './TabOverview.vue';
-import { serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
+import { provideSiteGroup, serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
 
 let backend: MockBackend;
 
@@ -20,7 +20,7 @@ afterEach(() => {
 function makeWrapper() {
   return mount(TabOverview, {
     props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
-    global: { stubs: { teleport: true } },
+    global: { stubs: { teleport: true }, provide: provideSiteGroup(backend) },
   });
 }
 
@@ -138,49 +138,6 @@ describe('TabOverview: states', () => {
 
     expect(wrapper.html()).toContain('Nog geen live versie');
     expect(wrapper.find('[data-testid="public-url"]').exists()).toBe(false);
-  });
-
-  it('shows an error message on a server error', async () => {
-    vi.stubGlobal('fetch', serverErrorFetch());
-
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    expect(wrapper.html()).toContain('Serverfout');
-  });
-
-  it('shows a 404 when the site vanished from its group between the two requests', async () => {
-    // A real race (deleted from another tab just as this one loads): the
-    // versions call still answers, but the group listing no longer has the
-    // site, so `found` in TabOverview's load() comes back undefined.
-    const realFetch = backend.fetch;
-    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await realFetch(input, init);
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/-/api/v1/groups/team-aurora') {
-        const body = await response.clone().json();
-        body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
-        return new Response(JSON.stringify(body), {
-          status: response.status,
-          headers: response.headers,
-        });
-      }
-      return response;
-    });
-
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    expect(wrapper.html()).toContain('Onbekende site');
-  });
-
-  it('shows a 404 message for an unknown site', async () => {
-    const wrapper = mount(TabOverview, {
-      props: { group: 'team-aurora', site: 'bestaat-niet', contentBase: MOCK_CONTENT_BASE },
-    });
-    await untilIdle();
-
-    expect(wrapper.html()).toContain('Onbekende site');
   });
 });
 

@@ -11,12 +11,13 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { cliSessions, revokeCliSession } from '@/api/plak';
-import { ApiError } from '@/api/client';
+import { errorText } from '@/api/client';
 import type { CliSession } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { useLoader } from '@/composables/loader';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
 import { PLAK_LOGIN_DOCS_URL } from '@/urls';
@@ -29,34 +30,19 @@ const route = useRoute();
  */
 const subtitle = computed(() => t('admin.sessions.subtitle').split('{command}'));
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const sessions = ref<CliSession[]>([]);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const revoking = ref<CliSession | null>(null);
 const revokeBusy = ref(false);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    sessions.value = await cliSessions();
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
+const { loading, error } = useLoader(cliSessions, (list) => {
+  sessions.value = list;
+});
 
 onMounted(() => {
   setBreadcrumbs(route.path, [{ text: t('nav.overview'), href: '/' }, { text: t('nav.sessions') }]);
-  void load();
 });
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
 
 function lastUsedLabel(session: CliSession): string {
   return session.lastUsedAt ? formatTimestamp(session.lastUsedAt) : t('admin.sessions.neverUsed');

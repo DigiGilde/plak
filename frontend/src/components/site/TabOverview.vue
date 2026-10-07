@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import * as plak from '@/api/plak';
-import { ApiError } from '@/api/client';
-import type { Site, Version } from '@/api/types';
+import { errorText } from '@/api/client';
 import { accessLabel, accessSummary, formatTimestamp, siteUrl } from '@/format';
+import { useSiteGroup } from '@/composables/siteGroup';
 import { t } from '@/i18n';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -22,10 +22,7 @@ const emit = defineEmits<{
   changed: [];
 }>();
 
-const loading = ref(true);
-const error = ref<unknown>(null);
-const siteInfo = ref<Site | null>(null);
-const versions = ref<Version[]>([]);
+const siteInfo = useSiteGroup().site;
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const uploadBusy = ref(false);
@@ -41,7 +38,7 @@ const liveUrl = computed(() => siteUrl(props.contentBase, props.group, props.sit
  * follows the access base; the line below it says who can really see the site.
  */
 const addressLabel = computed(() =>
-  siteInfo.value?.access.base === 'public'
+  siteInfo.value.access.base === 'public'
     ? t('site.overview.addressLabel.public')
     : t('site.overview.addressLabel.restricted'),
 );
@@ -61,37 +58,6 @@ async function copyAddress(): Promise<void> {
 }
 
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    const [detail, versionList] = await Promise.all([
-      plak.group(props.group),
-      plak.versions(props.group, props.site),
-    ]);
-    const found = detail.sites.find((p) => p.slug === props.site);
-    if (!found) {
-      error.value = new ApiError({
-        type: 'about:blank',
-        title: t('site.notFound.title'),
-        status: 404,
-        detail: t('site.notFound.detail', { site: props.site, group: props.group }),
-      });
-      siteInfo.value = null;
-      return;
-    }
-    siteInfo.value = found;
-    versions.value = versionList;
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
-watch(() => [props.group, props.site], load);
-
 // Publishing carries weight and cannot be undone: no optimistic assumption,
 // but an explicit action with a confirmation afterwards.
 async function publish(file: File): Promise<void> {
@@ -105,7 +71,6 @@ async function publish(file: File): Promise<void> {
       t('site.overview.published.detail'),
     );
     emit('changed');
-    await load();
   } catch (f) {
     uploadError.value = f;
   } finally {
@@ -133,23 +98,12 @@ async function deleteSite(): Promise<void> {
   }
 }
 
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
-
 </script>
 
 <template>
   <Notices ref="notices" />
 
-  <nldd-activity-indicator
-    v-if="loading"
-    :text="t('site.overview.loading')"
-  ></nldd-activity-indicator>
-
-  <ErrorBanner v-else-if="error" :error="error" />
-
-  <nldd-container v-else-if="siteInfo" layout="stack" gap="24">
+  <nldd-container layout="stack" gap="24">
     <section aria-labelledby="heading-status">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4"><h2 id="heading-status">{{ t('site.overview.status.heading') }}</h2></nldd-title>

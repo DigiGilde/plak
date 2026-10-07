@@ -7,10 +7,12 @@
  * The group name comes from the group itself, because the collapsed block
  * names the group people reach this site through.
  */
-import { onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import * as plak from '@/api/plak';
 import type { MemberSuggestion, Role, SiteMember } from '@/api/types';
+import { useLoader } from '@/composables/loader';
+import { useSiteGroup } from '@/composables/siteGroup';
 import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import SiteMembersManager from '@/components/SiteMembersManager.vue';
@@ -20,30 +22,17 @@ defineOptions({ inheritAttrs: false });
 
 const props = defineProps<{ group: string; site: string }>();
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const members = ref<SiteMember[]>([]);
-const groupName = ref('');
+const siteGroup = useSiteGroup();
+const groupName = computed(() => siteGroup.detail.value.group.name);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    const [rows, detail] = await Promise.all([
-      plak.siteMembers(props.group, props.site),
-      plak.group(props.group),
-    ]);
+const { loading, error } = useLoader(
+  () => plak.siteMembers(props.group, props.site),
+  (rows) => {
     members.value = rows;
-    groupName.value = detail.group.name;
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
-watch(() => [props.group, props.site], load);
+  },
+  () => [props.group, props.site],
+);
 
 function add(identifier: string, role: Role): Promise<SiteMember> {
   return plak.addSiteMember(props.group, props.site, identifier, role);

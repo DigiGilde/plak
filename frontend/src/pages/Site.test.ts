@@ -141,6 +141,26 @@ describe('Site: structure', () => {
   });
 });
 
+describe('Site: the group is fetched once', () => {
+  it('asks for the group once for a whole visit across the tabs', async () => {
+    const realFetch = backend.fetch;
+    const groupRequests: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/-/api/v1/groups/team-aurora') groupRequests.push(url);
+      return realFetch(input, init);
+    });
+    const { router } = await makeWrapper('/team-aurora/website');
+
+    for (const path of ['previews', 'versions', 'access', 'deploy', '']) {
+      await router.push(`/team-aurora/website/${path}`);
+      await untilIdle();
+    }
+
+    expect(groupRequests).toHaveLength(1);
+  });
+});
+
 describe('Site: tab navigation', () => {
   it('navigates per tab to the matching subpath', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora/website');
