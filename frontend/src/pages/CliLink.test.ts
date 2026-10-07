@@ -426,6 +426,25 @@ describe('CliLink: looking up the code via the url', () => {
     expect(backend.data.cliSessions.some((s) => s.clientName === 'plak-cli')).toBe(true);
   });
 
+  it('ignores the other button while an answer is on its way', async () => {
+    const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
+    const inner = backend.fetch;
+    const answers: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/approve') || url.includes('/deny')) answers.push(url);
+      return inner(input, init);
+    });
+
+    await wrapper.find('[data-testid="code-link"]').trigger('click');
+    await wrapper.find('[data-testid="code-deny"]').trigger('click');
+    await untilIdle();
+
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toContain('/approve');
+    expect(backend.data.deviceAuthorizations[0]!.status).toBe('approved');
+  });
+
   it('refuses after Weigeren and grants no access', async () => {
     const { wrapper } = await makeWrapper('/cli-link?code=ABCD-EFGH');
 

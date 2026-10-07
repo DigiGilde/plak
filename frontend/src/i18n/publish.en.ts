@@ -50,9 +50,10 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.drop.noFolder': 'Do not drag a folder. {hint}',
   'publish.upload.field.label': 'File or folder',
   'publish.upload.field.hint': 'Drag it here, or choose it.',
-  'publish.upload.field.required': 'An archive, a single HTML file or a folder you drag here',
+  'publish.upload.field.required': 'An archive, a single HTML file or a folder',
   'publish.upload.field.help':
-    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here. A single HTML file becomes the start page of your site; a folder is packed by Plak in your browser, without the metadata of your operating system.',
+    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site; a folder is packed by Plak in your browser, without the metadata of your operating system.',
+  'publish.upload.folder': 'Choose a folder',
   'publish.upload.progress.reading': 'Reading folder',
   'publish.upload.progress.packing': 'Packing folder',
   'publish.upload.ready.title': 'Ready to publish',

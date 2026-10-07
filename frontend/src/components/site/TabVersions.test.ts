@@ -328,6 +328,24 @@ describe('TabVersions: setting live', () => {
     expect(wrapper.find('nldd-notification[text="Versie live gezet"]').exists()).toBe(true);
   });
 
+  it('ignores a second choice while the first is still being carried out', async () => {
+    const realFetch = backend.fetch;
+    let requests = 0;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/_set-live')) requests += 1;
+      return realFetch(input, init);
+    });
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const item = wrapper.find('[data-testid="set-live-versie-0"]').element;
+    item.dispatchEvent(new CustomEvent('select'));
+    item.dispatchEvent(new CustomEvent('select'));
+    await untilIdle();
+
+    expect(requests).toBe(1);
+  });
+
   it('reports it when setting live fails', async () => {
     const wrapper = makeWrapper();
     await untilIdle();

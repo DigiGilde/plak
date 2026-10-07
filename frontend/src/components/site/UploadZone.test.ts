@@ -140,6 +140,80 @@ describe('UploadZone: choosing via the field', () => {
   });
 });
 
+/** A folder as the file dialog hands it over: flat files that carry their path. */
+function chosenFolder(paths: string[]): File[] {
+  return paths.map((path) => {
+    const chosen = file(path.split('/').pop()!);
+    Object.defineProperty(chosen, 'webkitRelativePath', { value: path });
+    return chosen;
+  });
+}
+
+function chooseFolder(wrapper: ReturnType<typeof mount>, files: File[]): Promise<void> {
+  const input = wrapper.find('[data-testid="upload-folder-input"]').element as HTMLInputElement;
+  Object.defineProperty(input, 'files', { value: files, configurable: true });
+  input.dispatchEvent(new Event('change'));
+  return untilQuiet();
+}
+
+describe('UploadZone: choosing a folder without dragging', () => {
+  it('opens the folder dialog from a button', async () => {
+    const { wrapper } = await mountComponent();
+    const input = wrapper.find('[data-testid="upload-folder-input"]').element as HTMLInputElement;
+    const click = vi.spyOn(input, 'click');
+
+    await wrapper.find('[data-testid="upload-folder"]').trigger('click');
+
+    expect(click).toHaveBeenCalledOnce();
+    expect(wrapper.find('[data-testid="upload-folder"]').attributes('text')).toBe('Kies een map');
+    expect(input.hasAttribute('webkitdirectory')).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it('packs the chosen folder like a dropped one', async () => {
+    const { wrapper } = await mountComponent();
+
+    await chooseFolder(
+      wrapper,
+      chosenFolder(['mijn-site/index.html', 'mijn-site/assets/stijl.css', 'mijn-site/.DS_Store']),
+    );
+
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
+    expect(notice).toContain('mijn-site');
+    expect(notice).toContain('2 bestanden');
+
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    const sent = wrapper.emitted('file')?.[0]?.[0] as File;
+    expect(sent.name).toBe('mijn-site.tar.gz');
+
+    wrapper.unmount();
+  });
+
+  it('refuses a folder without a start page, as a drop would', async () => {
+    const { wrapper } = await mountComponent();
+
+    await chooseFolder(wrapper, chosenFolder(['mijn-site/lees-mij.txt']));
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  it('refuses an empty folder', async () => {
+    const { wrapper } = await mountComponent();
+
+    await chooseFolder(wrapper, []);
+
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toBe(
+      'In deze map staat niets dat gepubliceerd kan worden.',
+    );
+
+    wrapper.unmount();
+  });
+});
+
 describe('UploadZone: dragging', () => {
   it('marks the zone as long as something hovers over it', async () => {
     const { wrapper, zone } = await mountComponent();

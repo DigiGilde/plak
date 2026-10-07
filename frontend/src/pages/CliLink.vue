@@ -103,6 +103,8 @@ function submitManualCode(): void {
 }
 
 async function respond(action: 'approve' | 'deny', code: string): Promise<void> {
+  // The other button stays enabled: a second click while one answer is on its way does nothing.
+  if (actionBusy.value !== null) return;
   actionBusy.value = action;
   try {
     if (action === 'approve') {
@@ -298,7 +300,6 @@ function clientLine(authorization: DeviceAuthorization): string {
           variant="primary"
           :text="t('page.cliPair.confirm.approve')"
           :loading="actionBusy === 'approve' || undefined"
-          :disabled="actionBusy === 'deny' || undefined"
           data-testid="code-link"
           @click="respond('approve', view.authorization.userCode)"
         ></nldd-button>
@@ -306,7 +307,6 @@ function clientLine(authorization: DeviceAuthorization): string {
           variant="secondary"
           :text="t('page.cliPair.confirm.deny')"
           :loading="actionBusy === 'deny' || undefined"
-          :disabled="actionBusy === 'approve' || undefined"
           data-testid="code-deny"
           @click="respond('deny', view.authorization.userCode)"
         ></nldd-button>

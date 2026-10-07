@@ -12,6 +12,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Added
+
+- "Choose a folder" on a site's Overview tab picks a whole folder to publish
+  without dragging it.
+
 ### Changed
 
 - The What's new page no longer opens with the version you use; the footer
@@ -31,6 +36,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   without its version.
 - The site pages fetch the group once instead of once per tab, and a slow
   answer no longer overwrites a newer one when you switch quickly.
+- After a navigation inside the admin, focus moves to the page heading (or
+  the tab content) and a screen reader hears the page title.
+- The browser tab title follows a language switch at once.
+- The approve and deny buttons of the CLI link page and the actions in the
+  platform members and versions menus are no longer disabled; a second click
+  while busy is ignored, and a blocked member action explains why.
 
 ### Security
 

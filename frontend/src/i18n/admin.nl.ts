@@ -41,6 +41,11 @@ export const adminNl = {
   'admin.members.action.demote': 'Beheerdersrol afnemen',
   'admin.members.blocked.bootstrap': 'bootstrap-account',
   'admin.members.blocked.lastAdmin': 'laatste beheerder',
+  'admin.members.blocked.title': 'Dit kan niet voor {name}',
+  'admin.members.blocked.bootstrap.explanation':
+    'Het bootstrap-account houdt altijd toegang en de beheerdersrol.',
+  'admin.members.blocked.lastAdmin.explanation':
+    'Er moet minstens één actieve beheerder overblijven.',
   'admin.members.roleFailed': 'De rol van {name} wijzigen is niet gelukt',
   'admin.members.activateFailed': '{name} activeren is niet gelukt',
   'admin.members.deactivateFailed': '{name} deactiveren is niet gelukt',

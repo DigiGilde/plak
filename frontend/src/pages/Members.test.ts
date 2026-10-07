@@ -183,16 +183,37 @@ describe('Platform management (filled)', () => {
 
   it('leaves the bootstrap account visible with the reason included, instead of leaving it out', async () => {
     // Bea Heerder is the bootstrap account; viewed by someone else the
-    // action stays visible but disabled, because that reason is not
-    // self-evident.
+    // action stays visible and names the reason, because that reason is not
+    // self-evident. It is not disabled: choosing it explains.
     backend.data.loggedInMemberId = 'lid-3';
     const app = await mountComponent();
 
     const item = actionOf('Bea Heerder', 'member-access-lid-1');
     expect(item.exists()).toBe(true);
-    expect(item.attributes('disabled')).toBeDefined();
+    expect(item.attributes('disabled')).toBeUndefined();
     expect(item.attributes('details')).toBe('bootstrap-account');
     expect(app.exists()).toBe(true);
+  });
+
+  it('explains why instead of acting when a blocked item is chosen', async () => {
+    backend.data.loggedInMemberId = 'lid-3';
+    await mountComponent();
+
+    await runAction('Bea Heerder', 'member-access-lid-1');
+    await runAction('Bea Heerder', 'member-role-lid-1');
+
+    const notices = [...document.querySelectorAll('nldd-notification')] as (HTMLElement & {
+      text?: string;
+      supportingText?: string;
+    })[];
+    expect(notices).toHaveLength(2);
+    expect(notices[0]!.text).toBe('Dit kan niet voor Bea Heerder');
+    expect(notices[0]!.supportingText).toBe(
+      'Het bootstrap-account houdt altijd toegang en de beheerdersrol.',
+    );
+    // Nothing was sent: the member is as she was.
+    expect(backend.data.members.find((l) => l.id === 'lid-1')?.status).toBe('active');
+    expect(backend.data.members.find((l) => l.id === 'lid-1')?.platformRole).toBe('admin');
   });
 
   it('shows who is platform admin and makes that changeable from the menu', async () => {
@@ -383,12 +404,20 @@ describe('Platform management (filled)', () => {
     await mountComponent();
 
     const toegang = actionOf('Ada Vermeer', 'member-access-lid-3');
-    expect(toegang.attributes('disabled')).toBeDefined();
+    expect(toegang.attributes('disabled')).toBeUndefined();
     expect(toegang.attributes('details')).toBe('laatste beheerder');
 
     const rol = actionOf('Ada Vermeer', 'member-role-lid-3');
-    expect(rol.attributes('disabled')).toBeDefined();
+    expect(rol.attributes('disabled')).toBeUndefined();
     expect(rol.attributes('details')).toBe('laatste beheerder');
+
+    await runAction('Ada Vermeer', 'member-role-lid-3');
+
+    const notice = document.querySelector('nldd-notification') as
+      | (HTMLElement & { supportingText?: string })
+      | null;
+    expect(notice?.supportingText).toBe('Er moet minstens één actieve beheerder overblijven.');
+    expect(backend.data.members.find((l) => l.id === 'lid-3')?.platformRole).toBe('admin');
   });
 
   it('demotes a platform admin back to member', async () => {
