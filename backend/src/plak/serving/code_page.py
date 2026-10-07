@@ -71,7 +71,6 @@ _CODE_PAGE_CSS = """
   color-scheme: light;
   --plak-ground: #fff;
   --plak-text: #1c2022;
-  --plak-muted: #46535a;
   --plak-brand: #154273;
   --plak-brand-contrast: #fff;
   --plak-line: #767676;
@@ -83,7 +82,6 @@ _CODE_PAGE_CSS = """
     color-scheme: dark;
     --plak-ground: #1c2022;
     --plak-text: #e7eaec;
-    --plak-muted: #b3bcc1;
     /* Rijksblauw reaches only 3:1 on this ground; this lighter tint 6.5:1. */
     --plak-brand: #8fb8e0;
     --plak-brand-contrast: #1c2022;
@@ -116,10 +114,6 @@ h1 {
   color: var(--plak-brand);
   font-size: 1.75rem;
   line-height: 1.2;
-}
-
-.intro {
-  color: var(--plak-muted);
 }
 
 label {
@@ -165,6 +159,18 @@ button:hover {
   padding-left: 0.75rem;
   color: var(--plak-critical);
 }
+
+.site-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--plak-line);
+  padding-top: 1rem;
+}
+
+.site-footer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 """
 
 
@@ -185,13 +191,28 @@ CODE_PAGE_HEADERS = {
 }
 
 
-def code_page_html(selector: str, path: str, error: str = "", locale: str = i18n.DEFAULT) -> str:
+def code_page_html(
+    selector: str, path: str, error: str = "", locale: str = i18n.DEFAULT, *, admin_origin: str = ""
+) -> str:
     """The code page. `selector` and `path` ride along in the form, because the
     POST lands on `/-/code` and no longer knows which address the visitor came
-    for."""
+    for.
+
+    `admin_origin` (PLAK_BASE_URL, never the Host header) is where the footer
+    links the accessibility statement; without one there is no footer."""
     say = partial(i18n.t, locale)
+    # The prefix says it is an error without the colour and the border.
     error_html = (
-        f'<p class="error" id="code-fout" role="alert">{escape(error)}</p>' if error else ""
+        f'<p class="error" id="code-fout" role="alert"><strong>{say("code.error")}</strong> {escape(error)}</p>'
+        if error
+        else ""
+    )
+    footer_html = (
+        f'<footer class="site-footer">\n<nav aria-label="{say("footer.label")}">\n<ul>\n'
+        f'<li><a href="{escape(admin_origin, quote=True)}/-/accessibility">{say("footer.accessibility")}</a></li>\n'
+        "</ul>\n</nav>\n</footer>\n"
+        if admin_origin
+        else ""
     )
     described = ' aria-describedby="code-fout"' if error else ""
     invalid = ' aria-invalid="true"' if error else ""
@@ -218,7 +239,7 @@ def code_page_html(selector: str, path: str, error: str = "", locale: str = i18n
 <p><button type="submit">{say("code.submit")}</button></p>
 </form>
 </main>
-</div>
+{footer_html}</div>
 </body>
 </html>
 """
@@ -229,7 +250,9 @@ def code_page_response(request: Request, selector: str, path: str, error: str = 
     is to go on."""
     locale = i18n.negotiate(request.headers.get("accept-language"))
     return Response(
-        content=code_page_html(selector, path, error, locale),
+        content=code_page_html(
+            selector, path, error, locale, admin_origin=(request.app.state.settings.base_url or "").rstrip("/")
+        ),
         status_code=200,
         media_type="text/html; charset=utf-8",
         headers=CODE_PAGE_HEADERS,

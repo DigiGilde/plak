@@ -65,6 +65,9 @@ NL: Final[dict[str, str]] = {
     "code.submit": "Bekijk de pagina",
     "code.wrong": "De code klopt niet. Controleer de code die je apart hebt gekregen.",
     "code.later": "Probeer het later opnieuw.",
+    "code.error": "Fout:",
+    "footer.label": "Over deze dienst",
+    "footer.accessibility": "Toegankelijkheid",
 }
 
 EN: Final[dict[str, str]] = {
@@ -83,6 +86,9 @@ EN: Final[dict[str, str]] = {
     "code.submit": "View the page",
     "code.wrong": "That code is not right. Check the code you were given separately.",
     "code.later": "Please try again later.",
+    "code.error": "Error:",
+    "footer.label": "About this service",
+    "footer.accessibility": "Accessibility",
 }
 
 _CATALOGUES: Final[dict[str, dict[str, str]]] = {"nl": NL, "en": EN}
