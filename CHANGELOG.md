@@ -47,6 +47,15 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
+- Plak fetches the signing keys and the discovery document of the identity
+  provider again every hour, so a key the provider withdraws stops being
+  trusted without a restart.
+- A CI ID token that carries a `jti` (GitHub) is accepted once; a second use
+  within its lifetime is refused.
+- A non-admin reaching the platform member routes is refused and audited
+  before a malformed request is looked at.
+- JSON and other non-HTML answers of the admin host carry `Referrer-Policy`
+  and `X-Frame-Options`.
 
 ## [2026.10.7]
 

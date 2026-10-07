@@ -563,8 +563,8 @@ class TestEndSessionUrl:
         assert url is None
 
     async def test_separator_is_ampersand_when_endpoint_already_has_a_query(self, oidc):
-        await oidc.metadata()
-        oidc._metadata["end_session_endpoint"] = "https://idp.example/endsession?foo=bar"
+        metadata = await oidc.metadata()
+        metadata["end_session_endpoint"] = "https://idp.example/endsession?foo=bar"
         url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
         assert url.startswith("https://idp.example/endsession?foo=bar&")
 
@@ -582,6 +582,106 @@ class TestJwksFetchFailure:
         oidc = OidcClient(make_settings(idp), http)
         with pytest.raises(OidcError):
             await oidc._fetch_keyset()
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class TestKeysAndMetadataExpire:
+    """Both are fetched again after an hour, so a key the IdP withdraws stops
+    being trusted without a restart."""
+
+    @staticmethod
+    def _client(idp: MockIdP, clock: _Clock, handler=None) -> OidcClient:
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler or idp.handler))
+        return OidcClient(make_settings(idp), http, clock=clock)
+
+    async def test_the_jwks_is_reused_within_the_hour(self, idp):
+        clock = _Clock()
+        oidc = self._client(idp, clock)
+        await validate(oidc, idp, idp.make_id_token(nonce="nonce-1"))
+        fetched = idp.jwks_requests
+
+        clock.now += 3599
+        await validate(oidc, idp, idp.make_id_token(nonce="nonce-1"))
+        assert idp.jwks_requests == fetched
+
+    async def test_a_key_the_idp_withdraws_stops_being_trusted_after_the_hour(self, idp):
+        clock = _Clock()
+        oidc = self._client(idp, clock)
+        await validate(oidc, idp, idp.make_id_token(nonce="nonce-1"))
+
+        # The IdP rotates and withdraws the old key; this token is still
+        # signed with it, under its old kid.
+        new_public = RSAKey.generate_key(2048).as_dict(private=False)
+        new_public["kid"] = "idp-sleutel-2"
+        idp.jwks = {"keys": [new_public]}
+        token = idp.make_id_token(nonce="nonce-1")
+        assert (await validate(oidc, idp, token))["sub"] == "gebruiker-1"
+
+        clock.now += 3601
+        with pytest.raises(OidcError):
+            await validate(oidc, idp, token)
+
+    async def test_the_discovery_document_is_fetched_again_after_the_hour(self, idp):
+        clock = _Clock()
+        oidc = self._client(idp, clock)
+        assert "end_session_endpoint" not in await oidc.metadata()
+
+        idp.end_session_supported = True
+        clock.now += 3599
+        assert "end_session_endpoint" not in await oidc.metadata()
+        clock.now += 2
+        assert (await oidc.metadata())["end_session_endpoint"] == idp.issuer + "/endsession"
+
+    async def test_an_unreachable_idp_leaves_the_last_document_in_use(self, idp):
+        state = {"down": False, "requests": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                state["requests"] += 1
+                if state["down"]:
+                    return httpx.Response(503)
+            return idp.handler(request)
+
+        clock = _Clock()
+        oidc = self._client(idp, clock, handler)
+        first = await oidc.metadata()
+        state["down"] = True
+        clock.now += 3601
+
+        assert await oidc.metadata() == first
+        # The failed refetch restarted the clock: the next request does not
+        # try again.
+        assert await oidc.metadata() == first
+        assert state["requests"] == 2
+
+    async def test_a_failed_fetch_is_not_retried_straight_away(self, idp):
+        requests = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/.well-known/openid-configuration":
+                requests.append(request)
+                return httpx.Response(503)
+            return idp.handler(request)
+
+        clock = _Clock()
+        oidc = self._client(idp, clock, handler)
+        for _ in range(2):
+            with pytest.raises(OidcError) as refused:
+                await oidc.metadata()
+            assert refused.value.reason == vocabulary.LOGIN_IDP_UNREACHABLE
+        assert len(requests) == 1
+
+        clock.now += 31
+        with pytest.raises(OidcError):
+            await oidc.metadata()
+        assert len(requests) == 2
 
 
 class TestClientAssertionGuard:

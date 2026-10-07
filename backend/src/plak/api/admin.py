@@ -185,10 +185,10 @@ ActiveMember = Annotated[Member, Depends(require_active_member)]
 
 
 async def require_platform_admin(member: ActiveMember) -> Member:
-    """Same check as `_require_admin`, but as a dependency: FastAPI resolves
-    dependencies before it parses the body, so a non-admin is refused before
-    a malformed body would be (previously a 422 could beat the 403 on these
-    routes, and a non-admin's probing request went unaudited)."""
+    """Only a platform administrator. A dependency rather than a check in the
+    route: FastAPI resolves dependencies before it parses the body, so a
+    non-admin is refused before a malformed body would be (a 422 beating the
+    403 would leave a non-admin's probing request unaudited)."""
     if member.platform_role != PlatformRole.ADMIN:
         raise ApiError(403, KEY_ADMIN_ONLY)
     return member
@@ -1764,11 +1764,6 @@ async def _site_with_role(
         raise ApiError(404, "UNKNOWN_SITE")
     require_at_least(role, minimum)
     return group, site
-
-
-def _require_admin(member: Member) -> None:
-    if member.platform_role != PlatformRole.ADMIN:
-        raise ApiError(403, KEY_ADMIN_ONLY)
 
 
 def _refuse_self(target: Member, member: Member, what: str) -> None:
@@ -4017,8 +4012,7 @@ def make_admin_router() -> APIRouter:
         ),
         responses=_errors(_ERROR_ADMIN),
     )
-    async def platform_members(request: Request, member: ActiveMember, db: Db) -> list[MemberOut]:
-        _require_admin(member)
+    async def platform_members(request: Request, member: PlatformAdmin, db: Db) -> list[MemberOut]:
         bootstrap_sub = request.app.state.settings.bootstrap_admin_sub
         members = await db.scalars(select(Member).order_by(Member.email))
         return [_member_json(row, bootstrap_sub=bootstrap_sub) for row in members]
@@ -4063,7 +4057,6 @@ def make_admin_router() -> APIRouter:
     async def _set_member_status(
         request: Request, member_id: uuid.UUID, status: MemberStatus, action: str, member: Member, db: AsyncSession
     ) -> MemberOut:
-        _require_admin(member)
         target = await db.get(Member, member_id)
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER")
@@ -4094,7 +4087,7 @@ def make_admin_router() -> APIRouter:
         responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Unknown member (`UNKNOWN_MEMBER`)."}),
     )
     async def activate_platform_member(
-        request: Request, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request, member_id: uuid.UUID, _csrf: Csrf, member: PlatformAdmin, db: Db
     ) -> MemberOut:
         return await _set_member_status(request, member_id, MemberStatus.ACTIVE, "member_activate", member, db)
 
@@ -4113,7 +4106,7 @@ def make_admin_router() -> APIRouter:
         responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Unknown member (`UNKNOWN_MEMBER`)."}),
     )
     async def deactivate_platform_member(
-        request: Request, member_id: uuid.UUID, _csrf: Csrf, member: ActiveMember, db: Db
+        request: Request, member_id: uuid.UUID, _csrf: Csrf, member: PlatformAdmin, db: Db
     ) -> MemberOut:
         return await _set_member_status(
             request, member_id, MemberStatus.DEACTIVATED, "member_deactivate", member, db
@@ -4150,10 +4143,9 @@ def make_admin_router() -> APIRouter:
         member_id: uuid.UUID,
         body: PlatformRoleUpdate,
         _csrf: Csrf,
-        member: ActiveMember,
+        member: PlatformAdmin,
         db: Db,
     ) -> MemberOut:
-        _require_admin(member)
         target = await db.get(Member, member_id)
         if target is None:
             raise ApiError(404, "UNKNOWN_MEMBER")

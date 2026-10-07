@@ -20,6 +20,7 @@ from plak.ci.tokens import (
     MAX_TOKEN_LENGTH,
     CiTokenError,
     CiTokenVerifier,
+    ReplayCache,
     VerifiedCiToken,
     looks_like_jwt,
 )
@@ -478,6 +479,53 @@ class TestDiscoveryUnreachable:
         stale_token = ci.token("github", exp=int(time.time()) + 300)
         verified = await verifier.verify(stale_token)
         assert verified.claim("repository") == "minbzk/website"
+
+
+class TestReplay:
+    """A token with a jti is good for one call; a leaked one cannot be used
+    again for the rest of its lifetime."""
+
+    async def test_a_github_token_is_accepted_once(self):
+        ci = MockCi()
+        verifier = _verifier(ci)
+        token = ci.token("github")
+        await verifier.verify(token)
+
+        with pytest.raises(CiTokenError) as exc:
+            await verifier.verify(token)
+        assert exc.value.reason == vocabulary.CI_TOKEN_INVALID
+        assert exc.value.message.key == "CI_TOKEN_INVALID.replayed"
+        assert exc.value.status == 401
+
+    async def test_every_fresh_token_passes(self):
+        ci = MockCi()
+        verifier = _verifier(ci)
+        for _ in range(3):
+            await verifier.verify(ci.token("github"))
+
+    async def test_a_token_without_jti_is_not_held_against_the_next(self):
+        """Forgejo sends no jti, and two jobs of one run that ask in the same
+        second get the same bytes: nothing tells a replay from the second job."""
+        ci = MockCi()
+        verifier = _verifier(ci)
+        token = ci.token("forgejo")
+        await verifier.verify(token)
+        await verifier.verify(token)
+
+    async def test_a_refused_token_burns_no_jti(self):
+        """Only a verified token counts, or anyone could spend the jti of a
+        token the issuer has yet to hand out."""
+        ci = MockCi()
+        verifier = _verifier(ci)
+        with pytest.raises(CiTokenError):
+            await verifier.verify(ci.token("github", jti="j-1", aud="https://elsewhere.example"))
+        await verifier.verify(ci.token("github", jti="j-1"))
+
+    def test_an_entry_is_forgotten_once_its_token_has_expired(self):
+        cache = ReplayCache()
+        assert cache.seen_before("j-1", until=100.0, now=0.0) is False
+        assert cache.seen_before("j-1", until=100.0, now=99.0) is True
+        assert cache.seen_before("j-1", until=300.0, now=100.0) is False
 
 
 class TestVerifiedCiTokenClaim:

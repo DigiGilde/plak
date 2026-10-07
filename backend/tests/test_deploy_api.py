@@ -344,6 +344,21 @@ async def test_live_deploy_with_ci_token(environment: Environment) -> None:
     assert row.refs["provider"] == "github"
 
 
+async def test_a_ci_token_used_a_second_time_is_refused_and_audited(environment: Environment) -> None:
+    """A leaked token is worth one deploy at most: the one its job made."""
+    token = environment.ci_token
+    async with environment.client() as client:
+        first = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+        replayed = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
+
+    assert first.status_code == 201
+    assert _assert_problem(replayed, 401)["code"] == "CI_TOKEN_INVALID"
+    assert replayed.headers["www-authenticate"].startswith("Bearer")
+    async with environment.session_factory() as db:
+        rows = (await db.execute(select(AuditLogEntry).order_by(AuditLogEntry.occurred_at))).scalars().all()
+    assert [(row.result, row.reason_code) for row in rows] == [("allowed", None), ("refused", "CI_TOKEN_INVALID")]
+
+
 async def test_ci_token_never_lands_in_the_audit_log(environment: Environment) -> None:
     token = environment.ci_token
     async with environment.client() as client:

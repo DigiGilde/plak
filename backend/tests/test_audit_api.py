@@ -737,6 +737,34 @@ class TestAdminCheckBeforeBodyValidation:
 
         assert await _count(factory, AuditLogEntry, action=vocabulary.ADMIN_ACCESS, result="refused") == 1
 
+    @pytest.mark.parametrize(
+        ("method", "path", "body"),
+        [
+            ("PUT", "/platform/members/{member_id}/platform-role", {"platformRole": "keizer"}),
+            ("PUT", "/platform/members/niet-een-id/platform-role", {"platformRole": "admin"}),
+            ("POST", "/platform/members/niet-een-id/_activate", None),
+            ("POST", "/platform/members/niet-een-id/_deactivate", None),
+        ],
+    )
+    async def test_a_non_admin_with_a_malformed_member_request_gets_403_not_422(
+        self, client, app, factory, data, method, path, body
+    ):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        url = BASE + path.format(member_id=data.member_b.id)
+        response = await client.request(method, url, json=body, headers=headers)
+        assert response.status_code == 403
+        assert response.json()["code"] == "NOT_ADMIN"
+
+        assert await _count(factory, AuditLogEntry, action=vocabulary.ADMIN_ACCESS, result="refused") == 1
+
+    async def test_a_non_admin_reading_the_member_list_is_refused_and_audited(self, client, app, factory, data):
+        login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.get(f"{BASE}/platform/members")
+        assert response.status_code == 403
+        assert response.json()["code"] == "NOT_ADMIN"
+
+        assert await _count(factory, AuditLogEntry, action=vocabulary.ADMIN_ACCESS, result="refused") == 1
+
     async def test_non_admin_with_a_malformed_ip_reveal_body_gets_403_not_422(self, client, app, factory, data):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         entry_id = "00000000-0000-0000-0000-000000000000"

@@ -583,7 +583,7 @@ class TestAuthenticationAudit:
         assert record.result == vocabulary.ALLOWED
         assert record.actor.kind is ActorKind.MEMBER
         assert record.actor.identifier == "gebruiker-1"
-        assert record.refs == {"kind": vocabulary.SESSION_ADMIN}
+        assert record.refs == {"kind": "admin"}
         assert record.reason_code is None
         assert record.ip
 
@@ -635,7 +635,7 @@ class TestAuthenticationAudit:
     async def test_content_login_records_the_content_flow(self, content_client, idp, audit):
         await _complete_content_login(content_client, idp)
         record = audit.only()
-        assert record.refs == {"kind": vocabulary.SESSION_CONTENT}
+        assert record.refs == {"kind": "content"}
 
     async def test_logout_records_the_member(self, client, idp, audit):
         await complete_login(client, idp)
