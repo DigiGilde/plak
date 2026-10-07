@@ -3165,7 +3165,7 @@ def make_admin_router() -> APIRouter:
         await db.commit()
         store = request.app.state.content_store
         for site in sites:
-            store.delete_site(site.id)
+            await asyncio.to_thread(store.delete_site, site.id)
         site_slugs = [site.slug for site in sites]
         await _audit(request, member, "group_delete", {"group": group_slug, "sites": site_slugs})
         return Response(status_code=204)
@@ -3416,7 +3416,7 @@ def make_admin_router() -> APIRouter:
         site_id = site.id
         await db.delete(site)
         await db.commit()
-        request.app.state.content_store.delete_site(site_id)
+        await asyncio.to_thread(request.app.state.content_store.delete_site, site_id)
         await _audit(request, member, "site_delete", {"group": group_slug, "site": site_slug})
         return Response(status_code=204)
 

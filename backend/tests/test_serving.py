@@ -38,7 +38,7 @@ from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
 from plak.models.slugs import GroupSlug, SiteSlug
 from plak.serving import addresses
-from plak.serving.response import PLATFORM_CSP
+from plak.serving.response import PLATFORM_CSP, _ContentFileResponse
 from plak.serving.router import router as serving_router
 from plak.slug_window import redirect_ends_at
 
@@ -2156,6 +2156,27 @@ class TestHeaderSet:
         assert response.headers["content-range"] == "bytes 1-2/4"
         assert response.headers["etag"] == f'"{environment.world.site_live_id}"'
         assert response.headers["content-security-policy"] == FULL_CSP
+
+
+class TestContentFileResponse:
+    async def test_a_large_file_goes_out_whole_in_512_kib_chunks(self, tmp_path: Path):
+        content = bytes(range(256)) * (5 * 1024)  # 1.25 MiB
+        path = tmp_path / "groot.bin"
+        path.write_bytes(content)
+        sent: list[dict] = []
+
+        async def receive() -> dict:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        scope = {"type": "http", "method": "GET", "headers": [], "extensions": {}}
+        await _ContentFileResponse(path, media_type="application/octet-stream")(scope, receive, send)
+        bodies = [m["body"] for m in sent if m["type"] == "http.response.body"]
+        assert b"".join(bodies) == content
+        # 512 + 512 + 256 KiB, against twenty reads at Starlette's default.
+        assert [len(b) for b in bodies] == [512 * 1024, 512 * 1024, 256 * 1024]
 
 
 class TestAudit:

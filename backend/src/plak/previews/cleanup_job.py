@@ -88,8 +88,7 @@ async def _cleanup_expired_previews(
                         delete(Version).where(Version.id.in_(version_ids)).returning(Version.storage_ref)
                     )
                 ).all()
-        for storage_ref in storage_refs:
-            store.delete_version(storage_ref)
+        await store.delete_versions(storage_refs)
         return len(version_ids)
 
 
@@ -106,8 +105,7 @@ async def _cleanup_orphan_preview_versions(
             ids = [row.id for row in rows]
             if ids:
                 await db.execute(delete(Version).where(Version.id.in_(ids)))
-        for row in rows:
-            store.delete_version(row.storage_ref)
+        await store.delete_versions(row.storage_ref for row in rows)
         return len(rows)
 
 
@@ -155,8 +153,7 @@ async def _cleanup_site_live_versions(
                     .returning(Version.id, Version.storage_ref)
                 )
             ).all()
-        for row in removed:
-            store.delete_version(row.storage_ref)
+        await store.delete_versions(row.storage_ref for row in removed)
         return [row.id for row in removed], site.kept
 
 
@@ -218,9 +215,7 @@ async def _reclaim_orphan_directories(
     async with factory() as db:
         site_ids = {str(site_id) for site_id in await db.scalars(select(Site.id))}
         storage_refs = set(await db.scalars(select(Version.storage_ref)))
-    # On the event loop, not in a thread: a site deleted through the API then
-    # cannot remove a directory halfway through this walk.
-    reclaimed = store.reclaim(site_ids, storage_refs, ORPHAN_OLDER_THAN)
+    reclaimed = await asyncio.to_thread(store.reclaim, site_ids, storage_refs, ORPHAN_OLDER_THAN)
     if reclaimed.moved:
         _logger.warning(
             "Moved %d directories without a row into _reclaimed: %s",
@@ -233,7 +228,8 @@ async def _reclaim_orphan_directories(
             len(reclaimed.held),
             ", ".join(reclaimed.held),
         )
-    return len(reclaimed.moved), len(reclaimed.held), store.sweep_reclaimed(RECLAIMED_KEPT)
+    swept = await asyncio.to_thread(store.sweep_reclaimed, RECLAIMED_KEPT)
+    return len(reclaimed.moved), len(reclaimed.held), swept
 
 
 async def _release_retired_slugs(factory: async_sessionmaker[AsyncSession], now: datetime) -> int:
@@ -273,7 +269,7 @@ async def delete_expired(
     expired = await _cleanup_expired_previews(factory, store, now)
     orphans = await _cleanup_orphan_preview_versions(factory, store)
     old_live = await _cleanup_old_live_versions(factory, store, live_versions_kept)
-    swept = store.sweep_tmp(tmp_older_than)
+    swept = await asyncio.to_thread(store.sweep_tmp, tmp_older_than)
     async with factory() as db:
         authorizations, cli_sessions = await cli.delete_expired(db, now)
     released_slugs = await _release_retired_slugs(factory, now)
