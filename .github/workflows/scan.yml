@@ -1,0 +1,85 @@
+# A weekly vulnerability scan of what runs, not of what a pull request
+# adds: a hole published after a release is found here, not at the next
+# deploy. A finding fails the run, and GitHub mails the person who last
+# changed the schedule of a failing scheduled workflow.
+#
+#   - `dependencies`: pip-audit on the backend and CLI lockfiles and npm
+#     audit on the frontend lockfile, as the `vulnerabilities` job in
+#     ci.yml does;
+#   - `image`: trivy on the digest of the image of the newest release,
+#     the one production runs, with the gate deploy.yml draws.
+#
+# All third-party actions are pinned to a commit SHA; the tag after it is
+# the readable label, not the reference.
+
+name: Scheduled scan
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/audit-dependencies
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to the registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Production follows the newest release, and the release tag is
+      # also the image tag (deploy.yml). The digest is read from the
+      # registry so that the scan names the bytes that run.
+      - name: Find the image of the newest release
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --repo "$REPOSITORY" --json tagName --jq .tagName)"
+          name="ghcr.io/$(echo "$REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          digest="$(docker buildx imagetools inspect "${name}:${tag#v}" --format '{{.Manifest.Digest}}')"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::No digest found for ${name}:${tag#v}"
+            exit 1
+          fi
+          echo "::notice::Scanning ${name}@${digest} (${tag})"
+          echo "ref=${name}@${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Scan the image, gate on high and critical (trivy)
+        uses: ./.github/actions/trivy
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          trivyignores: .trivyignore.yaml
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

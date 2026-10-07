@@ -8,6 +8,9 @@
 #   PLAK_E2E_OIDC_PORT), because 8080/8081 may be taken;
 # - mock OIDC with interactiveLogin so the suite can log in as multiple
 #   identities (dev always logs in as dev-beheerder);
+# - the app runs the SPA and the backend source of the image, not the
+#   host mounts of dev/compose.yml: the one build of the image is what is
+#   tested, and no frontend/dist is needed on the host;
 # - looser rate limits: the suite does in seconds what a human does in
 #   minutes, and the limit values themselves are already covered by
 #   backend tests.
@@ -44,6 +47,9 @@ services:
       PLAK_CONTENT_BASE_URL: http://plak.localhost:${PLAK_E2E_PORT:-18888}
       PLAK_RATELIMIT_LOGIN_MAX: "100"
       PLAK_RATELIMIT_API_MAX: "600"
+      PLAK_SPA_PATH: /app/spa
+    volumes: !override
+      - content:/content
 
   nginx:
     ports: !override

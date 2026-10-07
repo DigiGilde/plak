@@ -40,21 +40,11 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
 
       - name: Install oasdiff
-        run: |
-          set -euo pipefail
-          image="$(grep -oE '^FROM docker\.io/tufin/oasdiff:[^@ ]+@sha256:[0-9a-f]{64}$' \
-            .github/oasdiff/Containerfile | cut -d' ' -f2)"
-          if [ -z "$image" ]; then
-            echo "No oasdiff image pinned by digest in .github/oasdiff/Containerfile" >&2
-            exit 1
-          fi
-          docker create --name oasdiff "$image" > /dev/null
-          docker cp oasdiff:/usr/bin/oasdiff "$RUNNER_TEMP/oasdiff"
-          docker rm oasdiff > /dev/null
-          "$RUNNER_TEMP/oasdiff" --version
+        id: oasdiff
+        uses: ./.github/actions/install-oasdiff
 
       - name: Print the API schema
         working-directory: backend
@@ -64,9 +54,10 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           COMMENT_FILE: ${{ runner.temp }}/api-comment.md
+          OASDIFF: ${{ steps.oasdiff.outputs.path }}
         run: |
           set -euo pipefail
-          args=(api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff")
+          args=(api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF")
           if [ "$EVENT" = pull_request ]; then
             args+=(--comment-file "$COMMENT_FILE")
           fi
@@ -79,23 +70,8 @@ jobs:
       - name: Update the API comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          COMMENT_FILE: ${{ runner.temp }}/api-comment.md
-          MARKER: "<!-- plak-api-check -->"
-        run: |
-          set -euo pipefail
-          ids="$(gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments" \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER))) | .id')"
-          existing="${ids%%$'\n'*}"
-          if [ -s "$COMMENT_FILE" ]; then
-            if [ -n "$existing" ]; then
-              gh api --method PATCH "repos/$REPOSITORY/issues/comments/$existing" -F "body=@$COMMENT_FILE" > /dev/null
-            else
-              gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/comments" -F "body=@$COMMENT_FILE" > /dev/null
-            fi
-          elif [ -n "$existing" ]; then
-            gh api --method DELETE "repos/$REPOSITORY/issues/comments/$existing"
-          fi
+        uses: ./.github/actions/sticky-comment
+        with:
+          token: ${{ github.token }}
+          marker: "<!-- plak-api-check -->"
+          comment-file: ${{ runner.temp }}/api-comment.md

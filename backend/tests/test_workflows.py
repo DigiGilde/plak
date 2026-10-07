@@ -664,13 +664,15 @@ class TestTheReleaseImage:
         production rolled out whichever finished last: v2026.10.4 and
         v2026.10.7 ran as `dev`, not as the image their release named. A
         release now pushes its version tag alone, and the scans, the SBOM,
-        the attestations and production all take that one."""
+        the attestations and production all take that one; the scans and the
+        SBOM by the digest that push returned."""
         image = "${{ steps.release.outputs.image || steps.tag.outputs.image }}"
         assert _step(build, "Build and push the image")["with"]["tags"] == image
         assert build["outputs"]["image"] == image
+        pushed = "${{ steps.tag.outputs.name }}@${{ steps.push.outputs.digest }}"
         for step in build["steps"]:
             if "image-ref" in step.get("with", {}):
-                assert step["with"]["image-ref"] == image, step.get("name")
+                assert step["with"]["image-ref"] == pushed, step.get("name")
         assert _step(deploy["jobs"]["production"], "Roll out to ZAD")["with"]["image"] == (
             "${{ needs.build.outputs.image }}"
         )

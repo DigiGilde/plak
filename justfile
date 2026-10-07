@@ -17,17 +17,7 @@ seed:
 test:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        # macOS: no native Podman socket, so via the podman machine
-        socket="$(podman machine inspect --format '{{'{{'}}.ConnectionInfo.PodmanSocket.Path{{'}}'}}' 2>/dev/null || true)"
-        if [[ -z "${socket}" ]]; then
-            # fallback: default location of the podman machine socket
-            socket="${HOME}/.local/share/containers/podman/machine/podman.sock"
-        fi
-        export DOCKER_HOST="unix://${socket}"
-    else
-        export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/podman/podman.sock"
-    fi
+    export DOCKER_HOST="$("{{justfile_directory()}}/dev/podman-socket.sh")"
     cd backend && uv run python -m pytest -n 4
     cd "{{justfile_directory()}}" && just test-cli
 
@@ -39,15 +29,7 @@ test-cli:
 coverage:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        socket="$(podman machine inspect --format '{{'{{'}}.ConnectionInfo.PodmanSocket.Path{{'}}'}}' 2>/dev/null || true)"
-        if [[ -z "${socket}" ]]; then
-            socket="${HOME}/.local/share/containers/podman/machine/podman.sock"
-        fi
-        export DOCKER_HOST="unix://${socket}"
-    else
-        export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/podman/podman.sock"
-    fi
+    export DOCKER_HOST="$("{{justfile_directory()}}/dev/podman-socket.sh")"
     cd backend && uv run python -m pytest -n 4 --cov=src/plak --cov-report=term-missing:skip-covered
     # .github/scripts/release.py and rulesets.py lie outside src/plak: measured on its own, as in CI.
     release_data="$(mktemp -t plak-release-coverage)"
@@ -89,16 +71,18 @@ scan:
     requirements="$(mktemp -t plak-requirements)"
     report="$(mktemp -t plak-npm-audit)"
     trap 'trash "$requirements" "$report" 2>/dev/null || true' EXIT
-    uv export --directory backend --frozen --no-emit-project --quiet \
-        --format requirements-txt -o "$requirements"
     flags=()
     while IFS= read -r id; do
         if [ -n "$id" ]; then
             flags+=(--ignore-vuln "$id")
         fi
     done < <(uv run --script .github/scripts/vulnerabilities.py ids)
-    uvx pip-audit@2.10.1 --requirement "$requirements" --disable-pip \
-        --progress-spinner off ${flags[@]+"${flags[@]}"}
+    for project in backend cli; do
+        uv export --directory "$project" --frozen --no-emit-project --quiet \
+            --format requirements-txt -o "$requirements"
+        uvx pip-audit@2.10.1 --requirement "$requirements" --disable-pip \
+            --progress-spinner off ${flags[@]+"${flags[@]}"}
+    done
     npm audit --json --prefix frontend > "$report" || true
     uv run --script .github/scripts/vulnerabilities.py npm-audit "$report"
 

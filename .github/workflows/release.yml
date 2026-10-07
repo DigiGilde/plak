@@ -72,31 +72,23 @@ jobs:
         run: python3 .github/scripts/release.py validate-tag "$TAG"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
 
       # As in api.yml: the image pinned in .github/oasdiff/Containerfile.
       - name: Install oasdiff
-        run: |
-          set -euo pipefail
-          image="$(grep -oE '^FROM docker\.io/tufin/oasdiff:[^@ ]+@sha256:[0-9a-f]{64}$' \
-            .github/oasdiff/Containerfile | cut -d' ' -f2)"
-          if [ -z "$image" ]; then
-            echo "No oasdiff image pinned by digest in .github/oasdiff/Containerfile" >&2
-            exit 1
-          fi
-          docker create --name oasdiff "$image" > /dev/null
-          docker cp oasdiff:/usr/bin/oasdiff "$RUNNER_TEMP/oasdiff"
-          docker rm oasdiff > /dev/null
-          "$RUNNER_TEMP/oasdiff" --version
+        id: oasdiff
+        uses: ./.github/actions/install-oasdiff
 
       - name: Print the API schema
         working-directory: backend
         run: uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"
 
       - name: Write the release
+        env:
+          OASDIFF: ${{ steps.oasdiff.outputs.path }}
         run: |
           python3 .github/scripts/release.py promote --tag "$TAG" \
-            --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"
+            --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF"
 
       - name: Hand the release on as a patch
         run: |

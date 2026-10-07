@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
 
       - name: Check CHANGELOG.md and the What's new notes
         env:
@@ -68,23 +68,8 @@ jobs:
       - name: Update the changelog comment
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          COMMENT_FILE: ${{ runner.temp }}/changelog-comment.md
-          MARKER: "<!-- plak-changelog-check -->"
-        run: |
-          set -euo pipefail
-          ids="$(gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments" \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER))) | .id')"
-          existing="${ids%%$'\n'*}"
-          if [ -s "$COMMENT_FILE" ]; then
-            if [ -n "$existing" ]; then
-              gh api --method PATCH "repos/$REPOSITORY/issues/comments/$existing" -F "body=@$COMMENT_FILE" > /dev/null
-            else
-              gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/comments" -F "body=@$COMMENT_FILE" > /dev/null
-            fi
-          elif [ -n "$existing" ]; then
-            gh api --method DELETE "repos/$REPOSITORY/issues/comments/$existing"
-          fi
+        uses: ./.github/actions/sticky-comment
+        with:
+          token: ${{ github.token }}
+          marker: "<!-- plak-changelog-check -->"
+          comment-file: ${{ runner.temp }}/changelog-comment.md
