@@ -4932,6 +4932,37 @@ def test_preview_remove_tries_again_after_a_503(stub_server, host, token_env, mo
     assert sleeps == [cli.RETRY_DELAY_S]
 
 
+def test_preview_remove_tries_again_with_a_fresh_oidc_token(
+    stub_server, host, isolated_cwd, monkeypatch
+):
+    """The server accepts a CI ID token once, and the first try may have
+    reached it before the 503: the retry must not send the same token."""
+    stub_server.responder = _sequence_responder(
+        {
+            "/oidc-token": [
+                _json_step(200, {"value": "oidc-token-1"}),
+                _json_step(200, {"value": "oidc-token-2"}),
+            ],
+            "/-/api/v1/sites/team-aurora/website/previews/pr-42": [
+                _json_step(503, {"status": 503}),
+                lambda _record: (204, None, "text/plain"),
+            ],
+        }
+    )
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
+    _recorded_sleeps(monkeypatch)
+
+    code = cli.main(["preview-remove", "pr-42", "--host", host, "--site", "team-aurora/website"])
+
+    assert code == 0
+    deletes = [r for r in stub_server.requests if r["method"] == "DELETE"]
+    assert [r["headers"]["Authorization"] for r in deletes] == [
+        "Bearer oidc-token-1",
+        "Bearer oidc-token-2",
+    ]
+
+
 def test_preview_remove_gives_up_after_one_more_try(
     stub_server, host, token_env, monkeypatch, capsys
 ):

@@ -59,6 +59,7 @@ import tempfile
 import time
 import urllib.parse
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Any
 
@@ -489,7 +490,11 @@ RETRY_DELAY_S = 1.0
 
 
 def _http(
-    method: str, url: str, retry_on: tuple[type[Exception], ...] = (), **kwargs: Any
+    method: str,
+    url: str,
+    retry_on: tuple[type[Exception], ...] = (),
+    retry_headers: Callable[[], dict[str, str]] | None = None,
+    **kwargs: Any,
 ) -> httpx.Response:
     """The one way out to the server: sets the User-Agent and refuses a server
     with a newer API major before any caller reads the response.
@@ -498,25 +503,28 @@ def _http(
     request reuses the connection instead of a new TLS handshake each time.
     A call that passes `retry_on` is tried once more after RETRY_DELAY_S
     when it fails with one of those errors or the server answers 502, 503
-    or 504; nothing else is ever retried."""
+    or 504; nothing else is ever retried. `retry_headers` replaces headers
+    for that second try."""
     global _client
     if _client is None:
         _client = httpx.Client()
     client = _client
     headers = {**kwargs.pop("headers", {}), "User-Agent": f"plak-cli/{VERSION}"}
 
-    def send() -> httpx.Response:
-        return client.request(method, url, headers=headers, **kwargs)
+    def send(extra: dict[str, str] | None = None) -> httpx.Response:
+        return client.request(method, url, headers={**headers, **(extra or {})}, **kwargs)
+
+    def send_again() -> httpx.Response:
+        time.sleep(RETRY_DELAY_S)
+        return send(retry_headers() if retry_headers else None)
 
     try:
         response = send()
     except retry_on:
-        time.sleep(RETRY_DELAY_S)
-        response = send()
+        response = send_again()
     else:
         if retry_on and response.status_code in RETRY_STATUSES:
-            time.sleep(RETRY_DELAY_S)
-            response = send()
+            response = send_again()
     _check_api_version(response)
     return response
 
@@ -906,6 +914,9 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
 
     url = f"{host}/-/api/v1/sites/{group}/{site}/previews/{args.ref}"
 
+    # The server accepts a CI ID token with a `jti` once, and the first try
+    # may have reached it, so the retry asks for the token again: in CI that
+    # is a fresh one.
     response = _request(
         host,
         "DELETE",
@@ -913,6 +924,7 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
         headers={"Authorization": f"Bearer {token}"},
         timeout=60.0,
         retry_on=RETRY_ANY_TRANSPORT,
+        retry_headers=lambda: {"Authorization": f"Bearer {_get_bearer_token(host)}"},
     )
     if response is None:
         return 1
