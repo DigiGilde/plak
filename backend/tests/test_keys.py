@@ -254,6 +254,54 @@ def test_bare_selector_accepts_a_selector():
     assert keys.bare_selector(selector) == selector
 
 
+FULL_KEY = "Ab12Cd34." + "x" * 31 + "Z"
+BARE_SELECTOR = "Ab12Cd34"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [FULL_KEY],
+        # The page reads the first `key` and the gate the last, so any counts.
+        ["foo", FULL_KEY],
+        [FULL_KEY, "foo"],
+        # What a mail client leaves stuck to a link it did not quite recognise.
+        [FULL_KEY + ")"],
+        [FULL_KEY + "."],
+        [FULL_KEY + " "],
+        [FULL_KEY + "trailing"],
+    ],
+)
+def test_carries_full_key_finds_a_secret_link_in_any_value(values):
+    assert keys.carries_full_key(values)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["foo"],
+        [BARE_SELECTOR],
+        [BARE_SELECTOR + "."],
+        ["Ab12Cd3." + "x" * 32],
+        ["Ab12Cd34." + "x" * 31],
+        ["Ab12-d34." + "x" * 32],
+    ],
+)
+def test_carries_full_key_ignores_what_is_no_whole_secret_link(values):
+    assert not keys.carries_full_key(values)
+
+
+@pytest.mark.parametrize("values", [[BARE_SELECTOR], ["foo", BARE_SELECTOR], [BARE_SELECTOR, "foo"]])
+def test_carries_bare_selector_finds_a_selector_in_any_value(values):
+    assert keys.carries_bare_selector(values)
+
+
+@pytest.mark.parametrize("values", [[], [FULL_KEY], [BARE_SELECTOR + "x"], ["Ab12Cd3"], ["Ab12-d34"]])
+def test_carries_bare_selector_ignores_everything_else(values):
+    assert not keys.carries_bare_selector(values)
+
+
 async def test_validate_cookie_expired_key(db, site_id):
     # create_key refuses a past expiry, so this builds an already-expired
     # record directly, bypassing the guarantee, to test validate_cookie's own check.

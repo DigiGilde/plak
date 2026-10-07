@@ -8,10 +8,11 @@ app has to supply on app.state: settings (Settings), session_store
 (SessionStore), session_factory (async_sessionmaker), content_store
 (ContentStore) and audit_log (AuditLog).
 
-Order per request: path validation -> access decision -> fetch-metadata guard
--> audit -> key redeem -> file resolution -> If-None-Match -> response. The
-lexical 301 (site or subroute root without a slash) sits in separate routes
-before any existence or access check and therefore leaks nothing.
+Order per request: service worker refusal -> path validation -> access
+decision -> fetch-metadata guard -> audit -> key redeem or removal -> file
+resolution -> If-None-Match -> response. The lexical 301 (site or subroute
+root without a slash) sits in separate routes before any existence or access
+check and therefore leaks nothing.
 
 Viewers are content sessions only; a management session never
 counts here. The content session cookie is scoped to `/{group}/{site}/`, so a
@@ -19,17 +20,24 @@ request aimed at another site carries no session and the gate sees an
 anonymous visitor. A login redirect goes to `/-/login` on the same host. A valid
 `?key=` is redeemed: the key cookie rides along on a 302 to the same URL
 without `key`, so the key is not left behind in the address bar, the history
-or logs. A `?key=` that carries the selector alone (a link shared without its
-code) gets the code page instead of the neutral 404 and instead of the login
-redirect, but only for live content and only when that selector belongs to a
-usable key of this site (serving/code_page.py). An allow is audited for
-`_version` views only (AVG).
+or logs. Any other `key` value that starts with a whole secret link leaves the
+URL the same way, without a cookie, whatever the answer would have been; only
+the login redirect keeps its own answer, which never carries the key. A page
+reads its own address, and a later page on this host can read the tab's
+history. A path that cannot be a site (the platform namespace, anything no
+content route claims) keeps the neutral 404, key or not: a target built from
+it could leave the host. A `?key=` that carries the selector alone (a link
+shared without its code) gets the code page instead of the neutral 404 and
+instead of the login redirect, but only for live content and only when that
+selector belongs to a usable key of this site (serving/code_page.py); on an
+allowed page it leaves the URL as well. An allow is audited for `_version`
+views only (AVG).
 """
 
 from __future__ import annotations
 
 import uuid
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Request
 from sqlalchemy import select
@@ -89,12 +97,26 @@ def _visitor(request: Request) -> gate.Visitor:
 
 def _path_without_key(request: Request) -> str:
     """Current URL (path plus query) without any key parameter: it must never
-    end up in a returnTo or a Location."""
-    path = request.url.path
-    query = [(name, value) for name, value in parse_qsl(request.url.query, keep_blank_values=True) if name != "key"]
+    end up in a returnTo or a Location.
+
+    Never from `request.url`: Starlette glues the decoded path and the query
+    together and splits them again, so an encoded `?` or `#` in the path would
+    land in the query or the fragment, and `%25` would come back as `%`."""
+    path = quote(request.scope["path"])
+    query = [(name, value) for name, value in request.query_params.multi_items() if name != "key"]
     if query:
         path = f"{path}?{urlencode(query)}"
     return path
+
+
+def _path_with_slash(request: Request) -> str:
+    """Current URL with a slash after the path, the query passed on as it
+    came; not from `request.url`, for the reason `_path_without_key` gives."""
+    target = f"{quote(request.scope['path'])}/"
+    query = request.scope["query_string"].decode("latin-1")
+    if query:
+        target = f"{target}?{query}"
+    return target
 
 
 def _lexical_slash_redirect(request: Request, group: str) -> Response:
@@ -102,10 +124,7 @@ def _lexical_slash_redirect(request: Request, group: str) -> Response:
     # namespace (reserved slugs and /-/) drops out.
     if _is_platform_namespace(group):
         return response.neutral_404_response()
-    target = f"{request.url.path}/"
-    if request.url.query:
-        target = f"{target}?{request.url.query}"
-    return RedirectResponse(target, status_code=301)
+    return RedirectResponse(_path_with_slash(request), status_code=301)
 
 
 def _is_page(rel: str) -> bool:
@@ -119,6 +138,15 @@ def _fetch_token(request: Request, header: str) -> str | None:
     if value is None:
         return None
     return value.strip().lower()[:_FETCH_TOKEN_MAX]
+
+
+def _is_service_worker_script(request: Request) -> bool:
+    """A service worker registered by one site would see every navigation
+    under its path before the server does, secret links included."""
+    worker = request.headers.get("Service-Worker")
+    if worker is not None and worker.strip().lower() == "script":
+        return True
+    return _fetch_token(request, "Sec-Fetch-Dest") == "serviceworker"
 
 
 def _referer_within_site(request: Request, group: str, site: str) -> bool:
@@ -210,10 +238,18 @@ async def _serve(
     ref: str | None = None,
     version_str: str | None = None,
 ) -> Response:
+    if _is_service_worker_script(request):
+        # Before anything that audits: no site may have one, so this is no
+        # access decision either.
+        return response.neutral_404_response()
+
     if _is_platform_namespace(group):
         # Platform namespace (robots.txt, favicon.ico, /-/...): not a content
         # route and no audit; these are routing misses, not access refusals.
         return response.neutral_404_response()
+
+    key_values = request.query_params.getlist("key")
+    full_key = keys.carries_full_key(key_values)
 
     refs: dict = {
         "kind": kind,
@@ -240,7 +276,7 @@ async def _serve(
     rel = resolution.normalise_rest(rest)
     if rel is None:
         await _audit(request, visitor, "refused", REASON_PATH_INVALID, refs)
-        return response.neutral_404_response()
+        return _refuse(request, full_key)
 
     session_factory = request.app.state.session_factory
     async with session_factory() as db:
@@ -257,12 +293,13 @@ async def _serve(
                 decision = await gate.decide_version(db, group, site, version_id, visitor)
 
         code_selector: str | None = None
-        if decision.kind in (DecisionKind.NEUTRAL_404, DecisionKind.LOGIN_REDIRECT) and kind == "live":
+        if decision.kind in (DecisionKind.NEUTRAL_404, DecisionKind.LOGIN_REDIRECT) and kind == "live" and not full_key:
             # A `?key=` carrying the selector alone: the link was shared
             # without its code. Only for a selector that really belongs to
             # this site does the code page appear, and then it wins over both
             # the neutral 404 and the login redirect: whoever was handed a
-            # link is asked for its code, not sent to an IdP.
+            # link is asked for its code, not sent to an IdP. Never beside a
+            # whole link, which leaves with the answer the gate gave.
             selector = keys.bare_selector(visitor.key_query)
             if selector is not None and await gate.code_page_needed(db, group, site, selector):
                 code_selector = selector
@@ -305,7 +342,7 @@ async def _serve(
         and _foreign_subresource(request, group, site)
     ):
         await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
-        return response.neutral_404_response()
+        return _refuse(request, full_key)
 
     # A preview or a _version view is often the first thing a member opens of
     # a site, and the content session cookie is scoped per site, so that first
@@ -336,7 +373,7 @@ async def _serve(
 
     if decision.kind is DecisionKind.NEUTRAL_404:
         await _audit(request, visitor, "refused", decision.reason_code, refs)
-        return response.neutral_404_response()
+        return _refuse(request, full_key)
 
     if decision.kind is DecisionKind.LOGIN_REDIRECT:
         await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
@@ -347,14 +384,20 @@ async def _serve(
     if storage_ref is None or version_id_allowed is None or access is None:
         # Allowed but no (complete) version record: an inconsistent reference.
         await _audit(request, visitor, "refused", REASON_UNKNOWN_STORAGE, refs)
-        return response.neutral_404_response()
+        return _refuse(request, full_key)
 
     if key_cookie is not None:
         return _redeem_key(request, key_cookie, group, site, kind, ref)
 
+    # A selector alone leaves on an allow only: on a refusal the code page
+    # needs it.
+    if full_key or keys.carries_bare_selector(key_values):
+        return _strip_key_redirect(request)
+
     # Looking at non-public content is logged, one row per page rather than
     # per stylesheet or image, and kept for the short term (docs/audit-log.md).
-    # After the key redemption, whose follow-up request is the actual view.
+    # After the key redemption or removal, whose follow-up request is the
+    # actual view.
     if version_view or (not access.is_public and _is_page(rel)):
         if decision.key_selector is not None:
             refs["selector"] = decision.key_selector
@@ -365,10 +408,7 @@ async def _serve(
 
     if outcome_.kind is resolution.ResolutionKind.DIRECTORY_REDIRECT:
         # Directory 301 inside a site: only after an allow decision.
-        target = f"{request.url.path}/"
-        if request.url.query:
-            target = f"{target}?{request.url.query}"
-        return RedirectResponse(target, status_code=301, headers={"Cache-Control": "no-store"})
+        return RedirectResponse(_path_with_slash(request), status_code=301, headers={"Cache-Control": "no-store"})
 
     if (
         outcome_.kind is resolution.ResolutionKind.FILE
@@ -453,6 +493,21 @@ def _redeem_key(
         samesite="none",
     )
     return response
+
+
+def _strip_key_redirect(request: Request) -> Response:
+    """The same URL without any `key`: the page that answers next never sees
+    a secret link that was not redeemed for its own site."""
+    return RedirectResponse(_path_without_key(request), status_code=302, headers={"Cache-Control": "no-store"})
+
+
+def _refuse(request: Request, full_key: bool) -> Response:
+    """A refusal, unless a secret link would stay behind in the address bar
+    and the history: the same 302 then, whatever the reason, so it says no
+    more about what exists than the neutral 404 does."""
+    if full_key:
+        return _strip_key_redirect(request)
+    return response.neutral_404_response()
 
 
 @router.get("/{group}/{site}", include_in_schema=False)
