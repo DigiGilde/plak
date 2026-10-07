@@ -8,8 +8,15 @@ import TabDeploy from '@/components/site/TabDeploy.vue';
 import TabOverview from '@/components/site/TabOverview.vue';
 import TabPreviews from '@/components/site/TabPreviews.vue';
 import TabAccess from '@/components/site/TabAccess.vue';
+import TabSettings from '@/components/site/TabSettings.vue';
 import TabVersions from '@/components/site/TabVersions.vue';
-import { serverErrorFetch, untilIdle, fireDetailEvent } from '@/components/site/testHelpers';
+import {
+  fakeTabBarLayout,
+  fireDetailEvent,
+  serverErrorFetch,
+  stubFrames,
+  untilIdle,
+} from '@/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import Site from './Site.vue';
@@ -50,6 +57,7 @@ function makeRouter(): Router {
           { path: 'versions', name: 'site-versions', component: TabVersions },
           { path: 'access', name: 'site-access', component: TabAccess },
           { path: 'deploy', name: 'site-deploy', component: TabDeploy },
+          { path: 'settings', name: 'site-settings', component: TabSettings },
         ],
       },
     ],
@@ -66,7 +74,7 @@ async function makeWrapper(path: string) {
 }
 
 describe('Site: structure', () => {
-  it('shows title, visibility and the six tabs with clean hrefs', async () => {
+  it('shows title, visibility and the seven tabs with clean hrefs', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/website');
 
     expect(wrapper.find('h1').text()).toBe('Team Aurora website');
@@ -80,10 +88,14 @@ describe('Site: structure', () => {
       'Toegang',
       'Leden',
       'Deploy',
+      'Instellingen',
     ]);
     expect(wrapper.find('[data-testid="tab-overview"]').attributes('current')).toBeDefined();
     expect(wrapper.find('[data-testid="tab-previews"]').attributes('href')).toBe(
       '/team-aurora/website/previews',
+    );
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('href')).toBe(
+      '/team-aurora/website/settings',
     );
     expect(wrapper.find('[data-testid="tab-overview"]').attributes('href')).toBe(
       '/team-aurora/website',
@@ -116,7 +128,8 @@ describe('Site: structure', () => {
 
     expect(router.currentRoute.value.name).toBe('site-overview');
     expect(wrapper.text()).toContain('Status');
-    expect(wrapper.text()).toContain('Gevarenzone');
+    // Deleting the site moved to the Instellingen tab.
+    expect(wrapper.text()).not.toContain('Gevarenzone');
   });
 
   it('shows a 404 message for an unknown site, without tabs', async () => {
@@ -167,6 +180,13 @@ describe('Site: tab navigation', () => {
     await untilIdle();
     expect(router.currentRoute.value.path).toBe('/team-aurora/website/versions');
     expect(wrapper.find('[data-testid="live-marker-versie-1"]').exists()).toBe(true);
+
+    await wrapper.find('[data-testid="tab-settings"]').trigger('click');
+    await untilIdle();
+    expect(router.currentRoute.value.name).toBe('site-settings');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/website/settings');
+    expect(wrapper.find('[data-testid="site-title"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('current')).toBeDefined();
   });
 
   it('gives every tab the reading width except deploy, which keeps it itself', async () => {
@@ -184,6 +204,48 @@ describe('Site: tab navigation', () => {
 
     expect(wrapper.text()).toContain('Wie kan deze site bekijken?');
     expect(wrapper.find('[data-testid="tab-access"]').attributes('current')).toBeDefined();
+  });
+});
+
+describe('Site: tab bar', () => {
+  // Seven tabs of 100 in a bar that shows 250.
+  const LAYOUT = { barWidth: 250, tabWidth: 100 };
+
+  function scroller(wrapper: ReturnType<typeof mount>): HTMLElement {
+    return wrapper.find('.tabs-scroll').element as HTMLElement;
+  }
+
+  it('lets the bar scroll in a wrapper of its own instead of squeezing its labels', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/website');
+
+    const bar = wrapper.find('[data-testid="site-tabs"]');
+    expect(bar.element.parentElement?.classList.contains('tabs-scroll')).toBe(true);
+    expect(wrapper.findAll('.tabs-scroll')).toHaveLength(1);
+  });
+
+  it('brings the current tab into view when the page opens on it', async () => {
+    const frames = stubFrames();
+    const { wrapper } = await makeWrapper('/team-aurora/website/settings');
+    fakeTabBarLayout(scroller(wrapper), LAYOUT);
+
+    frames.run();
+
+    // The seventh tab ends at 700 and the bar shows 250.
+    expect(scroller(wrapper).scrollLeft).toBe(450);
+  });
+
+  it('follows the route to the next tab', async () => {
+    const frames = stubFrames();
+    const { wrapper, router } = await makeWrapper('/team-aurora/website/settings');
+    fakeTabBarLayout(scroller(wrapper), LAYOUT);
+    frames.run();
+
+    await router.push('/team-aurora/website/versions');
+    await untilIdle();
+    frames.run();
+
+    // The third tab spans 200 to 300, behind the 450 to 700 the bar showed.
+    expect(scroller(wrapper).scrollLeft).toBe(200);
   });
 });
 
@@ -278,9 +340,57 @@ describe('Site: breadcrumb path', () => {
   });
 });
 
+describe('Site: renaming', () => {
+  async function rename(wrapper: ReturnType<typeof mount>, title: string): Promise<void> {
+    fireDetailEvent(wrapper.find('[data-testid="site-title"]').element, 'input', { value: title });
+    await wrapper.find('[data-testid="site-title-form"]').trigger('submit');
+    await untilIdle();
+  }
+
+  it('shows the new title in the header and the browser tab, without rebuilding the page', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/website/settings');
+    const bar = wrapper.find('[data-testid="site-tabs"]').element;
+    const title = wrapper.find('h1').element;
+
+    await rename(wrapper, 'Documentatie');
+
+    expect(backend.data.sites[0]!.title).toBe('Documentatie');
+    expect(wrapper.find('h1').text()).toBe('Documentatie');
+    expect(document.title).toBe('Documentatie - Instellingen - Plak');
+    // The confirmation lives in the tab, which the refresh must leave alone.
+    expect(wrapper.find('[data-testid="site-title-notice"]').text()).toBe(
+      'Titel opgeslagen. De site heet nu Documentatie.',
+    );
+    expect(wrapper.find('[data-testid="site-tabs"]').element).toBe(bar);
+    expect(wrapper.find('h1').element).toBe(title);
+    expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Documentatie');
+  });
+
+  it('leaves the breadcrumb on the address, which a title does not change', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/website/settings');
+
+    await rename(wrapper, 'Documentatie');
+
+    expect(breadcrumbsFor('/team-aurora/website/settings')).toEqual([
+      { text: 'Overzicht', href: '/' },
+      { text: 'Team Aurora', href: '/team-aurora' },
+      { text: 'website' },
+    ]);
+  });
+
+  it('keeps the old header when the member is not allowed to rename', async () => {
+    // lid-3 (Ada Vermeer) is editor in the group: the form is not offered.
+    backend.data.loggedInMemberId = 'lid-3';
+    const { wrapper } = await makeWrapper('/team-aurora/website/settings');
+
+    expect(wrapper.find('[data-testid="site-title-form"]').exists()).toBe(false);
+    expect(wrapper.find('h1').text()).toBe('Team Aurora website');
+  });
+});
+
 describe('Site: deleting', () => {
   it('returns to the overview after deleting the site', async () => {
-    const { wrapper, router } = await makeWrapper('/team-aurora/website');
+    const { wrapper, router } = await makeWrapper('/team-aurora/website/settings');
 
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
     fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', {

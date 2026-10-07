@@ -818,6 +818,30 @@ NL: Final[dict[str, str]] = {
         "(`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). De header `X-CSRF-Token` ontbreekt of komt niet overeen met het "
         "CSRF-cookie (`CSRF_INVALID`). Je rol in deze groep is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."
     ),
+    "Change the name of a group": "Naam van een groep wijzigen",
+    (
+        "Sets the display name of the group. The slug, and with it every URL of the group, does not change. The audit "
+        "log keeps the previous name, in full. Sending the name the group already has (after trimming spaces) "
+        "changes nothing and writes no audit row.\n"
+        "\n"
+        "**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without a "
+        "group role is not allowed."
+    ): (
+        "Zet de weergavenaam van de groep. De slug, en daarmee elke URL van de groep, verandert niet. Het auditlog "
+        "bewaart de vorige naam, volledig. Wie de naam stuurt die de groep al heeft (na het weghalen van spaties aan "
+        "begin en eind), wijzigt niets en laat geen auditregel achter.\n"
+        "\n"
+        "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Een platformbeheerder die geen groepsrol heeft mag "
+        "het niet."
+    ),
+    "The group with its new name.": "De groep met haar nieuwe naam.",
+    (
+        "Unprocessable input. The name is empty (`FIELD_EMPTY`), contains control or formatting characters "
+        "(`FIELD_CONTROL_CHARACTERS`) or is longer than 200 characters (`FIELD_TOO_LONG`)."
+    ): (
+        "Onverwerkbare invoer. De naam is leeg (`FIELD_EMPTY`), bevat stuur- of opmaaktekens "
+        "(`FIELD_CONTROL_CHARACTERS`) of is langer dan 200 tekens (`FIELD_TOO_LONG`)."
+    ),
     "Set the default access of a group": "Standaardtoegang van een groep zetten",
     (
         "Sets the access that new sites in this group start with: the base and the two exceptions in one go. Existing "
@@ -904,6 +928,28 @@ NL: Final[dict[str, str]] = {
     ),
     "Not found. Unknown group (`UNKNOWN_GROUP`) or unknown site (`UNKNOWN_SITE`).": (
         "Niet gevonden. Onbekende groep (`UNKNOWN_GROUP`) of onbekende site (`UNKNOWN_SITE`)."
+    ),
+    "Change the title of a site": "Titel van een site wijzigen",
+    (
+        "Sets the display title of the site. The slug, and with it every URL of the site, does not change. The audit "
+        "log keeps the previous title, in full. Sending the title the site already has (after trimming spaces) "
+        "changes nothing and writes no audit row.\n"
+        "\n"
+        "**Who can call this:** effective site role `admin`, with a valid CSRF header."
+    ): (
+        "Zet de weergavetitel van de site. De slug, en daarmee elke URL van de site, verandert niet. Het auditlog "
+        "bewaart de vorige titel, volledig. Wie de titel stuurt die de site al heeft (na het weghalen van spaties aan "
+        "begin en eind), wijzigt niets en laat geen auditregel achter.\n"
+        "\n"
+        "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+    ),
+    "The site with its new title.": "De site met zijn nieuwe titel.",
+    (
+        "Unprocessable input. The title is empty (`FIELD_EMPTY`), contains control or formatting characters "
+        "(`FIELD_CONTROL_CHARACTERS`) or is longer than 200 characters (`FIELD_TOO_LONG`)."
+    ): (
+        "Onverwerkbare invoer. De titel is leeg (`FIELD_EMPTY`), bevat stuur- of opmaaktekens "
+        "(`FIELD_CONTROL_CHARACTERS`) of is langer dan 200 tekens (`FIELD_TOO_LONG`)."
     ),
     "Set the access to a site": "Toegang tot een site zetten",
     (
@@ -2426,6 +2472,11 @@ NL: Final[dict[str, str]] = {
     "A member of a group, as the member list of that group shows it.": (
         "Een lid van een groep, zoals de ledenlijst van die groep het toont."
     ),
+    "New display name, 1 to 200 characters after trimming spaces; no control or formatting characters.": (
+        "Nieuwe weergavenaam, 1 tot 200 tekens na het weghalen van spaties aan begin en eind; geen stuur- of "
+        "opmaaktekens."
+    ),
+    "The new display name of a group.": "De nieuwe weergavenaam van een groep.",
     "Access that a new site in this group starts with. Existing sites are not affected.": (
         "Toegang die een nieuwe site in deze groep meekrijgt. Bestaande sites veranderen niet mee."
     ),
@@ -2932,6 +2983,11 @@ NL: Final[dict[str, str]] = {
     "What a site takes up on the content volume, and how many live versions are kept.": (
         "Wat een site op het contentvolume inneemt, en hoeveel live-versies er bewaard blijven."
     ),
+    "New display title, 1 to 200 characters after trimming spaces; no control or formatting characters.": (
+        "Nieuwe weergavetitel, 1 tot 200 tekens na het weghalen van spaties aan begin en eind; geen stuur- of "
+        "opmaaktekens."
+    ),
+    "The new display title of a site.": "De nieuwe weergavetitel van een site.",
     "`device_code` after approval, `refresh_token` to refresh.": (
         "`device_code` na het goedkeuren, `refresh_token` om te verversen."
     ),

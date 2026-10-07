@@ -24,11 +24,14 @@ import { makeMockBackend, type MockBackend } from '../src/api/mock';
 import TabMembers from '../src/components/group/TabMembers.vue';
 import TabSites from '../src/components/group/TabSites.vue';
 import TabSettings from '../src/components/group/TabSettings.vue';
+import SiteTabSettings from '../src/components/site/TabSettings.vue';
+import { fireDetailEvent } from '../src/components/site/testHelpers';
 import { _resetBreadcrumbs } from '../src/composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import { _setLocaleForTest, currentLocale } from '../src/i18n';
 import Group from '../src/pages/Group.vue';
 import Profile from '../src/pages/Profile.vue';
+import Site from '../src/pages/Site.vue';
 
 /**
  * jsdom 25 reflects the ARIA properties of ElementInternals onto a map it
@@ -98,6 +101,16 @@ const GROUP_ROUTES = [
   },
 ];
 
+const SITE_ROUTES = [
+  {
+    path: '/:group/:site',
+    component: Site as Component,
+    children: [
+      { path: 'settings', name: 'site-settings', component: SiteTabSettings as Component },
+    ],
+  },
+];
+
 const PROFILE_ROUTES = [{ path: '/-/profile', component: Profile as Component }];
 
 async function expectNoViolations(element: Element): Promise<void> {
@@ -116,6 +129,89 @@ describe('axe: the admin in English', () => {
 
     expect(currentLocale.value).toBe('en');
     expect(document.documentElement.lang).toBe('en');
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('the site Settings tab, with its seven tabs, has no violations in English', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/website/settings', SITE_ROUTES);
+
+    expect(document.documentElement.lang).toBe('en');
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('text')).toBe('Settings');
+    expect(wrapper.find('[data-testid="site-title-save"]').attributes('text')).toBe('Save title');
+    expect(wrapper.find('[data-testid="delete-site"]').attributes('text')).toBe('Delete site');
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('says a refused site title in English, at the field, with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/website/settings', SITE_ROUTES);
+
+    fireDetailEvent(wrapper.find('[data-testid="site-title"]').element, 'input', { value: '  ' });
+    await wrapper.find('[data-testid="site-title-form"]').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-validation-item#site-title-server').text()).toBe('A title is needed');
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('says a saved site title, and a title that did not change, in English in the status line', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/website/settings', SITE_ROUTES);
+
+    fireDetailEvent(wrapper.find('[data-testid="site-title"]').element, 'input', {
+      value: 'Documentation',
+    });
+    await wrapper.find('[data-testid="site-title-form"]').trigger('submit');
+    await flushPromises();
+    const line = wrapper.find('[data-testid="site-title-notice"]');
+    expect(line.attributes('role')).toBe('status');
+    expect(line.text()).toBe('Title saved. The site is now called Documentation.');
+    await expectNoViolations(wrapper.element);
+
+    await wrapper.find('[data-testid="site-title-form"]').trigger('submit');
+    await flushPromises();
+    expect(line.text()).toBe('The title has not changed.');
+    wrapper.unmount();
+  });
+
+  it('says a saved group name, and a name that did not change, in English in the status line', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/-/settings', GROUP_ROUTES);
+
+    fireDetailEvent(wrapper.find('[data-testid="group-name"]').element, 'input', {
+      value: 'Team Sunrise',
+    });
+    await wrapper.find('[data-testid="group-name-form"]').trigger('submit');
+    await flushPromises();
+    const line = wrapper.find('[data-testid="group-name-notice"]');
+    expect(line.attributes('role')).toBe('status');
+    expect(line.text()).toBe('Name saved. The group is now called Team Sunrise.');
+    await expectNoViolations(wrapper.element);
+
+    await wrapper.find('[data-testid="group-name-form"]').trigger('submit');
+    await flushPromises();
+    expect(line.text()).toBe('The name has not changed.');
+    wrapper.unmount();
+  });
+
+  it('says a refused group name in English, at the field, with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/-/settings', GROUP_ROUTES);
+
+    fireDetailEvent(wrapper.find('[data-testid="group-name"]').element, 'input', {
+      value: 'a'.repeat(201),
+    });
+    await wrapper.find('[data-testid="group-name-form"]').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="group-name-save"]').attributes('text')).toBe('Save name');
+    expect(wrapper.find('nldd-validation-item#group-settings-name-server').text()).toBe(
+      'A name is at most 200 characters long',
+    );
     await expectNoViolations(wrapper.element);
     wrapper.unmount();
   });

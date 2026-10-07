@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Instellingen tab of the group page: the access new sites in this group start
- * with, base and extras together, and for a group admin the danger zone.
+ * Instellingen tab of the group page: the name of the group, which a group
+ * admin can change, the access new sites in this group start with, base and
+ * extras together, and for a group admin the danger zone.
  *
  * The choice sits inline on the tab rather than in a sheet: the tab is the
  * place for this setting, and a sheet over it would show the same options a
@@ -9,7 +10,7 @@
  * API confirms behind it, on failure it rolls back with a notification), just
  * like the Toegang tab of a site.
  */
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import { ApiError } from '@/api/client';
 import * as api from '@/api/plak';
@@ -18,13 +19,20 @@ import { ACCESS_BASE_VALUES } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import Notices from '@/components/site/Notices.vue';
 import { accessBaseHint, accessBaseLabel, accessSummary, inviteesLabel, keysLabel } from '@/format';
-import { t } from '@/i18n';
+import { type MessageKey, t } from '@/i18n';
 
 // The tab has several roots (notifications beside the content) and receives
 // the props of every tab; none of them should fall through to the markup.
 defineOptions({ inheritAttrs: false });
 
-const props = defineProps<{ group: string; access: Access; sites: Site[]; canDelete: boolean }>();
+const props = defineProps<{
+  group: string;
+  groupName: string;
+  access: Access;
+  sites: Site[];
+  canDelete: boolean;
+  canRename: boolean;
+}>();
 
 const emit = defineEmits<{
   groupChanged: [Group];
@@ -33,6 +41,72 @@ const emit = defineEmits<{
 
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 const chosen = ref<Access>(props.access);
+
+const nameInput = ref(props.groupName);
+const nameError = ref<string | null>(null);
+const nameBusy = ref(false);
+const nameNotice = ref('');
+const nameField = ref<HTMLElement | null>(null);
+
+const NAME_REFUSALS = new Map<string, MessageKey>([
+  ['FIELD_EMPTY', 'group.settings.name.required'],
+  ['FIELD_TOO_LONG', 'group.settings.name.tooLong'],
+  ['FIELD_CONTROL_CHARACTERS', 'group.settings.name.controlCharacters'],
+]);
+
+function inputValue(event: Event): string {
+  return (
+    (event as CustomEvent<{ value?: string }>).detail?.value ?? (event.target as HTMLInputElement).value
+  );
+}
+
+function editName(event: Event): void {
+  nameInput.value = inputValue(event);
+  nameError.value = null;
+  nameNotice.value = '';
+}
+
+/** Emptied first: a live region only speaks when its words change. */
+async function say(text: string): Promise<void> {
+  nameNotice.value = '';
+  await nextTick();
+  nameNotice.value = text;
+}
+
+async function saveName(): Promise<void> {
+  if (nameBusy.value) return;
+  nameNotice.value = '';
+  const name = nameInput.value.trim();
+  if (name === props.groupName) {
+    await say(t('group.settings.name.unchanged'));
+    return;
+  }
+  nameBusy.value = true;
+  nameError.value = null;
+  try {
+    const updated = await api.setGroupName(props.group, name);
+    nameInput.value = updated.name;
+    emit('groupChanged', updated);
+    await say(t('group.settings.name.saved', { name: updated.name }));
+  } catch (f) {
+    const refusal = f instanceof ApiError ? NAME_REFUSALS.get(f.problem.code ?? '') : undefined;
+    if (refusal) {
+      nameError.value = t(refusal);
+      // After the render, so the field is already described by its verdict
+      // when the focus lands on it.
+      await nextTick();
+      nameField.value?.focus();
+    } else {
+      notices.value?.notify(
+        'critical',
+        t('group.settings.name.saveFailed'),
+        errorText(f, t('group.settings.name.saveFailed.detail')),
+      );
+    }
+  } finally {
+    nameBusy.value = false;
+  }
+}
 
 watch(
   () => props.access,
@@ -88,7 +162,7 @@ async function deleteGroup(): Promise<void> {
     emit('removed');
   } catch (f) {
     // Close first: the modal renders the page below it inert, so a
-    // notification there would be unreachable (see site/TabOverview).
+    // notification there would be unreachable (see site/TabSettings).
     deleteOpen.value = false;
     notices.value?.notify(
       'critical',
@@ -114,6 +188,67 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
 
 <template>
   <Notices ref="notices" />
+
+  <section aria-labelledby="heading-group-name">
+    <nldd-container layout="stack" gap="8">
+      <nldd-title :size="4">
+        <h2 id="heading-group-name">{{ t('group.settings.name.heading') }}</h2>
+      </nldd-title>
+
+      <template v-if="canRename">
+        <nldd-form data-testid="group-name-form" @submit.prevent="saveName">
+          <nldd-form-field :label="t('group.settings.name.label')">
+            <nldd-text-field
+              ref="nameField"
+              name="group-name"
+              required
+              autocomplete="off"
+              :value="nameInput"
+              :invalid="nameError !== null || undefined"
+              :unmet="nameError !== null ? 'group-settings-name-server' : undefined"
+              data-testid="group-name"
+              @input="editName"
+            ></nldd-text-field>
+            <nldd-validation-list>
+              <nldd-validation-item id="group-settings-name-required" required>
+                {{ t('group.settings.name.required') }}
+              </nldd-validation-item>
+              <nldd-validation-item id="group-settings-name-length" hint>
+                {{ t('group.settings.name.tooLong') }}
+              </nldd-validation-item>
+              <nldd-validation-item id="group-settings-name-server">
+                {{ nameError }}
+              </nldd-validation-item>
+            </nldd-validation-list>
+          </nldd-form-field>
+          <nldd-form-actions>
+            <nldd-button
+              variant="primary"
+              type="submit"
+              :text="t('group.settings.name.save')"
+              :loading="nameBusy || undefined"
+              data-testid="group-name-save"
+            ></nldd-button>
+          </nldd-form-actions>
+        </nldd-form>
+
+        <!-- After Enter the field has the focus already, so focusing it says
+             nothing: this is what a screen reader hears of the verdict. -->
+        <div v-if="nameError" role="alert" class="visually-hidden" data-testid="group-name-alert">
+          {{ nameError }}
+        </div>
+
+        <nldd-text size="sm" role="status" data-testid="group-name-notice">{{ nameNotice }}</nldd-text>
+      </template>
+
+      <nldd-rich-text v-else>
+        <p data-testid="group-name-text">{{ groupName }}</p>
+        <p>{{ t('group.settings.name.readOnly') }}</p>
+      </nldd-rich-text>
+    </nldd-container>
+  </section>
+
+  <nldd-spacer size="24"></nldd-spacer>
 
   <section aria-labelledby="heading-default-access">
     <nldd-container layout="stack" gap="8">

@@ -114,3 +114,35 @@ h6 {
 nldd-status-bar {
   --components-status-bar-height: max(24px, 1.5em);
 }
+
+/* The first of two documented exceptions to composing with components only.
+   nldd-tab-bar has no overflow strategy (0.8.92): with seven tabs the labels
+   collapse to one letter on a phone, and at 200% text one of them clips on a
+   wider screen (WCAG 1.4.4, 1.4.10). The bar scrolls sideways in this wrapper
+   instead. A scroll box clips what sticks out of it, the focus ring of a tab
+   included, so the padding keeps the ring inside on every side, and the
+   negative margin gives that room back so the bar still lines up with the
+   page. Goes once the tab bar copes with a narrow screen itself. */
+.tabs-scroll {
+  overflow-x: auto;
+  padding: var(--primitives-space-4);
+  margin-inline: calc(-1 * var(--primitives-space-4));
+  scroll-padding-inline: var(--primitives-space-4);
+}
+
+.tabs-scroll nldd-tab-bar {
+  max-width: none;
+}
+
+.tabs-scroll nldd-tab-bar-item {
+  min-width: max-content;
+}
+
+/* The second: a 63-character slug has no break opportunity, so in a dialog, a
+   help text or a validation item it would scroll the page sideways at 320 px
+   (WCAG 1.4.10). Let it wrap anywhere instead. */
+nldd-modal-dialog,
+nldd-form-field-help-text,
+nldd-validation-item {
+  overflow-wrap: anywhere;
+}

@@ -17,6 +17,7 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.tabs.access': 'Access',
   'site.tabs.members': 'Members',
   'site.tabs.deploy': 'Deploy',
+  'site.tabs.settings': 'Settings',
 
   // -- Overview tab ---------------------------------------------------------
   'site.overview.loading': 'Loading site details',
@@ -36,17 +37,6 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.overview.publish.heading': 'Publish a new version',
   'site.overview.published.title': 'Version published',
   'site.overview.published.detail': 'The new version is live now.',
-  'site.overview.danger.heading': 'Danger zone',
-  'site.overview.danger.body':
-    'Deleting the site permanently removes every version, preview, invitee, secret link and the connected repository, including the files on the server.',
-  'site.overview.danger.action': 'Delete site',
-  'site.overview.danger.confirm.title': 'Delete site {group}/{site}?',
-  'site.overview.danger.confirm.text':
-    'This cannot be undone. Every version, preview, invitee, secret link and the connected repository disappear for good.',
-  'site.overview.danger.confirm.keep': 'Keep site',
-  'site.overview.danger.confirm.confirm': 'Delete this site',
-  'site.overview.delete.failed': 'Site not deleted',
-  'site.overview.delete.failed.detail': 'Deleting did not work.',
 
   // -- Previews tab ---------------------------------------------------------
   'site.previews.loading': 'Loading previews',
@@ -121,6 +111,32 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.members.heading': 'Members',
   'site.members.intro':
     'Someone can reach this site via the group or via a role on this site alone. The wider of the two decides what they may do here: a site role widens, and never takes anything away.',
+
+  // -- Settings tab -----------------------------------------------------------
+  'site.settings.loading': 'Loading settings',
+  'site.settings.title.heading': 'Title of the site',
+  'site.settings.title.label': 'Title',
+  'site.settings.title.required': 'A title is needed',
+  'site.settings.title.tooLong': 'A title is at most 200 characters long',
+  'site.settings.title.controlCharacters':
+    'A title contains no invisible characters or line breaks, which often come along with copied text',
+  'site.settings.title.save': 'Save title',
+  'site.settings.title.readOnly': 'Only an administrator of the site can change the title.',
+  'site.settings.title.saved': 'Title saved. The site is now called {title}.',
+  'site.settings.title.unchanged': 'The title has not changed.',
+  'site.settings.title.saveFailed': 'Title not saved',
+  'site.settings.title.saveFailed.detail': 'Saving did not work.',
+  'site.settings.danger.heading': 'Danger zone',
+  'site.settings.danger.body':
+    'Deleting the site permanently removes every version, preview, invitee, secret link and the connected repository, including the files on the server.',
+  'site.settings.danger.action': 'Delete site',
+  'site.settings.danger.confirm.title': 'Delete site {group}/{site}?',
+  'site.settings.danger.confirm.text':
+    'This cannot be undone. Every version, preview, invitee, secret link and the connected repository disappear for good.',
+  'site.settings.danger.confirm.keep': 'Keep site',
+  'site.settings.danger.confirm.confirm': 'Delete this site',
+  'site.settings.delete.failed': 'Site not deleted',
+  'site.settings.delete.failed.detail': 'Deleting did not work.',
 
   // -- Secret link: the two ways to share one key ---------------------------
   'site.secretLink.withCode': 'Link with code',

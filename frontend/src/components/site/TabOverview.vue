@@ -6,7 +6,6 @@ import { ApiError } from '@/api/client';
 import type { Site, Version } from '@/api/types';
 import { accessLabel, accessSummary, formatTimestamp, siteUrl } from '@/format';
 import { t } from '@/i18n';
-import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import UploadZone from '@/components/site/UploadZone.vue';
@@ -18,7 +17,6 @@ defineOptions({ inheritAttrs: false });
 const props = defineProps<{ group: string; site: string; contentBase: string }>();
 
 const emit = defineEmits<{
-  removed: [];
   changed: [];
 }>();
 
@@ -30,9 +28,6 @@ const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const uploadBusy = ref(false);
 const uploadError = ref<unknown>(null);
-
-const deleteOpen = ref(false);
-const deleteBusy = ref(false);
 
 const liveUrl = computed(() => siteUrl(props.contentBase, props.group, props.site));
 
@@ -111,30 +106,6 @@ async function publish(file: File): Promise<void> {
   } finally {
     uploadBusy.value = false;
   }
-}
-
-async function deleteSite(): Promise<void> {
-  deleteBusy.value = true;
-  try {
-    await plak.deleteSite(props.group, props.site);
-    deleteOpen.value = false;
-    emit('removed');
-  } catch (f) {
-    // The modal sits in the top layer and renders the page below it inert; a
-    // notification there would be unreachable. So close first, then notify.
-    deleteOpen.value = false;
-    notices.value?.notify(
-      'critical',
-      t('site.overview.delete.failed'),
-      errorText(f, t('site.overview.delete.failed.detail')),
-    );
-  } finally {
-    deleteBusy.value = false;
-  }
-}
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
 }
 
 </script>
@@ -246,38 +217,6 @@ function errorText(f: unknown, fallback: string): string {
           <ErrorBanner v-if="uploadError" :error="uploadError" />
         </nldd-container>
       </nldd-container>
-    </section>
-
-    <section aria-labelledby="heading-danger-zone">
-      <nldd-box background="critical">
-        <nldd-container layout="stack" gap="8" padding="16">
-          <nldd-title :size="4"><h2 id="heading-danger-zone">{{ t('site.overview.danger.heading') }}</h2></nldd-title>
-          <nldd-container layout="stack" gap="16">
-            <nldd-rich-text>
-              <p>{{ t('site.overview.danger.body') }}</p>
-            </nldd-rich-text>
-            <nldd-button-group orientation="horizontal">
-              <nldd-button
-                variant="destructive"
-                :text="t('site.overview.danger.action')"
-                data-testid="delete-site"
-                @click="deleteOpen = true"
-              ></nldd-button>
-            </nldd-button-group>
-          </nldd-container>
-        </nldd-container>
-      </nldd-box>
-      <ConfirmModal
-        :open="deleteOpen"
-        :title="t('site.overview.danger.confirm.title', { group: props.group, site: props.site })"
-        :text="t('site.overview.danger.confirm.text')"
-        :keep-label="t('site.overview.danger.confirm.keep')"
-        :confirm-label="t('site.overview.danger.confirm.confirm')"
-        :confirm-phrase="`${props.group}/${props.site}`"
-        :busy="deleteBusy"
-        @confirm="deleteSite"
-        @close="deleteOpen = false"
-      />
     </section>
   </nldd-container>
 </template>

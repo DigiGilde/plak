@@ -61,6 +61,15 @@ describe('groups: not found and defaults', () => {
     expect(body.defaultAccess.base).toBe('public');
   });
 
+  it('treats a name request without a body as an empty name', async () => {
+    const backend = makeMockBackend();
+
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/name', { method: 'PUT' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('FIELD_EMPTY');
+  });
+
   it('refuses creating a site in an unknown group', async () => {
     const backend = makeMockBackend();
 
@@ -263,6 +272,17 @@ describe('sites: not found', () => {
     });
 
     expect(response.status).toBe(404);
+  });
+
+  it('treats a title request without a body as an empty title', async () => {
+    const backend = makeMockBackend();
+
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/title', {
+      method: 'PUT',
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('FIELD_EMPTY');
   });
 
   it('treats a missing site member search query as empty and refuses it as too short', async () => {
