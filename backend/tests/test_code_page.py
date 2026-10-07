@@ -33,6 +33,7 @@ from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, Member, MemberStatus
 from plak.models.publication import AccessKey, KeyStatus, Preview, Site, Version, VersionTarget
 from plak.ratelimit import InMemoryCounter
+from plak.serving.code_page import code_page_html
 from plak.serving.code_page import router as code_router
 from plak.serving.response import NEUTRAL_404_BODY
 from plak.serving.router import router as serving_router
@@ -239,6 +240,24 @@ class TestTheCodePageAppears:
         response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
         assert directives(response.headers["content-security-policy"])["form-action"] == ["'self'"]
         assert directives(response.headers["content-security-policy"])["base-uri"] == ["'none'"]
+
+    async def test_the_footer_links_the_accessibility_statement(self, client, environment):
+        """By law the statement is reachable from every page, this one too."""
+        dutch = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}")
+        english = await client.get(
+            f"/aurora/geheim/?key={environment.world.key_selector}", headers={"accept-language": "en"}
+        )
+        assert '<footer class="site-footer">\n<nav aria-label="Over deze dienst">' in dutch.text
+        assert f'<a href="{ADMIN_URL}/-/accessibility">Toegankelijkheid</a>' in dutch.text
+        assert f'<a href="{ADMIN_URL}/-/accessibility">Accessibility</a>' in english.text
+
+    def test_without_an_admin_origin_there_is_no_footer(self):
+        body = code_page_html("AbCdEfGh", "/aurora/geheim/")
+        assert "<footer" not in body
+        assert "/-/accessibility" not in body
+
+    def test_no_text_is_grey(self):
+        assert "muted" not in code_page_html("AbCdEfGh", "/aurora/geheim/", "x", admin_origin=ADMIN_URL)
 
     async def test_english_accept_language_gets_the_english_page(self, client, environment):
         response = await client.get(
@@ -473,6 +492,20 @@ class TestHandingInTheCode:
         assert "De code klopt niet" in response.text
         assert KEY_COOKIE not in response.cookies
         assert_runs_no_script_and_only_its_own_style(response.text, response.headers["content-security-policy"])
+
+    async def test_the_error_says_it_is_one_in_words_too(self, client, environment):
+        """Colour and border alone tell nobody who cannot see them that this
+        is an error; the prefix does, in the page's language."""
+        dutch = await self._post(client, environment, code="fout")
+        english = await client.post(
+            PATH_CONTENT_CODE,
+            data={"selector": environment.world.key_selector, "code": "fout", "path": "/aurora/geheim/"},
+            headers={**FORM_HEADERS, "accept-language": "en"},
+        )
+        assert '<p class="error" id="code-fout" role="alert"><strong>Fout:</strong> De code klopt niet.' in dutch.text
+        assert '<p class="error" id="code-fout" role="alert"><strong>Error:</strong> That code is not right.' in (
+            english.text
+        )
 
     async def test_a_wrong_code_is_audited_without_the_code(self, client, environment):
         await self._post(client, environment, code="fout")
