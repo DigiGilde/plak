@@ -18,9 +18,12 @@ from plak.serving import mime
 # Every content policy comes out of this one table, so the variants cannot
 # drift apart: each is this base plus the additions of the site switches that
 # are on, directive by directive, and nothing else.
+#
+# 'wasm-unsafe-eval' lets a page compile WebAssembly and nothing else; it is not
+# 'unsafe-eval', which would also open eval() and new Function() to JavaScript.
 _CONTENT_DIRECTIVES: dict[str, tuple[str, ...]] = {
     "default-src": ("'self'",),
-    "script-src": ("'self'", "'unsafe-inline'"),
+    "script-src": ("'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"),
     "style-src": ("'self'", "'unsafe-inline'"),
     "img-src": ("'self'", "data:", "blob:"),
     "font-src": ("'self'", "data:"),
@@ -189,17 +192,30 @@ def make_304(
     *,
     version_view: bool,
     noindex: bool,
+    external_sources: bool,
+    sandbox: bool,
 ) -> Response:
     """304 on If-None-Match, by the app itself, without touching the store: the
-    headers follow purely from path and decision."""
+    headers follow purely from path and decision.
+
+    A browser keeps the headers it stored with the 200 and overwrites only
+    those the 304 repeats, so the 304 repeats the CSP and the Referrer-Policy:
+    turning a site switch or secret links on or off changes them without
+    changing the ETag, and a cached page would otherwise keep the policy it
+    was first served with. Content-Type stays out, as representation
+    metadata. No default for the switches: a 304 that left one out would now
+    overwrite the stored policy with a weaker one."""
     content_type = mime.determine(rel_path)
-    headers = {
-        "ETag": etag_for(version_id),
-        "Cache-Control": cache_control(content_type, access, version_view=version_view),
-        "X-Content-Type-Options": "nosniff",
-    }
-    if noindex:
-        headers["X-Robots-Tag"] = NOINDEX
+    headers = _base_headers(
+        content_type,
+        version_id,
+        access,
+        version_view=version_view,
+        noindex=noindex,
+        external_sources=external_sources,
+        sandbox=sandbox,
+    )
+    del headers["Content-Type"]
     return Response(status_code=304, headers=headers)
 
 
@@ -211,8 +227,8 @@ def make_content_response(
     access: AccessPolicy,
     version_view: bool,
     noindex: bool,
-    external_sources: bool = False,
-    sandbox: bool = False,
+    external_sources: bool,
+    sandbox: bool,
     status_code: int = 200,
 ) -> Response:
     content_type = mime.determine(rel_path)

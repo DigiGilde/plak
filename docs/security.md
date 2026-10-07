@@ -120,6 +120,8 @@ X-Accel path and no nginx logic.
 | Content CSP (§5.7 regime) on all content routes | implemented: `serving/response.py` (`CONTENT_CSP`, on the neutral 404 too), `backend/tests/test_serving.py` |
 | External sources per site (on by default) | implemented: `sites.external_sources`, `serving/response.py` (`CONTENT_CSP_EXTERNAL`), `api/admin.py` (`PUT /sites/{group}/{site}/external-sources`, site role admin, CSRF, audit action `site_external_sources`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "External sources" below |
 | Shielding from other sites per site (on by default) | implemented: `sites.sandbox`, `serving/response.py` (`SANDBOX`, `CONTENT_CSP_SANDBOX`), `api/admin.py` (`PUT /sites/{group}/{site}/sandbox`, site role admin, CSRF, audit action `site_sandbox`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "Shielding from other sites" below |
+| WebAssembly on every site (`'wasm-unsafe-eval'` in `script-src`, never `'unsafe-eval'`) | implemented: `serving/response.py` (`_CONTENT_DIRECTIVES`), `backend/tests/test_security_headers.py` (`test_webassembly_compiles_but_javascript_eval_stays_shut`), `test_serving.py`. See "WebAssembly" below |
+| A 304 repeats the CSP and the Referrer-Policy of the 200 | implemented: `serving/response.py` (`make_304`), `serving/router.py`, `backend/tests/test_serving.py` (`TestEtag304`) |
 | Admin CSP (§9 regime, stricter) on everything on the admin host | implemented: the app serves the SPA itself with this CSP (`platform/spa.py`, `backend/tests/test_spa.py`), and HTML on the admin host that carries no CSP of its own gets the same regime from `security_headers.py`. The regime follows the host, not the path: a path rule would make a refusal on the content host distinguishable from an ordinary neutral 404. `/-/api/docs` does carry a CSP of its own (`DOCS_CSP` in `api/docs.py`): identical, apart from `style-src`, which allows `'unsafe-inline'` because Swagger UI puts style attributes on its elements. `script-src` stays `'self'`; the page has no inline script, the Swagger bootstrap sits in `docs-init.js`; JSON answers only get `frame-ancestors 'none'` (`backend/tests/test_security_headers.py`) |
 | HSTS (includeSubDomains) | implemented: app middleware `security_headers.py`, only with an https `PLAK_BASE_URL`, `max-age=31536000; includeSubDomains`; preload deliberately not |
 | `Permissions-Policy` | implemented: `camera=(), microphone=(), geolocation=()` on every answer |
@@ -256,6 +258,62 @@ The same two exceptions as for external sources apply. The neutral 404 keeps
 the plain `CONTENT_CSP` whatever a site sets, because it has to stay
 byte-identical across every cause of refusal. The code page for a secret link
 keeps it too: it is a page of the platform itself.
+
+### WebAssembly
+
+The content CSP allows `'wasm-unsafe-eval'` in `script-src`, on every site and
+without a switch. It lets a page compile WebAssembly, which a static search
+index such as Pagefind (and so Starlight's built-in search) needs. It is not
+`'unsafe-eval'`: `eval()`, `new Function()` and a string passed to
+`setTimeout` stay blocked (CSP Level 3, "wasm-unsafe-eval only permits
+WebAssembly and does not affect JavaScript"). This section is the explicit
+risk assessment BIO2 asks for a security-relevant change (5.08.01, 8.32.01).
+
+What it adds. `script-src` already allows `'unsafe-inline'`, so whoever gets
+script into a page can already run any JavaScript there. WebAssembly gives
+that script no capability it lacks: a module reaches the network, the DOM and
+storage only through the JavaScript that instantiates it, so `connect-src
+'self'`, the shielding and the access gate bound it exactly as they bound the
+script. For privacy nothing changes; no request can leave that could not leave
+before. What is new is narrow:
+
+- Compiling bytes into code. Dangerous only where a site's own code compiles
+  bytes an attacker controls, which is not a pattern static sites have.
+- The browser's WebAssembly compiler as attack surface. A renderer exploit
+  through it needs an unpatched browser and a publisher who wants to attack
+  their own visitors; such a publisher can send those visitors to a domain of
+  their own just as well.
+- Efficient in-browser mining. A question of trusting the publisher, as it
+  already is for JavaScript.
+
+Why not a switch per site. A switch costs a column, an endpoint, an audit
+action, a bilingual UI and twice as many policies, and buys little against
+the above. Without the keyword a search fails silently: the page looks
+complete and only the console says why. That is the same reasoning that keeps
+external sources on by default.
+
+Under the shielding the keyword changes little: WebAssembly compiles there,
+but a site's own module scripts, workers and `fetch` are refused (see
+"Shielding from other sites"), so Pagefind needs the shielding off.
+Verified in Chromium, Firefox and WebKit against a Pagefind 1.5.2 build, with
+the policy this file describes: without the keyword the module is refused,
+with it the search answers, and under the sandbox it fails on the module
+import and the worker.
+
+Checked against the frameworks. NCSC's ICT-beveiligingsrichtlijnen voor
+webapplicaties (U/PW.03) names `unsafe-inline`, `unsafe-eval` and
+`unsafe-hashes` as unsafe; `'wasm-unsafe-eval'` is a different keyword and not
+among them. internet.nl's CSP check matches each token from its start, so it
+does not count `'wasm-unsafe-eval'` as `'unsafe-eval'`; the content CSP
+fails that check on `'unsafe-inline'` alone, before and after this change.
+The `'unsafe-inline'` itself deviates from U/PW.03, and did before this
+change: published content may carry inline script.
+
+Rollback: drop the keyword from `_CONTENT_DIRECTIVES`. No data or schema
+depends on it. With the 304 repeating the CSP, the narrower policy reaches a
+cached HTML page on its next revalidation; a cached worker script of a public
+site is `immutable`, so it keeps the wider policy until it leaves the
+visitor's cache (design.md §5.4).
 
 ### Why the content cookies are SameSite=None
 

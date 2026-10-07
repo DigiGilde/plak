@@ -75,6 +75,8 @@ class TestContentHeaderset:
             access=AccessPolicy(AccessBase.PUBLIC),
             version_view=False,
             noindex=noindex,
+            external_sources=False,
+            sandbox=False,
         )
         # Starlette lowercases header names while iterating.
         return resp.status_code, dict(resp.headers)
@@ -105,15 +107,23 @@ class TestContentHeaderset:
         # without touching the store; the headers follow purely from path and decision.
         version_id = uuid.uuid4()
         resp_304 = response.make_304(
-            "index.html", version_id, AccessPolicy(AccessBase.PUBLIC), version_view=False, noindex=False
+            "index.html",
+            version_id,
+            AccessPolicy(AccessBase.PUBLIC),
+            version_view=False,
+            noindex=False,
+            external_sources=False,
+            sandbox=False,
         )
         assert resp_304.status_code == 304
         headers_304 = dict(resp_304.headers)
         assert _header(headers_304, "ETag") == response.etag_for(version_id)
         assert _header(headers_304, "Cache-Control") == "no-cache, must-revalidate"
         assert _header(headers_304, "X-Content-Type-Options") == "nosniff"
-        # No body to protect: CSP only on 200/404.
-        assert _header(headers_304, "Content-Security-Policy") is None
+        # A browser keeps the stored CSP unless the 304 repeats it.
+        assert _header(headers_304, "Content-Security-Policy") == response.CONTENT_CSP
+        assert _header(headers_304, "Referrer-Policy") == "strict-origin-when-cross-origin"
+        assert _header(headers_304, "Content-Type") is None
 
     def test_neutral_404_is_byte_identical_regardless_of_reason(self) -> None:
         r1 = response.neutral_404_response()

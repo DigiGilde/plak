@@ -38,7 +38,7 @@ from plak.serving.router import router as serving_router
 BASE_URL = "https://plak.example"
 
 FULL_CSP = (
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "
     "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
     "font-src 'self' data:; connect-src 'self'; media-src 'self'; "
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; "
@@ -47,7 +47,7 @@ FULL_CSP = (
 
 EXTERNAL_CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net "
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net "
     "https://unpkg.com https://cdn.tailwindcss.com; "
     "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net "
     "https://unpkg.com https://fonts.googleapis.com; "
@@ -583,6 +583,107 @@ class TestEtag304:
         response = await client.get("/aurora/site/_preview/pr-42/", headers={"If-None-Match": etag})
         assert response.status_code == 304
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
+
+    @staticmethod
+    async def _assert_304_repeats_the_200(client, path: str) -> None:
+        full = await client.get(path)
+        assert full.status_code == 200, path
+        revalidated = await client.get(path, headers={"If-None-Match": full.headers["etag"]})
+        assert revalidated.status_code == 304, path
+        assert {k for k in revalidated.headers if k != "content-length"} == {
+            k for k in full.headers if k not in ("content-length", "content-type", "accept-ranges", "last-modified")
+        }, path
+        for name in revalidated.headers:
+            if name != "content-length":
+                assert revalidated.headers[name] == full.headers[name], (path, name)
+
+    async def test_304_repeats_the_headers_of_the_200(self, client, environment):
+        """A browser keeps the headers it stored with the 200 and overwrites
+        only those a 304 repeats, so the 304 carries every one of them but
+        Content-Type: each switch combination, a page and an asset, private
+        content and a preview with its noindex."""
+        for path in (
+            "/aurora/site/",
+            "/aurora/extern/",
+            "/aurora/afgeschermd/",
+            "/aurora/extern/stijl.css",
+            "/aurora/site/_preview/pr-42/",
+        ):
+            await self._assert_304_repeats_the_200(client, path)
+        async with environment.factory() as db:
+            site = (await db.scalars(select(Site).where(Site.slug == "extern"))).one()
+            site.sandbox = True
+            await db.commit()
+        await self._assert_304_repeats_the_200(client, "/aurora/extern/")
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
+        await self._assert_304_repeats_the_200(client, "/aurora/intern/")
+
+    async def test_a_switch_turned_after_caching_reaches_the_cached_page(self, client, environment):
+        """The version and so the ETag stay the same when a site admin turns
+        the shielding on; without the CSP on the 304 the visitor's cached
+        page would keep running unshielded."""
+        cached = await client.get("/aurora/site/")
+        assert "sandbox" not in cached.headers["content-security-policy"]
+        async with environment.factory() as db:
+            site = (await db.scalars(select(Site).where(Site.slug == "site"))).one()
+            site.sandbox = True
+            await db.commit()
+        revalidated = await client.get("/aurora/site/", headers={"If-None-Match": cached.headers["etag"]})
+        assert revalidated.status_code == 304
+        assert revalidated.headers["content-security-policy"] == SANDBOX_CSP
+
+    async def test_304_of_a_secret_link_site_keeps_its_referrer_policy(self, client, environment):
+        await client.get(f"/aurora/geheim/?key={environment.world.key_plain}")
+        etag = (await client.get("/aurora/geheim/")).headers["etag"]
+        revalidated = await client.get("/aurora/geheim/", headers={"If-None-Match": etag})
+        assert revalidated.status_code == 304
+        assert revalidated.headers["referrer-policy"] == "same-origin"
+
+
+
+class TestEtag304Refused:
+    """If-None-Match never gets past the access decision: whoever may not see
+    a page gets the refusal they would get without it, never a 304 that
+    confirms the version and carries the site's own policy."""
+
+    async def test_anonymous_on_a_secret_link_site_gets_the_neutral_404(self, client):
+        reference = await client.get("/aurora/bestaat-niet/")
+        response = await client.get("/aurora/geheim/", headers={"If-None-Match": "*"})
+        assert response.status_code == 404
+        assert response.content == reference.content
+        assert _header_list(response) == _header_list(reference)
+
+    async def test_anonymous_on_a_group_site_goes_to_the_login(self, client):
+        response = await client.get("/aurora/intern/", headers={"If-None-Match": "*"})
+        assert response.status_code == 302
+        assert response.headers["location"].startswith("/-/login?")
+
+    async def test_a_foreign_subresource_gets_the_neutral_404(self, client):
+        reference = await client.get("/aurora/bestaat-niet/")
+        response = await client.get(
+            "/aurora/intern/stijl.css",
+            headers={
+                "If-None-Match": "*",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+                "Referer": f"{BASE_URL}/aurora/site/",
+            },
+        )
+        assert response.status_code == 404
+        assert response.content == reference.content
+        assert _header_list(response) == _header_list(reference)
+
+    async def test_a_version_view_for_a_non_member_gets_the_neutral_404(self, client, environment):
+        reference = await client.get("/aurora/bestaat-niet/")
+        set_content_session_cookie(client, environment.app, sub="buitenstaander", sites=("/aurora/site/",))
+        response = await client.get(
+            f"/aurora/site/_version/{environment.world.site_live_id}/",
+            headers={"If-None-Match": f'"{environment.world.site_live_id}"'},
+        )
+        assert response.status_code == 404
+        assert response.content == reference.content
+        assert _header_list(response) == _header_list(reference)
 
 
 class TestKey:

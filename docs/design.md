@@ -272,9 +272,19 @@ more). Unknown is `application/octet-stream`. Every content response carries
 `ETag` is the version id. `If-None-Match` is answered by the application itself
 with a 304, after resolution has found a file: a 304 for a path without a file
 would let an intermediary treat a non-existent resource as fresh. The 304
-carries `ETag`, `Cache-Control`, `nosniff` and, where it applies,
-`X-Robots-Tag`. Code: `serving/response.py` (`etag_for`,
-`if_none_match_matches`, `make_304`). Guarded by: `test_serving.py`.
+carries the header set of the 200 apart from `Content-Type`: `ETag`,
+`Cache-Control`, `nosniff`, the content CSP, `Referrer-Policy` and, where it
+applies, `X-Robots-Tag`. A browser keeps what it stored with the 200 and
+overwrites only the headers a 304 repeats (RFC 9111 §3.2, verified in
+Chromium, Firefox and WebKit), and turning a site switch or secret links on
+or off changes the CSP or the Referrer-Policy without changing the version, so
+without them a cached page would keep the policy it was first served with.
+That reaches what revalidates: HTML, which is `no-cache`. Any other file of a
+public site is `immutable` and never revalidates, so a worker script or an SVG
+opened on its own keeps the policy it was first served with until it leaves
+the cache. Code:
+`serving/response.py` (`etag_for`, `if_none_match_matches`, `make_304`).
+Guarded by: `test_serving.py`.
 
 ### 5.5 Cache-Control
 
@@ -309,11 +319,18 @@ Code: `serving/response.py` (`neutral_404_response`), `access/gate.py`,
 The publication contract, on every content response:
 
 ```
-default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'
-'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;
-connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'self';
-form-action 'self'; object-src 'none'
+default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'
+data:; connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri
+'self'; form-action 'self'; object-src 'none'
 ```
+
+`'wasm-unsafe-eval'` lets a page compile WebAssembly, which a static search
+index such as Pagefind needs; it does not open `eval()` or `new Function()`,
+which `'unsafe-eval'` would. A dedicated worker started from a file of the
+site gets this policy with its own response, so the same keyword covers a
+worker that compiles the module. The risk assessment is in `docs/security.md`,
+"WebAssembly".
 
 A site may allow **external sources**, which is on by default for a new site
 (`sites.external_sources`, server default true). That widens `script-src` and
