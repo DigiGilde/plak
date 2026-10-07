@@ -29,6 +29,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- The site pages fetch the group once instead of once per tab, and a slow
+  answer no longer overwrites a newer one when you switch quickly.
 
 ### Security
 
@@ -36,11 +38,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
-
-### Fixed
-
-- The site pages fetch the group once instead of once per tab, and a slow
-  answer no longer overwrites a newer one when you switch quickly.
 
 ## [2026.10.7]
 
