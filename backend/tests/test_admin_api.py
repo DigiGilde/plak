@@ -13,6 +13,7 @@ import json
 import re
 import shutil
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -22,7 +23,7 @@ from fastapi import FastAPI
 from helpers_audit import install_audit_recorder
 from helpers_ci import FORGEJO_HOST, MockCi
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_test_client, set_session_cookie
-from sqlalchemy import func, select, update
+from sqlalchemy import event, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -158,6 +159,22 @@ def login(client, app, *, sub: str, email: str | None = None) -> dict[str, str]:
     session = set_session_cookie(client, app, sub=sub, email=email or f"{sub}@example.nl")
     client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="plak.example", path="/")
     return {CSRF_HEADER: session.csrf_token}
+
+
+@contextmanager
+def _statements(factory):
+    """Every SQL statement the app sends while the block runs."""
+    engine = factory.kw["bind"].sync_engine
+    seen: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        seen.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _record)
+    try:
+        yield seen
+    finally:
+        event.remove(engine, "before_cursor_execute", _record)
 
 
 async def _join_group(factory, group, member, role: Role) -> None:
@@ -334,14 +351,22 @@ class TestAuthorization:
         assert response.status_code == 200
         assert {member["ssoSubject"] for member in response.json()} >= {"admin-sub", "lid-a", "lid-b"}
 
-    async def test_platform_members_carry_both_dates(self, client, app, data):
+    async def test_platform_members_carry_both_dates(self, client, app, factory, data):
         """The platform page sorts on these two, so they have to be in the payload."""
+        async with factory() as db:
+            await db.execute(
+                update(Member)
+                .where(Member.id == data.admin_member.id)
+                .values(last_login_at=datetime(2026, 9, 12, 9, 30, tzinfo=UTC))
+            )
+            await db.commit()
         login(client, app, sub="admin-sub", email="admin@example.nl")
         members = (await client.get(f"{BASE}/platform/members")).json()
-        admin = next(member for member in members if member["ssoSubject"] == "admin-sub")
-        assert admin["createdAt"].endswith("Z")
-        # Logging in is what fetched this list, so the admin has been seen.
-        assert admin["lastLoginAt"].endswith("Z")
+        by_sub = {member["ssoSubject"]: member for member in members}
+        assert by_sub["admin-sub"]["createdAt"].endswith("Z")
+        assert by_sub["admin-sub"]["lastLoginAt"] == "2026-09-12T09:30:00Z"
+        # A request is not a login: whoever never signed in has no date.
+        assert by_sub["lid-a"]["lastLoginAt"] is None
 
     async def test_platform_storage_refuses_anonymous(self, client, app, data):
         response = await client.get(f"{BASE}/platform/storage")
@@ -850,6 +875,60 @@ class TestGroupsAndSites:
 
         empty_group = next(group for group in overview["groups"] if group["group"]["slug"] == "leeg")
         assert empty_group["sites"] == []
+
+    async def test_the_overview_costs_no_more_queries_for_more_groups(self, client, app, factory, data):
+        login(client, app, sub="lid-a", email="a@example.nl")
+        with _statements(factory) as one_group:
+            assert (await client.get(f"{BASE}/overview")).status_code == 200
+
+        async with factory() as db:
+            for slug in ("tweede", "derde"):
+                group = Group(slug=slug, name=slug, default_access_base=AccessBase.SITE_TEAM)
+                db.add(group)
+                await db.flush()
+                db.add(GroupMember(group_id=group.id, member_id=data.member_a.id, role=Role.READER))
+                for site_slug in ("b", "a"):
+                    db.add(Site(group_id=group.id, slug=site_slug, title=site_slug, access_base=AccessBase.SITE_TEAM))
+            await db.commit()
+        with _statements(factory) as three_groups:
+            overview = (await client.get(f"{BASE}/overview")).json()
+
+        assert len(three_groups) == len(one_group)
+        assert [
+            (group["group"]["slug"], [site["slug"] for site in group["sites"]]) for group in overview["groups"]
+        ] == [("derde", ["a", "b"]), ("team", ["site"]), ("tweede", ["a", "b"])]
+
+    async def test_the_overview_puts_each_sites_activity_on_that_site(self, client, app, factory, data):
+        """One activity query serves every group, so a site in one group must
+        not borrow the deploys or previews of a site in another."""
+        async with factory() as db:
+            other = Group(slug="ander", name="Ander", default_access_base=AccessBase.SITE_TEAM)
+            db.add(other)
+            await db.flush()
+            busy = Site(group_id=other.id, slug="site", title="Druk", access_base=AccessBase.SITE_TEAM)
+            db.add(busy)
+            await db.flush()
+            version = Version(
+                site_id=busy.id, target=VersionTarget.PREVIEW, storage_ref="ref-druk", member_id=data.member_b.id
+            )
+            db.add(version)
+            await db.flush()
+            db.add(Preview(site_id=busy.id, ref="feature", version_id=version.id))
+            db.add(GroupMember(group_id=other.id, member_id=data.member_b.id, role=Role.READER))
+            await db.commit()
+        # A group role on one group and a site role alone in another: both
+        # kinds of bucket in one answer.
+        await _join_site(factory, data.site, data.member_b, Role.READER)
+        login(client, app, sub="lid-b", email="b@example.nl")
+
+        overview = (await client.get(f"{BASE}/overview")).json()
+
+        sites = {group["group"]["slug"]: group["sites"] for group in overview["groups"]}
+        assert list(sites) == ["ander", "team"]
+        assert [(site["slug"], site["previewCount"]) for site in sites["ander"]] == [("site", 1)]
+        assert sites["ander"][0]["lastPublishedAt"] is not None
+        assert [(site["slug"], site["previewCount"]) for site in sites["team"]] == [("site", 0)]
+        assert sites["team"][0]["lastPublishedAt"] is None
 
     async def test_a_group_role_covers_a_site_a_site_role_also_names(
         self, client, app, data, factory
@@ -1377,16 +1456,9 @@ class TestGroupMembers:
         class _FakeOrigError(Exception):
             sqlstate = "40001"
 
-        original_commit = AsyncSession.commit
-        calls = {"n": 0}
-
+        # require_active_member writes nothing for a known, unchanged member,
+        # so the one commit on this request is the role change's own.
         async def _boom(self, *args, **kwargs):
-            calls["n"] += 1
-            # The first commit on this request is require_active_member's own
-            # login bookkeeping (auth/members.py), not the role change under
-            # test: only the second, inside `_group_keeps_an_admin`, fails.
-            if calls["n"] == 1:
-                return await original_commit(self, *args, **kwargs)
             raise DBAPIError("UPDATE", {}, _FakeOrigError())
 
         monkeypatch.setattr(AsyncSession, "commit", _boom)
@@ -1786,6 +1858,13 @@ class TestRoles:
         )
         assert response.status_code == 403
 
+    async def test_the_role_is_looked_up_once_per_request(self, client, app, data):
+        login(client, app, sub="lid-a", email="a@example.nl")
+        with _statements(factory=app.state.session_factory) as statements:
+            assert (await client.get(f"{BASE}/sites/team/site/versions")).status_code == 200
+        assert sum("FROM group_members" in statement for statement in statements) == 1
+        assert sum("FROM site_members" in statement for statement in statements) == 1
+
     async def test_a_platform_admin_without_group_role_does_not_manage_content(
         self, client, app, data
     ):
@@ -1902,6 +1981,28 @@ class TestSiteMembers:
 
         rows = (await client.get(f"{BASE}/sites/team/site/members")).json()
         assert [row["identifier"] for row in rows] == ["a@example.nl"]
+
+    async def test_the_answer_is_the_row_of_the_member_it_names(self, client, app, data, factory):
+        """Two members without a verified address share the empty e-mail; the
+        answer to adding or changing one must still be that member's row."""
+        first = await _new_member(factory, sub="zonder-1", email="")
+        second = await _new_member(factory, sub="zonder-2", email="")
+        await _join_group(factory, data.group, first, Role.EDITOR)
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+
+        added = await client.post(
+            f"{BASE}/sites/team/site/members", json={"identifier": "zonder-2"}, headers=headers
+        )
+        assert added.status_code == 201
+        assert added.json()["memberId"] == str(second.id)
+        assert (added.json()["groupRole"], added.json()["siteRole"]) == (None, "reader")
+
+        changed = await client.put(
+            f"{BASE}/sites/team/site/members/{second.id}/role", json={"role": "admin"}, headers=headers
+        )
+        assert changed.status_code == 200
+        assert changed.json()["memberId"] == str(second.id)
+        assert (changed.json()["siteRole"], changed.json()["effectiveRole"]) == ("admin", "admin")
 
     async def test_removing_a_site_role_leaves_the_group_role_standing(
         self, client, app, data, factory

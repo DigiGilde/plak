@@ -42,7 +42,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import ConfigDict, Field, field_validator
-from sqlalchemy import delete, func, select, tuple_, update
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import Response
@@ -50,7 +50,7 @@ from starlette.responses import Response
 from plak import net
 from plak.access import keys as access_keys
 from plak.access import roles
-from plak.api.authorization import require_group_role, require_site_role
+from plak.api.authorization import require_at_least, require_group_role
 from plak.api.deploys import bearer_from_request, cli_member
 from plak.api.docs import (
     TAG_AUDIT,
@@ -90,6 +90,7 @@ from plak.ci.trust import ci_actor_identifier
 from plak.cli import service as cli
 from plak.config import normalise_https_base_url
 from plak.constants import RESERVED_SLUGS, ROLE_RANK, SLUG_RE, AccessBase, Role
+from plak.db import request_db
 from plak.expiry import MAX_VALIDITY, ExpiryError
 from plak.ingest.service import IngestError, IngestService
 from plak.models.audit import ActorKind, AuditLogEntry, ContentViewer
@@ -169,11 +170,6 @@ def _timestamp_schema() -> dict[str, Any]:
 # -- Dependencies -----------------------------------------------------------
 
 
-async def _db(request: Request) -> AsyncIterator[AsyncSession]:
-    async with request.app.state.session_factory() as session:
-        yield session
-
-
 async def require_csrf(request: Request) -> None:
     """Double-submit check for mutations; runs before the member upsert so a
     forged request never creates a member record."""
@@ -184,7 +180,7 @@ async def require_csrf(request: Request) -> None:
         raise ApiError(403, KEY_CSRF_INVALID)
 
 
-Db = Annotated[AsyncSession, Depends(_db)]
+Db = Annotated[AsyncSession, Depends(request_db)]
 ActiveMember = Annotated[Member, Depends(require_active_member)]
 
 
@@ -1763,12 +1759,10 @@ async def _site_with_role(
     """
     group = await _group_or_404(db, group_slug)
     site = await _site_or_404(db, group, site_slug)
-    if (
-        member.platform_role != PlatformRole.ADMIN
-        and await roles.effective_site_role(db, site, member.id) is None
-    ):
+    role = await roles.effective_site_role(db, site, member.id)
+    if role is None and member.platform_role != PlatformRole.ADMIN:
         raise ApiError(404, "UNKNOWN_SITE")
-    await require_site_role(db, member, site, minimum)
+    require_at_least(role, minimum)
     return group, site
 
 
@@ -1901,7 +1895,10 @@ async def _audit_strict(request: Request, member: Member, action: str, refs: dic
         raise ApiError(503, "AUDIT_UNAVAILABLE") from error
 
 
-async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list[SiteOut]:
+async def _site_activity(
+    db: AsyncSession, sites: list[Site]
+) -> tuple[dict[uuid.UUID, datetime], dict[uuid.UUID, int]]:
+    """Per site, when a version was last deployed and how many previews are open."""
     ids = [site.id for site in sites]
     last: dict[uuid.UUID, datetime] = {}
     counts: dict[uuid.UUID, int] = {}
@@ -1924,6 +1921,11 @@ async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list
                 )
             ).all()
         )
+    return last, counts
+
+
+async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list[SiteOut]:
+    last, counts = await _site_activity(db, sites)
     return [
         _site_json(site, group.slug, last.get(site.id), counts.get(site.id, 0))
         for site in sites
@@ -2021,10 +2023,15 @@ async def _one_group_member(
 async def _one_site_member(
     db: AsyncSession, group: Group, site: Site, target: Member
 ) -> SiteMemberOut:
-    """The row for one member, taken from the same listing the GET returns, so
-    an answer after a change can never disagree with the list."""
-    rows = await _site_members_json(db, group, site)
-    return next(row for row in rows if row.identifier == target.email)
+    """The row for one member, built the same way the listing builds it, so an
+    answer after a change can never disagree with the list."""
+    return _site_member_json(
+        group.slug,
+        site.slug,
+        target,
+        await roles.group_role(db, group.id, target.id),
+        await roles.site_role(db, site.id, target.id),
+    )
 
 
 async def _site_members_json(db: AsyncSession, group: Group, site: Site) -> list[SiteMemberOut]:
@@ -2053,8 +2060,8 @@ async def _site_members_json(db: AsyncSession, group: Group, site: Site) -> list
         ).all()
     )
     identifiers = set(group_roles) | set(site_roles)
-    # Both callers only reach here through require_site_role, which already
-    # demands the caller be one of these identifiers.
+    # The listing route only reaches here through _site_with_role, which
+    # already demands the caller be one of these identifiers.
     if not identifiers:  # pragma: no cover - unreachable, see above
         return []
     members = await db.scalars(select(Member).where(Member.id.in_(identifiers)))
@@ -2131,9 +2138,12 @@ async def _groups_for_member(
             select(Group).where(Group.id.in_(group_ids | set(sites_per_group))).order_by(Group.slug)
         )
     )
-    for group in groups:
-        if group.id in group_ids:
-            sites_per_group[group.id] = await _group_sites(db, group)
+    if group_ids:
+        for group_id in group_ids:
+            sites_per_group[group_id] = []
+        whole_groups = await db.scalars(select(Site).where(Site.group_id.in_(group_ids)).order_by(Site.slug))
+        for site in whole_groups:
+            sites_per_group[site.group_id].append(site)
     return groups, sites_per_group
 
 
@@ -2602,7 +2612,7 @@ class Creator:
         return {"via": vocabulary.VIA_CLI, "cli_session": str(self.cli_session_id)}
 
 
-async def require_creator(request: Request) -> Creator:
+async def require_creator(request: Request, db: Db) -> Creator:
     """The two creation routes and the repository link take an admin session
     with CSRF, exactly as before, or a CLI access token. A bearer header
     decides: with one, the session cookie is not looked at, and neither is
@@ -2611,11 +2621,10 @@ async def require_creator(request: Request) -> Creator:
     plaintext = bearer_from_request(request)
     if plaintext is None:
         await require_csrf(request)
-        return Creator(member=await require_active_member(request))
+        return Creator(member=await require_active_member(request, db))
     if not plaintext.startswith(cli.ACCESS_TOKEN_PREFIX + "_"):
         raise ApiError(401, "TOKEN_INVALID.cli_only", headers=WWW_AUTHENTICATE_BEARER)
-    async with request.app.state.session_factory() as db:
-        session, member = await cli_member(request, db, plaintext)
+    session, member = await cli_member(request, db, plaintext)
     creator = Creator(member=member, cli_session_id=session.id)
     # A refusal after this point (role, rate limit) is audited by
     # api/errors.py, which cannot see this member through a session cookie.
@@ -2751,10 +2760,7 @@ def make_admin_router() -> APIRouter:
     async def set_my_language(
         request: Request, body: LanguageUpdate, _csrf: Csrf, member: ActiveMember, db: Db
     ) -> Response:
-        # `member` comes from require_active_member, whose session is already
-        # closed, so it is detached here: a statement rather than an attribute
-        # assignment is what reaches the row from this session.
-        await db.execute(update(Member).where(Member.id == member.id).values(language=body.language))
+        member.language = body.language
         await db.commit()
         await _audit(
             request,
@@ -2784,10 +2790,14 @@ def make_admin_router() -> APIRouter:
     )
     async def overview(member: ActiveMember, db: Db) -> Overview:
         groups, sites_per_group = await _groups_for_member(db, member)
+        last, counts = await _site_activity(db, [site for sites in sites_per_group.values() for site in sites])
         rows = [
             GroupRow(
                 group=_group_json(group),
-                sites=await _sites_json(db, group, sites_per_group[group.id]),
+                sites=[
+                    _site_json(site, group.slug, last.get(site.id), counts.get(site.id, 0))
+                    for site in sites_per_group[group.id]
+                ],
             )
             for group in groups
         ]

@@ -2,23 +2,27 @@
 
 Viewing never creates a member record (data minimisation); a record comes
 into being only once require_active_member runs, so on management endpoints.
+`last_login_at` is the moment of signing in: an admin login stamps it on an
+existing record, and a record created later takes it from the session.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import Request
-from sqlalchemy import select
+from fastapi import Depends, Request
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from plak.api.errors import ApiError
 from plak.auth.sessions import Session, session_from_request
+from plak.db import request_db
 from plak.models.identity import Member, MemberStatus, PlatformRole
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
 # Message keys in plak/messages.py; the code a client sees is what stands
 # before the dot.
@@ -57,7 +61,7 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
             name=claimed_name or None,
             platform_role=PlatformRole.ADMIN if is_bootstrap else PlatformRole.MEMBER,
             status=MemberStatus.ACTIVE,
-            last_login_at=datetime.now(UTC),
+            last_login_at=session.created_at,
         )
         db.add(member)
         try:
@@ -70,28 +74,45 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
             member = result.scalar_one()
         return member
 
+    changed = False
     if is_bootstrap and (member.platform_role != PlatformRole.ADMIN or member.status != MemberStatus.ACTIVE):
         member.platform_role = PlatformRole.ADMIN
         member.status = MemberStatus.ACTIVE
+        changed = True
     if not member.email and verified_email:
         member.email = verified_email
+        changed = True
     # Unlike the email, which is only filled in where it is missing because
     # adding a member by address resolves against it, the name follows the IdP:
     # nothing else writes it, and a changed name should show.
     if claimed_name and member.name != claimed_name:
         member.name = claimed_name
-    member.last_login_at = datetime.now(UTC)
-    await db.commit()
+        changed = True
+    if changed:
+        await db.commit()
     return member
 
 
-async def require_active_member(request: Request) -> Member:
+async def record_admin_login(session_factory: async_sessionmaker[AsyncSession], sub: str) -> None:
+    """Stamps `last_login_at` on the member with this sub, if there is one.
+
+    Never creates a record: logging in alone makes no member.
+    """
+    async with session_factory() as db:
+        await db.execute(update(Member).where(Member.sso_subject == sub).values(last_login_at=datetime.now(UTC)))
+        await db.commit()
+
+
+async def require_active_member(
+    request: Request, db: Annotated[AsyncSession, Depends(request_db)]
+) -> Member:
     """FastAPI dependency for management endpoints: requires an active member.
 
     The member record is upserted here (a first admin visit creates it,
     active) and stays in place even when the 403 follows: a deactivated
     member keeps its record, so reactivation by a platform administrator
-    brings back the same one.
+    brings back the same one. It is read through the request's own database
+    session, the one the handler gets as well, so the member stays attached.
     """
     session = session_from_request(request)
     if session is None:
@@ -100,10 +121,8 @@ async def require_active_member(request: Request) -> Member:
         # and the SPA should not have to tell them apart by their wording.
         raise ApiError(401, KEY_NOT_LOGGED_IN)
 
-    session_factory = request.app.state.session_factory
     bootstrap_sub = request.app.state.settings.bootstrap_admin_sub
-    async with session_factory() as db:
-        member = await get_or_create_member(db, session, bootstrap_sub)
+    member = await get_or_create_member(db, session, bootstrap_sub)
 
     if member.status != MemberStatus.ACTIVE:
         raise ApiError(403, KEY_DEACTIVATED)
@@ -116,5 +135,6 @@ __all__ = [
     "REASON_DEACTIVATED",
     "REASON_NO_SESSION",
     "get_or_create_member",
+    "record_admin_login",
     "require_active_member",
 ]

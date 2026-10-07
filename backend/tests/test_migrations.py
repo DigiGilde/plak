@@ -653,6 +653,54 @@ async def test_the_ids_confirmed_migration_takes_the_latest_link_audit_row(postg
         await admin.close()
 
 
+_SITE_INDEXES = {
+    "ix_versions_site_id_created_at": "(site_id, created_at DESC)",
+    "ix_access_keys_site_id": "(site_id)",
+}
+
+
+async def _site_indexes(conn: asyncpg.Connection) -> dict[str, str]:
+    rows = await conn.fetch(
+        "SELECT indexname, indexdef FROM pg_indexes WHERE indexname = ANY($1::text[])", list(_SITE_INDEXES)
+    )
+    return {row["indexname"]: row["indexdef"] for row in rows}
+
+
+async def test_versions_and_access_keys_are_indexed_on_their_site(db_connection: asyncpg.Connection) -> None:
+    """PostgreSQL indexes no foreign key column by itself; the version list
+    and the secret links tab read both tables per site."""
+    indexes = await _site_indexes(db_connection)
+    assert set(indexes) == set(_SITE_INDEXES)
+    for name, columns in _SITE_INDEXES.items():
+        assert indexes[name].endswith(columns), indexes[name]
+
+
+async def test_the_site_index_migration_goes_down_and_up_again(postgres_container) -> None:
+    base = postgres_container.get_connection_url(driver=None)
+    name = f"indexen_{uuid.uuid4().hex[:8]}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE DATABASE "{name}"')
+    dsn = f"{base.rsplit('/', 1)[0]}/{name}"
+    try:
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        await asyncio.to_thread(_alembic, dsn, "downgrade", "0002_retention_and_repo_ids")
+        conn = await asyncpg.connect(dsn)
+        try:
+            assert await _site_indexes(conn) == {}
+        finally:
+            await conn.close()
+
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        conn = await asyncpg.connect(dsn)
+        try:
+            assert set(await _site_indexes(conn)) == set(_SITE_INDEXES)
+        finally:
+            await conn.close()
+    finally:
+        await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+        await admin.close()
+
+
 async def test_sandbox_defaults_to_on(db_connection: asyncpg.Connection) -> None:
     """The safe value is the one a row gets for free: a site that never names
     the column is served with its own origin, and the SPA switch is what gives
