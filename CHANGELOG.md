@@ -12,6 +12,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Added
+
+- `site-id` for the publish action and `--site-id` for the CLI; the site
+  id on the Deploy tab and in the API.
+
 ### Changed
 
 - The What's new page no longer opens with the version you use; the footer
@@ -23,6 +28,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- A new repository link requires the site id, and so does every
+  existing link of a repository that is linked to several sites; other
+  existing links keep working without it until another repository is
+  linked or a site admin requires it.
 
 ### Fixed
 
@@ -40,6 +49,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
+- A workflow that names its site id publishes only to that site: Plak
+  accepts a CI token bound to it, so a renamed, deleted or mistyped
+  address can no longer send its build to someone else's site.
 
 ## [2026.10.7]
 

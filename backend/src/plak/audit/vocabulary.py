@@ -60,6 +60,7 @@ ADMIN_ACTIONS: Final = frozenset(
         "key_revoke",
         "site_repository_set",
         "site_repository_remove",
+        "site_repository_site_id_required",
         "member_activate",
         "member_deactivate",
         "member_platform_role",
@@ -156,6 +157,8 @@ CI_AUDIENCE_MISMATCH: Final = "CI_AUDIENCE_MISMATCH"
 CI_REPOSITORY_NOT_TRUSTED: Final = "CI_REPOSITORY_NOT_TRUSTED"
 CI_BRANCH_NOT_ALLOWED: Final = "CI_BRANCH_NOT_ALLOWED"
 CI_PROVIDER_UNREACHABLE: Final = "CI_PROVIDER_UNREACHABLE"
+CI_SITE_ID_REQUIRED: Final = "CI_SITE_ID_REQUIRED"
+SITE_MOVED: Final = "SITE_MOVED"
 
 CI_REASONS: Final = frozenset(
     {
@@ -165,6 +168,8 @@ CI_REASONS: Final = frozenset(
         CI_REPOSITORY_NOT_TRUSTED,
         CI_BRANCH_NOT_ALLOWED,
         CI_PROVIDER_UNREACHABLE,
+        CI_SITE_ID_REQUIRED,
+        SITE_MOVED,
     }
 )
 

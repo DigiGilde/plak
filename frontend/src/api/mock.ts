@@ -43,6 +43,9 @@ import type {
 const MOCK_CI_FORGEJO_HOSTS = ['https://code.overheid.nl'];
 const MOCK_CI_AUDIENCE = 'https://plak.test';
 
+/** Id of the demo site that `defaultData()` seeds. */
+const MOCK_SITE_ID = '3f2b8a1e-5d4c-4e9a-9b6f-7c1d2e3a4b5c';
+
 // Mirrors constants.py, so the mock rejects exactly what the real
 // backend rejects.
 const SLUG_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -310,6 +313,7 @@ function defaultData(): MockData {
     ],
     sites: [
       {
+        id: MOCK_SITE_ID,
         groupSlug: 'team-aurora',
         slug: 'website',
         title: 'Team Aurora website',
@@ -402,6 +406,9 @@ function defaultData(): MockData {
       {
         groupSlug: 'team-aurora',
         siteSlug: 'website',
+        siteId: MOCK_SITE_ID,
+        // A link from before the site id existed: it still accepts a workflow without it.
+        siteIdRequired: false,
         provider: 'github',
         host: 'https://github.com',
         owner: 'team-aurora',
@@ -625,6 +632,13 @@ function nextId(prefix: string): string {
   return `${prefix}-${nextSequenceNumber()}`;
 }
 
+let siteSequenceNumber = 0;
+/** A UUID in the shape of a version 4 one that counts up, so ids are unique and the same in every run. */
+function nextSiteId(): string {
+  siteSequenceNumber += 1;
+  return `00000000-0000-4000-8000-${String(siteSequenceNumber).padStart(12, '0')}`;
+}
+
 export interface MockBackend {
   fetch: typeof fetch;
   data: MockData;
@@ -783,6 +797,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           return problem(409, 'Site bestaat al', `Er bestaat al een site met slug "${slug}" in deze groep.`);
         }
         const created: Site = {
+          id: nextSiteId(),
           groupSlug,
           slug,
           title,
@@ -1267,14 +1282,23 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             );
           }
           const liveBranch = (body.liveBranch as string | null) ?? null;
+          const repositoryId = entered ? (body.repositoryId as number) : (existing?.repositoryId ?? nextSequenceNumber());
+          // Like the backend: only the same repository keeps the choice; any other link starts out requiring the site id.
+          const sameRepository =
+            existing !== undefined &&
+            existing.provider === provider &&
+            existing.host === host &&
+            existing.repositoryId === repositoryId;
           const linked: SiteRepository = {
             groupSlug,
             siteSlug,
+            siteId: siteRow.id,
+            siteIdRequired: sameRepository ? existing.siteIdRequired : true,
             provider,
             host,
             owner,
             repo,
-            repositoryId: entered ? (body.repositoryId as number) : (existing?.repositoryId ?? nextSequenceNumber()),
+            repositoryId,
             ownerId: entered ? (body.ownerId as number) : (existing?.ownerId ?? nextSequenceNumber()),
             liveBranch,
             // The lookup does not find a private repository, so its ids stay as entered.
@@ -1302,6 +1326,33 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           );
           return empty(204);
         }
+      }
+
+      // PUT /sites/{group}/{site}/repository/site-id-required
+      if (rest.length === 5 && rest[3] === 'repository' && rest[4] === 'site-id-required' && method === 'PUT') {
+        if (!siteRow) return siteNotFound();
+        const linkedRepository = data.repositories.find(
+          (r) => r.groupSlug === groupSlug && r.siteSlug === siteSlug,
+        );
+        if (!linkedRepository) {
+          return problem(
+            404,
+            'Geen gekoppelde repository',
+            'Er is nog geen repository aan deze site gekoppeld.',
+            'REPOSITORY_NOT_SET',
+          );
+        }
+        const wanted = readJson().siteIdRequired === true;
+        if (!wanted && linkedRepository.siteIdRequired) {
+          return problem(
+            422,
+            'Site-ID blijft verplicht',
+            'Zodra het site-ID verplicht is, blijft het verplicht.',
+            'SITE_ID_REQUIRED_PERMANENT',
+          );
+        }
+        if (wanted) linkedRepository.siteIdRequired = true;
+        return json(200, linkedRepository);
       }
 
       // storage

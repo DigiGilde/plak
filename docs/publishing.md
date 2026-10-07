@@ -197,8 +197,8 @@ CI publishes without a secret ("trusted publishing"): a GitHub or
 Forgejo workflow proves who it is with an OIDC ID token that the platform
 itself issues (`ACTIONS_ID_TOKEN_REQUEST_URL` on GitHub,
 `enable-openid-connect` on Forgejo), and Plak checks that token against the
-repository linked to the site. So there is no secret to create, store or
-rotate.
+repository linked to the site, and against the site id the workflow names.
+So there is no secret to create, store or rotate.
 
 ### Linking a repository
 
@@ -217,7 +217,8 @@ branch may publish live. For a GitHub repository the CLI asks your own `gh` logi
 ids and sends them along, so a private repository links without further
 ado; `--no-gh` leaves the lookup to Plak, and `--repository-id` with
 `--owner-id` gives the ids by hand. Exit codes as for every command: `0`
-linked, `1` refused or unreachable, `2` wrong usage.
+linked, `1` refused or unreachable, `2` wrong usage. It also prints the
+site id, the fixed id the workflow names beside the site (below).
 
 In the admin: **site detail, tab
 Deploy** ("Publiceren vanuit GitHub of Forgejo"), button "Repository
@@ -251,6 +252,41 @@ live; with a live branch only that one. Previews (and purging them) are
 always allowed, from any event and from any branch. A site role of `admin`
 can link (in the admin or with the CLI) and unlink (in the admin only),
 `editor` can view the link (to set up the workflow).
+
+### Why a workflow names the site id
+
+A workflow names its site twice: by address (`site: team-aurora/website`)
+and by its fixed id (`site-id: <site-id>`), which the Deploy tab of the site
+shows and `plak site link` prints. The CLI then asks the forge for an ID
+token whose audience is the admin origin followed by that id,
+`https://beheer.plak.example.org/-/sites/<site-id>`, so the token is valid
+for that one site only, and Plak uses it on that site or not at all.
+
+That makes publishing a matter of consent from both sides, bound to the
+site rather than to its address: the site links the repository, and the
+repository names the site. An address can come to lead to another site: a
+site is deleted and someone creates a new one under the same name, or a
+typo in `site:` lands on somebody else's site. A workflow that names the
+site id never publishes there. A token whose repository is not linked to
+the site it names gets `401 CI_AUDIENCE_MISMATCH` at every address, that
+site's own included, so it learns nothing about where that site is. The
+repository linked to it publishes at the site's own address, and anywhere
+else, or where the address leads nowhere, gets `409 SITE_MOVED` with the
+site's current address. No answer names a site id. A site that is deleted
+and created again has a new id, so even its own workflow has to name it
+anew. The site id is no secret: it sits in the workflow for anyone
+to read, and it works only for the repository the site links.
+
+The transition: a link made before the site id existed still accepts a
+workflow without one, so existing workflows keep working, unless their
+repository was linked to more than one site. Then every link of that
+repository requires the site id at once: one of them may be someone
+else's, made from their own site to the repository (a typo of an address,
+say). A link made since, or one that got another repository, requires it
+too, and a workflow without `site-id` then gets `403 CI_SITE_ID_REQUIRED`.
+Once your workflow names the site id, end the exemption with "Alleen met
+site-ID publiceren" (publish only with the site id) on the Deploy tab;
+that cannot be undone.
 
 ### GitHub Actions
 
@@ -294,6 +330,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
 
       - name: Publish preview
@@ -302,6 +339,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
           preview-ref: pr-${{ github.event.pull_request.number }}
 
@@ -314,6 +352,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           preview-ref: pr-${{ github.event.pull_request.number }}
           teardown: "true"
 ```
@@ -340,8 +379,9 @@ same pull requests.
 
 The input `host` is the admin origin of the instance (`PLAK_BASE_URL`, e.g.
 `https://beheer.plak.example.org`), without an `/admin` suffix, and at the
-same time the expected `aud` claim of the ID token: the action sets that
-audience itself. The deploy API exists only on that host; the content host
+same time the start of the `aud` claim of the ID token: the action asks for
+`<host>/-/sites/<site-id>` itself, or for `<host>` alone without
+`site-id`. The deploy API exists only on that host; the content host
 (`https://plak.example.org`) answers `/admin/...` with a neutral 404. Leave
 `host` out to publish to the DigiGilde instance,
 `https://beheer.plak.rijks.app`, or to whatever `PLAK_HOST` in the job's
@@ -380,6 +420,7 @@ permissions:
         uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
           preview-ref: pr-${{ github.event.pull_request.number }}
           environment: preview
@@ -434,6 +475,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
 
       - name: Publish preview
@@ -442,6 +484,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
           preview-ref: pr-${{ github.event.pull_request.number }}
 
@@ -455,6 +498,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           preview-ref: pr-${{ github.event.pull_request.number }}
           teardown: "true"
 ```
@@ -502,6 +546,7 @@ jobs:
         with:
           host: https://beheer.plak.example.org
           site: team-aurora/website
+          site-id: <site-id>
           preview-ref: smoke-test
           teardown: "true"
 ```
@@ -563,6 +608,11 @@ without the action, you publish with a CLI token from `plak login` (§6)
 instead of an ID token: for the deploy API those two kinds of token are
 interchangeable, `Authorization: Bearer <token>`.
 
+In CI the CLI asks for the ID token itself, as the action does; give it
+the site id with `--site-id` or `PLAK_SITE_ID`, the CLI's side of the
+action's `site-id`. With a session or `PLAK_ACCESS_TOKEN` the site id binds
+nothing, and the CLI warns that it ignores it.
+
 If you publish an archive instead of a dist directory, and the site sits
 inside it in a subdirectory next to other files, you point at that directory
 with `--base-path dist` (action input `base-path`). Without that flag Plak
@@ -592,11 +642,12 @@ CI ID token (§3), or a CLI token from `plak login` (§6). Outside these two
 endpoints and the CLI session endpoints, Plak accepts a Bearer token
 nowhere.
 
-A GitHub workflow that requests the ID token itself, outside the action:
+A GitHub workflow that requests the ID token itself, outside the action,
+bound to the site by its id (§3, "Why a workflow names the site id"):
 
 ```bash
 id_token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-    "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://beheer.plak.example.org" \
+    "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://beheer.plak.example.org/-/sites/<site-id>" \
     | jq -r .value)
 
 curl -sS -X POST \
@@ -608,6 +659,10 @@ curl -sS -X POST \
 That does require `permissions: id-token: write` on the job (§3); without
 those rights `ACTIONS_ID_TOKEN_REQUEST_URL` and
 `ACTIONS_ID_TOKEN_REQUEST_TOKEN` do not exist in the step's environment.
+The audience is exact: the id in lowercase, as the Deploy tab shows it, and
+nothing after it, not even a slash. A link from before the site id also
+accepts `audience=https://beheer.plak.example.org` alone, until it requires
+the site id.
 
 ### Live deploy
 
@@ -810,10 +865,10 @@ stable reason code (e.g. `TOKEN_INVALID`, `CI_REPOSITORY_NOT_TRUSTED`,
 
 | Status | Meaning |
 |---|---|
-| 401 | No CLI token, or an invalid, expired or revoked one (`TOKEN_INVALID`), or a CI token that does not check out: unknown issuer (`CI_ISSUER_UNKNOWN`), not a valid JWT, wrong algorithm or invalid claims (`CI_TOKEN_INVALID`), or an `aud` that is not exactly `PLAK_BASE_URL` (`CI_AUDIENCE_MISMATCH`) |
-| 403 | The repository of the CI token is not (or no longer) linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a live deploy from an event other than `push`, `workflow_dispatch` or `schedule`, or outside the configured live branch (`CI_BRANCH_NOT_ALLOWED`) |
-| 404 | Unknown group or site (teardown of an unknown preview ref simply gives `204`) |
-| 409 | Conflict; does not occur on the deploy endpoints, but does elsewhere in the admin API |
+| 401 | No CLI token, or an invalid, expired or revoked one (`TOKEN_INVALID`), or a CI token that does not check out: unknown issuer (`CI_ISSUER_UNKNOWN`), not a valid JWT, wrong algorithm or invalid claims (`CI_TOKEN_INVALID`), or an `aud` that is neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/<site-id>`, or that names a site the repository is not linked to, at any address (`CI_AUDIENCE_MISMATCH`) |
+| 403 | The repository of the CI token is not (or no longer) linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the CI token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a live deploy from an event other than `push`, `workflow_dispatch` or `schedule`, or outside the configured live branch (`CI_BRANCH_NOT_ALLOWED`) |
+| 404 | Unknown group or site (teardown of an unknown preview ref simply gives `204`); a CI token bound to a site gets the 409 or the 401 instead |
+| 409 | The CI token names a site that is not at this address, and its repository is linked to that site (`SITE_MOVED`): `detail` names that site's current address, so fix `site:`. Elsewhere in the admin API: a conflict such as `SLUG_EXISTS` |
 | 413 | Limit exceeded |
 | 422 | Invalid archive, no `index.html` in the root, invalid `basePath`, invalid preview ref or invalid input |
 | 429 | Rate limit; the response contains `Retry-After` |

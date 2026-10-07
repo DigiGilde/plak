@@ -639,6 +639,13 @@ async def test_the_ids_confirmed_migration_takes_the_latest_link_audit_row(postg
             "no-row": False,
         }
 
+        # One repository on six sites: 0004 requires the site id of each, and
+        # will not go down while a link does.
+        conn = await asyncpg.connect(dsn)
+        try:
+            await conn.execute("DELETE FROM site_repositories")
+        finally:
+            await conn.close()
         await asyncio.to_thread(_alembic, dsn, "downgrade", "0001_base")
         conn = await asyncpg.connect(dsn)
         try:
@@ -1083,3 +1090,210 @@ async def test_the_storage_migration_needs_the_content_root_when_there_is_someth
         await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
 
     assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
+
+
+_LINK_INSERT = """
+    INSERT INTO site_repositories (id, site_id, provider, host, owner, repo, repository_id, owner_id)
+    VALUES ($1, $2, 'github', 'https://github.com', 'minbzk', 'website', 1001, 2002)
+"""
+
+
+async def _link_before_the_site_id(dsn: str) -> uuid.UUID:
+    """A database at 0003 with one linked site; returns its group."""
+    await asyncio.to_thread(_alembic, dsn, "upgrade", "0003_storage_by_site_id")
+    conn = await asyncpg.connect(dsn)
+    try:
+        group_id = await _make_group(conn)
+        await conn.execute(_LINK_INSERT, uuid.uuid4(), await _make_site(conn, group_id))
+    finally:
+        await conn.close()
+    return group_id
+
+
+async def _site_id_required(dsn: str) -> list[bool] | None:
+    """site_id_required of every link, oldest site first; None without the column."""
+    conn = await asyncpg.connect(dsn)
+    try:
+        columns = await conn.fetch(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'site_repositories'"
+        )
+        if "site_id_required" not in {row["column_name"] for row in columns}:
+            return None
+        rows = await conn.fetch(
+            "SELECT link.site_id_required FROM site_repositories AS link "
+            "JOIN sites ON sites.id = link.site_id ORDER BY sites.created_at, sites.slug"
+        )
+        return [row["site_id_required"] for row in rows]
+    finally:
+        await conn.close()
+
+
+# migrated_dsn first: the autouse cleanup would otherwise migrate the shared
+# database from inside the running event loop when this test runs alone.
+@pytest.mark.usefixtures("migrated_dsn")
+async def test_the_site_id_migration_lets_existing_links_go_without_and_requires_it_of_new_ones(
+    own_database: str,
+) -> None:
+    """A link from before the migration keeps accepting a CI token without a
+    site id; one made afterwards gets the column default and requires it."""
+    group_id = await _link_before_the_site_id(own_database)
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0004_site_id_required")
+    conn = await asyncpg.connect(own_database)
+    try:
+        await conn.execute(_LINK_INSERT, uuid.uuid4(), await _make_site(conn, group_id))
+    finally:
+        await conn.close()
+
+    assert await _site_id_required(own_database) == [False, True]
+
+
+@pytest.mark.usefixtures("migrated_dsn")
+async def test_the_site_id_migration_requires_it_of_a_repository_linked_to_several_sites(
+    own_database: str,
+) -> None:
+    """A link someone made from their own site to another's repository, a
+    typo of an address say, must not keep accepting that repository's
+    workflows without a site id; the repository's own link loses the
+    exemption with it. Only a repository linked to one site keeps it. The
+    repository is (provider, host, repository_id): the same number on
+    another forge is another repository."""
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0003_storage_by_site_id")
+    links = {
+        "own": ("github", "https://github.com", 1001),
+        "planted": ("github", "https://github.com", 1001),
+        "single": ("github", "https://github.com", 3003),
+        "same-number-elsewhere": ("forgejo", "https://code.overheid.nl", 1001),
+    }
+    conn = await asyncpg.connect(own_database)
+    try:
+        group_id = await _make_group(conn)
+        sites = {}
+        for name, (provider, host, repository_id) in links.items():
+            sites[name] = await _make_site(conn, group_id)
+            await conn.execute(
+                """
+                INSERT INTO site_repositories (id, site_id, provider, host, owner, repo, repository_id, owner_id)
+                VALUES ($1, $2, $3, $4, 'minbzk', 'website', $5, 2002)
+                """,
+                uuid.uuid4(),
+                sites[name],
+                provider,
+                host,
+                repository_id,
+            )
+    finally:
+        await conn.close()
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0004_site_id_required")
+
+    conn = await asyncpg.connect(own_database)
+    try:
+        required = {
+            name: await conn.fetchval(
+                "SELECT site_id_required FROM site_repositories WHERE site_id = $1", site_id
+            )
+            for name, site_id in sites.items()
+        }
+    finally:
+        await conn.close()
+    assert required == {"own": True, "planted": True, "single": False, "same-number-elsewhere": False}
+
+
+@pytest.mark.usefixtures("migrated_dsn")
+async def test_the_site_id_migration_will_not_go_down_while_a_link_requires_the_site_id(
+    own_database: str,
+) -> None:
+    """Upgrading again would set every link back to false, and so silently
+    reopen what was closed; the refusal leaves everything as it was."""
+    group_id = await _link_before_the_site_id(own_database)
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0004_site_id_required")
+    conn = await asyncpg.connect(own_database)
+    try:
+        await conn.execute(_LINK_INSERT, uuid.uuid4(), await _make_site(conn, group_id))
+    finally:
+        await conn.close()
+
+    with pytest.raises(RuntimeError, match=r"while repository links require a site id \(1 with"):
+        await asyncio.to_thread(_alembic, own_database, "downgrade", "0003_storage_by_site_id")
+
+    assert await _site_id_required(own_database) == [False, True]
+    conn = await asyncpg.connect(own_database)
+    try:
+        assert await conn.fetchval("SELECT version_num FROM alembic_version") == "0004_site_id_required"
+    finally:
+        await conn.close()
+
+
+@pytest.mark.usefixtures("migrated_dsn")
+async def test_the_site_id_migration_goes_down_while_every_link_still_goes_without(
+    own_database: str,
+) -> None:
+    await _link_before_the_site_id(own_database)
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0004_site_id_required")
+    assert await _site_id_required(own_database) == [False]
+
+    await asyncio.to_thread(_alembic, own_database, "downgrade", "0003_storage_by_site_id")
+
+    assert await _site_id_required(own_database) is None
+    conn = await asyncpg.connect(own_database)
+    try:
+        assert await conn.fetchval("SELECT count(*) FROM site_repositories") == 1
+        trigger = "site_repositories_site_id_required"
+        assert await conn.fetchval("SELECT count(*) FROM pg_trigger WHERE tgname = $1", trigger) == 0
+        assert await conn.fetchval("SELECT count(*) FROM pg_proc WHERE proname = $1", trigger) == 0
+        # Without the trigger an update of a link works as before 0004.
+        await conn.execute("UPDATE site_repositories SET repository_id = 5005")
+    finally:
+        await conn.close()
+
+
+async def _link_at_head(conn: asyncpg.Connection, *, required: bool) -> uuid.UUID:
+    site_id = await _make_site(conn, await _make_group(conn))
+    await conn.execute(
+        """
+        INSERT INTO site_repositories
+            (id, site_id, provider, host, owner, repo, repository_id, owner_id, site_id_required)
+        VALUES ($1, $2, 'github', 'https://github.com', 'minbzk', 'website', 1001, 2002, $3)
+        """,
+        uuid.uuid4(),
+        site_id,
+        required,
+    )
+    return site_id
+
+
+async def _required_after(conn: asyncpg.Connection, site_id: uuid.UUID, change: str) -> bool:
+    # `change` is one of the fixed texts of the parametrize lists below.
+    await conn.execute(f"UPDATE site_repositories SET {change} WHERE site_id = $1", site_id)  # noqa: S608
+    return await conn.fetchval("SELECT site_id_required FROM site_repositories WHERE site_id = $1", site_id)
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["site_id_required = false", "site_id_required = false, live_branch = 'main'", "repository_id = repository_id"],
+)
+async def test_the_database_keeps_a_required_site_id_required(db_connection: asyncpg.Connection, change) -> None:
+    """The rule holds in the database itself, so also for code that knows
+    nothing of the column, such as the image before 0004 after a rollback."""
+    site_id = await _link_at_head(db_connection, required=True)
+    assert await _required_after(db_connection, site_id, change) is True
+
+
+@pytest.mark.parametrize(
+    ("change", "required"),
+    [
+        ("repository_id = 5005", True),
+        ("host = 'https://code.overheid.nl'", True),
+        ("provider = 'forgejo', host = 'https://code.overheid.nl'", True),
+        ("site_id_required = true", True),
+        # The same repository: renamed, transferred, another live branch.
+        ("owner = 'ander', repo = 'andere-naam', owner_id = 9999", False),
+        ("live_branch = 'release', ids_confirmed = true", False),
+    ],
+)
+async def test_the_database_requires_the_site_id_once_another_repository_is_linked(
+    db_connection: asyncpg.Connection, change, required
+) -> None:
+    site_id = await _link_at_head(db_connection, required=False)
+    assert await _required_after(db_connection, site_id, change) is required

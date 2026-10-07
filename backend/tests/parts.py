@@ -33,6 +33,7 @@ NAMED: dict[str, frozenset[str]] = {
     "auth": frozenset(
         {
             "test_backchannel_logout.py",
+            "test_ci_binding.py",
             "test_ci_providers.py",
             "test_ci_tokens.py",
             "test_ci_trust.py",

@@ -7,9 +7,11 @@ Usage:
     plak login [--host <host>] [--no-open] [--insecure-storage]
     plak logout [--host <host>]
     plak whoami [--host <host>]
-    plak publish <dist-dir-or-file> --site <group/site> [--host <host>] \
-        [--preview <ref>] [--base-path <dir>] [--output-file <path>]
-    plak preview-remove <ref> --site <group/site> [--host <host>]
+    plak publish <dist-dir-or-file> --site <group/site> [--site-id <id>] \
+        [--host <host>] [--preview <ref>] [--base-path <dir>] \
+        [--output-file <path>]
+    plak preview-remove <ref> --site <group/site> [--site-id <id>] \
+        [--host <host>]
     plak group create <group> --name <name> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
@@ -29,7 +31,8 @@ outside Windows. That file also remembers the host you last logged in
 to. In CI an OIDC token is used automatically (GitHub Actions with
 'id-token: write', Forgejo Actions with 'enable-openid-connect: true'), or
 supply a token yourself through the environment variable
-PLAK_ACCESS_TOKEN.
+PLAK_ACCESS_TOKEN. With --site-id (or PLAK_SITE_ID) the OIDC token is
+valid for that one site only.
 
 Every command finds its host in this order: --host, PLAK_HOST in the
 environment, the host you last logged in to, then DEFAULT_HOST, the
@@ -81,6 +84,11 @@ HOST_HELP = (
     f"logged in to, then {DEFAULT_HOST}"
 )
 
+SITE_ID_HELP = (
+    "Fixed id of the site, from its Deploy tab in Plak; defaults to PLAK_SITE_ID. "
+    "In CI the ID token is then valid for this site only"
+)
+
 HOSTS_FILENAME = "hosts.json"
 # Its own name, so a test can run the Windows path on any platform.
 WINDOWS = sys.platform == "win32"
@@ -96,6 +104,11 @@ ALLOWED_ARCHIVE_EXTENSIONS = {".html", ".zip", ".tar.gz", ".tgz"}
 SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 VERSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+# The fixed id of a site, as the Deploy tab shows it. Plak takes only the
+# lowercase form in an audience, so the CLI lowers what it is given.
+SITE_ID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
 )
 # The URL characters of RFC 3986 without ' ( ) [ ]: the URL goes into
 # GITHUB_OUTPUT, and from there into Markdown in the job summary and the
@@ -147,6 +160,22 @@ def _split_site(site: str, label: str = "--site") -> tuple[str, str]:
             f"{label} must have the form 'group/site', got: {site!r}"
         )
     return _valid_slug(parts[0], "group"), _valid_slug(parts[1], "site")
+
+
+def _site_id(args: argparse.Namespace) -> str | None:
+    """The site id from --site-id, else PLAK_SITE_ID (empty counts as unset),
+    lowercase; None without one. Checked before any token is asked for."""
+    if args.site_id is not None:
+        value, source = args.site_id, "--site-id"
+    else:
+        value, source = os.environ.get("PLAK_SITE_ID") or None, "PLAK_SITE_ID"
+    if value is None:
+        return None
+    if not SITE_ID_RE.fullmatch(value):
+        raise UsageError(
+            f"{source} must be a site id (a UUID, from the Deploy tab of the site), got: {value!r}"
+        )
+    return value.lower()
 
 
 def _valid_base_path(value: str) -> str:
@@ -558,16 +587,18 @@ def _stored_token(host: str) -> str | None:
     return token
 
 
-def _fetch_oidc_token(host: str) -> str | None:
+def _fetch_oidc_token(host: str, site_id: str | None) -> str | None:
     """CI mode: exchange the runner OIDC token for an ID token with this host
-    as audience. None if the environment offers no OIDC request (so not CI, or
-    'id-token: write'/'enable-openid-connect' is missing)."""
+    as audience, or with this host and the site id, which makes the token
+    valid for that site only. None if the environment offers no OIDC request
+    (so not CI, or 'id-token: write'/'enable-openid-connect' is missing)."""
     request_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
     request_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
     if not request_url or not request_token:
         return None
+    audience = host if site_id is None else f"{host}/-/sites/{site_id}"
     separator = "&" if "?" in request_url else "?"
-    url = f"{request_url}{separator}audience={urllib.parse.quote(host, safe='')}"
+    url = f"{request_url}{separator}audience={urllib.parse.quote(audience, safe='')}"
     try:
         response = _http(
             "GET",
@@ -612,17 +643,29 @@ def _mask_in_ci_log(secret: str) -> None:
     print(f"::add-mask::{secret}")
 
 
-def _get_bearer_token(host: str) -> str:
+def _warn_site_id_unused(site_id: str | None) -> None:
+    if site_id is not None:
+        print(
+            "Warning: --site-id (or PLAK_SITE_ID) only binds the CI ID token the CLI asks for; "
+            "ignored with a session or PLAK_ACCESS_TOKEN.",
+            file=sys.stderr,
+        )
+
+
+def _get_bearer_token(host: str, site_id: str | None = None) -> str:
     """The token for the deploy endpoints and /cli/whoami, in order: an
-    explicit PLAK_ACCESS_TOKEN, a CI OIDC token, then the stored session."""
+    explicit PLAK_ACCESS_TOKEN, a CI OIDC token, then the stored session.
+    Only the OIDC token carries the site id."""
     env_token = os.environ.get("PLAK_ACCESS_TOKEN")
     if env_token:
+        _warn_site_id_unused(site_id)
         return env_token
-    oidc_token = _fetch_oidc_token(host)
+    oidc_token = _fetch_oidc_token(host, site_id)
     if oidc_token:
         return oidc_token
     stored = _stored_token(host)
     if stored:
+        _warn_site_id_unused(site_id)
         return stored
     _note_legacy_env_file()
     raise UsageError(
@@ -759,7 +802,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
     try:
         host = _resolve_host(args)
         _require_https(host)
-        token = _get_bearer_token(host)
+        site_id = _site_id(args)
+        token = _get_bearer_token(host, site_id)
         group, site = _split_site(args.site)
         if args.preview:
             _valid_slug(args.preview, "preview-ref")
@@ -851,7 +895,8 @@ def cmd_preview_remove(args: argparse.Namespace) -> int:
     try:
         host = _resolve_host(args)
         _require_https(host)
-        token = _get_bearer_token(host)
+        site_id = _site_id(args)
+        token = _get_bearer_token(host, site_id)
         group, site = _split_site(args.site)
         _valid_slug(args.ref, "preview-ref")
     except UsageError as error:
@@ -1203,6 +1248,16 @@ def cmd_site_link(args: argparse.Namespace) -> int:
               "Previews: from any branch.")
     if ids_from is not None:
         print(f"IDs {ids_from}: repository {body['repositoryId']}, owner {body['ownerId']}.")
+    # From the server, so only what is a site id reaches the terminal; a Plak
+    # from before the site id sends none.
+    site_id = data.get("siteId")
+    if isinstance(site_id, str) and SITE_ID_RE.fullmatch(site_id):
+        site_id = site_id.lower()
+        print(f"Site id: {site_id}")
+        print(
+            f"In the workflow, beside 'site: {group}/{site}': 'site-id: {site_id}' (action) or "
+            f"'--site-id {site_id}' (CLI)."
+        )
     print(f"Set up the workflow: {host}/{group}/{site}/deploy")
     return 0
 
@@ -1498,6 +1553,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     publish.add_argument("--host", default=None, help=HOST_HELP)
     publish.add_argument("--site", required=True, help="group/site")
+    publish.add_argument("--site-id", default=None, help=SITE_ID_HELP)
     publish.add_argument(
         "--preview",
         help="Preview ref, for instance pr-42; without this field it is a live deploy",
@@ -1527,6 +1583,7 @@ def _build_parser() -> argparse.ArgumentParser:
     remove.add_argument("ref", help="Preview ref to remove")
     remove.add_argument("--host", default=None, help=HOST_HELP)
     remove.add_argument("--site", required=True, help="group/site")
+    remove.add_argument("--site-id", default=None, help=SITE_ID_HELP)
     remove.set_defaults(func=cmd_preview_remove)
 
     group = subparsers.add_parser("group", help="Manage groups.")

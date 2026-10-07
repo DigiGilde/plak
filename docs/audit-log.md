@@ -113,15 +113,18 @@ who attempted it, and more personal data adds little for investigation.
 | `preview_visibility` | `allowed` |
 | `invitee_add`, `invitee_remove` | `allowed` |
 | `key_create`, `key_revoke` | `allowed` |
-| `site_repository_set`, `site_repository_remove` | `allowed` |
+| `site_repository_set`, `site_repository_remove`, `site_repository_site_id_required` | `allowed` |
 | `member_activate`, `member_deactivate`, `member_platform_role` | `allowed` |
 | `admin_access` | `refused` |
 
 `site_repository_set` and `site_repository_remove` are about the repository
 linked to a site so that it may publish from there with a CI ID token
 (`api/admin.py`, "Linked repository"); `refs` carries group, site, provider,
-host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed` and
-`live_branch`, and on unlinking only group and site. `ids_confirmed` is
+host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed`,
+`site_id_required` and `live_branch`, and on unlinking only group and site.
+`site_id_required` is what the link stores afterwards: `true` for a new link
+and for a link that got another repository, unchanged when the same
+repository is linked again (a new live branch, say). `ids_confirmed` is
 what the link stores: `false` when the admin entered the ids and the provider
 could not confirm them (a private repository, or the provider was
 unavailable), unless the link already had the same repository and ids
@@ -131,6 +134,13 @@ recheck confirms, confirms them without a row of its own; its `deploy` or
 `preview_teardown` row is the record. Linked with the
 CLI token (`plak site link`), the row carries `refs.via` and
 `refs.cli_session` as a creation does.
+
+`site_repository_site_id_required` is written when a site admin ends, on the
+Deploy tab, what a link from before the site id still accepted: from then on
+the linked repository publishes only with a CI ID token bound to the site.
+`refs` carries group, site and `site_id`. It goes one way only, so no row
+ever records the other direction, and asking for what already holds writes
+nothing.
 
 `group_delete` carries the group and, in `refs.sites`, the slugs of the sites
 that went with it. Those sites get no `site_delete` row of their own.
@@ -203,8 +213,16 @@ The actor is `ci` for a CI ID token, `member` for a CLI token from `plak
 login` or for an ordinary admin session. For a CI actor `refs` carries the
 claims from the token (`ci/trust.py`, `AUDIT_CLAIMS`, each truncated at 200
 characters): `provider`, and where present `repository`, `ref`, `sha`,
-`run_id`, `workflow`, `event_name`. On a successful deploy or preview
-teardown the actor is pseudonymised on the *stored* repository id
+`run_id`, `workflow`, `event_name`. Beside them `refs.site_bound`: `true`
+when the token's audience named the site id
+(`PLAK_BASE_URL/-/sites/{site id}`), `false` when it was `PLAK_BASE_URL`
+itself, so the move to tokens bound to one site can be followed.
+`refs.site_id` is the id of the site the address in the request leads to,
+when it leads to one, and with a bound token `refs.bound_site_id` is the id
+of the site the token names; on a `SITE_MOVED` or `CI_AUDIENCE_MISMATCH`
+refusal the two differ, or `site_id` is missing. Ids, unlike slugs, stay
+with their site. No response carries either. On a successful deploy or
+preview teardown the actor is pseudonymised on the *stored* repository id
 (`ci/trust.py:TrustedRepository.actor_identifier`); on a refused token on
 what the token itself claimed (`repository_id`, or otherwise `repository` in
 lower case, `ci/trust.py:refused_actor_identifier`) - this way an attacker
@@ -301,8 +319,19 @@ as `NO_SESSION`, `CSRF_INVALID`, `ORIGIN_REFUSED`, `MEMBER_DEACTIVATED`,
 `TOKEN_INVALID` (unknown, revoked or expired token, or the member no longer
 active); for a CI ID token `CI_ISSUER_UNKNOWN` (the `iss` belongs to no
 configured provider), `CI_TOKEN_INVALID` (not a valid JWT, wrong algorithm,
-signature or claims are wrong), `CI_AUDIENCE_MISMATCH` (the `aud` is not
-exactly `PLAK_BASE_URL`), `CI_REPOSITORY_NOT_TRUSTED` (no repository, or a
+signature or claims are wrong), `CI_AUDIENCE_MISMATCH` (the `aud` is
+neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/{site id}`,
+or it names a site that does not exist or that the token's repository is
+not linked to, whatever the requested address),
+`SITE_MOVED` (the `aud` names a site other than the one at the requested
+address, or there is no site at that address, and the token's repository is
+linked to the site it names: the workflow's `site:` is old or mistyped, and
+the answer names the current address of that site),
+`CI_SITE_ID_REQUIRED` (the `aud` is `PLAK_BASE_URL` itself, while the link
+of the site requires a token bound to it: every link made since migration
+0004, every older link of a repository that was linked to several sites
+then, and any other older one once a site admin required it or another
+repository was linked), `CI_REPOSITORY_NOT_TRUSTED` (no repository, or a
 different one, linked to the site), `CI_BRANCH_NOT_ALLOWED` (a live deploy
 from an event other than `push`, `workflow_dispatch` or `schedule`, without
 `event_name`, or outside the configured `liveBranch`) and `CI_PROVIDER_UNREACHABLE` (the keys or, on Forgejo 15 without

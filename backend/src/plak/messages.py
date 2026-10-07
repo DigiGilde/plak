@@ -145,6 +145,7 @@ NL: Final[dict[str, str]] = {
         "{host} geeft {owner}/{repo} andere ids dan ingevuld. Laat de ids leeg, of neem ze over van {host}."
     ),
     "LIVE_BRANCH_INVALID": "Deze live-branch is geen geldige branchnaam.",
+    "SITE_ID_REQUIRED_PERMANENT": "Is het site-ID eenmaal verplicht, dan blijft het verplicht.",
     "LIVE_VERSIONS_KEPT_INVALID": (
         "Het aantal bewaarde vorige versies moet een geheel getal van 0 of meer zijn."
     ),
@@ -170,11 +171,15 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_ISSUER_UNKNOWN.mismatch": "De issuer van het CI-token klopt niet.",
     "CI_AUDIENCE_MISMATCH": (
-        "De audience van het CI-token moet precies de beheer-URL van Plak zijn ({audience})."
+        "De audience van het CI-token moet precies de beheer-URL van Plak zijn ({audience}), of voor "
+        "één site {audience}/-/sites/ met het site-ID erachter."
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
         "De audience van het CI-token moet precies de beheer-URL van Plak zijn "
         "(PLAK_BASE_URL is niet ingesteld)."
+    ),
+    "CI_AUDIENCE_MISMATCH.site": (
+        "De repository van dit ID-token is niet gekoppeld aan de site waar het site-ID bij hoort."
     ),
     "CI_REPOSITORY_NOT_TRUSTED": (
         "Deze repository mag niet naar deze site publiceren. Koppel haar eerst bij de site in het beheer."
@@ -185,6 +190,14 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_BRANCH_NOT_ALLOWED.branch": (
         "Alleen de branch {branch} mag live publiceren; publiceer vanaf deze ref als preview."
+    ),
+    "CI_SITE_ID_REQUIRED": (
+        "Deze site accepteert alleen een workflow die haar site-ID noemt. Zet `site-id` (action) of "
+        "`--site-id` (CLI) in de workflow, met het ID van het tabblad Deploy van je site in Plak."
+    ),
+    "SITE_MOVED": (
+        "Deze workflow publiceert naar {address}. Gebruik dat adres als site: `site:` in de action, "
+        "`--site` bij de CLI."
     ),
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "Het token is ongeldig, ingetrokken of verlopen.",
@@ -423,6 +436,7 @@ EN: Final[dict[str, str]] = {
         "{host}."
     ),
     "LIVE_BRANCH_INVALID": "This live branch is not a valid branch name.",
+    "SITE_ID_REQUIRED_PERMANENT": "Once a site id is required, it stays required.",
     "LIVE_VERSIONS_KEPT_INVALID": (
         "The number of previous versions kept must be a whole number of 0 or more."
     ),
@@ -448,12 +462,14 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_ISSUER_UNKNOWN.mismatch": "The issuer of the CI token is not right.",
     "CI_AUDIENCE_MISMATCH": (
-        "The audience of the CI token has to be exactly the beheer URL of Plak ({audience})."
+        "The audience of the CI token has to be exactly the beheer URL of Plak ({audience}), or for "
+        "one site {audience}/-/sites/ followed by the site id."
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
         "The audience of the CI token has to be exactly the beheer URL of Plak "
         "(PLAK_BASE_URL is not set)."
     ),
+    "CI_AUDIENCE_MISMATCH.site": "This ID token's repository is not linked to the site its site id names.",
     "CI_REPOSITORY_NOT_TRUSTED": (
         "This repository may not publish to this site. Link it to the site in beheer first."
     ),
@@ -463,6 +479,14 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_BRANCH_NOT_ALLOWED.branch": (
         "Only the branch {branch} may publish live; publish from this ref as a preview."
+    ),
+    "CI_SITE_ID_REQUIRED": (
+        "This site only accepts a workflow that names its site id. Add `site-id` (action) or "
+        "`--site-id` (CLI) with the id from the Deploy tab of your site in Plak."
+    ),
+    "SITE_MOVED": (
+        "This workflow publishes to {address}. Use that address as the site: `site:` in the action, "
+        "`--site` for the CLI."
     ),
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "The token is invalid, revoked or expired.",

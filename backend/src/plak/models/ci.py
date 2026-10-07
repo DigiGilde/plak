@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, false, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, false, func, true
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -45,6 +45,10 @@ class SiteRepository(IDMixin, Base):
     # False while the ids are only what an admin entered: the provider could
     # not look them up and no trusted CI token has matched them yet.
     ids_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
+    # True: only a CI token bound to this site (audience PLAK_BASE_URL/-/sites/
+    # {site_id}) may deploy. False only on a link from before 0004, and never
+    # set back to false once true.
+    site_id_required: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true(), default=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("members.id", ondelete="SET NULL"), nullable=True
     )
