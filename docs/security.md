@@ -86,7 +86,8 @@ see the CLI row above.
 | Constant-time comparison of CLI tokens (device code, access and refresh token): selector plus SHA-256 hash, with a dummy hash for an unknown selector so that an unknown selector takes as long as a wrong secret | implemented: `cli/service.py` (`matches`, `_DUMMY_HASH`), `backend/tests/test_cli_service.py` |
 | `__Secure-` key cookie, HttpOnly, SameSite=None (see "Why the content cookies are SameSite=None"), path exactly on site/preview | implemented: `auth/sessions.py` (`KEY_COOKIE`), `serving/router.py`, `backend/tests/test_serving.py` |
 | Secret link without a code: `?key=selector` only shows a code page for a usable key of that site, everything beyond that stays the neutral 404; the code goes in the body of a POST, never in the URL | implemented: `serving/code_page.py`, `access/gate.py` (`code_page_needed`), `access/keys.py` (`verify_parts`, `selector_usable`, `compare_dummy`), `backend/tests/test_code_page.py` |
-| Secret link: `?key=` is redeemed (cookie plus 302 to the URL without `key`); key never in audit, returnTo or access log | implemented: `serving/router.py`, `containers/plak/Containerfile` and `justfile` (`--no-access-log`), `backend/tests/test_serving.py` |
+| Secret link: `?key=` is redeemed (cookie plus 302 to the URL without `key`); on a `/{group}/{site}/...` path every other `key` value that starts with a whole secret link leaves the URL with the same 302, without a cookie, on every answer but the login redirect (a refusal included), so no page reads it from its address or the tab's history; that 302 is the same whether or not the site exists; a selector alone leaves an allowed page too; every other path keeps the neutral 404, so no target is ever built from a path that could leave the host; key never in audit, returnTo or access log | implemented: `serving/router.py` (`_redeem_key`, `_strip_key_redirect`, `_refuse`), `access/keys.py` (`carries_full_key`, `carries_bare_selector`), `containers/plak/Containerfile` and `justfile` (`--no-access-log`), `backend/tests/test_serving.py` (`TestKeyNeverReachesAPage`), `backend/tests/test_key_stripping_matrix.py` |
+| Service workers are refused on the content host: a request with `Service-Worker: script` or `Sec-Fetch-Dest: serviceworker` gets the neutral 404 before anything else and without an audit row, so no site registers a worker that would see every navigation under its path, secret links included, before the server does; content responses carry `Vary: Service-Worker`, so a registration cannot be answered from an HTTP cache entry that a plain request filled | implemented: `serving/router.py` (`_is_service_worker_script`), `serving/response.py` (`_base_headers`), `backend/tests/test_serving.py` (`TestServiceWorkerScript`), `e2e/test_header_parity.py` |
 | Expired preview gets the neutral 404 straight away at the access decision itself (not only via the purge job) | implemented: `access/gate.py` (`REASON_PREVIEW_EXPIRED`), `backend/tests/test_access_gate.py` |
 | Anonymous top-level navigation to a preview or `_version` view: the same login redirect whatever lies behind the path, so it betrays no existence of non-public content (a public preview is served, as it always was); not for a subresource, not with a key in play, not for a path of non-slugs (the login could scope no site cookie there, so it would loop) | implemented: `serving/router.py`, `backend/tests/test_serving.py` (`TestFirstVisitToPreviewOrVersion`) |
 | `_version` views exclusively for active group members, every access audited | implemented: `access/gate.py`, `serving/router.py`, `backend/tests/test_access_gate.py`, `backend/tests/test_serving.py` |
@@ -786,7 +787,8 @@ a 302 (`Cache-Control: no-store`) to the same URL without the
 `key` parameter (other query parameters stay); the cookie route serves
 after that. The cookie carries the id of the link, signed with
 `PLAK_SESSION_SECRET`: a bare id is not proof of access, because it appears
-nowhere as a secret. An invalid key or cookie stays the neutral 404.
+nowhere as a secret. An invalid cookie stays the neutral 404; an invalid key in
+the query leaves the URL (next paragraph).
 The audit record carries the path and the selector of the link, never the
 query string, and a stray `key` does not travel along
 in `returnTo` either. The access log of uvicorn logs path plus query string and
@@ -800,6 +802,35 @@ rotation of `PLAK_SESSION_SECRET` invalidates every existing key cookie:
 visitors with such a cookie have to open their link again. Still open:
 `X-Robots-Tag: noindex` on key content.
 
+**A secret link never reaches a page.** Redeeming takes a valid key out of the
+URL; without more, every other key would stay in it. On an allowed page (a
+public site, a visitor with a session) the page's script reads it from
+`location.search`. On a refusal it stays in the address bar and in the tab's
+history, where a later page on the same host can read it through the
+Navigation API. A service worker that a site registers on its own path sees
+every navigation under that path before the server does. And
+`?key=<link>&key=x` slips past a check on one value: Starlette reads the last
+`key`, `URLSearchParams.get` the first. A key stays usable on its own site for
+up to 365 days, so a link that reaches another site's page is a credential in
+the wrong hands. Hence: on a path of a site (`/{group}/{site}/...`), any `key`
+value that starts with a whole secret link (also with what a mail client leaves
+stuck to it) and is not redeemed for this site leaves the URL with a 302
+(`no-store`, no cookie) to the same URL without any `key`, whatever the answer
+would have been, after the decision is audited. Only the login redirect keeps
+its answer, which never carried the key. The 302 is the same for an unknown
+group as for a site that refuses or allows, so it is no enumeration oracle.
+Every other path keeps the neutral 404: no link is meant for a path that cannot
+be a site, and a target built from one could leave the host (a strip of
+`//evil.example/x/?key=...` would be an open redirect). The targets themselves
+are built from the decoded path and the query apart, never from `request.url`,
+so an encoded `?` in the path cannot move a `key` past the filter. A selector
+alone leaves an allowed page too and stays on a refusal, where the code page
+needs it. Service worker scripts get the neutral
+404 (the row under "Access to content"); with the shielding on a page could not
+register one anyway, its origin being opaque. Tests:
+`backend/tests/test_serving.py` (`TestKeyNeverReachesAPage`,
+`TestServiceWorkerScript`), `backend/tests/test_key_stripping_matrix.py`.
+
 **Secret link without a code.** The same link can be shared in two
 ways. In full (`?key=selector.verifier`): whoever has the link can view.
 Without the code (`?key=selector`): the link goes via one channel, the code via
@@ -812,7 +843,9 @@ usable key of that site. The neutral 404 remains the answer for: an
 unknown or wrong selector, a revoked or expired key, a
 key of another site, a site that is not set to "secret link", a
 site without a live version, an unknown site or group, and a preview. Otherwise
-the page itself would betray which selectors exist. The page names no
+the page itself would betray which selectors exist. Where the visitor may see
+the page anyway, the selector leaves the URL before the page loads ("A secret
+link never reaches a page", above). The page names no
 site title and no group name: only that a code is needed, an input field,
 a button and an error line. It carries the headers of protected content
 (`no-store`, `noindex`, `Referrer-Policy: same-origin`) with the platform CSP.

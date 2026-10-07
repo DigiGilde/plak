@@ -203,6 +203,11 @@ def _base_headers(
         # because the router needs a Referer of its own to tell a site's own
         # subresources from another site's (see _foreign_subresource).
         "Referrer-Policy": "same-origin" if access.keys else "strict-origin-when-cross-origin",
+        # A service worker registration may be answered from the HTTP cache
+        # (updateViaCache 'all'); without this, from what a plain request for
+        # the same file left there, and the router never sees the refusal's
+        # Service-Worker header.
+        "Vary": "Service-Worker",
     }
     if noindex:
         headers["X-Robots-Tag"] = NOINDEX

@@ -47,6 +47,7 @@ CONTENT_HEADERS = (
     "X-Content-Type-Options",
     "Content-Security-Policy",
     "Referrer-Policy",
+    "Vary",
 )
 
 # Headers the spec demands for everything the SPA serves (spec §9, §5.9).
@@ -92,6 +93,7 @@ class TestContentHeaderset:
         assert _header(headers, "X-Content-Type-Options") == "nosniff"
         assert _header(headers, "Content-Security-Policy") == response.CONTENT_CSP
         assert _header(headers, "Referrer-Policy") == "strict-origin-when-cross-origin"
+        assert _header(headers, "Vary") == "Service-Worker"
 
     def test_noindex_adds_only_x_robots_tag_to(self, tmp_path: Path) -> None:
         version_id = uuid.uuid4()
@@ -123,6 +125,7 @@ class TestContentHeaderset:
         # A browser keeps the stored CSP unless the 304 repeats it.
         assert _header(headers_304, "Content-Security-Policy") == response.CONTENT_CSP
         assert _header(headers_304, "Referrer-Policy") == "strict-origin-when-cross-origin"
+        assert _header(headers_304, "Vary") == "Service-Worker"
         assert _header(headers_304, "Content-Type") is None
 
     def test_neutral_404_is_byte_identical_regardless_of_reason(self) -> None:

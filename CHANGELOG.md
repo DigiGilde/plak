@@ -36,6 +36,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
+- A page never sees a secret link that was not meant for it: Plak takes a
+  `key` in the shape of a secret link out of the address before it answers,
+  also on a refusal, and refuses service worker scripts, which could read a
+  link before Plak does.
 
 ## [2026.10.7]
 
