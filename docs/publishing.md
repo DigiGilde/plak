@@ -1049,3 +1049,24 @@ set what happens to the first (`/core/transition-period`,
   is possible during the whole transition.
 
 How long the transition lasts is decided when v2 is planned.
+
+## 8. Plak is not an archive
+
+Published government content can be an archival record under the
+Archiefwet. Plak is a publishing platform, not a records system, and it
+does not keep what it serves:
+
+- Every night Plak removes the live versions older than the ones a site
+  keeps: the 5 previous live versions by default (§4; a site admin sets
+  another number per site, `0` keeps them all).
+- Previews expire automatically after thirty days without a new deploy.
+- A site admin can delete a site and a group admin a whole group, with
+  every version in it.
+- The content volume is not backed up as an archive, and nothing in Plak
+  records that a page was an official publication.
+
+The publishing organisation keeps its own records. What has to be
+preserved goes to the organisation's own archive, in line with its
+selection list (selectielijst), before it is published here or when it
+is withdrawn. Do not treat the `_version` view or the retained versions
+as that archive.

@@ -23,6 +23,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- The privacy and accessibility statements name the controller, legal
+  basis, DPO, complaint routes and the hosting on ZAD, and no longer claim
+  that an organisation is stored. Both are marked as drafts.
 
 ### Fixed
 

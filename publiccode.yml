@@ -11,7 +11,7 @@ categories:
   - collaboration
   - document-management
 
-developmentStatus: development
+developmentStatus: beta
 
 softwareVersion: "2026.10.7"
 releaseDate: "2026-10-07"
@@ -26,9 +26,10 @@ maintenance:
       email: digigilde@rijksoverheid.nl
 
 localisation:
-  localisationReady: false
+  localisationReady: true
   availableLanguages:
     - nl
+    - en
 
 description:
   nl:
@@ -47,5 +48,6 @@ description:
       - Publiceren van statische sites op een eigen groep/site-pad
       - PR-previews met automatische opruiming
       - "Vijf toegangsniveaus: publiek, geheime link, SSO Rijk, groepsleden, genodigden"
-      - Beheer-SPA voor groepen, sites, toegang en deploy-tokens
-      - Herbruikbare GitHub/Forgejo-action voor publicatie in CI
+      - Tweetalige (Nederlands en Engels) beheer-SPA voor groepen, sites, toegang en leden
+      - Publiceren vanuit de eigen computer met de plak-CLI
+      - Herbruikbare GitHub/Forgejo-action voor publicatie in CI, aangemeld met een OIDC-token

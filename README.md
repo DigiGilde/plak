@@ -1,8 +1,8 @@
 # Plak
 
-**Status: under development.** Plak is not in production yet; this
-document describes the design and the state of the build, not a
-finished product.
+**Status: beta, in production.** Plak runs in production on ZAD and is
+still a beta: the design and the interface can change, as the disclaimer
+below says.
 
 Plak is a platform that lets government organisations (among them
 MinBZK and the Nederlandse Digitale Dienst) publish and share static
@@ -14,8 +14,8 @@ preview of its own.
 
 Read this before you use anything here.
 
-- **Experimental, not in production.** Plak runs nowhere for real
-  users. There is no support, no service level and no guarantee of any
+- **Beta, in production.** Plak runs in production for real users, as a
+  beta. There is no support, no service level and no guarantee of any
   kind. The HTTP contract, the URL design, the database schema and the
   configuration can change without notice and without a migration path.
 - **Not independently reviewed.** No external security review, no
@@ -36,6 +36,11 @@ Read this before you use anything here.
 - **Licence.** EUPL-1.2 (see `LICENSE` and `publiccode.yml`). That
   licence grants the software as is, without warranty of any kind and
   without liability, to the extent the law allows.
+
+Plak is not an archive. It deletes old live versions every night and
+lets administrators delete sites, so a published page can disappear.
+The publishing organisation keeps its own records under its selection
+list (Archiefwet); see §8 of `docs/publishing.md`.
 
 The name comes from `plakkaat`, the Dutch word for a placard. Placards
 used to be put up to share something with more people than you could
