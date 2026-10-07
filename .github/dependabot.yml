@@ -46,6 +46,7 @@ updates:
     directories:
       - /
       - /actions/publish
+      - /.github/actions/*
     multi-ecosystem-group: tooling
     patterns:
       - "*"

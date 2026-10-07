@@ -1,0 +1,52 @@
+# trivy-action with the Trivy version pinned in one place, for ci.yml,
+# deploy.yml and the scheduled scan. The defaults are those of
+# trivy-action, so a call here behaves like the same call there.
+# Dependabot updates the `uses:` pin, not the version: bump `version` by
+# hand.
+name: Trivy
+description: Run trivy-action at the Trivy version this repository pins.
+
+inputs:
+  scan-type:
+    description: trivy-action scan-type.
+    default: image
+  scan-ref:
+    description: trivy-action scan-ref.
+    default: "."
+  image-ref:
+    description: trivy-action image-ref.
+    default: ""
+  trivyignores:
+    description: trivy-action trivyignores.
+    default: ""
+  severity:
+    description: trivy-action severity.
+    default: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+  ignore-unfixed:
+    description: trivy-action ignore-unfixed.
+    default: "false"
+  exit-code:
+    description: trivy-action exit-code.
+    default: ""
+  format:
+    description: trivy-action format.
+    default: table
+  output:
+    description: trivy-action output.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        scan-type: ${{ inputs.scan-type }}
+        scan-ref: ${{ inputs.scan-ref }}
+        image-ref: ${{ inputs.image-ref }}
+        trivyignores: ${{ inputs.trivyignores }}
+        severity: ${{ inputs.severity }}
+        ignore-unfixed: ${{ inputs.ignore-unfixed }}
+        exit-code: ${{ inputs.exit-code }}
+        format: ${{ inputs.format }}
+        output: ${{ inputs.output }}
+        version: v0.74.0

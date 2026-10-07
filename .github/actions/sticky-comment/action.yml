@@ -1,0 +1,42 @@
+# One comment per marker on the pull request: created or updated when the
+# file has content, deleted when it is empty or missing. Meant for a step
+# with `continue-on-error: true`: a fork or Dependabot token is read-only.
+name: Sticky pull request comment
+description: Upsert, or remove, the comment that starts with a marker line.
+
+inputs:
+  marker:
+    description: First line of the comment, the HTML comment that identifies it.
+    required: true
+  comment-file:
+    description: File with the comment body.
+    required: true
+  token:
+    description: Token that may write pull request comments.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Update the comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REPOSITORY: ${{ github.repository }}
+        NUMBER: ${{ github.event.pull_request.number }}
+        COMMENT_FILE: ${{ inputs.comment-file }}
+        MARKER: ${{ inputs.marker }}
+      run: |
+        set -euo pipefail
+        ids="$(gh api --paginate "repos/$REPOSITORY/issues/$NUMBER/comments" \
+          --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith(env.MARKER))) | .id')"
+        existing="${ids%%$'\n'*}"
+        if [ -s "$COMMENT_FILE" ]; then
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPOSITORY/issues/comments/$existing" -F "body=@$COMMENT_FILE" > /dev/null
+          else
+            gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/comments" -F "body=@$COMMENT_FILE" > /dev/null
+          fi
+        elif [ -n "$existing" ]; then
+          gh api --method DELETE "repos/$REPOSITORY/issues/comments/$existing"
+        fi

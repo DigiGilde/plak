@@ -1,0 +1,30 @@
+# The oasdiff binary of the image pinned by digest in
+# .github/oasdiff/Containerfile (Dependabot bumps it there). Needs a
+# checkout and a container runtime.
+name: Install oasdiff
+description: Copy the pinned oasdiff binary out of its image.
+
+outputs:
+  path:
+    description: Path of the oasdiff binary.
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install oasdiff
+      id: install
+      shell: bash
+      run: |
+        set -euo pipefail
+        image="$(grep -oE '^FROM docker\.io/tufin/oasdiff:[^@ ]+@sha256:[0-9a-f]{64}$' \
+          .github/oasdiff/Containerfile | cut -d' ' -f2)"
+        if [ -z "$image" ]; then
+          echo "No oasdiff image pinned by digest in .github/oasdiff/Containerfile" >&2
+          exit 1
+        fi
+        docker create --name oasdiff "$image" > /dev/null
+        docker cp oasdiff:/usr/bin/oasdiff "$RUNNER_TEMP/oasdiff"
+        docker rm oasdiff > /dev/null
+        "$RUNNER_TEMP/oasdiff" --version
+        echo "path=$RUNNER_TEMP/oasdiff" >> "$GITHUB_OUTPUT"

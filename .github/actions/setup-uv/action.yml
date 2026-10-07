@@ -1,0 +1,23 @@
+# setup-uv with the pin in one place. Without a glob the action keeps its
+# own default cache key; with one, the cache follows those lockfiles.
+name: Set up uv
+description: Install uv, optionally caching on the given lockfiles.
+
+inputs:
+  cache-dependency-glob:
+    description: Lockfile glob that keys the uv cache; empty keeps the action's default.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      if: ${{ inputs.cache-dependency-glob == '' }}
+      uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+    - name: Install uv with a cache
+      if: ${{ inputs.cache-dependency-glob != '' }}
+      uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: ${{ inputs.cache-dependency-glob }}

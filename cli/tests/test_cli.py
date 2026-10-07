@@ -1291,7 +1291,8 @@ def test_action_yml_runs_the_cli_from_the_project_two_levels_up():
     """github.action_path is actions/publish/ in this repository, so the
     reference to the CLI project in cli/ has to climb out of it."""
     content = ACTION_YML_PATH.read_text()
-    assert content.count('--project "${{ github.action_path }}/../../cli" plak') == 2
+    assert content.count('--locked --project "$PLAK_ACTION_PATH/../../cli" plak') == 2
+    assert content.count("PLAK_ACTION_PATH: ${{ github.action_path }}") == 3
     project = (ACTION_YML_PATH.parent / ".." / ".." / "cli").resolve()
     assert (project / "pyproject.toml").is_file()
     assert (project / "plak_cli" / "__init__.py").is_file()

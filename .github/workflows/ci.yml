@@ -22,11 +22,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Dependabot updates `uses:` references, not this input: bump it by hand,
-  # together with the same variable in deploy.yml.
-  TRIVY_VERSION: v0.74.0
-
 jobs:
   # The backend suite in parts side by side (backend/tests/parts.py).
   # `backend-tests` below judges their results, `backend-coverage` merges
@@ -42,9 +37,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
       # The DB tests run PostgreSQL 16 via testcontainers. The
@@ -115,9 +109,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
       - name: Fetch the coverage data
@@ -158,9 +151,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: backend/uv.lock
 
       - name: Release script tests with coverage
@@ -177,14 +169,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: cli/uv.lock
 
       - name: CLI tests with coverage
         working-directory: cli
-        run: uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
+        run: uv run pytest tests -q -n auto --cov=plak_cli --cov-report=term-missing:skip-covered
 
   # The same suite on Windows, without the coverage floor: the `cli` job
   # already covers the Windows branches by switching cli.WINDOWS, this job
@@ -195,9 +186,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: cli/uv.lock
 
       - name: CLI tests
@@ -229,20 +219,14 @@ jobs:
         run: npm run build
 
       # With coverage, on the same run: the thresholds in vite.config.ts
-      # fail this step when coverage drops, and a second pass purely for a
-      # number would cost the suite twice.
+      # fail this step when coverage drops. This run includes
+      # tests/build-output.test.ts, the CSP gate: the built index.html may
+      # not carry an inline <script> without src, otherwise the admin CSP
+      # (script-src 'self', no unsafe-inline) no longer matches what is
+      # served.
       - name: Frontend tests with coverage
         working-directory: frontend
         run: npm run coverage
-
-      # Deliberately runs once more, separate from the suite above, so the
-      # CI log names this gate explicitly: the built index.html may not
-      # carry an inline <script> without src, otherwise the admin CSP
-      # (script-src 'self', no unsafe-inline) no longer matches what is
-      # served.
-      - name: CSP check on the built SPA
-        working-directory: frontend
-        run: npx vitest run tests/build-output.test.ts
 
   # The whole product against a real stack: nginx, the app, PostgreSQL and
   # the mock OIDC, driven through a browser. The unit suites cannot see
@@ -266,16 +250,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            frontend/package-lock.json
-            e2e/package-lock.json
+          cache-dependency-path: e2e/package-lock.json
 
       # run.sh generates dev/.secrets/ with a Python one-liner, and the CLI
       # scenario runs the real CLI through `uv run --project cli`.
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
         with:
-          enable-cache: true
           cache-dependency-glob: |
             backend/uv.lock
             cli/uv.lock
@@ -288,14 +269,6 @@ jobs:
             echo "No container runtime on this runner: the e2e stack cannot start." >&2
             exit 1
           fi
-
-      # dev/compose.yml mounts frontend/dist read-only into the app; without
-      # it /admin answers 503 and half the scenarios fail on that.
-      - name: Build the SPA
-        working-directory: frontend
-        run: |
-          npm ci --no-audit --no-fund
-          npm run build
 
       - name: Install Playwright
         working-directory: e2e
@@ -320,19 +293,19 @@ jobs:
           if-no-files-found: ignore
 
   # Runs .pre-commit-config.yaml over the whole tree, so a commit made
-  # without the local hook installed is still caught. The gitleaks hook in
-  # that config scans the staged diff and is therefore a no-op here; the
-  # job `secret-scan` below is what covers secrets in CI.
+  # without the local hook installed is still caught. The gitleaks hook is
+  # skipped here (SKIP): it scans the staged diff, a no-op under
+  # --all-files, and building it takes longer than the rest of the job.
+  # The job `secret-scan` below is what covers secrets in CI.
   pre-commit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: ./.github/actions/setup-uv
 
-      # Building the gitleaks hook from source takes longer than the rest
-      # of the job together; the cache key follows the pinned revisions.
+      # The cache key follows the pinned revisions.
       - name: Hook environments from the cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -340,6 +313,8 @@ jobs:
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Run the pre-commit hooks
+        env:
+          SKIP: gitleaks
         run: uv run --project backend --only-group tools pre-commit run --all-files --show-diff-on-failure
 
   # `git commit --no-verify` walks past the local gitleaks hook, so the
@@ -355,9 +330,7 @@ jobs:
   #
   # gitleaks-action is not used on purpose: it asks an organization
   # account for a paid licence key, which is exactly the dependency this
-  # repository is getting rid of. `go install` at an exact tag is verified
-  # against the Go checksum database; the module path is still the old
-  # zricethezav one, which is what the go.mod of gitleaks declares.
+  # repository is getting rid of.
   secret-scan:
     runs-on: ubuntu-latest
     steps:
@@ -369,13 +342,23 @@ jobs:
           # is a few hundred commits, a second of fetching.
           fetch-depth: 0
 
-      # go install lands the binary in GOPATH/bin, which is not on PATH in
-      # the next step. Adding it there beats calling gitleaks by full path
-      # in every scan below.
+      # A release binary checked against the SHA-256 of its published
+      # checksums file (gitleaks_8.30.1_checksums.txt on the release page),
+      # copied in here: go install depends on sum.golang.org being up.
+      # Bump the version and the checksum together.
       - name: Install gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
         run: |
-          go install github.com/zricethezav/gitleaks/v8@v8.30.1
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          archive="gitleaks_${VERSION}_linux_x64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${archive}"
+          echo "${SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
 
       - name: Scan the working tree for secrets
         run: gitleaks dir . --redact --no-banner
@@ -437,24 +420,22 @@ jobs:
           echo "nginx=$nginx" >> "$GITHUB_OUTPUT"
 
       - name: Scan the Containerfiles (trivy config)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: ./.github/actions/trivy
         with:
           scan-type: config
           scan-ref: containers
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           exit-code: "1"
-          version: ${{ env.TRIVY_VERSION }}
 
       - name: Scan the runtime base image (trivy)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: ./.github/actions/trivy
         with:
           image-ref: ${{ steps.bases.outputs.runtime }}
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-          version: ${{ env.TRIVY_VERSION }}
 
       # Gated like the image that ships. This one only runs in
       # dev/compose.yml, but it runs on every developer's machine, and the
@@ -463,73 +444,17 @@ jobs:
       # which it comes back, so the gate stays honest instead of standing
       # open.
       - name: Scan the nginx base image (trivy)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        uses: ./.github/actions/trivy
         with:
           image-ref: ${{ steps.bases.outputs.nginx }}
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
-          version: ${{ env.TRIVY_VERSION }}
 
   vulnerabilities:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            backend/uv.lock
-            cli/uv.lock
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-
-      # uv export instead of the venv: pip-audit then reads exactly what
-      # the lockfile pins, including the dev group, and nothing from the
-      # runner.
-      - name: Scan the backend dependencies (pip-audit)
-        env:
-          REQUIREMENTS: ${{ runner.temp }}/requirements.txt
-        run: |
-          uv export --directory backend --frozen --no-emit-project --quiet \
-            --format requirements-txt -o "$REQUIREMENTS"
-          flags=()
-          while IFS= read -r id; do
-            if [ -n "$id" ]; then
-              flags+=(--ignore-vuln "$id")
-            fi
-          done < <(uv run --script .github/scripts/vulnerabilities.py ids)
-          uv run --project backend --only-group tools pip-audit --requirement "$REQUIREMENTS" --disable-pip \
-            --progress-spinner off ${flags[@]+"${flags[@]}"}
-
-      # cli/ is the one component users install on their own machines
-      # (README.md); it has its own uv project and lockfile, separate from
-      # the backend, so it needs its own export-and-audit step.
-      - name: Scan the CLI dependencies (pip-audit)
-        env:
-          REQUIREMENTS: ${{ runner.temp }}/cli-requirements.txt
-        run: |
-          uv export --directory cli --frozen --no-emit-project --quiet \
-            --format requirements-txt -o "$REQUIREMENTS"
-          flags=()
-          while IFS= read -r id; do
-            if [ -n "$id" ]; then
-              flags+=(--ignore-vuln "$id")
-            fi
-          done < <(uv run --script .github/scripts/vulnerabilities.py ids)
-          uv run --project backend --only-group tools pip-audit --requirement "$REQUIREMENTS" --disable-pip \
-            --progress-spinner off ${flags[@]+"${flags[@]}"}
-
-      # npm audit reads the lockfile and does not need node_modules; the
-      # script does the filtering, because npm audit has no ignore list.
-      - name: Scan the frontend dependencies (npm audit)
-        env:
-          REPORT: ${{ runner.temp }}/npm-audit.json
-        run: |
-          npm audit --json --prefix frontend > "$REPORT" || true
-          uv run --script .github/scripts/vulnerabilities.py npm-audit "$REPORT"
+      - uses: ./.github/actions/audit-dependencies

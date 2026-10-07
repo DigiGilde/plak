@@ -22,10 +22,36 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RELEASE_SCRIPT = ROOT / ".github" / "scripts" / "release.py"
+ACTIONS = ROOT / ".github" / "actions"
+LOCAL_TRIVY = "./.github/actions/trivy"
 
 
 def _load(name: str) -> dict:
     return yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+
+
+def _action(name: str) -> dict:
+    return yaml.safe_load((ACTIONS / name / "action.yml").read_text(encoding="utf-8"))
+
+
+def _is_sha(reference: str) -> bool:
+    ref = reference.split("@")[1]
+    return len(ref) == 40 and all(c in "0123456789abcdef" for c in ref)
+
+
+def _pinned(ci: dict) -> set[str]:
+    """The third-party actions ci.yml and the local actions pin."""
+    steps = [s for job in ci["jobs"].values() for s in job.get("steps", [])]
+    for path in ACTIONS.glob("*/action.yml"):
+        steps += yaml.safe_load(path.read_text(encoding="utf-8"))["runs"]["steps"]
+    return {s["uses"] for s in steps if "uses" in s}
+
+
+def _local_actions_exist(job: dict) -> None:
+    for step in job.get("steps", []):
+        uses = step.get("uses", "")
+        if uses.startswith("./"):
+            assert (ROOT / uses / "action.yml").is_file(), uses
 
 
 @pytest.fixture(scope="module")
@@ -188,7 +214,7 @@ class TestTheCheckGate:
 class TestTheScans:
     def test_the_image_is_scanned_before_anything_rolls_out(self, deploy) -> None:
         steps = deploy["jobs"]["build"]["steps"]
-        scans = [s for s in steps if "trivy-action" in str(s.get("uses", ""))]
+        scans = [s for s in steps if s.get("uses") == LOCAL_TRIVY]
 
         # One that reports everything, one that closes the gate, and the SBOM.
         assert len(scans) == 3
@@ -196,6 +222,30 @@ class TestTheScans:
         assert len(gate) == 1
         assert gate[0]["with"]["severity"] == "CRITICAL,HIGH"
         assert gate[0]["with"]["trivyignores"] == ".trivyignore.yaml"
+
+    def test_the_image_is_scanned_by_the_digest_that_was_pushed(self, deploy) -> None:
+        """A tag can move between the push and the scan."""
+        steps = deploy["jobs"]["build"]["steps"]
+        for scan in (s for s in steps if s.get("uses") == LOCAL_TRIVY):
+            assert scan["with"]["image-ref"] == "${{ steps.tag.outputs.name }}@${{ steps.push.outputs.digest }}"
+
+    def test_the_build_job_does_not_keep_the_token_in_git(self, deploy) -> None:
+        """It holds `packages: write` and runs the Containerfile."""
+        checkout = deploy["jobs"]["build"]["steps"][0]
+        assert checkout["uses"].startswith("actions/checkout@")
+        assert checkout["with"]["persist-credentials"] is False
+
+    def test_trivy_is_one_action_with_one_version(self, ci, deploy) -> None:
+        """The version used to be a variable in two workflows; it is the
+        input of the local action now, and nothing else sets one."""
+        step = _action("trivy")["runs"]["steps"][0]
+        assert step["uses"].startswith("aquasecurity/trivy-action@") and _is_sha(step["uses"])
+        assert re.fullmatch(r"v\d+\.\d+\.\d+", step["with"]["version"])
+        for workflow in (ci, deploy):
+            assert "TRIVY_VERSION" not in workflow.get("env", {})
+            for job in workflow["jobs"].values():
+                for each in job.get("steps", []):
+                    assert "version" not in each.get("with", {}) or "trivy" not in each.get("uses", "")
 
     def test_the_image_carries_provenance_and_sbom_attestations(self, deploy) -> None:
         """Both attest the digest that was pushed, never a tag, which can move."""
@@ -263,7 +313,7 @@ class TestTheScans:
         dev/compose.yml, but it runs on every developer's machine, and what
         it still carries is written down in .trivyignore.yaml with a date."""
         steps = ci["jobs"]["containers"]["steps"]
-        scans = [s for s in steps if "trivy-action" in str(s.get("uses", ""))]
+        scans = [s for s in steps if s.get("uses") == LOCAL_TRIVY]
 
         assert [s["with"]["exit-code"] for s in scans] == ["1"] * len(scans)
         assert {s["with"].get("scan-type", "image") for s in scans} == {"config", "image"}
@@ -285,17 +335,30 @@ class TestTheScans:
             "plugin.yml",
             "release.yml",
             "rulesets.yml",
+            "scan.yml",
         ]
 
         for path in paths:
             workflow = _load(path.name)
             for job in workflow["jobs"].values():
+                _local_actions_exist(job)
                 for step in job.get("steps", []):
                     uses = step.get("uses")
                     if not uses or uses.startswith("./"):
                         continue
-                    ref = uses.split("@")[1]
-                    assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), uses
+                    assert _is_sha(uses), uses
+
+    def test_every_third_party_action_in_a_local_action_is_pinned_to_a_sha(self) -> None:
+        """The composite actions in .github/actions are workflow code too."""
+        paths = sorted(ACTIONS.glob("*/action.yml"))
+        assert paths
+        for path in paths:
+            steps = yaml.safe_load(path.read_text(encoding="utf-8"))["runs"]["steps"]
+            for step in steps:
+                uses = step.get("uses")
+                if not uses or uses.startswith("./"):
+                    continue
+                assert _is_sha(uses), f"{path.parent.name}: {uses}"
 
     def test_every_push_trigger_names_the_default_branch(self) -> None:
         """A push trigger on a branch that does not exist is a workflow that
@@ -664,13 +727,15 @@ class TestTheReleaseImage:
         production rolled out whichever finished last: v2026.10.4 and
         v2026.10.7 ran as `dev`, not as the image their release named. A
         release now pushes its version tag alone, and the scans, the SBOM,
-        the attestations and production all take that one."""
+        the attestations and production all take that one; the scans and the
+        SBOM by the digest that push returned."""
         image = "${{ steps.release.outputs.image || steps.tag.outputs.image }}"
         assert _step(build, "Build and push the image")["with"]["tags"] == image
         assert build["outputs"]["image"] == image
+        pushed = "${{ steps.tag.outputs.name }}@${{ steps.push.outputs.digest }}"
         for step in build["steps"]:
             if "image-ref" in step.get("with", {}):
-                assert step["with"]["image-ref"] == image, step.get("name")
+                assert step["with"]["image-ref"] == pushed, step.get("name")
         assert _step(deploy["jobs"]["production"], "Roll out to ZAD")["with"]["image"] == (
             "${{ needs.build.outputs.image }}"
         )
@@ -811,9 +876,10 @@ class TestTheChangelogCheck:
         assert changelog["jobs"]["changelog"]["permissions"] == {"contents": "read", "pull-requests": "write"}
 
     def test_the_actions_are_the_ones_ci_already_pins(self, ci, changelog) -> None:
-        pinned = {s["uses"] for job in ci["jobs"].values() for s in job.get("steps", []) if "uses" in s}
+        pinned = _pinned(ci)
+        _local_actions_exist(changelog["jobs"]["changelog"])
         for step in changelog["jobs"]["changelog"]["steps"]:
-            if "uses" in step:
+            if "uses" in step and not step["uses"].startswith("./"):
                 assert step["uses"] in pinned, step["uses"]
 
     def test_the_check_sees_the_base_and_the_tags(self, changelog) -> None:
@@ -835,15 +901,16 @@ class TestTheChangelogCheck:
         step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "comment" in s.get("name", ""))
         assert step["continue-on-error"] is True
         assert "github.event_name == 'pull_request'" in step["if"]
-        assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
-        assert "${{" not in step["run"]
+        assert step["uses"] == "./.github/actions/sticky-comment"
+        assert step["with"]["token"] == "${{ github.token }}"
 
     def test_the_comment_marker_is_the_one_the_script_writes(self, changelog) -> None:
         """Another marker and every run posts a new comment instead of
         updating the one that is there."""
         script = (WORKFLOWS.parent / "scripts" / "release.py").read_text(encoding="utf-8")
         step = next(s for s in changelog["jobs"]["changelog"]["steps"] if "comment" in s.get("name", ""))
-        assert f'COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script
+        assert f'COMMENT_MARKER = "{step["with"]["marker"]}"\n' in script
+        assert step["with"]["comment-file"] == "${{ runner.temp }}/changelog-comment.md"
 
 
 class TestTheApiContractCheck:
@@ -859,9 +926,10 @@ class TestTheApiContractCheck:
         assert api["jobs"]["api-contract"]["permissions"] == {"contents": "read", "pull-requests": "write"}
 
     def test_the_actions_are_the_ones_ci_already_pins(self, ci, api) -> None:
-        pinned = {s["uses"] for job in ci["jobs"].values() for s in job.get("steps", []) if "uses" in s}
+        pinned = _pinned(ci)
+        _local_actions_exist(api["jobs"]["api-contract"])
         for step in api["jobs"]["api-contract"]["steps"]:
-            if "uses" in step:
+            if "uses" in step and not step["uses"].startswith("./"):
                 assert step["uses"] in pinned, step["uses"]
 
     def test_the_check_sees_the_tags(self, api) -> None:
@@ -876,7 +944,9 @@ class TestTheApiContractCheck:
         Dependabot reads. Run against the real Containerfile, so a FROM line
         the step no longer recognises fails here and not in a pull request."""
         step = next(s for s in api["jobs"]["api-contract"]["steps"] if s.get("name") == "Install oasdiff")
-        reading = step["run"].split("if [")[0]
+        assert step["uses"] == "./.github/actions/install-oasdiff"
+        run = _action("install-oasdiff")["runs"]["steps"][0]["run"]
+        reading = run.split("if [")[0]
         found = subprocess.run(  # noqa: S603
             ["bash", "-e", "-c", reading + 'printf "%s" "$image"'],  # noqa: S607
             cwd=WORKFLOWS.parents[1],
@@ -885,11 +955,13 @@ class TestTheApiContractCheck:
             check=True,
         ).stdout
         assert re.fullmatch(r"docker\.io/tufin/oasdiff:v\d+\.\d+\.\d+@sha256:[0-9a-f]{64}", found)
-        assert step["run"].index('if [ -z "$image" ]') < step["run"].index("docker cp oasdiff:/usr/bin/oasdiff")
+        assert run.index('if [ -z "$image" ]') < run.index("docker cp oasdiff:/usr/bin/oasdiff")
 
         dependabot = yaml.safe_load((WORKFLOWS.parent / "dependabot.yml").read_text(encoding="utf-8"))
         docker = next(u for u in dependabot["updates"] if u["package-ecosystem"] == "docker")
         assert "/.github/oasdiff" in docker["directories"]
+        actions = next(u for u in dependabot["updates"] if u["package-ecosystem"] == "github-actions")
+        assert "/.github/actions/*" in actions["directories"]
 
     def test_the_check_compares_the_schema_the_backend_prints(self, api) -> None:
         steps = api["jobs"]["api-contract"]["steps"]
@@ -900,7 +972,9 @@ class TestTheApiContractCheck:
         assert order == sorted(order)
         assert printing["working-directory"] == "backend"
         assert printing["run"] == 'uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"'
-        assert 'api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"' in checking["run"]
+        assert 'api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF"' in checking["run"]
+        assert checking["env"]["OASDIFF"] == "${{ steps.oasdiff.outputs.path }}"
+        assert steps[names.index("Install oasdiff")]["id"] == "oasdiff"
         assert "${{" not in checking["run"]
 
     def test_only_a_pull_request_gets_a_comment(self, api) -> None:
@@ -912,13 +986,30 @@ class TestTheApiContractCheck:
         step = next(s for s in api["jobs"]["api-contract"]["steps"] if "comment" in s.get("name", ""))
         assert step["continue-on-error"] is True
         assert "github.event_name == 'pull_request'" in step["if"]
-        assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
-        assert "${{" not in step["run"]
+        assert step["uses"] == "./.github/actions/sticky-comment"
+        assert step["with"]["token"] == "${{ github.token }}"
 
     def test_the_comment_marker_is_the_one_the_script_writes(self, api) -> None:
         script = (WORKFLOWS.parent / "scripts" / "release.py").read_text(encoding="utf-8")
         step = next(s for s in api["jobs"]["api-contract"]["steps"] if "comment" in s.get("name", ""))
-        assert f'API_COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script
+        assert f'API_COMMENT_MARKER = "{step["with"]["marker"]}"\n' in script
+        assert step["with"]["comment-file"] == "${{ runner.temp }}/api-comment.md"
+
+
+class TestTheStickyCommentAction:
+    def test_nothing_from_the_caller_is_interpolated_into_the_script(self) -> None:
+        """The marker, the file and the token reach the script through env."""
+        step = _action("sticky-comment")["runs"]["steps"][0]
+        assert "${{" not in step["run"]
+        assert step["env"]["GH_TOKEN"] == "${{ inputs.token }}"
+        assert step["env"]["MARKER"] == "${{ inputs.marker }}"
+        assert step["env"]["COMMENT_FILE"] == "${{ inputs.comment-file }}"
+
+    def test_it_updates_one_comment_and_removes_it_when_the_file_is_empty(self) -> None:
+        run = _action("sticky-comment")["runs"]["steps"][0]["run"]
+        assert 'startswith(env.MARKER)' in run
+        for method in ("PATCH", "POST", "DELETE"):
+            assert f"--method {method}" in run
 
 
 class TestTheReleaseWorkflow:
@@ -1014,11 +1105,14 @@ class TestTheReleaseWorkflow:
         """The release compares with the same oasdiff and the same schema
         the pull request check used."""
         check = api["jobs"]["api-contract"]
-        for name in ("Install oasdiff", "Print the API schema"):
-            assert _step(prepare, name)["run"] == _step(check, name)["run"], name
-        assert _step(prepare, "Write the release")["run"] == (
+        assert _step(prepare, "Install oasdiff")["uses"] == _step(check, "Install oasdiff")["uses"]
+        assert _step(prepare, "Print the API schema")["run"] == _step(check, "Print the API schema")["run"]
+        assert _step(prepare, "Install oasdiff")["id"] == "oasdiff"
+        writing = _step(prepare, "Write the release")
+        assert writing["env"] == {"OASDIFF": "${{ steps.oasdiff.outputs.path }}"}
+        assert writing["run"] == (
             'python3 .github/scripts/release.py promote --tag "$TAG" \\\n'
-            '  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"\n'
+            '  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF"\n'
         )
 
     def test_the_commit_and_the_tag_go_up_together_as_the_app(self, job, tmp_path) -> None:

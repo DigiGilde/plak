@@ -36,6 +36,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
+- The container image declares its user as the numeric `1000:1000`, so a
+  Kubernetes `runAsNonRoot` check can verify it.
+- The publish action runs the CLI with `uv run --locked`, so it fails
+  instead of resolving dependencies the lockfile does not pin.
 
 ## [2026.10.7]
 
