@@ -46,7 +46,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from plak import messages, net
+from plak import messages
 from plak.access.gate import effective_access
 from plak.api.authorization import require_site_role
 from plak.api.docs import TAG_DEPLOYS
@@ -58,8 +58,9 @@ from plak.api.errors import (
     problem_response,
 )
 from plak.api.schema import AccessOut, ApiModel
+from plak.audit import request as audit_request
 from plak.audit import vocabulary
-from plak.audit.log import ANONYMOUS, Actor, AuditLog
+from plak.audit.log import ANONYMOUS, Actor
 from plak.auth import sessions
 from plak.ci import trust
 from plak.ci.providers import ProviderClient
@@ -486,9 +487,7 @@ async def _audit(
     # The ApiError handler audits refusals generically; this endpoint writes a
     # richer record of its own (CI or member actor, group, site), so it says so.
     request.state.audit_written = True
-    log: AuditLog = request.app.state.audit_log
-    ip = net.client_ip_from_request(request)
-    await log.write(action, actor, result, reason_code=reason_code, refs=refs, ip=ip)
+    await audit_request.write(request, action, actor, result, reason_code=reason_code, refs=refs)
 
 
 async def _audit_best_effort(

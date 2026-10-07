@@ -5,6 +5,9 @@ snake_case bodies from existing clients keep being accepted too.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import overload
+
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
@@ -30,4 +33,15 @@ class AccessOut(ApiModel):
     invitees: bool = Field(description="Whether invitees get access after signing in with SSO Rijk.")
 
 
-__all__ = ["ACCESS_BASE_HINT", "AccessOut", "ApiModel"]
+@overload
+def iso_utc(value: datetime) -> str: ...
+@overload
+def iso_utc(value: datetime | None) -> str | None: ...
+def iso_utc(value: datetime | None) -> str | None:
+    """A timestamp on the wire: RFC 3339 in UTC with a Z."""
+    if value is None:
+        return None
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+__all__ = ["ACCESS_BASE_HINT", "AccessOut", "ApiModel", "iso_utc"]

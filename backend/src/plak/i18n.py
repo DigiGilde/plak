@@ -20,8 +20,6 @@ from __future__ import annotations
 
 from typing import Final
 
-Locale = str  # "nl" or "en"
-
 SUPPORTED: Final[tuple[str, ...]] = ("nl", "en")
 
 # Two different fallbacks, because "no signal" and "a signal we cannot follow"
