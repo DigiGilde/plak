@@ -391,13 +391,8 @@ async def submit_code(request: Request) -> Response:
     # the signed key cookie, scoped to this site, and on to the page itself.
     # The audit row for the view is written there, on the request that follows.
     response = RedirectResponse(target, status_code=303, headers={"Cache-Control": "no-store"})
-    response.set_cookie(
-        sessions.KEY_COOKIE,
-        sessions.sign_key_cookie(settings.session_secret, key_id),
-        path=f"/{quote(group)}/{quote(site)}/",
-        httponly=True,
-        secure=True,
-        samesite="none",
+    sessions.set_key_cookie(
+        response, sessions.sign_key_cookie(settings.session_secret, key_id), path=f"/{quote(group)}/{quote(site)}/"
     )
     return response
 

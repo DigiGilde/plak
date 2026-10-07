@@ -28,6 +28,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The admin pages load with fewer database round trips, and an admin request
   no longer writes to the database; a member's last login is now the moment
   they signed in rather than their latest request.
+- A page view on a published site costs one database query where it took
+  up to four, and redeeming a secret link checks the key once.
 
 ### Fixed
 

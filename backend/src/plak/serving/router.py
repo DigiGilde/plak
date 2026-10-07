@@ -33,15 +33,12 @@ import uuid
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Request
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import RedirectResponse, Response
 
 from plak import net
 from plak.access import gate, keys
 from plak.access.decision import (
     REASON_KEY_CODE_REQUIRED,
-    AccessDecision,
     DecisionKind,
     neutral_404,
 )
@@ -51,8 +48,6 @@ from plak.auth import sessions
 from plak.constants import PATH_CONTENT_LOGIN, PLATFORM_SEGMENT, RESERVED_SLUGS
 from plak.ingest.store import ContentStore
 from plak.models.audit import ActorKind
-from plak.models.identity import Group
-from plak.models.publication import Site, Version
 from plak.serving import code_page, resolution, response
 
 REASON_PATH_INVALID = "PATH_INVALID"
@@ -73,19 +68,6 @@ router = APIRouter()
 
 def _is_platform_namespace(group: str) -> bool:
     return group in RESERVED_SLUGS or group == PLATFORM_SEGMENT
-
-
-def _visitor(request: Request) -> gate.Visitor:
-    # The content session only; sessions.visitor_from_request deliberately
-    # ignores the management session cookie.
-    session_visitor = sessions.visitor_from_request(request)
-    return gate.Visitor(
-        sub=session_visitor.sub,
-        email=session_visitor.email,
-        email_verified=session_visitor.email_verified,
-        key_cookie=session_visitor.key_cookie,
-        key_query=session_visitor.key_query,
-    )
 
 
 def _path_without_key(request: Request) -> str:
@@ -161,7 +143,7 @@ def _foreign_subresource(request: Request, group: str, site: str) -> bool:
 
 async def _audit(
     request: Request,
-    visitor: gate.Visitor,
+    visitor: sessions.Visitor,
     result: str,
     reason_code: str | None,
     refs: dict,
@@ -172,33 +154,6 @@ async def _audit(
     await log.write(
         AUDIT_ACTION, actor, result, reason_code=reason_code, refs=refs, ip=ip
     )
-
-
-async def _key_cookie_value(
-    request: Request,
-    db: AsyncSession,
-    group: str,
-    site: str,
-    decision: AccessDecision,
-    visitor: gate.Visitor,
-) -> str | None:
-    """Signed key id for the __Secure cookie after a successful ?key= access;
-    None when no cookie needs to be set. Signed, because the key id
-    alone would otherwise be a bearer credential for the site."""
-    if decision.key_selector is None or not visitor.key_query:
-        return None
-    site_id = await db.scalar(
-        select(Site.id)
-        .join(Group, Site.group_id == Group.id)
-        .where(Group.slug == group, Site.slug == site)
-    )
-    if site_id is None:
-        return None
-    key = await keys.verify(db, site_id, visitor.key_query)
-    if key is None:
-        # Access then came in on an already-set cookie; nothing to do.
-        return None
-    return sessions.sign_key_cookie(request.app.state.settings.session_secret, str(key.id))
 
 
 async def _serve(
@@ -236,7 +191,9 @@ async def _serve(
     if version_str is not None:
         refs["version"] = version_str[:_AUDIT_PATH_MAX]
 
-    visitor = _visitor(request)
+    # The content session only; visitor_from_request deliberately ignores the
+    # management session cookie.
+    visitor = sessions.visitor_from_request(request)
 
     rel = resolution.normalise_rest(rest)
     if rel is None:
@@ -267,23 +224,6 @@ async def _serve(
             selector = keys.bare_selector(visitor.key_query)
             if selector is not None and await gate.code_page_needed(db, group, site, selector):
                 code_selector = selector
-
-        storage_ref: str | None = None
-        key_cookie: str | None = None
-        external_sources = False
-        sandbox = False
-        if decision.kind is DecisionKind.ALLOW:
-            version = await db.get(Version, decision.version_id)
-            storage_ref = version.storage_ref if version is not None else None
-            if version is not None:
-                row = (
-                    await db.execute(
-                        select(Site.external_sources, Site.sandbox).where(Site.id == version.site_id)
-                    )
-                ).one_or_none()
-                if row is not None:  # pragma: no cover - version.site_id is FK-bound to a Site row
-                    external_sources, sandbox = bool(row.external_sources), bool(row.sandbox)
-            key_cookie = await _key_cookie_value(request, db, group, site, decision, visitor)
 
     if code_selector is not None:
         refs["selector"] = code_selector
@@ -345,12 +285,16 @@ async def _serve(
 
     access = decided_access
     version_id_allowed = decision.version_id
+    storage_ref = decision.storage_ref
+    external_sources = decision.external_sources
+    sandbox = decision.sandbox
     if storage_ref is None or version_id_allowed is None or access is None:
         # Allowed but no (complete) version record: an inconsistent reference.
         await _audit(request, visitor, "refused", REASON_UNKNOWN_STORAGE, refs)
         return response.neutral_404_response()
 
-    if key_cookie is not None:
+    if decision.redeem_key_id is not None:
+        key_cookie = sessions.sign_key_cookie(request.app.state.settings.session_secret, str(decision.redeem_key_id))
         return _redeem_key(request, key_cookie, group, site, kind, ref)
 
     # Looking at non-public content is logged, one row per page rather than
@@ -436,24 +380,13 @@ def _redeem_key(
 ) -> Response:
     """Redeems a valid ?key=: set the cookie and 302 to the same URL without
     key (other query parameters stay). The actual response comes from the
-    follow-up request on the cookie route.
-
-    SameSite=None for the same reason as the content session cookie
-    (auth/sessions.py): a sandboxed page is cross-site with its own site, so
-    under Lax the key would reach the page and none of its assets."""
+    follow-up request on the cookie route."""
     if kind == "preview":
         path = f"/{quote(group)}/{quote(site)}/_preview/{quote(ref or '')}/"
     else:
         path = f"/{quote(group)}/{quote(site)}/"
     response = RedirectResponse(_path_without_key(request), status_code=302, headers={"Cache-Control": "no-store"})
-    response.set_cookie(
-        sessions.KEY_COOKIE,
-        key_cookie,
-        path=path,
-        httponly=True,
-        secure=True,
-        samesite="none",
-    )
+    sessions.set_key_cookie(response, key_cookie, path=path)
     return response
 
 

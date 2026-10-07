@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from helpers_audit import install_audit_recorder
 from helpers_ci import FORGEJO_HOST, MockCi
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_test_client, set_session_cookie
+from helpers_store import store_version
 from sqlalchemy import event, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -405,7 +406,7 @@ class TestAuthorization:
     async def test_platform_storage_reports_the_volume_and_nothing_about_sites(
         self, client, app, factory, data, content_root
     ):
-        app.state.content_store.store_version("team", "site", uuid.uuid4(), {"index.html": b"x" * 10})
+        store_version(app.state.content_store, "team", "site", uuid.uuid4(), {"index.html": b"x" * 10})
 
         login(client, app, sub="admin-sub", email="admin@example.nl")
         response = await client.get(f"{BASE}/platform/storage")

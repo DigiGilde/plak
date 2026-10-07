@@ -111,11 +111,11 @@ _MAX_CONTENT_SITES = 32
 class Visitor:
     """Derived from session + request, without a member lookup up front."""
 
-    sub: str | None
-    email: str | None
-    email_verified: bool
-    key_cookie: str | None
-    key_query: str | None
+    sub: str | None = None
+    email: str | None = None
+    email_verified: bool = False
+    key_cookie: str | None = None
+    key_query: str | None = None
 
 
 @dataclass(frozen=True)
@@ -554,6 +554,16 @@ def set_content_session_cookie(response: Response, session: Session, secret: str
     )
 
 
+def set_key_cookie(response: Response, value: str, *, path: str) -> None:
+    """The signed key cookie (`sign_key_cookie`) for one site. `path` is the
+    `/{group}/{site}/` prefix, or a preview's own below it.
+
+    SameSite=None for the same reason as the content session cookie: a
+    sandboxed page is cross-site with its own site, so under Lax the key would
+    reach the page and none of its assets."""
+    response.set_cookie(KEY_COOKIE, value, httponly=True, secure=True, samesite="none", path=path)
+
+
 def csrf_valid(request: Request, session: Session) -> bool:
     """Double submit: header and cookie must both carry the session CSRF token."""
     header = request.headers.get(CSRF_HEADER)
@@ -596,6 +606,7 @@ __all__ = [
     "session_from_request",
     "set_content_anchor_cookies",
     "set_content_session_cookie",
+    "set_key_cookie",
     "set_session_cookies",
     "sign",
     "sign_key_cookie",

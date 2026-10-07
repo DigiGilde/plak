@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+from helpers_store import store_version
 
 from plak.ingest.store import ContentStore
 from plak.serving import resolution
@@ -76,7 +77,8 @@ def store(tmp_path: Path) -> ContentStore:
 
 @pytest.fixture
 def storage_ref(store: ContentStore) -> str:
-    return store.store_version(
+    return store_version(
+        store,
         "aurora",
         "site",
         uuid.uuid4(),
@@ -125,7 +127,7 @@ class TestResolve:
 
 class TestFind404Page:
     def test_present(self, store: ContentStore):
-        ref = store.store_version("aurora", "met404", uuid.uuid4(), {"404.html": b"<h1>oeps</h1>"})
+        ref = store_version(store, "aurora", "met404", uuid.uuid4(), {"404.html": b"<h1>oeps</h1>"})
         path = resolution.find_404_page(store, ref)
         assert path is not None and path.read_bytes() == b"<h1>oeps</h1>"
 

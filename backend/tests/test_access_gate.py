@@ -738,3 +738,50 @@ async def test_is_invitee_false_when_nothing_identifies_the_visitor(db):
     # An unverified email is the same as no email at all here.
     unverified = Visitor(email="genodigde@example.org", email_verified=False)
     assert await _is_invitee(db, world.site_id, unverified) is False
+
+
+# --- What an allow hands to the serving layer ---
+
+
+async def test_an_allow_carries_the_storage_and_switches_serving_needs(db):
+    """Serving looks nothing up again, so the decision has to name the storage
+    of the version it allows and the site switches the headers depend on."""
+    world = await make_world(db, AccessPolicy(AccessBase.PUBLIC))
+    site = await db.get(Site, world.site_id)
+    site.external_sources = False
+    site.sandbox = True
+    await db.flush()
+    visitor = visitors(world)["group_member_active"]
+
+    decisions = [
+        await decide(db, world.group_slug, world.site_slug, visitor),
+        await decide_preview(db, world.group_slug, world.site_slug, world.preview_ref, visitor),
+        await decide_version(db, world.group_slug, world.site_slug, world.live_version_id, visitor),
+    ]
+
+    assert [(d.kind, d.storage_ref, d.external_sources, d.sandbox) for d in decisions] == [
+        (DecisionKind.ALLOW, "aurora/site/live", False, True),
+        (DecisionKind.ALLOW, "aurora/site/pv", False, True),
+        (DecisionKind.ALLOW, "aurora/site/live", False, True),
+    ]
+
+
+async def test_only_a_key_in_the_url_is_handed_on_to_be_redeemed(db):
+    """The serving layer turns `redeem_key_id` into the key cookie without
+    verifying again, so it is set only for the key the URL itself proved."""
+    world = await make_world(db, AccessPolicy(AccessBase.NOBODY, keys=True))
+
+    by_query = await decide(db, world.group_slug, world.site_slug, Visitor(key_query=world.key_plain))
+    by_cookie = await decide(db, world.group_slug, world.site_slug, Visitor(key_cookie=str(world.key_id)))
+    cookie_beside_a_broken_query = await decide(
+        db, world.group_slug, world.site_slug, Visitor(key_query="kapot.waarde", key_cookie=str(world.key_id))
+    )
+    refused = await decide(db, world.group_slug, world.site_slug, Visitor(key_query=world.other_site_key_plain))
+
+    assert (by_query.kind, by_query.redeem_key_id) == (DecisionKind.ALLOW, world.key_id)
+    assert (by_cookie.kind, by_cookie.redeem_key_id) == (DecisionKind.ALLOW, None)
+    assert (cookie_beside_a_broken_query.kind, cookie_beside_a_broken_query.redeem_key_id) == (
+        DecisionKind.ALLOW,
+        None,
+    )
+    assert (refused.kind, refused.redeem_key_id) == (DecisionKind.NEUTRAL_404, None)
