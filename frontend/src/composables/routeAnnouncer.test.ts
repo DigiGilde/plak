@@ -21,8 +21,11 @@ const Page = (title: string) =>
 const SlowPage = defineComponent({
   setup() {
     const loaded = ref(false);
-    onMounted(() => setTimeout(() => (loaded.value = true), 30));
-    return () => h('div', loaded.value ? [h('h1', 'Traag')] : [h('p', 'Laden')]);
+    const label = ref('Laden');
+    // Something changes in the page before the heading arrives.
+    onMounted(() => setTimeout(() => (label.value = 'Nog even'), 10));
+    onMounted(() => setTimeout(() => (loaded.value = true), 40));
+    return () => h('div', loaded.value ? [h('h1', 'Traag')] : [h('p', label.value)]);
   },
 });
 
@@ -124,7 +127,7 @@ describe('useRouteAnnouncer', () => {
     expect(document.querySelector('h1')).toBeNull();
     expect(status()).toBe('');
 
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     await flushPromises();
 
     expect(document.activeElement).toBe(document.querySelector('h1'));
@@ -139,7 +142,7 @@ describe('useRouteAnnouncer', () => {
     await flushPromises();
     await router.push('/groups');
     await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await new Promise((resolve) => setTimeout(resolve, 80));
     await flushPromises();
 
     expect(document.activeElement!.textContent).toBe('Groepen');
