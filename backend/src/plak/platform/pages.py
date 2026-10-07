@@ -71,7 +71,7 @@ from plak.constants import (
 )
 from plak.models.audit import ActorKind
 from plak.platform.security_txt import PATH_SECURITY_TXT, security_txt
-from plak.serving.response import CONTENT_CSP, neutral_404_response
+from plak.serving.response import neutral_404_response, platform_csp
 
 if TYPE_CHECKING:
     from plak.config import Settings
@@ -164,8 +164,8 @@ BETA_NOTICE = i18n.NL["beta.bar"]
 # origin as uploaded sites with their own JavaScript (see api/origin_guard.py:
 # the admin API refuses that origin precisely because a browser counts it as
 # same-site). So: plain server-rendered HTML, no script at all, no session
-# read, no API call, no CSRF token, no SPA. The stylesheet is inline because
-# the content CSP allows inline style and a file of its own would need a route
+# read, no API call, no CSRF token, no SPA. The stylesheet is inline, admitted
+# by its hash in the platform CSP, because a file of its own would need a route
 # under `/-/`, which host separation keeps off this host on purpose. The
 # button to the admin environment is a plain link to the other origin.
 #
@@ -174,17 +174,6 @@ BETA_NOTICE = i18n.NL["beta.bar"]
 # and a server-rendered page on that host would leave two, with logging out
 # landing on the server-rendered one as a blank page. No SPA runs on the
 # content host, so here this page is the only landing there is.
-
-FRONT_PAGE_HEADERS = {
-    "Cache-Control": "no-cache",
-    # The body depends on Accept-Language, so a cache that keys on the URL
-    # alone would hand the Dutch page to an English visitor and the other way
-    # round.
-    "Vary": "Accept-Language",
-    "Content-Security-Policy": CONTENT_CSP,
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-}
 
 # The name of each language, written in that language: an English reader has to
 # recognise the way out without reading Dutch first.
@@ -402,6 +391,17 @@ a:focus-visible {
   min-width: 0;
 }
 """
+
+FRONT_PAGE_HEADERS = {
+    "Cache-Control": "no-cache",
+    # The body depends on Accept-Language, so a cache that keys on the URL
+    # alone would hand the Dutch page to an English visitor and the other way
+    # round.
+    "Vary": "Accept-Language",
+    "Content-Security-Policy": platform_csp(style=_FRONT_PAGE_CSS),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
 
 # The wordmark in two pieces, with the name once more for a screen reader
 # (see .brand__name in the CSS). The pieces sit against each other without

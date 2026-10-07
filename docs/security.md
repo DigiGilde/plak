@@ -117,7 +117,8 @@ X-Accel path and no nginx logic.
 
 | Item | Status |
 |---|---|
-| Content CSP (§5.7 regime) on all content routes | implemented: `serving/response.py` (`CONTENT_CSP`, on the neutral 404 too), `backend/tests/test_serving.py` |
+| Content CSP (§5.7 regime) on all content routes | implemented: `serving/response.py` (`CONTENT_CSP`), `backend/tests/test_serving.py` |
+| Platform CSP on the platform's own answers on the content host (front page, code page, neutral 404): no script, the one inline `<style>` by hash, no `'unsafe-inline'` | implemented: `serving/response.py` (`platform_csp`, `PLATFORM_CSP`), `platform/pages.py`, `serving/code_page.py`, `backend/tests/test_security_headers.py` (`TestPlatformCsp`), `test_front_page.py`, `test_code_page.py`. See "The platform's own pages" below |
 | External sources per site (on by default) | implemented: `sites.external_sources`, `serving/response.py` (`CONTENT_CSP_EXTERNAL`), `api/admin.py` (`PUT /sites/{group}/{site}/external-sources`, site role admin, CSRF, audit action `site_external_sources`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "External sources" below |
 | Shielding from other sites per site (on by default) | implemented: `sites.sandbox`, `serving/response.py` (`SANDBOX`, `CONTENT_CSP_SANDBOX`), `api/admin.py` (`PUT /sites/{group}/{site}/sandbox`, site role admin, CSRF, audit action `site_sandbox`), `frontend/src/components/site/TabAccess.vue`, `backend/tests/test_security_headers.py`, `test_serving.py`, `test_admin_api.py`. See "Shielding from other sites" below |
 | WebAssembly on every site (`'wasm-unsafe-eval'` in `script-src`, never `'unsafe-eval'`) | implemented: `serving/response.py` (`_CONTENT_DIRECTIVES`), `backend/tests/test_security_headers.py` (`test_webassembly_compiles_but_javascript_eval_stays_shut`), `test_serving.py`. See "WebAssembly" below |
@@ -167,11 +168,11 @@ variant and the variant with external sources cannot drift apart;
 
 The switch applies to every answer that carries the content CSP for that site:
 the live pages, previews, `_version` views and assets. Two places deliberately
-do not follow it. The neutral 404 always keeps the strict `CONTENT_CSP`,
-because it has to stay byte-identical: a deviating CSP would betray which site
-a refused path belonged to. The code page for a secret link
-(`serving/code_page.py`) keeps the strict CSP as well, because it is a page of
-the platform itself, with its own markup and no need for anything from outside.
+do not follow it. The neutral 404 always keeps the platform CSP, because it
+has to stay byte-identical: a deviating CSP would betray which site a refused
+path belonged to. The code page for a secret link (`serving/code_page.py`)
+keeps the platform CSP as well, because it is a page of the platform itself,
+with its own markup and no need for anything from outside.
 
 What the administrator needs to know is in the SPA in those words too: the
 parties behind cdnjs, jsDelivr, unpkg, the Tailwind CDN and Google Fonts see
@@ -255,9 +256,41 @@ the platform can enforce, and it does not replace the access gate: a page that
 is refused is still refused.
 
 The same two exceptions as for external sources apply. The neutral 404 keeps
-the plain `CONTENT_CSP` whatever a site sets, because it has to stay
-byte-identical across every cause of refusal. The code page for a secret link
-keeps it too: it is a page of the platform itself.
+the platform CSP whatever a site sets, because it has to stay byte-identical
+across every cause of refusal. The code page for a secret link keeps it too:
+it is a page of the platform itself.
+
+### The platform's own pages
+
+The front page, the code page for a secret link and the neutral 404 are
+answers of the platform itself on the content host, the origin every
+published site shares. None of them runs script, so their policy allows none
+(`platform_csp` in `serving/response.py`):
+
+```
+default-src 'none'; style-src 'sha256-…'; base-uri 'none';
+form-action 'none'; frame-ancestors 'none'
+```
+
+The page's one inline `<style>` is admitted by its hash, computed from the
+stylesheet constant when the module loads, so an edit to the CSS carries its
+hash along. `form-action` is `'self'` on the code page, whose form posts to
+`/-/code` and is redirected to the site on this origin, and `'none'`
+elsewhere. If one of these templates ever let markup through, no script would
+run and no style attribute would apply. The tests render each page and hold
+every `<style>` against the hash in its own header, and refuse a `<script>` or
+a `style=""` attribute in it, because a hash does not cover an attribute.
+
+This meets NCSC's ICT-beveiligingsrichtlijnen voor webapplicaties, U/PW.03,
+which asks for `default-src` `'none'` or `'self'` and no `unsafe-inline`,
+`unsafe-eval` or `unsafe-hashes`; this policy uses `'none'`. It passes
+internet.nl's CSP check, run with its own checker code against these three
+policies. internet.nl tests the root of a host, which on the content host is
+the front page; its verdict says nothing about the policy of the published
+sites, which keeps `'unsafe-inline'`. Verified in Chromium, Firefox and
+WebKit: the stylesheet applies on both pages and the code form posts and
+follows its redirect. Firefox no longer requests `/favicon.ico` for these
+pages; there is none to fetch on this host.
 
 ### WebAssembly
 
@@ -736,8 +769,8 @@ Toegankelijkheid, Privacy and the API documentation. The page carries **no
 authority whatsoever**, because this is the origin on which uploaded sites run
 their own JavaScript (see `api/origin_guard.py`): no script, no
 session reading, no API call, no CSRF token, no SPA. Its own CSS sits
-inline (the content CSP allows `style-src 'unsafe-inline'`; a separate file
-would require a route under `/-/` and host separation keeps exactly that away
+inline, admitted by its hash in the platform CSP (a separate file would
+require a route under `/-/` and host separation keeps exactly that away
 here), and every link is absolute to the admin origin from
 `PLAK_BASE_URL`, never from the `Host` header. Without that setting the root
 stays the neutral 404, because then there is no address to point to. The rest
@@ -782,8 +815,8 @@ key of another site, a site that is not set to "secret link", a
 site without a live version, an unknown site or group, and a preview. Otherwise
 the page itself would betray which selectors exist. The page names no
 site title and no group name: only that a code is needed, an input field,
-a button and an error line. It carries the same headers as protected content
-(`no-store`, `noindex`, the `CONTENT_CSP`, `Referrer-Policy: same-origin`).
+a button and an error line. It carries the headers of protected content
+(`no-store`, `noindex`, `Referrer-Policy: same-origin`) with the platform CSP.
 That policy is not `no-referrer`, because under `no-referrer` Chrome anonymises
 the Origin of the form navigation to `Origin: null`, which would cost the origin
 guard its teeth. The page URL carries only the selector, never the verifier, so

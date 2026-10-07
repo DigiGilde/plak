@@ -10,8 +10,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
-<!-- release: hold -->
-
 ### Security
 
 - The container runs on a Python base image with patched Perl packages
@@ -23,6 +21,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - A 304 carries the same content CSP and Referrer-Policy as the full
   answer, so turning a site switch or secret links on or off reaches pages
   a visitor already has in their cache.
+- The front page, the code page for a secret link and the neutral 404 on
+  the content host run no script and admit only their own stylesheet, by
+  hash, instead of sharing the published sites' policy.
 
 ### Changed
 

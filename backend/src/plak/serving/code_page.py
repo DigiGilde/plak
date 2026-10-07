@@ -50,7 +50,7 @@ from plak.host_separation import host_from_scope
 from plak.models.identity import Group
 from plak.models.publication import Site
 from plak.ratelimit import RateLimitClass, limit_for
-from plak.serving.response import CONTENT_CSP, NOINDEX, neutral_404_response
+from plak.serving.response import NOINDEX, neutral_404_response, platform_csp
 
 router = APIRouter()
 
@@ -61,22 +61,6 @@ _AUDIT_PATH_MAX = 200
 # A form with three fields; anything larger is not this form.
 MAX_BODY_BYTES = 4096
 FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
-
-# The same header set as protected content, plus no-store: the page carries a
-# form whose answer opens a site, and nothing about it may be kept.
-#
-# Referrer-Policy is same-origin rather than the no-referrer of content: under
-# no-referrer Chrome posts this form with `Origin: null`, which costs the
-# origin guard its teeth. The page's own URL carries only the selector, never
-# the verifier, so a Referer to our own POST target leaks nothing.
-CODE_PAGE_HEADERS = {
-    "Cache-Control": "no-store",
-    "Vary": "Accept-Language",
-    "Content-Security-Policy": CONTENT_CSP,
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "same-origin",
-    "X-Robots-Tag": NOINDEX,
-}
 
 # Its own small stylesheet, like the front page has: the content host carries
 # no design system and a stylesheet of its own would need a route under `/-/`.
@@ -182,6 +166,23 @@ button:hover {
   color: var(--plak-critical);
 }
 """
+
+
+# The platform's own policy, plus no-store: the page carries a form whose
+# answer opens a site, and nothing about it may be kept.
+#
+# Referrer-Policy is same-origin rather than the no-referrer of content: under
+# no-referrer Chrome posts this form with `Origin: null`, which costs the
+# origin guard its teeth. The page's own URL carries only the selector, never
+# the verifier, so a Referer to our own POST target leaks nothing.
+CODE_PAGE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Vary": "Accept-Language",
+    "Content-Security-Policy": platform_csp(style=_CODE_PAGE_CSS, form=True),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+    "X-Robots-Tag": NOINDEX,
+}
 
 
 def code_page_html(selector: str, path: str, error: str = "", locale: str = i18n.DEFAULT) -> str:

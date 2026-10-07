@@ -14,6 +14,8 @@ sits behind this origin.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -47,8 +49,10 @@ from plak.serving.response import (
     CONTENT_CSP_SANDBOX,
     EXTERNAL_SOURCES,
     NEUTRAL_404_BODY,
+    PLATFORM_CSP,
     SANDBOX,
     content_csp,
+    platform_csp,
 )
 
 
@@ -122,6 +126,36 @@ class TestContentCspComposition:
         assert both["sandbox"] == list(SANDBOX["sandbox"])
         for name, values in _directives(CONTENT_CSP_EXTERNAL).items():
             assert both[name] == values, name
+
+
+class TestPlatformCsp:
+    """The platform's own answers on the content host (the front page, the
+    code page, the neutral 404) share that origin with every published site,
+    so their policy grants nothing the content policy does."""
+
+    def test_no_script_may_run(self) -> None:
+        for policy in (PLATFORM_CSP, platform_csp(style="p{}"), platform_csp(style="p{}", form=True)):
+            found = _directives(policy)
+            assert found["default-src"] == ["'none'"]
+            assert "script-src" not in found
+            assert not {"'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'"} & {
+                token for values in found.values() for token in values
+            }
+
+    def test_a_style_is_admitted_by_its_hash_and_nothing_else(self) -> None:
+        digest = base64.b64encode(hashlib.sha256(b"p{}").digest()).decode()
+        assert _directives(platform_csp(style="p{}"))["style-src"] == [f"'sha256-{digest}'"]
+        assert "style-src" not in _directives(PLATFORM_CSP)
+
+    def test_only_a_page_with_a_form_may_post(self) -> None:
+        assert _directives(PLATFORM_CSP)["form-action"] == ["'none'"]
+        assert _directives(platform_csp(style="p{}"))["form-action"] == ["'none'"]
+        assert _directives(platform_csp(style="p{}", form=True))["form-action"] == ["'self'"]
+
+    def test_it_cannot_be_framed_or_rebased(self) -> None:
+        found = _directives(PLATFORM_CSP)
+        assert found["frame-ancestors"] == ["'none'"]
+        assert found["base-uri"] == ["'none'"]
 
 
 ADMIN = "https://beheer.plak.example"
@@ -343,7 +377,7 @@ class TestFullApp:
         reference = responses[0]
         assert reference.status_code == 404
         assert reference.content == NEUTRAL_404_BODY
-        assert reference.headers["content-security-policy"] == CONTENT_CSP
+        assert reference.headers["content-security-policy"] == PLATFORM_CSP
         assert "cross-origin-opener-policy" not in reference.headers
         for path, response in zip(paths, responses, strict=True):
             assert response.status_code == 404, path
@@ -359,7 +393,7 @@ class TestFullApp:
         assert response.content == NEUTRAL_404_BODY
         assert response.headers["cross-origin-opener-policy"] == COOP
         assert response.headers["x-content-type-options"] == NOSNIFF
-        assert response.headers["content-security-policy"] == CONTENT_CSP
+        assert response.headers["content-security-policy"] == PLATFORM_CSP
 
     async def test_front_page_robots_and_security_txt_get_only_the_general_headers(self, app_clients) -> None:
         _, content = app_clients
