@@ -263,11 +263,11 @@ describe('Platform management (filled)', () => {
     expect(renderedNames()[0]).toBe('Karel Oud');
     expect(ariaSortOf('Aangemaakt')).toBe('ascending');
 
-    await sortOn('Laatste activiteit');
+    await sortOn('Laatst ingelogd');
     // Whoever never logged in has no activity and sinks to the bottom,
     // whichever way the column is sorted.
     expect(renderedNames().at(-1)).toBe('Wim Weg');
-    await sortOn('Laatste activiteit');
+    await sortOn('Laatst ingelogd');
     expect(renderedNames().at(-1)).toBe('Wim Weg');
   });
 
@@ -331,7 +331,7 @@ describe('Platform management (filled)', () => {
     backend.data.members.find((l) => l.id === 'lid-4')!.lastLoginAt = same;
 
     await mountComponent();
-    await sortOn('Laatste activiteit');
+    await sortOn('Laatst ingelogd');
 
     const names = renderedNames();
     expect(names).toContain('Ada Vermeer');

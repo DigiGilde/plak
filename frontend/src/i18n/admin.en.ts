@@ -22,7 +22,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
 
   // -- Platform administration ----------------------------------------------
   'admin.members.column.created': 'Created',
-  'admin.members.column.activity': 'Last activity',
+  'admin.members.column.activity': 'Last sign-in',
   'admin.members.search.label': 'Search for a member by name or email address',
   'admin.members.search.placeholder': 'Search for a member',
   'admin.members.loading': 'Loading members...',

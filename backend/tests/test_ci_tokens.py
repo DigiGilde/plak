@@ -493,7 +493,7 @@ class TestReplay:
 
         with pytest.raises(CiTokenError) as exc:
             await verifier.verify(token)
-        assert exc.value.reason == vocabulary.CI_TOKEN_INVALID
+        assert exc.value.reason == vocabulary.CI_TOKEN_REPLAYED
         assert exc.value.message.key == "CI_TOKEN_INVALID.replayed"
         assert exc.value.status == 401
 
