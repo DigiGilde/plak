@@ -211,6 +211,12 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.requireSiteId.keep': 'Keep the current link',
   'publish.deploy.requireSiteId.confirm': 'Only with site ID',
 
+  // -- Deploy tab: the address of the site has changed ---------------------------------
+  'publish.deploy.moved.title': 'The address of this site has changed.',
+  'publish.deploy.moved.text':
+    'Workflows with {old} no longer publish; use {new} and the site ID.',
+  'publish.deploy.moved.or': ' or ',
+
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Loading access settings',
   'publish.access.unknownSite.title': 'Unknown site',

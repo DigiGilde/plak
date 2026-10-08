@@ -1,5 +1,5 @@
-import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+import { describe, expect, it, vi } from 'vitest';
 
 import ConfirmModal from './ConfirmModal.vue';
 import { fireDetailEvent } from './site/testHelpers';
@@ -61,6 +61,83 @@ describe('ConfirmModal (teleport)', () => {
     // Action in flight: a loading state on the button, not a disabled one.
     expect(actions[1]!.attributes('loading')).toBeDefined();
     expect(actions[1]!.attributes('disabled')).toBeUndefined();
+  });
+});
+
+describe('ConfirmModal (variant of the confirmation)', () => {
+  it('colours the confirmation as destructive unless told otherwise', () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true },
+      global: { stubs: { teleport: true } },
+    });
+
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('variant')).toBe(
+      'destructive',
+    );
+  });
+
+  it('gives a change that can be undone a confirmation that is not red, and keeps the safe way out primary', () => {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true, confirmVariant: 'secondary' },
+      global: { stubs: { teleport: true } },
+    });
+
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('variant')).toBe('secondary');
+    expect(wrapper.find('[data-testid="confirm-cancel"]').attributes('variant')).toBe('primary');
+  });
+});
+
+describe('ConfirmModal (while the action runs)', () => {
+  async function makeBusy() {
+    const wrapper = mount(ConfirmModal, {
+      props: { ...props, open: true, busy: true },
+      global: { stubs: { teleport: true } },
+    });
+    // Let the dialog open first: a dialog that is already open is the point.
+    await flushPromises();
+    // jsdom does not upgrade the element, so it has no show() of its own.
+    const show = vi.fn();
+    const dialog = wrapper.find('nldd-modal-dialog');
+    (dialog.element as HTMLElement & { show: () => void }).show = show;
+    return { wrapper, dialog, show };
+  }
+
+  it('opens the dialog again when it closes itself on Escape or a click on the backdrop, and tells nobody', async () => {
+    const { wrapper, dialog, show } = await makeBusy();
+
+    await dialog.trigger('close');
+
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted('close')).toBeUndefined();
+  });
+
+  it('ignores the safe way out as well: the action cannot be called back', async () => {
+    const { wrapper } = await makeBusy();
+
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
+
+    expect(wrapper.emitted('close')).toBeUndefined();
+  });
+
+  it('lets the dialog close again once the action is done', async () => {
+    const { wrapper, dialog, show } = await makeBusy();
+    await wrapper.setProps({ busy: false });
+
+    await dialog.trigger('close');
+    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
+
+    expect(show).not.toHaveBeenCalled();
+    expect(wrapper.emitted('close')).toHaveLength(2);
+  });
+
+  it('lets the owner close it, though the action is still marked as running', async () => {
+    const { wrapper, dialog, show } = await makeBusy();
+    await wrapper.setProps({ open: false });
+
+    await dialog.trigger('close');
+
+    expect(show).not.toHaveBeenCalled();
+    expect(wrapper.emitted('close')).toHaveLength(1);
   });
 });
 

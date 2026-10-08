@@ -11,6 +11,8 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote, unquote
@@ -20,7 +22,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import set_content_session_cookie, set_session_cookie
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from plak.access import gate, keys
@@ -34,8 +36,11 @@ from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
+from plak.models.slugs import GroupSlug, SiteSlug
+from plak.serving import addresses
 from plak.serving.response import PLATFORM_CSP
 from plak.serving.router import router as serving_router
+from plak.slug_window import redirect_ends_at
 
 BASE_URL = "https://plak.example"
 
@@ -2219,3 +2224,363 @@ class TestAudit:
         assert len(rows) == 1
         assert rows[0].result == "refused"
         assert rows[0].reason_code == "PATH_INVALID"
+
+
+async def _rename_group(environment: Environment, slug: str) -> None:
+    async with environment.factory() as db:
+        (await db.scalar(select(Group).where(Group.slug == "aurora"))).slug = slug
+        await db.commit()
+
+
+async def _rename_site(environment: Environment, old: str, new: str) -> None:
+    async with environment.factory() as db:
+        (await db.scalar(select(Site).where(Site.slug == old))).slug = new
+        await db.commit()
+
+
+async def _sunset(environment: Environment, namespace, slug: str) -> str:
+    """The `Sunset` an old slug's redirect should carry."""
+    async with environment.factory() as db:
+        retired_at = await db.scalar(select(namespace.retired_at).where(namespace.slug == slug))
+    return format_datetime(redirect_ends_at(retired_at), usegmt=True)
+
+
+async def _move_back(environment: Environment, namespace, slug: str, days: int) -> None:
+    """Dates the retirement of an old slug this many days back."""
+    async with environment.factory() as db:
+        await db.execute(
+            update(namespace)
+            .where(namespace.slug == slug)
+            .values(retired_at=namespace.retired_at - timedelta(days=days))
+        )
+        await db.commit()
+
+
+class TestOldAddress:
+    """Spec 7.7: an old address redirects whoever may see the site at its
+    current address, and answers everyone else exactly as before the rename,
+    whatever Referer comes along."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document", "Sec-Fetch-Site": "none"}
+    IMAGE: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "image", "Sec-Fetch-Site": "same-origin"}
+
+    async def test_a_page_redirects_to_the_same_path_at_the_new_address(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+
+        response = await client.get("/aurora/site/docs/?utm=x")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/nieuw/docs/?utm=x"
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["sunset"] == await _sunset(environment, SiteSlug, "site")
+        assert response.content == b""
+        followed = await client.get(response.headers["location"])
+        assert followed.status_code == 200
+        assert followed.content == b"<h1>docs</h1>"
+
+    async def test_a_renamed_group_takes_every_site_along(self, client, environment):
+        await _rename_group(environment, "borealis")
+
+        response = await client.get("/aurora/site/stijl.css")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/borealis/site/stijl.css"
+        assert response.headers["sunset"] == await _sunset(environment, GroupSlug, "aurora")
+
+    async def test_a_group_and_a_site_both_renamed_go_in_one_step_until_the_first_ends(self, client, environment):
+        await _rename_group(environment, "borealis")
+        await _move_back(environment, GroupSlug, "aurora", days=10)
+        await _rename_site(environment, "site", "nieuw")
+
+        response = await client.get("/aurora/site/docs/")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/borealis/nieuw/docs/"
+        assert response.headers["sunset"] == await _sunset(environment, GroupSlug, "aurora")
+        assert (await client.get("/borealis/site/docs/")).headers["location"] == "/borealis/nieuw/docs/"
+        assert (await client.get("/aurora/nieuw/docs/")).headers["location"] == "/borealis/nieuw/docs/"
+
+    async def test_every_key_leaves_the_query_and_the_rest_stays(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+
+        response = await client.get("/aurora/site/?a=1&key=x&b=2&key=AbCdEfGh")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/nieuw/?a=1&b=2"
+
+    async def test_an_encoded_path_stays_encoded(self, environment):
+        await _rename_site(environment, "site", "nieuw")
+
+        status, headers, _ = await _raw_request(environment.app, "/aurora/site/een%20map/%3Fniet-de-query")
+
+        assert status == 301
+        assert dict(headers)["location"] == "/aurora/nieuw/een%20map/%3Fniet-de-query"
+
+    async def test_a_preview_redirects_to_the_preview_at_the_new_address(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+
+        response = await client.get("/aurora/site/_preview/pr-42/")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/nieuw/_preview/pr-42/"
+
+    async def test_a_version_view_redirects_a_member_without_an_audit_row(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
+        version = environment.world.site_live_id
+
+        response = await client.get(f"/aurora/site/_version/{version}/")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == f"/aurora/nieuw/_version/{version}/"
+        assert await _audit_rows(environment) == []
+
+    async def test_a_secret_link_at_the_old_address_sets_its_cookie_for_the_new_path(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+
+        response = await client.get(f"/aurora/geheim/map/?key={environment.world.key_plain}&x=1")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/verborgen/map/?x=1"
+        set_cookie = response.headers["set-cookie"]
+        assert "Path=/aurora/verborgen/" in set_cookie
+        value = set_cookie.split(";", 1)[0].removeprefix(f"{KEY_COOKIE}=")
+        secret = environment.app.state.settings.session_secret
+        assert check_signature(secret, value) == f"key:{environment.world.key_id}"
+        followed = await client.get(response.headers["location"])
+        assert followed.status_code == 200
+        assert followed.content == b"<h1>map</h1>"
+
+    async def test_a_secret_link_to_a_preview_sets_its_cookie_for_the_new_preview_path(self, client, environment):
+        async with environment.factory() as db:
+            site = await db.scalar(select(Site).where(Site.slug == "geheim"))
+            db.add(Preview(site_id=site.id, ref="pr-7", version_id=environment.world.secret_live_id))
+            await db.commit()
+        await _rename_site(environment, "geheim", "verborgen")
+
+        response = await client.get(f"/aurora/geheim/_preview/pr-7/?key={environment.world.key_plain}")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/verborgen/_preview/pr-7/"
+        assert "Path=/aurora/verborgen/_preview/pr-7/" in response.headers["set-cookie"]
+
+    async def test_the_first_visit_to_a_version_view_logs_in_at_the_old_address(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+        path = f"/aurora/site/_version/{environment.world.site_live_id}/"
+
+        response = await client.get(path, headers=self.NAVIGATION)
+
+        assert response.status_code == 302
+        assert response.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}"
+
+    async def test_the_key_cookie_of_the_old_path_is_set_again_for_the_new_one_on_a_navigation(
+        self, client, environment
+    ):
+        await _rename_site(environment, "geheim", "verborgen")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+
+        response = await client.get("/aurora/geheim/", headers=self.NAVIGATION)
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/verborgen/"
+        set_cookie = response.headers["set-cookie"]
+        assert "Path=/aurora/verborgen/" in set_cookie
+        assert set_cookie.split(";", 1)[0] == f"{KEY_COOKIE}={_signed_key_cookie(environment)}"
+        followed = await client.get("/aurora/verborgen/", headers=self.NAVIGATION)
+        assert followed.status_code == 200
+        assert followed.content == SECRET_INDEX
+
+    async def test_a_page_of_the_new_address_loads_an_old_path_without_a_new_cookie(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+
+        response = await client.get(
+            "/aurora/geheim/stijl.css", headers={**self.IMAGE, "Referer": f"{BASE_URL}/aurora/verborgen/"}
+        )
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/verborgen/stijl.css"
+        assert "set-cookie" not in response.headers
+
+    async def test_an_allowed_request_from_another_sites_page_is_still_refused(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+        unknown = await client.get("/aurora/bestaat-niet/")
+
+        response = await client.get(
+            "/aurora/geheim/stijl.css", headers={**self.IMAGE, "Referer": f"{BASE_URL}/aurora/site/"}
+        )
+
+        assert response.status_code == 404
+        assert response.content == unknown.content
+        rows = await _audit_rows(environment)
+        assert (rows[-1].reason_code, rows[-1].refs["site"]) == ("FOREIGN_SUBRESOURCE", "geheim")
+
+    @pytest.mark.parametrize("slug", ["geheim", "intern"])
+    async def test_a_refused_visitor_gets_the_answer_of_before_the_rename_for_every_referer(
+        self, client, environment, slug
+    ):
+        """Keys only (geheim) and SSO (intern), anonymous: before and after
+        the rename, a navigation and a page's own request, with no Referer,
+        the old address, the new address and another site as Referer."""
+        cases = [
+            (headers, referer)
+            for headers in (self.NAVIGATION, self.IMAGE)
+            for referer in (None, f"/aurora/{slug}/", f"/aurora/{slug}-nieuw/", "/aurora/site/")
+        ]
+
+        async def answers() -> list[tuple]:
+            found = []
+            for headers, referer in cases:
+                sent = {**headers, **({"Referer": f"{BASE_URL}{referer}"} if referer else {})}
+                response = await client.get(f"/aurora/{slug}/stijl.css", headers=sent)
+                found.append((response.status_code, _header_list(response), response.content))
+            return found
+
+        before = await answers()
+        await _rename_site(environment, slug, f"{slug}-nieuw")
+        after = await answers()
+
+        assert after == before
+        assert {status for status, _, _ in after} == ({404} if slug == "geheim" else {302, 404})
+
+    async def test_an_anonymous_visitor_logs_in_at_the_old_address(self, client, environment):
+        await _rename_site(environment, "intern", "binnen")
+
+        response = await client.get("/aurora/intern/x.html?y=1", headers=self.NAVIGATION)
+
+        assert response.status_code == 302
+        assert response.headers["location"] == f"/-/login?returnTo={quote('/aurora/intern/x.html?y=1', safe='')}"
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.refs["site"]) for row in rows] == [("login_redirect", "intern")]
+
+    async def test_a_session_cookie_of_the_old_path_gets_the_redirect(self, client, environment):
+        """The cookie stays with the old path: at the new one the visitor is
+        anonymous until the login shortcut sets one there (test_sessions.py)."""
+        await _rename_site(environment, "intern", "binnen")
+        set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
+
+        response = await client.get("/aurora/intern/", headers=self.NAVIGATION)
+        followed = await client.get(response.headers["location"], headers=self.NAVIGATION)
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/binnen/"
+        assert followed.status_code == 302
+        assert followed.headers["location"] == f"/-/login?returnTo={quote('/aurora/binnen/', safe='')}"
+
+    async def test_the_first_visit_to_a_preview_logs_in_at_the_old_address(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+        path = "/aurora/site/_preview/pr-besloten/"
+
+        response = await client.get(path, headers=self.NAVIGATION)
+
+        assert response.status_code == 302
+        assert response.headers["location"] == f"/-/login?returnTo={quote(path, safe='')}"
+
+    async def test_a_refusal_is_audited_with_the_slugs_asked_for(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+
+        response = await client.get("/aurora/geheim/")
+
+        assert response.status_code == 404
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.reason_code, row.refs["site"]) for row in rows] == [
+            ("refused", "NO_ACCESS", "geheim")
+        ]
+
+    async def test_the_redirect_writes_no_audit_row_and_the_look_at_the_new_address_does(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+
+        redirect = await client.get("/aurora/geheim/")
+        assert redirect.status_code == 301
+        assert await _audit_rows(environment) == []
+
+        await client.get(redirect.headers["location"])
+        rows = await _audit_rows(environment)
+        assert [(row.result, row.refs["site"]) for row in rows] == [("allowed", "verborgen")]
+
+    async def test_a_selector_alone_gets_the_code_page_at_the_old_address(self, client, environment):
+        await _rename_site(environment, "geheim", "verborgen")
+        selector = environment.world.key_plain.split(".")[0]
+
+        response = await client.get(f"/aurora/geheim/?key={selector}")
+
+        assert response.status_code == 200
+        assert 'value="/aurora/geheim/"' in response.text
+
+    async def test_head_gets_the_redirect_too(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+
+        response = await client.head("/aurora/site/docs/")
+
+        assert response.status_code == 301
+        assert response.headers["location"] == "/aurora/nieuw/docs/"
+
+    async def test_once_the_redirect_has_ended_the_old_address_is_the_neutral_404(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+        await _move_back(environment, SiteSlug, "site", days=32)
+        unknown = await client.get("/aurora/bestaat-niet/")
+
+        response = await client.get("/aurora/site/")
+
+        assert response.status_code == 404
+        assert response.content == unknown.content
+        assert _header_list(response) == _header_list(unknown)
+
+    async def test_a_site_that_took_a_released_slug_is_served_as_itself(self, client, environment):
+        await _rename_site(environment, "site", "nieuw")
+        async with environment.factory() as db:
+            await db.execute(delete(SiteSlug).where(SiteSlug.slug == "site"))
+            group = await db.scalar(select(Group).where(Group.slug == "aurora"))
+            member = await db.scalar(select(Member))
+            claimant = Site(
+                group_id=group.id,
+                slug="site",
+                title="Opvolger",
+                access_base=AccessBase.PUBLIC,
+                external_sources=False,
+                sandbox=False,
+            )
+            db.add(claimant)
+            await db.flush()
+            version_id = uuid.uuid4()
+            storage_ref = environment.store.store_version(claimant.id, version_id, {"index.html": b"<h1>opvolger</h1>"})
+            db.add(
+                Version(
+                    id=version_id,
+                    site_id=claimant.id,
+                    target=VersionTarget.LIVE,
+                    storage_ref=storage_ref,
+                    member_id=member.id,
+                )
+            )
+            await db.flush()
+            claimant.live_version_id = version_id
+            await db.commit()
+
+        response = await client.get("/aurora/site/")
+
+        assert response.status_code == 200
+        assert response.content == b"<h1>opvolger</h1>"
+
+
+class TestCurrentAddress:
+    """serving/addresses.py on its own."""
+
+    async def test_two_current_slugs_have_no_other_address(self, environment):
+        async with environment.factory() as db:
+            assert await addresses.current_address(db, "aurora", "site", datetime.now(UTC)) is None
+
+    async def test_an_old_group_slug_with_an_unknown_site_leads_nowhere(self, environment):
+        await _rename_group(environment, "borealis")
+        async with environment.factory() as db:
+            assert await addresses.current_address(db, "aurora", "bestaat-niet", datetime.now(UTC)) is None
+            assert await addresses.current_address(db, "aurora", "site", datetime.now(UTC)) is not None
+
+    def test_a_path_keeps_everything_after_the_two_segments(self):
+        address = addresses.CurrentAddress("borealis", "nieuw", datetime.now(UTC))
+
+        assert addresses.relocate("/aurora/site/a/b?c=d", "aurora", "site", address) == "/borealis/nieuw/a/b?c=d"
+        assert addresses.relocate("/aurora/site", "aurora", "site", address) == "/borealis/nieuw"
+        assert addresses.relocate("/aurora/site?c=d", "aurora", "site", address) == "/borealis/nieuw?c=d"

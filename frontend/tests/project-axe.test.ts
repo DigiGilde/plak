@@ -47,6 +47,21 @@ import Site from '../src/pages/Site.vue';
   }
 }
 
+/**
+ * jsdom has no dialog: showModal() and close() are not there, and
+ * nldd-modal-dialog calls both. Open and closed is all that is needed for axe
+ * to see the dialog or not.
+ */
+{
+  const proto = HTMLDialogElement.prototype;
+  proto.showModal ??= function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  proto.close ??= function close(this: HTMLDialogElement) {
+    this.removeAttribute('open');
+  };
+}
+
 beforeEach(() => {
   vi.stubGlobal('fetch', makeMockBackend().fetch);
   // Module-level session cache: a test that signs in as someone else must not
@@ -194,7 +209,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     backend.data.loggedInMemberId = 'lid-3';
     vi.stubGlobal('fetch', backend.fetch);
     const wrapper = mount(TabSettings, {
-      props: { group: 'team-aurora', site: 'website' },
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
     });
     await untilIdle();
@@ -205,7 +220,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
 
   it('Instellingen met een geweigerde titel bij het veld is zonder violations', async () => {
     const wrapper = mount(TabSettings, {
-      props: { group: 'team-aurora', site: 'website' },
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
     });
     await untilIdle();
@@ -218,6 +233,116 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     expect(wrapper.find('nldd-validation-item#site-title-server').text()).toBe(
       'Een titel is hoogstens 200 tekens lang',
     );
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings with an old address that still redirects', async () => {
+    const backend = makeMockBackend();
+    backend.data.sites[0]!.previousSlugs = [
+      { slug: 'oude-naam', redirectsUntil: '2099-11-06T23:00:00Z' },
+    ];
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-address-restore-oude-naam"]').exists()).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings for a site administrator without a role in the group', async () => {
+    const backend = makeMockBackend();
+    backend.data.siteRoles.push({
+      groupSlug: 'team-aurora',
+      siteSlug: 'website',
+      identifier: 'sanne@voorbeeld.nl',
+      role: 'admin',
+    });
+    backend.data.loggedInMemberId = 'lid-6';
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-address-readonly"]').exists()).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings with the confirmation of an address change open', async () => {
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    });
+    await untilIdle();
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await untilIdle();
+    const dialog = wrapper.find('section[aria-labelledby="heading-site-address"] nldd-modal-dialog');
+    expect(dialog.attributes('accessible-label')).toBe(
+      'Adres van site team-aurora/website wijzigen in team-aurora/handboek?',
+    );
+    expect(dialog.element.shadowRoot?.querySelector('dialog')?.hasAttribute('open')).toBe(true);
+    // What axe is given has the dialog in it.
+    expect(wrapper.element.contains(dialog.element)).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings with a refused address at the field', async () => {
+    const backend = makeMockBackend();
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    });
+    await untilIdle();
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'x', slug: 'handboek' });
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await untilIdle();
+    await wrapper
+      .find('section[aria-labelledby="heading-site-address"] [data-testid="confirm-continue"]')
+      .trigger('click');
+    await untilIdle();
+    await wrapper
+      .find('section[aria-labelledby="heading-site-address"] nldd-modal-dialog')
+      .trigger('close');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-address"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-validation-item#site-address-server').text()).toBe(
+      'Dit adres is al in gebruik of was kort geleden van een andere site. Kies een ander adres.',
+    );
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the Deploy tab with the notice that the address has changed', async () => {
+    const wrapper = mount(TabDeploy, {
+      props: {
+        group: 'team-aurora',
+        site: 'website',
+        contentBase: MOCK_CONTENT_BASE,
+        previousSlugs: [
+          { slug: 'oude-naam', redirectsUntil: '2099-11-06T23:00:00Z' },
+          { slug: 'oudere-naam', redirectsUntil: '2099-10-20T22:00:00Z' },
+        ],
+      },
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    });
+    await untilIdle();
+    expect(wrapper.find('[data-testid="deploy-moved"]').exists()).toBe(true);
     await expectNoViolationsIn(wrapper.element);
     wrapper.unmount();
   });

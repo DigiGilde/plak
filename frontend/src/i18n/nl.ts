@@ -9,6 +9,7 @@
  * Keys are grouped by where the words appear, not by what they say, because
  * that is how you find them again when a screen changes.
  */
+import { addressNl } from './address.nl';
 import { adminNl } from './admin.nl';
 import { designSystemNl } from './designSystem.nl';
 import { groupNl } from './group.nl';
@@ -35,6 +36,10 @@ const shared = {
     'De rol wijzig je in het menu achter de regel van dit lid.',
   'error.guidance.ALREADY_SITE_MEMBER':
     'Die rol wijzig je in het menu achter de regel van dit lid.',
+  // A site or group that is not found, on the page of a site or a group: the
+  // address may have been changed since the link was made.
+  'error.renamed.hint': 'Is de site of groep hernoemd? Zoek hem dan in je overzicht.',
+  'error.renamed.link': 'Naar het overzicht',
 
   // -- The development notice, on both hosts --------------------------------
   // One line: nldd-status-bar shows one and cuts the rest off with an
@@ -159,6 +164,7 @@ export const nl = {
   ...shared,
   ...pagesNl,
   ...groupNl,
+  ...addressNl,
   ...adminNl,
   ...siteNl,
   ...publishNl,

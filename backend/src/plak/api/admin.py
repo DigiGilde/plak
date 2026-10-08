@@ -42,9 +42,10 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import ConfigDict, Field, field_validator
-from sqlalchemy import delete, func, select, tuple_, update
+from sqlalchemy import delete, func, or_, select, tuple_, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 from starlette.responses import Response
 
 from plak import net
@@ -89,7 +90,16 @@ from plak.ci.providers import (
 from plak.ci.trust import ci_actor_identifier
 from plak.cli import service as cli
 from plak.config import normalise_https_base_url
-from plak.constants import RESERVED_SLUGS, ROLE_RANK, SLUG_RE, AccessBase, Role
+from plak.constants import (
+    MAX_PREVIOUS_SLUGS,
+    RESERVED_SLUGS,
+    ROLE_RANK,
+    SLUG_RE,
+    SLUG_REDIRECT_DAYS,
+    AccessBase,
+    Role,
+)
+from plak.db import violated_constraint
 from plak.expiry import MAX_VALIDITY, ExpiryError
 from plak.ingest.service import IngestError, IngestService
 from plak.models.audit import ActorKind, AuditLogEntry, ContentViewer
@@ -112,7 +122,9 @@ from plak.models.publication import (
     Version,
     VersionTarget,
 )
+from plak.models.slugs import GroupSlug, SiteSlug
 from plak.ratelimit import InMemoryCounter
+from plak.slug_window import redirect_ends_at, still_redirects
 
 # Message keys in plak/messages.py; the code the SPA branches on is what
 # stands before the dot.
@@ -123,6 +135,11 @@ KEY_NOT_GROUP_MEMBER = "NOT_GROUP_MEMBER.you"
 
 # PostgreSQL code for a PL/pgSQL `RAISE EXCEPTION` without a code of its own.
 _SQLSTATE_RAISE_EXCEPTION = "P0001"
+
+# Taken by every change of a group's slug before it locks the group: two
+# groups trading slugs share no row to wait on, and would each wait for the
+# other's unique index entry, a deadlock.
+_GROUP_SLUG_LOCK = select(func.pg_advisory_xact_lock(func.hashtext("plak-group-slug")))
 
 # Unicode categories no text a member types may contain: Cc (control, e.g.
 # NUL, tab, newline), Cf (format, e.g. U+202E right-to-left override, which
@@ -407,6 +424,38 @@ class SiteTitleBody(ApiModel):
             "formatting characters."
         ),
         json_schema_extra={"maxLength": TEXT_MAX_LENGTH},
+    )
+
+
+class GroupSlugBody(ApiModel):
+    """The new slug of a group."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"slug": "aurora"}]})
+
+    slug: str = Field(
+        description=(
+            "New slug of the group: lowercase letters, digits and hyphens, at most 63 characters, and not one of "
+            "the names the platform reserves ("
+            + ", ".join(f"`{name}`" for name in sorted(RESERVED_SLUGS))
+            + "). Not the current slug of another group either, nor one that another group gave up and that is "
+            "not free again yet."
+        ),
+        examples=["aurora"],
+    )
+
+
+class SiteSlugBody(ApiModel):
+    """The new slug of a site within its group."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"slug": "docs"}]})
+
+    slug: str = Field(
+        description=(
+            "New slug of the site: lowercase letters, digits and hyphens, at most 63 characters. Not the current "
+            "slug of another site in the group, nor one that another site in the group gave up and that is not "
+            "free again yet."
+        ),
+        examples=["docs"],
     )
 
 
@@ -789,6 +838,28 @@ class MyProfile(MemberOut):
         ),
         examples=["en"],
     )
+    slug_redirect_days: int = Field(
+        description=(
+            "Through how many days after a change of address the old addresses of a group or site still redirect, "
+            "until midnight, Amsterdam time. The SPA takes the number from here, so its texts say what the server "
+            "does."
+        ),
+        examples=[SLUG_REDIRECT_DAYS],
+    )
+
+
+class PreviousSlugOut(ApiModel):
+    """An old slug whose addresses still redirect to the current ones."""
+
+    slug: str = Field(description="The old slug.", examples=["oud-team"])
+    redirects_until: str = Field(
+        description=(
+            f"When the redirect ends: midnight, Amsterdam time, at the end of day {SLUG_REDIRECT_DAYS} after the "
+            "change. From then on the old addresses answer 404; the slug is free again for others only once the "
+            "nightly cleanup after that has run."
+        ),
+        json_schema_extra=_timestamp_schema(),
+    )
 
 
 class GroupOut(ApiModel):
@@ -799,6 +870,13 @@ class GroupOut(ApiModel):
     default_access: AccessOut = Field(
         description=(
             "Access that a new site in this group starts with. Existing sites are not affected."
+        )
+    )
+    previous_slugs: list[PreviousSlugOut] = Field(
+        description=(
+            "Old slugs of the group whose addresses still redirect to the current ones, newest first; empty when "
+            "there are none. Each stays reserved for this group, which can change back to it until its redirect "
+            "has ended."
         )
     )
 
@@ -814,6 +892,13 @@ class SiteOut(ApiModel):
     )
     group_slug: str = Field(description="Slug of the group this site is in.", examples=["aurora"])
     slug: str = Field(description="Slug of the site; the second path segment of the site URL.", examples=["docs"])
+    previous_slugs: list[PreviousSlugOut] = Field(
+        description=(
+            "Old slugs of the site whose addresses still redirect to the current ones, newest first; empty when "
+            "there are none. Each stays reserved for this site, which can change back to it until its redirect "
+            "has ended. A change of the group's slug is not in here but in the `previousSlugs` of the group."
+        )
+    )
     title: str = Field(description="Display name of the site.", examples=["Documentatie"])
     access: AccessOut = Field(description="Who may see the live content: base plus exceptions.")
     external_sources: bool = Field(
@@ -1380,10 +1465,20 @@ class AuditFilters(ApiModel):
         examples=["UNKNOWN_SITE"],
     )
     group: str | None = Field(
-        default=None, description="Slug of the group the row is about.", examples=["aurora"]
+        default=None,
+        description=(
+            "Slug of the group the row is about. Also matches the `previous_group` of a change of address, so "
+            "that change is found from the old slug as well as the new one."
+        ),
+        examples=["aurora"],
     )
     site: str | None = Field(
-        default=None, description="Slug of the site the row is about.", examples=["docs"]
+        default=None,
+        description=(
+            "Slug of the site the row is about. Also matches the `previous_site` of a change of address, and the "
+            "`sites` of a row about a whole group: the sites that moved with its new address or went with it."
+        ),
+        examples=["docs"],
     )
     actor_pseudonym: str | None = Field(
         default=None,
@@ -1624,7 +1719,7 @@ def _member_json(member: Member, *, bootstrap_sub: str = "") -> MemberOut:
     )
 
 
-def _group_json(group: Group) -> GroupOut:
+def _group_json(group: Group, previous_slugs: list[PreviousSlugOut]) -> GroupOut:
     return GroupOut(
         slug=group.slug,
         name=group.name,
@@ -1633,6 +1728,7 @@ def _group_json(group: Group) -> GroupOut:
             keys=group.default_access_keys,
             invitees=group.default_access_invitees,
         ),
+        previous_slugs=previous_slugs,
     )
 
 
@@ -1641,11 +1737,13 @@ def _site_json(
     group_slug: str,
     last_published_at: datetime | None,
     preview_count: int,
+    previous_slugs: list[PreviousSlugOut],
 ) -> SiteOut:
     return SiteOut(
         id=site.id,
         group_slug=group_slug,
         slug=site.slug,
+        previous_slugs=previous_slugs,
         title=site.title,
         access=AccessOut(base=site.access_base, keys=site.access_keys, invitees=site.access_invitees),
         external_sources=site.external_sources,
@@ -1842,15 +1940,17 @@ async def _site_with_role(
     return group, site
 
 
-async def _reread_locked(db: AsyncSession, row: Group | Site) -> None:
+async def _reread_locked(db: AsyncSession, row: Group | Site, *, slug_change: bool = False) -> None:
     """Reads `row` again under FOR NO KEY UPDATE: another change of the row
-    waits, a row that points at it does not. A row deleted since the role
-    check is the 404 of one that was never there (`db.refresh` would raise)."""
+    waits, a row that points at it does not. `slug_change` takes FOR UPDATE,
+    which changing a unique column takes anyway, so that a row pointing at it
+    waits too. A row deleted since the role check is the 404 of one that was
+    never there (`db.refresh` would raise)."""
     model = type(row)
     found = await db.scalar(
         select(model)
         .where(model.id == row.id)
-        .with_for_update(key_share=True)
+        .with_for_update(key_share=not slug_change)
         .execution_options(populate_existing=True)
     )
     if found is None:
@@ -1938,6 +2038,62 @@ def _validate_slug(slug: str, *, reserved_refused: bool = False) -> str:
     return normalised
 
 
+# Per kind, what a slug that is taken runs into (migration 0005): the current
+# slug of another group or site, or one that another gave up and still holds.
+_SLUG_CONSTRAINTS: dict[str, tuple[str, str]] = {
+    "group": ("uq_groups_slug", "pk_group_slugs"),
+    "site": ("uq_sites_group_slug", "pk_site_slugs"),
+}
+
+
+def _slug_conflict(error: IntegrityError, kind: Literal["group", "site"], slug: str) -> ApiError:
+    """The 409 for a slug that is taken, told by the constraint it ran into.
+    Any other integrity error is a fault rather than a collision, and goes on
+    as it came."""
+    current, previous = _SLUG_CONSTRAINTS[kind]
+    constraint = violated_constraint(error)
+    if constraint == current:
+        return ApiError(409, f"SLUG_EXISTS.{kind}", params={"slug": slug})
+    if constraint == previous:
+        return ApiError(409, f"SLUG_EXISTS.{kind}_previous", params={"slug": slug})
+    raise error
+
+
+async def _previous_slugs(
+    db: AsyncSession, owner: InstrumentedAttribute[uuid.UUID], owner_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[PreviousSlugOut]]:
+    """Per group or site (`owner` is `GroupSlug.group_id` or
+    `SiteSlug.site_id`), the slugs it gave up that still redirect, newest
+    first. One that stopped redirecting is left out before the nightly
+    cleanup has removed it."""
+    namespace = owner.class_
+    now = datetime.now(UTC)
+    rows = await db.execute(
+        select(owner, namespace.slug, namespace.retired_at)
+        .where(owner.in_(owner_ids), namespace.retired_at.is_not(None))
+        .order_by(namespace.retired_at.desc(), namespace.slug)
+    )
+    found: dict[uuid.UUID, list[PreviousSlugOut]] = {}
+    for owner_id, slug, retired_at in rows:
+        if still_redirects(retired_at, now):
+            found.setdefault(owner_id, []).append(
+                PreviousSlugOut(slug=slug, redirects_until=_iso(redirect_ends_at(retired_at)))
+            )
+    return found
+
+
+def _require_room_for_an_old_slug(previous_slugs: list[PreviousSlugOut], slug: str) -> None:
+    """Going back to one of the old slugs keeps their number as it is; any
+    other new slug adds the current one to them."""
+    if len(previous_slugs) >= MAX_PREVIOUS_SLUGS and slug not in {old.slug for old in previous_slugs}:
+        raise ApiError(409, "TOO_MANY_PREVIOUS_SLUGS", params={"max": MAX_PREVIOUS_SLUGS})
+
+
+async def _groups_json(db: AsyncSession, groups: list[Group]) -> list[GroupOut]:
+    previous = await _previous_slugs(db, GroupSlug.group_id, [group.id for group in groups])
+    return [_group_json(group, previous.get(group.id, [])) for group in groups]
+
+
 def _validate_text(value: str, field: str, *, max_length: int | None = None) -> str:
     normalised = value.strip()
     if not normalised:
@@ -1993,7 +2149,9 @@ async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list
     ids = [site.id for site in sites]
     last: dict[uuid.UUID, datetime] = {}
     counts: dict[uuid.UUID, int] = {}
+    previous: dict[uuid.UUID, list[PreviousSlugOut]] = {}
     if ids:
+        previous = await _previous_slugs(db, SiteSlug.site_id, ids)
         last = dict(
             (
                 await db.execute(
@@ -2013,7 +2171,7 @@ async def _sites_json(db: AsyncSession, group: Group, sites: list[Site]) -> list
             ).all()
         )
     return [
-        _site_json(site, group.slug, last.get(site.id), counts.get(site.id, 0))
+        _site_json(site, group.slug, last.get(site.id), counts.get(site.id, 0), previous.get(site.id, []))
         for site in sites
     ]
 
@@ -2671,8 +2829,9 @@ def _unknown_user_code() -> ApiError:
     return ApiError(404, "USER_CODE_UNKNOWN")
 
 
-# Per member, groups and sites together; every attempt that gets past the
-# role check and the input validation counts, a slug collision included.
+# Per member, new groups, new sites and changes of address together; every
+# attempt that gets past the role check and the input validation counts, a
+# slug collision included.
 CREATION_MAX_PER_WINDOW = 20
 CREATION_WINDOW_S = 3600
 
@@ -2767,9 +2926,9 @@ _ERROR_CLI_TOKEN = {
 }
 _ERROR_CREATIONS = {
     429: (
-        f"This member has already created {CREATION_MAX_PER_WINDOW} groups and sites combined in the past "
-        "hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed "
-        "again."
+        f"This member has already made {CREATION_MAX_PER_WINDOW} new groups, sites and addresses combined in "
+        "the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is "
+        "allowed again."
     )
 }
 _CREATION_RULE = (
@@ -2777,7 +2936,7 @@ _CREATION_RULE = (
     "`plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header "
     "is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID "
     "token is not allowed. "
-    f"Each member has a limit of {CREATION_MAX_PER_WINDOW} new groups and sites combined per "
+    f"Each member has a limit of {CREATION_MAX_PER_WINDOW} new groups, sites and addresses combined per "
     f"{CREATION_WINDOW_S // 60} minutes, across the admin interface and the CLI together."
 )
 _APPROVAL_RULE = (
@@ -2820,6 +2979,7 @@ def make_admin_router() -> APIRouter:
             ci_forgejo_hosts=list(request.app.state.settings.forgejo_hosts),
             ci_audience=_ci_audience(request),
             language=member.language,
+            slug_redirect_days=SLUG_REDIRECT_DAYS,
         )
 
     @router.put(
@@ -2874,12 +3034,13 @@ def make_admin_router() -> APIRouter:
     )
     async def overview(member: ActiveMember, db: Db) -> Overview:
         groups, sites_per_group = await _groups_for_member(db, member)
+        groups_json = await _groups_json(db, groups)
         rows = [
             GroupRow(
-                group=_group_json(group),
+                group=group_json,
                 sites=await _sites_json(db, group, sites_per_group[group.id]),
             )
-            for group in groups
+            for group, group_json in zip(groups, groups_json, strict=True)
         ]
         return Overview(groups=rows)
 
@@ -2904,7 +3065,12 @@ def make_admin_router() -> APIRouter:
             _ERROR_CSRF,
             _ERROR_CLI_TOKEN,
             _ERROR_CREATIONS,
-            {409: "A group with this slug already exists (`SLUG_EXISTS`)."},
+            {
+                409: (
+                    "Another group has this slug, now or as an old slug that is not free again yet "
+                    "(`SLUG_EXISTS`)."
+                )
+            },
             {
                 422: (
                     "The slug is invalid or reserved (`SLUG_INVALID`), or the name is empty "
@@ -2931,9 +3097,9 @@ def make_admin_router() -> APIRouter:
         db.add(group)
         try:
             await db.flush()
-        except IntegrityError:
+        except IntegrityError as error:
             await db.rollback()
-            raise ApiError(409, "SLUG_EXISTS.group", params={"slug": slug}) from None
+            raise _slug_conflict(error, "group", slug) from None
         # The creator becomes group beheerder in the same transaction, otherwise
         # they cannot create a site in their own fresh group (403).
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
@@ -2944,7 +3110,7 @@ def make_admin_router() -> APIRouter:
             "group_create",
             {"group": slug, **_access_refs(base, keys, invitees), **creator.audit_refs()},
         )
-        return _group_json(group)
+        return _group_json(group, [])
 
     @router.get(
         "/groups/{group_slug}",
@@ -2961,7 +3127,7 @@ def make_admin_router() -> APIRouter:
         group = await _group_with_role(db, member, group_slug, Role.READER, platform_admin=True)
         sites = await _group_sites(db, group)
         return GroupDetail(
-            group=_group_json(group),
+            group=(await _groups_json(db, [group]))[0],
             sites=await _sites_json(db, group, sites),
             members=await _group_members_json(db, group),
         )
@@ -3040,7 +3206,76 @@ def make_admin_router() -> APIRouter:
                 "group_name",
                 {"group": group_slug, "group_id": str(group.id), "previous_name": previous},
             )
-        return _group_json(group)
+        return (await _groups_json(db, [group]))[0]
+
+    @router.put(
+        "/groups/{group_slug}/slug",
+        tags=[TAG_GROUPS],
+        summary="Change the address of a group",
+        response_description="The group at its new address.",
+        description=(
+            "Sets the slug of the group, the first path segment of every URL of its sites: every site, preview "
+            "and secret link of the group gets a new address at once. The old slug stays reserved for this group, "
+            f"and its old addresses redirect to the new ones through day {SLUG_REDIRECT_DAYS} after the change "
+            "(until midnight, Amsterdam time), for visitors who may see the site. After that they answer 404, and "
+            "the old slug is free for another group once the nightly cleanup has run. Until then this group can "
+            "change back to it. `previousSlugs` lists the old slugs that still redirect.\n\n"
+            "Publishing under the old address stops at once: the API knows only the current slug, and from this "
+            "change on the repository link of every site in the group requires the site id. Sending the slug the "
+            "group already has changes nothing and writes no audit row. If the response gets lost, the old path "
+            "answers 404: read the group at the new slug, or send the request again with the new slug in the path, "
+            "which then changes nothing.\n\n"
+            "**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without "
+            f"a group role is not allowed. Each change counts towards the limit of {CREATION_MAX_PER_WINDOW} new "
+            f"groups, sites and addresses combined per {CREATION_WINDOW_S // 60} minutes, and at most "
+            f"{MAX_PREVIOUS_SLUGS} old slugs of a group redirect at the same time."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_GROUP_ROLE,
+            _ERROR_GROUP,
+            _ERROR_CREATIONS,
+            {
+                409: (
+                    "Another group has this slug, now or as an old slug that is not free again yet "
+                    f"(`SLUG_EXISTS`); or this group already has {MAX_PREVIOUS_SLUGS} old slugs that still "
+                    "redirect, and the new slug is none of them (`TOO_MANY_PREVIOUS_SLUGS`)."
+                )
+            },
+            {422: "The slug is invalid or reserved (`SLUG_INVALID`)."},
+        ),
+    )
+    async def set_group_slug(
+        request: Request, group_slug: str, body: GroupSlugBody, _csrf: Csrf, member: ActiveMember, db: Db
+    ) -> GroupOut:
+        group = await _group_with_role(db, member, group_slug, Role.ADMIN)
+        slug = _validate_slug(body.slug, reserved_refused=True)
+        await db.execute(_GROUP_SLUG_LOCK)
+        # Locked and read again before anything is decided: the old slugs are
+        # counted, and the audit row names what this change replaces, as they
+        # stand once a rename that ran meanwhile has committed.
+        await _reread_locked(db, group, slug_change=True)
+        previous = group.slug
+        if slug == previous:
+            return (await _groups_json(db, [group]))[0]
+        await _require_creation_budget(request, member)
+        previous_slugs = await _previous_slugs(db, GroupSlug.group_id, [group.id])
+        _require_room_for_an_old_slug(previous_slugs.get(group.id, []), slug)
+        group.slug = slug
+        try:
+            await db.flush()
+        except IntegrityError as error:
+            await db.rollback()
+            raise _slug_conflict(error, "group", slug) from None
+        sites = list(await db.scalars(select(Site.slug).where(Site.group_id == group.id).order_by(Site.slug)))
+        await db.commit()
+        await _audit(
+            request,
+            member,
+            "group_slug",
+            {"group": slug, "previous_group": previous, "group_id": str(group.id), "sites": sites},
+        )
+        return (await _groups_json(db, [group]))[0]
 
     @router.put(
         "/groups/{group_slug}/default-access",
@@ -3075,7 +3310,7 @@ def make_admin_router() -> APIRouter:
                 "invitees": body.invitees,
             },
         )
-        return _group_json(group)
+        return (await _groups_json(db, [group]))[0]
 
     # -- Sites --
 
@@ -3100,7 +3335,12 @@ def make_admin_router() -> APIRouter:
             _ERROR_CREATIONS,
             _ERROR_GROUP_ROLE,
             _ERROR_GROUP,
-            {409: "A site with this slug already exists in this group (`SLUG_EXISTS`)."},
+            {
+                409: (
+                    "Another site in this group has this slug, now or as an old slug that is not free again yet "
+                    "(`SLUG_EXISTS`)."
+                )
+            },
             {422: "The slug is invalid (`SLUG_INVALID`), or the title is empty (`FIELD_EMPTY`)."},
         ),
     )
@@ -3131,9 +3371,9 @@ def make_admin_router() -> APIRouter:
         db.add(site)
         try:
             await db.flush()
-        except IntegrityError:
+        except IntegrityError as error:
             await db.rollback()
-            raise ApiError(409, "SLUG_EXISTS.site", params={"slug": slug}) from None
+            raise _slug_conflict(error, "site", slug) from None
         # The creator becomes site beheerder of what they create.
         db.add(
             SiteMember(
@@ -3147,7 +3387,7 @@ def make_admin_router() -> APIRouter:
             "site_create",
             {"group": group_slug, "site": slug, **_access_refs(base, keys, invitees), **creator.audit_refs()},
         )
-        return _site_json(site, group.slug, None, 0)
+        return _site_json(site, group.slug, None, 0, [])
 
     @router.delete(
         "/sites/{group_slug}/{site_slug}",
@@ -3221,6 +3461,94 @@ def make_admin_router() -> APIRouter:
                 "site_title",
                 {"group": group_slug, "site": site_slug, "site_id": str(site.id), "previous_title": previous},
             )
+        return (await _sites_json(db, group, [site]))[0]
+
+    @router.put(
+        "/sites/{group_slug}/{site_slug}/slug",
+        tags=[TAG_SITES],
+        summary="Change the address of a site",
+        response_description="The site at its new address.",
+        description=(
+            "Sets the slug of the site, the second path segment of its URL: the site, its previews and its secret "
+            "links get a new address at once. The old slug stays reserved for this site, and its old addresses "
+            f"redirect to the new ones through day {SLUG_REDIRECT_DAYS} after the change (until midnight, "
+            "Amsterdam time), for visitors who may see the site. After that they answer 404, and the old slug is "
+            "free for another site in the group once the nightly cleanup has run. Until then this site can change "
+            "back to it. `previousSlugs` lists the old slugs that still redirect.\n\n"
+            "Publishing under the old address stops at once: the API knows only the current slug, and from this "
+            "change on the repository link of the site requires the site id. Sending the slug the site already has "
+            "changes nothing and writes no audit row. If the response gets lost, the old path answers 404: read "
+            "the site at the new slug, or send the request again with the new slug in the path, which then "
+            "changes nothing.\n\n"
+            "**Who can call this:** effective site role `admin` together with a role in the group of the site, "
+            "`reader` or higher, with a valid CSRF header. An admin of the site alone, without a role in its "
+            "group, can change its title but not its address. Each change counts towards the limit of "
+            f"{CREATION_MAX_PER_WINDOW} new groups, sites and addresses combined per {CREATION_WINDOW_S // 60} "
+            f"minutes, and at most {MAX_PREVIOUS_SLUGS} old slugs of a site redirect at the same time."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_SITE_ROLE,
+            {
+                403: (
+                    "Changing the address also needs a role in the group of the site, which an admin of the site "
+                    "alone does not have (`INSUFFICIENT_ROLE`)."
+                )
+            },
+            _ERROR_SITE,
+            _ERROR_CREATIONS,
+            {
+                409: (
+                    "Another site in this group has this slug, now or as an old slug that is not free again yet "
+                    f"(`SLUG_EXISTS`); or this site already has {MAX_PREVIOUS_SLUGS} old slugs that still "
+                    "redirect, and the new slug is none of them (`TOO_MANY_PREVIOUS_SLUGS`)."
+                )
+            },
+            {422: "The slug is invalid (`SLUG_INVALID`)."},
+        ),
+    )
+    async def set_site_slug(
+        request: Request,
+        group_slug: str,
+        site_slug: str,
+        body: SiteSlugBody,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+    ) -> SiteOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        # Whoever renames a site has to be able to see the group, which a role
+        # on the site alone does not give: a 409 would say which slugs the
+        # other sites of the group have, or recently had.
+        if await roles.group_role(db, group.id, member.id) is None:
+            raise ApiError(403, "INSUFFICIENT_ROLE.site_address")
+        slug = _validate_slug(body.slug)
+        # As for a group: locked and read again before anything is decided.
+        # The group first: deleting a group locks it and then its sites, so
+        # the other order deadlocks with that. The group's lock also lets one
+        # address change in the group run at a time, and keeps its slug in the
+        # audit row and the answer current.
+        await _reread_locked(db, group)
+        await _reread_locked(db, site, slug_change=True)
+        previous = site.slug
+        if slug == previous:
+            return (await _sites_json(db, group, [site]))[0]
+        await _require_creation_budget(request, member)
+        previous_slugs = await _previous_slugs(db, SiteSlug.site_id, [site.id])
+        _require_room_for_an_old_slug(previous_slugs.get(site.id, []), slug)
+        site.slug = slug
+        try:
+            await db.flush()
+        except IntegrityError as error:
+            await db.rollback()
+            raise _slug_conflict(error, "site", slug) from None
+        await db.commit()
+        await _audit(
+            request,
+            member,
+            "site_slug",
+            {"group": group.slug, "site": slug, "previous_site": previous, "site_id": str(site.id)},
+        )
         return (await _sites_json(db, group, [site]))[0]
 
     @router.put(
@@ -4451,9 +4779,20 @@ def make_admin_router() -> APIRouter:
         if filters.reason_code:
             statement = statement.where(AuditLogEntry.reason_code == filters.reason_code)
         if filters.group:
-            statement = statement.where(AuditLogEntry.refs["group"].astext == filters.group)
+            statement = statement.where(
+                or_(
+                    AuditLogEntry.refs["group"].astext == filters.group,
+                    AuditLogEntry.refs["previous_group"].astext == filters.group,
+                )
+            )
         if filters.site:
-            statement = statement.where(AuditLogEntry.refs["site"].astext == filters.site)
+            statement = statement.where(
+                or_(
+                    AuditLogEntry.refs["site"].astext == filters.site,
+                    AuditLogEntry.refs["previous_site"].astext == filters.site,
+                    AuditLogEntry.refs["sites"].has_key(filters.site),
+                )
+            )
         if filters.actor_pseudonym:
             statement = statement.where(
                 AuditLogEntry.actor_pseudonym == _audit_pseudonym(filters.actor_pseudonym)

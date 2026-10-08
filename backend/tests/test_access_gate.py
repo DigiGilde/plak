@@ -466,6 +466,54 @@ async def test_matrix_version(db, policy, name):
         check(decision, DecisionKind.NEUTRAL_404, "NO_ACCESS", None, None)
 
 
+# --- The matrix after a change of address ---
+# The gate knows current slugs only: at the old ones it finds nothing, at the
+# new ones it decides exactly as before. Redirecting from an old address is
+# serving's (serving/router.py), on top of these answers.
+
+
+async def _change_address(db, world: World, moved: str) -> tuple[str, str]:
+    if moved == "group":
+        (await db.get(Group, world.group_id)).slug = "borealis"
+    else:
+        (await db.get(Site, world.site_id)).slug = "nieuw"
+    await db.flush()
+    return ("borealis", world.site_slug) if moved == "group" else (world.group_slug, "nieuw")
+
+
+@pytest.mark.parametrize("moved", ["group", "site"])
+@pytest.mark.parametrize("name", VISITOR_NAMES)
+@pytest.mark.parametrize("policy", POLICIES, ids=policy_id)
+async def test_matrix_after_a_change_of_address(db, policy, name, moved):
+    world = await make_world(db, policy)
+    group, site = await _change_address(db, world, moved)
+    visitor = visitors(world)[name]
+    unknown = "UNKNOWN_GROUP" if moved == "group" else "UNKNOWN_SITE"
+
+    for decision in [
+        await decide(db, world.group_slug, world.site_slug, visitor),
+        await decide_preview(db, world.group_slug, world.site_slug, world.preview_ref, visitor),
+        await decide_version(db, world.group_slug, world.site_slug, world.live_version_id, visitor),
+    ]:
+        check(decision, DecisionKind.NEUTRAL_404, unknown, None, None)
+
+    kind, reason = expected(policy, name, preview=False)
+    check(await decide(db, group, site, visitor), kind, reason, world.live_version_id, policy)
+    kind, reason = expected(policy, name, preview=True)
+    check(
+        await decide_preview(db, group, site, world.preview_ref, visitor),
+        kind,
+        reason,
+        world.preview_version_id,
+        policy,
+    )
+    version = await decide_version(db, group, site, world.live_version_id, visitor)
+    if name == "group_member_active":
+        check(version, DecisionKind.ALLOW, "OK", world.live_version_id, AccessPolicy(AccessBase.SITE_TEAM))
+    else:
+        check(version, DecisionKind.NEUTRAL_404, "NO_ACCESS", None, None)
+
+
 # --- Edge cases ---
 
 

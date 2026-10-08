@@ -1,8 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
-import type { Access, Site } from '@/api/types';
+import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
+import type { Access, PreviousSlug, Site } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import { fireDetailEvent, problemFetch, serverErrorFetch } from '@/components/site/testHelpers';
 import TabSettings from './TabSettings.vue';
@@ -24,8 +24,11 @@ function makeWrapper(
   props: {
     access?: Access;
     sites?: Site[];
+    previousSlugs?: PreviousSlug[];
+    redirectDays?: number;
     canDelete?: boolean;
     canRename?: boolean;
+    canChangeAddress?: boolean;
     groupName?: string;
     /** In the document, for a test that needs to know where the focus is. */
     attach?: boolean;
@@ -37,8 +40,12 @@ function makeWrapper(
       groupName: props.groupName ?? 'Team Aurora',
       access: props.access ?? access,
       sites: props.sites ?? [],
+      previousSlugs: props.previousSlugs ?? [],
+      contentBase: MOCK_CONTENT_BASE,
+      redirectDays: props.redirectDays ?? 30,
       canDelete: props.canDelete ?? false,
       canRename: props.canRename ?? false,
+      canChangeAddress: props.canChangeAddress ?? false,
     },
     global: { stubs: { teleport: true } },
     attachTo: props.attach ? document.body : undefined,
@@ -604,9 +611,103 @@ describe('group TabSettings: name', () => {
   });
 });
 
+describe('group TabSettings: address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function typeAddress(wrapper: ReturnType<typeof makeWrapper>, value: string): void {
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', { value });
+  }
+
+  it('comes second, between the name and the access new sites start with', () => {
+    const wrapper = makeWrapper({ canRename: true, canChangeAddress: true });
+
+    expect(wrapper.findAll('h2').map((h) => h.text())).toEqual([
+      'Naam van de groep',
+      'Adres van de groep',
+      'Standaardtoegang voor nieuwe sites',
+    ]);
+  });
+
+  it('shows the form to a group admin and the sites it has as an example', () => {
+    const wrapper = makeWrapper({
+      canChangeAddress: true,
+      sites: backend.data.sites,
+    });
+
+    expect(wrapper.find('[data-testid="group-address-form"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
+      'https://sites.plak.test/team-aurora/website/',
+    );
+  });
+
+  it('says who may change it to everyone else, and still lists the old addresses', () => {
+    const wrapper = makeWrapper({
+      canChangeAddress: false,
+      previousSlugs: [{ slug: 'team-oud', redirectsUntil: '2026-11-06T23:00:00Z' }],
+    });
+
+    expect(wrapper.find('[data-testid="group-address-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-address-readonly"]').text()).toBe(
+      'Alleen een beheerder van de groep kan het adres wijzigen.',
+    );
+    expect(wrapper.find('[data-testid="group-address-previous"]').text()).toContain(
+      'team-oud stuurt door tot en met 6 november 2026.',
+    );
+  });
+
+  it('warns about the address of a public site, and about nothing else', () => {
+    const open = { ...backend.data.sites[0]!, access: { base: 'public', keys: false, invitees: false } } as Site;
+    const closed = { ...open, slug: 'intern', access: { base: 'site_team', keys: true, invitees: true } } as Site;
+
+    const withPublic = makeWrapper({ canChangeAddress: true, sites: [closed, open] });
+    const withoutPublic = makeWrapper({ canChangeAddress: true, sites: [closed] });
+
+    expect(withPublic.find('[data-testid="group-address-public"]').exists()).toBe(true);
+    expect(withoutPublic.find('[data-testid="group-address-public"]').exists()).toBe(false);
+  });
+
+  it('counts the days the page is told to count', () => {
+    const wrapper = makeWrapper({ canChangeAddress: true, redirectDays: 14 });
+
+    expect(wrapper.find('[data-testid="group-address-consequences"]').text()).toContain(
+      'Tot en met 22 oktober 2026 kun je het oude adres terugzetten.',
+    );
+  });
+
+  it('changes the address of the group and hands the group to the page', async () => {
+    const wrapper = makeWrapper({ canChangeAddress: true, sites: backend.data.sites });
+
+    typeAddress(wrapper, 'aurora');
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await flushPromises();
+
+    expect(backend.data.groups[0]!.slug).toBe('aurora');
+    expect(wrapper.emitted('renamed')).toHaveLength(1);
+    expect(wrapper.emitted('renamed')![0]![0]).toMatchObject({
+      slug: 'aurora',
+      previousSlugs: [{ slug: 'team-aurora' }],
+    });
+    // The page handles the new group: the tab says nothing of it as a change of the access or the name.
+    expect(wrapper.emitted('groupChanged')).toBeUndefined();
+  });
+});
+
 describe('group TabSettings: danger zone', () => {
   function site(slug: string, title = slug): Site {
-    return { groupSlug: 'team-aurora', slug, title } as Site;
+    return {
+      groupSlug: 'team-aurora',
+      slug,
+      title,
+      access: { base: 'site_team', keys: false, invitees: false },
+    } as Site;
   }
 
   function typeSlug(wrapper: ReturnType<typeof makeWrapper>, value = 'team-aurora'): void {

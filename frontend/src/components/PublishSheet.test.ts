@@ -7,9 +7,9 @@ import type { Group, Me, MyGroupRole, Site } from '@/api/types';
 
 import PublishSheet from './PublishSheet.vue';
 
-const AURORA: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } };
-const TEAM: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false } };
-const FRESH: Group = { slug: 'mijn-team', name: 'Mijn team', defaultAccess: { base: 'site_team', keys: false, invitees: false } };
+const AURORA: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
+const TEAM: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false }, previousSlugs: [] };
+const FRESH: Group = { slug: 'mijn-team', name: 'Mijn team', defaultAccess: { base: 'site_team', keys: false, invitees: false }, previousSlugs: [] };
 
 /** A member with the given group roles; only `groupRoles` varies per test. */
 function meWith(groupRoles: MyGroupRole[]): Me {
@@ -28,6 +28,7 @@ function meWith(groupRoles: MyGroupRole[]): Me {
     ciForgejoHosts: [],
     ciAudience: 'https://plak.test',
     language: null,
+    slugRedirectDays: 30,
   };
 }
 
@@ -45,6 +46,7 @@ const site: Site = {
   hasLiveVersion: false,
   lastPublishedAt: null,
   previewCount: 0,
+  previousSlugs: [],
 };
 
 type Wrapper = ReturnType<typeof mount>;
@@ -400,7 +402,7 @@ describe('PublishSheet (the group)', () => {
 });
 
 describe('PublishSheet (the group, filtered by role)', () => {
-  const READERS: Group = { slug: 'lezers', name: 'Lezers', defaultAccess: { base: 'public', keys: false, invitees: false } };
+  const READERS: Group = { slug: 'lezers', name: 'Lezers', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 
   it('asks nothing when the user may only publish in one of the groups', () => {
     const me = meWith([
@@ -620,6 +622,7 @@ describe('PublishSheet (publishing)', () => {
       slug: 'team-aurora',
       name: 'Team Aurora',
       defaultAccess: { base: 'nobody', keys: true, invitees: false },
+      previousSlugs: [],
     };
     const { wrapper } = mountComponent({ groups: [WITH_EXTRAS] });
 
@@ -636,6 +639,7 @@ describe('PublishSheet (publishing)', () => {
       slug: 'team-aurora',
       name: 'Team Aurora',
       defaultAccess: { base: 'public', keys: true, invitees: false },
+      previousSlugs: [],
     };
     // The site is created on the group default, so turning the switch off is
     // a real change that has to reach the server.
@@ -664,6 +668,7 @@ describe('PublishSheet (publishing)', () => {
       slug: 'team-aurora',
       name: 'Team Aurora',
       defaultAccess: { base: 'public', keys: true, invitees: false },
+      previousSlugs: [],
     };
     const { wrapper, actions } = mountComponent({ groups: [WITH_KEYS] });
 

@@ -19,7 +19,7 @@ import pytest_asyncio
 from fastapi import FastAPI
 from helpers_csp import assert_runs_no_script_and_only_its_own_style, directives
 from helpers_oidc import set_content_session_cookie
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from plak.access import keys
@@ -31,6 +31,7 @@ from plak.ingest.store import ContentStore
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, Member, MemberStatus
 from plak.models.publication import AccessKey, KeyStatus, Preview, Site, Version, VersionTarget
+from plak.models.slugs import SiteSlug
 from plak.ratelimit import InMemoryCounter
 from plak.serving.code_page import router as code_router
 from plak.serving.response import NEUTRAL_404_BODY
@@ -693,6 +694,77 @@ class TestTheLimitPerSelector:
             headers=FORM_HEADERS,
         )
         assert "Probeer het later opnieuw" not in response.text
+
+
+class TestTheCodeAtAnOldAddress:
+    """A renamed site asks for the code at its old address, as before the
+    rename (spec 7.7); the code then leads to the new address, with the
+    cookie for that path."""
+
+    @staticmethod
+    async def _rename(environment) -> None:
+        async with environment.factory() as db:
+            (await db.scalar(select(Site).where(Site.slug == "geheim"))).slug = "verborgen"
+            await db.commit()
+
+    async def _post(self, client, environment, **overrides) -> httpx.Response:
+        data = {
+            "selector": environment.world.key_selector,
+            "code": environment.world.key_verifier,
+            "path": "/aurora/geheim/?x=1",
+        }
+        data.update(overrides)
+        return await client.post(PATH_CONTENT_CODE, data=data, headers=FORM_HEADERS)
+
+    async def test_the_page_stays_at_the_old_address(self, client, environment):
+        await self._rename(environment)
+
+        response = await client.get(f"/aurora/geheim/?key={environment.world.key_selector}&x=1")
+
+        assert response.status_code == 200
+        assert 'value="/aurora/geheim/?x=1"' in response.text
+
+    async def test_the_right_code_leads_to_the_new_address_with_the_cookie_for_it(self, client, environment):
+        await self._rename(environment)
+
+        response = await self._post(client, environment)
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/aurora/verborgen/?x=1"
+        assert "Path=/aurora/verborgen/" in response.headers["set-cookie"]
+        value = check_signature(environment.app.state.settings.session_secret, response.cookies[KEY_COOKIE])
+        assert value == f"key:{environment.world.key_id}"
+        page = await client.get(response.headers["location"])
+        assert page.status_code == 200
+        assert page.content == SECRET_INDEX
+
+    async def test_a_wrong_code_answers_at_the_old_address_as_before(self, client, environment):
+        await self._rename(environment)
+
+        response = await self._post(client, environment, code="fout")
+
+        assert response.status_code == 200
+        assert "De code klopt niet" in response.text
+        assert 'value="/aurora/geheim/?x=1"' in response.text
+        assert KEY_COOKIE not in response.cookies
+        rows = await _audit_rows(environment)
+        assert [(row.reason_code, row.refs["site"]) for row in rows] == [("KEY_CODE_INVALID", "geheim")]
+
+    async def test_once_the_redirect_has_ended_the_code_opens_nothing(self, client, environment):
+        await self._rename(environment)
+        async with environment.factory() as db:
+            await db.execute(
+                update(SiteSlug)
+                .where(SiteSlug.slug == "geheim")
+                .values(retired_at=SiteSlug.retired_at - timedelta(days=32))
+            )
+            await db.commit()
+
+        response = await self._post(client, environment)
+
+        assert response.status_code == 200
+        assert "De code klopt niet" in response.text
+        assert KEY_COOKIE not in response.cookies
 
 
 class TestKeysHelpers:

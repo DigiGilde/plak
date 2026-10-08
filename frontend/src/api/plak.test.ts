@@ -50,6 +50,10 @@ describe('me (session)', () => {
     expect(loggedIn.contentBaseUrl).toBe('https://sites.plak.test');
   });
 
+  it('says how many days an old address keeps redirecting', async () => {
+    expect((await plak.me()).slugRedirectDays).toBe(30);
+  });
+
   it('returns 401 when there is no session', async () => {
     backend.data.loggedInMemberId = null;
 
@@ -448,6 +452,505 @@ describe('site title', () => {
     backend.data.loggedInMemberId = null;
 
     const error = await refusedWith(plak.setSiteTitle('team-aurora', 'onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('group address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('puts the new slug on the slug of the group and hands back the group with its old address', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const group = await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/groups/team-aurora/slug');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ slug: 'team-zon' });
+    expect(group).toMatchObject({ slug: 'team-zon', name: 'Team Aurora' });
+    expect(group.previousSlugs).toEqual([
+      { slug: 'team-aurora', redirectsUntil: '2026-11-07T23:00:00.000Z' },
+    ]);
+  });
+
+  it('knows the group on the new slug only: the API follows no old address', async () => {
+    await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    expect((await plak.group('team-zon')).group.slug).toBe('team-zon');
+    const error = await refusedWith(plak.group('team-aurora'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('takes everything that hangs on the group along', async () => {
+    await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    const detail = await plak.group('team-zon');
+    expect(detail.sites.map((s) => s.groupSlug)).toEqual(['team-zon']);
+    expect(detail.members.map((l) => l.groupSlug)).toEqual(['team-zon', 'team-zon', 'team-zon']);
+    // The role of a member on one site is found by the slug of its group.
+    expect(
+      detail.members.find((l) => l.memberId === 'lid-4')!.siteRoles.map((r) => r.siteSlug),
+    ).toEqual(['website']);
+    expect((await plak.versions('team-zon', 'website')).map((v) => v.groupSlug)).toEqual([
+      'team-zon',
+      'team-zon',
+      'team-zon',
+    ]);
+    expect((await plak.previews('team-zon', 'website'))[0]).toMatchObject({
+      groupSlug: 'team-zon',
+      url: '/team-zon/website/_preview/pr-42/',
+    });
+    expect((await plak.invitees('team-zon', 'website'))[0]!.groupSlug).toBe('team-zon');
+    expect((await plak.keys('team-zon', 'website'))[0]!.groupSlug).toBe('team-zon');
+    expect((await plak.siteRepository('team-zon', 'website'))?.groupSlug).toBe('team-zon');
+    // Someone with a role on this one site alone is found by the slug of its group too.
+    expect((await plak.siteMembers('team-zon', 'website')).map((l) => l.identifier)).toContain(
+      'weg@voorbeeld.nl',
+    );
+    const me = await plak.me();
+    expect(me.groupRoles).toEqual([{ groupSlug: 'team-zon', role: 'admin' }]);
+  });
+
+  it('ends the redirect at midnight in Amsterdam after the 30th day, the clocks changing in between', async () => {
+    // 23:30 in Amsterdam on the last Saturday of October, the night before the clocks go back.
+    vi.setSystemTime(new Date('2026-10-24T21:30:00Z'));
+
+    const group = await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    // Day 0 is the 24th, day 30 the 23rd of November, and the midnight after it is 00:00 CET.
+    expect(group.previousSlugs[0]!.redirectsUntil).toBe('2026-11-23T23:00:00.000Z');
+  });
+
+  it('counts the day after Amsterdam midnight as day 0, though it is still yesterday in UTC', async () => {
+    vi.setSystemTime(new Date('2026-10-07T22:10:00Z'));
+
+    const group = await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    expect(group.previousSlugs[0]!.redirectsUntil).toBe('2026-11-07T23:00:00.000Z');
+  });
+
+  it('lists the newest old address first', async () => {
+    await plak.setGroupSlug('team-aurora', 'team-zon');
+    vi.setSystemTime(new Date('2026-10-09T10:00:00Z'));
+
+    const group = await plak.setGroupSlug('team-zon', 'team-maan');
+
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-zon', 'team-aurora']);
+  });
+
+  it('changes back to an old address of its own, which then leaves the list', async () => {
+    await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    const group = await plak.setGroupSlug('team-zon', 'team-aurora');
+
+    expect(group.slug).toBe('team-aurora');
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-zon']);
+  });
+
+  it('answers a change to the slug it already has with the group, unchanged', async () => {
+    const group = await plak.setGroupSlug('team-aurora', 'team-aurora');
+
+    expect(group).toMatchObject({ slug: 'team-aurora', previousSlugs: [] });
+  });
+
+  it('forgets an old address once its redirect has ended', async () => {
+    backend.data.groups[0]!.previousSlugs = [
+      { slug: 'team-oud', redirectsUntil: '2026-10-08T09:59:59.999Z' },
+      { slug: 'team-ouder', redirectsUntil: '2026-10-08T10:00:00.001Z' },
+    ];
+
+    const group = await plak.setGroupSlug('team-aurora', 'team-zon');
+
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-aurora', 'team-ouder']);
+  });
+
+  it.each(['', 'Team Zon', '-zon', 'zon-', 'a'.repeat(64), 'admin', 'cli-link'])(
+    'refuses %j with SLUG_INVALID',
+    async (slug) => {
+      const error = await refusedWith(plak.setGroupSlug('team-aurora', slug));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('SLUG_INVALID');
+      expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+    },
+  );
+
+  it('treats a request without a body as an empty slug', async () => {
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/slug', { method: 'PUT' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('SLUG_INVALID');
+  });
+
+  it('refuses the slug of another group with SLUG_EXISTS', async () => {
+    await plak.createGroup('Team Zon', 'team-zon');
+
+    const error = await refusedWith(plak.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('Er bestaat al een groep');
+  });
+
+  it('refuses the recent address of another group with SLUG_EXISTS too, its text telling them apart', async () => {
+    await plak.createGroup('Team Zon', 'team-zon');
+    await plak.setGroupSlug('team-zon', 'team-maan');
+
+    const error = await refusedWith(plak.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('kort geleden');
+    expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+  });
+
+  it('lets another group take an address whose redirect has ended', async () => {
+    await plak.createGroup('Team Zon', 'team-zon');
+    backend.data.groups[1]!.previousSlugs = [
+      { slug: 'team-maan', redirectsUntil: '2026-10-08T09:00:00.000Z' },
+    ];
+
+    const group = await plak.setGroupSlug('team-aurora', 'team-maan');
+
+    expect(group.slug).toBe('team-maan');
+  });
+
+  it('keeps five old addresses and refuses a sixth address with TOO_MANY_PREVIOUS_SLUGS', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await plak.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+    expect((await plak.group('team-f')).group.previousSlugs).toHaveLength(5);
+
+    const error = await refusedWith(plak.setGroupSlug('team-f', 'team-g'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+    expect(backend.data.groups[0]!.slug).toBe('team-f');
+  });
+
+  it('still lets a group with five old addresses change back to one of them', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await plak.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+
+    const group = await plak.setGroupSlug('team-f', 'team-c');
+
+    expect(group.slug).toBe('team-c');
+    expect(group.previousSlugs).toHaveLength(5);
+  });
+
+  it('counts only the old addresses that still redirect towards the limit', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await plak.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+    backend.data.groups[0]!.previousSlugs[4]!.redirectsUntil = '2026-10-08T09:00:00.000Z';
+
+    const group = await plak.setGroupSlug('team-f', 'team-g');
+
+    expect(group.slug).toBe('team-g');
+    expect(group.previousSlugs).toHaveLength(5);
+  });
+
+  it('refuses the limit before it refuses a taken slug', async () => {
+    await plak.createGroup('Team Zon', 'team-zon');
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await plak.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+
+    const error = await refusedWith(plak.setGroupSlug('team-f', 'team-zon'));
+
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+  });
+
+  /** The slug the first group has now. */
+  async function currentGroupSlug(): Promise<string> {
+    return backend.data.groups[0]!.slug;
+  }
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-4', 'a reader of the group'],
+    ['lid-7', 'someone with no role in the group'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(plak.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+  });
+
+  it('gives a platform admin without a role in the group no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(plak.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses an unknown group with UNKNOWN_GROUP', async () => {
+    const error = await refusedWith(plak.setGroupSlug('onbekend', 'team-zon'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_GROUP');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(plak.setGroupSlug('onbekend', 'team-zon'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('site address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('puts the new slug on the slug of the site and hands back the site with its old address', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/sites/team-aurora/website/slug');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ slug: 'handboek' });
+    expect(site).toMatchObject({ slug: 'handboek', groupSlug: 'team-aurora', previewCount: 1 });
+    expect(site.id).toBe(backend.data.sites[0]!.id);
+    expect(site.previousSlugs).toEqual([
+      { slug: 'website', redirectsUntil: '2026-11-07T23:00:00.000Z' },
+    ]);
+  });
+
+  it('knows the site on the new slug only: the API follows no old address', async () => {
+    await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const sites = (await plak.group('team-aurora')).sites;
+    expect(sites.map((s) => s.slug)).toEqual(['handboek']);
+    const error = await refusedWith(plak.versions('team-aurora', 'website'));
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('takes everything that hangs on the site along', async () => {
+    await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect((await plak.versions('team-aurora', 'handboek')).map((v) => v.siteSlug)).toEqual([
+      'handboek',
+      'handboek',
+      'handboek',
+    ]);
+    expect((await plak.previews('team-aurora', 'handboek'))[0]).toMatchObject({
+      siteSlug: 'handboek',
+      url: '/team-aurora/handboek/_preview/pr-42/',
+    });
+    expect((await plak.invitees('team-aurora', 'handboek'))[0]!.siteSlug).toBe('handboek');
+    expect((await plak.keys('team-aurora', 'handboek'))[0]!.siteSlug).toBe('handboek');
+    expect((await plak.siteRepository('team-aurora', 'handboek'))?.siteSlug).toBe('handboek');
+    expect((await plak.siteMembers('team-aurora', 'handboek')).map((l) => l.identifier)).toContain(
+      'weg@voorbeeld.nl',
+    );
+    const group = await plak.group('team-aurora');
+    expect(group.members.flatMap((l) => l.siteRoles.map((r) => r.siteSlug))).toEqual([
+      'handboek',
+    ]);
+  });
+
+  it('moves the site roles of the member along in /me', async () => {
+    backend.data.loggedInMemberId = 'lid-4';
+
+    await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect((await plak.me()).siteRoles).toEqual([
+      { groupSlug: 'team-aurora', siteSlug: 'handboek', role: 'admin', effectiveRole: 'admin' },
+    ]);
+  });
+
+  it('ends the redirect at midnight in Amsterdam after the 30th day, the clocks changing in between', async () => {
+    vi.setSystemTime(new Date('2026-10-24T21:30:00Z'));
+
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.previousSlugs[0]!.redirectsUntil).toBe('2026-11-23T23:00:00.000Z');
+  });
+
+  it('changes back to an old address of its own, which then leaves the list', async () => {
+    await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const site = await plak.setSiteSlug('team-aurora', 'handboek', 'website');
+
+    expect(site.slug).toBe('website');
+    expect(site.previousSlugs.map((p) => p.slug)).toEqual(['handboek']);
+  });
+
+  it('answers a change to the slug it already has with the site, unchanged', async () => {
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'website');
+
+    expect(site).toMatchObject({ slug: 'website', previousSlugs: [] });
+  });
+
+  it.each(['', 'Hand Boek', '-boek', 'boek-', 'a'.repeat(64)])(
+    'refuses %j with SLUG_INVALID',
+    async (slug) => {
+      const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', slug));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('SLUG_INVALID');
+      expect(backend.data.sites[0]!.slug).toBe('website');
+    },
+  );
+
+  it('lets a site take a slug that a reserved group name would not get', async () => {
+    // Only groups share the namespace of the platform paths.
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'admin');
+
+    expect(site.slug).toBe('admin');
+  });
+
+  it('treats a request without a body as an empty slug', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/slug', {
+      method: 'PUT',
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('SLUG_INVALID');
+  });
+
+  it('refuses the slug of another site in the group with SLUG_EXISTS', async () => {
+    await plak.createSite('team-aurora', 'Handboek', 'handboek');
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('Er bestaat al een site');
+  });
+
+  it('refuses the recent address of another site in the group with SLUG_EXISTS too, its text telling them apart', async () => {
+    await plak.createSite('team-aurora', 'Handboek', 'handboek');
+    await plak.setSiteSlug('team-aurora', 'handboek', 'gids');
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('kort geleden');
+  });
+
+  it('lets the same slug live in another group', async () => {
+    await plak.createGroup('Team Zon', 'team-zon');
+    await plak.createSite('team-zon', 'Handboek', 'handboek');
+
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.slug).toBe('handboek');
+  });
+
+  it('keeps five old addresses and refuses a sixth address with TOO_MANY_PREVIOUS_SLUGS', async () => {
+    let slug = 'website';
+    for (const next of ['b', 'c', 'd', 'e', 'f']) {
+      await plak.setSiteSlug('team-aurora', slug, `site-${next}`);
+      slug = `site-${next}`;
+    }
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'site-f', 'site-g'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+    expect((await plak.setSiteSlug('team-aurora', 'site-f', 'site-c')).slug).toBe('site-c');
+  });
+
+  it.each([
+    ['lid-1', 'an admin of the group'],
+    ['lid-4', 'an admin of this site who is a reader in the group'],
+  ])('lets %s (%s) change it', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const site = await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.slug).toBe('handboek');
+  });
+
+  it('refuses an admin of this site alone, who has no role in the group, with INSUFFICIENT_ROLE', async () => {
+    backend.data.siteRoles.push({
+      groupSlug: 'team-aurora',
+      siteSlug: 'website',
+      identifier: 'sanne@voorbeeld.nl',
+      role: 'admin',
+    });
+    backend.data.loggedInMemberId = 'lid-6';
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(error.problem.detail).toContain('rol in de groep');
+    expect(backend.data.sites[0]!.slug).toBe('website');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-2', 'an editor of this site alone'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('answers someone with no role on the site as if it was not there', async () => {
+    backend.data.loggedInMemberId = 'lid-7';
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('gives a platform admin without a role on the site no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses an unknown site with UNKNOWN_SITE', async () => {
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'onbekend', 'handboek'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(plak.setSiteSlug('team-aurora', 'onbekend', 'handboek'));
 
     expect(error.problem.status).toBe(401);
     expect(error.problem.code).toBe('NO_SESSION');

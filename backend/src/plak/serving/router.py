@@ -32,11 +32,19 @@ instead of the login redirect, but only for live content and only when that
 selector belongs to a usable key of this site (serving/code_page.py); on an
 allowed page it leaves the URL as well. An allow is audited for `_version`
 views only (AVG).
+
+An old address of a renamed group or site redirects while its old slug does
+(serving/addresses.py): only when the gate finds no group or no site does the
+lookup run, and the gate then decides again at the current address. Whoever
+may see the site gets a 301 there, the same path without any `key`; anyone
+else gets exactly the answer of before the rename, at the old address.
 """
 
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
+from email.utils import format_datetime
 from urllib.parse import quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Request
@@ -48,6 +56,8 @@ from plak import net
 from plak.access import gate, keys
 from plak.access.decision import (
     REASON_KEY_CODE_REQUIRED,
+    REASON_UNKNOWN_GROUP,
+    REASON_UNKNOWN_SITE,
     AccessDecision,
     DecisionKind,
     neutral_404,
@@ -60,7 +70,7 @@ from plak.ingest.store import ContentStore
 from plak.models.audit import ActorKind
 from plak.models.identity import Group
 from plak.models.publication import Site, Version
-from plak.serving import code_page, resolution, response
+from plak.serving import addresses, code_page, resolution, response
 
 REASON_PATH_INVALID = "PATH_INVALID"
 REASON_UNKNOWN_VERSION = "UNKNOWN_VERSION"
@@ -228,6 +238,27 @@ async def _key_cookie_value(
     return sessions.sign_key_cookie(request.app.state.settings.session_secret, str(key.id))
 
 
+async def _decide(
+    db: AsyncSession,
+    group: str,
+    site: str,
+    visitor: gate.Visitor,
+    *,
+    kind: str,
+    ref: str | None,
+    version_str: str | None,
+) -> AccessDecision:
+    if kind == "live":
+        return await gate.decide(db, group, site, visitor)
+    if kind == "preview" and ref is not None:
+        return await gate.decide_preview(db, group, site, ref, visitor)
+    try:
+        version_id = uuid.UUID(version_str)
+    except (TypeError, ValueError):
+        return neutral_404(REASON_UNKNOWN_VERSION)
+    return await gate.decide_version(db, group, site, version_id, visitor)
+
+
 async def _serve(
     request: Request,
     group: str,
@@ -279,18 +310,20 @@ async def _serve(
         return _refuse(request, full_key)
 
     session_factory = request.app.state.session_factory
+    moved: addresses.CurrentAddress | None = None
     async with session_factory() as db:
-        if kind == "live":
-            decision = await gate.decide(db, group, site, visitor)
-        elif kind == "preview" and ref is not None:
-            decision = await gate.decide_preview(db, group, site, ref, visitor)
-        else:
-            try:
-                version_id = uuid.UUID(version_str)
-            except (TypeError, ValueError):
-                decision = neutral_404(REASON_UNKNOWN_VERSION)
-            else:
-                decision = await gate.decide_version(db, group, site, version_id, visitor)
+        decision = await _decide(db, group, site, visitor, kind=kind, ref=ref, version_str=version_str)
+        if decision.kind is DecisionKind.NEUTRAL_404 and decision.reason_code in (
+            REASON_UNKNOWN_GROUP,
+            REASON_UNKNOWN_SITE,
+        ):
+            moved = await addresses.current_address(db, group, site, datetime.now(UTC))
+            if moved is not None:
+                decision = await _decide(
+                    db, moved.group, moved.site, visitor, kind=kind, ref=ref, version_str=version_str
+                )
+        # Where the gate decided: the current address of a moved site.
+        current_group, current_site = (moved.group, moved.site) if moved is not None else (group, site)
 
         code_selector: str | None = None
         if decision.kind in (DecisionKind.NEUTRAL_404, DecisionKind.LOGIN_REDIRECT) and kind == "live" and not full_key:
@@ -301,7 +334,7 @@ async def _serve(
             # link is asked for its code, not sent to an IdP. Never beside a
             # whole link, which leaves with the answer the gate gave.
             selector = keys.bare_selector(visitor.key_query)
-            if selector is not None and await gate.code_page_needed(db, group, site, selector):
+            if selector is not None and await gate.code_page_needed(db, current_group, current_site, selector):
                 code_selector = selector
 
         storage_ref: str | None = None
@@ -309,17 +342,31 @@ async def _serve(
         external_sources = False
         sandbox = False
         if decision.kind is DecisionKind.ALLOW:
-            version = await db.get(Version, decision.version_id)
-            storage_ref = version.storage_ref if version is not None else None
-            if version is not None:
-                row = (
-                    await db.execute(
-                        select(Site.external_sources, Site.sandbox).where(Site.id == version.site_id)
-                    )
-                ).one_or_none()
-                if row is not None:  # pragma: no cover - version.site_id is FK-bound to a Site row
-                    external_sources, sandbox = bool(row.external_sources), bool(row.sandbox)
-            key_cookie = await _key_cookie_value(request, db, group, site, decision, visitor)
+            if moved is None:
+                version = await db.get(Version, decision.version_id)
+                storage_ref = version.storage_ref if version is not None else None
+                if version is not None:
+                    row = (
+                        await db.execute(
+                            select(Site.external_sources, Site.sandbox).where(Site.id == version.site_id)
+                        )
+                    ).one_or_none()
+                    if row is not None:  # pragma: no cover - version.site_id is FK-bound to a Site row
+                        external_sources, sandbox = bool(row.external_sources), bool(row.sandbox)
+            key_cookie = await _key_cookie_value(request, db, current_group, current_site, decision, visitor)
+            if (
+                key_cookie is None
+                and moved is not None
+                and decision.key_selector is not None
+                and visitor.key_cookie
+                and sessions.top_level_navigation(request)
+            ):
+                # The key cookie of the old path got the visitor in, and the
+                # browser keeps it to that path; this one is for the new path,
+                # signed over the key id the gate just accepted from it. Only
+                # on a top-level navigation, as with the login shortcut: a
+                # request a page makes in the background mints nothing.
+                key_cookie = sessions.sign_key_cookie(request.app.state.settings.session_secret, visitor.key_cookie)
 
     if code_selector is not None:
         refs["selector"] = code_selector
@@ -334,12 +381,21 @@ async def _serve(
     # so nobody logs in because of it, and a 302 would say that this site
     # exists. Not before the neutral 404, which is this answer already and
     # keeps the reason that really refused.
+    #
+    # At an old address the Referer is held to the old prefix, exactly as
+    # before the rename, unless access is allowed: a refused visitor would
+    # otherwise learn from the answer whether a guess at the new address was
+    # right. An allowed one is sent there anyway, and the page that asks is
+    # one of the new address.
     decided_access = decision.effective_access
+    referer_group, referer_site = (
+        (current_group, current_site) if decision.kind is DecisionKind.ALLOW else (group, site)
+    )
     if (
         decision.kind is not DecisionKind.NEUTRAL_404
         and decided_access is not None
         and (version_view or not decided_access.is_public)
-        and _foreign_subresource(request, group, site)
+        and _foreign_subresource(request, referer_group, referer_site)
     ):
         await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
         return _refuse(request, full_key)
@@ -378,6 +434,10 @@ async def _serve(
     if decision.kind is DecisionKind.LOGIN_REDIRECT:
         await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
         return _login_redirect(request)
+
+    if moved is not None:
+        # No audit row: the look itself is logged at the new address.
+        return _moved_redirect(request, group, site, moved, key_cookie, kind, ref)
 
     access = decided_access
     version_id_allowed = decision.version_id
@@ -464,6 +524,28 @@ def _login_redirect(request: Request) -> Response:
     )
 
 
+def _set_key_cookie(
+    response: Response, key_cookie: str, group: str, site: str, kind: str, ref: str | None
+) -> None:
+    """The key cookie for one site, or for one preview of it.
+
+    SameSite=None for the same reason as the content session cookie
+    (auth/sessions.py): a sandboxed page is cross-site with its own site, so
+    under Lax the key would reach the page and none of its assets."""
+    if kind == "preview":
+        path = f"/{quote(group)}/{quote(site)}/_preview/{quote(ref or '')}/"
+    else:
+        path = f"/{quote(group)}/{quote(site)}/"
+    response.set_cookie(
+        sessions.KEY_COOKIE,
+        key_cookie,
+        path=path,
+        httponly=True,
+        secure=True,
+        samesite="none",
+    )
+
+
 def _redeem_key(
     request: Request,
     key_cookie: str,
@@ -474,24 +556,33 @@ def _redeem_key(
 ) -> Response:
     """Redeems a valid ?key=: set the cookie and 302 to the same URL without
     key (other query parameters stay). The actual response comes from the
-    follow-up request on the cookie route.
-
-    SameSite=None for the same reason as the content session cookie
-    (auth/sessions.py): a sandboxed page is cross-site with its own site, so
-    under Lax the key would reach the page and none of its assets."""
-    if kind == "preview":
-        path = f"/{quote(group)}/{quote(site)}/_preview/{quote(ref or '')}/"
-    else:
-        path = f"/{quote(group)}/{quote(site)}/"
+    follow-up request on the cookie route."""
     response = RedirectResponse(_path_without_key(request), status_code=302, headers={"Cache-Control": "no-store"})
-    response.set_cookie(
-        sessions.KEY_COOKIE,
-        key_cookie,
-        path=path,
-        httponly=True,
-        secure=True,
-        samesite="none",
+    _set_key_cookie(response, key_cookie, group, site, kind, ref)
+    return response
+
+
+def _moved_redirect(
+    request: Request,
+    group: str,
+    site: str,
+    address: addresses.CurrentAddress,
+    key_cookie: str | None,
+    kind: str,
+    ref: str | None,
+) -> Response:
+    """301 from an old address to the same path at the current one, the query
+    without any `key`, and the key cookie for the current path when there is
+    one to set. `no-store`: the redirect ends, and it is for some visitors
+    only; `Sunset` (RFC 8594) says when."""
+    location = addresses.relocate(_path_without_key(request), group, site, address)
+    response = RedirectResponse(
+        location,
+        status_code=301,
+        headers={"Cache-Control": "no-store", "Sunset": format_datetime(address.ends_at, usegmt=True)},
     )
+    if key_cookie is not None:
+        _set_key_cookie(response, key_cookie, address.group, address.site, kind, ref)
     return response
 
 

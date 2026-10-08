@@ -50,6 +50,13 @@ that writes absolute URLs (Astro's `site`, a canonical link, `og:url`)
 takes the content origin from there; after the deploy, the action's
 output `url` gives the same address.
 
+The group and the site in these paths are slugs, and those can change: a
+group admin can give the group another address, and a site admin with a role
+in the group the site (in the admin, on the tab "Instellingen"). Plak does not
+promise lasting addresses. The old address redirects to the new one for 30
+days, and after that it can come to lead to another site; see "After an
+address change" at the end of §3 for what to adjust.
+
 So your build has to know under which path it will run, so that
 generated `<link>`, `<script>` and asset URLs are correct. Most build
 tools support this through a "base" setting; the path differs per
@@ -284,9 +291,11 @@ repository requires the site id at once: one of them may be someone
 else's, made from their own site to the repository (a typo of an address,
 say). A link made since, or one that got another repository, requires it
 too, and a workflow without `site-id` then gets `403 CI_SITE_ID_REQUIRED`.
-Once your workflow names the site id, end the exemption with "Alleen met
-site-ID publiceren" (publish only with the site id) on the Deploy tab;
-that cannot be undone.
+So does a link whose site, or the group of whose site, gets another address:
+otherwise the exemption would follow its site onto an address that used to be
+another site's. Once your workflow names the site id, end the exemption with
+"Alleen met site-ID publiceren" (publish only with the site id) on the Deploy
+tab; that cannot be undone.
 
 ### GitHub Actions
 
@@ -629,13 +638,53 @@ because the runner would not have read it there anyway, but a pipe is
 indistinguishable from the runner's own. Read the version id with
 `--output-file` instead, which is what the action does.
 
+### After an address change
+
+When a group or a site gets another address (§2), every path under it
+changes at once: the site, its previews and the secret links to it. The old
+address keeps redirecting to the new one through day 30 after the change,
+until midnight Amsterdam time, but only for visitors who may see the site;
+anyone else gets the answer they got before. After that the old address
+answers 404, and once the nightly cleanup has run another group or site can
+take it, so an old link can then lead to somebody else's content. Google
+advises keeping the redirects of a site move for at least a year: for a
+public site, 30 days is short. Until the redirect has ended you can change
+back; the admin lists the old addresses that still redirect, and so does the
+API (`previousSlugs` on a group and a site).
+
+What you adjust yourself:
+
+- **Your workflow.** Publishing under the old address stops at once: the API
+  knows the current slug only. Change `site:` (action) or `--site` (CLI) to
+  the new `group/site`, and add `site-id` (action) or `--site-id` (CLI) if it
+  is not there yet: a link that still took a workflow without the site id
+  requires it from the change on. A workflow that names the site id but still
+  has the old `site:` gets `409 SITE_MOVED`, whose `detail` names the new
+  address; one without a site id gets `404` at the old address, or `403
+  CI_SITE_ID_REQUIRED` once someone else has claimed it and linked the same
+  repository.
+- **The base path.** The base path your build derives from the address (§2)
+  changes with it. Publish the site again before the redirect ends: until
+  then stylesheets and scripts still load through the old address, after
+  that they do not, and whoever claims the old address could then serve a
+  script there that runs on your site.
+- **Absolute addresses in your site**, such as `canonical`, `og:url`, a
+  sitemap or a fixed path: publish again with the new address.
+- **Shared secret links.** A link with the old address keeps working through
+  the redirect until its end date. After that, replace the address in the
+  link with the new one; everything after `?key=` stays the same.
+- **Visitors of a restricted site** may have to sign in once more: their
+  browser keeps its session with the old path.
+
 ## 4. Curl fallback (bare HTTP contract)
 
 The action and the CLI are a convenience, not a requirement. The underlying
 HTTP contract is and remains directly usable, and is at the same time the
 interface description for your own tooling.
 
-Addressing is on slugs (group, site, ref), never on UUIDs. The
+Addressing is on slugs (group, site, ref), never on UUIDs.
+Addresses are slugs and can change; the API knows only the current one, an
+old slug answers 404 (§3, "After an address change"). The
 endpoints live on the admin origin (`PLAK_BASE_URL`); on the content host
 `/admin` does not exist. `${PLAK_TOKEN}` below is one of two things: a
 CI ID token (§3), or a CLI token from `plak login` (§6). Outside these two
@@ -867,8 +916,8 @@ stable reason code (e.g. `TOKEN_INVALID`, `CI_REPOSITORY_NOT_TRUSTED`,
 |---|---|
 | 401 | No CLI token, or an invalid, expired or revoked one (`TOKEN_INVALID`), or a CI token that does not check out: unknown issuer (`CI_ISSUER_UNKNOWN`), not a valid JWT, wrong algorithm or invalid claims (`CI_TOKEN_INVALID`), or an `aud` that is neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/<site-id>`, or that names a site the repository is not linked to, at any address (`CI_AUDIENCE_MISMATCH`) |
 | 403 | The repository of the CI token is not (or no longer) linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the CI token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a live deploy from an event other than `push`, `workflow_dispatch` or `schedule`, or outside the configured live branch (`CI_BRANCH_NOT_ALLOWED`) |
-| 404 | Unknown group or site (teardown of an unknown preview ref simply gives `204`); a CI token bound to a site gets the 409 or the 401 instead |
-| 409 | The CI token names a site that is not at this address, and its repository is linked to that site (`SITE_MOVED`): `detail` names that site's current address, so fix `site:`. Elsewhere in the admin API: a conflict such as `SLUG_EXISTS` |
+| 404 | Unknown group or site, an old address after a change of address included: the API follows no old slug (teardown of an unknown preview ref simply gives `204`); a CI token bound to a site gets the 409 or the 401 instead |
+| 409 | The CI token names a site that is not at this address, and its repository is linked to that site (`SITE_MOVED`): `detail` names that site's current address, so fix `site:`. Elsewhere in the admin API: a conflict such as `SLUG_EXISTS`, which also covers a slug that was recently the address of another group or site |
 | 413 | Limit exceeded |
 | 422 | Invalid archive, no `index.html` in the root, invalid `basePath`, invalid preview ref or invalid input |
 | 429 | Rate limit; the response contains `Retry-After` |
@@ -1047,9 +1096,9 @@ Who can see it: members of the site and its group.
 Change it at: https://beheer.plak.example.org/team/-/settings
 ```
 
-Per member at most 20 groups and sites together can be created per hour,
-through the admin and the CLI together; over that the server answers 429 and
-the CLI prints the reason. Exit codes are those of every other command: `0`
+Per member at most 20 new groups, sites and addresses together per hour,
+through the admin and the CLI together (a change of address in the admin
+counts too); over that the server answers 429 and the CLI prints the reason. Exit codes are those of every other command: `0`
 created, `1` refused or unreachable (the server's reason on stderr, for
 instance an existing slug or a role that is too narrow), `2` wrong usage or
 no session.

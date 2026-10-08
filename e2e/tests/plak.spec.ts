@@ -475,6 +475,57 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     await memberPage.close();
   });
 
+  test('a new address redirects from the old one, a secret link included', async () => {
+    const moved = 'website-verhuisd';
+    const access = await adminFetch(adminPage, 'PUT', `${API}/sites/${GROUP}/${SITE}/access`, {
+      base: 'public',
+    });
+    expect(access.status).toBe(200);
+    const before = await contentApi.get(`${SITE_PATH}/onderdeel/pagina.html`);
+    expect(before.status()).toBe(200);
+
+    const renamed = await adminFetch(adminPage, 'PUT', `${API}/sites/${GROUP}/${SITE}/slug`, { slug: moved });
+    expect(renamed.status).toBe(200);
+    const site = renamed.json as { slug: string; previousSlugs: Array<{ slug: string }> };
+    expect(site.slug).toBe(moved);
+    expect(site.previousSlugs.map((old) => old.slug)).toEqual([SITE]);
+
+    // The old address sends a visitor who may look to the same path at the
+    // new one, query and all, and no cache keeps that answer.
+    const old = await contentApi.get(`${SITE_PATH}/onderdeel/pagina.html?x=1`, { maxRedirects: 0 });
+    expect(old.status()).toBe(301);
+    expect(old.headers()['cache-control']).toBe('no-store');
+    expect(old.headers()['location']).toBe(`/${GROUP}/${moved}/onderdeel/pagina.html?x=1`);
+    expect(old.headers()['sunset']).toBeTruthy();
+    const after = await contentApi.get(`/${GROUP}/${moved}/onderdeel/pagina.html`);
+    expect(after.status()).toBe(200);
+    expect(await body(after)).toBe(await body(before));
+
+    // A secret link shared with the old address still gets in: the 301 sets
+    // its cookie for the new path, and the key leaves the address bar.
+    const closed = await adminFetch(adminPage, 'PUT', `${API}/sites/${GROUP}/${moved}/access`, {
+      base: 'nobody',
+      keys: true,
+    });
+    expect(closed.status).toBe(200);
+    const key = await adminFetch(adminPage, 'POST', `${API}/sites/${GROUP}/${moved}/keys`, { label: 'e2e-oud' });
+    expect(key.status).toBe(201);
+    const { value } = key.json as { value: string };
+    const anonymous = await adminContext.browser()!.newContext(CONTEXT_OPTIONS);
+    const page = await anonymous.newPage();
+    await page.goto(`${CONTENT_URL}${SITE_PATH}/?key=${encodeURIComponent(value)}`);
+    await expect(page.locator('h1')).toHaveText('Plak E2E versie 2');
+    expect(page.url()).toBe(`${CONTENT_URL}/${GROUP}/${moved}/`);
+    await anonymous.close();
+
+    // Back to the old address, which stayed reserved for this site.
+    const back = await adminFetch(adminPage, 'PUT', `${API}/sites/${GROUP}/${moved}/slug`, { slug: SITE });
+    expect(back.status).toBe(200);
+    const restored = back.json as { slug: string; previousSlugs: Array<{ slug: string }> };
+    expect(restored.slug).toBe(SITE);
+    expect(restored.previousSlugs.map((old) => old.slug)).toEqual([moved]);
+  });
+
   test('deleting a site cleans up live and previews', async () => {
     // A fresh preview so the cascade over previews is demonstrable.
     const deploy = await adminApi.post(`${API}/sites/${GROUP}/${SITE}/deploys`, {

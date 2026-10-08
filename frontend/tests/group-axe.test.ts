@@ -38,6 +38,21 @@ import Group from '../src/pages/Group.vue';
   }
 }
 
+/**
+ * jsdom has no dialog: showModal() and close() are not there, and
+ * nldd-modal-dialog calls both. Open and closed is all that is needed for axe
+ * to see the dialog or not.
+ */
+{
+  const proto = HTMLDialogElement.prototype;
+  proto.showModal ??= function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  proto.close ??= function close(this: HTMLDialogElement) {
+    this.removeAttribute('open');
+  };
+}
+
 let backend: MockBackend;
 
 const AXE_OPTIONS: axe.RunOptions = {
@@ -79,7 +94,7 @@ const Host = defineComponent({ render: () => h(RouterView) });
 
 // Through a RouterView, because the tabs are child routes: without that parent
 // the router-view in Group.vue would resolve the page itself all over again.
-async function mountGroup(path: string) {
+async function mountGroup(path: string, stubs: Record<string, boolean> = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -96,7 +111,7 @@ async function mountGroup(path: string) {
   });
   await router.push(path);
   await router.isReady();
-  return mount(Host, { global: { plugins: [router] }, attachTo: document.body });
+  return mount(Host, { global: { plugins: [router], stubs }, attachTo: document.body });
 }
 
 describe('axe: groepspagina', () => {
@@ -153,8 +168,81 @@ describe('axe: groepspagina', () => {
     wrapper.unmount();
   });
 
+  it('has no violations on the settings with an old address that still redirects', async () => {
+    backend.data.groups[0]!.previousSlugs = [
+      { slug: 'team-oud', redirectsUntil: '2099-11-06T23:00:00Z' },
+    ];
+    const wrapper = await mountGroup('/team-aurora/-/settings');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="group-address-restore-team-oud"]').exists()).toBe(true);
+    const result = await axe.run(
+      { include: [wrapper.element], exclude: OUT_OF_SCOPE },
+      AXE_OPTIONS,
+    );
+    expect(result.violations).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings with the confirmation of an address change open', async () => {
+    const wrapper = await mountGroup('/team-aurora/-/settings', { teleport: true });
+    await flushPromises();
+
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', {
+      value: 'aurora',
+    });
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await flushPromises();
+
+    const dialog = wrapper.find('section[aria-labelledby="heading-group-address"] nldd-modal-dialog');
+    expect(dialog.attributes('accessible-label')).toBe(
+      'Adres van groep team-aurora wijzigen in aurora?',
+    );
+    expect(dialog.element.shadowRoot?.querySelector('dialog')?.hasAttribute('open')).toBe(true);
+    const result = await axe.run(
+      { include: [wrapper.element], exclude: OUT_OF_SCOPE },
+      AXE_OPTIONS,
+    );
+    expect(result.violations).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('has no violations on the settings with a refused address at the field', async () => {
+    const wrapper = await mountGroup('/team-aurora/-/settings', { teleport: true });
+    await flushPromises();
+    await backend.fetch('/-/api/v1/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Aurora', slug: 'aurora' }),
+    });
+
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', {
+      value: 'aurora',
+    });
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-group-address"] [data-testid="confirm-continue"]')
+      .trigger('click');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-group-address"] nldd-modal-dialog')
+      .trigger('close');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="group-address"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-validation-item#group-address-server').text()).toBe(
+      'Dit adres is al in gebruik of was kort geleden van een andere groep. Kies een ander adres.',
+    );
+    const result = await axe.run(
+      { include: [wrapper.element], exclude: OUT_OF_SCOPE },
+      AXE_OPTIONS,
+    );
+    expect(result.violations).toEqual([]);
+    wrapper.unmount();
+  });
+
   it('lege groep is zonder violations', async () => {
-    backend.data.groups.push({ slug: 'leeg', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false } });
+    backend.data.groups.push({ slug: 'leeg', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] });
     const wrapper = await mountGroup('/leeg');
     await flushPromises();
 

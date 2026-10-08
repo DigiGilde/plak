@@ -130,6 +130,7 @@ platform administrator may do without a group role (§3.4).
 | Read a group, read its member list | group `reader`, or platform administrator |
 | Add a group member, change a group role, remove a group member | group `admin`, or platform administrator |
 | Change the group name | group `admin` |
+| Change the group address (slug) | group `admin` |
 | Change the group default access | group `admin` |
 | Delete a group, with every site in it | group `admin` |
 | Create a site | group `editor`; the creator becomes site `admin` |
@@ -140,13 +141,17 @@ platform administrator may do without a group role (§3.4).
 | Link or unlink a repository, change external sources | effective site `admin` |
 | Add, change, remove a site member | effective site `admin` |
 | Change the site title | effective site `admin` |
+| Change the site address (slug) | effective site `admin` plus any role in the group |
 | Delete a site | effective site `admin` |
 | Read the audit log, resolve a pseudonym, reveal an IP | platform administrator |
 | Read how full the content volume is (`GET /platform/storage`) | platform administrator |
 
 A member who has no role at all on a site gets the neutral 404 of an unknown
 site rather than a 403: without that, the API would list which sites exist in a
-group they have nothing to do with.
+group they have nothing to do with. For the same reason an admin of one site
+without a role in its group changes its title but not its address: a 409 on a
+taken slug would tell them about the other sites of the group. Any role in the
+group is enough, since a reader there sees those sites already.
 
 Code: `api/admin.py`, `api/deploys.py`, `api/authorization.py`. Guarded by:
 `test_admin_api.py`, `test_deploy_api.py`, `test_audit_api.py`,
@@ -157,7 +162,26 @@ Code: `api/admin.py`, `api/deploys.py`, `api/authorization.py`. Guarded by:
 Slugs (group, site, preview ref) match
 `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`, so a slug can never start with `_` and
 can never be exactly `-` (`constants.py`, `frontend/src/composables/slug.ts`).
-The slug is the stable identifier, in the API too; renaming is out of scope.
+
+The slug of a group or a site can change (§3.6), and every address under it
+changes with it at once. The old slug stays reserved for its group or site,
+and its old addresses redirect to the new ones through day 30 after the
+change, until midnight in Amsterdam, for whoever may see the site (§5.11).
+Then the redirect stops and the nightly cleanup frees the slug, also when
+something still points at it; until then the group or site can change back
+to it. At most five old slugs of one group or site redirect at the same time,
+and a change counts towards the creation budget: 20 new groups, sites and
+addresses per member per hour. The API knows the current slug only, an old
+one answers 404 there, and a workflow is bound to the id of its site rather
+than to its address (§8). Current and old slugs share one namespace per
+kind, kept by triggers (§12).
+
+That is a conscious deviation from persistent addresses ("Cool URIs don't
+change", W3C): GitHub and GitLab keep a redirect until somebody claims the
+old name again, and Google advises keeping one for at least a year. Plak stops
+after 30 days and frees the slug, so an old address can come to mean another
+site; what that costs is in `docs/publishing.md` ("After an address change")
+and `docs/security.md`.
 
 | Path | Meaning |
 |---|---|
@@ -233,7 +257,8 @@ where the server offers it, Range requests) and answers conditional requests
 without touching the store. There is no X-Accel-Redirect and no nginx datapath;
 nginx exists only in the dev compose stack, passing the `Host` through.
 
-Order per request: service worker refusal, path validation, access decision,
+Order per request: service worker refusal, path validation, access decision
+(with the lookup of an old address where the gate found nothing, §5.11),
 audit, key redeem or removal (§7.4), file resolution, `If-None-Match`,
 response. The lexical 301 sits before all of it (§5.2).
 
@@ -484,9 +509,48 @@ session and without one: nobody logs in because of a stylesheet fetch, and a
 302 would tell an anonymous caller that this site exists. It does not sit
 before the neutral 404, which is this answer already; a refusal the gate made
 itself keeps the reason that really refused (`UNKNOWN_SITE` and the rest).
+At the old address of a renamed site (§5.11) the `Referer` is held to the old
+prefix on every refusal and to the current one only when access is allowed.
 
 Code: `serving/router.py` (`_foreign_subresource`). Guarded by:
 `test_serving.py`.
+
+### 5.11 Old addresses
+
+Only when the gate finds no group or no site at the requested slugs
+(`UNKNOWN_GROUP`, `UNKNOWN_SITE`) does serving look the two slugs up as
+current or old ones, an old one counting while it still redirects (§4). Do
+they lead to a site, then the unchanged gate decides again at its current
+address, with the credentials the visitor sent along, and the answer at the
+old address follows from that decision:
+
+| Decision at the current address | Answer at the old address |
+|---|---|
+| allowed | 301 to the same path at the current address, with the query minus every `key`, `Cache-Control: no-store` and `Sunset` (RFC 8594) carrying the end of the redirect |
+| allowed through `?key=` | the same, and the key cookie for the new path in the same answer (§7.4) |
+| allowed through the key cookie | the same; on a top-level navigation the cookie is set again for the new path, signed over the key id the gate accepted |
+| allowed through a session | the same; at the new path the login shortcut sets the site cookie (§7.6) |
+| a selector alone of this site | the code page at the old address, as before the rename (§7.4) |
+| neutral 404 | the neutral 404, byte for byte |
+| login redirect, the first-visit rule included | the login redirect with the old path as `returnTo` |
+
+A visitor who may not look gets exactly the answer of before the rename,
+whatever `Referer` comes along: §5.10 compares with the old prefix on a
+refusal, or a right guess at the new address would get the login redirect and
+a wrong one the neutral 404. `returnTo` stays the old path for the same
+reason, so the login does not reveal where a restricted site went. The
+`Location` is built from the requested path, never from the `Host` or the
+full URL. 301 because the site did move, `no-store` because the redirect ends
+and depends on who asks. A group and a site renamed both take one step: an old
+slug leads to the id, so `/old-group/old-site/` goes straight to the current
+address, until the first of the two stops redirecting. Ordinary traffic costs
+nothing, since the lookup runs only where the gate found nothing. The 301
+writes no audit row; the look at the new address is logged as before, and a
+refusal at the old one with the slugs that were asked for.
+
+Code: `serving/addresses.py`, `serving/router.py`, `serving/code_page.py`,
+`slug_window.py`. Guarded by: `test_serving.py` (`TestOldAddress`),
+`test_code_page.py`, `test_access_gate.py`, `test_sessions.py`.
 
 ## 6. Ingest
 
@@ -697,6 +761,11 @@ on a refusal, where the code page needs it. `KEY=` and other spellings of the
 name are left alone: redeeming is case-sensitive. Every other path keeps the
 neutral 404 (§5.6).
 
+At the old address of a renamed site (§5.11) a valid `?key=` is redeemed with
+the 301 to the new address, which carries the cookie for the new path. The
+code page stays at the old address, and a code handed in there leads to the
+new path, with the cookie for that path.
+
 The content host refuses service workers: a request with
 `Service-Worker: script` or `Sec-Fetch-Dest: serviceworker` gets the neutral
 404 before anything else and without an audit row, like a routing miss. A
@@ -792,6 +861,12 @@ session handed one out for (the session remembers up to 32 of them). Past that
 ceiling a site cookie survives in the browser until it closes, and opens
 nothing: the session behind the id is gone.
 
+A renamed site leaves its site cookies at the old path. A visitor who comes
+in at the old address with one is redirected (§5.11), arrives at the new path
+without a cookie, and the login shortcut above sets one there; a visitor may
+therefore have to pass the login once more, without the IdP as long as the
+anchor session holds.
+
 Code: `auth/sessions.py`, `platform/pages.py`. Guarded by: `test_sessions.py`.
 
 ### 7.7 OIDC
@@ -871,7 +946,10 @@ Code: `audit/log.py`, `audit/pseudonymisation.py`, `audit/ip_crypto.py`,
 
 ## 8. Publishing: API, CI and CLI
 
-The API base is `/-/api/v1` and addressing is on slugs, never UUIDs.
+The API base is `/-/api/v1` and addressing is on slugs, never UUIDs. The
+slugs are the current ones: the API follows no old slug (§4), which answers
+404, also a repeated request whose first answer got lost after a change of
+address.
 
 | Endpoint | Auth |
 |---|---|
@@ -936,8 +1014,10 @@ one may be someone else's, planted from their own site), elsewhere it gets 403
 `CI_SITE_ID_REQUIRED`, and only once the repository itself matched. That
 exemption only ends: when another repository is linked, or when a site
 admin requires the site id (`PUT .../repository/site-id-required`), and a
-trigger of migration 0004 holds the database to that as well. A member's
-CLI token is not affected: its role decides.
+trigger of migration 0004 holds the database to that as well; and when the
+site or its group gets another address, which the triggers of migration
+0005 see to, so an exempt link cannot follow its site onto an address that
+used to be another's. A member's CLI token is not affected: its role decides.
 
 **CLI login.** `plak login` is an OAuth 2.0 device authorization grant (RFC
 8628) Plak runs itself on top of the admin SSO login: the CLI asks for a device
@@ -955,7 +1035,10 @@ token acts as its member, with exactly that member's roles.
 A successful upsert removes the replaced preview version, row and file tree.
 Teardown and the daily cleanup job (03:00) remove the preview row, its version
 and its files, and the job also sweeps orphaned preview versions, stale `_tmp`
-directories and expired CLI device authorizations and sessions.
+directories and expired CLI device authorizations and sessions, and frees the
+old slugs whose redirect has ended (§4). Between the end of a redirect at
+midnight and that run, an old address no longer redirects and cannot be claimed
+yet.
 
 **Directories without a row.** A publish renames its directory into place
 before it inserts the row, and a cleanup commits the delete before it removes
@@ -984,7 +1067,9 @@ memberships; only a group admin may.
 
 **Error contract.** Every API error is `application/problem+json` (RFC 9457, NL
 API Design Rules) with `code` as the machine-readable extension: 401, 403, 404,
-409, 413, 422, 429 with `Retry-After`. The OpenAPI schema and a self-hosted docs
+409, 413, 422, 429 with `Retry-After`. Invalid input is a 422 by house rule,
+where the API Design Rules ask for 400: a deliberate deviation, kept for every
+endpoint alike. The OpenAPI schema and a self-hosted docs
 UI sit on `/-/api/docs`; the assets are local files because the CSP of §9 allows
 no CDN. Both come in English and Dutch: `?lang=`, then the language a signed-in
 member set on their profile, then `Accept-Language`, and otherwise English, the
@@ -1106,7 +1191,7 @@ PostgreSQL with Alembic migrations: the schema is migration `0001_base`, and
 Tables: `members`, `groups`, `group_members`, `sites`, `site_members`,
 `site_repositories`, `versions`, `previews`, `invitees`, `access_keys`,
 `audit_log_entries`, `content_viewers`, `cli_device_authorizations`,
-`cli_sessions`, `cli_refresh_tokens`.
+`cli_sessions`, `cli_refresh_tokens`, `group_slugs`, `site_slugs`.
 
 Rules that live in the database rather than only in the application:
 
@@ -1125,6 +1210,16 @@ Rules that live in the database rather than only in the application:
   `uq_site_repositories_site`.
 - `groups.slug` refuses the reserved slugs by CHECK; emails and invitee
   identifiers are lowercase by CHECK.
+- `group_slugs` and `site_slugs` (migration `0005_slug_namespace`) hold every
+  current and old slug of a group, or of a site within its group, with
+  `retired_at` NULL on the current one. Their primary keys keep a slug unique
+  across both, so an old slug stays reserved for its owner (`pk_group_slugs`,
+  `pk_site_slugs`, which the API reports as a slug that was recently another's;
+  a current slug still collides on `uq_groups_slug` or `uq_sites_group_slug`).
+  Only triggers on `groups` and `sites` write them; a rename also makes the
+  repository links of the renamed site or group require the site id. The app
+  deletes an old slug once its redirect has ended (§8). The downgrade drops
+  both tables and with them every reservation at once.
 - `sites.live_versions_kept` is NULL (follow `PLAK_LIVE_VERSIONS_KEPT`) or a
   number of at least 0 (`ck_sites_live_versions_kept`).
 - Access lives on the site; the group carries a default for new sites and a
@@ -1173,7 +1268,8 @@ Code: `alembic/versions/`, `models/`. Guarded by:
   site, uploading a dist fixture, deploying a preview through the API, viewing
   an older version through `_version`, creating a secret link and using it
   anonymously, the invitee flow including the return to the requested page after
-  login, and deleting a site (`e2e/`).
+  login, changing a site's address and following the old one with and without
+  a secret link, and deleting a site (`e2e/`).
 - **Lint**: `just lint` runs `ruff check` over `src` and `tests`.
 - **Security**: the living checklist in `docs/security.md` carries the items of
   this document with their status. DPIA and a pentest are conditions for
@@ -1183,10 +1279,12 @@ Code: `alembic/versions/`, `models/`. Guarded by:
 
 Subdomain or wildcard per site; magic-link login for externals (secret links
 cover externals, invitees need SSO); custom domains per group; object storage
-(the recorded scaling route, not part of the first delivery); renaming group or
-site slugs; email notification (inviting sends no mail, the administrator shares
-the URL themselves); central session revocation (deactivating works immediately
-because member status is checked per request).
+(the recorded scaling route, not part of the first delivery); the API
+following an old slug (a deploy to an old address fails at once, §8); moving a
+site to another group; releasing an old slug early; email notification
+(inviting sends no mail, the administrator shares the URL themselves); central
+session revocation (deactivating works immediately because member status is
+checked per request).
 
 ## 15. References that no longer have a subject
 

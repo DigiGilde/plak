@@ -77,6 +77,7 @@ NL: Final[dict[str, str]] = {
         "Fields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n"
         "(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\n"
         "the major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\n"
+        "Addresses are slugs and can change; the API knows only the current one, an old slug answers 404.\n"
     ): (
         "\n"
         "Plak publiceert statische sites per groep en site, met previews per pull request.\n"
@@ -134,6 +135,7 @@ NL: Final[dict[str, str]] = {
         "Velden op de draad zijn lowerCamelCase. Tijdstippen zijn RFC 3339 in UTC met een `Z`-achtervoegsel\n"
         "(`2026-09-12T09:30:00Z`). De volledige versie van deze API staat op elk antwoord in de `API-Version`-header;\n"
         "de majorversie staat in het pad (`/-/api/v1`). Verzoeken zijn ratelimited: bij overschrijding volgt 429.\n"
+        "Adressen zijn slugs en kunnen veranderen; de API kent alleen het huidige, een oude slug geeft 404.\n"
     ),
     "Session": "Sessie",
     "Who am I, and where does my content live.": "Wie ben ik, en waar staat mijn content.",
@@ -745,8 +747,8 @@ NL: Final[dict[str, str]] = {
         "admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` "
         "(`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, "
         "because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each "
-        "member has a limit of 20 new groups and sites combined per 60 minutes, across the admin interface and the CLI "
-        "together."
+        "member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface "
+        "and the CLI together."
     ): (
         "Maakt een groep aan en maakt de aanmaker meteen groepsbeheerder (`admin`), zodat hij er sites in kan zetten. "
         "De nieuwe groep begint met basis `site_team` en geen uitzonderingen, tenzij `defaultAccess` iets anders "
@@ -757,8 +759,8 @@ NL: Final[dict[str, str]] = {
         "wie iets wil publiceren moet daar zelf een plek voor kunnen maken. Behalve met de beheersessie en een geldige "
         "CSRF-header mag dit ook met een CLI-token uit `plak login` (`Authorization: Bearer plakcli_...`), met precies "
         "dezelfde rolcontrole; de CSRF-header vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een "
-        "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen en sites samen per 60 minuten, via "
-        "beheer en CLI samen."
+        "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
+        "minuten, via beheer en CLI samen."
     ),
     "The created group.": "De aangemaakte groep.",
     (
@@ -779,8 +781,8 @@ NL: Final[dict[str, str]] = {
         "(`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). De header `X-CSRF-Token` ontbreekt of komt niet overeen met het "
         "CSRF-cookie (`CSRF_INVALID`). Met een CLI-token: het lid is niet (meer) actief (`MEMBER_NOT_ACTIVE`)."
     ),
-    "Conflict. A group with this slug already exists (`SLUG_EXISTS`).": (
-        "Conflict. Er bestaat al een groep met deze slug (`SLUG_EXISTS`)."
+    "Conflict. Another group has this slug, now or as an old slug that is not free again yet (`SLUG_EXISTS`).": (
+        "Conflict. Een andere groep heeft deze slug, nu of als oude slug die nog niet weer vrij is (`SLUG_EXISTS`)."
     ),
     "Unprocessable input. The slug is invalid or reserved (`SLUG_INVALID`), or the name is empty (`FIELD_EMPTY`).": (
         "Onverwerkbare invoer. De slug is ongeldig of gereserveerd (`SLUG_INVALID`), of de naam is leeg "
@@ -788,12 +790,12 @@ NL: Final[dict[str, str]] = {
     ),
     (
         "Too many requests. The rate limit budget for this session is used up; try again later. This member has "
-        "already created 20 groups and sites combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` "
-        "header says after how many seconds it is allowed again."
+        "already made 20 new groups, sites and addresses combined in the past hour (`TOO_MANY_CREATIONS`); the "
+        "`Retry-After` header says after how many seconds it is allowed again."
     ): (
         "Te veel verzoeken. Het ratelimit-budget voor deze sessie is op; probeer het later opnieuw. Dit lid heeft in "
-        "het afgelopen uur al 20 groepen en sites samen aangemaakt (`TOO_MANY_CREATIONS`); de header `Retry-After` "
-        "zegt na hoeveel seconden het weer kan."
+        "het afgelopen uur al 20 nieuwe groepen, sites en adressen samen gemaakt (`TOO_MANY_CREATIONS`); de header "
+        "`Retry-After` zegt na hoeveel seconden het weer kan."
     ),
     "Group with sites and members": "Groep met sites en leden",
     (
@@ -869,6 +871,55 @@ NL: Final[dict[str, str]] = {
         "Onverwerkbare invoer. De naam is leeg (`FIELD_EMPTY`), bevat stuur- of opmaaktekens "
         "(`FIELD_CONTROL_CHARACTERS`) of is langer dan 200 tekens (`FIELD_TOO_LONG`)."
     ),
+    "Change the address of a group": "Adres van een groep wijzigen",
+    (
+        "Sets the slug of the group, the first path segment of every URL of its sites: every site, preview and secret "
+        "link of the group gets a new address at once. The old slug stays reserved for this group, and its old "
+        "addresses redirect to the new ones through day 30 after the change (until midnight, Amsterdam time), for "
+        "visitors who may see the site. After that they answer 404, and the old slug is free for another group once "
+        "the nightly cleanup has run. Until then this group can change back to it. `previousSlugs` lists the old "
+        "slugs that still redirect.\n"
+        "\n"
+        "Publishing under the old address stops at once: the API knows only the current slug, and from this change "
+        "on the repository link of every site in the group requires the site id. Sending the slug the group already "
+        "has changes nothing and writes no audit row. If the response gets lost, the old path answers 404: read the "
+        "group at the new slug, or send the request again with the new slug in the path, which then changes "
+        "nothing.\n"
+        "\n"
+        "**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without a "
+        "group role is not allowed. Each change counts towards the limit of 20 new groups, sites and addresses "
+        "combined per 60 minutes, and at most 5 old slugs of a group redirect at the same time."
+    ): (
+        "Zet de slug van de groep, het eerste padsegment van elke URL van haar sites: elke site, preview en geheime "
+        "link van de groep krijgt in één keer een nieuw adres. De oude slug blijft voor deze groep gereserveerd, en "
+        "haar oude adressen sturen tot en met dag 30 na de wijziging (tot middernacht, Amsterdamse tijd) door naar de "
+        "nieuwe, voor bezoekers die de site mogen zien. Daarna geven ze 404, en is de oude slug vrij voor een andere "
+        "groep zodra de nachtelijke opruiming heeft gedraaid. Tot dan kan deze groep er weer naar terug. "
+        "`previousSlugs` noemt de oude slugs die nog doorsturen.\n"
+        "\n"
+        "Publiceren onder het oude adres stopt meteen: de API kent alleen de huidige slug, en vanaf deze wijziging "
+        "vraagt de repositorykoppeling van elke site in de groep het site-ID. Wie de slug stuurt die de groep al "
+        "heeft, wijzigt niets en laat geen auditregel achter. Gaat het antwoord verloren, dan geeft het oude pad 404: "
+        "lees de groep op de nieuwe slug, of stuur het verzoek opnieuw met de nieuwe slug in het pad, dat dan niets "
+        "meer wijzigt.\n"
+        "\n"
+        "**Mag:** groepsrol `admin`, met een geldige CSRF-header. Een platformbeheerder die geen groepsrol heeft mag "
+        "het niet. Elke wijziging telt mee in de limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
+        "minuten, en hoogstens 5 oude slugs van een groep sturen tegelijk door."
+    ),
+    "The group at its new address.": "De groep op haar nieuwe adres.",
+    (
+        "Conflict. Another group has this slug, now or as an old slug that is not free again yet (`SLUG_EXISTS`); or "
+        "this group already has 5 old slugs that still redirect, and the new slug is none of them "
+        "(`TOO_MANY_PREVIOUS_SLUGS`)."
+    ): (
+        "Conflict. Een andere groep heeft deze slug, nu of als oude slug die nog niet weer vrij is (`SLUG_EXISTS`); "
+        "of deze groep heeft al 5 oude slugs die nog doorsturen, en de nieuwe slug is daar geen van "
+        "(`TOO_MANY_PREVIOUS_SLUGS`)."
+    ),
+    "Unprocessable input. The slug is invalid or reserved (`SLUG_INVALID`).": (
+        "Onverwerkbare invoer. De slug is ongeldig of gereserveerd (`SLUG_INVALID`)."
+    ),
     "Set the default access of a group": "Standaardtoegang van een groep zetten",
     (
         "Sets the access that new sites in this group start with: the base and the two exceptions in one go. Existing "
@@ -896,7 +947,7 @@ NL: Final[dict[str, str]] = {
         "with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer "
         "plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not "
         "sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new "
-        "groups and sites combined per 60 minutes, across the admin interface and the CLI together."
+        "groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together."
     ): (
         "Maakt een site binnen een groep. De site krijgt de standaardtoegang van de groep, of wat `access` daarvan "
         "afwijkend vraagt, en staat op `/{groupSlug}/{siteSlug}/` op de content-origin, zodra er iets naartoe is "
@@ -907,8 +958,8 @@ NL: Final[dict[str, str]] = {
         "platformbeheerder die geen groepsrol heeft, mag dit niet. Behalve met de beheersessie en een geldige "
         "CSRF-header mag dit ook met een CLI-token uit `plak login` (`Authorization: Bearer plakcli_...`), met precies "
         "dezelfde rolcontrole; de CSRF-header vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een "
-        "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen en sites samen per 60 minuten, via "
-        "beheer en CLI samen."
+        "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
+        "minuten, via beheer en CLI samen."
     ),
     "The created site.": "Het aangemaakte site.",
     (
@@ -922,8 +973,12 @@ NL: Final[dict[str, str]] = {
         "CSRF-cookie (`CSRF_INVALID`). Met een CLI-token: het lid is niet (meer) actief (`MEMBER_NOT_ACTIVE`). Je rol "
         "in deze groep is te smal voor deze handeling (`INSUFFICIENT_ROLE`)."
     ),
-    "Conflict. A site with this slug already exists in this group (`SLUG_EXISTS`).": (
-        "Conflict. Er bestaat al een site met deze slug in deze groep (`SLUG_EXISTS`)."
+    (
+        "Conflict. Another site in this group has this slug, now or as an old slug that is not free again yet "
+        "(`SLUG_EXISTS`)."
+    ): (
+        "Conflict. Een andere site in deze groep heeft deze slug, nu of als oude slug die nog niet weer vrij is "
+        "(`SLUG_EXISTS`)."
     ),
     "Unprocessable input. The slug is invalid (`SLUG_INVALID`), or the title is empty (`FIELD_EMPTY`).": (
         "Onverwerkbare invoer. De slug is ongeldig (`SLUG_INVALID`), of de titel is leeg (`FIELD_EMPTY`)."
@@ -977,6 +1032,68 @@ NL: Final[dict[str, str]] = {
     ): (
         "Onverwerkbare invoer. De titel is leeg (`FIELD_EMPTY`), bevat stuur- of opmaaktekens "
         "(`FIELD_CONTROL_CHARACTERS`) of is langer dan 200 tekens (`FIELD_TOO_LONG`)."
+    ),
+    "Change the address of a site": "Adres van een site wijzigen",
+    (
+        "Sets the slug of the site, the second path segment of its URL: the site, its previews and its secret links "
+        "get a new address at once. The old slug stays reserved for this site, and its old addresses redirect to the "
+        "new ones through day 30 after the change (until midnight, Amsterdam time), for visitors who may see the "
+        "site. After that they answer 404, and the old slug is free for another site in the group once the nightly "
+        "cleanup has run. Until then this site can change back to it. `previousSlugs` lists the old slugs that "
+        "still redirect.\n"
+        "\n"
+        "Publishing under the old address stops at once: the API knows only the current slug, and from this change "
+        "on the repository link of the site requires the site id. Sending the slug the site already has changes "
+        "nothing and writes no audit row. If the response gets lost, the old path answers 404: read the site at the "
+        "new slug, or send the request again with the new slug in the path, which then changes nothing.\n"
+        "\n"
+        "**Who can call this:** effective site role `admin` together with a role in the group of the site, `reader` "
+        "or higher, with a valid CSRF header. An admin of the site alone, without a role in its group, can change its "
+        "title but not its address. Each change counts towards the limit of 20 new groups, sites and addresses "
+        "combined per 60 minutes, and at most 5 old slugs of a site redirect at the same time."
+    ): (
+        "Zet de slug van de site, het tweede padsegment van zijn URL: de site, zijn previews en zijn geheime links "
+        "krijgen in één keer een nieuw adres. De oude slug blijft voor deze site gereserveerd, en zijn oude adressen "
+        "sturen tot en met dag 30 na de wijziging (tot middernacht, Amsterdamse tijd) door naar de nieuwe, voor "
+        "bezoekers die de site mogen zien. Daarna geven ze 404, en is de oude slug vrij voor een andere site in de "
+        "groep zodra de nachtelijke opruiming heeft gedraaid. Tot dan kan deze site er weer naar terug. "
+        "`previousSlugs` noemt de oude slugs die nog doorsturen.\n"
+        "\n"
+        "Publiceren onder het oude adres stopt meteen: de API kent alleen de huidige slug, en vanaf deze wijziging "
+        "vraagt de repositorykoppeling van de site het site-ID. Wie de slug stuurt die de site al heeft, wijzigt niets "
+        "en laat geen auditregel achter. Gaat het antwoord verloren, dan geeft het oude pad 404: lees de site op de "
+        "nieuwe slug, of stuur het verzoek opnieuw met de nieuwe slug in het pad, dat dan niets meer wijzigt.\n"
+        "\n"
+        "**Mag:** effectieve siterol `admin` samen met een rol in de groep van de site, `reader` of ruimer, met een "
+        "geldige CSRF-header. Wie alleen de site beheert, zonder rol in zijn groep, kan zijn titel wijzigen maar niet "
+        "zijn adres. Elke wijziging telt mee in de limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
+        "minuten, en hoogstens 5 oude slugs van een site sturen tegelijk door."
+    ),
+    "The site at its new address.": "De site op zijn nieuwe adres.",
+    (
+        "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) "
+        "active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the "
+        "CSRF cookie (`CSRF_INVALID`). The member's role on this site is insufficient for this action "
+        "(`INSUFFICIENT_ROLE`). Changing the address also needs a role in the group of the site, which an admin of "
+        "the site alone does not have (`INSUFFICIENT_ROLE`)."
+    ): (
+        "Geen toegang. Het verzoek komt van een andere origin dan de beheer-host, of het lid is niet (meer) actief "
+        "(`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). De header `X-CSRF-Token` ontbreekt of komt niet overeen met het "
+        "CSRF-cookie (`CSRF_INVALID`). Je rol op deze site is te smal voor deze handeling (`INSUFFICIENT_ROLE`). Het "
+        "adres wijzigen vraagt ook een rol in de groep van de site, en die heeft wie alleen de site beheert niet "
+        "(`INSUFFICIENT_ROLE`)."
+    ),
+    (
+        "Conflict. Another site in this group has this slug, now or as an old slug that is not free again yet "
+        "(`SLUG_EXISTS`); or this site already has 5 old slugs that still redirect, and the new slug is none of them "
+        "(`TOO_MANY_PREVIOUS_SLUGS`)."
+    ): (
+        "Conflict. Een andere site in deze groep heeft deze slug, nu of als oude slug die nog niet weer vrij is "
+        "(`SLUG_EXISTS`); of deze site heeft al 5 oude slugs die nog doorsturen, en de nieuwe slug is daar geen van "
+        "(`TOO_MANY_PREVIOUS_SLUGS`)."
+    ),
+    "Unprocessable input. The slug is invalid (`SLUG_INVALID`).": (
+        "Onverwerkbare invoer. De slug is ongeldig (`SLUG_INVALID`)."
     ),
     "Set the access to a site": "Toegang tot een site zetten",
     (
@@ -1765,8 +1882,21 @@ NL: Final[dict[str, str]] = {
     "Exact reason code behind the outcome, for example `UNKNOWN_SITE`.": (
         "Exacte redencode achter de uitkomst, bijvoorbeeld `UNKNOWN_SITE`."
     ),
-    "Slug of the group the row is about.": "Slug van de groep waar de regel over gaat.",
-    "Slug of the site the row is about.": "Slug van de site waar de regel over gaat.",
+    (
+        "Slug of the group the row is about. Also matches the `previous_group` of a change of address, so that "
+        "change is found from the old slug as well as the new one."
+    ): (
+        "Slug van de groep waar de regel over gaat. Matcht ook de `previous_group` van een adreswijziging, zodat die "
+        "wijziging zowel vanaf de oude als vanaf de nieuwe slug te vinden is."
+    ),
+    (
+        "Slug of the site the row is about. Also matches the `previous_site` of a change of address, and the `sites` "
+        "of a row about a whole group: the sites that moved with its new address or went with it."
+    ): (
+        "Slug van de site waar de regel over gaat. Matcht ook de `previous_site` van een adreswijziging, en de "
+        "`sites` van een regel over een hele groep: de sites die met haar nieuwe adres meeverhuisden of met haar "
+        "verdwenen."
+    ),
     (
         "Pseudonym of one actor, 64 hexadecimal characters. Fetch it with `POST /platform/audit/actor-pseudonym`. An "
         "e-mail address does not belong here: a query parameter ends up in proxy logs."
@@ -2537,8 +2667,39 @@ NL: Final[dict[str, str]] = {
         "opmaaktekens."
     ),
     "The new display name of a group.": "De nieuwe weergavenaam van een groep.",
+    (
+        "New slug of the group: lowercase letters, digits and hyphens, at most 63 characters, and not one of the "
+        "names the platform reserves (`.well-known`, `cli-link`, `favicon.ico`, `robots.txt`). Not the current slug "
+        "of another group either, nor one that another group gave up and that is not free again yet."
+    ): (
+        "Nieuwe slug van de groep: kleine letters, cijfers en koppeltekens, hoogstens 63 tekens, en geen van de namen "
+        "die het platform reserveert (`.well-known`, `cli-link`, `favicon.ico`, `robots.txt`). Ook niet de huidige "
+        "slug van een andere groep, of een slug die een andere groep opgaf en die nog niet weer vrij is."
+    ),
+    "The new slug of a group.": "De nieuwe slug van een groep.",
     "Access that a new site in this group starts with. Existing sites are not affected.": (
         "Toegang die een nieuwe site in deze groep meekrijgt. Bestaande sites veranderen niet mee."
+    ),
+    (
+        "Old slugs of the group whose addresses still redirect to the current ones, newest first; empty when there "
+        "are none. Each stays reserved for this group, which can change back to it until its redirect has ended."
+    ): (
+        "Oude slugs van de groep waarvan de adressen nog doorsturen naar de huidige, nieuwste eerst; leeg als er geen "
+        "zijn. Elk blijft voor deze groep gereserveerd, en de groep kan ernaar terug tot de doorverwijzing ervan is "
+        "afgelopen."
+    ),
+    "The old slug.": "De oude slug.",
+    (
+        "When the redirect ends: midnight, Amsterdam time, at the end of day 30 after the change. From then on the "
+        "old addresses answer 404; the slug is free again for others only once the nightly cleanup after that has "
+        "run."
+    ): (
+        "Wanneer de doorverwijzing afloopt: middernacht, Amsterdamse tijd, aan het eind van dag 30 na de wijziging. "
+        "Vanaf dan geven de oude adressen 404; de slug is pas weer vrij voor anderen als de nachtelijke opruiming "
+        "daarna heeft gedraaid."
+    ),
+    "An old slug whose addresses still redirect to the current ones.": (
+        "Een oude slug waarvan de adressen nog doorsturen naar de huidige."
     ),
     "A group: owner of sites and the unit of membership.": (
         "Een groep: eigenaar van sites en de eenheid waarop lidmaatschap telt."
@@ -2769,6 +2930,14 @@ NL: Final[dict[str, str]] = {
         "De taal die dit lid zelf koos voor het beheer: `nl` of `en`. `null` betekent dat het lid geen keuze maakte en "
         "de SPA de taal uit de browser haalt. De keuze staat op het account en geldt dus op elk apparaat."
     ),
+    (
+        "Through how many days after a change of address the old addresses of a group or site still redirect, until "
+        "midnight, Amsterdam time. The SPA takes the number from here, so its texts say what the server does."
+    ): (
+        "Tot en met hoeveel dagen na een adreswijziging de oude adressen van een groep of site nog doorsturen, tot "
+        "middernacht, Amsterdamse tijd. De SPA haalt het getal hier vandaan, zodat haar teksten zeggen wat de server "
+        "doet."
+    ),
     "The signed-in member, extended with what the SPA needs to build links.": (
         "Het ingelogde lid, aangevuld met wat de SPA nodig heeft om links te bouwen."
     ),
@@ -2930,6 +3099,15 @@ NL: Final[dict[str, str]] = {
     "Slug of the site; the second path segment of the site URL.": (
         "Slug van de site; het tweede padsegment van de site-URL."
     ),
+    (
+        "Old slugs of the site whose addresses still redirect to the current ones, newest first; empty when there "
+        "are none. Each stays reserved for this site, which can change back to it until its redirect has ended. A "
+        "change of the group's slug is not in here but in the `previousSlugs` of the group."
+    ): (
+        "Oude slugs van de site waarvan de adressen nog doorsturen naar de huidige, nieuwste eerst; leeg als er geen "
+        "zijn. Elk blijft voor deze site gereserveerd, en de site kan ernaar terug tot de doorverwijzing ervan is "
+        "afgelopen. Een wijziging van de slug van de groep staat hier niet, maar in de `previousSlugs` van de groep."
+    ),
     "Who may see the live content: base plus exceptions.": "Wie de live content mag zien: basis plus uitzonderingen.",
     (
         "Whether the content of this site may load scripts, styles and fonts from a fixed list of external hosts. "
@@ -3087,6 +3265,15 @@ NL: Final[dict[str, str]] = {
         "opmaaktekens."
     ),
     "The new display title of a site.": "De nieuwe weergavetitel van een site.",
+    (
+        "New slug of the site: lowercase letters, digits and hyphens, at most 63 characters. Not the current slug of "
+        "another site in the group, nor one that another site in the group gave up and that is not free again yet."
+    ): (
+        "Nieuwe slug van de site: kleine letters, cijfers en koppeltekens, hoogstens 63 tekens. Niet de huidige slug "
+        "van een andere site in de groep, of een slug die een andere site in de groep opgaf en die nog niet weer vrij "
+        "is."
+    ),
+    "The new slug of a site within its group.": "De nieuwe slug van een site binnen zijn groep.",
     "`device_code` after approval, `refresh_token` to refresh.": (
         "`device_code` na het goedkeuren, `refresh_token` om te verversen."
     ),

@@ -24,6 +24,7 @@ const site: Site = {
   hasLiveVersion: true,
   lastPublishedAt: '2026-07-17T14:32:00.000Z',
   previewCount: 2,
+  previousSlugs: [],
 };
 
 describe('SiteRow', () => {

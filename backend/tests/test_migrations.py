@@ -119,6 +119,8 @@ async def test_all_core_tables_exist(db_connection: asyncpg.Connection) -> None:
         "cli_sessions",
         "cli_refresh_tokens",
         "audit_log_entries",
+        "group_slugs",
+        "site_slugs",
     }
     rows = await db_connection.fetch(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
@@ -1297,3 +1299,75 @@ async def test_the_database_requires_the_site_id_once_another_repository_is_link
 ) -> None:
     site_id = await _link_at_head(db_connection, required=False)
     assert await _required_after(db_connection, site_id, change) is required
+
+
+async def _slug_namespace(conn: asyncpg.Connection) -> tuple[dict, dict]:
+    groups = {
+        row["slug"]: (row["group_id"], row["retired_at"]) for row in await conn.fetch("SELECT * FROM group_slugs")
+    }
+    sites = {
+        (row["group_id"], row["slug"]): (row["site_id"], row["retired_at"])
+        for row in await conn.fetch("SELECT * FROM site_slugs")
+    }
+    return groups, sites
+
+
+# The two tables, the four triggers and the four functions 0005 brings.
+_SLUG_NAMESPACE_OBJECTS = """
+    SELECT
+        (SELECT count(*) FROM pg_tables WHERE tablename IN ('group_slugs', 'site_slugs'))
+        + (SELECT count(*) FROM pg_trigger WHERE tgname IN
+            ('group_slugs_insert', 'group_slugs_rename', 'site_slugs_insert', 'site_slugs_rename'))
+        + (SELECT count(*) FROM pg_proc WHERE proname IN
+            ('group_slugs_on_insert', 'group_slugs_on_rename', 'site_slugs_on_insert', 'site_slugs_on_rename'))
+"""
+
+
+@pytest.mark.usefixtures("migrated_dsn")
+async def test_the_slug_namespace_takes_in_every_slug_and_goes_down_again(own_database: str) -> None:
+    """Up: every current slug becomes the current row of its group or site,
+    and the triggers keep the namespace from then on. Down: the tables, the
+    triggers and the functions go, and every retired slug is free at once."""
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0004_site_id_required")
+    conn = await asyncpg.connect(own_database)
+    try:
+        group_ids = [await _make_group(conn), await _make_group(conn)]
+        for group_id in (group_ids[0], group_ids[0], group_ids[1]):
+            await _make_site(conn, group_id)
+        groups = {row["slug"]: row["id"] for row in await conn.fetch("SELECT slug, id FROM groups")}
+        sites = {
+            (row["group_id"], row["slug"]): row["id"]
+            for row in await conn.fetch("SELECT group_id, slug, id FROM sites")
+        }
+    finally:
+        await conn.close()
+
+    await asyncio.to_thread(_alembic, own_database, "upgrade", "0005_slug_namespace")
+
+    conn = await asyncpg.connect(own_database)
+    try:
+        assert await _slug_namespace(conn) == (
+            {slug: (group_id, None) for slug, group_id in groups.items()},
+            {key: (site_id, None) for key, site_id in sites.items()},
+        )
+        assert await conn.fetchval(_SLUG_NAMESPACE_OBJECTS) == 10
+        old_slug = await conn.fetchval("SELECT slug FROM groups WHERE id = $1", group_ids[0])
+        await conn.execute("UPDATE groups SET slug = 'hernoemd' WHERE id = $1", group_ids[0])
+        owner, retired_at = (await _slug_namespace(conn))[0][old_slug]
+        assert owner == group_ids[0]
+        assert retired_at is not None
+    finally:
+        await conn.close()
+
+    await asyncio.to_thread(_alembic, own_database, "downgrade", "0004_site_id_required")
+
+    conn = await asyncpg.connect(own_database)
+    try:
+        assert await conn.fetchval(_SLUG_NAMESPACE_OBJECTS) == 0
+        await conn.execute(
+            "INSERT INTO groups (id, slug, name, default_access_base) VALUES ($1, $2, 'Oud', 'public')",
+            uuid.uuid4(),
+            old_slug,
+        )
+    finally:
+        await conn.close()

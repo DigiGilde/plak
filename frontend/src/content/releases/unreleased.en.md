@@ -15,3 +15,9 @@ Published sites can no longer register a service worker, so a PWA plugin no long
 ## Change the name of a group and the title of a site
 
 A group administrator can change the name of the group, and a site administrator the title of the site. You do that on the "Settings" tab. A site now has that tab too; it is also where "Delete site" is, which used to be on the "Overview" tab.
+
+## Change the address of a group or site
+
+A group administrator can change the address of the group, and a site administrator who is also a member of the group the address of the site. You do that on the "Settings" tab. The old address redirects for 30 days, for whoever may view the site, and you can change back to it during that time. After that another group or site can get the address.
+
+Publishing from a workflow or with `plak publish` only works again after a change once you update the address there. After a change to the address of a site, its "Deploy" tab says so for as long as the old address still redirects.

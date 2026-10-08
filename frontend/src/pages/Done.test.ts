@@ -246,6 +246,7 @@ describe('Done (reload and share)', () => {
       hasLiveVersion: true,
       lastPublishedAt: '2026-07-17T14:32:00.000Z',
       previewCount: 0,
+      previousSlugs: [],
     });
     const wrapper = await mountComponent('/team-aurora/website/done');
     await flushPromises();

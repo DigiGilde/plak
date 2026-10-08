@@ -47,6 +47,21 @@ import Site from '../src/pages/Site.vue';
   }
 }
 
+/**
+ * jsdom has no dialog: showModal() and close() are not there, and
+ * nldd-modal-dialog calls both. Open and closed is all that is needed for axe
+ * to see the dialog or not.
+ */
+{
+  const proto = HTMLDialogElement.prototype;
+  proto.showModal ??= function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  proto.close ??= function close(this: HTMLDialogElement) {
+    this.removeAttribute('open');
+  };
+}
+
 const AXE_OPTIONS: axe.RunOptions = {
   rules: {
     // jsdom has no renderer or canvas; contrast is covered by the design
@@ -80,11 +95,15 @@ afterEach(() => {
 
 const Host = defineComponent({ render: () => h(RouterView) });
 
-async function mountPage(path: string, routes: Parameters<typeof createRouter>[0]['routes']) {
+async function mountPage(
+  path: string,
+  routes: Parameters<typeof createRouter>[0]['routes'],
+  stubs: Record<string, boolean> = {},
+) {
   const router = createRouter({ history: createMemoryHistory(), routes });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(Host, { global: { plugins: [router] }, attachTo: document.body });
+  const wrapper = mount(Host, { global: { plugins: [router], stubs }, attachTo: document.body });
   await flushPromises();
   return wrapper;
 }
@@ -211,6 +230,122 @@ describe('axe: the admin in English', () => {
     expect(wrapper.find('[data-testid="group-name-save"]').attributes('text')).toBe('Save name');
     expect(wrapper.find('nldd-validation-item#group-settings-name-server').text()).toBe(
       'A name is at most 200 characters long',
+    );
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('asks to change the address of a site in English, in a dialog with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/website/settings', SITE_ROUTES, { teleport: true });
+
+    expect(wrapper.find('h2#heading-site-address').text()).toBe('Address of the site');
+    expect(wrapper.find('[data-testid="site-address-change"]').attributes('text')).toBe('Change address');
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handbook',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await flushPromises();
+
+    const dialog = wrapper.find('section[aria-labelledby="heading-site-address"] nldd-modal-dialog');
+    expect(dialog.attributes('accessible-label')).toBe(
+      'Change the address of site team-aurora/website to team-aurora/handbook?',
+    );
+    expect(dialog.element.shadowRoot?.querySelector('dialog')?.hasAttribute('open')).toBe(true);
+    expect(wrapper.find('[data-testid="confirm-cancel"]').attributes('text')).toBe(
+      'Keep current address',
+    );
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('says a refused address of a group in English, at the field, with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/-/settings', GROUP_ROUTES, { teleport: true });
+    await backend.fetch('/-/api/v1/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Aurora', slug: 'aurora' }),
+    });
+
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', {
+      value: 'aurora',
+    });
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-group-address"] [data-testid="confirm-continue"]')
+      .trigger('click');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-group-address"] nldd-modal-dialog')
+      .trigger('close');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-validation-item#group-address-server').text()).toBe(
+      'This address is already in use, or recently belonged to another group. Choose another address.',
+    );
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('says a refused address of a site in English, at the field, with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/website/settings', SITE_ROUTES, { teleport: true });
+    await backend.fetch('/-/api/v1/groups/team-aurora/sites', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Handbook', slug: 'handbook' }),
+    });
+
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handbook',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-site-address"] [data-testid="confirm-continue"]')
+      .trigger('click');
+    await flushPromises();
+    await wrapper
+      .find('section[aria-labelledby="heading-site-address"] nldd-modal-dialog')
+      .trigger('close');
+    await flushPromises();
+
+    expect(wrapper.find('nldd-validation-item#site-address-server').text()).toBe(
+      'This address is already in use, or recently belonged to another site. Choose another address.',
+    );
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('asks to change the address of a group in English, in a dialog with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/team-aurora/-/settings', GROUP_ROUTES, { teleport: true });
+
+    expect(wrapper.find('h2#heading-group-address').text()).toBe('Address of the group');
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', {
+      value: 'aurora',
+    });
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await flushPromises();
+
+    const dialog = wrapper.find('section[aria-labelledby="heading-group-address"] nldd-modal-dialog');
+    expect(dialog.attributes('accessible-label')).toBe(
+      'Change the address of group team-aurora to aurora?',
+    );
+    expect(dialog.element.shadowRoot?.querySelector('dialog')?.hasAttribute('open')).toBe(true);
+    await expectNoViolations(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('says in English that an unknown group may have been renamed, with no violations', async () => {
+    _setLocaleForTest('en');
+    const wrapper = await mountPage('/onbekend/-/settings', GROUP_ROUTES);
+
+    expect(wrapper.find('[data-testid="renamed-hint"]').text()).toBe(
+      'Was the site or group renamed? Then look for it in your overview.',
+    );
+    expect(wrapper.find('[data-testid="renamed-overview"]').attributes('text')).toBe(
+      'Go to the overview',
     );
     await expectNoViolations(wrapper.element);
     wrapper.unmount();
