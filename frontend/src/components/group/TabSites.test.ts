@@ -9,6 +9,7 @@ import TabSites from './TabSites.vue';
 
 function site(slug: string, title: string): Site {
   return {
+    id: `id-${slug}`,
     groupSlug: 'team-aurora',
     slug,
     title,

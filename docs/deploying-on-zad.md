@@ -411,6 +411,9 @@ needs the content volume and `PLAK_CONTENT_ROOT`, which only the app's own pod
 has: it refuses to run without them, so take route 2 for it. Should it stop
 halfway, let the pod start again rather than rolling back to the previous
 image, which only knows the old places of the directories already moved.
+`0004_site_id_required` refuses to go down once a repository link requires
+the site id, since upgrading again would let every link publish without
+one; to roll back, roll back the image only, which ignores the column.
 
 Plak runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the
