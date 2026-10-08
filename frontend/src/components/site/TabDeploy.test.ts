@@ -1781,3 +1781,86 @@ describe('TabDeploy: unlinking and configuration fallbacks', () => {
     expect(wrapper.html()).toContain('Gekoppeld door onbekend');
   });
 });
+
+describe('TabDeploy: the address of the site has changed', () => {
+  function makeMovedWrapper(
+    previousSlugs: { slug: string; redirectsUntil: string }[],
+    site = 'website',
+  ) {
+    return mount(TabDeploy, {
+      props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE, previousSlugs },
+      global: { stubs: { teleport: true } },
+    });
+  }
+
+  const OLD = { slug: 'oude-naam', redirectsUntil: '2099-11-06T23:00:00Z' };
+  const OLDER = { slug: 'oudere-naam', redirectsUntil: '2099-10-20T22:00:00Z' };
+
+  it('says nothing of it while the site has kept its address', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="deploy-moved"]').exists()).toBe(false);
+  });
+
+  it('warns that workflows with the old address publish no more, and what to use instead', async () => {
+    const wrapper = makeMovedWrapper([OLD]);
+    await untilIdle();
+
+    const notice = wrapper.find('[data-testid="deploy-moved"]');
+    expect(notice.element.tagName.toLowerCase()).toBe('nldd-banner');
+    expect(notice.attributes('variant')).toBe('warning');
+    expect(notice.attributes('text')).toBe('Het adres van deze site is gewijzigd.');
+    expect(notice.find('nldd-rich-text').text()).toBe(
+      'Workflows met site: team-aurora/oude-naam publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+    );
+    expect(notice.findAll('code').map((code) => code.text())).toEqual([
+      'site: team-aurora/oude-naam',
+      'site: team-aurora/website',
+    ]);
+    expect(notice.findAll('code').every((code) => code.attributes('translate') === 'no')).toBe(true);
+  });
+
+  it('names every old address that still redirects, as alternatives', async () => {
+    const wrapper = makeMovedWrapper([OLD, OLDER]);
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
+      'Workflows met site: team-aurora/oude-naam of site: team-aurora/oudere-naam publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+    );
+  });
+
+  it('stands above everything else on the tab', async () => {
+    const wrapper = makeMovedWrapper([OLD]);
+    await untilIdle();
+
+    const notice = wrapper.find('[data-testid="deploy-moved"]').element;
+    const first = wrapper.find('section[aria-labelledby="heading-repository"]').element;
+    expect(notice.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('is there for a reader of the site too, who may have the workflow open', async () => {
+    // lid-4 (Zoë de Wit) is a reader in the group and admin of `website` alone.
+    backend.data.loggedInMemberId = 'lid-4';
+    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'docs', title: 'Docs' });
+    const wrapper = makeMovedWrapper([OLD], 'docs');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="repository-empty"]').attributes('supporting-text')).toContain(
+      'Vraag een beheerder van deze site',
+    );
+    expect(wrapper.find('[data-testid="deploy-moved"]').exists()).toBe(true);
+  });
+
+  it('says it in English in English', async () => {
+    _setLocaleForTest('en');
+    const wrapper = makeMovedWrapper([OLD, OLDER]);
+    await untilIdle();
+
+    const notice = wrapper.find('[data-testid="deploy-moved"]');
+    expect(notice.attributes('text')).toBe('The address of this site has changed.');
+    expect(notice.find('nldd-rich-text').text()).toBe(
+      'Workflows with site: team-aurora/oude-naam or site: team-aurora/oudere-naam no longer publish; use site: team-aurora/website and the site ID.',
+    );
+  });
+});

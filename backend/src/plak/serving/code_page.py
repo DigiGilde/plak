@@ -28,13 +28,16 @@ code_attempts (an `InMemoryCounter` for the limit per selector).
 from __future__ import annotations
 
 import time
+import uuid
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from functools import partial
 from html import escape
 from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Request
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import FormData
 from starlette.formparsers import FormParser
 from starlette.responses import RedirectResponse, Response
@@ -50,6 +53,7 @@ from plak.host_separation import host_from_scope
 from plak.models.identity import Group
 from plak.models.publication import Site
 from plak.ratelimit import RateLimitClass, limit_for
+from plak.serving import addresses
 from plak.serving.response import NOINDEX, neutral_404_response, platform_csp
 
 router = APIRouter()
@@ -301,6 +305,20 @@ async def _over_the_limit(request: Request, selector: str) -> bool:
     return result.count > limit.max
 
 
+async def _site_on_secret_links(db: AsyncSession, group: str, site: str) -> uuid.UUID | None:
+    """The live site at these slugs that has secret links on, if any."""
+    return await db.scalar(
+        select(Site.id)
+        .join(Group, Site.group_id == Group.id)
+        .where(
+            Group.slug == group,
+            Site.slug == site,
+            Site.access_keys.is_(True),
+            Site.live_version_id.is_not(None),
+        )
+    )
+
+
 class _BodyTooLargeError(Exception):
     """Raised mid-stream once the body read so far exceeds MAX_BODY_BYTES,
     for a chunked request that carries no Content-Length to check upfront."""
@@ -369,16 +387,13 @@ async def submit_code(request: Request) -> Response:
 
     session_factory = request.app.state.session_factory
     async with session_factory() as db:
-        site_id = await db.scalar(
-            select(Site.id)
-            .join(Group, Site.group_id == Group.id)
-            .where(
-                Group.slug == group,
-                Site.slug == site,
-                Site.access_keys.is_(True),
-                Site.live_version_id.is_not(None),
-            )
-        )
+        site_id = await _site_on_secret_links(db, group, site)
+        moved = None
+        if site_id is None:
+            # The page was shown at an old address that still redirects.
+            moved = await addresses.current_address(db, group, site, datetime.now(UTC))
+            if moved is not None:
+                site_id = await _site_on_secret_links(db, moved.group, moved.site)
         key = await keys.verify_parts(db, site_id, selector, code)
         key_id = str(key.id) if key is not None else None
 
@@ -386,6 +401,10 @@ async def submit_code(request: Request) -> Response:
         await _audit(request, REASON_KEY_CODE_INVALID, refs)
         locale = i18n.negotiate(request.headers.get("accept-language"))
         return code_page_response(request, selector, target, i18n.t(locale, "code.wrong"))
+
+    if moved is not None:
+        target = addresses.relocate(target, group, site, moved)
+        group, site = moved.group, moved.site
 
     # From here on exactly what a full `?key=` link does (serving/router.py):
     # the signed key cookie, scoped to this site, and on to the page itself.

@@ -2,6 +2,7 @@ import {
   createRouter,
   createWebHistory,
   type NavigationGuardWithThis,
+  type NavigationHookAfter,
   type RouterScrollBehavior,
 } from 'vue-router';
 
@@ -192,15 +193,18 @@ router.beforeEach(platformAdminGuard);
  * The title of a page whose name comes from the server (a group, a site) is
  * only known once it has loaded, so Group.vue and Site.vue set their own as
  * soon as they have it. What the router can do meanwhile is stop the previous
- * page's title from sticking around: the slug is already in the path.
+ * page's title from sticking around: the slug is already in the path. Exported
+ * for a test that mounts a page on a memory-history router.
  */
-router.afterEach((to) => {
+export const titleAfterNavigation: NavigationHookAfter = (to) => {
   if (typeof to.meta.titleKey === 'string') {
     setDocumentTitle(t(to.meta.titleKey as MessageKey));
     return;
   }
   const { group, site } = to.params as { group?: string; site?: string };
   setDocumentTitle(site ?? group);
-});
+};
+
+router.afterEach(titleAfterNavigation);
 
 export default router;

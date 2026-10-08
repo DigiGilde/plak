@@ -163,6 +163,30 @@ class TestReading:
         body = (await client.get(AUDIT, params={"site": "site", "result": "refused"})).json()
         assert [row["refs"]["site"] for row in body["entries"]] == ["site"]
 
+    async def test_a_change_of_address_is_found_from_the_old_and_the_new_slug(self, client, app, data):
+        await _write(
+            app,
+            action="group_slug",
+            refs={"group": "ploeg", "previous_group": "team", "group_id": "g", "sites": ["blog", "site"]},
+        )
+        await _write(
+            app, action="site_slug", refs={"group": "ploeg", "site": "docs", "previous_site": "site", "site_id": "s"}
+        )
+        await _write(app, action="content_access", refs={"group": "ander", "site": "blogger"})
+        _as_admin(client, app)
+
+        async def found(**filters) -> list[str]:
+            body = (await client.get(AUDIT, params=filters)).json()
+            return sorted(row["action"] for row in body["entries"])
+
+        assert await found(group="team") == ["group_slug"]
+        assert await found(group="ploeg") == ["group_slug", "site_slug"]
+        assert await found(site="site") == ["group_slug", "site_slug"]
+        assert await found(site="docs") == ["site_slug"]
+        assert await found(site="blog") == ["group_slug"]
+        # A whole element of `sites`, never a part of one.
+        assert await found(site="blogger") == ["content_access"]
+
     async def test_the_actor_stays_pseudonymous(self, client, app, data):
         await _write(app, action="test_actor", sub="lid-a")
         _as_admin(client, app)
