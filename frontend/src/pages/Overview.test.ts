@@ -42,7 +42,7 @@ vi.mock('../api/plak', () => ({
 const filledData: OverviewData = {
   groups: [
     {
-      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
+      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
       sites: [
         {
           id: '3f2b8a1e-5d4c-4e9a-9b6f-7c1d2e3a4b5c',
@@ -58,6 +58,7 @@ const filledData: OverviewData = {
           hasLiveVersion: true,
           lastPublishedAt: '2026-07-17T14:32:00.000Z',
           previewCount: 1,
+          previousSlugs: [],
         },
       ],
     },
@@ -242,7 +243,7 @@ describe('Overview', () => {
     vi.mocked(plakApi.overview).mockResolvedValue({
       groups: [
         {
-          group: { slug: 'empty', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          group: { slug: 'empty', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
           sites: [],
         },
       ],
@@ -331,6 +332,7 @@ describe('Overview', () => {
       ciForgejoHosts: [],
       ciAudience: 'https://plak.test',
       language: null,
+      slugRedirectDays: 30,
     });
 
     const wrapper = mount(Overview, {
@@ -375,8 +377,9 @@ describe('Overview', () => {
       hasLiveVersion: false,
       lastPublishedAt: null,
       previewCount: 0,
+      previousSlugs: [],
     };
-    const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false } };
+    const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 
     // Teleport stubbed, like the other sheet tests: a sheet that really lands
     // in document.body is connected there as a custom element and then calls
@@ -595,6 +598,7 @@ describe('Overview', () => {
         ciForgejoHosts: [],
         ciAudience: 'https://plak.test',
         language: null,
+        slugRedirectDays: 30,
       };
     }
 

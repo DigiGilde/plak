@@ -7,6 +7,15 @@ from dataclasses import dataclass
 
 SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
+# An old address keeps redirecting through this many days after a rename
+# (slug_window.py), and stays reserved for its group or site until then.
+SLUG_REDIRECT_DAYS = 30
+
+# At most this many old addresses of one group or site redirect at once: a
+# rename beyond that is refused until one has ended, and renaming back to one
+# of them is always allowed.
+MAX_PREVIOUS_SLUGS = 5
+
 
 def path_under(path: str, prefix: str) -> bool:
     """Whether `path` is `prefix` itself or something below it.
