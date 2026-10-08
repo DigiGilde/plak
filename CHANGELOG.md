@@ -10,8 +10,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
-<!-- release: hold -->
-
 ### Changed
 
 - The What's new page no longer opens with the version you use; the footer
