@@ -16,7 +16,13 @@ const props = withDefaults(
     confirmLabel: string;
     /** The safe way out: sits at the top and gets the primary variant. */
     keepLabel?: string;
+    /**
+     * While it is set the dialog cannot be dismissed: the action is under way
+     * and cannot be called back.
+     */
     busy?: boolean;
+    /** A change that can be undone is not red. */
+    confirmVariant?: 'destructive' | 'secondary';
     /**
      * Text the member has to type before the confirmation goes through, for
      * an action that throws away more than one thing. A click on autopilot
@@ -24,7 +30,7 @@ const props = withDefaults(
      */
     confirmPhrase?: string;
   }>(),
-  { busy: false },
+  { busy: false, confirmVariant: 'destructive' },
 );
 
 // Not a withDefaults default: that is evaluated once, which would freeze the
@@ -70,6 +76,24 @@ watch(
   { immediate: true },
 );
 
+/**
+ * The dialog closes itself on Escape and on a click on the backdrop, and says
+ * so only when it is gone. While the action runs that is undone by opening it
+ * again. The owner closing it (open is false by then) is not dismissing.
+ */
+function closed(): void {
+  if (props.busy && props.open) {
+    dialog.value?.show?.();
+    return;
+  }
+  emit('close');
+}
+
+function keep(): void {
+  if (props.busy) return;
+  emit('close');
+}
+
 function confirm(): void {
   // Only confirm while the dialog is genuinely open: that makes the
   // confirmation step enforceable in tests too (which have no real modal).
@@ -91,7 +115,7 @@ function confirm(): void {
       :text="title"
       :supporting-text="text"
       :accessible-label="title"
-      @close="emit('close')"
+      @close="closed"
     >
       <!-- Between the sentence and the buttons: whatever a confirmation needs
            beyond a sentence, such as the choice to take more along. -->
@@ -131,11 +155,11 @@ function confirm(): void {
         variant="primary"
         :text="keepText"
         data-testid="confirm-cancel"
-        @click="emit('close')"
+        @click="keep"
       ></nldd-button>
       <nldd-button
         slot="actions"
-        variant="destructive"
+        :variant="confirmVariant"
         :text="confirmLabel"
         :loading="busy || undefined"
         data-testid="confirm-continue"

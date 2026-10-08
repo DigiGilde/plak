@@ -27,6 +27,7 @@ import type {
   Overview,
   PlatformRole,
   Preview,
+  PreviousSlug,
   RepositoryProvider,
   Role,
   Site,
@@ -124,6 +125,112 @@ function resolveText(requested: string, field: string): TextResolution {
     };
   }
   return { ok: true, text };
+}
+
+// Mirrors constants.py: how long an old address keeps redirecting, and how
+// many of them may redirect at once.
+const SLUG_REDIRECT_DAYS = 30;
+const MAX_PREVIOUS_SLUGS = 5;
+const AMSTERDAM = 'Europe/Amsterdam';
+const HOUR_MS = 60 * 60 * 1000;
+
+/** What the clock on the wall in Amsterdam says at `instant`, read as if it were UTC. */
+function amsterdamWallClock(instant: number): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: AMSTERDAM,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, Number(part.value)]),
+  ) as Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number>;
+  return Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+}
+
+/**
+ * When an address that changes now stops redirecting, like slug_window.py: at
+ * midnight in Amsterdam after the 30th day, so day 31 starts without it.
+ */
+function redirectEnd(): string {
+  const today = new Date(amsterdamWallClock(Date.now()));
+  const midnight = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate() + SLUG_REDIRECT_DAYS + 1,
+  );
+  // Read the offset shortly before that midnight: on the day the clocks change
+  // it is still the old one, and the old one is the one that midnight is in.
+  const before = midnight - 2 * HOUR_MS;
+  return new Date(midnight - (amsterdamWallClock(before) - before)).toISOString();
+}
+
+/** The old addresses that still redirect, newest first. */
+function redirecting(previous: PreviousSlug[]): PreviousSlug[] {
+  return previous.filter((p) => new Date(p.redirectsUntil).getTime() > Date.now());
+}
+
+interface Addressed {
+  slug: string;
+  previousSlugs: PreviousSlug[];
+}
+
+/**
+ * The refusals of an address change that come after the validation, in the
+ * backend's order: the limit of old addresses first, then a slug that is taken.
+ * A slug is taken by another's current address, and for a while after by its
+ * old one. `others` are the groups, or the other sites in the group.
+ */
+function addressRefusal(
+  entity: Addressed,
+  slug: string,
+  others: Addressed[],
+  taken: { current: string; recent: string },
+): Response | null {
+  const kept = redirecting(entity.previousSlugs);
+  if (kept.length >= MAX_PREVIOUS_SLUGS && !kept.some((p) => p.slug === slug)) {
+    return problem(
+      409,
+      'Te veel oude adressen',
+      `Dit heeft al ${MAX_PREVIOUS_SLUGS} oude adressen die nog doorsturen. Zet een oud adres terug, of wacht tot er een is verlopen.`,
+      'TOO_MANY_PREVIOUS_SLUGS',
+    );
+  }
+  if (others.some((other) => other.slug === slug)) {
+    return problem(409, 'Adres bestaat al', taken.current, 'SLUG_EXISTS');
+  }
+  if (others.some((other) => redirecting(other.previousSlugs).some((p) => p.slug === slug))) {
+    return problem(409, 'Adres bestaat al', taken.recent, 'SLUG_EXISTS');
+  }
+  return null;
+}
+
+/** The old address becomes a previous one; an address of its own that is taken back leaves the list. */
+function applyAddress(entity: Addressed, slug: string): void {
+  const kept = redirecting(entity.previousSlugs).filter((p) => p.slug !== slug);
+  entity.previousSlugs = [{ slug: entity.slug, redirectsUntil: redirectEnd() }, ...kept];
+  entity.slug = slug;
+}
+
+function slugInvalid(slug: string): Response {
+  return problem(
+    422,
+    'Ongeldig adres',
+    `"${slug}" is geen geldig of toegestaan adres.`,
+    'SLUG_INVALID',
+  );
 }
 
 /**
@@ -306,7 +413,14 @@ function defaultData(): MockData {
         lastLoginAt: '2026-07-30T10:10:00Z',
       },
     ],
-    groups: [{ slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } }],
+    groups: [
+      {
+        slug: 'team-aurora',
+        name: 'Team Aurora',
+        defaultAccess: { base: 'public', keys: false, invitees: false },
+        previousSlugs: [],
+      },
+    ],
     groupMembers: [
       {
         groupSlug: 'team-aurora',
@@ -367,6 +481,7 @@ function defaultData(): MockData {
         hasLiveVersion: true,
         lastPublishedAt: lastPublishedAt,
         previewCount: 1,
+        previousSlugs: [],
       },
     ],
     versions: [
@@ -750,6 +865,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         ciForgejoHosts: MOCK_CI_FORGEJO_HOSTS,
         ciAudience: MOCK_CI_AUDIENCE,
         language: data.myLanguage,
+        slugRedirectDays: SLUG_REDIRECT_DAYS,
       };
       return json(200, response);
     }
@@ -782,6 +898,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         slug,
         name,
         defaultAccess: { base: 'site_team', keys: false, invitees: false },
+        previousSlugs: [],
       };
       data.groups.push(created);
       // Like the backend: the creator immediately becomes a group member.
@@ -849,6 +966,50 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         return json(200, groupRow);
       }
 
+      // PUT /groups/{group}/slug
+      if (method === 'PUT' && rest.length === 3 && rest[2] === 'slug') {
+        const caller = loggedInMember();
+        if (!caller) return notLoggedIn();
+        if (!groupRow) {
+          return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`, 'UNKNOWN_GROUP');
+        }
+        const groupAdmin = myRoles(data, caller).groupRoles.some(
+          (r) => r.groupSlug === groupSlug && r.role === 'admin',
+        );
+        if (!groupAdmin) return insufficientRole();
+        const slug = String(readJson().slug ?? '');
+        if (!SLUG_RE.test(slug) || RESERVED_SLUGS.has(slug)) return slugInvalid(slug);
+        if (slug === groupRow.slug) return json(200, groupRow);
+        const refusal = addressRefusal(
+          groupRow,
+          slug,
+          data.groups.filter((g) => g !== groupRow),
+          {
+            current: `Er bestaat al een groep met slug "${slug}".`,
+            recent: `De slug "${slug}" was kort geleden het adres van een andere groep. Kies een andere slug.`,
+          },
+        );
+        if (refusal) return refusal;
+        applyAddress(groupRow, slug);
+        // The rows that name the group by its slug follow it, as they do in the database.
+        for (const row of [
+          ...data.sites,
+          ...data.groupMembers,
+          ...data.siteRoles,
+          ...data.versions,
+          ...data.previews,
+          ...data.invitees,
+          ...data.keys,
+          ...data.repositories,
+        ]) {
+          if (row.groupSlug === groupSlug) row.groupSlug = slug;
+        }
+        for (const preview of data.previews) {
+          if (preview.groupSlug === slug) preview.url = `/${slug}/${preview.url.slice(groupSlug.length + 2)}`;
+        }
+        return json(200, groupRow);
+      }
+
       // PUT /groups/{group}/default-access
       if (method === 'PUT' && rest.length === 3 && rest[2] === 'default-access') {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
@@ -882,6 +1043,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           hasLiveVersion: false,
           lastPublishedAt: null,
           previewCount: 0,
+          previousSlugs: [],
         };
         data.sites.push(created);
         return json(201, created);
@@ -1107,6 +1269,60 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         const resolved = resolveText(String(readJson().title ?? ''), 'title');
         if (!resolved.ok) return resolved.response;
         siteRow.title = resolved.text;
+        return json(200, siteDerived(data, siteRow));
+      }
+
+      // PUT /sites/{group}/{site}/slug
+      if (method === 'PUT' && rest.length === 4 && rest[3] === 'slug') {
+        const caller = loggedInMember();
+        if (!caller) return notLoggedIn();
+        if (!siteRow) return siteNotFound();
+        const roles = myRoles(data, caller);
+        const groupRole = roles.groupRoles.find((r) => r.groupSlug === groupSlug)?.role;
+        const siteRole = roles.siteRoles.find(
+          (r) => r.groupSlug === groupSlug && r.siteSlug === siteSlug,
+        );
+        if (caller.platformRole !== 'admin' && !groupRole && !siteRole) return siteNotFound();
+        if (groupRole !== 'admin' && siteRole?.effectiveRole !== 'admin') return insufficientRole();
+        // An admin of this site alone may change its title but not its address.
+        if (!groupRole) {
+          return problem(
+            403,
+            'Geen toegang',
+            'Het adres van een site wijzigen kan alleen met een rol in de groep van de site.',
+            'INSUFFICIENT_ROLE',
+          );
+        }
+        const slug = String(readJson().slug ?? '');
+        if (!SLUG_RE.test(slug)) return slugInvalid(slug);
+        if (slug === siteRow.slug) return json(200, siteDerived(data, siteRow));
+        const refusal = addressRefusal(
+          siteRow,
+          slug,
+          data.sites.filter((p) => p.groupSlug === groupSlug && p !== siteRow),
+          {
+            current: `Er bestaat al een site met slug "${slug}" in deze groep.`,
+            recent: `De slug "${slug}" was kort geleden het adres van een andere site in deze groep. Kies een andere slug.`,
+          },
+        );
+        if (refusal) return refusal;
+        applyAddress(siteRow, slug);
+        // The rows that name the site by its slug follow it.
+        for (const row of [
+          ...data.siteRoles,
+          ...data.versions,
+          ...data.previews,
+          ...data.invitees,
+          ...data.keys,
+          ...data.repositories,
+        ]) {
+          if (row.groupSlug === groupSlug && row.siteSlug === siteSlug) row.siteSlug = slug;
+        }
+        for (const preview of data.previews) {
+          if (preview.groupSlug === groupSlug && preview.siteSlug === slug) {
+            preview.url = `/${groupSlug}/${slug}/${preview.url.slice(groupSlug.length + siteSlug.length + 3)}`;
+          }
+        }
         return json(200, siteDerived(data, siteRow));
       }
 

@@ -42,6 +42,43 @@ export function formatCalendarDate(day: string): string {
   return formatter({ dateStyle: 'long', timeZone: 'UTC' }, 'calendar-date').format(new Date(day));
 }
 
+const AMSTERDAM = 'Europe/Amsterdam';
+
+/** The calendar day (`YYYY-MM-DD`) an instant falls on in Amsterdam, wherever the reader is. */
+function amsterdamDay(instant: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: AMSTERDAM,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(instant)
+      .map(({ type, value }) => [type, value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+/**
+ * The last day an old address redirects, from the moment the API says the
+ * redirect is over: midnight in Amsterdam at the start of the day after it, so
+ * a millisecond earlier is still the last day.
+ */
+export function lastRedirectDay(redirectsUntil: string): string {
+  return formatCalendarDate(amsterdamDay(new Date(new Date(redirectsUntil).getTime() - 1)));
+}
+
+/**
+ * The last day an address that changes now still redirects: `days` after
+ * today in Amsterdam, counted on the calendar because a day is not always 24
+ * hours there.
+ */
+export function redirectDayFromToday(days: number, now: Date = new Date()): string {
+  const [year, month, day] = amsterdamDay(now).split('-').map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(year, month - 1, day + days));
+  return formatCalendarDate(last.toISOString().slice(0, 10));
+}
+
 /** A size in bytes as KiB, MiB or GiB, in the number conventions of the language on screen. */
 export function formatBytes(bytes: number): string {
   const units = ['B', 'KiB', 'MiB', 'GiB'];

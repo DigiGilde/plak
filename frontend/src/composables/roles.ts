@@ -27,6 +27,15 @@ export function isGroupAdmin(me: Me | null | undefined, groupSlug: string): bool
 }
 
 /**
+ * Whether `me` has a role in this group, a reader's included; no
+ * platform-admin bypass. Changing the address of a site needs one besides
+ * admin on the site.
+ */
+export function isGroupMember(me: Me | null | undefined, groupSlug: string): boolean {
+  return me?.groupRoles.some((r) => r.groupSlug === groupSlug) ?? false;
+}
+
+/**
  * Whether `me` is beheerder of this site: the widest of the group role and the
  * site role is admin. Mirrors `effective_site_role` in the backend; no
  * platform-admin bypass.

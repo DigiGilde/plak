@@ -7,6 +7,7 @@
  * keep its name, because that is what the login service is called and
  * translating a proper noun only makes it unfindable.
  */
+import { addressEn } from './address.en';
 import { adminEn } from './admin.en';
 import { designSystemEn } from './designSystem.en';
 import { groupEn } from './group.en';
@@ -24,6 +25,8 @@ const shared = {
   'error.expired.action': 'Sign in again',
   'error.guidance.ALREADY_GROUP_MEMBER': 'You change their role from the menu behind their row.',
   'error.guidance.ALREADY_SITE_MEMBER': 'You change that role from the menu behind their row.',
+  'error.renamed.hint': 'Was the site or group renamed? Then look for it in your overview.',
+  'error.renamed.link': 'Go to the overview',
 
   'beta.bar': 'Beta - Plak is under development and may contain errors',
 
@@ -133,6 +136,7 @@ export const en: Catalogue = {
   ...shared,
   ...pagesEn,
   ...groupEn,
+  ...addressEn,
   ...adminEn,
   ...siteEn,
   ...publishEn,

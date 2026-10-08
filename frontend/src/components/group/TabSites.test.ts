@@ -22,6 +22,7 @@ function site(slug: string, title: string): Site {
     hasLiveVersion: false,
     lastPublishedAt: null,
     previewCount: 0,
+    previousSlugs: [],
   };
 }
 

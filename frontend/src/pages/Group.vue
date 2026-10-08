@@ -24,7 +24,7 @@ import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import * as api from '@/api/plak';
-import type { Group, GroupDetail, GroupMember, Me, Site } from '@/api/types';
+import type { Group, GroupDetail, GroupMember, Me, Member, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
@@ -52,14 +52,23 @@ const sheetOpen = ref(false);
 const contentBase = ref('');
 /** From `/me`; gates the publish button and feeds the sheet's own filtering. */
 const me = ref<Me | null>(null);
+/**
+ * The address the roles in `me` name the group by. That is the address on
+ * screen, except while an address change moves the route, and when the roles
+ * could not be fetched again after it.
+ */
+const shownSlug = ref(groupSlug.value);
 // A failed session fetch must not topple the page (same stance as
 // `contentBase` above): with the role unknown, the button stays rather than
 // stranding a flow that may well be allowed.
-const canPublish = computed(() => me.value == null || mayCreateSiteIn(me.value, groupSlug.value));
+const canPublish = computed(() => me.value == null || mayCreateSiteIn(me.value, shownSlug.value));
 // Unlike canPublish, an unknown role hides it: deleting is not a flow to strand.
-const canDeleteGroup = computed(() => isGroupAdmin(me.value, groupSlug.value));
+const canDeleteGroup = computed(() => isGroupAdmin(me.value, shownSlug.value));
 // Same for renaming: with the role unknown the name is shown, not offered.
-const canRenameGroup = computed(() => isGroupAdmin(me.value, groupSlug.value));
+const canRenameGroup = computed(() => isGroupAdmin(me.value, shownSlug.value));
+// Same for the address.
+const canChangeAddress = computed(() => isGroupAdmin(me.value, shownSlug.value));
+const redirectDays = computed(() => me.value?.slugRedirectDays ?? 0);
 
 async function loadGroup(): Promise<void> {
   loading.value = true;
@@ -74,14 +83,25 @@ async function loadGroup(): Promise<void> {
     me.value = loggedIn as Me | null;
     contentBase.value = me.value?.contentBaseUrl ?? '';
     detail.value = fetched;
+    shownSlug.value = fetched.group.slug;
   } catch (e) {
     error.value = e;
+    // Not the group the page showed before: this address is not that group.
+    detail.value = null;
   } finally {
     loading.value = false;
   }
 }
 
+/** The address this page has just moved the route to itself, which needs no load. */
+let movedTo: string | null = null;
+
 onMounted(loadGroup);
+watch(groupSlug, (slug) => {
+  const own = movedTo === slug;
+  movedTo = null;
+  if (!own) void loadGroup();
+});
 
 watchEffect(() => {
   setBreadcrumbs(route.path, [
@@ -110,9 +130,11 @@ const currentTab = computed(() => TABS.find((tab) => tab.name === route.name));
 const tabsScroll = ref<HTMLElement | null>(null);
 useCurrentTabInView(tabsScroll, () => TABS.findIndex((tab) => tab.name === route.name));
 
-watchEffect(() => {
+function showTitle(): void {
   setDocumentTitle(detail.value?.group.name ?? groupSlug.value, currentTab.value?.path ? t(currentTab.value.labelKey) : null);
-});
+}
+
+watchEffect(showTitle);
 
 function tabPath(tab: TabDefinition): string {
   const base = `/${groupSlug.value}`;
@@ -201,6 +223,35 @@ function afterRemoval(): void {
   void router.replace('/');
 }
 
+/**
+ * The address of the group was changed in its settings tab. The page takes the
+ * group over and moves the route to the new address without loading: a load
+ * would take the tab down, and with it the line that says what came of the
+ * change.
+ */
+async function onGroupRenamed(updated: Group): Promise<void> {
+  const current = detail.value!;
+  let member: Member | null | undefined;
+  try {
+    // The roles in `/me` name a group by its address.
+    member = await fetchCurrentMember(true);
+  } catch {
+    // The address has changed all the same. The roles go on naming the group
+    // by the address they were fetched with, and `shownSlug` with them.
+  }
+  current.group = updated;
+  for (const site of current.sites) site.groupSlug = updated.slug;
+  if (member !== undefined) {
+    me.value = member as Me | null;
+    shownSlug.value = updated.slug;
+  }
+  movedTo = updated.slug;
+  await router.replace({ params: { group: updated.slug } });
+  // The router has put the slug in the title, as it does on every navigation,
+  // and nothing the title is made of has changed to make it come back.
+  showTitle();
+}
+
 function onMemberAdded(member: GroupMember): void {
   detail.value?.members.push(member);
 }
@@ -259,7 +310,7 @@ function onGroupChanged(group: Group): void {
       :text="t('group.page.loading')"
     ></nldd-inline-dialog>
 
-    <ErrorBanner v-else-if="error" :error="error" />
+    <ErrorBanner v-else-if="error" :error="error" renamed-hint />
 
     <template v-else-if="detail">
       <!-- Title and tab bar together form the page header (16), the content
@@ -309,12 +360,17 @@ function onGroupChanged(group: Group): void {
           :sites="detail.sites"
           :members="detail.members"
           :access="detail.group.defaultAccess"
+          :previous-slugs="detail.group.previousSlugs"
+          :content-base="contentBase"
+          :redirect-days="redirectDays"
           :can-delete="canDeleteGroup"
           :can-rename="canRenameGroup"
+          :can-change-address="canChangeAddress"
           @member-added="onMemberAdded"
           @member-removed="onMemberRemoved"
           @member-role-changed="onMemberRoleChanged"
           @group-changed="onGroupChanged"
+          @renamed="onGroupRenamed"
           @removed="afterRemoval"
         />
       </router-view>

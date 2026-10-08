@@ -5,8 +5,9 @@ preview versions (target=preview without a matching preview row, left behind
 by an interrupted upsert/teardown), live versions older than the ones a
 site keeps (its own number, else PLAK_LIVE_VERSIONS_KEPT; row and file tree),
 stale `_tmp` directories in the ContentStore, version and site directories that
-lost their row (set aside in `_reclaimed` first, removed a week later), and
-expired CLI device authorizations and CLI sessions.
+lost their row (set aside in `_reclaimed` first, removed a week later),
+expired CLI device authorizations and CLI sessions, and the old slugs of
+groups and sites whose redirect has ended, which frees them for anyone.
 
 `delete_expired` is the core and can be called on its own by tests; main.py
 starts the background loop through `cleanup_job()`, an async context manager,
@@ -24,7 +25,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from plak.audit import vocabulary
@@ -33,6 +34,8 @@ from plak.ingest.store import ContentStore
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.identity import Group
 from plak.models.publication import Preview, Site, Version, VersionTarget
+from plak.models.slugs import GroupSlug, SiteSlug
+from plak.slug_window import still_redirects
 
 TIMESTAMP_DEFAULT = time(3, 0)
 TMP_OLDER_THAN_DEFAULT = timedelta(hours=24)
@@ -58,6 +61,7 @@ class CleanupResult:
     orphan_directories: int = 0
     held_directories: int = 0
     reclaimed_swept: int = 0
+    released_slugs: int = 0
 
 
 async def _cleanup_expired_previews(
@@ -232,6 +236,28 @@ async def _reclaim_orphan_directories(
     return len(reclaimed.moved), len(reclaimed.held), store.sweep_reclaimed(RECLAIMED_KEPT)
 
 
+async def _release_retired_slugs(factory: async_sessionmaker[AsyncSession], now: datetime) -> int:
+    """Deletes the old slugs whose redirect has ended (slug_window.py decides
+    that), so anyone can claim them from now on. No audit row: the moment
+    follows from the change of address, and a claim writes its own.
+
+    A row goes only as it was read: one its group or site took back, or gave
+    up once more, in the meantime has another `retired_at` and stays."""
+    released = 0
+    async with factory() as db, db.begin():
+        for namespace, key in ((GroupSlug, (GroupSlug.slug,)), (SiteSlug, (SiteSlug.group_id, SiteSlug.slug))):
+            rows = (await db.execute(select(*key, namespace.retired_at).where(namespace.retired_at.is_not(None)))).all()
+            ended = [tuple(row) for row in rows if not still_redirects(row.retired_at, now)]
+            if ended:
+                gone = await db.scalars(
+                    delete(namespace)
+                    .where(tuple_(*key, namespace.retired_at).in_(ended))
+                    .returning(namespace.slug)
+                )
+                released += len(gone.all())
+    return released
+
+
 async def delete_expired(
     factory: async_sessionmaker[AsyncSession],
     store: ContentStore,
@@ -250,6 +276,7 @@ async def delete_expired(
     swept = store.sweep_tmp(tmp_older_than)
     async with factory() as db:
         authorizations, cli_sessions = await cli.delete_expired(db, now)
+    released_slugs = await _release_retired_slugs(factory, now)
     orphan_directories, held_directories, reclaimed_swept = await _reclaim_orphan_directories(factory, store)
     return CleanupResult(
         expired_previews=expired,
@@ -261,6 +288,7 @@ async def delete_expired(
         orphan_directories=orphan_directories,
         held_directories=held_directories,
         reclaimed_swept=reclaimed_swept,
+        released_slugs=released_slugs,
     )
 
 

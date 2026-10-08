@@ -114,6 +114,7 @@ or `?lang=en` overrides the header.
 Fields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix
 (`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;
 the major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.
+Addresses are slugs and can change; the API knows only the current one, an old slug answers 404.
 """
 
 OPENAPI_TAGS: list[dict[str, str]] = [

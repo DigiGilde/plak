@@ -98,6 +98,18 @@ export function setGroupName(groupSlug: string, name: string): Promise<Group> {
   });
 }
 
+/**
+ * Changes the address of a group. The old one keeps redirecting for a while,
+ * but the API itself knows only the new one: the next call names it.
+ */
+export function setGroupSlug(groupSlug: string, slug: string): Promise<Group> {
+  return request<Group>(`${groupPath(groupSlug)}/slug`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slug }),
+  });
+}
+
 export function setGroupDefaultAccess(slug: string, access: Access): Promise<Group> {
   return request<Group>(`${groupPath(slug)}/default-access`, {
     method: 'PUT',
@@ -129,6 +141,19 @@ export function setSiteTitle(
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title }),
+  });
+}
+
+/** The same for a site; needs a role in its group as well as site admin. */
+export function setSiteSlug(
+  groupSlug: string,
+  siteSlug: string,
+  slug: string,
+): Promise<Site> {
+  return request<Site>(`${sitePath(groupSlug, siteSlug)}/slug`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slug }),
   });
 }
 

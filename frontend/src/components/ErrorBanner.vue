@@ -13,10 +13,21 @@ import { computed } from 'vue';
 import { ApiError } from '@/api/client';
 import { t } from '@/i18n';
 
-const props = defineProps<{ error: unknown }>();
+const props = defineProps<{
+  error: unknown;
+  /** On the page of a site or a group: what is not found there may have been renamed. */
+  renamedHint?: boolean;
+}>();
 
 const expired = computed(
   () => props.error instanceof ApiError && props.error.problem.status === 401,
+);
+
+const renamed = computed(
+  () =>
+    props.renamedHint === true &&
+    props.error instanceof ApiError &&
+    props.error.problem.status === 404,
 );
 
 const title = computed(() => {
@@ -52,6 +63,17 @@ const loginHref = computed(
     :text="title"
     :supporting-text="detail"
   >
+    <nldd-rich-text v-if="renamed" data-testid="renamed-hint">
+      <p>{{ t('error.renamed.hint') }}</p>
+    </nldd-rich-text>
+    <nldd-button
+      v-if="renamed"
+      slot="actions"
+      variant="secondary"
+      :text="t('error.renamed.link')"
+      href="/"
+      data-testid="renamed-overview"
+    ></nldd-button>
     <nldd-button
       v-if="expired"
       slot="actions"

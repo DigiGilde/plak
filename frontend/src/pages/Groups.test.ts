@@ -46,23 +46,24 @@ function site(slug: string, live: boolean): Site {
     hasLiveVersion: live,
     lastPublishedAt: live ? '2026-07-17T14:32:00.000Z' : null,
     previewCount: 0,
+    previousSlugs: [],
   };
 }
 
 const filledData: OverviewData = {
   groups: [
     {
-      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
+      group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
       sites: [site('website', true), site('handboek', false)],
     },
     {
-      group: { slug: 'leeg', name: 'Lege groep', defaultAccess: { base: 'site_team', keys: false, invitees: false } },
+      group: { slug: 'leeg', name: 'Lege groep', defaultAccess: { base: 'site_team', keys: false, invitees: false }, previousSlugs: [] },
       sites: [],
     },
   ],
 };
 
-const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false } };
+const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false }, previousSlugs: [] };
 
 function makeRouter(): Router {
   return createRouter({
@@ -155,7 +156,7 @@ describe('Groups', () => {
     vi.mocked(plakApi.overview).mockResolvedValue({
       groups: [
         {
-          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
           sites: [site('website', true)],
         },
       ],
@@ -172,7 +173,7 @@ describe('Groups', () => {
     vi.mocked(plakApi.overview).mockResolvedValue({
       groups: [
         {
-          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } },
+          group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
           sites: [site('website', true), site('handboek', true), site('intranet', false)],
         },
       ],

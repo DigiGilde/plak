@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import * as plak from '@/api/plak';
 import { ApiError } from '@/api/client';
-import type { Me, RepositoryProvider, SiteRepository } from '@/api/types';
+import type { Me, PreviousSlug, RepositoryProvider, SiteRepository } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
@@ -32,7 +32,16 @@ function segments(
 // See TabOverview.vue for why inheritAttrs is off on every tab.
 defineOptions({ inheritAttrs: false });
 
-const props = defineProps<{ group: string; site: string; contentBase: string }>();
+const props = withDefaults(
+  defineProps<{
+    group: string;
+    site: string;
+    contentBase: string;
+    /** The old addresses of the site that still redirect, from the page. */
+    previousSlugs?: PreviousSlug[];
+  }>(),
+  { previousSlugs: () => [] },
+);
 
 const loading = ref(true);
 const error = ref<unknown>(null);
@@ -598,6 +607,11 @@ const workflowPath = computed(() =>
 
 const workflowPathHint = computed(() => segments('publish.deploy.workflow.path', ['path', 'link']));
 
+const movedSentence = computed(() => segments('publish.deploy.moved.text', ['old', 'new']));
+
+/** What `site:` held in a workflow that has not been told about the new address. */
+const oldSiteValues = computed(() => props.previousSlugs.map((p) => `${props.group}/${p.slug}`));
+
 const siteIdOptional = computed(() => segments('publish.deploy.siteId.optional', ['code']));
 
 const cliInstall = computed(() => segments('publish.deploy.cli.install', ['repo', 'folder']));
@@ -638,6 +652,27 @@ plak logout
   <ErrorBanner v-else-if="error" :error="error" />
 
   <nldd-container v-else layout="stack" gap="24" class="deploy">
+    <!-- In a container of its own, which the reading width below applies to. -->
+    <nldd-container v-if="previousSlugs.length > 0" layout="stack">
+      <nldd-banner
+        variant="warning"
+        :text="t('publish.deploy.moved.title')"
+        data-testid="deploy-moved"
+      >
+        <nldd-rich-text>
+          <p>
+            {{ movedSentence[0]
+            }}<template v-for="(address, index) in oldSiteValues" :key="address"
+              >{{ index > 0 ? t('publish.deploy.moved.or') : ''
+              }}<code translate="no">site: {{ address }}</code></template
+            >{{ movedSentence[1] }}<code translate="no">site: {{ group }}/{{ site }}</code>{{
+              movedSentence[2]
+            }}
+          </p>
+        </nldd-rich-text>
+      </nldd-banner>
+    </nldd-container>
+
     <section aria-labelledby="heading-repository">
       <nldd-container layout="stack" gap="8">
         <nldd-title :size="4">

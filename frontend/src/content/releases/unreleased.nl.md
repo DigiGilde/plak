@@ -15,3 +15,9 @@ Een gepubliceerde site kan geen service worker meer registreren, dus een PWA-plu
 ## Naam van een groep en titel van een site wijzigen
 
 Een beheerder van een groep kan de naam van de groep wijzigen, en een beheerder van een site de titel van de site. Dat doe je op het tabblad "Instellingen". Een site heeft nu zo'n tabblad; daar staat ook "Site verwijderen", dat eerder op het tabblad "Overzicht" stond.
+
+## Adres van een groep of site wijzigen
+
+Een beheerder van een groep kan het adres van de groep wijzigen, en een beheerder van een site die ook lid is van de groep het adres van de site. Dat doe je op het tabblad "Instellingen". Het oude adres stuurt 30 dagen door voor wie de site mag bekijken, en in die tijd kun je het terugzetten. Daarna kan een andere groep of site het adres krijgen.
+
+Publiceren vanuit een workflow of met `plak publish` werkt na een wijziging pas weer als je het adres daar aanpast. Na een wijziging van het adres van een site zegt het tabblad "Deploy" van die site dat zolang het oude adres nog doorstuurt.

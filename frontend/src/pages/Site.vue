@@ -24,9 +24,14 @@ const error = ref<unknown>(null);
 const detail = ref<GroupDetail | null>(null);
 /** Content origin from `/me`; the tabs build every shared link on it. */
 const contentBase = ref('');
+/**
+ * Which site the page shows. Its address can change under the page, and the
+ * page goes on showing the site while the route follows.
+ */
+const siteId = ref<string | null>(null);
 
 const site = computed<Site | null>(
-  () => detail.value?.sites.find((p) => p.slug === siteSlug.value) ?? null,
+  () => detail.value?.sites.find((p) => p.id === siteId.value) ?? null,
 );
 
 /** Fetches group and session; throws when the site cannot be shown. */
@@ -37,7 +42,8 @@ async function fetchData(): Promise<void> {
   ]);
   // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
   contentBase.value = (loggedIn as Me | null)?.contentBaseUrl ?? '';
-  if (!fetched.sites.some((p) => p.slug === siteSlug.value)) {
+  const found = fetched.sites.find((p) => p.slug === siteSlug.value);
+  if (!found) {
     throw new ApiError({
       type: 'about:blank',
       title: t('site.notFound.title'),
@@ -45,6 +51,7 @@ async function fetchData(): Promise<void> {
       detail: t('site.notFound.detail', { site: siteSlug.value, group: groupSlug.value }),
     });
   }
+  siteId.value = found.id;
   detail.value = fetched;
 }
 
@@ -81,8 +88,40 @@ async function refresh(): Promise<void> {
   }
 }
 
+/** The address this page has just moved the route to itself, which needs no load. */
+let movedTo: string | null = null;
+
 onMounted(load);
-watch(() => [groupSlug.value, siteSlug.value], load);
+watch(
+  () => [groupSlug.value, siteSlug.value],
+  () => {
+    const own = movedTo === `${groupSlug.value}/${siteSlug.value}`;
+    movedTo = null;
+    if (!own) void load();
+  },
+);
+
+/**
+ * The address of the site was changed in a tab. The page takes the site over
+ * and moves the route to the new address without loading: a load would take the
+ * tab down, and with it the line that says what came of the change.
+ */
+async function onRenamed(updated: Site): Promise<void> {
+  const current = detail.value!;
+  try {
+    // The roles in `/me` name a site by its address.
+    await fetchCurrentMember(true);
+  } catch {
+    // The address has changed all the same, and the tab goes on with the roles
+    // it was opened with.
+  }
+  current.sites = current.sites.map((p) => (p.id === updated.id ? updated : p));
+  movedTo = `${updated.groupSlug}/${updated.slug}`;
+  await router.replace({ params: { site: updated.slug } });
+  // The router has put the slug in the title, as it does on every navigation,
+  // and nothing the title is made of has changed to make it come back.
+  showTitle();
+}
 
 watchEffect(() => {
   setBreadcrumbs(route.path, [
@@ -132,9 +171,11 @@ useCurrentTabInView(tabsScroll, () => TABS.value.findIndex((tab) => tab.name ===
 
 // The site name is the distinguishing part, so it comes first; the tab is
 // dropped on the overview, where it would only repeat the page itself.
-watchEffect(() => {
+function showTitle(): void {
   setDocumentTitle(site.value?.title || siteSlug.value, currentTab.value?.path ? currentTab.value.label : null);
-});
+}
+
+watchEffect(showTitle);
 
 function tabPath(tab: TabDefinition): string {
   const base = `/${groupSlug.value}/${siteSlug.value}`;
@@ -156,7 +197,7 @@ function afterRemoval(): void {
   <nldd-simple-section :class="{ 'reading-width': route.name !== 'site-deploy' }">
     <nldd-activity-indicator v-if="loading" :text="t('site.loading')"></nldd-activity-indicator>
 
-    <ErrorBanner v-else-if="error" :error="error" />
+    <ErrorBanner v-else-if="error" :error="error" renamed-hint />
 
     <template v-else-if="site">
       <!--
@@ -201,8 +242,10 @@ function afterRemoval(): void {
           :group="groupSlug"
           :site="siteSlug"
           :content-base="contentBase"
+          :previous-slugs="site.previousSlugs"
           @removed="afterRemoval"
           @changed="refresh"
+          @renamed="onRenamed"
         />
       </router-view>
     </template>

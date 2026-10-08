@@ -143,6 +143,7 @@ sent to the host it was issued for.
 | Publish live | you, after an explicit request | See rule 1 |
 | Clean up a preview | you | Idempotent, no risk to live |
 | Roll back to an earlier version | user | Session-only, the CLI does not offer it |
+| Rename a group or site (change its address) | user, in the admin environment | Session-only; old links redirect for 30 days and the old address is then free for others, and every workflow has to be adjusted |
 | Delete a group or site, manage members | user | Session-only, the CLI refuses it |
 | Sign out (`plak logout`) | user or you, on request | Simple, reversible action |
 
@@ -280,7 +281,8 @@ Publish to it with: plak publish <dist> --host https://beheer.plak.example.nl --
 
 Then publish a preview to it as in "The path" above. Create a group or site
 once: if it already exists (`SLUG_EXISTS`), that is the user's site or
-somebody else's, so ask instead of trying another slug.
+somebody else's, or an address another group or site gave up recently, so
+ask instead of trying another slug.
 
 ## Letting CI publish: linking the repository
 
@@ -438,16 +440,16 @@ upload, and the live site stands as it stood.
 | `INSUFFICIENT_ROLE`, `MEMBER_NOT_ACTIVE` (403) | The signed-in user does not have at least the `editor` role on this site (for `plak site create`: in this group; for `plak site link`: `admin` on the site), or is no longer an active member | Stop and ask; do not try another site |
 | `CI_REPOSITORY_NOT_TRUSTED`, `CI_BRANCH_NOT_ALLOWED` (403) | CI only: the repository is not linked to this site, or this is a live deploy that does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch | Link the repository on request (`plak site link`, or "Publiceren vanuit GitHub of Forgejo" in the admin environment), or use a preview here instead of live |
 | `CI_SITE_ID_REQUIRED` (403) | CI only: the link of this site requires the site id, and the workflow names none | Add `site-id` beside `site:` (action) or `--site-id` (CLI), with the id `plak site link` printed for this site or the one on its Deploy tab; never an id from anywhere else |
-| `SITE_MOVED` (409) | CI only: the site id in the workflow belongs to a site at another address; `detail` names that address | Relay the address. Change `site:` to it only after the user confirms it is the site they mean; if they meant the site at the address in the workflow, the `site-id` is what is wrong |
+| `SITE_MOVED` (409) | CI only: the site id in the workflow belongs to a site at another address, for instance because its address was changed; `detail` names that address | Relay the address. Change `site:` to it only after the user confirms it is the site they mean; if they meant the site at the address in the workflow, the `site-id` is what is wrong |
 | `CI_AUDIENCE_MISMATCH` (401) | CI only: the ID token is not for this Plak, or its site id names a site the repository may not publish to (another site, or one that was deleted) | Compare `site-id` with the Deploy tab of the site the user named; do not try other ids |
 | `REPOSITORY_NOT_FOUND` (422) | `plak site link`: Plak cannot see the repository and got no ids | Relay the line the CLI prints below the error: it says why `gh` gave no ids and what to do (install `gh`, `gh auth login`, check the name or ask for access, drop `--no-gh`). `gh auth login` is the user's to run; never guess the ids |
 | `CI_PROVIDER_RATE_LIMITED` (503) | `plak site link`: GitHub's limit on anonymous lookups is used up and no ids went along | Relay the line below the error, which says how to get the ids along (through `gh` or by hand); do not retry in a loop |
 | `REPOSITORY_IDS_MISMATCH`, `REPOSITORY_IDS_INVALID` (422) | `plak site link`: the ids given do not belong to this repository, or are not two positive numbers | Leave the ids out, or take them from `gh api`; do not guess |
 | `HOST_NOT_ALLOWED` (422) | `plak site link`: a Forgejo instance this Plak does not trust | Stop and ask; the platform admin decides which Forgejo instances count |
-| `UNKNOWN_SITE` (404) | Unknown group or unknown site | Have the slug confirmed; do not start guessing variants |
+| `UNKNOWN_SITE` (404) | Unknown group or unknown site; also the old address of a group or site whose address changed, which the API does not follow | Have the slug confirmed; do not start guessing variants |
 | `UNKNOWN_GROUP` (404) | `plak site create` into a group that does not exist | Have the group confirmed; create it only if the user asks for a new group |
-| `SLUG_EXISTS` (409) | `plak group create` or `plak site create` with a slug that is taken | Ask the user; it may be theirs already, or someone else's |
-| `TOO_MANY_CREATIONS` (429) | More than 20 groups and sites created in an hour | Stop; this is not something to wait out in a loop |
+| `SLUG_EXISTS` (409) | `plak group create` or `plak site create` with a slug that is taken, now or until recently by another group or site | Ask the user; it may be theirs already, someone else's, or an address another group or site gave up recently. Do not try variants |
+| `TOO_MANY_CREATIONS` (429) | More than 20 new groups, sites and addresses in an hour | Stop; this is not something to wait out in a loop |
 | (429) | Rate limit | Wait out `Retry-After`, do not keep retrying in a loop |
 
 For 401, 403 and 404: do not retry with variations. That is a question for the

@@ -26,7 +26,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from helpers_ci import AUDIENCE, FORGEJO_HOST, MockCi
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from test_deploy_api import BASE_URL, _bearer, _cli_login, _make_app, _make_settings, _upload
 
@@ -35,6 +35,7 @@ from plak.models.audit import AuditLogEntry
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
+from plak.models.slugs import SiteSlug
 
 # The token's repository, R, and another one, R2, both on GitHub.
 REPOSITORY = {"owner": "minbzk", "repo": "website", "repository_id": 1001, "owner_id": 2002}
@@ -266,16 +267,70 @@ async def test_a_bound_workflow_after_a_rename_is_told_the_new_address(binding: 
     await _assert_no_site_id_in(binding, response)
 
 
+async def test_a_link_that_took_a_token_without_site_id_requires_one_once_its_site_moves(binding: Binding) -> None:
+    """The exemption of a link from before the site id ends with the move
+    (spec 6.4), and the API follows no old address."""
+    await binding.link(binding.y, REPOSITORY, required=False)
+    async with binding.factory() as db:
+        (await db.get(Site, binding.y.id)).slug = "nieuwe-website"
+        await db.commit()
+
+    async with binding.client() as client:
+        at_the_new = await client.post(
+            f"/-/api/v1/sites/{GROUP}/nieuwe-website/deploys", files=_upload(), headers=_bearer(binding.token(False))
+        )
+        at_the_old = await client.post(
+            f"/-/api/v1/sites/{GROUP}/website/deploys", files=_upload(), headers=_bearer(binding.token(False))
+        )
+
+    assert at_the_new.status_code == 403
+    assert at_the_new.json()["code"] == "CI_SITE_ID_REQUIRED"
+    assert at_the_old.status_code == 404
+    assert at_the_old.json()["code"] == "UNKNOWN_SITE"
+    assert await binding.versions_per_site() == {}
+
+
+async def test_a_bound_workflow_follows_its_site_when_the_group_moves(binding: Binding) -> None:
+    await binding.link(binding.y, REPOSITORY, required=False)
+    async with binding.factory() as db:
+        (await db.get(Group, binding.group.id)).slug = "ploeg-aurora"
+        await db.commit()
+
+    async with binding.client() as client:
+        unbound = await client.post(
+            "/-/api/v1/sites/ploeg-aurora/website/deploys", files=_upload(), headers=_bearer(binding.token(False))
+        )
+        old = await client.post(
+            f"/-/api/v1/sites/{GROUP}/website/deploys", files=_upload(), headers=_bearer(binding.token(True))
+        )
+        new = await client.post(
+            "/-/api/v1/sites/ploeg-aurora/website/deploys", files=_upload(), headers=_bearer(binding.token(True))
+        )
+
+    assert unbound.status_code == 403
+    assert unbound.json()["code"] == "CI_SITE_ID_REQUIRED"
+    assert old.status_code == 409
+    assert old.json()["code"] == "SITE_MOVED"
+    assert "ploeg-aurora/website" in old.json()["detail"]
+    assert new.status_code == 201
+    assert await binding.versions_per_site() == {binding.y.id: 1}
+    for response in (unbound, old, new):
+        await _assert_no_site_id_in(binding, response)
+
+
 async def test_a_claimant_of_the_old_address_with_the_same_repository_never_gets_the_build(
     binding: Binding,
 ) -> None:
-    """Y moves; someone creates a site at Y's old address and links the very
-    repository that publishes to Y. The bound workflow, still on the old
-    `site:`, is pointed at Y's new address; the one without a site id meets a
-    link that requires one. Neither lands on the claimant's site."""
+    """Y moves; once its old address is free again, someone creates a site
+    there and links the very repository that publishes to Y. The bound
+    workflow, still on the old `site:`, is pointed at Y's new address; the
+    one without a site id meets a link that requires one. Neither lands on
+    the claimant's site."""
     await binding.link(binding.y, REPOSITORY, required=False)
     async with binding.factory() as db:
         await db.execute(update(Site).where(Site.id == binding.y.id).values(slug="verhuisd"))
+        # What the nightly cleanup does once the old address stopped redirecting.
+        await db.execute(delete(SiteSlug).where(SiteSlug.site_id == binding.y.id, SiteSlug.slug == "website"))
         claimant = Site(group_id=binding.group.id, slug="website", title="Overgenomen", access_base=AccessBase.PUBLIC)
         db.add(claimant)
         await db.commit()

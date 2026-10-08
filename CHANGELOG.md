@@ -19,6 +19,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - A group admin can change a group's name and a site admin a site's title,
   on the group's and the site's Settings tab; the audit log keeps the
   previous name or title.
+- A group admin can change a group's address, and a site admin with a role in
+  the group a site's address. The old address redirects whoever may see the
+  site through the 30th day, can be taken back until then, and is free for
+  others after the nightly cleanup.
+- The API for it: `PUT /groups/{group}/slug` and `PUT /sites/{group}/{site}/slug`,
+  `previousSlugs` on groups and sites, and `slugRedirectDays` on `/me`.
 
 ### Changed
 
@@ -36,6 +42,15 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   existing links keep working without it until another repository is
   linked or a site admin requires it.
 - Deleting a site moved from the site's Overview tab to its new Settings tab.
+- Creating a group or site answers `SLUG_EXISTS` also for a slug that was
+  recently the address of another group or site.
+- The creation budget of 20 per hour counts changes of address as well.
+- The audit log filters on group and site also find a change of address by
+  its old slug, and a group's change by each of its sites.
+- The API knows only the current address of a group or site: an old one
+  answers 404, also to a workflow.
+- A repository link that still took workflows without the site id requires
+  it once its site or group gets another address.
 
 ### Fixed
 

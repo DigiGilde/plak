@@ -14,8 +14,9 @@ import { computed, nextTick, ref, watch } from 'vue';
 
 import { ApiError } from '@/api/client';
 import * as api from '@/api/plak';
-import type { Access, AccessBase, Group, Site } from '@/api/types';
+import type { Access, AccessBase, Group, PreviousSlug, Site } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
+import AddressSection from '@/components/AddressSection.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import Notices from '@/components/site/Notices.vue';
 import { accessBaseHint, accessBaseLabel, accessSummary, inviteesLabel, keysLabel } from '@/format';
@@ -30,14 +31,22 @@ const props = defineProps<{
   groupName: string;
   access: Access;
   sites: Site[];
+  previousSlugs: PreviousSlug[];
+  contentBase: string;
+  /** How many days an old address keeps redirecting. */
+  redirectDays: number;
   canDelete: boolean;
   canRename: boolean;
+  canChangeAddress: boolean;
 }>();
 
 const emit = defineEmits<{
   groupChanged: [Group];
+  renamed: [Group];
   removed: [];
 }>();
+
+const hasPublicSite = computed(() => props.sites.some((site) => site.access.base === 'public'));
 
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 const chosen = ref<Access>(props.access);
@@ -247,6 +256,20 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
       </nldd-rich-text>
     </nldd-container>
   </section>
+
+  <nldd-spacer size="24"></nldd-spacer>
+
+  <AddressSection
+    kind="group"
+    :group="group"
+    :previous-slugs="previousSlugs"
+    :content-base="contentBase"
+    :redirect-days="redirectDays"
+    :can-change="canChangeAddress"
+    :is-public="hasPublicSite"
+    :sites="sites"
+    @renamed="emit('renamed', $event as Group)"
+  />
 
   <nldd-spacer size="24"></nldd-spacer>
 

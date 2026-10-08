@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
 import TabSettings from '@/components/group/TabSettings.vue';
 import TabMembers from '@/components/group/TabMembers.vue';
 import TabSites from '@/components/group/TabSites.vue';
@@ -20,6 +20,7 @@ import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import { _resetAddActions, useAddActions } from '@/composables/addActions';
 import { takePublishedMark } from '@/composables/publishedMark';
 
+import { titleAfterNavigation } from '@/router';
 import Group from './Group.vue';
 
 let backend: MockBackend;
@@ -143,7 +144,12 @@ describe('Group: layout', () => {
       // The logged-in member is group admin, so the danger zone is there too.
       [
         '/team-aurora/-/settings',
-        ['Naam van de groep', 'Standaardtoegang voor nieuwe sites', 'Gevarenzone'],
+        [
+          'Naam van de groep',
+          'Adres van de groep',
+          'Standaardtoegang voor nieuwe sites',
+          'Gevarenzone',
+        ],
       ],
     ] as const) {
       await router.push(path);
@@ -164,6 +170,25 @@ describe('Group: layout', () => {
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('text')).toBe('Onbekende groep');
     expect(wrapper.find('[data-testid="group-tabs"]').exists()).toBe(false);
+  });
+
+  it('points to the overview when the group is not found, in case it was renamed', async () => {
+    const { wrapper } = await makeWrapper('/onbekend');
+
+    expect(wrapper.find('[data-testid="renamed-hint"]').text()).toBe(
+      'Is de site of groep hernoemd? Zoek hem dan in je overzicht.',
+    );
+    const link = wrapper.find('[data-testid="renamed-overview"]');
+    expect(link.attributes('text')).toBe('Naar het overzicht');
+    expect(link.attributes('href')).toBe('/');
+  });
+
+  it('suggests no rename for a server error', async () => {
+    vi.stubGlobal('fetch', serverErrorFetch());
+    const { wrapper } = await makeWrapper('/team-aurora');
+
+    expect(wrapper.find('nldd-banner').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="renamed-hint"]').exists()).toBe(false);
   });
 });
 
@@ -348,7 +373,12 @@ describe('Group: put a site online', () => {
       expect(sheet.props('initialFile')).toBeInstanceOf(File);
       // Only this group is ever offered here: no picker to preselect within.
       expect(sheet.props('groups')).toEqual([
-        { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: expect.anything() },
+        {
+          slug: 'team-aurora',
+          name: 'Team Aurora',
+          defaultAccess: expect.anything(),
+          previousSlugs: [],
+        },
       ]);
     });
 
@@ -787,6 +817,319 @@ describe('Group: renaming the group', () => {
   });
 });
 
+describe('Group: the address of the group', () => {
+  it('offers the form to a group admin, with the content host of /me in the example', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-address-form"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
+      'https://sites.plak.test/team-aurora/website/',
+    );
+  });
+
+  it('lists the old addresses the page holds, with the day they stop redirecting', async () => {
+    backend.data.groups[0]!.previousSlugs = [
+      { slug: 'team-oud', redirectsUntil: '2099-11-06T23:00:00Z' },
+    ];
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-address-previous"]').text()).toBe(
+      'team-oud stuurt door tot en met 6 november 2099.',
+    );
+    expect(wrapper.find('[data-testid="group-address-restore-team-oud"]').exists()).toBe(true);
+  });
+
+  it('says who may change it to an editor of the group', async () => {
+    // lid-3 (Ada Vermeer) is editor on team-aurora.
+    backend.data.loggedInMemberId = 'lid-3';
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-address-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-address-readonly"]').text()).toBe(
+      'Alleen een beheerder van de groep kan het adres wijzigen.',
+    );
+  });
+
+  it('shows it as text while the role is unknown', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/me') ? serverErrorFetch()(input, init) : backend.fetch(input, init),
+    );
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    expect(wrapper.find('[data-testid="group-address-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-address-readonly"]').exists()).toBe(true);
+  });
+
+  it('counts the days /me says an old address redirects', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+    try {
+      const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+      expect(wrapper.find('[data-testid="group-address-consequences"]').text()).toContain(
+        'Tot en met 7 november 2026 kun je het oude adres terugzetten.',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Group: changing the address', () => {
+  const ADDRESS = 'section[aria-labelledby="heading-group-address"]';
+
+  beforeEach(() => {
+    // Today is the 8th of October 2026 in Amsterdam.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function typeAddress(wrapper: ReturnType<typeof mount>, slug: string): void {
+    fireDetailEvent(wrapper.find('[data-testid="group-address"]').element, 'input', { value: slug });
+  }
+
+  async function changeAddress(wrapper: ReturnType<typeof mount>, slug: string): Promise<void> {
+    typeAddress(wrapper, slug);
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await untilIdle();
+    await wrapper.find(`${ADDRESS} [data-testid="confirm-continue"]`).trigger('click');
+    await untilIdle();
+  }
+
+  /** The dialog is gone: this is when the browser says so, and the status line speaks. */
+  async function dialogClosed(wrapper: ReturnType<typeof mount>): Promise<void> {
+    await wrapper.find(`${ADDRESS} nldd-modal-dialog`).trigger('close');
+    await untilIdle();
+  }
+
+  it('moves the route to the new address on the same tab', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(backend.data.groups[0]!.slug).toBe('aurora');
+    expect(router.currentRoute.value.name).toBe('group-settings');
+    expect(router.currentRoute.value.path).toBe('/aurora/-/settings');
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('current')).toBeDefined();
+  });
+
+  it('leaves the tab where it is: nothing is rebuilt and nothing loads in front of it', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    const bar = wrapper.find('[data-testid="group-tabs"]').element;
+    const heading = wrapper.find('h1').element;
+    const section = wrapper.find(ADDRESS).element;
+    const button = wrapper.find('[data-testid="group-address-change"]').element;
+    const status = wrapper.find('[data-testid="group-address-notice"]').element;
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(wrapper.find('[data-testid="group-tabs"]').element).toBe(bar);
+    expect(wrapper.find('h1').element).toBe(heading);
+    expect(wrapper.find(ADDRESS).element).toBe(section);
+    expect(wrapper.find('[data-testid="group-address-change"]').element).toBe(button);
+    expect(wrapper.find('[data-testid="group-address-notice"]').element).toBe(status);
+    expect(wrapper.find('nldd-inline-dialog[variant="loading"]').exists()).toBe(false);
+  });
+
+  it('keeps the forms of the other sections of the tab: the group admin is still one', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    const name = wrapper.find('[data-testid="group-name-form"]').element;
+    const danger = wrapper.find('[data-testid="delete-group"]').element;
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(wrapper.find('[data-testid="group-name-form"]').element).toBe(name);
+    expect(wrapper.find('[data-testid="delete-group"]').element).toBe(danger);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(true);
+  });
+
+  it('says what happened where the member is, and leaves the focus on the button', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+    await changeAddress(wrapper, 'aurora');
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await dialogClosed(wrapper);
+
+    expect(wrapper.find('[data-testid="group-address-notice"]').text()).toBe(
+      'Het adres is gewijzigd. team-aurora stuurt tot en met 7 november 2026 door naar aurora. Gebruik je automatisch publiceren of plak publish? Pas het adres daar nu aan.',
+    );
+    expect(focus.mock.contexts).toEqual([
+      wrapper.find('[data-testid="group-address-change"]').element,
+    ]);
+    focus.mockRestore();
+  });
+
+  it('shows the new address in the tab bar and the section, and the sites below it', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(wrapper.find('[data-testid="tab-sites"]').attributes('href')).toBe('/aurora');
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('href')).toBe('/aurora/-/settings');
+    expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
+      'Het adres van deze groep is aurora.',
+    );
+    expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
+      `${MOCK_CONTENT_BASE}/aurora/website/`,
+    );
+    expect(wrapper.find('[data-testid="group-address-previous"]').text()).toBe(
+      'team-aurora stuurt door tot en met 7 november 2026.',
+    );
+
+    await router.push('/aurora');
+    await untilIdle();
+    expect(
+      wrapper.find('[data-testid="site-website"]').find('nldd-link').attributes('href'),
+    ).toBe('/aurora/website');
+  });
+
+  it('keeps the title of the browser tab after the router has put the new address in it', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    // As the app does on every navigation, before the page has had its say.
+    router.afterEach(titleAfterNavigation);
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(document.title).toBe('Team Aurora - Instellingen - Plak');
+  });
+
+  it('keeps the name in the header: only the address has changed', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
+
+    await changeAddress(wrapper, 'aurora');
+
+    expect(wrapper.find('h1').text()).toBe('Team Aurora');
+    expect(document.title).toBe('Team Aurora - Instellingen - Plak');
+    expect(breadcrumbsFor('/aurora/-/settings')).toEqual([
+      { text: 'Overzicht', href: '/' },
+      { text: 'Team Aurora' },
+    ]);
+  });
+
+  it('can change the address once more straight away, from the address it has now', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    await changeAddress(wrapper, 'aurora');
+    await dialogClosed(wrapper);
+
+    await changeAddress(wrapper, 'zonsopgang');
+
+    expect(backend.data.groups[0]!.slug).toBe('zonsopgang');
+    expect(router.currentRoute.value.path).toBe('/zonsopgang/-/settings');
+    expect(backend.data.groups[0]!.previousSlugs.map((p) => p.slug)).toEqual([
+      'aurora',
+      'team-aurora',
+    ]);
+  });
+
+  it('changes an address back from the list of the old ones', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    await changeAddress(wrapper, 'aurora');
+    await dialogClosed(wrapper);
+
+    await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('click');
+    await untilIdle();
+    await wrapper.find(`${ADDRESS} [data-testid="confirm-continue"]`).trigger('click');
+    await untilIdle();
+
+    expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+    expect(router.currentRoute.value.path).toBe('/team-aurora/-/settings');
+  });
+
+  it('loads the page again for any other address, so the old one finds nothing', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    await changeAddress(wrapper, 'aurora');
+
+    // Back to the old address, as the back button does: the API follows no old address.
+    await router.push('/team-aurora/-/settings');
+    await untilIdle();
+    expect(wrapper.find('nldd-banner').attributes('text')).toBe('Onbekende groep');
+    expect(wrapper.find('[data-testid="group-tabs"]').exists()).toBe(false);
+    // Nothing of the group it showed before is left to name this address.
+    expect(breadcrumbsFor('/team-aurora/-/settings')).toEqual([
+      { text: 'Overzicht', href: '/' },
+      { text: 'team-aurora' },
+    ]);
+    expect(document.title).toBe('team-aurora - Instellingen - Plak');
+
+    // And forward again to the new one: a page that loaded in between does load again.
+    await router.push('/aurora/-/settings');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="group-tabs"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="tab-sites"]').attributes('href')).toBe('/aurora');
+  });
+
+  it('moves on even when the roles cannot be fetched again, and the member can go on from there', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
+    typeAddress(wrapper, 'aurora');
+    await wrapper.find('[data-testid="group-address-form"]').trigger('submit');
+    await untilIdle();
+    const form = wrapper.find('[data-testid="group-address-form"]').element;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/me')
+        ? Promise.reject(new TypeError('network down'))
+        : backend.fetch(input, init),
+    );
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await wrapper.find(`${ADDRESS} [data-testid="confirm-continue"]`).trigger('click');
+    await untilIdle();
+    await dialogClosed(wrapper);
+
+    expect(backend.data.groups[0]!.slug).toBe('aurora');
+    expect(router.currentRoute.value.path).toBe('/aurora/-/settings');
+    // The roles still name the group by its old address, and are read as such:
+    // the admin of the group is still one, in the whole page.
+    expect(wrapper.find('[data-testid="group-address-form"]').element).toBe(form);
+    expect(wrapper.find('[data-testid="group-name-form"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="delete-group"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-address-notice"]').text()).toContain(
+      'Het adres is gewijzigd.',
+    );
+    expect(focus.mock.contexts).toEqual([
+      wrapper.find('[data-testid="group-address-change"]').element,
+    ]);
+    focus.mockRestore();
+  });
+});
+
+describe('Group: another group in the address', () => {
+  it('loads the other group when the route changes under the page, which it did not before', async () => {
+    backend.data.groups.push({
+      slug: 'andere',
+      name: 'Andere groep',
+      defaultAccess: { base: 'public', keys: false, invitees: false },
+      previousSlugs: [],
+    });
+    const { wrapper, router } = await makeWrapper('/team-aurora');
+    expect(wrapper.find('h1').text()).toBe('Team Aurora');
+
+    await router.push('/andere');
+    await untilIdle();
+
+    expect(wrapper.find('h1').text()).toBe('Andere groep');
+    expect(wrapper.find('[data-testid="tab-sites"]').attributes('href')).toBe('/andere');
+    expect(breadcrumbsFor('/andere')).toEqual([
+      { text: 'Overzicht', href: '/' },
+      { text: 'Andere groep' },
+    ]);
+  });
+
+  it('shows an unknown group as such, and no tabs', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora');
+
+    await router.push('/onbekend');
+    await untilIdle();
+
+    expect(wrapper.find('nldd-banner').attributes('text')).toBe('Onbekende groep');
+    expect(wrapper.find('[data-testid="group-tabs"]').exists()).toBe(false);
+  });
+});
+
 describe('Group: deleting the group', () => {
   it('offers it to a group admin and goes to the overview once the group is gone', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
@@ -798,7 +1141,10 @@ describe('Group: deleting the group', () => {
     fireDetailEvent(wrapper.find('[data-testid="confirm-phrase"]').element, 'input', {
       value: 'team-aurora',
     });
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    // The address section has a dialog of its own, earlier on the page.
+    await wrapper
+      .find('section[aria-labelledby="heading-danger-zone-group"] [data-testid="confirm-continue"]')
+      .trigger('click');
     await untilIdle();
 
     expect(backend.data.groups.map((g) => g.slug)).not.toContain('team-aurora');
@@ -832,6 +1178,7 @@ describe('Group: empty', () => {
       slug: 'leeg',
       name: 'Lege groep',
       defaultAccess: { base: 'public', keys: false, invitees: false },
+      previousSlugs: [],
     });
 
     const { wrapper, router } = await makeWrapper('/leeg');

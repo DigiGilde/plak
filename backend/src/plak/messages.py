@@ -77,6 +77,7 @@ NL: Final[dict[str, str]] = {
     "ORIGIN_REFUSED": "Verzoek komt niet van de beheer-origin.",
     "NOT_ADMIN": "Alleen een platformbeheerder mag dit.",
     "INSUFFICIENT_ROLE": "Hiervoor heb je minimaal de rol {role} nodig.",
+    "INSUFFICIENT_ROLE.site_address": "Het adres van een site wijzigen kan alleen met een rol in de groep van de site.",
     "NO_AUTHENTICATION": "Geen geldige sessie of bearer-token.",
     "BEARER_NOT_ACCEPTED": (
         "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints, bij het aanmaken van "
@@ -101,7 +102,16 @@ NL: Final[dict[str, str]] = {
     "ALREADY_SITE_MEMBER": "Dit lid heeft al een eigen rol op deze site.",
     "SLUG_EXISTS.group": "Er bestaat al een groep met slug {slug!r}.",
     "SLUG_EXISTS.site": "Er bestaat al een site met slug {slug!r} in deze groep.",
+    "SLUG_EXISTS.group_previous": (
+        "De slug {slug!r} was kort geleden het adres van een andere groep. Kies een andere slug."
+    ),
+    "SLUG_EXISTS.site_previous": (
+        "De slug {slug!r} was kort geleden het adres van een andere site in deze groep. Kies een andere slug."
+    ),
     "SLUG_INVALID": "Slug is ongeldig of gereserveerd: {slug!r}.",
+    "TOO_MANY_PREVIOUS_SLUGS": (
+        "Er zijn al {max} oude adressen die nog doorsturen. Zet een ervan terug, of wacht tot er een is verlopen."
+    ),
     "FIELD_EMPTY": "Veld {field!r} mag niet leeg zijn.",
     "FIELD_CONTROL_CHARACTERS": "Veld {field!r} mag geen stuur- of opmaaktekens bevatten.",
     "FIELD_TOO_LONG": "Veld {field!r} mag hoogstens {max} tekens lang zijn.",
@@ -208,7 +218,7 @@ NL: Final[dict[str, str]] = {
     "EXPIRY_TOO_FAR": "De vervaldatum mag hoogstens {days} dagen vooruit liggen.",
     # -- CLI login ------------------------------------------------------------
     "TOO_MANY_ATTEMPTS": "Te veel pogingen; wacht een paar minuten.",
-    "TOO_MANY_CREATIONS": "Hoogstens {limit} nieuwe groepen en sites per uur; probeer het later opnieuw.",
+    "TOO_MANY_CREATIONS": "Hoogstens {limit} nieuwe groepen, sites en adressen per uur; probeer het later opnieuw.",
     "TOO_MANY_REQUESTS": "Te veel verzoeken. Probeer het over enkele ogenblikken opnieuw.",
     "TOO_MANY_REQUESTS.cli_login": "Te veel inlogpogingen vanaf dit adres; probeer het later opnieuw.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` ontbreekt.",
@@ -363,6 +373,7 @@ EN: Final[dict[str, str]] = {
     "ORIGIN_REFUSED": "This request does not come from the beheer origin.",
     "NOT_ADMIN": "Only a platform administrator may do this.",
     "INSUFFICIENT_ROLE": "This needs at least the role {role}.",
+    "INSUFFICIENT_ROLE.site_address": "Changing a site's address needs a role in its group.",
     "NO_AUTHENTICATION": "No valid session or bearer token.",
     "BEARER_NOT_ACCEPTED": (
         "Bearer authentication is accepted on the deploy and CLI endpoints, for creating a group or "
@@ -387,7 +398,15 @@ EN: Final[dict[str, str]] = {
     "ALREADY_SITE_MEMBER": "This member already has a role of their own on this site.",
     "SLUG_EXISTS.group": "A group with slug {slug!r} already exists.",
     "SLUG_EXISTS.site": "A site with slug {slug!r} already exists in this group.",
+    "SLUG_EXISTS.group_previous": "The slug {slug!r} was recently the address of another group. Choose another slug.",
+    "SLUG_EXISTS.site_previous": (
+        "The slug {slug!r} was recently the address of another site in this group. Choose another slug."
+    ),
     "SLUG_INVALID": "Slug is invalid or reserved: {slug!r}.",
+    "TOO_MANY_PREVIOUS_SLUGS": (
+        "This already has {max} previous addresses that still redirect. Change back to one of them, or wait "
+        "until one has expired."
+    ),
     "FIELD_EMPTY": "Field {field!r} must not be empty.",
     "FIELD_CONTROL_CHARACTERS": "Field {field!r} must not contain control or formatting characters.",
     "FIELD_TOO_LONG": "Field {field!r} may be at most {max} characters long.",
@@ -498,7 +517,7 @@ EN: Final[dict[str, str]] = {
     "EXPIRY_TOO_FAR": "The expiry date may be at most {days} days ahead.",
     # -- CLI login ------------------------------------------------------------
     "TOO_MANY_ATTEMPTS": "Too many attempts; wait a few minutes.",
-    "TOO_MANY_CREATIONS": "At most {limit} new groups and sites per hour; try again later.",
+    "TOO_MANY_CREATIONS": "At most {limit} new groups, sites and addresses per hour; try again later.",
     "TOO_MANY_REQUESTS": "Too many requests. Try again in a few moments.",
     "TOO_MANY_REQUESTS.cli_login": "Too many sign-in attempts from this address; try again later.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` is missing.",

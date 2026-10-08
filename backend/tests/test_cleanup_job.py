@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import event, select, text, update
+from sqlalchemy import Delete, event, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.util import await_only
 
@@ -34,6 +34,7 @@ from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.cli import CliDeviceAuthorization, CliSession
 from plak.models.identity import Group, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
+from plak.models.slugs import GroupSlug, SiteSlug
 from plak.previews.cleanup_job import (
     TIMESTAMP_DEFAULT,
     TMP_OLDER_THAN_DEFAULT,
@@ -44,6 +45,7 @@ from plak.previews.cleanup_job import (
     cleanup_job,
     delete_expired,
 )
+from plak.slug_window import redirect_ends_at
 
 
 @pytest_asyncio.fixture
@@ -983,3 +985,86 @@ class TestCliSweep:
             sessions = list(await db.scalars(select(CliSession.id)))
         assert old.authorization.id not in authorizations
         assert sessions == [live.session.id]
+
+
+# A rename well in the past, so the end of its redirect is a fixed moment.
+RETIRED_AT = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+
+
+async def _move(environment: Environment) -> tuple[str, str]:
+    """Gives the group and the site a new slug, and dates both changes to
+    RETIRED_AT; returns their old slugs."""
+    old_group, old_site = environment.group.slug, environment.site.slug
+    async with environment.session_factory() as db:
+        (await db.get(Group, environment.group.id)).slug = f"{old_group}-nieuw"
+        (await db.get(Site, environment.site.id)).slug = f"{old_site}-nieuw"
+        await db.commit()
+    async with environment.session_factory() as db:
+        await db.execute(update(GroupSlug).where(GroupSlug.slug == old_group).values(retired_at=RETIRED_AT))
+        await db.execute(update(SiteSlug).where(SiteSlug.slug == old_site).values(retired_at=RETIRED_AT))
+        await db.commit()
+    return old_group, old_site
+
+
+async def _slugs(environment: Environment) -> dict[str, bool]:
+    """The slugs of the environment's group and site, and whether each is retired."""
+    groups = select(GroupSlug.slug, GroupSlug.retired_at).where(GroupSlug.group_id == environment.group.id)
+    sites = select(SiteSlug.slug, SiteSlug.retired_at).where(SiteSlug.site_id == environment.site.id)
+    async with environment.session_factory() as db:
+        rows = [*await db.execute(groups), *await db.execute(sites)]
+    return {slug: retired_at is not None for slug, retired_at in rows}
+
+
+class TestReleasedSlugs:
+    async def test_an_old_slug_is_released_at_the_end_of_its_redirect_and_not_before(
+        self, environment: Environment
+    ):
+        old_group, old_site = await _move(environment)
+        end = redirect_ends_at(RETIRED_AT)
+
+        before = await delete_expired(environment.session_factory, environment.store, end - timedelta(seconds=1))
+
+        assert before.released_slugs == 0
+        assert await _slugs(environment) == {
+            old_group: True,
+            f"{old_group}-nieuw": False,
+            old_site: True,
+            f"{old_site}-nieuw": False,
+        }
+
+        at_the_end = await delete_expired(environment.session_factory, environment.store, end)
+
+        assert at_the_end.released_slugs == 2
+        assert await _slugs(environment) == {f"{old_group}-nieuw": False, f"{old_site}-nieuw": False}
+
+    async def test_a_released_slug_can_be_claimed_again(self, environment: Environment):
+        old_group, old_site = await _move(environment)
+        await delete_expired(environment.session_factory, environment.store, redirect_ends_at(RETIRED_AT))
+
+        async with environment.session_factory() as db:
+            db.add(Group(slug=old_group, name="Nieuw", default_access_base=AccessBase.PUBLIC))
+            db.add(Site(group_id=environment.group.id, slug=old_site, title="Nieuw", access_base=AccessBase.PUBLIC))
+            await db.commit()
+
+    async def test_a_slug_taken_back_while_the_cleanup_runs_stays(self, environment: Environment, monkeypatch):
+        """The cleanup read the old slug as ended; before its delete, the group
+        took it back. The delete matches the row only as it was read."""
+        old_group, _ = await _move(environment)
+        execute = AsyncSession.execute
+
+        async def take_back_first(session, statement, *args, **kwargs):
+            if isinstance(statement, Delete) and statement.table.name == GroupSlug.__tablename__:
+                monkeypatch.setattr(AsyncSession, "execute", execute)
+                async with environment.session_factory() as db:
+                    (await db.get(Group, environment.group.id)).slug = old_group
+                    await db.commit()
+            return await execute(session, statement, *args, **kwargs)
+
+        monkeypatch.setattr(AsyncSession, "execute", take_back_first)
+
+        result = await delete_expired(environment.session_factory, environment.store, redirect_ends_at(RETIRED_AT))
+
+        assert result.released_slugs == 1
+        slugs = await _slugs(environment)
+        assert slugs[old_group] is False
+        assert slugs[f"{old_group}-nieuw"] is True

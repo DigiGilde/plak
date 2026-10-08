@@ -106,9 +106,9 @@ who attempted it, and more personal data adds little for investigation.
 
 | Action | Result |
 |---|---|
-| `group_create`, `group_delete`, `group_name`, `group_default_visibility` | `allowed` |
+| `group_create`, `group_delete`, `group_name`, `group_slug`, `group_default_visibility` | `allowed` |
 | `group_member_add`, `group_member_remove`, `group_member_role` | `allowed` |
-| `site_create`, `site_delete`, `site_title`, `site_visibility`, `version_set_live` | `allowed` |
+| `site_create`, `site_delete`, `site_title`, `site_slug`, `site_visibility`, `version_set_live` | `allowed` |
 | `site_external_sources`, `site_sandbox`, `site_live_versions_kept` | `allowed` |
 | `site_member_add`, `site_member_remove`, `site_member_role` | `allowed` |
 | `preview_visibility` | `allowed` |
@@ -177,6 +177,22 @@ previous text is free text that members choose and can hold a person's name;
 a row cannot be corrected, so it stays until its retention term is over
 (`docs/privacy.md`).
 
+`group_slug` and `site_slug` are about the address of a group or a site (its
+slug, set on the Settings tab of each). `refs` carries `group` (the new slug),
+`previous_group`, `group_id` and `sites` for a group, `sites` being the slugs
+of the sites whose addresses changed with it; for a site it carries `group`,
+`site` (the new slug), `previous_site` and `site_id`. The ids keep a row
+unambiguous after an old slug is free again and someone else claims it.
+As with names, two changes close together are ordered by their previous
+slugs rather than by `occurred_at`. Sending the slug that is already there
+writes no row. The redirect from the
+old address and the release of the old slug after it write no row of their
+own: both follow from the change. A change of address counts towards the
+creation budget below. In `GET /platform/audit` the filter `group` also
+matches `previous_group`, and `site` also matches `previous_site` and an
+element of `sites`, so a change of address is found from the old slug as
+well as the new one, and a group's change from each of its sites.
+
 `group_create` and `site_create` record the access the new group or site
 starts with, in the same three fields as below: `refs.base`, `refs.keys` and
 `refs.invitees`, alongside group (and site). That is the effective access,
@@ -187,7 +203,8 @@ row also carries `refs.via` with the value `cli` and `refs.cli_session` with
 the id of the CLI session, as on a deploy. A refusal on those two routes
 through the CLI token arrives as `admin_access` like any other, with the
 member as actor and the same `refs.via` and `refs.cli_session`; that
-includes `TOO_MANY_CREATIONS`, the 429 of the creation budget.
+includes `TOO_MANY_CREATIONS`, the 429 of the creation budget, which new
+groups, new sites and changes of address share.
 
 `group_default_visibility`, `site_visibility` and `preview_visibility` carry
 no single level, but the three fields access is made of: `refs.base`

@@ -1016,6 +1016,43 @@ class TestContentCookiePerSite:
         assert content_session_from_request(_request_with_cookies(app, cookie_header)) is None
 
 
+def _cookie_names_sent_to(client: httpx.AsyncClient, path: str) -> set[str]:
+    """The cookies the client's jar would send along with a request to this path."""
+    request = httpx.Request("GET", f"{CONTENT_BASE_URL}{path}")
+    client.cookies.set_cookie_header(request)
+    return {part.split("=", 1)[0].strip() for part in request.headers.get("cookie", "").split(";") if part}
+
+
+class TestAfterAChangeOfAddress:
+    """A site cookie keeps the path it was set for, so after a change of
+    address it stays with the old path; the old address redirects (spec
+    7.7), and at the new one the login shortcut sets a cookie for that path
+    without a round trip to the IdP."""
+
+    NAVIGATION: ClassVar[dict[str, str]] = {"Sec-Fetch-Dest": "document"}
+
+    async def test_the_cookie_of_the_old_path_does_not_reach_the_new_one(self, content_client, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+
+        assert CONTENT_SESSION_COOKIE in _cookie_names_sent_to(content_client, "/fin/rapport/")
+        assert CONTENT_SESSION_COOKIE not in _cookie_names_sent_to(content_client, "/fin/verslag/")
+        assert CONTENT_SESSION_COOKIE not in _cookie_names_sent_to(content_client, "/financien/rapport/")
+
+    async def test_the_login_shortcut_sets_one_for_the_new_path(self, content_client, idp):
+        await _complete_content_login(content_client, idp, return_to="/fin/rapport/")
+        idp.token_requests.clear()
+
+        response = await content_client.get(
+            PATH_CONTENT_LOGIN, params={"returnTo": "/fin/verslag/"}, headers=self.NAVIGATION
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == "/fin/verslag/"
+        assert idp.token_requests == []
+        assert "path=/fin/verslag/" in _set_cookie_header(response, CONTENT_SESSION_COOKIE).lower()
+        assert CONTENT_SESSION_COOKIE in _cookie_names_sent_to(content_client, "/fin/verslag/")
+
+
 class TestContentViewerUpsert:
     """The content_viewers upsert (auth/content_viewers.py) is called on a
     content-host login and not on an admin login. The apps in this module

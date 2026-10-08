@@ -82,6 +82,8 @@ export interface Me extends Member {
    * every device they sign in from.
    */
   language: MemberLanguage | null;
+  /** Days after a change that the old address of a group or site keeps redirecting. */
+  slugRedirectDays: number;
 }
 
 export interface MyGroupRole {
@@ -97,10 +99,22 @@ export interface MySiteRole {
   effectiveRole: Role;
 }
 
+/** An address a group or site had before, which still redirects to its current one. */
+export interface PreviousSlug {
+  slug: string;
+  /**
+   * The first moment the old address no longer redirects: midnight in
+   * Amsterdam at the start of the day after the last day it redirects.
+   */
+  redirectsUntil: Timestamp;
+}
+
 export interface Group {
   slug: string;
   name: string;
   defaultAccess: Access;
+  /** Newest first, and only the addresses that still redirect. */
+  previousSlugs: PreviousSlug[];
 }
 
 /**
@@ -130,6 +144,8 @@ export interface Site {
    * site itself; null when it follows the platform default, 0 keeps all.
    */
   liveVersionsKept: number | null;
+  /** Newest first, and only the addresses that still redirect. */
+  previousSlugs: PreviousSlug[];
 }
 
 export interface SiteStorage {
