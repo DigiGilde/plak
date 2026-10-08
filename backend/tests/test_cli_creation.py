@@ -840,6 +840,22 @@ class TestNeighbouringRoutesStayShut:
             group = await db.scalar(select(Group).where(Group.slug == "team"))
         assert group.default_access_base == AccessBase.SITE_TEAM
 
+    async def test_put_group_name(self, client, factory, owner):
+        response = await client.put(
+            f"{BASE}/groups/team/name", json={"name": "Anders"}, headers=_bearer(owner[1])
+        )
+        _problem(response, 401, "BEARER_NOT_ACCEPTED")
+        async with factory() as db:
+            group = await db.scalar(select(Group).where(Group.slug == "team"))
+        assert group.name == "Team"
+
+    async def test_put_site_title(self, client, factory, owner):
+        response = await client.put(
+            f"{BASE}/sites/team/docs/title", json={"title": "Anders"}, headers=_bearer(owner[1])
+        )
+        _problem(response, 401, "BEARER_NOT_ACCEPTED")
+        assert (await _site(factory, "team", "docs")).title == "Docs"
+
     async def test_add_a_group_member(self, client, factory, owner):
         other = await _member(factory, "ander")
         response = await client.post(

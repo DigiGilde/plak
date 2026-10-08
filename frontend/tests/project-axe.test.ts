@@ -24,8 +24,9 @@ import TabOverview from '../src/components/site/TabOverview.vue';
 import TabPreviews from '../src/components/site/TabPreviews.vue';
 import TabAccess from '../src/components/site/TabAccess.vue';
 import TabMembers from '../src/components/site/TabMembers.vue';
+import TabSettings from '../src/components/site/TabSettings.vue';
 import TabVersions from '../src/components/site/TabVersions.vue';
-import { untilIdle } from '../src/components/site/testHelpers';
+import { fireDetailEvent, untilIdle } from '../src/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import Site from '../src/pages/Site.vue';
 
@@ -48,6 +49,9 @@ import Site from '../src/pages/Site.vue';
 
 beforeEach(() => {
   vi.stubGlobal('fetch', makeMockBackend().fetch);
+  // Module-level session cache: a test that signs in as someone else must not
+  // leave that member behind for the next one.
+  _resetCurrentMemberCache();
 });
 
 afterEach(() => {
@@ -182,6 +186,41 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
   });
   it('Leden is zonder violations', () => expectNoViolations(TabMembers));
   it('Deploy is zonder violations', () => expectNoViolations(TabDeploy));
+  it('Instellingen is zonder violations', () => expectNoViolations(TabSettings));
+
+  it('Instellingen voor een redacteur (de titel als tekst) is zonder violations', async () => {
+    // lid-3 (Ada Vermeer) is editor in the group: no form, no danger zone.
+    const backend = makeMockBackend();
+    backend.data.loggedInMemberId = 'lid-3';
+    vi.stubGlobal('fetch', backend.fetch);
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website' },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-title-text"]').exists()).toBe(true);
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('Instellingen met een geweigerde titel bij het veld is zonder violations', async () => {
+    const wrapper = mount(TabSettings, {
+      props: { group: 'team-aurora', site: 'website' },
+      attachTo: document.body,
+    });
+    await untilIdle();
+    fireDetailEvent(wrapper.find('[data-testid="site-title"]').element, 'input', {
+      value: 'a'.repeat(201),
+    });
+    await wrapper.find('[data-testid="site-title-form"]').trigger('submit');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-title"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-validation-item#site-title-server').text()).toBe(
+      'Een titel is hoogstens 200 tekens lang',
+    );
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
 
   it('de volledige sitepagina (kop, tabs en tabblad) is zonder violations', async () => {
     const Empty = defineComponent({ render: () => h('div') });
@@ -207,6 +246,39 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     });
     await untilIdle();
 
+    await expectNoViolationsIn(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it('de sitepagina met het tabblad Instellingen (zeven tabs) is zonder violations', async () => {
+    const Empty = defineComponent({ render: () => h('div') });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', name: 'overview', component: Empty },
+        { path: '/:group', name: 'group', component: Empty },
+        {
+          path: '/:group/:site',
+          component: Site,
+          children: [
+            { path: '', name: 'site-overview', component: TabOverview },
+            { path: 'settings', name: 'site-settings', component: TabSettings },
+          ],
+        },
+      ],
+    });
+    await router.push('/team-aurora/website/settings');
+    await router.isReady();
+
+    const Host = defineComponent({ render: () => h(RouterView) });
+    const wrapper = mount(Host, {
+      global: { plugins: [router] },
+      attachTo: document.body,
+    });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="tab-settings"]').attributes('current')).toBeDefined();
+    expect(wrapper.find('[data-testid="site-title"]').exists()).toBe(true);
     await expectNoViolationsIn(wrapper.element);
     wrapper.unmount();
   });

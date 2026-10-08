@@ -121,6 +121,18 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.add.submit': 'Add member',
 
   // -- Group page: settings tab --------------------------------------------
+  'group.settings.name.heading': 'Name of the group',
+  'group.settings.name.label': 'Name',
+  'group.settings.name.required': 'A name is needed',
+  'group.settings.name.tooLong': 'A name is at most 200 characters long',
+  'group.settings.name.controlCharacters':
+    'A name contains no invisible characters or line breaks, which often come along with copied text',
+  'group.settings.name.save': 'Save name',
+  'group.settings.name.readOnly': 'Only an administrator of the group can change the name.',
+  'group.settings.name.saved': 'Name saved. The group is now called {name}.',
+  'group.settings.name.unchanged': 'The name has not changed.',
+  'group.settings.name.saveFailed': 'Name not saved',
+  'group.settings.name.saveFailed.detail': 'Saving did not work.',
   'group.settings.heading': 'Default access for new sites',
   'group.settings.intro':
     'This is what a new site in this group starts with. Access stays adjustable per site afterwards, on the Access tab of that site. Existing sites do not change along.',

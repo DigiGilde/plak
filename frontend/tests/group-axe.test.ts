@@ -17,6 +17,8 @@ import { makeMockBackend, type MockBackend } from '../src/api/mock';
 import TabSettings from '../src/components/group/TabSettings.vue';
 import TabMembers from '../src/components/group/TabMembers.vue';
 import TabSites from '../src/components/group/TabSites.vue';
+import { fireDetailEvent } from '../src/components/site/testHelpers';
+import { _resetCurrentMemberCache } from '../src/composables/currentMember';
 import Group from '../src/pages/Group.vue';
 
 /**
@@ -63,6 +65,9 @@ const OUT_OF_SCOPE: axe.ContextObject['exclude'] = [
 beforeEach(() => {
   backend = makeMockBackend();
   vi.stubGlobal('fetch', backend.fetch);
+  // Module-level session cache: a test that signs in as someone else must not
+  // leave that member behind for the next one.
+  _resetCurrentMemberCache();
 });
 
 afterEach(() => {
@@ -103,6 +108,43 @@ describe('axe: groepspagina', () => {
     const wrapper = await mountGroup(path);
     await flushPromises();
 
+    const result = await axe.run(
+      { include: [wrapper.element], exclude: OUT_OF_SCOPE },
+      AXE_OPTIONS,
+    );
+    expect(result.violations).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('Instellingen voor een redacteur (de naam als tekst) is zonder violations', async () => {
+    // lid-3 (Ada Vermeer) is editor on team-aurora: no form, no danger zone.
+    backend.data.loggedInMemberId = 'lid-3';
+    const wrapper = await mountGroup('/team-aurora/-/settings');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="group-name-text"]').exists()).toBe(true);
+    const result = await axe.run(
+      { include: [wrapper.element], exclude: OUT_OF_SCOPE },
+      AXE_OPTIONS,
+    );
+    expect(result.violations).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it('Instellingen met een geweigerde naam bij het veld is zonder violations', async () => {
+    const wrapper = await mountGroup('/team-aurora/-/settings');
+    await flushPromises();
+
+    fireDetailEvent(wrapper.find('[data-testid="group-name"]').element, 'input', {
+      value: 'a'.repeat(201),
+    });
+    await wrapper.find('[data-testid="group-name-form"]').trigger('submit');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="group-name"]').attributes('invalid')).toBeDefined();
+    expect(wrapper.find('nldd-validation-item#group-settings-name-server').text()).toBe(
+      'Een naam is hoogstens 200 tekens lang',
+    );
     const result = await axe.run(
       { include: [wrapper.element], exclude: OUT_OF_SCOPE },
       AXE_OPTIONS,

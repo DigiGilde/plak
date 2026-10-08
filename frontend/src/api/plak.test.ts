@@ -218,6 +218,230 @@ describe('sites', () => {
   });
 });
 
+describe('group name', () => {
+  it('puts the new name on the name of the group and hands back the group', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const group = await plak.setGroupName('team-aurora', 'Team Zonsopgang');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/groups/team-aurora/name');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ name: 'Team Zonsopgang' });
+    expect(group).toMatchObject({ slug: 'team-aurora', name: 'Team Zonsopgang' });
+    expect((await plak.group('team-aurora')).group.name).toBe('Team Zonsopgang');
+  });
+
+  it('strips the spaces around the name, like the backend', async () => {
+    const group = await plak.setGroupName('team-aurora', '  Team Zonsopgang \n');
+
+    expect(group.name).toBe('Team Zonsopgang');
+  });
+
+  it('accepts 200 characters and refuses 201 with FIELD_TOO_LONG', async () => {
+    expect((await plak.setGroupName('team-aurora', 'a'.repeat(200))).name).toHaveLength(200);
+
+    const error = await refusedWith(plak.setGroupName('team-aurora', 'b'.repeat(201)));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+    expect((await plak.group('team-aurora')).group.name).toBe('a'.repeat(200));
+  });
+
+  it('counts characters, not UTF-16 code units', async () => {
+    expect((await plak.setGroupName('team-aurora', '\u{1F600}'.repeat(200))).name).toBe(
+      '\u{1F600}'.repeat(200),
+    );
+  });
+
+  it.each(['', '   \t '])('refuses %j with FIELD_EMPTY', async (name) => {
+    const error = await refusedWith(plak.setGroupName('team-aurora', name));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_EMPTY');
+    expect((await plak.group('team-aurora')).group.name).toBe('Team Aurora');
+  });
+
+  it.each(['Team\tAurora', 'Team\nAurora', 'Team\u200BAurora'])(
+    'refuses %j with FIELD_CONTROL_CHARACTERS',
+    async (name) => {
+      const error = await refusedWith(plak.setGroupName('team-aurora', name));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('FIELD_CONTROL_CHARACTERS');
+    },
+  );
+
+  it('gives 201 characters with a tab in them FIELD_TOO_LONG, the length being checked first', async () => {
+    const text = `${'a'.repeat(100)}\t${'a'.repeat(100)}`;
+    expect(text).toHaveLength(201);
+
+    const error = await refusedWith(plak.setGroupName('team-aurora', text));
+
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an unknown group with UNKNOWN_GROUP', async () => {
+    const error = await refusedWith(plak.setGroupName('onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_GROUP');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-4', 'a reader of the group'],
+    ['lid-7', 'someone with no role in the group'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(plak.setGroupName('team-aurora', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.groups[0]!.name).toBe('Team Aurora');
+  });
+
+  it('gives a platform admin without a role in the group no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(plak.setGroupName('team-aurora', 'Nieuw'));
+
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(plak.setGroupName('onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('site title', () => {
+  it('puts the new title on the title of the site and hands back the site', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const site = await plak.setSiteTitle('team-aurora', 'website', 'Documentatie');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/sites/team-aurora/website/title');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ title: 'Documentatie' });
+    expect(site).toMatchObject({ slug: 'website', title: 'Documentatie', previewCount: 1 });
+    const stored = (await plak.group('team-aurora')).sites.find((s) => s.slug === 'website');
+    expect(stored?.title).toBe('Documentatie');
+  });
+
+  it('strips the spaces around the title, like the backend', async () => {
+    const site = await plak.setSiteTitle('team-aurora', 'website', '  Documentatie  ');
+
+    expect(site.title).toBe('Documentatie');
+  });
+
+  it('accepts 200 characters and refuses 201 with FIELD_TOO_LONG', async () => {
+    expect((await plak.setSiteTitle('team-aurora', 'website', 'a'.repeat(200))).title).toHaveLength(
+      200,
+    );
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'b'.repeat(201)));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an empty title with FIELD_EMPTY and one with control characters', async () => {
+    const empty = await refusedWith(plak.setSiteTitle('team-aurora', 'website', '  '));
+    expect(empty.problem.code).toBe('FIELD_EMPTY');
+
+    const control = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'Doc\tumentatie'));
+    expect(control.problem.code).toBe('FIELD_CONTROL_CHARACTERS');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('gives 201 characters with a tab in them FIELD_TOO_LONG, the length being checked first', async () => {
+    const text = `${'a'.repeat(100)}\t${'a'.repeat(100)}`;
+    expect(text).toHaveLength(201);
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', text));
+
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an unknown site with UNKNOWN_SITE', async () => {
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it.each([
+    ['lid-1', 'an admin of the group'],
+    ['lid-4', 'an admin of this site alone'],
+  ])('lets %s (%s) change it', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const site = await plak.setSiteTitle('team-aurora', 'website', 'Nieuw');
+
+    expect(site.title).toBe('Nieuw');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-2', 'an editor of this site alone'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('refuses a reader of the group the same way', async () => {
+    // lid-4 holds an admin role on this one site as well; without it she only reads.
+    backend.data.siteRoles = backend.data.siteRoles.filter((r) => r.identifier !== 'zoe@voorbeeld.nl');
+    backend.data.loggedInMemberId = 'lid-4';
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('answers someone with no role on the site as if it was not there', async () => {
+    backend.data.loggedInMemberId = 'lid-7';
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('gives a platform admin without a role on the site no way round it', async () => {
+    // Past the 404 for strangers, and then refused by the role.
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(plak.setSiteTitle('team-aurora', 'onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
 describe('invitees (empty, filled, error)', () => {
   it('starts empty for a fresh site', async () => {
     await plak.createSite('team-aurora', 'Vers site', 'vers');

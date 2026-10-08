@@ -12,6 +12,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Added
+
+- A group admin can change a group's name and a site admin a site's title,
+  on the group's and the site's Settings tab; the audit log keeps the
+  previous name or title.
+
 ### Changed
 
 - The What's new page no longer opens with the version you use; the footer
@@ -23,12 +29,16 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- Deleting a site moved from the site's Overview tab to its new Settings tab.
 
 ### Fixed
 
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- A lone surrogate in a group name, site title, identifier, secret link
+  label or audit lookup reason is refused with a 422 instead of a server
+  error.
 
 ### Security
 

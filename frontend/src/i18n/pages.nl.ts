@@ -73,7 +73,7 @@ export const pagesNl = {
   'page.privacy.data.heading': 'Welke gegevens',
   'page.privacy.data.account': 'Accountgegevens: naam, e-mailadres en organisatie, via inloggen.',
   'page.privacy.data.audit':
-    'Auditgegevens: wie wat wanneer publiceerde of wijzigde, en wie wanneer inlogde.',
+    'Auditgegevens: wie wat wanneer publiceerde of wijzigde, en wie wanneer inlogde. Hernoem je een groep of site, dan staat ook de vorige naam of titel in die regel.',
   'page.privacy.data.visits':
     "Bezoekgegevens: welke pagina's van een afgeschermde site je bekeek. Van openbare sites wordt niets bijgehouden.",
   'page.privacy.retention.heading': 'Bewaartermijn',
@@ -85,7 +85,7 @@ export const pagesNl = {
     'Bekijk je afgeschermde content na inloggen met je organisatie, dan bewaart Plak je SSO-id en e-mailadres tot negentig dagen na je laatste keer inloggen. Dat is nodig om een regel in het auditlog bij een persoon te kunnen brengen, bijvoorbeeld bij het onderzoek naar een lek.',
   'page.privacy.visibility.heading': 'Wie kan wat zien',
   'page.privacy.visibility.body':
-    'Het auditlog is alleen in te zien door een platformbeheerder. In de regels staat geen naam en geen e-mailadres, maar een pseudoniem: een versleutelde weergave van je SSO-id. Een platformbeheerder kan opzoeken welk pseudoniem bij een persoon hoort, en omgekeerd wie achter een pseudoniem zit. Dat kan alleen met een opgegeven reden, die zelf wordt vastgelegd, en er geldt een maximum aantal opzoekingen per dag. De beheerder van een site ziet dit alles niet.',
+    'Het auditlog is alleen in te zien door een platformbeheerder. In de regels staan jouw naam en e-mailadres niet, maar een pseudoniem: een versleutelde weergave van je SSO-id. Een uitzondering is de vorige naam van een groep of de vorige titel van een site: die tekst staat er leesbaar in. Een platformbeheerder kan opzoeken welk pseudoniem bij een persoon hoort, en omgekeerd wie achter een pseudoniem zit. Dat kan alleen met een opgegeven reden, die zelf wordt vastgelegd, en er geldt een maximum aantal opzoekingen per dag. De beheerder van een site ziet dit alles niet.',
   'page.privacy.rights.heading': 'Je rechten',
   // Split around the mailto link in the sentence: the address itself is the
   // link text, so the two halves sit on either side of the anchor.

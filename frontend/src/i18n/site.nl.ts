@@ -18,6 +18,7 @@ export const siteNl = {
   'site.tabs.access': 'Toegang',
   'site.tabs.members': 'Leden',
   'site.tabs.deploy': 'Deploy',
+  'site.tabs.settings': 'Instellingen',
 
   // -- Overzicht tab --------------------------------------------------------
   'site.overview.loading': 'Sitegegevens laden',
@@ -37,17 +38,6 @@ export const siteNl = {
   'site.overview.publish.heading': 'Nieuwe versie publiceren',
   'site.overview.published.title': 'Versie gepubliceerd',
   'site.overview.published.detail': 'De nieuwe versie staat nu live.',
-  'site.overview.danger.heading': 'Gevarenzone',
-  'site.overview.danger.body':
-    'Site verwijderen haalt alle versies, previews, genodigden, geheime links en de gekoppelde repository definitief weg, inclusief de bestanden op de server.',
-  'site.overview.danger.action': 'Site verwijderen',
-  'site.overview.danger.confirm.title': 'Site {group}/{site} verwijderen?',
-  'site.overview.danger.confirm.text':
-    'Dit kan niet ongedaan gemaakt worden. Alle versies, previews, genodigden, geheime links en de gekoppelde repository verdwijnen definitief.',
-  'site.overview.danger.confirm.keep': 'Behoud site',
-  'site.overview.danger.confirm.confirm': 'Verwijder deze site',
-  'site.overview.delete.failed': 'Site niet verwijderd',
-  'site.overview.delete.failed.detail': 'Verwijderen is niet gelukt.',
 
   // -- Previews tab ---------------------------------------------------------
   'site.previews.loading': 'Previews laden',
@@ -122,6 +112,32 @@ export const siteNl = {
   'site.members.heading': 'Leden',
   'site.members.intro':
     'Iemand kan bij deze site via de groep of via een rol op alleen deze site. De ruimste van die twee bepaalt wat diegene hier mag: een siterol verbreedt, en neemt nooit iets af.',
+
+  // -- Instellingen tab -------------------------------------------------------
+  'site.settings.loading': 'Instellingen laden',
+  'site.settings.title.heading': 'Titel van de site',
+  'site.settings.title.label': 'Titel',
+  'site.settings.title.required': 'Een titel is nodig',
+  'site.settings.title.tooLong': 'Een titel is hoogstens 200 tekens lang',
+  'site.settings.title.controlCharacters':
+    'Een titel bevat geen onzichtbare tekens of regeleinden, die vaak meekomen met gekopieerde tekst',
+  'site.settings.title.save': 'Bewaar titel',
+  'site.settings.title.readOnly': 'Alleen een beheerder van de site kan de titel wijzigen.',
+  'site.settings.title.saved': 'Titel opgeslagen. De site heet nu {title}.',
+  'site.settings.title.unchanged': 'De titel is niet gewijzigd.',
+  'site.settings.title.saveFailed': 'Titel niet opgeslagen',
+  'site.settings.title.saveFailed.detail': 'Opslaan is niet gelukt.',
+  'site.settings.danger.heading': 'Gevarenzone',
+  'site.settings.danger.body':
+    'Site verwijderen haalt alle versies, previews, genodigden, geheime links en de gekoppelde repository definitief weg, inclusief de bestanden op de server.',
+  'site.settings.danger.action': 'Site verwijderen',
+  'site.settings.danger.confirm.title': 'Site {group}/{site} verwijderen?',
+  'site.settings.danger.confirm.text':
+    'Dit kan niet ongedaan gemaakt worden. Alle versies, previews, genodigden, geheime links en de gekoppelde repository verdwijnen definitief.',
+  'site.settings.danger.confirm.keep': 'Behoud site',
+  'site.settings.danger.confirm.confirm': 'Verwijder deze site',
+  'site.settings.delete.failed': 'Site niet verwijderd',
+  'site.settings.delete.failed.detail': 'Verwijderen is niet gelukt.',
 
   // -- Secret link: the two ways to share one key ---------------------------
   'site.secretLink.withCode': 'Link met code',
