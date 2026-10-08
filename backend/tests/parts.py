@@ -26,6 +26,7 @@ NAMED: dict[str, frozenset[str]] = {
             "test_security_headers.py",
             "test_security_txt.py",
             "test_serving.py",
+            "test_slug_namespace.py",
             "test_spa.py",
             "test_unpacker.py",
         }

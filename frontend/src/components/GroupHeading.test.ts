@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Group } from '../api/types';
 import GroupHeading from './GroupHeading.vue';
 
-const group: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false } };
+const group: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 
 describe('GroupHeading', () => {
   it('links the group name as a heading to the group page', async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Me } from '@/api/types';
 
-import { isGroupAdmin, isSiteAdmin, mayCreateSiteIn } from './roles';
+import { isGroupAdmin, isGroupMember, isSiteAdmin, mayCreateSiteIn } from './roles';
 
 function me(groupRoles: Me['groupRoles'], siteRoles: Me['siteRoles'] = []): Me {
   return {
@@ -20,6 +20,7 @@ function me(groupRoles: Me['groupRoles'], siteRoles: Me['siteRoles'] = []): Me {
     ciForgejoHosts: [],
     ciAudience: 'plak',
     language: null,
+    slugRedirectDays: 30,
   };
 }
 
@@ -66,6 +67,32 @@ describe('isGroupAdmin', () => {
 
   it('allows an admin of the group', () => {
     expect(isGroupAdmin(me([{ groupSlug: 'team-aurora', role: 'admin' }]), 'team-aurora')).toBe(true);
+  });
+});
+
+describe('isGroupMember', () => {
+  it('refuses without a member at all', () => {
+    expect(isGroupMember(null, 'team-aurora')).toBe(false);
+    expect(isGroupMember(undefined, 'team-aurora')).toBe(false);
+  });
+
+  it('refuses a member with a role in another group only', () => {
+    expect(isGroupMember(me([{ groupSlug: 'andere-groep', role: 'admin' }]), 'team-aurora')).toBe(false);
+  });
+
+  it('refuses a platform admin without a group role', () => {
+    expect(isGroupMember({ ...me([]), platformRole: 'admin' }, 'team-aurora')).toBe(false);
+  });
+
+  it('allows any role in the group, a reader included', () => {
+    for (const role of ['reader', 'editor', 'admin'] as const) {
+      expect(isGroupMember(me([{ groupSlug: 'team-aurora', role }]), 'team-aurora')).toBe(true);
+    }
+  });
+
+  it('is not met by a role on a site alone', () => {
+    const site = { groupSlug: 'team-aurora', siteSlug: 'website', role: 'admin', effectiveRole: 'admin' } as const;
+    expect(isGroupMember(me([], [site]), 'team-aurora')).toBe(false);
   });
 });
 
