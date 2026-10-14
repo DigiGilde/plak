@@ -1,14 +1,12 @@
-FROM docker.io/nginxinc/nginx-unprivileged:1.30-alpine@sha256:4714e0b1b2577eaa1a6131d07c958b67f0eb68e6d0521e90c6e5287db8cf0bc5
+FROM docker.io/nginxinc/nginx-unprivileged:1.30-alpine@sha256:56b8272e43a0525f67aed68d1e0794a712d10e3e45a563e118e9a77c817e6f86
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 10-resolver.sh /docker-entrypoint.d/10-resolver.sh
 
 # 10-resolver.sh writes the resolver at startup; /etc/nginx is not writable
 # for the nginx user, so the real file lives on /tmp.
-# The pcre2 upgrade patches CVE-2026-103111 until the upstream image carries
-# pcre2 10.49; it can go when the FROM pin moves past it.
 USER root
-RUN apk upgrade --no-cache pcre2 && ln -s /tmp/resolver.conf /etc/nginx/resolver.conf
+RUN ln -s /tmp/resolver.conf /etc/nginx/resolver.conf
 USER nginx
 
 EXPOSE 8080
