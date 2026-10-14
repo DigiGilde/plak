@@ -23,6 +23,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   admin environment, in light and in dark mode.
 - The admin environment uses the system font instead of RijksSans, which is
   licensed for Rijksoverheid publications only.
+- On ZAD the content volume is 10Gi and a site may again hold 500 MiB
+  across all its versions, the `PLAK_SITE_MAX_BYTES` default.
 
 ### Fixed
 

@@ -136,10 +136,13 @@ def test_backup_becomes_per_deployment_scheduled() -> None:
         assert "pvc" in deployment["backup"]["resource_types"]
 
 
-def test_the_site_quota_fits_the_volume_zad_caps_at_1gi() -> None:
+def test_the_10gi_volume_runs_with_the_default_site_quota() -> None:
+    """10Gi is a grant above the catalogue's 1Gi; on it the 500 MiB default
+    fits some nineteen sites at their maximum, so ZAD sets no quota of its own."""
+    (storage,) = _service_config(PROJECT["components"][0]["services"], "persistent-storage")
+    assert storage["size"] == "10Gi"
     deployment = PROJECT["deployments"][0]
-    env = deployment["components"][0]["env-vars"]
-    assert env["PLAK_SITE_MAX_BYTES"] == str(200 * 1024 * 1024)
+    assert "PLAK_SITE_MAX_BYTES" not in deployment["components"][0]["env-vars"]
 
 
 def test_urls_come_up_with_the_composed_hosts() -> None:
