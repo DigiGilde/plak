@@ -3,22 +3,4 @@
 # pip-audit and npm audit are hooked into it via
 # .github/scripts/kwetsbaarheden.py, so there is one place where an
 # accepted finding is written down.
-vulnerabilities:
-  - id: CVE-2026-93990
-    expired_at: 2026-11-01
-    statement: >-
-      libexpat in the nginx image of the development environment. No image
-      fixes it yet: 1.30-alpine and 1.31-alpine both carry it. This proxy
-      only runs in dev/compose.yml and is never rolled out. Short term,
-      because a new base image can fix it any week; after that it comes back
-      by itself and the pin can move up.
-  - id: CVE-2026-103111
-    expired_at: 2026-11-01
-    statement: >-
-      pcre2 in the nginx image of the development environment. The base
-      image still carries 10.48-r0 and no fixed upstream image exists yet.
-      Our own dev image upgrades pcre2 to 10.49-r0 in
-      containers/nginx-dev/Containerfile. The scan looks at the base image,
-      so this entry keeps it from failing. It expires on 2026-11-01; once
-      the FROM pin moves to an image with 10.49, both this entry and the
-      upgrade go.
+vulnerabilities: []
