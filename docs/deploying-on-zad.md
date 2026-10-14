@@ -172,11 +172,11 @@ anybody an administrator.
 | `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
 | `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
 | `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
-| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy. ZAD runs with `209715200` (200 MiB), set in the project file: the volume is capped at 1Gi (about 700 MiB usable), which leaves room for several sites at their maximum while a site can still publish several times a day before the nightly cleanup |
+| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy. ZAD runs with the default: the 10Gi volume leaves room for some nineteen sites at their maximum (§9) |
 | `PLAK_LIVE_VERSIONS_KEPT` | env-vars | optional, default `5`, `0` keeps everything; previous live versions the nightly cleanup keeps besides the current live one, for every site without a number of its own |
 | `PLAK_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
 
-The last six defaults fit the 1Gi content volume (§9). While a deploy runs,
+The last six defaults fit the 10Gi content volume (§9). While a deploy runs,
 its upload and what it unpacks sit on the volume side by side, so one deploy
 needs at most `PLAK_INGEST_MAX_BODY` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB)
 on top of the stored versions. Plak measures the actual deploy, not that
@@ -184,7 +184,7 @@ maximum: it checks the declared upload size before reading the body and keeps
 checking while it writes, refusing with `503` `STORAGE_UNAVAILABLE` rather than
 letting the volume drop below `PLAK_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
 one full-size deploy (400 MiB with the defaults) well below the volume size, or
-a large deploy can only ever be refused; a bigger volume is not available on ZAD (§9).
+a large deploy can only ever be refused.
 
 Besides the host separation, `PLAK_BASE_URL` is also the exact CI audience: a
 GitHub or Forgejo workflow requests its ID token with this value as
@@ -259,7 +259,7 @@ then no extra risk, but also no extra certainty.
 
 ### Content volume
 
-Nobody watches the ZAD probe (`tcp`), so trouble with the content volume (1Gi,
+Nobody watches the ZAD probe (`tcp`), so trouble with the content volume (10Gi,
 §9) is made visible in three places.
 
 `GET https://beheer.plak.<domain>/-/healthz` is public and needs no login. It
@@ -508,23 +508,27 @@ used is in the history of `deploy.yml`, before `aecdb30`.
 
 ## 9. Storage sizing
 
-`persistent-storage` offers a fixed catalogue of sizes: 50Mi, 100Mi, 250Mi,
-500Mi and 1Gi. **1Gi is the maximum per volume**, and a volume can grow but not
-shrink (source: RIG-Cluster, `operations-manager/python/opi/services/catalog/persistent_storage/help.md`
-and `persistent-storage.v1.0.json`). Plak already runs on 1Gi, so there is no
-bigger volume to move to. The volume is ReadWriteOnce on `ocs-storagecluster-ceph-rbd`, the number of replicas is
+Plak's content volume is **10Gi**, granted by the platform team. The
+`persistent-storage` catalogue still offers 50Mi, 100Mi, 250Mi, 500Mi and 1Gi,
+and a volume can grow but not shrink (source: RIG-Cluster,
+`operations-manager/python/opi/services/catalog/shared/storage.py`,
+`STORAGE_SIZES`). The platform refuses a size above 1Gi on its API with a 422,
+but does not judge a project file that is already stored, so the 10Gi stands
+as long as nobody saves this service again through the portal or the API. The
+volume is ReadWriteOnce on `ocs-storagecluster-ceph-rbd`, the number of replicas is
 fixed hard at 1, and as soon as a component has a persistent volume the
 platform switches the rollout strategy to `Recreate` itself (so a short
 interruption on every deploy).
 
-Of those 1024 MiB, the reserve (`PLAK_STORAGE_MIN_FREE_BYTES`, 100 MiB) and one
+Of those 10240 MiB, the reserve (`PLAK_STORAGE_MIN_FREE_BYTES`, 100 MiB) and one
 deploy of the maximum size in flight (200 MiB unpacked) are never available to
-stored versions, so roughly 700 MiB is left for all sites together, previews
-included (about 600 MiB while the upload of such a deploy sits next to what it
-unpacks).
+stored versions, so roughly 9.7 GiB is left for all sites together, previews
+included (about 9.6 GiB while the upload of such a deploy sits next to what it
+unpacks). At the default site quota that is some nineteen sites at their
+maximum.
 
 What one site can hold is bounded twice. `PLAK_SITE_MAX_BYTES` (500 MiB by
-default, 200 MiB on ZAD) caps all its versions together, and every night at 03:00 UTC the
+default, also on ZAD) caps all its versions together, and every night at 03:00 UTC the
 cleanup job removes the live versions beyond the current one and the ones
 before it that the site keeps, row and files, with a `version_cleanup` row in
 the audit log. That number is `PLAK_LIVE_VERSIONS_KEPT` (5) for every site,
@@ -542,8 +546,8 @@ their own number, and then the quota is their only bound.
 
 The candidate sites are 1 to 13 MB now, but every kept version and every
 preview counts towards the volume. Plak writes to that one volume and nowhere
-else (`ContentStore` is a plain filesystem class). More room than 1Gi would need
-storage other than a volume, which is not planned; the quota and the cleanup
+else (`ContentStore` is a plain filesystem class). More room than 10Gi would need a
+larger grant from the platform team or storage other than a volume; the quota and the cleanup
 above are what keep the volume from filling.
 
 The number of replicas is not a setting of the project on ZAD: the schema has
@@ -560,16 +564,14 @@ volume").
 Questions for the platform team, with what we do for now as long as the answer
 is not there:
 
-1. **Answered, from the platform repo.** The `persistent-storage` service
-   offers 50Mi, 100Mi, 250Mi, 500Mi and 1Gi; 1Gi is the maximum per volume and
-   a volume can grow but not shrink (RIG-Cluster,
-   `operations-manager/python/opi/services/catalog/persistent_storage/help.md`
-   and `persistent-storage.v1.0.json`). Plak runs on 1Gi, so more room than that
-   would need storage other than a volume, which is not planned. What stays
+1. **Answered.** The `persistent-storage` catalogue offers at most 1Gi per
+   volume, and a volume can grow but not shrink (RIG-Cluster,
+   `operations-manager/python/opi/services/catalog/shared/storage.py`). The
+   platform team granted Plak 10Gi outside that catalogue (§9). What stays
    open is whether there is a ReadWriteMany option and whether a component can
    run more than one replica: the project schema has no `replicas` field and
-   the platform renders 1 hard (§9). For now: 1Gi, one pod, a site quota of
-   200 MiB, and the signals of §5 ("Content volume") to see it fill up.
+   the platform renders 1 hard (§9). For now: 10Gi, one pod, the default site
+   quota of 500 MiB, and the signals of §5 ("Content volume") to see it fill up.
 2. **Can the Keycloak client of the project be set to `client-jwt`
    (private_key_jwt with JWKS) and to exact-match redirect URIs, and can
    `directAccessGrants` and service accounts be turned off?** Self-service
