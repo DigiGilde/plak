@@ -38,7 +38,6 @@ class TestTheIgnoreList:
     def test_every_entry_has_an_id_a_date_and_a_reason(self, script) -> None:
         entries = script.read_ignore_list(IGNORE_FILE)
 
-        assert entries
         for entry in entries:
             assert script.ADVISORY_ID.match(entry["id"]), entry["id"]
             assert isinstance(entry["expired_at"], date)
@@ -58,14 +57,33 @@ class TestTheIgnoreList:
         with pytest.raises(ValueError, match="advisory id"):
             script.read_ignore_list(bogus)
 
-    def test_an_entry_stops_counting_on_its_own_date(self, script) -> None:
+    def test_an_entry_stops_counting_on_its_own_date(self, script, tmp_path: Path) -> None:
         """The date is the point at which the finding comes back by itself, so
         that an accepted risk does not quietly stay forever."""
-        entries = script.read_ignore_list(IGNORE_FILE)
-        last = max(entry["expired_at"] for entry in entries)
+        listed = tmp_path / "listed.yaml"
+        listed.write_text(
+            yaml.safe_dump(
+                {
+                    "vulnerabilities": [
+                        {"id": "CVE-2026-0001", "expired_at": date(2026, 11, 1), "statement": "x"},
+                        {"id": "GHSA-aaaa-bbbb-cccc", "expired_at": date(2026, 12, 1), "statement": "y"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        entries = script.read_ignore_list(listed)
 
-        assert script.valid_ids(entries, date(2026, 1, 1))
-        assert script.valid_ids(entries, last) == []
+        assert script.valid_ids(entries, date(2026, 10, 31)) == ["CVE-2026-0001", "GHSA-aaaa-bbbb-cccc"]
+        assert script.valid_ids(entries, date(2026, 11, 1)) == ["GHSA-aaaa-bbbb-cccc"]
+        assert script.valid_ids(entries, date(2026, 12, 1)) == []
+
+    def test_an_empty_list_mutes_nothing(self, script, tmp_path: Path) -> None:
+        """Once every accepted finding is fixed the file says `vulnerabilities: []`."""
+        empty = tmp_path / "empty.yaml"
+        empty.write_text("vulnerabilities: []\n", encoding="utf-8")
+
+        assert script.read_ignore_list(empty) == []
 
 
 class TestNpmAudit:
