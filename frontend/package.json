@@ -13,21 +13,21 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@nldd/design-system": "0.8.92",
-    "@tanstack/vue-query": "^5.104.0",
-    "vue": "^3.5.43",
-    "vue-router": "^5.3.1"
+    "@nldd/design-system": "0.8.99",
+    "@tanstack/vue-query": "^5.104.2",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "@vitejs/plugin-vue": "^6.0.9",
-    "@vitest/coverage-v8": "^5.0.3",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "@vitest/coverage-v8": "^5.0.4",
     "@vue/test-utils": "^2.5.1",
-    "axe-core": "^4.13.0",
-    "jsdom": "^30.0.1",
+    "axe-core": "^4.14.0",
+    "jsdom": "^30.1.2",
     "typescript": "^6.0.3",
-    "vite": "^8.3.2",
+    "vite": "^8.3.4",
     "vitest": "^5.0.3",
-    "vue-tsc": "^3.3.11"
+    "vue-tsc": "^3.3.13"
   }
 }
