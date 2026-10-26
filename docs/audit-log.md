@@ -232,8 +232,9 @@ without a valid `repository` claim changes nothing.
 
 A removed live version is one somebody could have rolled back to, so its
 removal gets a row. What the same job removes besides (expired previews,
-orphaned preview versions, stale `_tmp` directories, expired CLI
-authorizations and sessions) writes none: nobody could reach those any more.
+orphaned preview versions, stale `_tmp` directories, directories that lost
+their row, expired CLI authorizations and sessions) writes none: nobody could
+reach those any more.
 The row is written in its own transaction after the removal committed, and a
 failure to write it is logged without stopping the cleanup of the next site,
 as with every other fail-open audit write.

@@ -793,11 +793,11 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         async with factory() as db:
             if preview is not None:
                 version_id = await service.preview_deploy(
-                    db, group, site, preview, upload.filename, upload.spool, deployer, base_path
+                    db, site, preview, upload.filename, upload.spool, deployer, base_path
                 )
             else:
                 version_id = await service.deploy(
-                    db, group, site, upload.filename, upload.spool, deployer, base_path
+                    db, site, upload.filename, upload.spool, deployer, base_path
                 )
             preview_row = (
                 await db.scalar(select(Preview).where(Preview.site_id == site.id, Preview.ref == preview))
