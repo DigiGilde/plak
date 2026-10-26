@@ -3,13 +3,4 @@
 # pip-audit and npm audit are hooked into it via
 # .github/scripts/kwetsbaarheden.py, so there is one place where an
 # accepted finding is written down.
-vulnerabilities:
-  - id: CVE-2026-84782
-    expired_at: 2026-11-26
-    statement: >-
-      OpenSSL in the python:3.12-slim-bookworm runtime base. The newest
-      upstream image still carries 3.0.22-1~deb12u1; containers/plak/Containerfile
-      upgrades libssl3 and openssl to deb12u2, so the built image that
-      deploy.yml scans is clean. The CI scan looks at the base image, so this
-      entry keeps it from failing. Once the FROM pin moves to an image with
-      deb12u2, both this entry and the upgrade go.
+vulnerabilities: []

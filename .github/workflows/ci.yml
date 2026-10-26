@@ -446,10 +446,13 @@ jobs:
           exit-code: "1"
           version: ${{ env.TRIVY_VERSION }}
 
+      # pip is skipped because containers/plak/Containerfile uninstalls it from
+      # the runtime stage; the scan of the built image in deploy.yml sees that.
       - name: Scan the runtime base image (trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.bases.outputs.runtime }}
+          skip-dirs: usr/local/lib/python3.*/site-packages/pip
           trivyignores: .trivyignore.yaml
           severity: CRITICAL,HIGH
           ignore-unfixed: true

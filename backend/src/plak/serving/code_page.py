@@ -309,7 +309,7 @@ class _BodyTooLargeError(Exception):
 async def _bounded_form(request: Request) -> FormData:
     total = 0
 
-    async def bounded_stream() -> AsyncGenerator[bytes, None]:
+    async def bounded_stream() -> AsyncGenerator[bytes]:
         nonlocal total
         async for chunk in request.stream():
             total += len(chunk)
