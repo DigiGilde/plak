@@ -118,14 +118,15 @@ def bare_selector(value: str | None) -> str | None:
     return value
 
 
-_FULL_KEY_AT_START = re.compile(rf"[{_ALPHABET}]{{{SELECTOR_LENGTH}}}\.[{_ALPHABET}]{{{VERIFIER_LENGTH}}}")
+_SECRET_LINK_AT_START = re.compile(rf"[{_ALPHABET}]{{{SELECTOR_LENGTH}}}\.")
 
 
-def carries_full_key(values: Iterable[str]) -> bool:
-    """Whether any of the `key` query values starts with a whole secret link
-    (selector.verifier). Starts with, not equals: a link copied out of a mail
-    often carries a closing bracket or full stop, and the page sees it anyway."""
-    return any(_FULL_KEY_AT_START.match(value) for value in values)
+def carries_secret_link(values: Iterable[str]) -> bool:
+    """Whether any of the `key` query values starts like a secret link: a
+    selector and the dot. Not the whole verifier: a link a mail client cut
+    short or mangled still hands a page most of its code, and one with a
+    closing bracket or full stop stuck to it hands over all of it."""
+    return any(_SECRET_LINK_AT_START.match(value) for value in values)
 
 
 def carries_bare_selector(values: Iterable[str]) -> bool:

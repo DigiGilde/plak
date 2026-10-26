@@ -270,10 +270,15 @@ BARE_SELECTOR = "Ab12Cd34"
         [FULL_KEY + "."],
         [FULL_KEY + " "],
         [FULL_KEY + "trailing"],
+        # What a mail client or chat app cut short or mangled still hands a
+        # page most of the code.
+        ["Ab12Cd34." + "x" * 31],
+        ["Ab12Cd34.x_y"],
+        [BARE_SELECTOR + "."],
     ],
 )
-def test_carries_full_key_finds_a_secret_link_in_any_value(values):
-    assert keys.carries_full_key(values)
+def test_carries_secret_link_finds_one_in_any_value(values):
+    assert keys.carries_secret_link(values)
 
 
 @pytest.mark.parametrize(
@@ -282,14 +287,14 @@ def test_carries_full_key_finds_a_secret_link_in_any_value(values):
         [],
         ["foo"],
         [BARE_SELECTOR],
-        [BARE_SELECTOR + "."],
+        [BARE_SELECTOR + "x"],
         ["Ab12Cd3." + "x" * 32],
-        ["Ab12Cd34." + "x" * 31],
         ["Ab12-d34." + "x" * 32],
+        ["x" + FULL_KEY],
     ],
 )
-def test_carries_full_key_ignores_what_is_no_whole_secret_link(values):
-    assert not keys.carries_full_key(values)
+def test_carries_secret_link_ignores_what_does_not_start_like_one(values):
+    assert not keys.carries_secret_link(values)
 
 
 @pytest.mark.parametrize("values", [[BARE_SELECTOR], ["foo", BARE_SELECTOR], [BARE_SELECTOR, "foo"]])
