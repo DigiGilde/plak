@@ -717,12 +717,13 @@ in Settings and not a change in this repository.
 - [x] **Branch protection on `beta`**, which is the default branch, is on
   (checked on 2026-10-03) as the ruleset in `.github/rulesets/beta.json`,
   with the required checks `ci / backend-tests`, `ci / backend-coverage`,
-  `ci / release-script`, `ci / cli`, `ci / cli-windows`, `ci / frontend`,
-  `ci / e2e`, `ci / pre-commit`, `ci / secret-scan`, `ci / containers`,
-  `ci / vulnerabilities`, `api-contract`, `changelog` and the CodeQL checks
-  `Analyse (actions)`, `Analyse (javascript-typescript)` and
-  `Analyse (python)`, enforced for administrators too, so the test
-  gate in `deploy.yml` is also closed for a direct push. Signed commits are
+  `ci / release-script`, `ci / cli`, `ci / cli-python`, `ci / cli-windows`,
+  `ci / frontend`, `ci / e2e`, `ci / pre-commit`, `ci / secret-scan`,
+  `ci / containers`, `ci / vulnerabilities`, `api-contract`, `changelog`
+  and the CodeQL checks `Analyse (actions)`,
+  `Analyse (javascript-typescript)` and `Analyse (python)`, enforced for
+  administrators too, so the test gate in `deploy.yml` is also closed for
+  a direct push. Signed commits are
   deliberately not required: GitHub cannot sign the commits a rebase merge
   creates.
   The rule moves along to `main` on the day production exists. Merging goes

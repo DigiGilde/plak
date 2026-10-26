@@ -186,6 +186,45 @@ jobs:
         working-directory: cli
         run: uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
 
+  # The CLI supports Python 3.12 and up (cli/pyproject.toml); `cli` and
+  # `cli-windows` run on cli/.python-version, the newest, and this job runs
+  # the suite on every older version people may still install it with.
+  cli-version:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: cli/uv.lock
+
+      - name: CLI tests
+        working-directory: cli
+        run: uv run pytest tests -q -rs
+
+  # The required check over `cli-version`, so a new Python in its matrix
+  # needs no change to the ruleset. `!cancelled()` for the same reason as in
+  # `backend-tests`.
+  cli-python:
+    needs: cli-version
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Python version to pass
+        if: needs.cli-version.result != 'success'
+        env:
+          RESULT: ${{ needs.cli-version.result }}
+        run: |
+          echo "The CLI tests did not pass on every Python version (${RESULT})." >&2
+          exit 1
+
   # The same suite on Windows, without the coverage floor: the `cli` job
   # already covers the Windows branches by switching cli.WINDOWS, this job
   # shows they really run there.

@@ -44,6 +44,7 @@
           {"context": "ci / release-script"},
           {"context": "rulesets"},
           {"context": "ci / cli"},
+          {"context": "ci / cli-python"},
           {"context": "ci / cli-windows"},
           {"context": "ci / containers"},
           {"context": "ci / e2e"},
