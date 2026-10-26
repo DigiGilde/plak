@@ -29,6 +29,12 @@ RUN uv sync --frozen --no-dev
 
 FROM docker.io/library/python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS runtime
 
+# The OpenSSL upgrade patches CVE-2026-84782 until the upstream image carries
+# 3.0.22-1~deb12u2; it can go when the FROM pin moves past it.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --only-upgrade libssl3 openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 1000 plak \
     && useradd --system --uid 1000 --gid plak --no-create-home plak \
     # /content/_tmp pre-created in the image: rootless Podman chowns an EMPTY

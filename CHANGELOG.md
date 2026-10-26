@@ -36,6 +36,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   of a 405, under the same gate and audit, so link checkers and monitors
   see what a browser sees. The admin host and the login paths are
   unchanged.
+- The image patches OpenSSL (CVE-2026-84782) and moves certifi to
+  2026.10.23 (PYSEC-2026-4320), also in the CLI; the SPA builds with
+  vite 8.3.5 and undici 8.12.3.
 
 ## [2026.10.7]
 
