@@ -77,8 +77,7 @@ def store(tmp_path: Path) -> ContentStore:
 @pytest.fixture
 def storage_ref(store: ContentStore) -> str:
     return store.store_version(
-        "aurora",
-        "site",
+        uuid.uuid4(),
         uuid.uuid4(),
         {
             "index.html": b"<h1>start</h1>",
@@ -125,7 +124,7 @@ class TestResolve:
 
 class TestFind404Page:
     def test_present(self, store: ContentStore):
-        ref = store.store_version("aurora", "met404", uuid.uuid4(), {"404.html": b"<h1>oeps</h1>"})
+        ref = store.store_version(uuid.uuid4(), uuid.uuid4(), {"404.html": b"<h1>oeps</h1>"})
         path = resolution.find_404_page(store, ref)
         assert path is not None and path.read_bytes() == b"<h1>oeps</h1>"
 

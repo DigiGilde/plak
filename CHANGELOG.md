@@ -26,12 +26,18 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - On ZAD the content volume is 10Gi and a site may again hold 500 MiB
   across all its versions, the `PLAK_SITE_MAX_BYTES` default.
 - The image runs Python 3.15 on Debian 13 (trixie), without pip.
+- Versions are stored under the site's id, so a site created again under a
+  deleted name starts empty. The upgrade moves the existing directories and
+  needs the content volume. After it, the previous image no longer starts.
 
 ### Fixed
 
 - Production runs the image its release names, so the footer shows the
   version instead of "Wat is er nieuw"; it ran a build of the same commit
   without its version.
+- Files left behind by an interrupted publish, cleanup or delete no longer
+  count against a site's storage quota: the nightly cleanup sets them aside
+  and removes them a week later.
 
 ### Security
 

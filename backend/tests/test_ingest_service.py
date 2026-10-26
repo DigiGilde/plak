@@ -59,7 +59,7 @@ class Environment:
 
     @property
     def sitedir(self) -> Path:
-        return self.content_root / self.group.slug / self.site.slug
+        return self.content_root / str(self.site.id)
 
     def source(self, content: bytes) -> Path:
         """Writes an upload to disk the way the API spools it (outside _tmp, so
@@ -165,7 +165,7 @@ class TestDeploy:
     async def test_deploy_creates_version_and_set_live(self, environment: Environment):
         async with environment.session_factory() as session:
             version_id = await environment.service.deploy(
-                session, environment.group, environment.site, "index.html", environment.source(b"<h1>v1</h1>"),
+                session, environment.site, "index.html", environment.source(b"<h1>v1</h1>"),
                 environment.deployer,
             )
 
@@ -181,12 +181,12 @@ class TestDeploy:
     async def test_second_deploy_swaps_pointer_and_keeps_old_version(self, environment: Environment):
         async with environment.session_factory() as session:
             first = await environment.service.deploy(
-                session, environment.group, environment.site, "a.html", environment.source(b"v1"),
+                session, environment.site, "a.html", environment.source(b"v1"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
             second_one = await environment.service.deploy(
-                session, environment.group, environment.site, "b.html", environment.source(b"v2"),
+                session, environment.site, "b.html", environment.source(b"v2"),
                 environment.deployer,
             )
 
@@ -207,7 +207,6 @@ class TestDeploy:
         async with environment.session_factory() as session:
             version_id = await environment.service.deploy(
                 session,
-                environment.group,
                 environment.site,
                 "site.zip",
                 environment.source(buf.getvalue()),
@@ -225,7 +224,7 @@ class TestDeploy:
         async with environment.session_factory() as session:
             with pytest.raises(BundleError):
                 await environment.service.deploy(
-                    session, environment.group, environment.site, "site.rar", environment.source(b"x"),
+                    session, environment.site, "site.rar", environment.source(b"x"),
                     environment.deployer,
                 )
         assert await _versions(environment) == []
@@ -244,7 +243,6 @@ class TestDeploy:
             with pytest.raises(BundleError) as error:
                 await environment.service.deploy(
                     session,
-                    environment.group,
                     environment.site,
                     "site.zip",
                     environment.source(buf.getvalue()),
@@ -266,7 +264,6 @@ class TestDeploy:
             with pytest.raises(BundleError) as error:
                 await environment.service.deploy(
                     session,
-                    environment.group,
                     environment.site,
                     "site.zip",
                     environment.source(buf.getvalue()),
@@ -287,7 +284,6 @@ class TestDeploy:
         async with environment.session_factory() as session:
             version_id = await environment.service.deploy(
                 session,
-                environment.group,
                 environment.site,
                 "site.zip",
                 environment.source(buf.getvalue()),
@@ -307,7 +303,7 @@ class TestDeploy:
         async with environment.session_factory() as session:
             with pytest.raises(IntegrityError):
                 await environment.service.deploy(
-                    session, environment.group, environment.site, "index.html", environment.source(b"x"),
+                    session, environment.site, "index.html", environment.source(b"x"),
                     ghost_deployer,
                 )
         assert await _versions(environment) == []
@@ -319,7 +315,7 @@ class TestPreviewDeploy:
         before = datetime.now(tz=UTC)
         async with environment.session_factory() as session:
             version_id = await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-7", "index.html", environment.source(b"p1"),
+                session, environment.site, "pr-7", "index.html", environment.source(b"p1"),
                 environment.deployer,
             )
 
@@ -336,7 +332,7 @@ class TestPreviewDeploy:
     async def test_upsert_same_ref_replaces_version_and_files(self, environment: Environment):
         async with environment.session_factory() as session:
             first = await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-1", "index.html", environment.source(b"p1"),
+                session, environment.site, "pr-1", "index.html", environment.source(b"p1"),
                 environment.deployer,
             )
         # Override set in between: it has to survive the redeploy.
@@ -352,7 +348,7 @@ class TestPreviewDeploy:
             )
         async with environment.session_factory() as session:
             second_one = await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-1", "index.html", environment.source(b"p2"),
+                session, environment.site, "pr-1", "index.html", environment.source(b"p2"),
                 environment.deployer,
             )
 
@@ -369,12 +365,12 @@ class TestPreviewDeploy:
     async def test_different_refs_alongside_each_other(self, environment: Environment):
         async with environment.session_factory() as session:
             await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-1", "index.html", environment.source(b"a"),
+                session, environment.site, "pr-1", "index.html", environment.source(b"a"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
             await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-2", "index.html", environment.source(b"b"),
+                session, environment.site, "pr-2", "index.html", environment.source(b"b"),
                 environment.deployer,
             )
         assert len(await _previews(environment)) == 2
@@ -386,7 +382,7 @@ class TestPreviewDeploy:
         async with environment.session_factory() as session:
             with pytest.raises(IntegrityError):
                 await environment.service.preview_deploy(
-                    session, environment.group, environment.site, "pr-ghost", "index.html",
+                    session, environment.site, "pr-ghost", "index.html",
                     environment.source(b"p"), ghost_deployer,
                 )
         assert await _versions(environment) == []
@@ -398,7 +394,6 @@ class TestPreviewDeploy:
             async with environment.session_factory() as session:
                 return await environment.service.preview_deploy(
                     session,
-                    environment.group,
                     environment.site,
                     "pr-race",
                     "index.html",
@@ -423,7 +418,7 @@ class TestDeletePreview:
     async def test_deletes_row_version_and_files(self, environment: Environment):
         async with environment.session_factory() as session:
             await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-1", "index.html", environment.source(b"p"),
+                session, environment.site, "pr-1", "index.html", environment.source(b"p"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
@@ -437,7 +432,7 @@ class TestDeletePreview:
             assert await environment.service.delete_preview(session, environment.site, "pr-x") is False
         async with environment.session_factory() as session:
             await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-x", "index.html", environment.source(b"p"),
+                session, environment.site, "pr-x", "index.html", environment.source(b"p"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
@@ -450,12 +445,12 @@ class TestRollback:
     async def test_rollback_to_earlier_live_version(self, environment: Environment):
         async with environment.session_factory() as session:
             first = await environment.service.deploy(
-                session, environment.group, environment.site, "a.html", environment.source(b"v1"),
+                session, environment.site, "a.html", environment.source(b"v1"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
             await environment.service.deploy(
-                session, environment.group, environment.site, "b.html", environment.source(b"v2"),
+                session, environment.site, "b.html", environment.source(b"v2"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
@@ -465,7 +460,7 @@ class TestRollback:
     async def test_refuses_preview_version(self, environment: Environment):
         async with environment.session_factory() as session:
             preview_version = await environment.service.preview_deploy(
-                session, environment.group, environment.site, "pr-1", "index.html", environment.source(b"p"),
+                session, environment.site, "pr-1", "index.html", environment.source(b"p"),
                 environment.deployer,
             )
         async with environment.session_factory() as session:
@@ -486,7 +481,7 @@ class TestRollback:
             session.add(other)
         async with environment.session_factory() as session:
             someone_elses_version = await environment.service.deploy(
-                session, environment.group, other, "index.html", environment.source(b"x"), environment.deployer
+                session, other, "index.html", environment.source(b"x"), environment.deployer
             )
         async with environment.session_factory() as session:
             with pytest.raises(IngestError) as error:
@@ -505,7 +500,7 @@ async def test_preview_expires_on_column_type(environment: Environment):
     """expires_at is stored with a timezone and lies about 30 days ahead."""
     async with environment.session_factory() as session:
         await environment.service.preview_deploy(
-            session, environment.group, environment.site, "pr-tz", "index.html", environment.source(b"p"),
+            session, environment.site, "pr-tz", "index.html", environment.source(b"p"),
             environment.deployer,
         )
     async with environment.session_factory() as session:
@@ -532,13 +527,13 @@ class TestStorageRoom:
         service = self._service(environment, site_max_bytes=200)
         async with environment.session_factory() as session:
             await service.deploy(
-                session, environment.group, environment.site, "index.html",
+                session, environment.site, "index.html",
                 environment.source(b"x" * 150), environment.deployer,
             )
         async with environment.session_factory() as session:
             with pytest.raises(IngestError) as error:
                 await service.deploy(
-                    session, environment.group, environment.site, "index.html",
+                    session, environment.site, "index.html",
                     environment.source(b"x" * 150), environment.deployer,
                 )
         assert error.value.reason == "SITE_QUOTA_EXCEEDED"
@@ -549,13 +544,13 @@ class TestStorageRoom:
         service = self._service(environment, site_max_bytes=200)
         async with environment.session_factory() as session:
             await service.deploy(
-                session, environment.group, environment.site, "index.html",
+                session, environment.site, "index.html",
                 environment.source(b"x" * 150), environment.deployer,
             )
         async with environment.session_factory() as session:
             with pytest.raises(IngestError):
                 await service.deploy(
-                    session, environment.group, environment.site, "index.html",
+                    session, environment.site, "index.html",
                     environment.source(b"x" * 150), environment.deployer,
                 )
         assert len(environment.version_dirs()) == 1
@@ -567,7 +562,7 @@ class TestStorageRoom:
         async with environment.session_factory() as session:
             for _ in range(3):
                 await service.deploy(
-                    session, environment.group, environment.site, "index.html",
+                    session, environment.site, "index.html",
                     environment.source(b"x" * 150), environment.deployer,
                 )
         assert len(environment.version_dirs()) == 3
@@ -614,7 +609,7 @@ class TestStorageRoom:
         service.check_room(349)
         async with environment.session_factory() as session:
             version_id = await service.deploy(
-                session, environment.group, environment.site, "index.html",
+                session, environment.site, "index.html",
                 environment.source(b"x" * 349), environment.deployer,
             )
         assert environment.version_dirs() == {str(version_id)}
@@ -633,12 +628,12 @@ class TestStorageRoom:
             with pytest.raises(IngestError) as error:
                 if preview:
                     await service.preview_deploy(
-                        session, environment.group, environment.site, "pr-1", "site.zip",
+                        session, environment.site, "pr-1", "site.zip",
                         source, environment.deployer,
                     )
                 else:
                     await service.deploy(
-                        session, environment.group, environment.site, "site.zip",
+                        session, environment.site, "site.zip",
                         source, environment.deployer,
                     )
         assert error.value.reason == "STORAGE_UNAVAILABLE"

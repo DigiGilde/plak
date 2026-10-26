@@ -193,7 +193,7 @@ async def _seed(factory, store: ContentStore) -> World:
 
         def new_version(site: Site, files: dict[str, bytes], target=VersionTarget.LIVE) -> Version:
             version_id = uuid.uuid4()
-            storage_ref = store.store_version(group.slug, site.slug, version_id, files)
+            storage_ref = store.store_version(site.id, version_id, files)
             return Version(
                 id=version_id, site_id=site.id, target=target, storage_ref=storage_ref, member_id=member.id
             )

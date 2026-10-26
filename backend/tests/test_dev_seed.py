@@ -72,10 +72,10 @@ async def session_factory(settings: Settings) -> AsyncIterator[async_sessionmake
 
 
 def _version_dirs(root: Path) -> set[str]:
-    """Every {group}/{site}/{version} directory on the content root."""
+    """Every {site_id}/{version_id} directory on the content root."""
     return {
         str(path.relative_to(root))
-        for path in root.glob("*/*/*")
+        for path in root.glob("*/*")
         if path.is_dir() and path.relative_to(root).parts[0] != "_tmp"
     }
 
