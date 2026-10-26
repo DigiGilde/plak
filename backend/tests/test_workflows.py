@@ -175,6 +175,8 @@ class TestTheCheckGate:
             "backend-tests",
             "release-script",
             "cli",
+            "cli-python",
+            "cli-version",
             "cli-windows",
             "frontend",
             "vulnerabilities",
@@ -183,6 +185,34 @@ class TestTheCheckGate:
             "containers",
             "e2e",
         }
+
+    def test_the_cli_runs_on_every_python_it_supports(self, ci) -> None:
+        """People install the CLI with whatever Python they have, so every
+        minor from the floor in requires-python up to cli/.python-version,
+        which `cli` and `cli-windows` run on, gets the suite."""
+        floor = re.search(
+            r'^requires-python = ">=3\.(\d+)"$', (ROOT / "cli" / "pyproject.toml").read_text(), re.M
+        )
+        assert floor
+        newest = int((ROOT / "cli" / ".python-version").read_text().strip().split(".")[1])
+        matrix = ci["jobs"]["cli-version"]["strategy"]["matrix"]["python"]
+
+        assert ci["jobs"]["cli-version"]["strategy"]["fail-fast"] is False
+        assert sorted([*matrix, f"3.{newest}"], key=lambda v: int(v.split(".")[1])) == [
+            f"3.{minor}" for minor in range(int(floor[1]), newest + 1)
+        ]
+        install = _step(ci["jobs"]["cli-version"], "Install uv")
+        assert install["with"]["python-version"] == "${{ matrix.python }}"
+
+    def test_a_failed_python_version_fails_the_cli_check(self, ci) -> None:
+        """The same trap as with the backend parts: a skipped required check
+        counts as passed, so `cli-python` runs regardless and fails itself."""
+        gate = ci["jobs"]["cli-python"]
+        assert gate["needs"] == "cli-version"
+        assert gate["if"] == "${{ !cancelled() }}"
+        [step] = gate["steps"]
+        assert step["if"] == "needs.cli-version.result != 'success'"
+        assert "exit 1" in step["run"]
 
 
 class TestTheScans:
