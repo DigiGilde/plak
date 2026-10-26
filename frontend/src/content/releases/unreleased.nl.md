@@ -4,4 +4,4 @@ Wie het adres van Plak zelf intypt, komt nu op dezelfde startpagina als in het b
 
 ## Service workers en de parameter `key`
 
-Een gepubliceerde site kan geen service worker meer registreren, dus een PWA-plugin maakt een site niet meer offline bruikbaar. Staat er in het adres van een pagina een `key` die op een geheime link lijkt, dan haalt Plak die weg voordat de pagina laadt; geef een eigen queryparameter een andere naam.
+Een gepubliceerde site kan geen service worker meer registreren, dus een PWA-plugin maakt een site niet meer offline bruikbaar. Staat er in het adres van een pagina een `key` die op een geheime link lijkt, dan haalt Plak die weg voordat de pagina laadt. Gebruikt je site zelf een parameter `key`? Geef die dan een andere naam.
