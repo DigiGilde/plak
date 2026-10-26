@@ -11,7 +11,7 @@
  */
 import { computed, ref, watch } from 'vue';
 
-import { ApiError } from '@/api/client';
+import { errorText } from '@/api/client';
 import * as api from '@/api/plak';
 import type { Access, AccessBase, Group, Site } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
@@ -40,10 +40,6 @@ watch(
     chosen.value = value;
   },
 );
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
 
 async function save(next: Access): Promise<void> {
   const previous = chosen.value;

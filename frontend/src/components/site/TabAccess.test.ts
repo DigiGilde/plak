@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
 import type { Access } from '@/api/types';
 import TabAccess from './TabAccess.vue';
-import { serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
+import { provideSiteGroup, serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';
 
 /** A network failure, as opposed to `serverErrorFetch()`'s problem+json: no
  * `ApiError` comes out of this one, so it exercises `errorText`'s fallback. */
@@ -33,7 +33,7 @@ function setAccess(access: Access): void {
 function makeWrapper() {
   return mount(TabAccess, {
     props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
-    global: { stubs: { teleport: true } },
+    global: { stubs: { teleport: true }, provide: provideSiteGroup(backend) },
   });
 }
 
@@ -386,31 +386,6 @@ describe('TabAccess: states', () => {
     await untilIdle();
 
     expect(wrapper.html()).toContain('Serverfout');
-  });
-
-  it('shows a 404 when the site vanished from its group between the two requests', async () => {
-    // A real race (deleted from another tab just as this one loads): the
-    // invitees and keys calls still answer, but the group listing no longer
-    // has the site, so `siteRow` in TabAccess's load() comes back undefined.
-    const realFetch = backend.fetch;
-    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await realFetch(input, init);
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/-/api/v1/groups/team-aurora') {
-        const body = await response.clone().json();
-        body.sites = body.sites.filter((entry: { slug: string }) => entry.slug !== 'website');
-        return new Response(JSON.stringify(body), {
-          status: response.status,
-          headers: response.headers,
-        });
-      }
-      return response;
-    });
-
-    const wrapper = makeWrapper();
-    await untilIdle();
-
-    expect(wrapper.html()).toContain('Onbekende site');
   });
 });
 

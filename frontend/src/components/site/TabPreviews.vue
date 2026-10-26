@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { ref } from 'vue';
 
 import * as plak from '@/api/plak';
-import { ApiError } from '@/api/client';
+import { errorText } from '@/api/client';
+import { useLoader } from '@/composables/loader';
 import type { Access, AccessBase, Preview } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
 import { accessBaseLabel, accessLabel, contentUrl, formatTimestamp } from '@/format';
@@ -16,29 +17,16 @@ defineOptions({ inheritAttrs: false });
 
 const props = defineProps<{ group: string; site: string; contentBase: string }>();
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const previews = ref<Preview[]>([]);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    previews.value = await plak.previews(props.group, props.site);
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(load);
-watch(() => [props.group, props.site], load);
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
+const { loading, error } = useLoader(
+  () => plak.previews(props.group, props.site),
+  (list) => {
+    previews.value = list;
+  },
+  () => [props.group, props.site],
+);
 
 /** The API returns `url` as a content path; the link belongs on the content host. */
 function previewUrl(preview: Preview): string {

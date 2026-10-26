@@ -3,8 +3,6 @@
  * follow the backend's camelCase wire contract (NL GOV API Design Rules).
  */
 
-export type { Problem } from './client';
-
 /**
  * The base answer to "who can view this site": exactly one per
  * site, a single shared enum type in the backend. `nobody` grants nothing by
@@ -33,13 +31,13 @@ export interface Access {
 
 export type PlatformRole = 'admin' | 'member';
 export type MemberStatus = 'active' | 'deactivated';
-export type VersionTarget = 'live' | 'preview';
-export type VersionOrigin = 'upload' | 'action';
-export type KeyStatus = 'active' | 'revoked';
+type VersionTarget = 'live' | 'preview';
+type VersionOrigin = 'upload' | 'action';
+type KeyStatus = 'active' | 'revoked';
 export type RepositoryProvider = 'github' | 'forgejo';
 
 /** ISO 8601 instant as the backend serialises it (UTC, with "Z"). */
-export type Timestamp = string;
+type Timestamp = string;
 
 /** The interface language a member chose; null means "follow my browser". */
 export type MemberLanguage = 'nl' | 'en';

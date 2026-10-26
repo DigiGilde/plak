@@ -146,7 +146,6 @@ const shared = {
   'profile.sessions.install.link': 'Zo installeer en gebruik je hem.',
   'profile.sessions.link': 'Bekijk gekoppelde CLI-sessies',
 
-  'language.label': 'Taal',
   'language.nl': 'Nederlands',
   'language.en': 'Engels',
 } as const;

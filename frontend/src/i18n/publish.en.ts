@@ -191,8 +191,6 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
 
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Loading access settings',
-  'publish.access.unknownSite.title': 'Unknown site',
-  'publish.access.unknownSite.detail': 'No site "{site}" in group "{group}".',
   'publish.access.base.heading': 'Who can view this site?',
   'publish.access.saved': 'Access saved',
   'publish.access.saveFailed': 'Access not saved',

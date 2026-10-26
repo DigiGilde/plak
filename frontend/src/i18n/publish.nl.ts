@@ -191,8 +191,6 @@ export const publishNl = {
 
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Toegangsinstellingen laden',
-  'publish.access.unknownSite.title': 'Onbekende site',
-  'publish.access.unknownSite.detail': 'Geen site "{site}" in groep "{group}".',
   'publish.access.base.heading': 'Wie kan deze site bekijken?',
   'publish.access.saved': 'Toegang opgeslagen',
   'publish.access.saveFailed': 'Toegang niet opgeslagen',

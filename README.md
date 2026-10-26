@@ -322,8 +322,7 @@ ZAD environment to deploy to yet.
 
 - `backend/`: Python >= 3.12, FastAPI, SQLAlchemy (async, asyncpg),
   Alembic, joserfc (JWT and JWKS for OIDC and CI tokens), pydantic-settings.
-- `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`,
-  `@tanstack/vue-query`.
+- `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`.
 - `cli/`: the publishing CLI, a uv project of its own that installs the
   `plak` command; its only dependency is httpx and it shares no code with
   the backend. `cli/tests/` is its suite (`just test-cli`).

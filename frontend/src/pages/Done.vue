@@ -11,7 +11,7 @@
  * than one address, the second address joins as an extra row, with the same
  * buttons.
  */
-import { computed, onMounted, ref, watch, watchEffect } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import * as plak from '@/api/plak';
@@ -20,8 +20,10 @@ import type { Me, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { useLoader } from '@/composables/loader';
 import { takePublishedMark } from '@/composables/publishedMark';
 import { groupPath } from '@/composables/slug';
+import { siteNotFound } from '@/composables/siteGroup';
 import SecretLink from '@/components/site/SecretLink.vue';
 import { accessSummary, formatTimestamp, siteUrl } from '@/format';
 import { t } from '@/i18n';
@@ -37,8 +39,6 @@ const router = useRouter();
 const groupSlug = computed(() => String(route.params.group ?? ''));
 const siteSlug = computed(() => String(route.params.site ?? ''));
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const site = ref<Site | null>(null);
 const groupName = ref('');
 const contentBase = ref('');
@@ -63,44 +63,35 @@ const addresses = computed<Address[]>(() => [
   },
 ]);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
+async function fetchDone() {
   keyValue.value = null;
   keyError.value = null;
   keyRequested = false;
+  site.value = null;
   const fromPublish = takePublishedMark(router);
-  try {
-    const [detail, loggedIn] = await Promise.all([plak.group(groupSlug.value), fetchCurrentMember()]);
+  const [detail, loggedIn] = await Promise.all([plak.group(groupSlug.value), fetchCurrentMember()]);
+  const found = detail.sites.find((p) => p.slug === siteSlug.value);
+  if (!found) {
+    throw siteNotFound(groupSlug.value, siteSlug.value);
+  }
+  return { detail, loggedIn, found, fromPublish };
+}
+
+const { loading, error } = useLoader(
+  fetchDone,
+  ({ detail, loggedIn, found, fromPublish }) => {
     // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
     contentBase.value = (loggedIn as Me | null)?.contentBaseUrl ?? '';
     groupName.value = detail.group.name;
-    const found = detail.sites.find((p) => p.slug === siteSlug.value);
-    if (!found) {
-      error.value = new ApiError({
-        type: 'about:blank',
-        title: t('page.done.error.unknownSite.title'),
-        status: 404,
-        detail: t('page.done.error.unknownSite.detail', {
-          site: siteSlug.value,
-          group: groupSlug.value,
-        }),
-      });
-      site.value = null;
-      return;
-    }
     site.value = found;
     if (found.access.keys && fromPublish) {
       // Not awaited: the address on this screen does not depend on it, and
       // it should not hold up the loading indicator.
       void ensureKeyLink();
     }
-  } catch (e) {
-    error.value = e;
-  } finally {
-    loading.value = false;
-  }
-}
+  },
+  () => [groupSlug.value, siteSlug.value],
+);
 
 /**
  * The link comes into being on the same screen as the choice. Without this,
@@ -129,9 +120,6 @@ async function ensureKeyLink(): Promise<void> {
     keyError.value = f;
   }
 }
-
-onMounted(load);
-watch(() => [groupSlug.value, siteSlug.value], load);
 
 watchEffect(() => {
   setBreadcrumbs(route.path, [

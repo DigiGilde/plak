@@ -499,6 +499,17 @@ function withSiteRoles(data: MockData, row: MockGroupMember): GroupMember {
   };
 }
 
+/** What `GET /groups/{group}` answers for a group that exists. */
+export function groupDetailOf(data: MockData, groupRow: Group): GroupDetail {
+  return {
+    group: groupRow,
+    sites: data.sites
+      .filter((p) => p.groupSlug === groupRow.slug)
+      .map((p) => siteDerived(data, p)),
+    members: groupMemberRows(data, groupRow.slug),
+  };
+}
+
 function groupMemberRows(data: MockData, groupSlug: string): GroupMember[] {
   return data.groupMembers
     .filter((l) => l.groupSlug === groupSlug)
@@ -739,14 +750,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
       // GET /groups/{group}
       if (method === 'GET' && rest.length === 2) {
         if (!groupRow) return problem(404, 'Onbekende groep', `Geen groep met slug "${groupSlug}".`);
-        const detail: GroupDetail = {
-          group: groupRow,
-          sites: data.sites
-            .filter((p) => p.groupSlug === groupSlug)
-            .map((p) => siteDerived(data, p)),
-          members: groupMemberRows(data, groupSlug),
-        };
-        return json(200, detail);
+        return json(200, groupDetailOf(data, groupRow));
       }
 
       // DELETE /groups/{group}

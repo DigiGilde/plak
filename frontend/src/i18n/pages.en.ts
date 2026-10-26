@@ -157,8 +157,6 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.done.loading': 'Loading the result…',
   'page.done.heading.online': 'Your site is online',
   'page.done.heading.offline': 'Your site is not online yet',
-  'page.done.error.unknownSite.title': 'Unknown site',
-  'page.done.error.unknownSite.detail': 'No site "{site}" in group "{group}".',
   'page.done.address.site': 'Address of your site',
   'page.done.copy.button': 'Copy address',
   'page.done.copy.ok': 'Address copied.',
