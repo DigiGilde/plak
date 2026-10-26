@@ -271,6 +271,16 @@ class TestTheScans:
             assert step["with"]["severity"] == "CRITICAL,HIGH"
             assert step["with"]["trivyignores"] == ".trivyignore.yaml"
 
+    def test_the_base_image_scan_skips_only_what_the_image_removes(self, ci) -> None:
+        """Skipping pip in the runtime base scan is only honest while the
+        runtime stage uninstalls it; the other scans skip nothing."""
+        steps = ci["jobs"]["containers"]["steps"]
+        skipping = {s["name"]: s["with"]["skip-dirs"] for s in steps if "skip-dirs" in s.get("with", {})}
+
+        assert skipping == {"Scan the runtime base image (trivy)": "usr/local/lib/python3.*/site-packages/pip"}
+        runtime = (ROOT / "containers" / "plak" / "Containerfile").read_text().split(" AS runtime", 1)[1]
+        assert "RUN python -m pip uninstall --yes --quiet pip" in runtime
+
     def test_every_third_party_action_is_pinned_to_a_sha(self) -> None:
         """A tag can be moved, a commit cannot. Over every workflow in the
         directory rather than a hand-kept list, so a new one is covered the

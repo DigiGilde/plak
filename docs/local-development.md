@@ -7,7 +7,8 @@ This document describes how to run and test Plak locally.
 - **Podman** (not Docker; see the global instructions). Install Podman
   and make sure the Podman machine is running on macOS/Windows
   (`podman machine start`).
-- Python >= 3.12 with `uv`.
+- `uv`; it installs the Python each `.python-version` asks for (3.15 for
+  the backend, 3.12 for the CLI).
 - Node.js with npm, for the frontend.
 - `just` (justfile runner) for the usual commands.
 - Two hostnames pointing at 127.0.0.1 (spec §4a: two origins; the app

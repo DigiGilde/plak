@@ -320,7 +320,7 @@ ZAD environment to deploy to yet.
 
 ## The technology in short
 
-- `backend/`: Python >= 3.12, FastAPI, SQLAlchemy (async, asyncpg),
+- `backend/`: Python 3.15, FastAPI, SQLAlchemy (async, asyncpg),
   Alembic, joserfc (JWT and JWKS for OIDC and CI tokens), pydantic-settings.
 - `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`,
   `@tanstack/vue-query`.
