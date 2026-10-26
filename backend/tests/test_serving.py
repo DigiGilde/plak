@@ -403,6 +403,18 @@ class TestLexical301:
         assert response.status_code == 301
         assert response.headers["location"] == f"/aurora/site/_version/{environment.world.site_live_id}/"
 
+    async def test_a_301_that_passes_a_key_on_is_not_stored(self, client):
+        """A browser keeps a 301 without an end, and this one repeats the query
+        it came with; with a `key` in it, not even its own site's link may
+        stay behind in the cache."""
+        with_key = await client.get("/aurora/site?key=foo&x=1")
+        assert with_key.status_code == 301
+        assert with_key.headers["location"] == "/aurora/site/?key=foo&x=1"
+        assert with_key.headers["cache-control"] == "no-store"
+        without = await client.get("/aurora/site?x=1")
+        assert without.status_code == 301
+        assert "cache-control" not in without.headers
+
     async def test_reserved_slug_gets_no_redirect(self, client):
         # Since the SPA moved to the root of the admin host, "admin" is a slug
         # like any other. What stays reserved is what the web itself claims.
@@ -537,8 +549,10 @@ class TestInconsistentDecision:
 
         monkeypatch.setattr(gate, "decide", fake_decide)
         response = await client.get("/aurora/nietbestaand/?key=AbCdEfGh.dummy")
-        assert response.status_code == 404
-        assert response.content == b"Niet gevonden\n"
+        # The refusal that follows takes the link out of the address.
+        assert response.status_code == 302
+        assert response.headers["location"] == "/aurora/nietbestaand/"
+        assert response.headers["cache-control"] == "no-store"
         assert "set-cookie" not in response.headers
 
 
@@ -896,7 +910,9 @@ class TestKey:
         assert response.content == anonymous.content
 
     async def test_invalid_key_is_neutral_404(self, client):
-        response = await client.get("/aurora/geheim/?key=verkeerd.sleutelwaarde")
+        # A value that does not start like a secret link; one that does leaves
+        # the address instead (TestKeyNeverReachesAPage).
+        response = await client.get("/aurora/geheim/?key=fout.sleutelwaarde")
         assert response.status_code == 404
         assert "set-cookie" not in response.headers
 
@@ -1174,6 +1190,16 @@ class TestServiceWorkerScript:
                 assert response.content == reference.content, (path, headers)
                 assert _header_list(response) == _header_list(reference), (path, headers)
 
+    async def test_a_registration_with_a_link_gets_the_neutral_404_too(self, client, environment):
+        """Before the key leaves: a 302 would tell a registration that a site
+        answers there."""
+        reference = await client.get("/nergens/niks/")
+        for headers in self.REGISTRATIONS:
+            response = await client.get(f"/aurora/site/sw.js?key={environment.world.key_plain}", headers=headers)
+            assert response.status_code == 404, headers
+            assert response.content == reference.content, headers
+            assert _header_list(response) == _header_list(reference), headers
+
     async def test_the_same_paths_are_served_without_it(self, client, environment):
         self._site_member(client, environment)
         for path in self._served_paths(environment):
@@ -1262,6 +1288,15 @@ class TestKeyNeverReachesAPage:
     async def test_a_link_with_what_a_mail_client_left_behind_leaves_too(self, client, environment, junk):
         response = await client.get(f"/aurora/site/?key={environment.world.key_plain}{junk}")
         self._assert_taken_out(response, "/aurora/site/")
+
+    @pytest.mark.parametrize("cut", [1, keys.VERIFIER_LENGTH])
+    async def test_a_link_cut_short_or_mangled_leaves_too(self, client, environment, cut):
+        """One character short still hands the page all but one character of
+        the code; the selector and the dot alone are where a link starts."""
+        link = environment.world.key_plain
+        for value in (link[:-cut], f"{link[:-1]}_"):
+            response = await client.get(f"/aurora/site/?key={value}")
+            self._assert_taken_out(response, "/aurora/site/")
 
     async def test_a_logged_in_visitor_loses_a_link_meant_for_another_site(self, client, environment):
         set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
@@ -1446,7 +1481,7 @@ class TestKeyNeverReachesAPage:
         assert response.content == reference.content
         assert _header_list(response) == _header_list(reference)
 
-    @pytest.mark.parametrize("query", ["key=foo", "key=fout.fout", "key=abcdefgh.kort", "KEY={key}"])
+    @pytest.mark.parametrize("query", ["key=foo", "key=fout.fout", "key=abcdefg.kort", "KEY={key}"])
     async def test_what_is_no_secret_link_stays(self, client, environment, query):
         """Another value under `key`, or the link under another spelling of
         the name: redeeming is case-sensitive, and so is this."""
@@ -1491,6 +1526,7 @@ class TestRedirectTargets:
         slash = await client.get(f"/aurora/site%3F?key={key}")
         assert slash.status_code == 301
         assert slash.headers["location"] == f"/aurora/site%3F/?key={key}"
+        assert slash.headers["cache-control"] == "no-store"
         after_slash = await client.get(slash.headers["location"])
         assert after_slash.status_code == 302
         assert after_slash.headers["location"] == "/aurora/site%3F/"
@@ -2187,7 +2223,8 @@ class TestAudit:
         # A refused key is audited, but without the key itself: the references
         # carry only the path, never the query.
         response = await client.get("/aurora/geheim/pagina.html?key=verkeerd.sleutelwaarde&x=1")
-        assert response.status_code == 404
+        assert response.status_code == 302
+        assert response.headers["location"] == "/aurora/geheim/pagina.html?x=1"
         rows = await _audit_rows(environment)
         assert len(rows) == 1
         assert rows[0].result == "refused"

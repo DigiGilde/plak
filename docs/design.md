@@ -680,14 +680,14 @@ A page never sees a secret link that is not redeemed for its own site. A page
 reads its own address, and a later page on the content host can read the tab's
 history, so a link left in either reaches whichever site answers it. Whenever,
 on a path of a site (`/{group}/{site}/...`), one of the `key` values starts
-with a whole secret link (eight letters or digits, a dot and thirty-two more,
-also with what a mail client leaves stuck to it) and the answer is not its
-redemption, serving answers with the same 302 to the URL without any `key`,
-with `no-store` and without a cookie: on an allowed page and on the neutral 404
-alike. Beside a whole link the code page does not appear; the gate's own answer
-stands. The decision is audited first, so `KEY_INVALID` stays visible. Every
-value counts, because the gate reads the last `key` and a page's
-`URLSearchParams` the first. Only the login redirect keeps its answer; it never
+like a secret link (eight letters or digits and a dot, however much of the
+code follows, so also a link a mail client cut short, mangled or left something
+stuck to) and the answer is not its redemption, serving answers with the same
+302 to the URL without any `key`, with `no-store` and without a cookie: on an
+allowed page and on the neutral 404 alike. Beside such a value the code page
+does not appear; the gate's own answer stands. The decision is audited first,
+so `KEY_INVALID` stays visible. Every value counts, because the gate reads the
+last `key` and a page's `URLSearchParams` the first. Only the login redirect keeps its answer; it never
 carried the key. A selector alone leaves an allowed page the same way and stays
 on a refusal, where the code page needs it. `KEY=` and other spellings of the
 name are left alone: redeeming is case-sensitive. Every other path keeps the

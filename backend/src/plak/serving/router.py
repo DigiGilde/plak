@@ -20,8 +20,9 @@ request aimed at another site carries no session and the gate sees an
 anonymous visitor. A login redirect goes to `/-/login` on the same host. A valid
 `?key=` is redeemed: the key cookie rides along on a 302 to the same URL
 without `key`, so the key is not left behind in the address bar, the history
-or logs. Any other `key` value that starts with a whole secret link leaves the
-URL the same way, without a cookie, whatever the answer would have been; only
+or logs. Any other `key` value that starts like a secret link (a selector and
+the dot, however much of the code follows) leaves the URL the same way, without
+a cookie, whatever the answer would have been; only
 the login redirect keeps its own answer, which never carries the key. A page
 reads its own address, and a later page on this host can read the tab's
 history. A path that cannot be a site (the platform namespace, anything no
@@ -124,7 +125,10 @@ def _lexical_slash_redirect(request: Request, group: str) -> Response:
     # namespace (reserved slugs and /-/) drops out.
     if _is_platform_namespace(group):
         return response.neutral_404_response()
-    return RedirectResponse(_path_with_slash(request), status_code=301)
+    # The query passes on as it came, a key included, and a browser keeps a
+    # 301 without an end; the route it points at takes the key out.
+    headers = {"Cache-Control": "no-store"} if "key" in request.query_params else None
+    return RedirectResponse(_path_with_slash(request), status_code=301, headers=headers)
 
 
 def _is_page(rel: str) -> bool:
@@ -249,7 +253,7 @@ async def _serve(
         return response.neutral_404_response()
 
     key_values = request.query_params.getlist("key")
-    full_key = keys.carries_full_key(key_values)
+    secret_link = keys.carries_secret_link(key_values)
 
     refs: dict = {
         "kind": kind,
@@ -276,7 +280,7 @@ async def _serve(
     rel = resolution.normalise_rest(rest)
     if rel is None:
         await _audit(request, visitor, "refused", REASON_PATH_INVALID, refs)
-        return _refuse(request, full_key)
+        return _refuse(request, secret_link)
 
     session_factory = request.app.state.session_factory
     async with session_factory() as db:
@@ -293,13 +297,17 @@ async def _serve(
                 decision = await gate.decide_version(db, group, site, version_id, visitor)
 
         code_selector: str | None = None
-        if decision.kind in (DecisionKind.NEUTRAL_404, DecisionKind.LOGIN_REDIRECT) and kind == "live" and not full_key:
+        if (
+            decision.kind in (DecisionKind.NEUTRAL_404, DecisionKind.LOGIN_REDIRECT)
+            and kind == "live"
+            and not secret_link
+        ):
             # A `?key=` carrying the selector alone: the link was shared
             # without its code. Only for a selector that really belongs to
             # this site does the code page appear, and then it wins over both
             # the neutral 404 and the login redirect: whoever was handed a
             # link is asked for its code, not sent to an IdP. Never beside a
-            # whole link, which leaves with the answer the gate gave.
+            # secret link, which leaves with the answer the gate gave.
             selector = keys.bare_selector(visitor.key_query)
             if selector is not None and await gate.code_page_needed(db, group, site, selector):
                 code_selector = selector
@@ -342,7 +350,7 @@ async def _serve(
         and _foreign_subresource(request, group, site)
     ):
         await _audit(request, visitor, vocabulary.REFUSED, REASON_FOREIGN_SUBRESOURCE, refs)
-        return _refuse(request, full_key)
+        return _refuse(request, secret_link)
 
     # A preview or a _version view is often the first thing a member opens of
     # a site, and the content session cookie is scoped per site, so that first
@@ -373,7 +381,7 @@ async def _serve(
 
     if decision.kind is DecisionKind.NEUTRAL_404:
         await _audit(request, visitor, "refused", decision.reason_code, refs)
-        return _refuse(request, full_key)
+        return _refuse(request, secret_link)
 
     if decision.kind is DecisionKind.LOGIN_REDIRECT:
         await _audit(request, visitor, "login_redirect", decision.reason_code, refs)
@@ -384,14 +392,14 @@ async def _serve(
     if storage_ref is None or version_id_allowed is None or access is None:
         # Allowed but no (complete) version record: an inconsistent reference.
         await _audit(request, visitor, "refused", REASON_UNKNOWN_STORAGE, refs)
-        return _refuse(request, full_key)
+        return _refuse(request, secret_link)
 
     if key_cookie is not None:
         return _redeem_key(request, key_cookie, group, site, kind, ref)
 
     # A selector alone leaves on an allow only: on a refusal the code page
     # needs it.
-    if full_key or keys.carries_bare_selector(key_values):
+    if secret_link or keys.carries_bare_selector(key_values):
         return _strip_key_redirect(request)
 
     # Looking at non-public content is logged, one row per page rather than
@@ -501,11 +509,11 @@ def _strip_key_redirect(request: Request) -> Response:
     return RedirectResponse(_path_without_key(request), status_code=302, headers={"Cache-Control": "no-store"})
 
 
-def _refuse(request: Request, full_key: bool) -> Response:
+def _refuse(request: Request, secret_link: bool) -> Response:
     """A refusal, unless a secret link would stay behind in the address bar
     and the history: the same 302 then, whatever the reason, so it says no
     more about what exists than the neutral 404 does."""
-    if full_key:
+    if secret_link:
         return _strip_key_redirect(request)
     return response.neutral_404_response()
 

@@ -877,8 +877,8 @@ no half upload. The live site stays as it was.
   and `unregister()` on each), with the shielding off for that release: a
   shielded page cannot reach the service worker API.
 - **The query parameter `key` belongs to Plak**: when a `key` value starts
-  like a secret link (eight letters or digits, a dot, thirty-two letters or
-  digits), Plak takes every `key` out of the address before the page loads;
+  like a secret link (eight letters or digits and a dot), Plak takes every
+  `key` out of the address before the page loads;
   on a page the visitor may see, it does the same for a value of exactly
   eight letters or digits (a link shared without its code). Do not use `key`
   as a query parameter of your own site.

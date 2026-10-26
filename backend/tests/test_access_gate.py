@@ -6,7 +6,12 @@ container.
 The policy axis is every base times every combination of the two extras, so
 the table covers the combinations the old single enum could not express: a
 secret link beside a public base, invitees beside the site team, and the
-closed base that only an extra opens."""
+closed base that only an extra opens.
+
+This is the gate's decision. What serving answers on top of it for a `key` in
+the address (the redeem, the 302 that takes a link out, the code page) is the
+same matrix again over HTTP, in test_key_stripping_matrix.py, which imports
+the policies and expectations from here."""
 
 from __future__ import annotations
 
