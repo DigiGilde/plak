@@ -11,6 +11,7 @@ import SiteRow from './SiteRow.vue';
 const ACCESS_BASES: AccessBase[] = ['public', 'sso', 'site_team', 'nobody'];
 
 const site: Site = {
+  id: '3f2b8a1e-5d4c-4e9a-9b6f-7c1d2e3a4b5c',
   groupSlug: 'team-aurora',
   slug: 'website',
   title: 'Team Aurora website',

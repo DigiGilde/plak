@@ -109,6 +109,8 @@ export interface Group {
  * has to count versions or previews itself.
  */
 export interface Site {
+  /** Fixed id of the site. A workflow names it as `site-id`, so a deploy can only land on this site. */
+  id: string;
   groupSlug: string;
   slug: string;
   title: string;
@@ -205,6 +207,10 @@ export interface KeyCreated {
 export interface SiteRepository {
   groupSlug: string;
   siteSlug: string;
+  /** The site's fixed id, which a workflow names as `site-id`. */
+  siteId: string;
+  /** False while a workflow that does not name the site id is still accepted. It only ever goes from false to true. */
+  siteIdRequired: boolean;
   provider: RepositoryProvider;
   /** 'https://github.com' or the forgejo base URL. */
   host: string;

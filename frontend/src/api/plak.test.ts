@@ -16,6 +16,8 @@ async function refusedWith(promise: Promise<unknown>): Promise<ApiError> {
   return (await promise.catch((error: unknown) => error)) as ApiError;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 beforeEach(() => {
   backend = makeMockBackend();
   vi.stubGlobal('fetch', backend.fetch);
@@ -189,6 +191,16 @@ describe('sites', () => {
     expect(error.problem.status).toBe(404);
   });
 
+  it('gives every site an id of its own', async () => {
+    const created = await plak.createSite('team-aurora', 'Nieuw site', 'nieuw');
+    const other = await plak.createSite('team-aurora', 'Ander site', 'ander');
+    const seeded = (await plak.group('team-aurora')).sites.find((site) => site.slug === 'website')!;
+
+    const ids = [seeded.id, created.id, other.id];
+    for (const id of ids) expect(id).toMatch(UUID);
+    expect(new Set(ids).size).toBe(3);
+  });
+
   it('sets base and exceptions of an existing site in one go', async () => {
     const access = { base: 'sso', keys: true, invitees: true } as const;
     const site = await plak.setAccess('team-aurora', 'website', access);
@@ -288,6 +300,15 @@ describe('site repository (trusted publishing)', () => {
     expect(repository?.repo).toBe('website');
   });
 
+  it('names the site it belongs to and whether a workflow has to name it too', async () => {
+    const site = (await plak.group('team-aurora')).sites[0]!;
+
+    const repository = await plak.siteRepository('team-aurora', 'website');
+
+    expect(repository?.siteId).toBe(site.id);
+    expect(repository?.siteIdRequired).toBe(false);
+  });
+
   it('returns null instead of an error when nothing is linked', async () => {
     await plak.deleteSiteRepository('team-aurora', 'website');
     const repository = await plak.siteRepository('team-aurora', 'website');
@@ -313,6 +334,29 @@ describe('site repository (trusted publishing)', () => {
 
     await plak.deleteSiteRepository('team-aurora', 'website');
     const error = await refusedWith(plak.deleteSiteRepository('team-aurora', 'website'));
+    expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
+  });
+
+  it('requires the site id of the link and hands the link back', async () => {
+    const link = await plak.requireSiteId('team-aurora', 'website');
+
+    expect(link.siteIdRequired).toBe(true);
+    expect(link.repo).toBe('website');
+    expect((await plak.siteRepository('team-aurora', 'website'))?.siteIdRequired).toBe(true);
+  });
+
+  it('answers a second request to require the site id with the unchanged link', async () => {
+    await plak.requireSiteId('team-aurora', 'website');
+
+    expect((await plak.requireSiteId('team-aurora', 'website')).siteIdRequired).toBe(true);
+  });
+
+  it('refuses to require the site id while nothing is linked', async () => {
+    await plak.deleteSiteRepository('team-aurora', 'website');
+
+    const error = await refusedWith(plak.requireSiteId('team-aurora', 'website'));
+
+    expect(error.problem.status).toBe(404);
     expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
   });
 

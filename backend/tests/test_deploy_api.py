@@ -28,7 +28,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from helpers_ci import AUDIENCE, FORGEJO_HOST, OMIT, MockCi
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import Request
 
@@ -214,6 +214,9 @@ async def _environment(tmp_path: Path, dsn: str, **overrides: object):
                     repository_id=1001,
                     owner_id=2002,
                     live_branch="main",
+                    # A link from before the site id: the tokens here name
+                    # none. test_ci_binding.py is about the site id.
+                    site_id_required=False,
                 )
             )
             await db.commit()
@@ -566,14 +569,30 @@ async def test_ci_origin_without_a_repository_claim_is_the_stored_name(environme
     assert actions == ["deploy"]
 
 
-async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environment: Environment) -> None:
+async def _link_forgejo_instead(environment: Environment) -> None:
+    """minbzk/website on Forgejo in place of the GitHub link, still as a link
+    from before the site id. A new row: the database requires the site id of
+    a link whose repository an update changes."""
     async with environment.session_factory() as db:
-        await db.execute(
-            update(SiteRepository).values(
-                provider=CiProvider.FORGEJO, host=FORGEJO_HOST, repository_id=3003, owner_id=4004
+        await db.execute(delete(SiteRepository))
+        db.add(
+            SiteRepository(
+                site_id=environment.site.id,
+                provider=CiProvider.FORGEJO,
+                host=FORGEJO_HOST,
+                owner="minbzk",
+                repo="website",
+                repository_id=3003,
+                owner_id=4004,
+                live_branch="main",
+                site_id_required=False,
             )
         )
         await db.commit()
+
+
+async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environment: Environment) -> None:
+    await _link_forgejo_instead(environment)
     token = environment.ci.token("forgejo", repository="MinBZK/Website")
     async with environment.client() as client:
         resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
@@ -597,13 +616,7 @@ async def test_forgejo_token_without_ids_is_rechecked_against_the_api(environmen
 
 
 async def test_forgejo_unreachable_for_the_recheck_503(environment: Environment) -> None:
-    async with environment.session_factory() as db:
-        await db.execute(
-            update(SiteRepository).values(
-                provider=CiProvider.FORGEJO, host=FORGEJO_HOST, repository_id=3003, owner_id=4004
-            )
-        )
-        await db.commit()
+    await _link_forgejo_instead(environment)
     environment.ci.failures[FORGEJO_HOST + "/api/v1/repos/minbzk/website"] = 502
     async with environment.client() as client:
         resp = await client.post(

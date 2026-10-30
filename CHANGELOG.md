@@ -12,6 +12,11 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 <!-- release: hold -->
 
+### Added
+
+- `site-id` for the publish action and `--site-id` for the CLI, and the
+  site id on the Deploy tab and in the API.
+
 ### Changed
 
 - The What's new page no longer opens with the version you use; the footer
@@ -29,6 +34,10 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - Versions are stored under the site's id, so a site created again under a
   deleted name starts empty. The upgrade moves the existing directories and
   needs the content volume. After it, the previous image no longer starts.
+- A new repository link requires the site id, and so does every existing
+  link of a repository that is linked to several sites. Other existing
+  links keep working without it until another repository is linked or a
+  site admin requires it.
 
 ### Fixed
 
@@ -54,6 +63,9 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   `key` in the shape of a secret link out of the address before it answers,
   also on a refusal, and refuses service worker scripts, which could read a
   link before Plak does.
+- A workflow that names its site id publishes only to that site: Plak
+  accepts a CI token bound to it, so a renamed, deleted or mistyped
+  address can no longer send its build to someone else's site.
 
 ## [2026.10.7]
 

@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
+import ConfirmModal from '@/components/ConfirmModal.vue';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _setLocaleForTest } from '@/i18n';
 import TabDeploy from './TabDeploy.vue';
@@ -957,7 +958,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     expect(snippet).toContain('plak login --host https://plak.test');
     expect(snippet).toContain('plak publish ./dist --host https://plak.test --site team-aurora/website');
     expect(snippet).toContain(
-      'plak publish ./dist --host https://plak.test --site team-aurora/website --preview pr-42',
+      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${backend.data.sites[0]!.id} --preview pr-42`,
     );
     expect(snippet).toContain('plak logout');
     expect(snippet).not.toContain(MOCK_CONTENT_BASE);
@@ -1009,6 +1010,452 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const richText = wrapper.find('[data-testid="workflow-snippet"]').element.parentElement!;
     expect(richText.textContent).toContain('.forgejo/workflows/publish.yml');
+  });
+});
+
+/** The tab holds two confirmation dialogs: the one for unlinking, then the one for requiring the site id. */
+function requireDialog(wrapper: ReturnType<typeof makeWrapper>) {
+  return wrapper.findAllComponents(ConfirmModal)[1]!;
+}
+
+/** Stands in for the clipboard; `refuse` makes writing to it fail, as it does without permission. */
+function stubClipboard(refuse = false) {
+  const writeText = refuse
+    ? vi.fn().mockRejectedValue(new Error('geen toestemming'))
+    : vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  return writeText;
+}
+
+const REQUIRED_SENTENCE = 'Alleen workflows die het site-ID noemen, kunnen publiceren.';
+const OPTIONAL_FOR_ADMIN =
+  "Deze koppeling accepteert ook workflows die het site-ID niet noemen. Zet site-id in je workflow en kies daarna 'Alleen met site-ID publiceren'.";
+const OPTIONAL_FOR_READER =
+  'Deze koppeling accepteert ook workflows die het site-ID niet noemen. Alleen een beheerder van deze site kan dat beperken.';
+
+describe('TabDeploy: the site id', () => {
+  it('shows the id of the site as code that a browser does not translate', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const id = wrapper.find('[data-testid="site-id"]');
+    expect(id.element.tagName.toLowerCase()).toBe('code');
+    expect(id.text()).toBe(backend.data.sites[0]!.id);
+    expect(id.attributes('translate')).toBe('no');
+    expect(wrapper.find('[data-testid="site-id-block"]').text()).toContain('Site-ID');
+  });
+
+  it('shows no site id while nothing is linked', async () => {
+    backend.data.repositories = [];
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-block"]').exists()).toBe(false);
+  });
+
+  it('copies the id and says so beside the button', async () => {
+    const writeText = stubClipboard();
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const button = wrapper.find('[data-testid="site-id-copy"]');
+    expect(button.attributes('text')).toBe('Kopieer site-ID');
+    await button.trigger('click');
+    await untilIdle();
+
+    expect(writeText).toHaveBeenCalledWith(backend.data.sites[0]!.id);
+    const notice = wrapper.find('[data-testid="site-id-copy-notice"]');
+    expect(notice.text()).toBe('Site-ID gekopieerd.');
+    // A status line that is in the page before it has anything to say, so the copy is announced.
+    expect(notice.attributes('role')).toBe('status');
+  });
+
+  it('points at the id itself when the clipboard refuses it', async () => {
+    stubClipboard(true);
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="site-id-copy"]').trigger('click');
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-copy-notice"]').text()).toBe(
+      'Kopiëren lukte niet. Selecteer het site-ID hierboven en kopieer het zelf.',
+    );
+  });
+
+  it('forgets that the id was copied when the tab moves to another site', async () => {
+    stubClipboard();
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'tweede-id', slug: 'docs', title: 'Docs' });
+    backend.data.repositories.push({ ...backend.data.repositories[0]!, siteSlug: 'docs', siteId: 'tweede-id' });
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-copy"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-id-copy-notice"]').text()).toBe('Site-ID gekopieerd.');
+
+    await wrapper.setProps({ site: 'docs' });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id"]').text()).toBe('tweede-id');
+    expect(wrapper.find('[data-testid="site-id-copy-notice"]').text()).toBe('');
+  });
+});
+
+describe('TabDeploy: the site id in the snippets', () => {
+  const stepsOf = (snippet: string, id: string) =>
+    snippet.match(new RegExp(`site: team-aurora/website\\n\\s+site-id: ${id}\\n`, 'g'));
+
+  it('names the site id under site: in every step of the GitHub workflow', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
+    expect(snippet.match(/site:/g)).toHaveLength(3);
+    expect(stepsOf(snippet, backend.data.sites[0]!.id)).toHaveLength(3);
+  });
+
+  it('names the site id under site: in every step of the Forgejo workflow', async () => {
+    backend.data.repositories[0]!.provider = 'forgejo';
+    backend.data.repositories[0]!.host = 'https://code.overheid.nl';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
+    expect(snippet.match(/site:/g)).toHaveLength(3);
+    expect(stepsOf(snippet, backend.data.sites[0]!.id)).toHaveLength(3);
+  });
+
+  it('adds --site-id to the commands that publish, once a repository is linked', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const id = backend.data.sites[0]!.id;
+    const commands = wrapper.find('[data-testid="cli-snippet"]').text().split('\n');
+    expect(commands).toContain(
+      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${id}`,
+    );
+    expect(commands).toContain(
+      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${id} --preview pr-42`,
+    );
+  });
+
+  it('leaves --site-id out while nothing is linked, since the tab then knows no id', async () => {
+    backend.data.repositories = [];
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    const commands = wrapper.find('[data-testid="cli-snippet"]').text().split('\n');
+    expect(commands).toContain('plak publish ./dist --host https://plak.test --site team-aurora/website');
+    expect(commands).toContain(
+      'plak publish ./dist --host https://plak.test --site team-aurora/website --preview pr-42',
+    );
+    expect(commands.join('\n')).not.toContain('--site-id');
+  });
+
+  it('keeps plak site link as it was', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+
+    expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toBe(
+      'plak site link team-aurora/website',
+    );
+  });
+});
+
+describe('TabDeploy: requiring the site id', () => {
+  it('tells an admin the link also accepts a workflow without the id, and offers to end that', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_ADMIN);
+    expect(wrapper.find('[data-testid="site-id-requirement"] code').text()).toBe('site-id');
+    const button = wrapper.find('[data-testid="site-id-require"]');
+    expect(button.attributes('text')).toBe('Alleen met site-ID publiceren');
+    expect(button.attributes('variant')).toBe('secondary');
+    expect(button.attributes('disabled')).toBeUndefined();
+  });
+
+  it('puts the sentence in a status line, so it is announced when it changes', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').attributes('role')).toBe('status');
+  });
+
+  it('asks before it requires the site id, and requires it after the confirmation', async () => {
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    await untilIdle();
+
+    const dialog = requireDialog(wrapper);
+    expect(dialog.props('open')).toBe(true);
+    expect(dialog.props('title')).toBe('Alleen nog publiceren met het site-ID?');
+    expect(dialog.props('text')).toBe(
+      'Workflows zonder "site-id" kunnen daarna niet meer publiceren naar deze site. Dit kun je niet terugdraaien.',
+    );
+    expect(dialog.props('keepLabel')).toBe('Behoud de huidige koppeling');
+    expect(dialog.props('confirmLabel')).toBe('Alleen met site-ID');
+    expect(bodies).toEqual([]);
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(false);
+
+    await dialog.find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    expect(bodies).toEqual([{ siteIdRequired: true }]);
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(true);
+    expect(requireDialog(wrapper).props('open')).toBe(false);
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(REQUIRED_SENTENCE);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('leaves the link as it is when the confirmation is cancelled', async () => {
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    await requireDialog(wrapper).find('[data-testid="confirm-cancel"]').trigger('click');
+    await untilIdle();
+
+    expect(requireDialog(wrapper).props('open')).toBe(false);
+    expect(bodies).toEqual([]);
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(false);
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_ADMIN);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(true);
+  });
+
+  it('shows the dialog as busy while the request is under way', async () => {
+    let answer: (response: Response) => void = () => {};
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? 'GET') === 'PUT' && String(input).endsWith('/site-id-required')) {
+        return new Promise<Response>((resolve) => {
+          answer = resolve;
+        });
+      }
+      return backend.fetch(input, init);
+    });
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+
+    await requireDialog(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    expect(requireDialog(wrapper).props('busy')).toBe(true);
+
+    answer(
+      await backend.fetch('/-/api/v1/sites/team-aurora/website/repository/site-id-required', {
+        method: 'PUT',
+        body: JSON.stringify({ siteIdRequired: true }),
+      }),
+    );
+    await untilIdle();
+    expect(requireDialog(wrapper).props('busy')).toBe(false);
+  });
+
+  it('shows only the sentence once the site id is required, to an admin as to anyone', async () => {
+    backend.data.repositories[0]!.siteIdRequired = true;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(REQUIRED_SENTENCE);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('tells a member who cannot change it that only an admin can, and shows no button', async () => {
+    // lid-3 (Ada Vermeer) is editor in the group, not a site admin.
+    backend.data.loggedInMemberId = 'lid-3';
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_READER);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-id"]').text()).toBe(backend.data.sites[0]!.id);
+  });
+
+  it('shows a member who cannot change it the same sentence once the site id is required', async () => {
+    backend.data.loggedInMemberId = 'lid-3';
+    backend.data.repositories[0]!.siteIdRequired = true;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(REQUIRED_SENTENCE);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('gives a platform admin without a role on the site no button, since the API gives that role no say', async () => {
+    // lid-1 is a platform admin and, in the mock, also admin of the group: take that away.
+    backend.data.groupMembers = backend.data.groupMembers.filter((member) => member.memberId !== 'lid-1');
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_READER);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('shows no button to someone who is not logged in', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_READER);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('requires the site id from the start on a new link', async () => {
+    backend.data.repositories = [];
+    const wrapper = makeWrapper();
+    await openLinkForm(wrapper);
+
+    typeInto(wrapper, 'repository-owner-repo', 'minbzk/website');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(REQUIRED_SENTENCE);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(false);
+  });
+
+  it('keeps the choice when the link changes to another live branch', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="repository-change"]').trigger('click');
+    await untilIdle();
+
+    typeInto(wrapper, 'repository-live-branch-input', 'release');
+    await submitForm(wrapper);
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_ADMIN);
+  });
+
+  it('reports a refusal after the dialog is closed, and leaves the link as it was', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method ?? 'GET') === 'PUT' && String(input).endsWith('/site-id-required')
+        ? Promise.resolve(problemResponse(403, 'INSUFFICIENT_ROLE', 'Hiervoor heb je de rol beheerder nodig.'))
+        : backend.fetch(input, init),
+    );
+
+    await requireDialog(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    // The dialog makes the page inert, so the notification only comes once it is closed.
+    expect(requireDialog(wrapper).props('open')).toBe(false);
+    const notification = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notification.attributes('text')).toBe('Site-ID niet verplicht gemaakt');
+    expect(notification.attributes('supporting-text')).toBe('Hiervoor heb je de rol beheerder nodig.');
+    expect(requireDialog(wrapper).props('busy')).toBe(false);
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(OPTIONAL_FOR_ADMIN);
+    expect(wrapper.find('[data-testid="site-id-require"]').exists()).toBe(true);
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(false);
+  });
+
+  it('reports the generic failure when the request itself does not get through', async () => {
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
+
+    await requireDialog(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    const notification = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notification.attributes('supporting-text')).toBe('Verplicht maken is niet gelukt.');
+    expect(requireDialog(wrapper).props('open')).toBe(false);
+  });
+
+  it('closes the dialog when the tab moves to another site, so it cannot act on that one', async () => {
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'tweede-id', slug: 'docs', title: 'Docs' });
+    backend.data.repositories.push({ ...backend.data.repositories[0]!, siteSlug: 'docs', siteId: 'tweede-id' });
+    const bodies = recordRepositoryPuts();
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    expect(requireDialog(wrapper).props('open')).toBe(true);
+
+    await wrapper.setProps({ site: 'docs' });
+    await untilIdle();
+
+    expect(requireDialog(wrapper).props('open')).toBe(false);
+    expect(bodies).toEqual([]);
+    expect(backend.data.repositories.map((link) => link.siteIdRequired)).toEqual([false, false]);
+  });
+
+  it('says the same in English', async () => {
+    _setLocaleForTest('en');
+    stubClipboard();
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-block"]').text()).toContain('Site ID');
+    expect(wrapper.find('[data-testid="site-id-copy"]').attributes('text')).toBe('Copy site ID');
+    await wrapper.find('[data-testid="site-id-copy"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-id-copy-notice"]').text()).toBe('Site ID copied.');
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(
+      "This link also accepts workflows that do not name the site ID. Put site-id in your workflow, then choose 'Only publish with the site ID'.",
+    );
+    expect(wrapper.find('[data-testid="site-id-require"]').attributes('text')).toBe(
+      'Only publish with the site ID',
+    );
+
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    const dialog = requireDialog(wrapper);
+    expect(dialog.props('title')).toBe('Only publish with the site ID from now on?');
+    expect(dialog.props('text')).toBe(
+      'Workflows without "site-id" can no longer publish to this site after this. You cannot undo this.',
+    );
+    expect(dialog.props('keepLabel')).toBe('Keep the current link');
+    expect(dialog.props('confirmLabel')).toBe('Only with site ID');
+
+    await dialog.find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(
+      'Only workflows that name the site ID can publish.',
+    );
+  });
+
+  it('says to a member who cannot change it who can, in English too', async () => {
+    _setLocaleForTest('en');
+    backend.data.loggedInMemberId = 'lid-3';
+    stubClipboard(true);
+
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-id-requirement"]').text()).toBe(
+      'This link also accepts workflows that do not name the site ID. Only an admin of this site can restrict that.',
+    );
+    await wrapper.find('[data-testid="site-id-copy"]').trigger('click');
+    await untilIdle();
+    expect(wrapper.find('[data-testid="site-id-copy-notice"]').text()).toBe(
+      'Copying did not work. Select the site ID above and copy it yourself.',
+    );
+  });
+
+  it('reports a failed request in English too', async () => {
+    _setLocaleForTest('en');
+    const wrapper = makeWrapper();
+    await untilIdle();
+    await wrapper.find('[data-testid="site-id-require"]').trigger('click');
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('offline')));
+
+    await requireDialog(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    const notification = wrapper.find('nldd-notification[variant="critical"]');
+    expect(notification.attributes('text')).toBe('Site ID not required');
+    expect(notification.attributes('supporting-text')).toBe('Requiring the site ID did not work.');
   });
 });
 

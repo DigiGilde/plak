@@ -198,6 +198,9 @@ repository links too:
 plak site link team-aurora/docs minbzk/website --live-branch main
 ```
 
+It prints the site id the workflow names beside the site (`site-id` in
+the action, `--site-id` or `PLAK_SITE_ID` for the CLI).
+
 Deleting groups and sites, unlinking and managing members stays in the admin.
 
 From a checkout of this repository the same commands run without
@@ -242,12 +245,15 @@ jobs:
       - uses: DigiGilde/plak/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
+          site-id: <site-id>
           dist-path: ./dist
 ```
 
-Pin the action to a commit SHA, not to a branch or a tag. The full
-workflow in `docs/publishing.md` adds a preview per pull request and its
-clean-up, and shows the Forgejo variant.
+The `site-id`, on the Deploy tab of the site, makes the token valid for
+that one site: an old or mistyped `site:` can then never publish
+anywhere else. Pin the action to a commit SHA, not to a branch or a tag.
+The full workflow in `docs/publishing.md` adds a preview per pull request
+and its clean-up, and shows the Forgejo variant.
 
 ## Publishing with Claude Code
 

@@ -8,6 +8,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { isSiteAdmin as isEffectiveSiteAdmin } from '@/composables/roles';
 import { type MessageKey, t } from '@/i18n';
 
 /**
@@ -58,6 +59,11 @@ const isSiteAdmin = computed<boolean>(() => {
   return me.value.groupRoles.some((r) => r.groupSlug === props.group && r.role === 'admin');
 });
 
+// Not the check above: the API gives a platform admin no say in this one.
+const mayRequireSiteId = computed<boolean>(() =>
+  isEffectiveSiteAdmin(me.value, props.group, props.site),
+);
+
 const editing = ref(false);
 const formProvider = ref<RepositoryProvider>('github');
 const formHost = ref('');
@@ -80,9 +86,14 @@ const idsPrefilled = ref(false);
 const unlinkOpen = ref(false);
 const unlinkBusy = ref(false);
 
+const requireOpen = ref(false);
+const requireBusy = ref(false);
+const siteIdNotice = ref('');
+
 async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
+  siteIdNotice.value = '';
   try {
     const [loggedIn, repo] = await Promise.all([
       fetchCurrentMember(),
@@ -102,6 +113,7 @@ watch(
   () => [props.group, props.site],
   () => {
     closeForm();
+    requireOpen.value = false;
     return load();
   },
 );
@@ -404,6 +416,34 @@ async function unlinkRepository(): Promise<void> {
   }
 }
 
+async function copySiteId(siteId: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(siteId);
+    siteIdNotice.value = t('publish.deploy.siteId.copied');
+  } catch {
+    // No permission, or no secure context.
+    siteIdNotice.value = t('publish.deploy.siteId.copyFailed');
+  }
+}
+
+async function requireSiteId(): Promise<void> {
+  requireBusy.value = true;
+  try {
+    repository.value = await plak.requireSiteId(props.group, props.site);
+    requireOpen.value = false;
+  } catch (f) {
+    // The open dialog renders the page below it inert; close it before notifying.
+    requireOpen.value = false;
+    notices.value?.notify(
+      'critical',
+      t('publish.deploy.siteId.requireFailed'),
+      errorText(f, t('publish.deploy.siteId.requireFailedDetail')),
+    );
+  } finally {
+    requireBusy.value = false;
+  }
+}
+
 const providerLabel = (provider: RepositoryProvider): string =>
   provider === 'github' ? 'GitHub' : 'Forgejo';
 
@@ -411,6 +451,8 @@ const providerLabel = (provider: RepositoryProvider): string =>
 // audience from /me, not the content host where the site itself lives.
 const host = computed(() => me.value?.ciAudience ?? window.location.origin);
 const siteRef = computed(() => `${props.group}/${props.site}`);
+// The tab learns the id from the link, so it is known only once one exists.
+const siteId = computed(() => repository.value?.siteId);
 const liveBranchOrMain = computed(() => repository.value?.liveBranch ?? 'main');
 
 // Matches docs/publishing.md: always pin the action to a commit SHA, never
@@ -446,6 +488,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           dist-path: ./dist
 
       - name: Publish preview
@@ -454,6 +497,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           dist-path: ./dist
           preview-ref: pr-\${{ github.event.pull_request.number }}
 
@@ -466,6 +510,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           preview-ref: pr-\${{ github.event.pull_request.number }}
           teardown: "true"
 `,
@@ -503,6 +548,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           dist-path: ./dist
 
       - name: Publish preview
@@ -511,6 +557,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           dist-path: ./dist
           preview-ref: pr-\${{ github.event.pull_request.number }}
 
@@ -524,6 +571,7 @@ jobs:
         with:
           host: ${host.value}
           site: ${siteRef.value}
+          site-id: ${siteId.value}
           preview-ref: pr-\${{ github.event.pull_request.number }}
           teardown: "true"
 `,
@@ -550,6 +598,8 @@ const workflowPath = computed(() =>
 
 const workflowPathHint = computed(() => segments('publish.deploy.workflow.path', ['path', 'link']));
 
+const siteIdOptional = computed(() => segments('publish.deploy.siteId.optional', ['code']));
+
 const cliInstall = computed(() => segments('publish.deploy.cli.install', ['repo', 'folder']));
 
 const cliInstallCommands = `uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
@@ -561,14 +611,16 @@ const cliLogin = computed(() =>
   segments('publish.deploy.cli.login', ['login', 'link', 'publish']),
 );
 
+const cliSiteId = computed(() => (siteId.value ? ` --site-id ${siteId.value}` : ''));
+
 const cliSnippet = computed(
   () => `plak login --host ${host.value}
 
 # Live: vervangt direct wat bezoekers zien
-plak publish ./dist --host ${host.value} --site ${siteRef.value}
+plak publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value}
 
 # Preview: eigen pad, laat de live site ongemoeid
-plak publish ./dist --host ${host.value} --site ${siteRef.value} --preview pr-42
+plak publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value} --preview pr-42
 
 plak logout
 `,
@@ -846,6 +898,57 @@ plak logout
             </nldd-form-actions>
           </nldd-form>
 
+          <nldd-box v-if="repository" data-testid="site-id-block">
+            <nldd-container layout="stack" gap="12" padding="16">
+              <nldd-container layout="stack" gap="4">
+                <nldd-text size="sm">{{ t('publish.deploy.siteId.label') }}</nldd-text>
+                <nldd-rich-text>
+                  <p><code translate="no" data-testid="site-id">{{ repository.siteId }}</code></p>
+                </nldd-rich-text>
+              </nldd-container>
+
+              <nldd-button-group orientation="horizontal">
+                <nldd-button
+                  variant="secondary"
+                  :text="t('publish.deploy.siteId.copy')"
+                  start-icon="copy"
+                  type="button"
+                  data-testid="site-id-copy"
+                  @click="copySiteId(repository.siteId)"
+                ></nldd-button>
+              </nldd-button-group>
+
+              <!-- A status line, not a toast: it belongs to this button and
+                   has to be announced when it appears after the copy too. -->
+              <nldd-text size="sm" role="status" data-testid="site-id-copy-notice">{{
+                siteIdNotice
+              }}</nldd-text>
+
+              <!-- Also a status line: the sentence changes once the site id is
+                   required, and that change has to be announced. -->
+              <nldd-rich-text role="status" data-testid="site-id-requirement">
+                <p v-if="repository.siteIdRequired">{{ t('publish.deploy.siteId.required') }}</p>
+                <p v-else-if="mayRequireSiteId">
+                  {{ siteIdOptional[0] }}<code>site-id</code>{{ siteIdOptional[1] }}
+                </p>
+                <p v-else>{{ t('publish.deploy.siteId.optionalReader') }}</p>
+              </nldd-rich-text>
+
+              <nldd-button-group
+                v-if="mayRequireSiteId && !repository.siteIdRequired"
+                orientation="horizontal"
+              >
+                <nldd-button
+                  variant="secondary"
+                  :text="t('publish.deploy.siteId.require')"
+                  type="button"
+                  data-testid="site-id-require"
+                  @click="requireOpen = true"
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-container>
+          </nldd-box>
+
           <nldd-rich-text v-if="repository">
             <p>{{ workflowHint[0] }}<code>&lt;commit-sha&gt;</code>{{ workflowHint[1] }}</p>
             <p>
@@ -899,6 +1002,17 @@ plak logout
     :busy="unlinkBusy"
     @confirm="unlinkRepository"
     @close="unlinkOpen = false"
+  />
+
+  <ConfirmModal
+    :open="requireOpen"
+    :title="t('publish.deploy.requireSiteId.title')"
+    :text="t('publish.deploy.requireSiteId.text')"
+    :keep-label="t('publish.deploy.requireSiteId.keep')"
+    :confirm-label="t('publish.deploy.requireSiteId.confirm')"
+    :busy="requireBusy"
+    @confirm="requireSiteId"
+    @close="requireOpen = false"
   />
 </template>
 

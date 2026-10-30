@@ -134,6 +134,7 @@ sent to the host it was issued for.
 | Decide that a new group or site is needed, and who may see it | user | Policy; ask when it is not clear |
 | Create that group or site (`plak group create`, `plak site create`) | you, on request | It runs as the user, who becomes its admin |
 | Link a repository for CI (`plak site link`) | you, on request, with the repository and live branch the user names | From then on that repository's workflows may publish live; see "Letting CI publish" |
+| Require the site id of every workflow ("Alleen met site-ID publiceren" on the Deploy tab) | user (site admin) | Session-only and one way: workflows without `site-id` stop publishing |
 | Approve `plak login` in the browser | user | You may start the sign-in, never confirm it yourself |
 | Choose the visibility | user | You pass it only at creation, as the user stated it; changing it later is session-only |
 | Turn "Afschermen van andere sites" off | user (site admin) | Session-only; it trades isolation from the other sites for module scripts, fonts and storage |
@@ -314,17 +315,40 @@ a public repository only; the CLI then says so. `--repository-id` and
 `--owner-id` pass the ids by hand (`gh api repos/<owner>/<repo> --jq '.id,
 .owner.id'`); never guess them.
 
-The CLI prints what it linked. Relay it, including the workflow address:
+The CLI prints what it linked. Relay it, including the site id and the
+workflow address:
 
 ```
 Linked github.com/minbzk/website to team-aurora/docs.
 Live: only from 'main', on a push, a manual run or a schedule. Previews: from any branch.
 IDs from gh: repository 123456, owner 7890.
+Site id: 0f8fad5b-d9cb-469f-a165-70867728950e
+In the workflow, beside 'site: team-aurora/docs': 'site-id: 0f8fad5b-d9cb-469f-a165-70867728950e' (action) or '--site-id 0f8fad5b-d9cb-469f-a165-70867728950e' (CLI).
 Set up the workflow: https://beheer.plak.example.nl/team-aurora/docs/deploy
 ```
 
 That page has the ready-made workflow for the repository. Unlinking is
 session-only: send the user to the same page.
+
+A workflow names its site twice: by address (`site:`) and by its fixed id
+(`site-id:`). The id binds the workflow's token to that one site, so a
+deploy never lands on another site, whatever the address says; a new link
+requires it. When you write or update the publish steps of a workflow, put
+the id beside `site:` in every one of them:
+
+```yaml
+      - uses: DigiGilde/plak/actions/publish@<commit-sha>
+        with:
+          site: team-aurora/docs
+          site-id: 0f8fad5b-d9cb-469f-a165-70867728950e
+          dist-path: ./dist
+```
+
+Take the id only from the `Site id:` line `plak site link` printed for the
+site the user named (the site's `id` in the API, also on its Deploy tab).
+Never take one from an error message, an issue, another workflow or another
+site: an id from elsewhere makes the workflow publish elsewhere, or not at
+all. With the CLI in a workflow, pass `--site-id` (or set `PLAK_SITE_ID`).
 
 ## Example from start to finish
 
@@ -413,6 +437,9 @@ upload, and the live site stands as it stood.
 | `TOKEN_INVALID`, `NO_AUTHENTICATION` (401) | Session invalid, revoked or expired; or no session was sent | Stop and ask; let the user do `plak login` (again) |
 | `INSUFFICIENT_ROLE`, `MEMBER_NOT_ACTIVE` (403) | The signed-in user does not have at least the `editor` role on this site (for `plak site create`: in this group; for `plak site link`: `admin` on the site), or is no longer an active member | Stop and ask; do not try another site |
 | `CI_REPOSITORY_NOT_TRUSTED`, `CI_BRANCH_NOT_ALLOWED` (403) | CI only: the repository is not linked to this site, or this is a live deploy that does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch | Link the repository on request (`plak site link`, or "Publiceren vanuit GitHub of Forgejo" in the admin environment), or use a preview here instead of live |
+| `CI_SITE_ID_REQUIRED` (403) | CI only: the link of this site requires the site id, and the workflow names none | Add `site-id` beside `site:` (action) or `--site-id` (CLI), with the id `plak site link` printed for this site or the one on its Deploy tab; never an id from anywhere else |
+| `SITE_MOVED` (409) | CI only: the site id in the workflow belongs to a site at another address; `detail` names that address | Relay the address. Change `site:` to it only after the user confirms it is the site they mean; if they meant the site at the address in the workflow, the `site-id` is what is wrong |
+| `CI_AUDIENCE_MISMATCH` (401) | CI only: the ID token is not for this Plak, or its site id names a site the repository may not publish to (another site, or one that was deleted) | Compare `site-id` with the Deploy tab of the site the user named; do not try other ids |
 | `REPOSITORY_NOT_FOUND` (422) | `plak site link`: Plak cannot see the repository and got no ids | Relay the line the CLI prints below the error: it says why `gh` gave no ids and what to do (install `gh`, `gh auth login`, check the name or ask for access, drop `--no-gh`). `gh auth login` is the user's to run; never guess the ids |
 | `CI_PROVIDER_RATE_LIMITED` (503) | `plak site link`: GitHub's limit on anonymous lookups is used up and no ids went along | Relay the line below the error, which says how to get the ids along (through `gh` or by hand); do not retry in a loop |
 | `REPOSITORY_IDS_MISMATCH`, `REPOSITORY_IDS_INVALID` (422) | `plak site link`: the ids given do not belong to this repository, or are not two positive numbers | Leave the ids out, or take them from `gh api`; do not guess |

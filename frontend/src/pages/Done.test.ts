@@ -233,6 +233,7 @@ describe('Done (reload and share)', () => {
 
   it('fetches again as soon as the route points to a different site', async () => {
     backend.data.sites.push({
+      id: '6d0e4b9a-1f27-4c83-8a5e-2b7c9d1e3f46',
       groupSlug: 'team-aurora',
       slug: 'tweede',
       title: 'Tweede site',

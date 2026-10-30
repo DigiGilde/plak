@@ -32,6 +32,7 @@ function meWith(groupRoles: MyGroupRole[]): Me {
 }
 
 const site: Site = {
+  id: '9c1a7e52-3b84-4d6f-a2e0-5f8b6d4c7a31',
   groupSlug: 'team-aurora',
   slug: 'mijn-site',
   title: 'Mijn site',

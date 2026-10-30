@@ -11,7 +11,10 @@ What decides whether a token is accepted, in order:
 - RS256 only: `none`, HS* and every other algorithm is refused before a key
   is looked at;
 - `exp` and `iat` are required, `exp`/`nbf`/`iat` get 60 seconds of leeway;
-- `aud` must be exactly PLAK_BASE_URL, as configured (no normalisation).
+- `aud` is exactly one value, and exactly one of two forms (no
+  normalisation): PLAK_BASE_URL as configured, or PLAK_BASE_URL followed by
+  `/-/sites/` and a site id in its canonical form (lowercase, with hyphens).
+  The second binds the token to that one site (`bound_site_id`).
 
 Whether the verified token may deploy to a given site is trust.py's question.
 """
@@ -23,6 +26,7 @@ import base64
 import json
 import re
 import time
+import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -59,6 +63,8 @@ KID_REFRESH_COOLDOWN_S = 60
 # provider outage must not turn every deploy attempt into outbound requests.
 FETCH_FAILURE_TTL_S = 30
 MAX_TOKEN_LENGTH = 16 * 1024
+# Between PLAK_BASE_URL and the site id in the audience of a bound token.
+SITE_AUDIENCE_PATH = "/-/sites/"
 
 _SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -96,10 +102,28 @@ def _b64_json(segment: str) -> Any:
     return json.loads(base64.urlsafe_b64decode(padded))
 
 
+def _bound_site(audience: str, aud: str) -> uuid.UUID | None:
+    """The site id in `{audience}/-/sites/{id}`, or None when `aud` is not
+    exactly that, with the id in its canonical form."""
+    prefix = audience + SITE_AUDIENCE_PATH
+    if not aud.startswith(prefix):
+        return None
+    tail = aud[len(prefix) :]
+    try:
+        site_id = uuid.UUID(tail)
+    except ValueError:
+        return None
+    # uuid.UUID also reads upper case, braces, a urn: prefix and no hyphens.
+    return site_id if str(site_id) == tail else None
+
+
 @dataclass(frozen=True)
 class VerifiedCiToken:
     issuer: Issuer
     claims: Mapping[str, Any]
+    # The one site a bound audience names; None when the audience is
+    # PLAK_BASE_URL itself.
+    bound_site_id: uuid.UUID | None = None
 
     def claim(self, name: str) -> str | None:
         """A claim as a non-empty string, or None. Numbers are stringified
@@ -161,8 +185,8 @@ class CiTokenVerifier:
             raise CiTokenError(vocabulary.CI_ISSUER_UNKNOWN)
 
         claims = await self._decode(issuer, token)
-        self._check_claims(issuer, claims)
-        return VerifiedCiToken(issuer=issuer, claims=dict(claims))
+        bound_site_id = self._check_claims(issuer, claims)
+        return VerifiedCiToken(issuer=issuer, claims=dict(claims), bound_site_id=bound_site_id)
 
     async def _decode(self, issuer: Issuer, token: str):
         try:
@@ -200,7 +224,8 @@ class CiTokenVerifier:
             raise _invalid("expired") from error
         return claims
 
-    def _check_claims(self, issuer: Issuer, claims: Mapping[str, Any]) -> None:
+    def _check_claims(self, issuer: Issuer, claims: Mapping[str, Any]) -> uuid.UUID | None:
+        """Returns the site a bound audience names, or None for PLAK_BASE_URL."""
         if claims.get("iss") != issuer.issuer:  # pragma: no cover - defensive: selected from these same bytes
             raise CiTokenError(f"{vocabulary.CI_ISSUER_UNKNOWN}.mismatch")
         for name in ("exp", "iat"):
@@ -210,12 +235,15 @@ class CiTokenVerifier:
         aud = claims.get("aud")
         if isinstance(aud, list) and len(aud) == 1:
             aud = aud[0]
-        if not audience or not isinstance(aud, str) or aud != audience:
-            if audience:
-                raise CiTokenError(
-                    vocabulary.CI_AUDIENCE_MISMATCH, params={"audience": audience}
-                )
-            raise CiTokenError(f"{vocabulary.CI_AUDIENCE_MISMATCH}.no_base_url")
+        if audience and isinstance(aud, str):
+            if aud == audience:
+                return None
+            site_id = _bound_site(audience, aud)
+            if site_id is not None:
+                return site_id
+        if audience:
+            raise CiTokenError(vocabulary.CI_AUDIENCE_MISMATCH, params={"audience": audience})
+        raise CiTokenError(f"{vocabulary.CI_AUDIENCE_MISMATCH}.no_base_url")
 
     async def _keyset(self, issuer: Issuer, *, force: bool = False):
         """The issuer's keyset: cached for KEYS_TTL_S, fetched by one request
