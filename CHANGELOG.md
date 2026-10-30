@@ -19,6 +19,12 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ### Changed
 
+- No summary under an access choice repeats the option just chosen any
+  more: not on a site's Access tab, not in the publish sheet and not for a
+  group's default access. A warning says when nobody can view the site, and
+  the publish sheet only says what follows after publishing.
+- On a group's Settings tab the secret links and invitees switches of the
+  default access sit under their own "Uitzonderingen" heading.
 - The What's new page no longer opens with the version you use; the footer
   shows it.
 - The root of the content host redirects to the landing page of the admin

@@ -90,6 +90,8 @@ const shared = {
     'wie een geldige geheime link heeft, ook zonder in te loggen',
   'access.summary.extra.invitees': 'genodigden van de lijst, na inloggen met SSO Rijk',
   'access.summary.extra.both': '{first}, en {second}',
+  'access.nobodyWarning': 'Niemand kan de site bekijken',
+  'access.nobodyWarning.detail': 'Zet hieronder geheime links of genodigden aan om iemand binnen te laten.',
 
   // -- The language choice itself -------------------------------------------
   // -- The app shell: toolbar, menu, footer ---------------------------------

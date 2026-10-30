@@ -21,6 +21,7 @@ import {
   accessBaseHint,
   accessBaseLabel,
   accessSummary,
+  nobodyCanView,
   formatDate,
   inviteesHint,
   inviteesLabel,
@@ -81,7 +82,6 @@ const newKeyLink = computed(() =>
 );
 /* v8 ignore stop */
 
-const summary = computed(() => (access.value ? accessSummary(access.value) : ''));
 /**
  * A public site is visible to everyone, so an extra can add nothing. The
  * switches stay operable (turning the base back down has to keep the lists
@@ -402,13 +402,13 @@ function keyActions(key: Key): RowAction[] {
             </nldd-list-item>
           </nldd-list>
 
-          <!-- The sum of base and extras, which is the thing someone came here
-               to know and the one thing three separate controls cannot say. -->
-          <nldd-inline-dialog
-            icon="eye"
-            :text="summary"
-            data-testid="access-summary"
-          ></nldd-inline-dialog>
+          <nldd-banner
+            v-if="access && nobodyCanView(access)"
+            variant="warning"
+            :text="t('access.nobodyWarning')"
+            :supporting-text="t('access.nobodyWarning.detail')"
+            data-testid="access-nobody-warning"
+          ></nldd-banner>
         </nldd-container>
       </section>
 

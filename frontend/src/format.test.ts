@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { contentUrl, formatBytes, formatCalendarDate, formatDate, siteUrl } from './format';
+import { contentUrl, formatBytes, formatCalendarDate, formatDate, nobodyCanView, siteUrl } from './format';
 
 describe('formatDate', () => {
   it('formats an ISO timestamp in the date style of the language on screen', () => {
@@ -61,5 +61,15 @@ describe('contentUrl and siteUrl', () => {
     expect(siteUrl('https://sites.plak.test', 'team-aurora', 'website')).not.toContain(
       window.location.origin,
     );
+  });
+});
+
+describe('nobodyCanView', () => {
+  it('is true only when the address grants nothing and no exception is on', () => {
+    expect(nobodyCanView({ base: 'nobody', keys: false, invitees: false })).toBe(true);
+    expect(nobodyCanView({ base: 'nobody', keys: true, invitees: false })).toBe(false);
+    expect(nobodyCanView({ base: 'nobody', keys: false, invitees: true })).toBe(false);
+    expect(nobodyCanView({ base: 'site_team', keys: false, invitees: false })).toBe(false);
+    expect(nobodyCanView({ base: 'public', keys: false, invitees: false })).toBe(false);
   });
 });

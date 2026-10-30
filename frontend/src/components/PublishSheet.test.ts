@@ -598,21 +598,34 @@ describe('PublishSheet (publishing)', () => {
     });
   });
 
-  it('tells at the choice who can actually see the site then', async () => {
+  it('warns when nobody could view the site, and says what follows once an exception is on', async () => {
     const { wrapper } = mountComponent({ groups: [AURORA] });
 
     await wrapper.find('[data-testid="publish-visibility-nobody"]').trigger('change');
     await flushPromises();
-    expect(explanationOf(wrapper)).toContain('Niemand kan de site bekijken');
+    const warning = wrapper.find('[data-testid="publish-nobody-warning"]');
+    expect(warning.attributes('variant')).toBe('warning');
+    expect(warning.attributes('text')).toBe('Niemand kan de site bekijken');
+    // Nothing follows after the publish, so there is nothing to say about it.
+    expect(wrapper.find('[data-testid="publish-access-explanation"]').exists()).toBe(false);
 
     wrapper
       .find('[data-testid="publish-exception-keys"]')
       .element.dispatchEvent(new CustomEvent('change', { detail: { checked: true } }));
     await flushPromises();
 
-    const explanation = explanationOf(wrapper);
-    expect(explanation).toContain('geheime link');
-    expect(explanation).toContain('meteen na het publiceren');
+    expect(wrapper.find('[data-testid="publish-nobody-warning"]').exists()).toBe(false);
+    expect(explanationOf(wrapper)).toBe('De eerste geheime link krijg je meteen na het publiceren.');
+  });
+
+  it('does not repeat the chosen access under the choice', async () => {
+    const { wrapper } = mountComponent({ groups: [AURORA] });
+
+    await wrapper.find('[data-testid="publish-visibility-sso"]').trigger('change');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="publish-access-explanation"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-nobody-warning"]').exists()).toBe(false);
   });
 
   it('starts from the group default access, exceptions included', async () => {

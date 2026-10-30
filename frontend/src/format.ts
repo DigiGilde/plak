@@ -145,6 +145,11 @@ export function inviteesHint(): string {
   return t('access.invitees.hint');
 }
 
+/** Whether nobody gets in at all: the address grants nothing and no exception is on. */
+export function nobodyCanView(access: Access): boolean {
+  return access.base === 'nobody' && !access.keys && !access.invitees;
+}
+
 /**
  * One sentence saying who can really see the site, for the combination as a
  * whole. Three separate controls each explaining themselves still leave the

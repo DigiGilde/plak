@@ -71,6 +71,8 @@ const shared = {
   'access.summary.extra.keys': 'whoever has a valid secret link, without signing in',
   'access.summary.extra.invitees': 'invitees from the list, after signing in with SSO Rijk',
   'access.summary.extra.both': '{first}, and {second}',
+  'access.nobodyWarning': 'Nobody can view the site',
+  'access.nobodyWarning.detail': 'Turn on secret links or invitees below to let somebody in.',
 
   'shell.skip': 'Skip to main content',
   'shell.brand.label': 'Plak, to the overview',
