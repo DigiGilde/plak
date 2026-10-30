@@ -48,6 +48,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - The image patches OpenSSL (CVE-2026-84782) and moves certifi to
   2026.10.23 (PYSEC-2026-4320), also in the CLI; the SPA builds with
   vite 8.3.5 and undici 8.12.3.
+- joserfc moves to 1.7.7, which rejects an oversized token before it
+  splits it (GHSA-9pg5-8c7x-5hfx).
 - A page never sees a secret link that was not meant for it: Plak takes a
   `key` in the shape of a secret link out of the address before it answers,
   also on a refusal, and refuses service worker scripts, which could read a
