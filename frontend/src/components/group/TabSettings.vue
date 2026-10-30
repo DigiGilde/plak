@@ -17,7 +17,14 @@ import type { Access, AccessBase, Group, Site } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import Notices from '@/components/site/Notices.vue';
-import { accessBaseHint, accessBaseLabel, accessSummary, inviteesLabel, keysLabel } from '@/format';
+import {
+  accessBaseHint,
+  accessBaseLabel,
+  accessSummary,
+  inviteesLabel,
+  keysLabel,
+  nobodyCanView,
+} from '@/format';
 import { t } from '@/i18n';
 
 // The tab has several roots (notifications beside the content) and receives
@@ -154,24 +161,32 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
         </nldd-list-item>
       </nldd-list>
 
-      <nldd-switch-field
-        :label="keysLabel()"
-        :checked="chosen.keys || undefined"
-        data-testid="default-access-keys"
-        @change="toggle('keys', $event)"
-      ></nldd-switch-field>
-      <nldd-switch-field
-        :label="inviteesLabel()"
-        :checked="chosen.invitees || undefined"
-        data-testid="default-access-invitees"
-        @change="toggle('invitees', $event)"
-      ></nldd-switch-field>
+      <nldd-banner
+        v-if="nobodyCanView(chosen)"
+        variant="warning"
+        :text="t('access.nobodyWarning')"
+        :supporting-text="t('access.nobodyWarning.detail')"
+        data-testid="default-access-nobody-warning"
+      ></nldd-banner>
 
-      <nldd-inline-dialog
-        icon="eye"
-        :text="accessSummary(chosen)"
-        data-testid="default-access-summary"
-      ></nldd-inline-dialog>
+      <nldd-container layout="stack" gap="8">
+        <nldd-title :size="5">
+          <h3 id="heading-default-access-exceptions">{{ t('publish.access.extras.heading') }}</h3>
+          <span slot="subtitle">{{ t('publish.access.extras.intro') }}</span>
+        </nldd-title>
+        <nldd-switch-field
+          :label="keysLabel()"
+          :checked="chosen.keys || undefined"
+          data-testid="default-access-keys"
+          @change="toggle('keys', $event)"
+        ></nldd-switch-field>
+        <nldd-switch-field
+          :label="inviteesLabel()"
+          :checked="chosen.invitees || undefined"
+          data-testid="default-access-invitees"
+          @change="toggle('invitees', $event)"
+        ></nldd-switch-field>
+      </nldd-container>
     </nldd-container>
   </section>
 

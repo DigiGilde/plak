@@ -37,6 +37,56 @@ function fireChange(el: Element, checked: boolean): void {
 }
 
 describe('group TabSettings', () => {
+  it('puts the exceptions under their own heading, with no summary that repeats the choice', () => {
+    const wrapper = makeWrapper();
+    const html = wrapper.html();
+
+    const heading = wrapper.find('h3#heading-default-access-exceptions');
+    expect(heading.text()).toBe('Uitzonderingen');
+    expect(wrapper.find('nldd-title:has(h3) [slot="subtitle"]').text()).toBe(
+      'Deze twee staan los van de keuze hierboven en los van elkaar. Ze laten er mensen bij, en nemen nooit iemand weg.',
+    );
+    expect(wrapper.find('nldd-inline-dialog').exists()).toBe(false);
+    expect(html.indexOf('heading-default-access-exceptions')).toBeGreaterThan(
+      html.indexOf('default-access-group'),
+    );
+    expect(html.indexOf('default-access-keys')).toBeGreaterThan(
+      html.indexOf('heading-default-access-exceptions'),
+    );
+    expect(html.indexOf('default-access-invitees')).toBeGreaterThan(
+      html.indexOf('default-access-keys'),
+    );
+  });
+
+  it('warns under the exceptions when nobody can view a new site, until one is on', async () => {
+    const wrapper = makeWrapper({ access: { base: 'nobody', keys: false, invitees: false } });
+
+    const warning = wrapper.find('[data-testid="default-access-nobody-warning"]');
+    expect(warning.attributes('variant')).toBe('warning');
+    expect(warning.attributes('text')).toBe('Niemand kan de site bekijken');
+    expect(warning.attributes('supporting-text')).toBe(
+      'Zet hieronder geheime links of genodigden aan om iemand binnen te laten.',
+    );
+    const html = wrapper.html();
+    // Under the choice it follows from, above the exceptions that lift it.
+    expect(html.indexOf('default-access-nobody-warning')).toBeGreaterThan(
+      html.indexOf('default-access-group'),
+    );
+    expect(html.indexOf('default-access-nobody-warning')).toBeLessThan(
+      html.indexOf('heading-default-access-exceptions'),
+    );
+
+    fireChange(wrapper.find('[data-testid="default-access-keys"]').element, true);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="default-access-nobody-warning"]').exists()).toBe(false);
+  });
+
+  it('does not warn while the address lets somebody in', () => {
+    const wrapper = makeWrapper({ access: { base: 'site_team', keys: false, invitees: false } });
+
+    expect(wrapper.find('[data-testid="default-access-nobody-warning"]').exists()).toBe(false);
+  });
+
   it('saves a chosen base through the real api.setGroupDefaultAccess', async () => {
     const wrapper = makeWrapper();
 

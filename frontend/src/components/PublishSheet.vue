@@ -37,13 +37,13 @@ import { SLUG_MATCH, SLUG_PATTERN, SLUG_RE, slugify, slugifyTyped } from '@/comp
 import {
   accessBaseHint,
   accessBaseLabel,
-  accessSummary,
   contentUrl,
   formatNumber,
   inviteesHint,
   inviteesLabel,
   keysHint,
   keysLabel,
+  nobodyCanView,
 } from '@/format';
 import { t } from '@/i18n';
 
@@ -175,9 +175,9 @@ const effectiveAccess = computed<Access>(() => ({
   invitees: chosenInvitees.value ?? defaultAccess.value.invitees,
 }));
 
-/** Who can really see it, plus what still follows after the publish. */
+/** What still follows after the publish for the exceptions that are on. */
 const accessExplanation = computed(() => {
-  const parts = [accessSummary(effectiveAccess.value)];
+  const parts: string[] = [];
   if (effectiveAccess.value.keys) {
     parts.push(t('publish.sheet.extras.keysAfter'));
   }
@@ -797,6 +797,14 @@ watch(
               </nldd-list>
             </nldd-form-field>
 
+            <nldd-banner
+              v-if="nobodyCanView(effectiveAccess)"
+              variant="warning"
+              :text="t('access.nobodyWarning')"
+              :supporting-text="t('access.nobodyWarning.detail')"
+              data-testid="publish-nobody-warning"
+            ></nldd-banner>
+
             <!-- The same two extras as the Toegang tab (components/site/
                  TabAccess.vue): without them that base publishes a
                  site nobody can reach. Each switch sits in a form-field of its
@@ -830,10 +838,9 @@ watch(
                 <nldd-form-field-help-text>{{ inviteesHint() }}</nldd-form-field-help-text>
               </nldd-form-field>
 
-              <!-- The sum of base and extras, which is what someone came for and
-                   the one thing three separate controls cannot say. -->
               <nldd-inline-dialog
-                icon="eye"
+                v-if="accessExplanation"
+                icon="info-circle"
                 :text="accessExplanation"
                 data-testid="publish-access-explanation"
               ></nldd-inline-dialog>

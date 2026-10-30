@@ -66,24 +66,29 @@ describe('TabAccess: the base', () => {
     );
   });
 
-  it('summarizes who can really see the site, base and exceptions combined', async () => {
+  it('shows no summary under the choice, which would only repeat it', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const summary = wrapper.find('[data-testid="access-summary"]').attributes('text')!;
-    expect(summary).toContain('SSO Rijk');
-    expect(summary).toContain('geheime link');
-    expect(summary).toContain('genodigden');
+    expect(wrapper.find('[data-testid="access-summary"]').exists()).toBe(false);
   });
 
-  it('says for base "nobody" without exceptions that no one can get in', async () => {
+  it('warns for base "nobody" without exceptions that no one can get in', async () => {
     setAccess({ base: 'nobody', keys: false, invitees: false });
     const wrapper = makeWrapper();
     await untilIdle();
 
-    expect(wrapper.find('[data-testid="access-summary"]').attributes('text')).toContain(
-      'Niemand kan de site bekijken',
-    );
+    const warning = wrapper.find('[data-testid="access-nobody-warning"]');
+    expect(warning.attributes('variant')).toBe('warning');
+    expect(warning.attributes('text')).toBe('Niemand kan de site bekijken');
+  });
+
+  it('does not warn for base "nobody" once an exception lets somebody in', async () => {
+    setAccess({ base: 'nobody', keys: true, invitees: false });
+    const wrapper = makeWrapper();
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="access-nobody-warning"]').exists()).toBe(false);
   });
 
   it('saves a new base together with the exceptions, in a PUT', async () => {
@@ -326,9 +331,6 @@ describe('TabAccess: the two exceptions', () => {
     const banner = wrapper.find('[data-testid="exceptions-pointless"]');
     expect(banner.exists()).toBe(true);
     expect(banner.attributes('supporting-text')).toContain('iedereen mag toch al kijken');
-    expect(wrapper.find('[data-testid="access-summary"]').attributes('text')).toContain(
-      'voegen daar niets aan toe',
-    );
     // Said, not silently done: the lists stay reachable so what is set up here
     // survives turning the base back down.
     expect(wrapper.find('[data-testid="keys-list"]').exists()).toBe(true);
