@@ -13,6 +13,14 @@ its issuer is that repository's provider and host, and:
   repository deleted and recreated under the same name does not inherit the
   trust. GitHub always sends ids; a GitHub token without them is refused.
 
+A token bound to a site (its audience names the site id, ci/tokens.py)
+matches that site only. A token without a site id, its audience the instance
+itself, matches only a link that still accepts one (`site_id_required`
+false: a link from before migration 0004 that got no other repository and
+that no site admin closed since); elsewhere it is refused with
+CI_SITE_ID_REQUIRED, but only once the repository itself matched, so a
+stranger still gets CI_REPOSITORY_NOT_TRUSTED.
+
 The repository's name on the trusted result, and so the origin a version
 records, comes from the token's signed `repository` claim: the stored name
 is whatever an admin typed for a private repository and goes stale after a
@@ -62,12 +70,15 @@ def refused_actor_identifier(token: VerifiedCiToken) -> str:
     return ci_actor_identifier(token.issuer.provider, token.issuer.host, repository)
 
 
-def audit_refs(token: VerifiedCiToken) -> dict[str, str]:
-    refs = {"provider": str(token.issuer.provider)}
+def audit_refs(token: VerifiedCiToken) -> dict[str, str | bool]:
+    refs: dict[str, str | bool] = {"provider": str(token.issuer.provider)}
     for name in AUDIT_CLAIMS:
         value = token.claim(name)
         if value is not None:
             refs[name] = value[:MAX_CLAIM_LENGTH]
+    refs["site_bound"] = token.bound_site_id is not None
+    if token.bound_site_id is not None:
+        refs["bound_site_id"] = str(token.bound_site_id)
     return refs
 
 
@@ -110,6 +121,10 @@ def _not_trusted() -> CiTokenError:
 async def trusted_repository(
     db: AsyncSession, token: VerifiedCiToken, site: Site, providers: ProviderClient
 ) -> TrustedRepository:
+    # api/deploys.py only asks about the site a bound token names; this keeps
+    # any other caller from trusting it elsewhere.
+    if token.bound_site_id is not None and token.bound_site_id != site.id:
+        raise CiTokenError(f"{vocabulary.CI_AUDIENCE_MISMATCH}.site")
     row = await db.scalar(select(SiteRepository).where(SiteRepository.site_id == site.id))
     if row is None or row.provider != token.issuer.provider or row.host != token.issuer.host:
         raise _not_trusted()
@@ -139,6 +154,9 @@ async def trusted_repository(
         if not still:
             raise _not_trusted()
         confirms_ids = True
+
+    if row.site_id_required and token.bound_site_id is None:
+        raise CiTokenError(vocabulary.CI_SITE_ID_REQUIRED, status=403)
 
     owner, repo = _claimed_name(token) or (row.owner, row.repo)
     return TrustedRepository(

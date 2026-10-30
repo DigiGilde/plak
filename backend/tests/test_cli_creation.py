@@ -868,6 +868,20 @@ class TestNeighbouringRoutesStayShut:
         _problem(response, 401, "BEARER_NOT_ACCEPTED")
         assert await _linked(factory) is not None
 
+    async def test_require_the_site_id(self, client, factory, owner):
+        async with factory() as db:
+            site = await db.scalar(select(Site).where(Site.slug == "docs"))
+            db.add(SiteRepository(site_id=site.id, provider="github", host="https://github.com", owner="minbzk",
+                                  repo="website", repository_id=1001, owner_id=2002, site_id_required=False))
+            await db.commit()
+        response = await client.put(
+            f"{BASE}/sites/team/docs/repository/site-id-required",
+            json={"siteIdRequired": True},
+            headers=_bearer(owner[1]),
+        )
+        _problem(response, 401, "BEARER_NOT_ACCEPTED")
+        assert (await _linked(factory)).site_id_required is False
+
     async def test_read_the_linked_repository(self, client, owner):
         response = await client.get(f"{BASE}/sites/team/docs/repository", headers=_bearer(owner[1]))
         _problem(response, 401, "BEARER_NOT_ACCEPTED")

@@ -4,7 +4,8 @@ Auth is one of three:
 
 - a CI ID token (`Authorization: Bearer <JWT>` from GitHub or Forgejo
   Actions), verified by ci/tokens.py and matched against the site's linked
-  repository by ci/trust.py;
+  repository by ci/trust.py; a token bound to a site is used on that site
+  or not at all (`_target_site`);
 - a CLI access token (`Authorization: Bearer plakcli_...` from `plak login`),
   which acts as its member with exactly that member's roles;
 - an admin session with CSRF, for the upload in the SPA.
@@ -195,11 +196,14 @@ _DEPLOY_ERRORS = {
         "Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the "
         "CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: "
         "it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is "
-        "invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is not exactly "
-        "the admin URL (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`."
+        "invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is neither "
+        "exactly the admin URL nor exactly the admin URL followed by `/-/sites/` and a site id, or it names "
+        "a site that the token's repository is not linked to, whatever the address (`CI_AUDIENCE_MISMATCH`). "
+        "The response then carries `WWW-Authenticate: Bearer`."
     ),
     403: (
-        "With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a "
+        "With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the "
+        "token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a "
         "live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch "
         "(`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the "
         "member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active "
@@ -208,6 +212,11 @@ _DEPLOY_ERRORS = {
         "no `Origin` and pass that check."
     ),
     404: "Unknown group or unknown site (`UNKNOWN_SITE`).",
+    409: (
+        "The CI token is bound to a site that is not at this address, and the token's repository is linked to "
+        "that site: the `site:` of the workflow is old or mistyped (`SITE_MOVED`). The `detail` names the "
+        "current address of the site the token is bound to; nothing is published."
+    ),
     429: "The rate limit budget is used up; try again later.",
     503: (
         "The CI provider cannot be reached to fetch the keys or to check the repository "
@@ -573,19 +582,52 @@ async def _authenticate(request: Request, db: AsyncSession) -> _DeployAuth:
     return _DeployAuth(member=member, ci=None, actor=Actor(ActorKind.MEMBER, session.sub))
 
 
-async def _find_group_and_site(
-    db: AsyncSession, group_slug: str, site_slug: str
-) -> tuple[Group, Site]:
+async def _group_and_site(db: AsyncSession, *where) -> tuple[Group, Site] | None:
     row = (
-        await db.execute(
-            select(Group, Site)
-            .join(Site, Site.group_id == Group.id)
-            .where(Group.slug == group_slug, Site.slug == site_slug)
-        )
+        await db.execute(select(Group, Site).join(Site, Site.group_id == Group.id).where(*where))
     ).one_or_none()
-    if row is None:
-        raise ApiError(404, "UNKNOWN_SITE.deploy")
-    return row.Group, row.Site
+    return None if row is None else (row.Group, row.Site)
+
+
+async def _target_site(
+    request: Request, db: AsyncSession, auth: _DeployAuth, group_slug: str, site_slug: str, refs: dict
+) -> tuple[Group, Site]:
+    """The site this request may act on: the one at the address, unless a CI
+    token is bound to a site. Such a token is decided on the site it names
+    first, whatever the address. A repository not linked to that site gets
+    the one 401 of a token for another site at every address, so the address
+    tells it nothing; the linked repository acts on that site at its own
+    address and is told the site's address anywhere else (SITE_MOVED). No
+    answer names a site id; for a CI token the audit `refs` get the id of
+    the site at the address, also when this refuses."""
+    found = await _group_and_site(db, Group.slug == group_slug, Site.slug == site_slug)
+    if auth.ci is not None and found is not None:
+        refs["site_id"] = str(found[1].id)
+    bound = auth.ci.token.bound_site_id if auth.ci is not None else None
+    if bound is None:
+        if found is None:
+            raise ApiError(404, "UNKNOWN_SITE.deploy")
+        return found
+    named = await _group_and_site(db, Site.id == bound)
+    if named is None or not await _linked_to(request, db, auth.ci.token, named[1]):
+        raise ApiError(401, f"{vocabulary.CI_AUDIENCE_MISMATCH}.site", headers=WWW_AUTHENTICATE_BEARER)
+    if found is not None and found[1].id == bound:
+        return found
+    group, site = named
+    raise ApiError(409, vocabulary.SITE_MOVED, params={"address": f"{group.slug}/{site.slug}"})
+
+
+async def _linked_to(request: Request, db: AsyncSession, token: VerifiedCiToken, site: Site) -> bool:
+    """Whether the token's repository is the one linked to `site`."""
+    providers: ProviderClient = request.app.state.ci_providers
+    try:
+        await trust.trusted_repository(db, token, site, providers)
+    except CiTokenError as error:
+        # Forgejo out of reach decides nothing either way: try again later.
+        if error.reason == vocabulary.CI_PROVIDER_UNREACHABLE:
+            raise ci_error(error) from None
+        return False
+    return True
 
 
 async def _authorize(
@@ -656,9 +698,12 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "`file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under "
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n"
         "**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions "
-        "(`Authorization: Bearer <JWT>`) whose audience is exactly Plak's admin URL, from the repository "
-        "linked to this site; a live deploy must then come from a `push`, `workflow_dispatch` or "
-        "`schedule`, and from the live branch if one is set; a preview may come from any branch. "
+        "(`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly "
+        "Plak's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link "
+        "still accepts it, exactly the admin URL itself; a live deploy must then come from a `push`, "
+        "`workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any "
+        "branch. A token bound to another site is never used here: its own repository gets 409 `SITE_MOVED` "
+        "with the address of that site. "
         "(2) A CLI token from `plak login` "
         "(`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their "
         "roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at "
@@ -749,7 +794,7 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
             auth = await _authenticate(request, db)
             actor = auth.actor
             refs.update(_auth_refs(auth))
-            group, site = await _find_group_and_site(db, group_slug, site_slug)
+            group, site = await _target_site(request, db, auth, group_slug, site_slug, refs)
             auth = await _authorize(request, db, auth, group_slug, site)
             actor = auth.actor
 
@@ -870,7 +915,7 @@ async def delete_preview(request: Request, group_slug: str, site_slug: str, ref:
             refs.update(_auth_refs(auth))
             if not SLUG_RE.match(ref):
                 raise ApiError(422, "PREVIEW_REF_INVALID")
-            _, site = await _find_group_and_site(db, group_slug, site_slug)
+            _, site = await _target_site(request, db, auth, group_slug, site_slug, refs)
             auth = await _authorize(request, db, auth, group_slug, site)
             actor = auth.actor
     except ApiError as error:

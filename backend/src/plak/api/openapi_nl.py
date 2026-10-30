@@ -37,8 +37,11 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n"
         "  and on linking a repository. The token is one of two kinds:\n"
         "  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n"
-        "    URL of Plak (`PLAK_BASE_URL`). It is valid only for the sites the repository of that workflow is linked\n"
-        "    to (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep;\n"
+        "    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n"
+        "    for that site, and only while the repository of that workflow is linked to it\n"
+        "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n"
+        "    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n"
+        "    the admin URL itself, until another repository is linked or a site admin requires the site id;\n"
         "  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n"
         "    signed in, with exactly their roles.\n"
         "\n"
@@ -53,7 +56,7 @@ NL: Final[dict[str, str]] = {
         "Who may do what depends on the group: **group members** manage the sites of their own group according to\n"
         "their role, and any active member may create a group. A **platform administrator** also activates and\n"
         "deactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\n"
-        "site, and for a live deploy the live branch.\n"
+        "site, the site id the workflow names, and for a live deploy the live branch.\n"
         "\n"
         "## Errors\n"
         "\n"
@@ -91,8 +94,12 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` en `GET /cli/whoami`, en, alleen met een CLI-token, op het aanmaken van een groep\n"
         "  of site en het koppelen van een repository. Het token is een van twee soorten:\n"
         "  * een **CI-ID-token** (JWT) van GitHub Actions of Forgejo Actions, met als audience precies de\n"
-        "    beheer-URL van Plak (`PLAK_BASE_URL`). Het geldt alleen voor de sites waaraan de repository van die\n"
-        "    workflow gekoppeld is (`PUT /sites/{groupSlug}/{siteSlug}/repository`); er is geen geheim om te bewaren;\n"
+        "    beheer-URL van Plak (`PLAK_BASE_URL`) gevolgd door `/-/sites/` en het `id` van één site. Het geldt\n"
+        "    alleen voor die site, en alleen zolang de repository van die workflow eraan gekoppeld is\n"
+        "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); er is geen geheim om te bewaren. Een koppeling\n"
+        "    van vóór het site-ID, van een repository die alleen aan die site gekoppeld was, accepteert ook een\n"
+        "    token met de beheer-URL zelf als audience, tot er een andere repository gekoppeld wordt of een\n"
+        "    sitebeheerder het site-ID verplicht maakt;\n"
         "  * een **CLI-token** `plakcli_...` uit `plak login` (zie de CLI-login-endpoints). Dat handelt als het lid\n"
         "    dat inlogde, met precies diens rollen.\n"
         "\n"
@@ -106,8 +113,8 @@ NL: Final[dict[str, str]] = {
         "\n"
         "Wie wat mag, hangt af van de groep: **groepsleden** beheren de sites van hun eigen groep volgens hun\n"
         "rol, en elk actief lid mag een groep aanmaken. Een **platformbeheerder** activeert en deactiveert\n"
-        "daarnaast leden en leest het auditlog. Bij een CI-ID-token telt de gekoppelde repository van de site,\n"
-        "en voor een live-deploy de live-branch.\n"
+        "daarnaast leden en leest het auditlog. Bij een CI-ID-token tellen de gekoppelde repository van de site,\n"
+        "het site-ID dat de workflow noemt, en voor een live-deploy de live-branch.\n"
         "\n"
         "## Fouten\n"
         "\n"
@@ -199,9 +206,12 @@ NL: Final[dict[str, str]] = {
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n"
         "\n"
         "**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions "
-        "(`Authorization: Bearer <JWT>`) whose audience is exactly Plak's admin URL, from the repository linked to "
-        "this site; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and from the live "
-        "branch if one is set; a preview may come from any branch. (2) A CLI token from `plak login` (`Authorization: "
+        "(`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Plak's "
+        "admin URL followed by `/-/sites/` and the `id` of this site, or, while the link still accepts it, exactly "
+        "the admin URL itself; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and "
+        "from the live branch if one is set; a preview may come from any branch. A token bound to another site is "
+        "never used here: its own repository gets 409 `SITE_MOVED` with the address of that site. (2) A CLI token "
+        "from `plak login` (`Authorization: "
         "Bearer plakcli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session "
         "plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this "
         "site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a "
@@ -249,10 +259,13 @@ NL: Final[dict[str, str]] = {
         "het veld `preview` vervangt de bundel de live site, met `preview` komt hij onder "
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/` te staan.\n"
         "\n"
-        "**Mag:** drie manieren. (1) Een CI-ID-token van GitHub of Forgejo Actions (`Authorization: Bearer <JWT>`) met "
-        "als audience precies de beheer-URL van Plak, uit de repository die aan deze site gekoppeld is; een "
-        "live-deploy moet dan uit een `push`, `workflow_dispatch` of `schedule` komen, en van de live-branch als die "
-        "is ingesteld; een preview mag vanaf elke branch. (2) Een CLI-token uit `plak login` (`Authorization: Bearer "
+        "**Mag:** drie manieren. (1) Een CI-ID-token van GitHub of Forgejo Actions (`Authorization: Bearer <JWT>`) uit "
+        "de repository die aan deze site gekoppeld is, met als audience precies de beheer-URL van Plak gevolgd door "
+        "`/-/sites/` en het `id` van deze site, of, zolang de koppeling dat nog accepteert, precies de beheer-URL "
+        "zelf; een live-deploy moet dan uit een `push`, `workflow_dispatch` of `schedule` komen, en van de "
+        "live-branch als die is ingesteld; een preview mag vanaf elke branch. Een token voor een andere site wordt "
+        "hier nooit gebruikt: de eigen repository van dat token krijgt 409 `SITE_MOVED` met het adres van die "
+        "site. (2) Een CLI-token uit `plak login` (`Authorization: Bearer "
         "plakcli_...`): dat handelt als het lid dat inlogde, met precies diens rollen. (3) Een beheersessie plus "
         "CSRF-header. Bij (2) en (3) moet het lid actief zijn en op deze site minstens de rol `editor` hebben. Dit "
         "endpoint en de preview-teardown zijn samen met de CLI-sessie-endpoints, het aanmaken van een groep of site en "
@@ -310,17 +323,21 @@ NL: Final[dict[str, str]] = {
         "Not authenticated. Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the CLI "
         "token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: it does not come from "
         "GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is invalid or the token is expired or not "
-        "yet valid (`CI_TOKEN_INVALID`), or the audience is not exactly the admin URL (`CI_AUDIENCE_MISMATCH`). The "
-        "response then carries `WWW-Authenticate: Bearer`."
+        "yet valid (`CI_TOKEN_INVALID`), or the audience is neither exactly the admin URL nor exactly the admin URL "
+        "followed by `/-/sites/` and a site id, or it names a site that the token's repository is not linked to, "
+        "whatever the address (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`."
     ): (
         "Niet geauthenticeerd. Er is noch een bearer-token noch een geldige beheersessie meegestuurd "
         "(`NO_AUTHENTICATION`), het CLI-token is ongeldig, ingetrokken of verlopen (`TOKEN_INVALID`), of het CI-token "
         "wordt geweigerd: het komt niet van GitHub of een geconfigureerde Forgejo (`CI_ISSUER_UNKNOWN`), de "
-        "handtekening of geldigheid klopt niet (`CI_TOKEN_INVALID`), of de audience is niet precies de beheer-URL "
-        "(`CI_AUDIENCE_MISMATCH`). Het antwoord draagt dan `WWW-Authenticate: Bearer`."
+        "handtekening of geldigheid klopt niet (`CI_TOKEN_INVALID`), of de audience is noch precies de beheer-URL "
+        "noch precies de beheer-URL gevolgd door `/-/sites/` en een site-ID, of hij noemt een site waaraan de "
+        "repository van het token niet gekoppeld is, op welk adres ook (`CI_AUDIENCE_MISMATCH`). Het antwoord "
+        "draagt dan `WWW-Authenticate: Bearer`."
     ),
     (
-        "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a "
+        "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the "
+        "token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a "
         "live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch "
         "(`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the member does not have at least the `editor` role "
         "on this site (`INSUFFICIENT_ROLE`) or is not active (`MEMBER_NOT_ACTIVE`); with a session also: the CSRF "
@@ -328,6 +345,7 @@ NL: Final[dict[str, str]] = {
         "well; CI and the CLI send no `Origin` and pass that check."
     ): (
         "Geen toegang. Bij een CI-token: de repository is niet aan deze site gekoppeld (`CI_REPOSITORY_NOT_TRUSTED`), "
+        "het token noemt geen site-ID terwijl de koppeling van deze site dat eist (`CI_SITE_ID_REQUIRED`), "
         "of een live-deploy komt niet uit `push`, `workflow_dispatch` of `schedule`, of niet van de live-branch "
         "(`CI_BRANCH_NOT_ALLOWED`). Bij een CLI-token of sessie: het lid heeft op deze site niet minimaal de rol "
         "`editor` (`INSUFFICIENT_ROLE`) of is niet actief (`MEMBER_NOT_ACTIVE`); bij een sessie ook: de CSRF-header "
@@ -336,6 +354,15 @@ NL: Final[dict[str, str]] = {
     ),
     "Not found. Unknown group or unknown site (`UNKNOWN_SITE`).": (
         "Niet gevonden. Onbekende groep of onbekende site (`UNKNOWN_SITE`)."
+    ),
+    (
+        "Conflict. The CI token is bound to a site that is not at this address, and the token's repository is linked "
+        "to that site: the `site:` of the workflow is old or mistyped (`SITE_MOVED`). The `detail` names the current "
+        "address of the site the token is bound to; nothing is published."
+    ): (
+        "Conflict. Het CI-token is gebonden aan een site die niet op dit adres staat, en de repository van het token "
+        "is aan die site gekoppeld: de `site:` van de workflow is oud of verkeerd getypt (`SITE_MOVED`). De `detail` "
+        "noemt het huidige adres van de site waaraan het token gebonden is; er wordt niets gepubliceerd."
     ),
     (
         "Content too large. The upload is larger than the body limit (`BODY_TOO_LARGE`), or the bundle unpacks too "
@@ -1215,6 +1242,39 @@ NL: Final[dict[str, str]] = {
         "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
     ),
     "The link has been removed. No content is returned.": "De koppeling is weg. Er komt geen inhoud terug.",
+    "Require the site id of a workflow": "Het site-ID van een workflow verplicht maken",
+    (
+        "For a link made before the site id existed: from now on the linked repository may publish to this site only "
+        "with a CI ID token whose audience names the site id, `{PLAK_BASE_URL}/-/sites/{siteId}`. A workflow does that "
+        "with `site-id` (action) or `--site-id` (CLI); a workflow without it is refused with 403 "
+        "`CI_SITE_ID_REQUIRED`. A link made since then, or that got another repository since, requires it already.\n"
+        "\n"
+        "This goes one way: `true` sets it, `false` on a link that requires the site id is refused, so no admin can "
+        "quietly let a workflow without it in again. Asking for what already holds changes nothing and writes no audit "
+        "row.\n"
+        "\n"
+        "**Who can call this:** effective site role `admin`, with a valid CSRF header."
+    ): (
+        "Voor een koppeling van vóór het site-ID: vanaf nu mag de gekoppelde repository alleen nog naar deze site "
+        "publiceren met een CI-ID-token waarvan de audience het site-ID noemt, `{PLAK_BASE_URL}/-/sites/{siteId}`. "
+        "Een workflow doet dat met `site-id` (action) of `--site-id` (CLI); een workflow zonder wordt geweigerd met "
+        "403 `CI_SITE_ID_REQUIRED`. Een koppeling die sindsdien is gemaakt, of die sindsdien een andere repository "
+        "kreeg, vraagt het al.\n"
+        "\n"
+        "Dit gaat één kant op: `true` zet het aan, `false` op een koppeling die het site-ID al vraagt wordt "
+        "geweigerd, zodat geen beheerder een workflow zonder site-ID stilletjes weer toelaat. Vragen om wat al geldt "
+        "verandert niets en schrijft geen auditregel.\n"
+        "\n"
+        "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
+    ),
+    "The linked repository, with its new setting.": "De gekoppelde repository, met de nieuwe instelling.",
+    (
+        "Unprocessable input. `siteIdRequired` is `false` while the link already requires the site id "
+        "(`SITE_ID_REQUIRED_PERMANENT`)."
+    ): (
+        "Onverwerkbare invoer. `siteIdRequired` is `false` terwijl de koppeling het site-ID al vraagt "
+        "(`SITE_ID_REQUIRED_PERMANENT`)."
+    ),
     "Look up a pending CLI login": "Openstaande CLI-login opzoeken",
     (
         "Looks up the pending CLI login behind a user code, so the admin interface can show which program is "
@@ -2760,6 +2820,16 @@ NL: Final[dict[str, str]] = {
     ),
     "A new site within a group.": "Een nieuwe site binnen een groep.",
     (
+        "`true`: from now on only a CI ID token whose audience names the id of this site may publish. `false` is "
+        "refused once that holds: a link that requires the site id keeps requiring it."
+    ): (
+        "`true`: vanaf nu mag alleen een CI-ID-token publiceren waarvan de audience het id van deze site noemt. "
+        "`false` wordt geweigerd zodra dat geldt: een koppeling die het site-ID vraagt, blijft het vragen."
+    ),
+    "Whether the linked repository may publish only with a CI ID token bound to this site.": (
+        "Of de gekoppelde repository alleen mag publiceren met een CI-ID-token dat aan deze site gebonden is."
+    ),
+    (
         "Role this member gets on this site: `reader` (views), `editor` (publishes) or `admin` (determines access, "
         "invitees, secret links and who has a role on the site). A higher role can do everything a lower role can. "
         "Omitted means `reader`. The role only widens; someone with a higher group role keeps that."
@@ -2798,6 +2868,13 @@ NL: Final[dict[str, str]] = {
     ),
     "A row of the member list of a site: everyone who can reach this site.": (
         "Een rij van de ledenlijst van een site: iedereen die bij deze site kan."
+    ),
+    (
+        "Fixed id of the site. A workflow names it as `site-id`, so a deploy can only land on this site, whatever its "
+        "address."
+    ): (
+        "Vast id van de site. Een workflow noemt het als `site-id`, zodat een deploy alleen op deze site terecht kan "
+        "komen, wat haar adres ook is."
     ),
     "Slug of the site; the second path segment of the site URL.": (
         "Slug van de site; het tweede padsegment van de site-URL."
@@ -2867,6 +2944,13 @@ NL: Final[dict[str, str]] = {
         "`ownerId`, of allebei weglaten. Op te vragen met `gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
     ),
     "Numeric ID of the owner, together with `repositoryId`.": "Numeriek id van de eigenaar, samen met `repositoryId`.",
+    (
+        "Fixed id of the site. A workflow names it as `site-id` (action) or `--site-id` (CLI); the CI ID token then "
+        "names it in its audience."
+    ): (
+        "Vast id van de site. Een workflow noemt het als `site-id` (action) of `--site-id` (CLI); het CI-ID-token "
+        "noemt het dan in zijn audience."
+    ),
     "Base URL of the provider.": "Basis-URL van de provider.",
     "Owner as the provider spells it.": "Eigenaar zoals de provider hem spelt.",
     "Repository as the provider spells it.": "Repository zoals de provider haar spelt.",
@@ -2883,6 +2967,21 @@ NL: Final[dict[str, str]] = {
     ): (
         "Of de ids bevestigd zijn: door de provider bij het koppelen, of door een CI-ID-token dat ze allebei droeg. "
         "`false` zolang ze alleen zijn zoals ze zijn ingevuld; de naam kan dan ook nog afwijken."
+    ),
+    (
+        "Whether only a CI ID token bound to this site may publish: its audience is the admin URL followed by "
+        "`/-/sites/` and `siteId`. `true` for every link made since the site id exists, for one that got another "
+        "repository since, and for an older link of a repository that was linked to several sites; `false` for any "
+        "other older link, which also accepts a token whose audience is the admin URL itself until a site admin "
+        "requires the site id "
+        "(`PUT /sites/{groupSlug}/{siteSlug}/repository/site-id-required`). Once `true`, it stays `true`."
+    ): (
+        "Of alleen een CI-ID-token dat aan deze site gebonden is mag publiceren: de audience is dan de beheer-URL "
+        "gevolgd door `/-/sites/` en `siteId`. `true` voor elke koppeling die is gemaakt sinds het site-ID bestaat, "
+        "voor een koppeling die sindsdien een andere repository kreeg, en voor een oudere koppeling van een repository "
+        "die aan meerdere sites gekoppeld was; `false` voor elke andere oudere koppeling, die ook een token met de "
+        "beheer-URL zelf als audience accepteert tot een sitebeheerder het site-ID verplicht maakt "
+        "(`PUT /sites/{groupSlug}/{siteSlug}/repository/site-id-required`). Eenmaal `true`, blijft het `true`."
     ),
     "Name or e-mail address of the member who linked the repository; empty if that member has been deleted.": (
         "Naam of e-mailadres van wie de koppeling maakte; leeg als dat lid verwijderd is."

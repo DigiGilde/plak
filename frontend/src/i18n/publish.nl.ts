@@ -159,6 +159,21 @@ export const publishNl = {
   'publish.deploy.workflow.path':
     'Zet dit bestand op {path} in de repository. Na een push naar de live-branch staat de nieuwe versie in {link}.',
 
+  // -- Deploy tab: the site id ------------------------------------------------------
+  'publish.deploy.siteId.label': 'Site-ID',
+  'publish.deploy.siteId.copy': 'Kopieer site-ID',
+  'publish.deploy.siteId.copied': 'Site-ID gekopieerd.',
+  'publish.deploy.siteId.copyFailed':
+    'Kopiëren lukte niet. Selecteer het site-ID hierboven en kopieer het zelf.',
+  'publish.deploy.siteId.optional':
+    "Deze koppeling accepteert ook workflows die het site-ID niet noemen. Zet {code} in je workflow en kies daarna 'Alleen met site-ID publiceren'.",
+  'publish.deploy.siteId.optionalReader':
+    'Deze koppeling accepteert ook workflows die het site-ID niet noemen. Alleen een beheerder van deze site kan dat beperken.',
+  'publish.deploy.siteId.required': 'Alleen workflows die het site-ID noemen, kunnen publiceren.',
+  'publish.deploy.siteId.require': 'Alleen met site-ID publiceren',
+  'publish.deploy.siteId.requireFailed': 'Site-ID niet verplicht gemaakt',
+  'publish.deploy.siteId.requireFailedDetail': 'Verplicht maken is niet gelukt.',
+
   // -- Deploy tab: why this is safe ------------------------------------------------
   'publish.deploy.safety.summary': 'Waarom is dit veilig?',
   'publish.deploy.safety.noSecret':
@@ -188,6 +203,13 @@ export const publishNl = {
     'Deze site kan hierna niet meer zonder geheim vanuit CI publiceren, tot een nieuwe repository gekoppeld is.',
   'publish.deploy.unlink.keep': 'Behoud koppeling',
   'publish.deploy.unlink.confirm': 'Ontkoppel repository',
+
+  // -- Deploy tab: requiring the site id -----------------------------------------------
+  'publish.deploy.requireSiteId.title': 'Alleen nog publiceren met het site-ID?',
+  'publish.deploy.requireSiteId.text':
+    'Workflows zonder "site-id" kunnen daarna niet meer publiceren naar deze site. Dit kun je niet terugdraaien.',
+  'publish.deploy.requireSiteId.keep': 'Behoud de huidige koppeling',
+  'publish.deploy.requireSiteId.confirm': 'Alleen met site-ID',
 
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Toegangsinstellingen laden',

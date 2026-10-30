@@ -873,6 +873,15 @@ class TestGroupsAndSites:
         assert [member["identifier"] for member in detail["members"]] == ["a@example.nl"]
         assert "tokens" not in detail
 
+    async def test_a_site_carries_its_fixed_id_in_the_overview_and_the_group_detail(self, client, app, data):
+        """The id a workflow names as `site-id`, which the SPA shows on the
+        Deploy tab."""
+        login(client, app, sub="lid-a", email="a@example.nl")
+        overview = (await client.get(f"{BASE}/overview")).json()
+        detail = (await client.get(f"{BASE}/groups/team")).json()
+        assert overview["groups"][0]["sites"][0]["id"] == str(data.site.id)
+        assert detail["sites"][0]["id"] == str(data.site.id)
+
     async def test_unknown_group_404(self, client, app, data):
         login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.get(f"{BASE}/groups/bestaat-niet")).status_code == 404
@@ -2549,8 +2558,64 @@ class TestSiteRepository:
             "repository": "MinBZK/Website",
             "repository_id": 1001,
             "ids_confirmed": True,
+            "site_id_required": True,
             "live_branch": "main",
         }
+
+    async def test_a_new_link_names_the_site_id_and_requires_it(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(REPOSITORY, json=_github(), headers=headers)
+        assert response.status_code == 200
+        assert response.json()["siteId"] == str(data.site.id)
+        assert response.json()["siteIdRequired"] is True
+        async with factory() as db:
+            audit = (
+                await db.execute(select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_set"))
+            ).scalar_one()
+        assert audit.refs["site_id_required"] is True
+
+    @pytest.mark.parametrize(
+        ("relink", "required_after"),
+        [
+            ({"liveBranch": "release"}, False),
+            ({"liveBranch": None}, False),
+            # The same repository under another name, or after a transfer:
+            # the provider's repository id is what makes it the same.
+            ({"repo": "nieuwe-naam", "repositoryId": 1001, "ownerId": 2002}, False),
+            ({"owner": "nieuwe-eigenaar", "repositoryId": 1001, "ownerId": 9999}, False),
+            ({"repo": "Prive", "repositoryId": 5005, "ownerId": 6006}, True),
+            ({"provider": "forgejo", "host": FORGEJO_HOST, "owner": "minbzk", "repo": "plak"}, True),
+        ],
+    )
+    async def test_linking_another_repository_ends_what_an_older_link_accepted(
+        self, client, app, data, factory, relink, required_after
+    ):
+        """A link from before the site id keeps accepting a token without
+        one while it stays the same repository; another repository is a new
+        link, and a new link requires the site id."""
+        headers = await _older_link(client, app, factory, data)
+
+        response = await client.put(REPOSITORY, json={**_github(), **relink}, headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["siteIdRequired"] is required_after
+        async with factory() as db:
+            stored = await db.scalar(select(SiteRepository.site_id_required))
+            audits = list(
+                await db.scalars(
+                    select(AuditLogEntry)
+                    .where(AuditLogEntry.action == "site_repository_set")
+                    .order_by(AuditLogEntry.occurred_at)
+                )
+            )
+        assert stored is required_after
+        assert audits[-1].refs["site_id_required"] is required_after
+
+    async def test_relinking_the_same_repository_never_lifts_the_requirement(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        assert (await client.put(REPOSITORY, json=_github(), headers=headers)).status_code == 200
+        response = await client.put(REPOSITORY, json=_github(liveBranch="release"), headers=headers)
+        assert response.json()["siteIdRequired"] is True
 
     async def test_relinking_replaces_the_one_row(self, client, app, data, factory):
         headers = login(client, app, sub="lid-a", email="a@example.nl")
@@ -2816,6 +2881,124 @@ class TestSiteRepository:
             await db.commit()
         login(client, app, sub="lid-a", email="a@example.nl")
         assert (await client.get(REPOSITORY)).json()["createdBy"] == ""
+
+
+# -- Requiring the site id ----------------------------------------------------
+
+
+SITE_ID_REQUIRED = f"{REPOSITORY}/site-id-required"
+
+
+async def _older_link(client, app, factory, data, *, required: bool = False) -> dict[str, str]:
+    """minbzk/website linked to the site as a link from before the site id
+    stands, and the admin's mutation headers. Inserted, because the database
+    keeps an update from setting a required site id back to false."""
+    async with factory() as db:
+        db.add(
+            SiteRepository(
+                site_id=data.site.id,
+                provider=CiProvider.GITHUB,
+                host="https://github.com",
+                owner="MinBZK",
+                repo="Website",
+                repository_id=1001,
+                owner_id=2002,
+                live_branch="main",
+                ids_confirmed=True,
+                created_by=data.member_a.id,
+                site_id_required=required,
+            )
+        )
+        await db.commit()
+    return login(client, app, sub="lid-a", email="a@example.nl")
+
+
+async def _required_rows(factory) -> list[AuditLogEntry]:
+    async with factory() as db:
+        return list(
+            await db.scalars(
+                select(AuditLogEntry).where(AuditLogEntry.action == "site_repository_site_id_required")
+            )
+        )
+
+
+async def _stored_requirement(factory) -> bool:
+    async with factory() as db:
+        return await db.scalar(select(SiteRepository.site_id_required))
+
+
+class TestSiteIdRequired:
+    async def test_a_site_admin_requires_the_site_id(self, client, app, data, factory):
+        headers = await _older_link(client, app, factory, data)
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": True}, headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["siteIdRequired"] is True
+        assert response.json()["siteId"] == str(data.site.id)
+        assert (await client.get(REPOSITORY)).json()["siteIdRequired"] is True
+        rows = await _required_rows(factory)
+        assert [row.refs for row in rows] == [{"group": "team", "site": "site", "site_id": str(data.site.id)}]
+        assert rows[0].actor_pseudonym == pseudonymise(app.state.settings.audit_pepper, "lid-a")
+
+    @pytest.mark.parametrize("value", [True, False])
+    async def test_asking_for_what_already_holds_changes_nothing(self, client, app, data, factory, value):
+        headers = await _older_link(client, app, factory, data, required=value)
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": value}, headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["siteIdRequired"] is value
+        assert await _stored_requirement(factory) is value
+        assert await _required_rows(factory) == []
+
+    async def test_once_required_it_stays_required(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        assert (await client.put(REPOSITORY, json=_github(), headers=headers)).status_code == 200
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": False}, headers=headers)
+
+        assert response.status_code == 422
+        assert response.json()["code"] == "SITE_ID_REQUIRED_PERMANENT"
+        assert await _stored_requirement(factory) is True
+        assert await _required_rows(factory) == []
+
+    async def test_without_a_link_there_is_nothing_to_require(self, client, app, data, factory):
+        headers = login(client, app, sub="lid-a", email="a@example.nl")
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": True}, headers=headers)
+        assert response.status_code == 404
+        assert response.json()["code"] == "REPOSITORY_NOT_SET"
+        assert await _count(factory, SiteRepository) == 0
+
+    async def test_an_editor_may_not(self, client, app, data, factory):
+        await _older_link(client, app, factory, data)
+        await _join_group(factory, data.group, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": True}, headers=headers)
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert await _stored_requirement(factory) is False
+
+    async def test_someone_without_a_role_gets_the_404_of_an_unknown_site(self, client, app, data, factory):
+        await _older_link(client, app, factory, data)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": True}, headers=headers)
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "UNKNOWN_SITE"
+        assert await _stored_requirement(factory) is False
+
+    async def test_without_csrf_nothing_changes(self, client, app, data, factory):
+        await _older_link(client, app, factory, data)
+
+        response = await client.put(SITE_ID_REQUIRED, json={"siteIdRequired": True})
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "CSRF_INVALID"
+        assert await _stored_requirement(factory) is False
 
 
 # -- Versions, previews and upload over the session -------------------------

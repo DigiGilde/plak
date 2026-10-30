@@ -426,6 +426,19 @@ class SandboxBody(ApiModel):
     )
 
 
+class SiteIdRequiredBody(ApiModel):
+    """Whether the linked repository may publish only with a CI ID token bound to this site."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"siteIdRequired": True}]})
+
+    site_id_required: bool = Field(
+        description=(
+            "`true`: from now on only a CI ID token whose audience names the id of this site may publish. "
+            "`false` is refused once that holds: a link that requires the site id keeps requiring it."
+        )
+    )
+
+
 class LiveVersionsKeptBody(ApiModel):
     """How many previous live versions this site keeps."""
 
@@ -760,6 +773,12 @@ class GroupOut(ApiModel):
 class SiteOut(ApiModel):
     """A site with the summary the SPA shows in lists."""
 
+    id: uuid.UUID = Field(
+        description=(
+            "Fixed id of the site. A workflow names it as `site-id`, so a deploy can only land on this site, "
+            "whatever its address."
+        )
+    )
     group_slug: str = Field(description="Slug of the group this site is in.", examples=["aurora"])
     slug: str = Field(description="Slug of the site; the second path segment of the site URL.", examples=["docs"])
     title: str = Field(description="Display name of the site.", examples=["Documentatie"])
@@ -1168,6 +1187,12 @@ class SiteRepositoryOut(ApiModel):
 
     group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
     site_slug: str = Field(description="Slug of the site.", examples=["docs"])
+    site_id: uuid.UUID = Field(
+        description=(
+            "Fixed id of the site. A workflow names it as `site-id` (action) or `--site-id` (CLI); the "
+            "CI ID token then names it in its audience."
+        )
+    )
     provider: CiProvider = Field(description="`github` or `forgejo`.")
     host: str = Field(description="Base URL of the provider.", examples=["https://github.com"])
     owner: str = Field(description="Owner as the provider spells it.", examples=["minbzk"])
@@ -1183,6 +1208,17 @@ class SiteRepositoryOut(ApiModel):
         description=(
             "Whether the IDs are confirmed: by the provider when linking, or by a CI ID token that carried both "
             "of them. `false` while they have only been entered by hand; the name may then also still differ."
+        ),
+        examples=[True],
+    )
+    site_id_required: bool = Field(
+        description=(
+            "Whether only a CI ID token bound to this site may publish: its audience is the admin URL followed "
+            "by `/-/sites/` and `siteId`. `true` for every link made since the site id exists, for one that got "
+            "another repository since, and for an older link of a repository that was linked to several sites; "
+            "`false` for any other older link, which also accepts a token whose audience is the admin URL itself "
+            "until a site admin requires the site id "
+            "(`PUT /sites/{groupSlug}/{siteSlug}/repository/site-id-required`). Once `true`, it stays `true`."
         ),
         examples=[True],
     )
@@ -1574,6 +1610,7 @@ def _site_json(
     preview_count: int,
 ) -> SiteOut:
     return SiteOut(
+        id=site.id,
         group_slug=group_slug,
         slug=site.slug,
         title=site.title,
@@ -2534,6 +2571,7 @@ async def _repository_json(db: AsyncSession, repository: SiteRepository, group_s
     return SiteRepositoryOut(
         group_slug=group_slug,
         site_slug=site_slug,
+        site_id=repository.site_id,
         provider=repository.provider,
         host=repository.host,
         owner=repository.owner,
@@ -2542,6 +2580,7 @@ async def _repository_json(db: AsyncSession, repository: SiteRepository, group_s
         owner_id=repository.owner_id,
         live_branch=repository.live_branch,
         ids_confirmed=repository.ids_confirmed,
+        site_id_required=repository.site_id_required,
         created_by=(creator.name or creator.email) if creator is not None else "",
         created_at=_iso(repository.created_at),
     )
@@ -3540,7 +3579,12 @@ def make_admin_router() -> APIRouter:
                 raise ApiError(422, "REPOSITORY_IDS_MISMATCH", params=where)
             ids_confirmed = True
 
-        repository = await db.scalar(select(SiteRepository).where(SiteRepository.site_id == site.id))
+        # Locked, so the site_id_required this answer and its audit row
+        # report is the one stored, also when the site id is required
+        # meanwhile.
+        repository = await db.scalar(
+            select(SiteRepository).where(SiteRepository.site_id == site.id).with_for_update()
+        )
         if repository is None:
             repository = SiteRepository(site_id=site.id)
             db.add(repository)
@@ -3560,6 +3604,14 @@ def make_admin_router() -> APIRouter:
             # Changing the live branch of a private repository keeps what a
             # token or an earlier lookup confirmed about the same repository.
             ids_confirmed = True
+        if (repository.provider, repository.host, repository.repository_id) != (
+            body.provider,
+            host,
+            resolved.repository_id,
+        ):
+            # Another repository is a new link, and a new link requires the
+            # site id; the same one keeps what an older link accepted.
+            repository.site_id_required = True
         repository.ids_confirmed = ids_confirmed
         repository.provider = body.provider
         repository.host = host
@@ -3583,6 +3635,7 @@ def make_admin_router() -> APIRouter:
                 "repository": f"{resolved.owner}/{resolved.repo}",
                 "repository_id": resolved.repository_id,
                 "ids_confirmed": ids_confirmed,
+                "site_id_required": repository.site_id_required,
                 "live_branch": live_branch,
                 **creator.audit_refs(),
             },
@@ -3615,6 +3668,64 @@ def make_admin_router() -> APIRouter:
         await db.commit()
         await _audit(request, member, "site_repository_remove", {"group": group_slug, "site": site_slug})
         return Response(status_code=204)
+
+    @router.put(
+        "/sites/{group_slug}/{site_slug}/repository/site-id-required",
+        tags=[TAG_CI],
+        summary="Require the site id of a workflow",
+        response_description="The linked repository, with its new setting.",
+        description=(
+            "For a link made before the site id existed: from now on the linked repository may publish to this "
+            "site only with a CI ID token whose audience names the site id, `{PLAK_BASE_URL}/-/sites/{siteId}`. "
+            "A workflow does that with `site-id` (action) or `--site-id` (CLI); a workflow without it is "
+            "refused with 403 `CI_SITE_ID_REQUIRED`. A link made since then, or that got another repository "
+            "since, requires it already.\n\n"
+            "This goes one way: `true` sets it, `false` on a link that requires the site id is refused, so no "
+            "admin can quietly let a workflow without it in again. Asking for what already holds changes "
+            "nothing and writes no audit row.\n\n"
+            "**Who can call this:** effective site role `admin`, with a valid CSRF header."
+        ),
+        responses=_errors(
+            _ERROR_CSRF,
+            _ERROR_SITE_ROLE,
+            _ERROR_SITE,
+            _ERROR_REPOSITORY_NOT_SET,
+            {
+                422: (
+                    "`siteIdRequired` is `false` while the link already requires the site id "
+                    "(`SITE_ID_REQUIRED_PERMANENT`)."
+                )
+            },
+        ),
+    )
+    async def set_site_id_required(
+        request: Request,
+        group_slug: str,
+        site_slug: str,
+        body: SiteIdRequiredBody,
+        _csrf: Csrf,
+        member: ActiveMember,
+        db: Db,
+    ) -> SiteRepositoryOut:
+        group, site = await _site_with_role(db, member, group_slug, site_slug, Role.ADMIN)
+        repository = await db.scalar(
+            select(SiteRepository).where(SiteRepository.site_id == site.id).with_for_update()
+        )
+        if repository is None:
+            raise ApiError(404, "REPOSITORY_NOT_SET")
+        if body.site_id_required == repository.site_id_required:
+            return await _repository_json(db, repository, group.slug, site.slug)
+        if not body.site_id_required:
+            raise ApiError(422, "SITE_ID_REQUIRED_PERMANENT")
+        repository.site_id_required = True
+        await db.commit()
+        await _audit(
+            request,
+            member,
+            "site_repository_site_id_required",
+            {"group": group_slug, "site": site_slug, "site_id": str(site.id)},
+        )
+        return await _repository_json(db, repository, group.slug, site.slug)
 
     # -- CLI login: the member's side --
 

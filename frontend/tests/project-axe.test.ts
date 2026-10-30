@@ -183,6 +183,15 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
   it('Leden is zonder violations', () => expectNoViolations(TabMembers));
   it('Deploy is zonder violations', () => expectNoViolations(TabDeploy));
 
+  it('Deploy met een verplicht site-ID is zonder violations', async () => {
+    // The default link still accepts a workflow without the site id; this is the other state.
+    _resetCurrentMemberCache();
+    const backend = makeMockBackend();
+    backend.data.repositories[0]!.siteIdRequired = true;
+    vi.stubGlobal('fetch', backend.fetch);
+    await expectNoViolations(TabDeploy);
+  });
+
   it('de volledige sitepagina (kop, tabs en tabblad) is zonder violations', async () => {
     const Empty = defineComponent({ render: () => h('div') });
     const router = createRouter({

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { installMock, makeMockBackend } from './mock';
+import { installMock, makeMockBackend, type MockBackend } from './mock';
 
 describe('mockFetch (fallback)', () => {
   it('answers an unmatched route with a 404 problem', async () => {
@@ -246,6 +246,7 @@ describe('sites: not found', () => {
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/external-sources'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/sandbox'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/live-versions-kept'],
+    ['PUT', '/-/api/v1/sites/team-aurora/geen-site/repository/site-id-required'],
     ['GET', '/-/api/v1/sites/team-aurora/geen-site/members'],
     ['GET', '/-/api/v1/sites/team-aurora/geen-site/members/search'],
     ['PUT', '/-/api/v1/sites/team-aurora/geen-site/members/lid-1/role'],
@@ -372,6 +373,107 @@ describe('site repository: defaults', () => {
   });
 });
 
+describe('site repository: the site id', () => {
+  const REPOSITORY = '/-/api/v1/sites/team-aurora/website/repository';
+  const REQUIRE = `${REPOSITORY}/site-id-required`;
+
+  const put = (backend: MockBackend, path: string, body: unknown) =>
+    backend.fetch(path, { method: 'PUT', body: JSON.stringify(body) });
+
+  const link = (backend: MockBackend, body: Record<string, unknown> = {}) =>
+    put(backend, REPOSITORY, { provider: 'github', owner: 'team-aurora', repo: 'website', ...body });
+
+  it('hands out a site id of its own to every site, and puts it on the link', async () => {
+    const backend = makeMockBackend();
+    const created = await backend.fetch('/-/api/v1/groups/team-aurora/sites', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Nieuw', slug: 'nieuw' }),
+    });
+    const { id } = (await created.json()) as { id: string };
+
+    expect(id).not.toBe(backend.data.sites[0]!.id);
+    expect(backend.data.repositories[0]!.siteId).toBe(backend.data.sites[0]!.id);
+    const linked = await put(backend, '/-/api/v1/sites/team-aurora/nieuw/repository', {
+      provider: 'github',
+      owner: 'team-aurora',
+      repo: 'nieuw',
+    });
+    expect(((await linked.json()) as { siteId: string }).siteId).toBe(id);
+  });
+
+  it('lets a link that existed before keep accepting a workflow without the site id', () => {
+    expect(makeMockBackend().data.repositories[0]!.siteIdRequired).toBe(false);
+  });
+
+  it('starts a new link out requiring the site id', async () => {
+    const backend = makeMockBackend();
+    backend.data.repositories = [];
+
+    const response = await link(backend);
+
+    expect(((await response.json()) as { siteIdRequired: boolean }).siteIdRequired).toBe(true);
+  });
+
+  it('leaves the choice alone when the same repository is linked again', async () => {
+    const backend = makeMockBackend();
+
+    const response = await link(backend, { liveBranch: 'release' });
+
+    expect(await response.json()).toMatchObject({ liveBranch: 'release', siteIdRequired: false });
+  });
+
+  it.each([
+    ['another repository', { repositoryId: 5005, ownerId: 6006 }],
+    ['another provider', { provider: 'forgejo', host: 'https://code.overheid.nl' }],
+  ])('requires the site id again for %s', async (_name, change) => {
+    const backend = makeMockBackend();
+
+    const response = await link(backend, change);
+
+    expect(((await response.json()) as { siteIdRequired: boolean }).siteIdRequired).toBe(true);
+  });
+
+  it('requires the site id on request', async () => {
+    const backend = makeMockBackend();
+
+    const response = await put(backend, REQUIRE, { siteIdRequired: true });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ repo: 'website', siteIdRequired: true });
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(true);
+  });
+
+  it('refuses to switch the requirement off again, in one direction only', async () => {
+    const backend = makeMockBackend();
+    backend.data.repositories[0]!.siteIdRequired = true;
+
+    const response = await put(backend, REQUIRE, { siteIdRequired: false });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('SITE_ID_REQUIRED_PERMANENT');
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(true);
+  });
+
+  it('answers a request to leave the requirement off with the link as it is', async () => {
+    const backend = makeMockBackend();
+
+    const response = await put(backend, REQUIRE, { siteIdRequired: false });
+
+    expect(response.status).toBe(200);
+    expect(backend.data.repositories[0]!.siteIdRequired).toBe(false);
+  });
+
+  it('refuses while nothing is linked', async () => {
+    const backend = makeMockBackend();
+    backend.data.repositories = [];
+
+    const response = await put(backend, REQUIRE, { siteIdRequired: true });
+
+    expect(response.status).toBe(404);
+    expect(((await response.json()) as { code: string }).code).toBe('REPOSITORY_NOT_SET');
+  });
+});
+
 describe('derived member rows: edge cases', () => {
   it('falls back to the identifier when a site role belongs to nobody known', async () => {
     const backend = makeMockBackend();
@@ -484,6 +586,7 @@ describe('mockFetch: unmatched methods fall through to the route 404', () => {
     ['DELETE', '/-/api/v1/sites/team-aurora/website/invitees'],
     ['PUT', '/-/api/v1/sites/team-aurora/website/keys'],
     ['PATCH', '/-/api/v1/sites/team-aurora/website/repository'],
+    ['GET', '/-/api/v1/sites/team-aurora/website/repository/site-id-required'],
     ['GET', '/-/api/v1/sites/team-aurora/website/deploys'],
   ])('answers %s %s with a 404, having matched no route for it', async (method, path) => {
     const backend = makeMockBackend();

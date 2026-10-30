@@ -419,6 +419,12 @@ rollout that carries this migration, start a manual backup of both on ZAD
 first: a full volume, or a directory already at a version's new place, stops
 the migration, and with `Recreate` that is every site down until someone
 intervenes.
+`0004_site_id_required` refuses to go down once a repository link requires
+the site id, since upgrading again would let every link publish without one.
+An image without `0004` does not start on a database that has it either, but
+here there is a way back: `alembic stamp 0003_storage_by_site_id` from the
+current image (route 1 is enough, it needs no volume) marks the database as
+before `0004` and leaves the column in place, which the older code ignores.
 
 Plak runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the
