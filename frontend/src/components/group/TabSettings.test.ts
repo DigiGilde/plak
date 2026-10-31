@@ -64,7 +64,7 @@ describe('group TabSettings', () => {
 
     const heading = wrapper.find('h3#heading-default-access-exceptions');
     expect(heading.text()).toBe('Uitzonderingen');
-    expect(wrapper.find('nldd-title:has(h3) [slot="subtitle"]').text()).toBe(
+    expect(wrapper.find('nldd-title:has(h3) [slot="supporting-text"]').text()).toBe(
       'Deze twee staan los van de keuze hierboven en los van elkaar. Ze laten er mensen bij, en nemen nooit iemand weg.',
     );
     expect(wrapper.find('nldd-inline-dialog').exists()).toBe(false);

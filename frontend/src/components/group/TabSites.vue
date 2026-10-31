@@ -10,6 +10,7 @@
 import type { Site } from '@/api/types';
 import SiteRow, { SITE_COLUMNS, SITE_COLUMNS_SM } from '@/components/SiteRow.vue';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // The tabs receive the props of every tab; none of them should fall through
 // to the markup.
@@ -23,10 +24,7 @@ defineProps<{ sites: Site[] }>();
 <template>
   <section aria-labelledby="heading-sites">
     <nldd-container layout="stack" gap="8">
-      <nldd-title :size="4">
-        <h2 id="heading-sites">{{ t('group.sites.heading') }}</h2>
-        <span slot="subtitle">{{ t('group.sites.intro') }}</span>
-      </nldd-title>
+      <SectionHeading id="heading-sites" :text="t('group.sites.heading')" :intro="t('group.sites.intro')" />
 
       <!-- The same table as the site overview, filled by the same row
            component: one site reads the same wherever you meet it, and the

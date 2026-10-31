@@ -16,6 +16,7 @@ import ErrorBanner from '@/components/ErrorBanner.vue';
 import NewGroupSheet from '@/components/NewGroupSheet.vue';
 import { crumbsGroups, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t } from '@/i18n';
+import PageHeader from '@/components/PageHeader.vue';
 
 const route = useRoute();
 
@@ -63,8 +64,7 @@ function onGroupCreated(group: Group): void {
     <!-- Same shape as the overview: the action beside the h1 rather than below
          the list, so a long list does not put it out of reach. The wrap
          container lets the button drop a line when it no longer fits. -->
-    <nldd-container layout="wrap" gap="16" vertical-alignment="center" class="page-header">
-      <nldd-title :size="1"><h1>{{ t('group.groups.heading') }}</h1></nldd-title>
+    <PageHeader :text="t('group.groups.heading')">
       <nldd-button
         v-if="!loading && !error"
         variant="primary"
@@ -73,7 +73,7 @@ function onGroupCreated(group: Group): void {
         data-testid="groups-create"
         @click="sheetOpen = true"
       ></nldd-button>
-    </nldd-container>
+    </PageHeader>
 
     <nldd-spacer size="24"></nldd-spacer>
 
