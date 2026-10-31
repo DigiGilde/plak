@@ -15,6 +15,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import { useAutosavedText } from '@/composables/autosavedText';
+import { useConfirm } from '@/composables/confirm';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { isGroupAdmin, isGroupMember, isSiteAdmin } from '@/composables/roles';
 import { type MessageKey, t } from '@/i18n';
@@ -68,9 +69,6 @@ const title = useAutosavedText({
 const titleInput = title.input;
 const titleVerdict = title.verdict;
 const titleSaved = title.justSaved;
-
-const deleteOpen = ref(false);
-const deleteBusy = ref(false);
 
 // Decided when the data arrives, not worked out again from the address: the
 // roles in `/me` name a site by its address, and while that changes under the
@@ -175,24 +173,25 @@ function onRenamed(updated: Site): void {
 }
 
 async function deleteSite(): Promise<void> {
-  deleteBusy.value = true;
   try {
     await plak.deleteSite(props.group, props.site);
-    deleteOpen.value = false;
     emit('removed');
   } catch (f) {
-    // The modal sits in the top layer and renders the page below it inert; a
-    // notification there would be unreachable. So close first, then notify.
-    deleteOpen.value = false;
     notices.value?.notify(
       'critical',
       t('site.settings.delete.failed'),
       errorText(f, t('site.settings.delete.failed.detail')),
     );
-  } finally {
-    deleteBusy.value = false;
   }
 }
+
+const {
+  open: deleteOpen,
+  busy: deleteBusy,
+  ask: askDelete,
+  cancel: cancelDelete,
+  confirm: confirmDelete,
+} = useConfirm<true>(deleteSite);
 </script>
 
 <template>
@@ -290,7 +289,7 @@ async function deleteSite(): Promise<void> {
                   variant="destructive"
                   :text="t('site.settings.danger.action')"
                   data-testid="delete-site"
-                  @click="deleteOpen = true"
+                  @click="askDelete(true)"
                 ></nldd-button>
               </nldd-button-group>
             </nldd-container>
@@ -304,8 +303,8 @@ async function deleteSite(): Promise<void> {
           :confirm-label="t('site.settings.danger.confirm.confirm')"
           :confirm-phrase="`${props.group}/${props.site}`"
           :busy="deleteBusy"
-          @confirm="deleteSite"
-          @close="deleteOpen = false"
+          @confirm="confirmDelete"
+          @close="cancelDelete"
         />
       </section>
     </nldd-container>

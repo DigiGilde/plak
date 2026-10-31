@@ -97,8 +97,6 @@ const idsPath = ref('');
 const idsPrefilled = ref(false);
 
 
-const requireOpen = ref(false);
-const requireBusy = ref(false);
 const siteIdNotice = ref('');
 
 const { loading, error } = useLoader(
@@ -114,7 +112,7 @@ watch(
   () => [props.group, props.site],
   () => {
     closeForm();
-    requireOpen.value = false;
+    cancelRequire();
     siteIdNotice.value = '';
   },
 );
@@ -425,22 +423,24 @@ async function copySiteId(siteId: string): Promise<void> {
 }
 
 async function requireSiteId(): Promise<void> {
-  requireBusy.value = true;
   try {
     repository.value = await plak.requireSiteId(props.group, props.site);
-    requireOpen.value = false;
   } catch (f) {
-    // The open dialog renders the page below it inert; close it before notifying.
-    requireOpen.value = false;
     notices.value?.notify(
       'critical',
       t('publish.deploy.siteId.requireFailed'),
       errorText(f, t('publish.deploy.siteId.requireFailedDetail')),
     );
-  } finally {
-    requireBusy.value = false;
   }
 }
+
+const {
+  open: requireOpen,
+  busy: requireBusy,
+  ask: askRequire,
+  cancel: cancelRequire,
+  confirm: confirmRequire,
+} = useConfirm<true>(requireSiteId);
 
 const providerLabel = (provider: RepositoryProvider): string =>
   provider === 'github' ? 'GitHub' : 'Forgejo';
@@ -968,7 +968,7 @@ plak logout
                   :text="t('publish.deploy.siteId.require')"
                   type="button"
                   data-testid="site-id-require"
-                  @click="requireOpen = true"
+                  @click="askRequire(true)"
                 ></nldd-button>
               </nldd-button-group>
             </nldd-container>
@@ -1034,8 +1034,8 @@ plak logout
     :keep-label="t('publish.deploy.requireSiteId.keep')"
     :confirm-label="t('publish.deploy.requireSiteId.confirm')"
     :busy="requireBusy"
-    @confirm="requireSiteId"
-    @close="requireOpen = false"
+    @confirm="confirmRequire"
+    @close="cancelRequire"
   />
 </template>
 
