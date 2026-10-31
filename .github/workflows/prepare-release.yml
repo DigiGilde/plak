@@ -105,23 +105,12 @@ jobs:
 
       - name: Install uv
         if: steps.find.outputs.mode != 'none'
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: ./.github/actions/setup-uv
 
-      # As in api.yml: the image pinned in .github/oasdiff/Containerfile.
       - name: Install oasdiff
+        id: oasdiff
         if: steps.find.outputs.mode != 'none'
-        run: |
-          set -euo pipefail
-          image="$(grep -oE '^FROM docker\.io/tufin/oasdiff:[^@ ]+@sha256:[0-9a-f]{64}$' \
-            .github/oasdiff/Containerfile | cut -d' ' -f2 || true)"
-          if [ -z "$image" ]; then
-            echo "No oasdiff image pinned by digest in .github/oasdiff/Containerfile" >&2
-            exit 1
-          fi
-          docker create --name oasdiff "$image" > /dev/null
-          docker cp oasdiff:/usr/bin/oasdiff "$RUNNER_TEMP/oasdiff"
-          docker rm oasdiff > /dev/null
-          "$RUNNER_TEMP/oasdiff" --version
+        uses: ./.github/actions/install-oasdiff
 
       - name: Print the API schema
         if: steps.find.outputs.mode != 'none'
@@ -142,6 +131,7 @@ jobs:
         if: steps.find.outputs.mode != 'none'
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          OASDIFF: ${{ steps.oasdiff.outputs.path }}
         run: |
           set -euo pipefail
           args=()
@@ -149,7 +139,7 @@ jobs:
             args+=(--tag "$TAG")
           fi
           python3 scripts/release.py prepare \
-            --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff" ${args[@]+"${args[@]}"}
+            --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF" ${args[@]+"${args[@]}"}
 
       # A refresh that would push the very same tree is no refresh.
       - name: Compare with the open pull request

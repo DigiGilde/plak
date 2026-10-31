@@ -31,70 +31,12 @@ if [[ "${ENGINE}" == "podman" ]] && podman machine list --format '{{.Name}}' >/d
     fi
 fi
 
-# Dev secrets: reuse dev/.secrets/ when present; creating them via
-# dev/up.sh here is not possible (that script keeps hanging in the
-# foreground), so generate them the same way.
-SECRETS_DIR="${REPO_ROOT}/dev/.secrets"
-APP_ENV="${SECRETS_DIR}/app.env"
-POSTGRES_ENV="${SECRETS_DIR}/postgres.env"
-if [[ ! -f "${APP_ENV}" || ! -f "${POSTGRES_ENV}" ]]; then
-    echo "Genereer dev-secrets in ${SECRETS_DIR} ..."
-    mkdir -p "${SECRETS_DIR}"
-    chmod 700 "${SECRETS_DIR}"
-    postgres_password="$(openssl rand -hex 24)"
-    # Separate account from the superuser the container bootstraps with; the
-    # init script (dev/postgres-init) creates it.
-    app_db_password="$(openssl rand -hex 24)"
-    session_secret="$(openssl rand -hex 32)"
-    audit_pepper="$(openssl rand -hex 32)"
-    audit_ip_key="$(openssl rand -base64 32)"
-    oidc_jwk="$(
-        cd "${REPO_ROOT}/backend" && uv run python - <<'PY'
-import base64
-import json
-
-from cryptography.hazmat.primitives.asymmetric import rsa
-
-
-def b64url(n: int) -> str:
-    length = (n.bit_length() + 7) // 8
-    return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
-
-
-key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-priv = key.private_numbers()
-pub = priv.public_numbers
-
-jwk = {
-    "kty": "RSA",
-    "use": "sig",
-    "alg": "RS256",
-    "kid": "plak-dev",
-    "n": b64url(pub.n),
-    "e": b64url(pub.e),
-    "d": b64url(priv.d),
-    "p": b64url(priv.p),
-    "q": b64url(priv.q),
-    "dp": b64url(priv.dmp1),
-    "dq": b64url(priv.dmq1),
-    "qi": b64url(priv.iqmp),
-}
-print(json.dumps(jwk))
-PY
-    )"
-    cat > "${POSTGRES_ENV}" <<EOF
-POSTGRES_PASSWORD=${postgres_password}
-PLAK_DB_PASSWORD=${app_db_password}
-EOF
-    cat > "${APP_ENV}" <<EOF
-PLAK_DB_URL=postgresql+asyncpg://plak:${app_db_password}@postgres:5432/plak
-PLAK_SESSION_SECRET=${session_secret}
-PLAK_AUDIT_PEPPER=${audit_pepper}
-PLAK_AUDIT_IP_KEY=${audit_ip_key}
-PLAK_OIDC_CLIENT_PRIVATE_JWK=${oidc_jwk}
-EOF
-    chmod 600 "${APP_ENV}" "${POSTGRES_ENV}"
-fi
+# Dev secrets: reuse dev/.secrets/ when present. dev/up.sh cannot create
+# them here (that script keeps hanging in the foreground), so the function
+# it uses lives in dev/secrets.sh.
+# shellcheck source=dev/secrets.sh
+source "${REPO_ROOT}/dev/secrets.sh"
+ensure_dev_secrets
 
 cd "${REPO_ROOT}"
 

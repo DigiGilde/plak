@@ -27,9 +27,9 @@ podman by default). Extra arguments are passed through to Playwright:
 
 The job `e2e` in `.github/workflows/ci.yml` runs this same script on
 every pull request, with `PLAK_E2E_ENGINE=docker` because the GitHub
-runner has no podman. It builds the SPA first (`frontend/dist` is
-mounted into the app) and uploads `test-results/` when the suite fails:
-the config keeps a trace and a screenshot per failed scenario.
+runner has no podman. The app serves the SPA of the image, so nothing
+is built on the host first. It uploads `test-results/` when the suite
+fails: the config keeps a trace and a screenshot per failed scenario.
 
 No `/etc/hosts` lines are needed: the browser pins `*.localhost` to
 `127.0.0.1` through `--host-resolver-rules`, and requests on the Node
@@ -41,9 +41,10 @@ and on the usual Linux setups).
 ## Setup
 
 - `compose.e2e.yml`: an overlay on `dev/compose.yml` with its own ports,
-  wider rate limits and a mock OIDC configuration with
-  `interactiveLogin`, so that the suite can log in as several
-  identities (dev always logs in fixed as `dev-beheerder`).
+  the SPA and backend source of the image instead of host mounts, wider
+  rate limits and a mock OIDC configuration with `interactiveLogin`, so
+  that the suite can log in as several identities (dev always logs in
+  fixed as `dev-beheerder`).
 - `helpers/oidc.ts`: proxies the internal mock OIDC origin
   (`http://mock-oidc:8080`) per browser context to the published port
   and completes the interactive login form.
