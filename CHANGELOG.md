@@ -10,8 +10,6 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
-<!-- release: hold -->
-
 ### Added
 
 - `site-id` for the publish action and `--site-id` for the CLI, and the
@@ -22,10 +20,18 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ### Changed
 
-- No summary under an access choice repeats the option just chosen any
-  more: not on a site's Access tab, not in the publish sheet and not for a
-  group's default access. A warning says when nobody can view the site, and
-  the publish sheet only says what follows after publishing.
+- A new repository link requires the site id, and so does every existing
+  link of a repository that is linked to several sites: a workflow of such
+  a repository publishes again once it names the site id. Other existing
+  links keep working without it until another repository is linked or a
+  site admin requires it.
+- Versions are stored under the site's id, so a site created again under a
+  deleted name starts empty. The upgrade moves the existing directories and
+  needs the content volume. After it, the previous image no longer starts.
+- The summary under an access choice no longer repeats the option just
+  chosen, on a site's Access tab, in the publish sheet and for a group's
+  default access. A warning says when nobody can view the site, and the
+  publish sheet only says what happens after publishing.
 - On a group's Settings tab the secret links and invitees switches of the
   default access sit under their own "Uitzonderingen" heading.
 - The What's new page no longer opens with the version you use; the footer
@@ -40,20 +46,13 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 - On ZAD the content volume is 10Gi and a site may again hold 500 MiB
   across all its versions, the `PLAK_SITE_MAX_BYTES` default.
 - The image runs Python 3.15 on Debian 13 (trixie), without pip.
-- Versions are stored under the site's id, so a site created again under a
-  deleted name starts empty. The upgrade moves the existing directories and
-  needs the content volume. After it, the previous image no longer starts.
-- A new repository link requires the site id, and so does every existing
-  link of a repository that is linked to several sites. Other existing
-  links keep working without it until another repository is linked or a
-  site admin requires it.
 - Deleting a site moved from the site's Overview tab to its new Settings tab.
 
 ### Fixed
 
-- Production runs the image its release names, so the footer shows the
-  version instead of "Wat is er nieuw"; it ran a build of the same commit
-  without its version.
+- Production runs the image its release names. It ran a build of the same
+  commit without its version, so the footer showed "Wat is er nieuw"
+  instead of the version.
 - Files left behind by an interrupted publish, cleanup or delete no longer
   count against a site's storage quota: the nightly cleanup sets them aside
   and removes them a week later.
@@ -78,8 +77,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   11.0.3 (GHSA-g3hv-75wg-m249).
 - A page never sees a secret link that was not meant for it: Plak takes a
   `key` in the shape of a secret link out of the address before it answers,
-  also on a refusal, and refuses service worker scripts, which could read a
-  link before Plak does.
+  also one a mail client cut short and also on a refusal, and refuses
+  service worker scripts, which could read a link before Plak does.
 - A workflow that names its site id publishes only to that site: Plak
   accepts a CI token bound to it, so a renamed, deleted or mistyped
   address can no longer send its build to someone else's site.
