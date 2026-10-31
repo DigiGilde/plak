@@ -1,4 +1,4 @@
-# A weekly vulnerability scan of what runs, not of what a pull request
+# A daily vulnerability scan of what runs, not of what a pull request
 # adds: a hole published after a release is found here, not at the next
 # deploy. A finding fails the run, and GitHub mails the person who last
 # changed the schedule of a failing scheduled workflow.
@@ -16,7 +16,7 @@ name: Scheduled scan
 
 on:
   schedule:
-    - cron: "17 5 * * 1"
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:

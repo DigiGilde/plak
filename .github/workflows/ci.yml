@@ -279,8 +279,12 @@ jobs:
   # The stack comes up through e2e/run.sh, the same script `just e2e`
   # calls; PLAK_E2E_ENGINE points it at docker, because the runner has no
   # podman.
+  #
+  # `playwright install` can hang without failing, and a hung job holds up
+  # every later run in the deploy.yml concurrency group.
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
