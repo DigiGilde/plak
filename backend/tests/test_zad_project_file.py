@@ -34,6 +34,8 @@ from typing import Any
 import pytest
 import yaml
 
+from plak.config import normalise_operator_email
+
 PROJECT_FILE = Path(__file__).resolve().parents[2] / "deploy" / "plak-project.example.yaml"
 PROJECT: dict[str, Any] = yaml.safe_load(PROJECT_FILE.read_text(encoding="utf-8"))
 
@@ -159,6 +161,14 @@ def test_urls_come_up_with_the_composed_hosts() -> None:
 
     keycloak = _service_config(PROJECT["services"], "keycloak")
     assert f"https://{content_host_name}/-/oauth2/callback" in keycloak["additional_redirect_uris"]
+
+
+def test_the_operator_is_named_with_an_address_the_app_accepts() -> None:
+    """The app refuses to start on an address that is not plain, so the
+    example must hold one it takes as it stands."""
+    env = PROJECT["deployments"][0]["components"][0]["env-vars"]
+    assert env["PLAK_OPERATOR_NAME"].strip()
+    assert normalise_operator_email(env["PLAK_OPERATOR_EMAIL"]) == env["PLAK_OPERATOR_EMAIL"]
 
 
 @pytest.mark.skipif(

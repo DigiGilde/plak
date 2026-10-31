@@ -218,6 +218,10 @@ deployments:
           # they thereby get in without a member record. Different per
           # environment.
           PLAK_BOOTSTRAP_ADMIN_SUB: "vul-in"
+          # Who runs this installation and how to reach them, shown on the
+          # public privacy and accessibility pages.
+          PLAK_OPERATOR_NAME: "Digi Gilde"
+          PLAK_OPERATOR_EMAIL: "digigilde@rijksoverheid.nl"
         # The secrets are NOT here. Set them per deployment with
         # `zadctl env` (AGE-encrypted in this file as user-env-vars):
         #   PLAK_SESSION_SECRET   at least 32 bytes

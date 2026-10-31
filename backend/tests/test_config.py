@@ -333,6 +333,79 @@ def test_content_host_is_the_hostname_of_the_content_origin(monkeypatch, url, ho
     assert load_settings().content_host == host
 
 
+def test_operator_is_not_configured_by_default(monkeypatch):
+    _set_required_env(monkeypatch)
+    settings = load_settings()
+    assert settings.operator_name == ""
+    assert settings.operator_email == ""
+
+
+def test_operator_name_and_email_are_read_and_stripped(monkeypatch):
+    _set_required_env(
+        monkeypatch,
+        PLAK_OPERATOR_NAME="  Digi Gilde \t",
+        PLAK_OPERATOR_EMAIL=" digigilde@rijksoverheid.nl\n",
+    )
+    settings = load_settings()
+    assert settings.operator_name == "Digi Gilde"
+    assert settings.operator_email == "digigilde@rijksoverheid.nl"
+
+
+@pytest.mark.parametrize("value", ["", "   ", "\t\n"])
+def test_operator_email_empty_after_stripping_is_not_configured(monkeypatch, value):
+    _set_required_env(monkeypatch, PLAK_OPERATOR_EMAIL=value)
+    assert load_settings().operator_email == ""
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "digigilde@rijksoverheid.nl",
+        "Digi.Gilde+plak@Rijksoverheid.NL",
+        "beheer@localhost",
+        "a" * 64 + "@" + "b" * 186 + ".nl",
+    ],
+)
+def test_operator_email_plain_address_accepted(monkeypatch, value):
+    _set_required_env(monkeypatch, PLAK_OPERATOR_EMAIL=value)
+    assert load_settings().operator_email == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "digigilde",
+        "@rijksoverheid.nl",
+        "digigilde@",
+        "digi@gilde@rijksoverheid.nl",
+        "digi gilde@rijksoverheid.nl",
+        "digigilde@rijksoverheid.nl\nBcc: iemand@example.org",
+        "digigilde@rijks\toverheid.nl",
+        "digigilde\u00a0@rijksoverheid.nl",
+        "\u202edigigilde@rijksoverheid.nl",
+        "digi\x07gilde@rijksoverheid.nl",
+        "<digigilde@rijksoverheid.nl>",
+        "Digi Gilde <digigilde@rijksoverheid.nl>",
+        '"digi gilde"@rijksoverheid.nl',
+        "digigilde@rijksoverheid.nl,iemand@example.org",
+        "digigilde@rijksoverheid.nl;iemand@example.org",
+        "digigilde@rijksoverheid.nl?subject=hoi",
+        "digigilde@rijksoverheid.nl&cc=iemand@example.org",
+        "digigilde@rijksoverheid.nl#x",
+        "digi%40gilde@rijksoverheid.nl",
+        "mailto:digigilde@rijksoverheid.nl",
+        "a" * 64 + "@" + "b" * 187 + ".nl",
+    ],
+)
+def test_operator_email_that_is_not_a_plain_address_refused(monkeypatch, value):
+    # The SPA puts the address in a mailto: link: anything that would end,
+    # extend or disguise that link stops the app at startup.
+    _set_required_env(monkeypatch, PLAK_OPERATOR_EMAIL=value)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_OPERATOR_EMAIL" in str(excinfo.value)
+
+
 def test_production_full_configured_loads(monkeypatch):
     _set_required_env(
         monkeypatch,

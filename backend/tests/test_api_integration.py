@@ -493,3 +493,19 @@ async def test_the_cli_login_runs_through_the_full_stack(app: FastAPI, client: h
 async def test_the_cli_login_start_refuses_a_content_origin(client: httpx.AsyncClient) -> None:
     resp = await client.post(f"{BASE}/cli/device-authorizations", json={}, headers={"Origin": OTHER_ORIGIN})
     assert resp.status_code == 403
+
+
+async def test_the_operator_is_public_through_the_full_stack(client: httpx.AsyncClient) -> None:
+    """No session, no CSRF, no cookie: the public privacy page reads it as is."""
+    resp = await client.get(f"{BASE}/operator")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"name": None, "email": None}
+    assert "set-cookie" not in resp.headers
+
+
+async def test_the_operator_refuses_a_content_origin(client: httpx.AsyncClient) -> None:
+    resp = await client.get(f"{BASE}/operator", headers={"Origin": OTHER_ORIGIN})
+
+    assert resp.status_code == 403
+    assert resp.json()["code"] == REASON_OTHER_ORIGIN

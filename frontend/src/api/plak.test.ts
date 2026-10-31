@@ -43,6 +43,14 @@ describe('platformStorage', () => {
   });
 });
 
+describe('operator', () => {
+  it('says who runs this installation, also without a session', async () => {
+    backend.data.loggedInMemberId = null;
+
+    expect(await plak.operator()).toEqual({ name: 'Digi Gilde', email: 'digigilde@rijksoverheid.nl' });
+  });
+});
+
 describe('me (session)', () => {
   it('returns the logged-in member, with the content origin for shared links', async () => {
     const loggedIn = await plak.me();

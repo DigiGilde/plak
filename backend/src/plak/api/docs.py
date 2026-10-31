@@ -58,6 +58,7 @@ TAG_AUDIT = "Audit log"
 TAG_CI = "Publishing from CI"
 TAG_CLI = "CLI login"
 TAG_PLATFORM = "Platform administration"
+TAG_INSTALLATION = "Installation"
 
 API_DESCRIPTION = """
 Plak publishes static sites per group and site, with a preview for every pull request.
@@ -168,6 +169,10 @@ OPENAPI_TAGS: list[dict[str, str]] = [
             "Reading the audit log: who did what, when, and with what outcome. Platform administrators "
             "only."
         ),
+    },
+    {
+        "name": TAG_INSTALLATION,
+        "description": "The organisation that runs this installation of Plak, and how to reach it.",
     },
 ]
 
