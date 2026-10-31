@@ -11,12 +11,7 @@ import App from './App.vue';
 import { useDesignSystemText } from './i18n/designSystem';
 import router from './router';
 
-async function start(): Promise<void> {
-  if (import.meta.env.VITE_MOCK_API === 'true') {
-    const { installMock } = await import('./api/mock');
-    installMock();
-  }
-
+function start(): void {
   // Before the first mount, so no component is ever rendered in Dutch first.
   useDesignSystemText();
 
@@ -26,4 +21,4 @@ async function start(): Promise<void> {
   app.mount('#app');
 }
 
-void start();
+start();

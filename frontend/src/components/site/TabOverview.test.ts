@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '@/api/mock';
+import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '../../../tests/mock-api';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import TabOverview from './TabOverview.vue';
 import { serverErrorFetch, untilIdle, fireDetailEvent } from './testHelpers';

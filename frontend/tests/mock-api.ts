@@ -1,13 +1,11 @@
 /**
- * In-memory mock of the session API (`/-/api/v1`), for use in vitest and
- * (via `VITE_MOCK_API=true`, see main.ts) in `npm run dev` as long as the
- * real backend is not there yet. Every call goes through `fetch` itself (no
- * serialisation boundary), so multipart bodies stay real `FormData`
- * instances.
+ * In-memory fake of the session API (`/-/api/v1`) for the vitest suite.
+ * Every call goes through `fetch` itself (no serialisation boundary), so
+ * multipart bodies stay real `FormData` instances.
  *
  * `makeMockBackend()` returns an isolated instance with its own state, so
- * tests cannot affect each other. `installMock()` replaces
- * `globalThis.fetch` and returns a restore function.
+ * tests cannot affect each other; a test hands its `fetch` to
+ * `vi.stubGlobal('fetch', ...)`.
  */
 import type {
   CliSession,
@@ -37,7 +35,7 @@ import type {
   Volume,
   Access,
   AccessBase,
-} from './types';
+} from '../src/api/types';
 
 /** Content of the mock's `/me`, matching a real CI setup for local dev. */
 const MOCK_CI_FORGEJO_HOSTS = ['https://code.overheid.nl'];
@@ -1583,18 +1581,4 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
   }
 
   return { fetch: mockFetch as typeof fetch, data };
-}
-
-/**
- * Replaces `globalThis.fetch` with the mock and returns a restore function.
- * Meant for `npm run dev` behind `VITE_MOCK_API`; vitest tests normally use
- * `vi.stubGlobal('fetch', makeMockBackend().fetch)` instead of this function,
- * so that `vi.unstubAllGlobals()` already takes care of the restore.
- */
-export function installMock(backend: MockBackend = makeMockBackend()): () => void {
-  const original = globalThis.fetch;
-  globalThis.fetch = backend.fetch;
-  return () => {
-    globalThis.fetch = original;
-  };
 }

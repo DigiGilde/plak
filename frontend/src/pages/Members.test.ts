@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
 import { expectNoAxeViolations } from '../../tests/a11y';
-import { makeMockBackend, type MockBackend } from '../api/mock';
+import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
 import { _resetBreadcrumbs, breadcrumbsFor } from '../composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
 import Members from './Members.vue';
