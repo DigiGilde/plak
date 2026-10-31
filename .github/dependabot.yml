@@ -14,9 +14,10 @@
 # group of their own per ecosystem as well.
 #
 # What only feeds CI and the containers (GitHub Actions, pre-commit hooks,
-# base images) shares one pull request across the three ecosystems: the
-# multi-ecosystem group `tooling`. The schedule lives on the group, and
-# `commit-message` may only be set there; on an entry it is a config error.
+# base images, the dev stack's images) shares one pull request across the
+# four ecosystems: the multi-ecosystem group `tooling`. The schedule lives
+# on the group, and `commit-message` may only be set there; on an entry it
+# is a config error.
 #
 # And a cooldown: a new version only counts once it is a week old, majors
 # only after a month. Broken upstream then surfaces somewhere else first,
@@ -196,3 +197,18 @@ updates:
     # docker only knows default-days, no semver variants.
     cooldown:
       default-days: 7
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /dev
+      - /e2e
+    multi-ecosystem-group: tooling
+    patterns:
+      - "*"
+    # docker-compose only knows default-days, no semver variants.
+    cooldown:
+      default-days: 7
+    ignore:
+      # PostgreSQL 16 is what the backend tests run against (testcontainers).
+      - dependency-name: library/postgres
+        update-types: ["version-update:semver-major"]
