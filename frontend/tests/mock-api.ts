@@ -325,6 +325,7 @@ function defaultData(): MockData {
         isBootstrap: true,
         createdAt: '2026-01-08T09:12:00Z',
         lastLoginAt: lastPublishedAt,
+        lastActiveAt: lastPublishedAt,
       },
       {
         id: 'lid-2',
@@ -335,6 +336,7 @@ function defaultData(): MockData {
         status: 'deactivated',
         createdAt: '2026-09-15T14:40:00Z',
         lastLoginAt: null,
+        lastActiveAt: null,
       },
       // Three more so the three sort orders on the platform page actually
       // differ from each other in dev: alphabetically, by creation and by last
@@ -348,6 +350,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-03-02T11:05:00Z',
         lastLoginAt: '2026-09-16T08:30:00Z',
+        lastActiveAt: '2026-09-16T08:30:00Z',
       },
       {
         id: 'lid-4',
@@ -358,6 +361,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-02-19T16:20:00Z',
         lastLoginAt: '2026-06-01T12:00:00Z',
+        lastActiveAt: '2026-06-01T12:00:00Z',
       },
       {
         id: 'lid-5',
@@ -368,6 +372,7 @@ function defaultData(): MockData {
         status: 'deactivated',
         createdAt: '2026-01-05T08:00:00Z',
         lastLoginAt: '2026-04-11T09:45:00Z',
+        lastActiveAt: '2026-04-11T09:45:00Z',
       },
       // Four accounts without a role anywhere, so typing a few letters in the
       // toevoegveld actually turns up someone to pick. Three of them answer to
@@ -382,6 +387,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-04-02T10:15:00Z',
         lastLoginAt: '2026-09-10T11:20:00Z',
+        lastActiveAt: '2026-09-10T11:20:00Z',
       },
       {
         id: 'lid-7',
@@ -392,6 +398,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-05-14T13:40:00Z',
         lastLoginAt: '2026-08-28T15:05:00Z',
+        lastActiveAt: '2026-08-28T15:05:00Z',
       },
       {
         id: 'lid-8',
@@ -402,6 +409,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-06-21T09:30:00Z',
         lastLoginAt: '2026-09-01T07:55:00Z',
+        lastActiveAt: '2026-09-01T07:55:00Z',
       },
       {
         id: 'lid-9',
@@ -412,6 +420,7 @@ function defaultData(): MockData {
         status: 'active',
         createdAt: '2026-07-08T16:00:00Z',
         lastLoginAt: '2026-07-30T10:10:00Z',
+        lastActiveAt: '2026-07-30T10:10:00Z',
       },
     ],
     groups: [

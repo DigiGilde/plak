@@ -435,6 +435,17 @@ async def sessions_of(db: AsyncSession, member_id: uuid.UUID, *, now: datetime |
     return list(rows)
 
 
+async def last_use_per_member(db: AsyncSession, member_ids: list[uuid.UUID]) -> dict[uuid.UUID, datetime]:
+    """When each of these members last used a CLI session that still exists;
+    a member without such a use is left out."""
+    rows = await db.execute(
+        select(CliSession.member_id, func.max(CliSession.last_used_at))
+        .where(CliSession.member_id.in_(member_ids), CliSession.last_used_at.is_not(None))
+        .group_by(CliSession.member_id)
+    )
+    return dict(rows.all())
+
+
 async def delete_expired(db: AsyncSession, now: datetime) -> tuple[int, int]:
     """Sweeps expired device authorizations and CLI sessions; returns both counts."""
     authorizations = await db.execute(

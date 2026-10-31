@@ -8,6 +8,7 @@ import { expectNoAxeViolations } from '../../tests/a11y';
 import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
 import { _resetBreadcrumbs, breadcrumbsFor } from '../composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
+import { formatTimestamp } from '../format';
 import Members from './Members.vue';
 
 let backend: MockBackend;
@@ -263,11 +264,11 @@ describe('Platform management (filled)', () => {
     expect(renderedNames()[0]).toBe('Karel Oud');
     expect(ariaSortOf('Aangemaakt')).toBe('ascending');
 
-    await sortOn('Laatste activiteit');
-    // Whoever never logged in has no activity and sinks to the bottom,
+    await sortOn('Laatst actief');
+    // Whoever was never active has no activity and sinks to the bottom,
     // whichever way the column is sorted.
     expect(renderedNames().at(-1)).toBe('Wim Weg');
-    await sortOn('Laatste activiteit');
+    await sortOn('Laatst actief');
     expect(renderedNames().at(-1)).toBe('Wim Weg');
   });
 
@@ -300,6 +301,7 @@ describe('Platform management (filled)', () => {
         status: 'active',
         createdAt: '2026-08-01T00:00:00Z',
         lastLoginAt: null,
+        lastActiveAt: null,
       },
       {
         id: 'lid-11',
@@ -310,6 +312,7 @@ describe('Platform management (filled)', () => {
         status: 'active',
         createdAt: '2026-08-02T00:00:00Z',
         lastLoginAt: null,
+        lastActiveAt: null,
       },
     );
     const app = await mountComponent();
@@ -327,15 +330,28 @@ describe('Platform management (filled)', () => {
 
   it('keeps two members with the same date next to each other rather than looping', async () => {
     const same = '2026-05-01T00:00:00Z';
-    backend.data.members.find((l) => l.id === 'lid-3')!.lastLoginAt = same;
-    backend.data.members.find((l) => l.id === 'lid-4')!.lastLoginAt = same;
+    backend.data.members.find((l) => l.id === 'lid-3')!.lastActiveAt = same;
+    backend.data.members.find((l) => l.id === 'lid-4')!.lastActiveAt = same;
 
     await mountComponent();
-    await sortOn('Laatste activiteit');
+    await sortOn('Laatst actief');
 
     const names = renderedNames();
     expect(names).toContain('Ada Vermeer');
     expect(names).toContain('Zoë de Wit');
+  });
+
+  it('shows and sorts on the last activity, which a CLI user has without signing in', async () => {
+    const ada = backend.data.members.find((l) => l.id === 'lid-3')!;
+    ada.lastLoginAt = '2026-01-05T09:00:00Z';
+    ada.lastActiveAt = '2026-12-30T09:00:00Z';
+
+    await mountComponent();
+    await sortOn('Laatst actief');
+
+    expect(renderedNames()[0]).toBe('Ada Vermeer');
+    expect(html()).toContain(formatTimestamp('2026-12-30T09:00:00Z'));
+    expect(html()).not.toContain(formatTimestamp('2026-01-05T09:00:00Z'));
   });
 
   it('toggles a column back to descending on a second click, starting from the default ascending', async () => {

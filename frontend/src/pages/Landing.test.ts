@@ -44,6 +44,7 @@ function meFetch(status: number): typeof fetch {
             status: 'active',
             createdAt: '2026-01-01T00:00:00Z',
             lastLoginAt: null,
+            lastActiveAt: null,
             contentBaseUrl: MOCK_CONTENT_BASE,
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },

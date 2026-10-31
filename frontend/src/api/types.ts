@@ -53,6 +53,8 @@ export interface Member {
   isBootstrap?: boolean;
   createdAt: Timestamp;
   lastLoginAt: Timestamp | null;
+  /** The later of the last sign-in and the last use of a CLI session. */
+  lastActiveAt: Timestamp | null;
 }
 
 /**

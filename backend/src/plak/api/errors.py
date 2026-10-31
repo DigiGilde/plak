@@ -176,10 +176,13 @@ class ApiError(Exception):
         *,
         params: Mapping[str, object] | None = None,
         headers: dict[str, str] | None = None,
+        reason: str | None = None,
     ) -> None:
         self.status = status
         self.message = Msg(key, dict(params or {}))
-        self.reason = messages.code_of(key)
+        self.code = messages.code_of(key)
+        # What the audit log records; the client still sees `code`.
+        self.reason = reason or self.code
         self.headers = headers or {}
         # English in the exception itself, so a traceback or a log line reads
         # as the developer-facing half of the same message.
@@ -280,7 +283,7 @@ def register_error_handlers(app: FastAPI) -> None:
             error.status,
             messages.render(locale, error.message),
             locale=locale,
-            code=error.reason,
+            code=error.code,
             headers=error.headers,
         )
 
