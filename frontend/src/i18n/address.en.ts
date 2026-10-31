@@ -39,8 +39,7 @@ export const addressEn: Record<keyof typeof addressNl, string> = {
   // -- The field ----------------------------------------------------------------
   'address.field.label': 'New address',
   'address.field.required': 'An address is needed',
-  'address.field.rule':
-    'An address contains only lowercase letters, digits and hyphens, does not start or end with a hyphen and is at most 63 characters long',
+  'address.field.hyphen': 'An address does not start or end with a hyphen',
   'address.field.differs': 'The new address differs from the current address',
   'address.field.preview': 'The new address will be {address}',
   'address.placeholder.site': '<site>',
