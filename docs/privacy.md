@@ -189,13 +189,16 @@ Open items, to be completed by the controller before go-live:
   (verwerkersovereenkomst, art. 28).
 - Registration of this processing in the controller's processing register
   ("verwerkingsregister").
-- A privacy statement (privacyverklaring, art. 13) reachable from the login
-  and access screens, covering the controller, FG contact, purposes and
-  legal basis, categories of personal data, recipients/processors, retention
-  terms, data subject rights and the right to complain to the Autoriteit
-  Persoonsgegevens. Plak does not currently serve one; `/admin/-/privacy` is
-  listed as a platform page in `README.md` but its content was not verified
-  as part of this document.
+- A privacy statement (privacyverklaring, art. 13) is served by the admin
+  SPA at `/-/privacy` (texts in `frontend/src/i18n/pages.nl.ts` and
+  `pages.en.ts`, keys `page.privacy.*`), reachable without logging in. It
+  is the standard statement of the software: what Plak processes, why, for
+  how long and who sees it, the data subject rights and the right to
+  complain to the Autoriteit Persoonsgegevens. It names the operator and its
+  address from `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL`, and otherwise
+  "the organisation that runs this installation". What only the controller
+  can say, such as the legal basis, the FG and the hosting, the organisation
+  that runs an installation adds itself. No FG has reviewed it.
 
 ## Risks
 
@@ -236,8 +239,8 @@ to Plak's actual design.
    the categories of personal data (art. 30(1)(c)): labels that members choose,
    such as group names and site titles, may contain a person's name; they stand
    on the group or site and, as previous values, in the audit log.
-7. Publish a privacy statement (art. 13) reachable from the login and access
-   screens.
+7. Complete the privacy statement served at `/-/privacy` with the legal
+   basis, the FG and the hosting, and have the FG review it.
 8. Define and document a self-service or FG-mediated process for access,
    rectification and erasure requests, including how a member row is
    actually deleted (not only deactivated).

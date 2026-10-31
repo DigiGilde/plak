@@ -21,6 +21,7 @@ import type {
   MemberLanguage,
   MemberSuggestion,
   MyGroupRole,
+  Operator,
   MySiteRole,
   Overview,
   PlatformRole,
@@ -274,6 +275,8 @@ interface MockData {
   cliSessions: CliSession[];
   /** The interface language on the logged-in account; null is "follow my browser". */
   myLanguage: MemberLanguage | null;
+  /** What `GET /operator` answers: who runs this installation. */
+  operator: Operator;
 }
 
 /** A device-flow authorization pending approval, as the CLI creates it. */
@@ -598,6 +601,7 @@ function defaultData(): MockData {
     storage: { usedBytes: 77594624, maxBytes: 524288000 },
     defaultLiveVersionsKept: 5,
     myLanguage: null,
+    operator: { name: 'Digi Gilde', email: 'digigilde@rijksoverheid.nl' },
   };
 }
 
@@ -849,6 +853,11 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
 
     const insufficientRole = (): Response =>
       problem(403, 'Geen toegang', 'Hiervoor heb je minimaal de rol beheerder nodig.', 'INSUFFICIENT_ROLE');
+
+    // GET /operator
+    if (method === 'GET' && rest.length === 1 && rest[0] === 'operator') {
+      return json(200, data.operator);
+    }
 
     // GET /me
     if (method === 'GET' && rest.length === 1 && rest[0] === 'me') {

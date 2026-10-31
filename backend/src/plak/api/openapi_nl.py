@@ -201,6 +201,10 @@ NL: Final[dict[str, str]] = {
     "Reading the audit log: who did what, when, and with what outcome. Platform administrators only.": (
         "Het auditlog teruglezen: wie deed wat, wanneer en met welke uitkomst. Alleen voor platformbeheerders."
     ),
+    "Installation": "Installatie",
+    "The organisation that runs this installation of Plak, and how to reach it.": (
+        "De organisatie die deze installatie van Plak draait, en hoe je die bereikt."
+    ),
     "Publish a bundle, live or as a preview": "Een bundel publiceren, live of als preview",
     (
         "The endpoint CI uses. Send the built site as `multipart/form-data` with the `file` field; without the "
@@ -638,6 +642,33 @@ NL: Final[dict[str, str]] = {
     ),
     "Forbidden. The member behind this CLI session is no longer active (`MEMBER_NOT_ACTIVE`).": (
         "Geen toegang. Het lid achter deze CLI-sessie is niet (meer) actief (`MEMBER_NOT_ACTIVE`)."
+    ),
+    "Who runs this installation": "Wie deze installatie draait",
+    (
+        "The organisation that runs this installation of Plak and the e-mail address at which people reach it about "
+        "privacy, accessibility and other questions, as set in `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL`. The "
+        "public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back "
+        "as `null`.\n"
+        "\n"
+        "**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and sets no "
+        "cookie."
+    ): (
+        "De organisatie die deze installatie van Plak draait en het e-mailadres waarop mensen haar bereiken over "
+        "privacy, toegankelijkheid en andere vragen, zoals ingesteld in `PLAK_OPERATOR_NAME` en "
+        "`PLAK_OPERATOR_EMAIL`. De openbare privacy- en toegankelijkheidspagina's van het beheer tonen ze. Een "
+        "instelling die leeg is, komt terug als `null`.\n"
+        "\n"
+        "**Mag:** iedereen, zonder authenticatie. Er is geen sessie en geen CSRF-header voor nodig, en er wordt geen "
+        "cookie gezet."
+    ),
+    "The name and e-mail address of the organisation, each `null` if not configured.": (
+        "De naam en het e-mailadres van de organisatie, elk `null` als het niet is ingesteld."
+    ),
+    "Forbidden. The request comes from an origin other than the admin host (`ORIGIN_REFUSED`).": (
+        "Geen toegang. Het verzoek komt van een andere origin dan de beheer-host (`ORIGIN_REFUSED`)."
+    ),
+    "Too many requests. Too many requests from this address (`TOO_MANY_REQUESTS`). Try again later.": (
+        "Te veel verzoeken. Te veel aanvragen vanaf dit adres (`TOO_MANY_REQUESTS`). Probeer het later opnieuw."
     ),
     "The signed-in member": "Het ingelogde lid",
     (
@@ -2969,6 +3000,25 @@ NL: Final[dict[str, str]] = {
     ),
     "A site on which the signed-in member has a direct site role.": (
         "Een site waarop het ingelogde lid een eigen siterol heeft."
+    ),
+    (
+        "Name of the organisation that runs this installation, as people should read it (`PLAK_OPERATOR_NAME`), or "
+        "`null` if it is not configured."
+    ): (
+        "Naam van de organisatie die deze installatie draait, zoals mensen die moeten lezen "
+        "(`PLAK_OPERATOR_NAME`), of `null` als die niet is ingesteld."
+    ),
+    (
+        "E-mail address at which people reach that organisation about privacy, accessibility and other questions "
+        "(`PLAK_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address without a display name, "
+        "fit for a `mailto:` link."
+    ): (
+        "E-mailadres waarop mensen die organisatie bereiken over privacy, toegankelijkheid en andere vragen "
+        "(`PLAK_OPERATOR_EMAIL`), of `null` als dat niet is ingesteld. Altijd een kaal adres zonder weergavenaam, "
+        "geschikt voor een `mailto:`-link."
+    ),
+    "Who runs this installation of Plak, and how to reach them.": (
+        "Wie deze installatie van Plak draait, en hoe je die bereikt."
     ),
     (
         "Groups this member may see, sorted by slug: where they have a group role, and where they have a role on a "

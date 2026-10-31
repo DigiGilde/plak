@@ -364,6 +364,14 @@ export interface Volume {
   maxDeployBytes: number;
 }
 
+/** Response of `GET /operator`: who runs this installation, for everyone to read. */
+export interface Operator {
+  /** `PLAK_OPERATOR_NAME`; null when the installation names none. */
+  name: string | null;
+  /** `PLAK_OPERATOR_EMAIL`; null when the installation names none. */
+  email: string | null;
+}
+
 export interface Overview {
   groups: OverviewGroup[];
 }

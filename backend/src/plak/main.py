@@ -14,7 +14,8 @@ front of it is dumb.
 Routers in order: deploy API (bearer or session, with origin checking through
 `require_admin_origin`: it lets CI through without Origin/Sec-Fetch-Site but
 turns away a same-site content origin), the CLI login API (the
-same origin check), session API for the SPA
+same origin check), the public operator endpoint (the same origin check),
+session API for the SPA
 (origin checking registered in the router itself), API docs, platform and
 auth routes (`platform.pages`), and the serving router last because it is a
 content catch-all (`/{group}/{site}/{rest:path}`) that would otherwise
@@ -44,6 +45,7 @@ from plak.api.cli import router as cli_router
 from plak.api.deploys import BearerOutsideDeploysMiddleware
 from plak.api.deploys import router as deploys_router
 from plak.api.errors import register_error_handlers
+from plak.api.operator import router as operator_router
 from plak.api.origin_guard import normalise_origin, require_admin_origin
 from plak.audit.log import AuditLog
 from plak.auth.oidc import OidcClient
@@ -269,6 +271,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # to the session branch of these mutating endpoints.
     app.include_router(deploys_router, dependencies=[Depends(require_admin_origin)])
     app.include_router(cli_router, dependencies=[Depends(require_admin_origin)])
+    app.include_router(operator_router, dependencies=[Depends(require_admin_origin)])
     app.include_router(make_admin_router())
     app.include_router(docs.router)
 

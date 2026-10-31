@@ -19,6 +19,7 @@ import type {
   Member,
   MemberLanguage,
   MemberSuggestion,
+  Operator,
   Overview,
   PlatformRole,
   Preview,
@@ -45,6 +46,11 @@ const BASE = '/-/api/v1';
  */
 export function me(): Promise<Me> {
   return request<Me>(`${BASE}/me`);
+}
+
+/** Who runs this installation, for the privacy and accessibility pages. Needs no session. */
+export function operator(): Promise<Operator> {
+  return request<Operator>(`${BASE}/operator`);
 }
 
 /**

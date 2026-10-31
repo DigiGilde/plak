@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import binascii
 import ipaddress
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -27,6 +28,12 @@ AUDIT_IP_KEY_BYTES = 32
 
 OIDC_CLIENT_AUTH_METHODS = ("private_key_jwt", "client_secret_post", "client_secret_basic")
 OIDC_DISCOVERY_SUFFIX = "/.well-known/openid-configuration"
+
+OPERATOR_EMAIL_MAX_LENGTH = 254
+# Besides whitespace and control or format characters: what would end the
+# address inside the mailto: link the SPA builds from it, or add a second
+# recipient or a header to that link.
+_OPERATOR_EMAIL_FORBIDDEN = frozenset('<>"(),;:[]\\?&#%')
 
 
 class ConfigurationError(RuntimeError):
@@ -69,6 +76,28 @@ def is_loopback_host(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
+
+
+def normalise_operator_email(value: str) -> str:
+    """A plain address `local@domain` without surrounding whitespace. Empty
+    (not configured) stays empty."""
+    address = value.strip()
+    if not address:
+        return ""
+    local, _, domain = address.partition("@")
+    if (
+        len(address) > OPERATOR_EMAIL_MAX_LENGTH
+        or not local
+        or not domain
+        or "@" in domain
+        or any(
+            char in _OPERATOR_EMAIL_FORBIDDEN or unicodedata.category(char)[0] in ("C", "Z") for char in address
+        )
+    ):
+        raise ValueError(
+            f"PLAK_OPERATOR_EMAIL: {address!r} is not a plain e-mail address such as name@example.org"
+        )
+    return address
 
 
 def _decode_audit_ip_key(field_name: str, value: str) -> str:
@@ -179,6 +208,13 @@ class Settings(BaseSettings):
     # that claim only selects from this list.
     ci_forgejo_hosts: str = "https://code.overheid.nl"
 
+    # The organisation that runs this installation, as people should read its
+    # name, and the address where they reach it about privacy, accessibility
+    # and questions. The public privacy and accessibility pages show both
+    # (GET /-/api/v1/operator). Empty means not configured.
+    operator_name: str = ""
+    operator_email: str = ""
+
     ratelimit_login_max: int = Field(default=10)
     ratelimit_login_window_s: int = Field(default=60)
     ratelimit_login_global_max: int = Field(default=1000)
@@ -202,6 +238,16 @@ class Settings(BaseSettings):
             normalise_https_base_url(entry, "PLAK_CI_FORGEJO_HOSTS") for entry in value.split(",") if entry.strip()
         ]
         return ",".join(dict.fromkeys(hosts))
+
+    @field_validator("operator_name")
+    @classmethod
+    def _operator_name_stripped(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("operator_email")
+    @classmethod
+    def _operator_email_valid(cls, value: str) -> str:
+        return normalise_operator_email(value)
 
     @property
     def forgejo_hosts(self) -> tuple[str, ...]:

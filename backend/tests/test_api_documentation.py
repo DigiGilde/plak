@@ -240,17 +240,19 @@ class TestErrorContract:
         assert "HTTPValidationError" not in json.dumps(schema)
 
     # The two halves of `plak login` a CLI reaches before it has any credential,
-    # and the logout, which answers 204 for any token so it is no oracle.
+    # the logout, which answers 204 for any token so it is no oracle, and who
+    # runs the installation, which the public privacy page shows.
     ANONYMOUS = frozenset(
         {
             "POST /-/api/v1/cli/device-authorizations",
             "POST /-/api/v1/cli/tokens",
             "DELETE /-/api/v1/cli/session",
+            "GET /-/api/v1/operator",
         }
     )
 
     def test_every_endpoint_documents_the_401(self, schema) -> None:
-        """No endpoint in this API is reachable anonymously, except the start of the CLI login."""
+        """No endpoint in this API is reachable anonymously, except the start of the CLI login and the operator."""
         without = {
             f"{m.upper()} {p}" for m, p, op in _operations(schema) if "401" not in op.get("responses", {})
         }
@@ -386,6 +388,9 @@ class TestSecurity:
     def test_the_cli_login_start_and_token_endpoint_need_no_authentication(self, schema) -> None:
         assert schema["paths"]["/-/api/v1/cli/device-authorizations"]["post"]["security"] == [{}]
         assert schema["paths"]["/-/api/v1/cli/tokens"]["post"]["security"] == [{}]
+
+    def test_the_operator_endpoint_needs_no_authentication(self, schema) -> None:
+        assert schema["paths"]["/-/api/v1/operator"]["get"]["security"] == [{}]
 
     def test_a_deploy_endpoint_accepts_besides_the_session(self, schema) -> None:
         requirements = schema["paths"][self.DEPLOY]["post"]["security"]

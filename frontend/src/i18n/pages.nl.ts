@@ -67,53 +67,120 @@ export const pagesNl = {
     'De naam komt van plakkaat: een aankondiging die je in de buurt ophangt zodat anderen hem kunnen zien. Een plakkaat kan in de openbare ruimte hangen, zichtbaar voor iedereen, of in een afgesloten ruimte waar alleen een kleine groep komt. Dat is precies wat Plak doet.',
 
   // -- Privacy --------------------------------------------------------------
-  'page.privacy.title': 'Privacy',
+  'page.privacy.title':
+    'Privacy',
   'page.privacy.intro':
-    'Plak verwerkt persoonsgegevens om toegang tot gepubliceerde sites te regelen: een e-mailadres bij inloggen via je organisatie, en eventueel een e-mailadres van een genodigde bij toegang op uitnodiging.',
-  'page.privacy.data.heading': 'Welke gegevens',
-  'page.privacy.data.account': 'Accountgegevens: naam, e-mailadres en organisatie, via inloggen.',
+    'Deze verklaring beschrijft hoe deze installatie van Plak omgaat met persoonsgegevens en welke rechten je hebt, volgens de Algemene verordening gegevensbescherming (AVG). Plak verwerkt persoonsgegevens om toegang tot gepubliceerde sites te regelen: een e-mailadres bij inloggen via je organisatie, en eventueel een e-mailadres van een genodigde bij toegang op uitnodiging.',
+  'page.privacy.standard':
+    'Dit is de standaardverklaring van de software Plak. De organisatie die deze installatie beheert, vult haar aan met wat alleen die organisatie kan zeggen, zoals de grondslag en de Functionaris Gegevensbescherming.',
+  'page.privacy.controller.heading':
+    'Wie is verantwoordelijk',
+  'page.privacy.controller.named':
+    'Deze installatie van Plak wordt beheerd door {name}. Die organisatie, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
+  'page.privacy.controller.unnamed':
+    'De organisatie die deze installatie van Plak beheert, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
+  'page.privacy.data.heading':
+    'Welke gegevens',
+  'page.privacy.data.account':
+    'Accountgegevens: naam en e-mailadres, via inloggen, en je rol in een groep of site.',
+  'page.privacy.data.invitees':
+    'Genodigden: het e-mailadres of SSO-id van wie een beheerder op de lijst van een site zet, ook als die persoon nooit inlogt.',
   'page.privacy.data.audit':
     'Auditgegevens: wie wat wanneer publiceerde of wijzigde, en wie wanneer inlogde. Hernoem je een groep of site, dan staat ook de vorige naam of titel in die regel.',
   'page.privacy.data.visits':
     "Bezoekgegevens: welke pagina's van een afgeschermde site je bekeek. Van openbare sites wordt niets bijgehouden.",
-  'page.privacy.retention.heading': 'Bewaartermijn',
+  'page.privacy.data.content':
+    'Gepubliceerde inhoud: kan persoonsgegevens bevatten, maar die zijn van de maker van de site. Plak leest, classificeert of filtert die inhoud niet. De publicerende organisatie is er zelf verantwoordelijk voor.',
+  'page.privacy.purpose.heading':
+    'Doel en grondslag',
+  'page.privacy.purpose.body':
+    'Deze gegevens worden verwerkt om gepubliceerde sites alleen te tonen aan wie ze mag zien, en om het platform veilig te houden en misbruik te kunnen onderzoeken. Welke grondslag uit artikel 6 van de AVG geldt, hangt af van de organisatie die deze installatie beheert.',
+  'page.privacy.processors.heading':
+    'Verwerkers en hosting',
+  'page.privacy.processors.body':
+    'Plak zelf gebruikt geen webstatistieken en deelt geen gegevens met andere partijen. Waar deze installatie draait en via welke inlogdienst je inlogt, bepaalt de organisatie die haar beheert.',
+  'page.privacy.retention.heading':
+    'Bewaartermijn',
   'page.privacy.retention.body':
     'Bezoekgegevens en inlogmomenten worden na 90 dagen verwijderd. Overige auditgegevens, zoals geweigerde toegang en beheerhandelingen, blijven drie jaar bewaard, omdat ze deel kunnen worden van het onderzoek naar een beveiligingsincident. Alleen een platformbeheerder kan ze inzien, en elke inzage wordt zelf vastgelegd, met een verplichte reden die voor elke platformbeheerder leesbaar is. Je naam en e-mailadres staan er niet leesbaar in. Previews en hun toegangsgegevens vervallen automatisch na dertig dagen zonder nieuwe deploy.',
   'page.privacy.retention.ip':
     'Bij elke auditregel hoort ook het IP-adres van waaraf iets gebeurde: een afgekapt netwerk (niet het volledige adres) staat gewoon in het log, even lang bewaard als de regel zelf. Het volledige adres staat er versleuteld naast, even lang bewaard, en alleen een platformbeheerder kan het opvragen, met dezelfde verplichte, vastgelegde reden.',
   'page.privacy.retention.session':
     'Bekijk je afgeschermde content na inloggen met je organisatie, dan bewaart Plak je SSO-id en e-mailadres tot negentig dagen na je laatste keer inloggen. Dat is nodig om een regel in het auditlog bij een persoon te kunnen brengen, bijvoorbeeld bij het onderzoek naar een lek.',
-  'page.privacy.visibility.heading': 'Wie kan wat zien',
+  'page.privacy.visibility.heading':
+    'Wie kan wat zien',
   'page.privacy.visibility.body':
     'Het auditlog is alleen in te zien door een platformbeheerder. In de regels staan jouw naam en e-mailadres niet, maar een pseudoniem: een versleutelde weergave van je SSO-id. Een uitzondering is de vorige naam van een groep of de vorige titel van een site: die tekst staat er leesbaar in. Een platformbeheerder kan opzoeken welk pseudoniem bij een persoon hoort, en omgekeerd wie achter een pseudoniem zit. Dat kan alleen met een opgegeven reden, die zelf wordt vastgelegd, en er geldt een maximum aantal opzoekingen per dag. De beheerder van een site ziet dit alles niet.',
-  'page.privacy.rights.heading': 'Je rechten',
-  // Split around the mailto link in the sentence: the address itself is the
-  // link text, so the two halves sit on either side of the anchor.
-  'page.privacy.rights.bodyBeforeEmail':
-    'Je mag opvragen welke gegevens Plak over je verwerkt, ze laten corrigeren, en bezwaar maken tegen de verwerking. Verwijderen kan niet altijd: het auditlog ligt vast zolang de bewaartermijn loopt, want het dient om misbruik te kunnen onderzoeken. Stel je vraag via',
-  'page.privacy.rights.bodyAfterEmail':
-    '; je krijgt binnen tien werkdagen een reactie. Ben je het niet eens met wat wij doen, dan kun je een klacht indienen bij de Autoriteit Persoonsgegevens.',
+  'page.privacy.rights.heading':
+    'Je rechten',
+  'page.privacy.rights.body':
+    'Je hebt het recht om je gegevens in te zien, te laten corrigeren of verwijderen, en om bezwaar te maken tegen of beperking te vragen van de verwerking. Verwijderen kan niet altijd: het auditlog ligt vast zolang de bewaartermijn loopt, want het dient om misbruik te kunnen onderzoeken.',
+  'page.privacy.rights.request.before':
+    'Een verzoek of een vraag over deze verklaring stuur je naar ',
+  'page.privacy.rights.request.after':
+    '.',
+  'page.privacy.rights.request.unnamed':
+    'Een verzoek of een vraag over deze verklaring stuur je naar de organisatie die deze installatie beheert.',
+  'page.privacy.complaint.heading':
+    'Een klacht indienen',
+  'page.privacy.complaint.before':
+    'Ben je het niet eens met hoe we met je gegevens omgaan? Je kunt een klacht indienen bij de ',
+  'page.privacy.complaint.link':
+    'Autoriteit Persoonsgegevens',
+  'page.privacy.complaint.after':
+    '.',
 
   // -- Accessibility --------------------------------------------------------
-  'page.accessibility.title': 'Toegankelijkheid',
+  'page.accessibility.title':
+    'Toegankelijkheid',
   'page.accessibility.intro':
-    'Wij vinden het belangrijk dat Plak voor iedereen goed te gebruiken is. Plak streeft naar WCAG 2.1, niveau AA, zoals het Besluit digitale toegankelijkheid overheid (EN 301 549) vraagt. De beheeromgeving is gebouwd met het NLDD Design System, dat toegankelijkheid in de componenten inbouwt: ARIA, focusvolgorde en toetsenbordbediening.',
-  'page.accessibility.works.heading': 'Wat al werkt',
-  'page.accessibility.works.keyboard': 'Alles is met het toetsenbord te bedienen.',
-  'page.accessibility.works.skipLink': 'Elke pagina begint met een link naar de hoofdinhoud.',
-  'page.accessibility.works.colorScheme':
-    'De interface volgt je voorkeur voor een licht of donker scherm.',
-  'page.accessibility.works.checks':
-    'Automatische controles op toegankelijkheid draaien mee bij elke wijziging.',
-  'page.accessibility.todo.heading': 'Wat nog niet af is',
-  'page.accessibility.todo.body':
-    "Plak is een bètaversie en is nog niet onderzocht. Er staat dan ook nog geen verklaring in het landelijke register op toegankelijkheidsverklaring.nl; die volgt zodra Plak in productie gaat. Pagina's die jij of je collega's publiceren, zijn van de makers zelf: Plak controleert de toegankelijkheid daarvan niet.",
-  'page.accessibility.report.heading': 'Een probleem melden',
-  // Same split as the privacy page: the e-mail address is the link text.
+    "Deze verklaring beschrijft in hoeverre de software Plak voldoet aan de toegankelijkheidseisen voor overheidswebsites. De wettelijke norm is WCAG 2.1 niveau AA, via EN 301 549 en verplicht onder het Besluit digitale toegankelijkheid overheid. Het gaat om de beheeromgeving van Plak. Pagina's die jij of je collega's publiceren zijn van de makers zelf, en Plak controleert de toegankelijkheid daarvan niet.",
+  'page.accessibility.standard.before':
+    'Dit is de standaardverklaring van de software Plak en berust op de toetsen van de makers. Een onderzoek door een onafhankelijke partij heeft niet plaatsgevonden. De organisatie die deze installatie beheert, stelt een eigen verklaring op met de invulassistent op ',
+  'page.accessibility.standard.link':
+    'toegankelijkheidsverklaring.nl',
+  'page.accessibility.standard.after':
+    ' en publiceert die in het register daar.',
+  'page.accessibility.status.heading':
+    'Nalevingsstatus',
+  'page.accessibility.status.body':
+    'De toegankelijkheid van Plak is nog niet volledig onderzocht. Er is wel getoetst (zie hieronder), maar er ligt nog geen volledig, gedocumenteerd onderzoek tegen alle succescriteria van WCAG 2.1 AA. In het model van DigiToegankelijk is dat status C.',
+  'page.accessibility.tested.heading':
+    'Hoe dit getoetst is',
+  'page.accessibility.tested.components':
+    'De beheeromgeving is opgebouwd uit de componenten van het NLDD Designsysteem. Die leveren het toetsenbordgedrag, de focusindicatie, de kleurcontrasten en de ARIA-kenmerken zelf mee. Elke pagina begint met een link naar de hoofdinhoud en de interface volgt je voorkeur voor een licht of donker scherm.',
+  'page.accessibility.tested.automated':
+    'Geautomatiseerd, bij elke wijziging: de toetsen van de beheeromgeving draaien axe-core op de groepspagina, de sitepagina en het profiel, in het Nederlands en het Engels, en een wijziging met een overtreding faalt. De taal van de pagina staat op het html-element, zodat een schermlezer de juiste uitspraak kiest.',
+  'page.accessibility.tested.notDone':
+    'Niet gedaan: een onderzoek door een onafhankelijke partij, een toets met schermlezers per pagina en een volledige doorloop van alle succescriteria van WCAG 2.1 AA.',
+  'page.accessibility.limits.heading':
+    'Bekende beperkingen',
+  'page.accessibility.limits.contrast':
+    'Kleurcontrast wordt niet in de geautomatiseerde toetsen gemeten, omdat de testomgeving geen weergave heeft. Het contrast berust op de kleuren van het designsysteem.',
+  'page.accessibility.limits.pages':
+    'Niet elke pagina heeft een eigen automatische toets, dus de dekking is nog niet volledig.',
+  'page.accessibility.limits.shadow':
+    'De componenten van het designsysteem tekenen onder meer landmarks en lijsten in hun schaduw-DOM. De ondersteuning daarvoor verschilt per schermlezer en is niet apart per schermlezer geverifieerd.',
+  'page.accessibility.limits.published':
+    'Gepubliceerde sites vallen buiten deze verklaring: de makers zijn zelf verantwoordelijk voor de toegankelijkheid van wat ze publiceren.',
+  'page.accessibility.report.heading':
+    'Een toegankelijkheidsprobleem melden',
   'page.accessibility.report.bodyBeforeEmail':
-    'Kom je iets tegen dat niet werkt, of heb je een idee voor verbetering? Neem contact op via',
+    'Kom je iets tegen dat niet werkt, of heb je een vraag over de toegankelijkheid? Laat het ons weten via',
   'page.accessibility.report.bodyAfterEmail':
-    '. Je krijgt binnen tien werkdagen een reactie. Wij werken doorlopend aan het verbeteren van de toegankelijkheid.',
+    '.',
+  'page.accessibility.report.unnamed':
+    'Kom je iets tegen dat niet werkt, of heb je een vraag over de toegankelijkheid? Laat het de organisatie weten die deze installatie beheert.',
+  'page.accessibility.enforcement.heading':
+    'Handhaving',
+  'page.accessibility.enforcement.before':
+    'Ben je niet tevreden met hoe we je melding afhandelen, of krijg je geen reactie? Dan kun je een klacht indienen bij het ',
+  'page.accessibility.enforcement.link':
+    'College voor de Rechten van de Mens',
+  'page.accessibility.enforcement.after':
+    '.',
+  'page.accessibility.prepared':
+    'Deze verklaring is opgesteld op 7 oktober 2026.',
 
   // -- Linking a CLI session (plak login) -----------------------------------
   'page.cliPair.loading': 'Bezig met laden',

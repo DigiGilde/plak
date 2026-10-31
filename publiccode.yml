@@ -11,7 +11,7 @@ categories:
   - collaboration
   - document-management
 
-developmentStatus: development
+developmentStatus: beta
 
 softwareVersion: "2026.10.31"
 releaseDate: "2026-10-31"
@@ -26,11 +26,30 @@ maintenance:
       email: digigilde@rijksoverheid.nl
 
 localisation:
-  localisationReady: false
+  localisationReady: true
   availableLanguages:
     - nl
+    - en
 
 description:
+  en:
+    localisedName: Plak
+    shortDescription: >-
+      Publish and share static sites with a preview per pull request and
+      five access levels.
+    longDescription: >-
+      Plak is a platform on which government organisations publish and
+      share static sites: public, behind SSO Rijk, for invitees by e-mail
+      address, or through a secret link. Every pull request can get a
+      preview of its own. Plak is built on FastAPI, Vue and PostgreSQL,
+      with a reusable publishing action for CI.
+    features:
+      - Publish static sites under a group/site path of their own
+      - Pull request previews that clean up after themselves
+      - "Five access levels: public, secret link, SSO Rijk, group members, invitees"
+      - Bilingual (Dutch and English) admin for groups, sites, access and members
+      - Publish from your own computer with the plak CLI
+      - Reusable GitHub/Forgejo action that publishes from CI, signed in with an OIDC token
   nl:
     localisedName: Plak
     shortDescription: >-
@@ -47,5 +66,6 @@ description:
       - Publiceren van statische sites op een eigen groep/site-pad
       - PR-previews met automatische opruiming
       - "Vijf toegangsniveaus: publiek, geheime link, SSO Rijk, groepsleden, genodigden"
-      - Beheer-SPA voor groepen, sites, toegang en deploy-tokens
-      - Herbruikbare GitHub/Forgejo-action voor publicatie in CI
+      - Tweetalige (Nederlands en Engels) beheer-SPA voor groepen, sites, toegang en leden
+      - Publiceren vanuit de eigen computer met de plak-CLI
+      - Herbruikbare GitHub/Forgejo-action voor publicatie in CI, aangemeld met een OIDC-token
