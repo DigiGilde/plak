@@ -39,9 +39,8 @@ All three suites sit at 100% and the floors are set there
 
 ## Language
 
-Dutch for everything a person sees: UI texts, error messages, the
-`just --list` recipe descriptions and the output of the shell scripts in
-`dev/`.
+Dutch for everything a person sees: UI texts, error messages and the
+output of the shell scripts in `dev/`.
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
