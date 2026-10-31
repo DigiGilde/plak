@@ -22,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
-from plak.ingest.store import version_ref
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
 from plak.models.publication import AccessKey, Invitee, Preview, Site, Version
+from plak.serving.resolution import locate
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "dev" / "seed.py"
 
@@ -205,9 +206,10 @@ class TestSeed:
             )
         assert result.versions == len(refs) == 6
         assert len(live) == 4
+        store = ContentStore(settings.content_root)
         for storage_ref in refs:
-            assert (settings.content_root / storage_ref / "index.html").is_file()
-            assert (settings.content_root / storage_ref / "assets" / "plak.css").is_file()
+            assert locate(store, storage_ref, "index.html") is not None
+            assert locate(store, storage_ref, "assets/plak.css") is not None
 
     async def test_a_preview_may_be_stricter_than_its_site(
         self, seed_module, settings: Settings, session_factory

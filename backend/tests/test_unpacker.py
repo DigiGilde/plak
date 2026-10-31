@@ -310,6 +310,15 @@ class TestPathValidation:
             unpack("site.zip", make_zip({"_version": b"1"}))
         assert reason_of(error) == "RESERVED_SEGMENT"
 
+    def test_encoded_in_the_root_refused(self, unpack: UnpackFn):
+        with pytest.raises(BundleError) as error:
+            unpack("site.zip", make_zip({"index.html": b"h", "_encoded/gzip/a.css": b"1"}))
+        assert reason_of(error) == "RESERVED_SEGMENT"
+
+    def test_nested_encoded_segment_allowed(self, unpack: UnpackFn):
+        data = make_zip({"index.html": b"h", "assets/_encoded/x.css": b"1"})
+        assert unpack("site.zip", data) == {"index.html": b"h", "assets/_encoded/x.css": b"1"}
+
     def test_nested_reserved_segment_allowed(self, unpack: UnpackFn):
         # The entry in the root keeps 'docs' an ordinary directory: without
         # that entry 'docs' would be stripped off (see TestOmhullendeMap).
@@ -676,7 +685,7 @@ class TestBasePath:
         assert "leave the base path field out" in str(error.value)
 
     @pytest.mark.parametrize(
-        "base_path", ["../geheim", "/etc", "dist/../../kwaad", "", ".", "a\x00b", "_preview"]
+        "base_path", ["../geheim", "/etc", "dist/../../kwaad", "", ".", "a\x00b", "_preview", "_encoded"]
     )
     def test_invalid_base_path_refused(self, unpack: UnpackFn, base_path: str):
         with pytest.raises(BundleError) as error:

@@ -78,6 +78,8 @@ class TestContentHeaderset:
             noindex=noindex,
             external_sources=False,
             sandbox=False,
+            encoding=None,
+            varies=False,
         )
         # Starlette lowercases header names while iterating.
         return resp.status_code, dict(resp.headers)
@@ -116,6 +118,8 @@ class TestContentHeaderset:
             noindex=False,
             external_sources=False,
             sandbox=False,
+            encoding=None,
+            varies=False,
         )
         assert resp_304.status_code == 304
         headers_304 = dict(resp_304.headers)

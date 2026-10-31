@@ -12,10 +12,11 @@ import hashlib
 import uuid
 from pathlib import Path
 
-from starlette.responses import FileResponse, Response
+from starlette.responses import FileResponse, Response, StreamingResponse
 from starlette.types import Receive, Scope, Send
 
 from plak.constants import HEAD_SCOPE_KEY, AccessPolicy
+from plak.ingest import precompress
 from plak.serving import mime
 
 # Every content policy comes out of this one table, so the variants cannot
@@ -146,8 +147,12 @@ def neutral_404_response() -> Response:
     )
 
 
-def etag_for(version_id: uuid.UUID) -> str:
-    return f'"{version_id}"'
+def etag_for(version_id: uuid.UUID, encoding: str | None = None) -> str:
+    """One tag per version, and per encoding within it: a cache that holds the
+    brotli variant must not have it confirmed for a request that gets gzip."""
+    if encoding is None:
+        return f'"{version_id}"'
+    return f'"{version_id}-{encoding}"'
 
 
 def if_none_match_matches(header: str | None, etag: str) -> bool:
@@ -189,11 +194,13 @@ def _base_headers(
     noindex: bool,
     external_sources: bool,
     sandbox: bool,
+    encoding: str | None,
+    varies: bool,
 ) -> dict[str, str]:
     headers = {
         "Content-Type": content_type,
         "Cache-Control": cache_control(content_type, access, version_view=version_view),
-        "ETag": etag_for(version_id),
+        "ETag": etag_for(version_id, encoding),
         "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": content_csp(
             external_sources=external_sources, sandbox=sandbox
@@ -208,8 +215,10 @@ def _base_headers(
         # (updateViaCache 'all'); without this, from what a plain request for
         # the same file left there, and the router never sees the refusal's
         # Service-Worker header.
-        "Vary": "Service-Worker",
+        "Vary": "Service-Worker, Accept-Encoding" if varies else "Service-Worker",
     }
+    if encoding is not None:
+        headers["Content-Encoding"] = encoding
     if noindex:
         headers["X-Robots-Tag"] = NOINDEX
     return headers
@@ -224,6 +233,8 @@ def make_304(
     noindex: bool,
     external_sources: bool,
     sandbox: bool,
+    encoding: str | None,
+    varies: bool,
 ) -> Response:
     """304 on If-None-Match, by the app itself, without touching the store: the
     headers follow purely from path and decision.
@@ -232,9 +243,9 @@ def make_304(
     those the 304 repeats, so the 304 repeats the CSP and the Referrer-Policy:
     turning a site switch or secret links on or off changes them without
     changing the ETag, and a cached page would otherwise keep the policy it
-    was first served with. Content-Type stays out, as representation
-    metadata. No default for the switches: a 304 that left one out would now
-    overwrite the stored policy with a weaker one."""
+    was first served with. Content-Type and Content-Encoding stay out, as
+    representation metadata. No default for the switches: a 304 that left one
+    out would now overwrite the stored policy with a weaker one."""
     content_type = mime.determine(rel_path)
     headers = _base_headers(
         content_type,
@@ -244,8 +255,11 @@ def make_304(
         noindex=noindex,
         external_sources=external_sources,
         sandbox=sandbox,
+        encoding=encoding,
+        varies=varies,
     )
     del headers["Content-Type"]
+    headers.pop("Content-Encoding", None)
     return Response(status_code=304, headers=headers)
 
 
@@ -258,9 +272,35 @@ class _ContentFileResponse(FileResponse):
     # worker-thread hop per chunk; its 64 KiB default makes a 4 MB file 64 hops.
     chunk_size = 512 * 1024
 
+    def _should_use_range(self, http_if_range: str) -> bool:
+        # The ETag only, never Last-Modified: the gzip and brotli copies of a
+        # file are written in the same second, so a date would let a range of
+        # one resume a partial copy of the other.
+        return http_if_range == self.headers["etag"]
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get(HEAD_SCOPE_KEY):
             scope = {**scope, "method": "HEAD"}
+        await super().__call__(scope, receive, send)
+
+
+class _GunzipResponse(StreamingResponse):
+    """The file as published, unpacked from its gzip copy on the way out, for
+    a client that takes neither gzip nor brotli. Without Content-Length, which
+    is known only once it is unpacked, and without Range: a range request gets
+    the whole file, as RFC 9110 allows. A HEAD gets the headers without
+    unpacking anything."""
+
+    def __init__(self, path: Path, *, status_code: int, headers: dict[str, str], media_type: str) -> None:
+        super().__init__(
+            precompress.gunzip(path), status_code=status_code, headers=headers, media_type=media_type
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get(HEAD_SCOPE_KEY):
+            await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
         await super().__call__(scope, receive, send)
 
 
@@ -274,6 +314,9 @@ def make_content_response(
     noindex: bool,
     external_sources: bool,
     sandbox: bool,
+    encoding: str | None,
+    varies: bool,
+    gunzip: bool = False,
     status_code: int = 200,
 ) -> Response:
     content_type = mime.determine(rel_path)
@@ -285,5 +328,9 @@ def make_content_response(
         noindex=noindex,
         external_sources=external_sources,
         sandbox=sandbox,
+        encoding=encoding,
+        varies=varies,
     )
+    if gunzip:
+        return _GunzipResponse(file_path, status_code=status_code, headers=headers, media_type=content_type)
     return _ContentFileResponse(file_path, status_code=status_code, headers=headers, media_type=content_type)

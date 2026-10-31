@@ -8,13 +8,18 @@ fixture db_verbinding from conftest.
 from __future__ import annotations
 
 import asyncio
+import base64
+import gzip
 import io
+import random
 import uuid
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
+import brotli
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select, update
@@ -23,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from plak.config import Settings
 from plak.constants import AccessBase
+from plak.ingest import precompress
 from plak.ingest.service import (
     PREVIEW_VALIDITY,
     ROOM_CHECK_STRIDE,
@@ -732,3 +738,247 @@ class TestRoomGuard:
         volume = _Volume(0)
         self._guard(volume, min_free=0).reserve(10**12)
         assert volume.measured == 0
+
+
+STYLESHEET = b"body { margin: 0; padding: 0; color: #111; }\n" * 100
+NOISE = base64.b64encode(random.Random(7).randbytes(6000))  # noqa: S311
+RANDOM = random.Random(8).randbytes(3000)  # noqa: S311
+
+
+def _site_zip(files: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    return buffer.getvalue()
+
+
+def _stored(environment: Environment, storage_ref: str) -> set[str]:
+    base = environment.content_root / storage_ref
+    return {path.relative_to(base).as_posix() for path in base.rglob("*") if path.is_file()}
+
+
+def _no_work_directories(environment: Environment) -> bool:
+    return list((environment.content_root / "_tmp").iterdir()) == []
+
+
+class TestPrecompression:
+    BUNDLE: ClassVar[dict[str, bytes]] = {
+        "index.html": b"<h1>hoi</h1>",
+        "assets/app.css": STYLESHEET,
+        "logo.png": b"\x89PNG" + b"\0" * 4000,
+        "random.txt": RANDOM,
+    }
+
+    async def _deploy(self, environment: Environment, preview: bool) -> str:
+        source = environment.source(_site_zip(self.BUNDLE))
+        async with environment.session_factory() as session:
+            if preview:
+                await environment.service.preview_deploy(
+                    session, environment.site, "pr-1", "site.zip", source, environment.deployer
+                )
+            else:
+                await environment.service.deploy(
+                    session, environment.site, "site.zip", source, environment.deployer
+                )
+        (version,) = await _versions(environment)
+        return version_ref(version.site_id, version.id)
+
+    @pytest.mark.parametrize("preview", [False, True])
+    async def test_a_compressible_file_is_kept_compressed_only(
+        self, environment: Environment, preview: bool
+    ):
+        storage_ref = await self._deploy(environment, preview)
+
+        assert len(STYLESHEET) > precompress.MIN_SIZE
+        stored = _stored(environment, storage_ref)
+        assert "assets/app.css" not in stored
+        assert stored == {
+            "index.html", "logo.png", "random.txt",
+            "_encoded/gzip/assets/app.css", "_encoded/br/assets/app.css",
+        }
+        gzipped = environment.store.encoded_path(storage_ref, "assets/app.css", "gzip")
+        assert gzipped is not None
+        assert gzip.decompress(gzipped.read_bytes()) == STYLESHEET
+        brotlied = environment.store.encoded_path(storage_ref, "assets/app.css", "br")
+        assert brotlied is not None
+        assert brotli.decompress(brotlied.read_bytes()) == STYLESHEET
+        assert brotlied.stat().st_size < gzipped.stat().st_size
+        assert environment.store.file_path(storage_ref, "assets/app.css") is None
+
+    async def test_small_precompressed_and_incompressible_files_stay_plain(
+        self, environment: Environment
+    ):
+        storage_ref = await self._deploy(environment, preview=False)
+        version_dir = environment.content_root / storage_ref
+        assert (version_dir / "index.html").read_bytes() == self.BUNDLE["index.html"]
+        assert (version_dir / "logo.png").read_bytes() == self.BUNDLE["logo.png"]
+        assert (version_dir / "random.txt").read_bytes() == RANDOM
+        assert environment.store.encoded_path(storage_ref, "random.txt", "gzip") is None
+        assert environment.store.encoded_path(storage_ref, "random.txt", "br") is None
+        assert environment.store.encoded_path(storage_ref, "index.html", "gzip") is None
+        assert not (environment.content_root / "_encoded").exists()
+
+    async def test_with_store_compressed_off_every_file_stays_plain(self, environment: Environment):
+        plain = IngestService(environment.store, _settings(environment.content_root, store_compressed=False))
+        storage_ref = await self._deploy(replace(environment, service=plain), preview=False)
+
+        assert _stored(environment, storage_ref) == set(self.BUNDLE)
+        assert (environment.content_root / storage_ref / "assets/app.css").read_bytes() == STYLESHEET
+        assert not (environment.content_root / storage_ref / "_encoded").exists()
+        assert environment.store.file_path(storage_ref, "assets/app.css") is not None
+
+    async def test_the_work_directories_are_gone_afterwards(self, environment: Environment):
+        await self._deploy(environment, preview=False)
+        assert _no_work_directories(environment)
+
+    async def test_a_db_failure_after_the_store_removes_the_copies_with_the_version(
+        self, environment: Environment
+    ):
+        async with environment.session_factory() as session:
+            with pytest.raises(IntegrityError):
+                await environment.service.deploy(
+                    session, environment.site, "site.zip",
+                    environment.source(_site_zip(self.BUNDLE)), Deployer(member_id=uuid.uuid4()),
+                )
+        assert environment.version_dirs() == set()
+        assert _no_work_directories(environment)
+
+    async def test_a_db_failure_on_a_preview_removes_the_copies_with_the_version(
+        self, environment: Environment
+    ):
+        async with environment.session_factory() as session:
+            with pytest.raises(IntegrityError):
+                await environment.service.preview_deploy(
+                    session, environment.site, "pr-ghost", "site.zip",
+                    environment.source(_site_zip(self.BUNDLE)), Deployer(member_id=uuid.uuid4()),
+                )
+        assert environment.version_dirs() == set()
+        assert _no_work_directories(environment)
+
+    async def test_replacing_a_preview_removes_the_old_copies(self, environment: Environment):
+        old_ref = await self._deploy(environment, preview=True)
+        assert any(name.startswith("_encoded/") for name in _stored(environment, old_ref))
+
+        async with environment.session_factory() as session:
+            await environment.service.preview_deploy(
+                session, environment.site, "pr-1", "index.html", environment.source(b"p2"),
+                environment.deployer,
+            )
+
+        (version,) = await _versions(environment)
+        assert version_ref(version.site_id, version.id) != old_ref
+        assert not (environment.content_root / old_ref).exists()
+
+    async def test_deleting_a_preview_removes_its_copies(self, environment: Environment):
+        storage_ref = await self._deploy(environment, preview=True)
+        async with environment.session_factory() as session:
+            assert await environment.service.delete_preview(session, environment.site, "pr-1") is True
+        assert not (environment.content_root / storage_ref).exists()
+        assert environment.version_dirs() == set()
+
+    @pytest.mark.parametrize("preview", [False, True])
+    async def test_copies_that_do_not_fit_above_the_floor_refuse_the_deploy(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch, preview: bool
+    ):
+        """The unpacked files fit with a little to spare; the compressed
+        copies, written beside them before the plain file goes, do not."""
+        bundle = {"index.html": b"<h1>hoi</h1>", "data.txt": NOISE}
+        content = sum(len(body) for body in bundle.values())
+        archive = _site_zip(bundle)
+        service = IngestService(
+            environment.store, _settings(environment.content_root, storage_min_free_bytes=FLOOR)
+        )
+
+        # Control: with room for the copies as well, the same bundle goes in.
+        with monkeypatch.context() as patch:
+            _fake_volume(patch, environment.store, free=FLOOR + 4 * content)
+            async with environment.session_factory() as session:
+                await service.deploy(
+                    session, environment.site, "site.zip",
+                    environment.source(archive), environment.deployer,
+                )
+        (control,) = await _versions(environment)
+        stored = _stored(environment, version_ref(control.site_id, control.id))
+        assert "data.txt" not in stored
+        assert "_encoded/gzip/data.txt" in stored
+
+        _fake_volume(monkeypatch, environment.store, free=FLOOR + content + 1000)
+        async with environment.session_factory() as session:
+            with pytest.raises(IngestError) as error:
+                if preview:
+                    await service.preview_deploy(
+                        session, environment.site, "pr-1", "site.zip",
+                        environment.source(archive), environment.deployer,
+                    )
+                else:
+                    await service.deploy(
+                        session, environment.site, "site.zip",
+                        environment.source(archive), environment.deployer,
+                    )
+        assert error.value.reason == "STORAGE_UNAVAILABLE"
+        assert environment.version_dirs() == {version_ref(control.site_id, control.id).split("/")[1]}
+        assert _no_work_directories(environment)
+        assert len(await _versions(environment)) == 1
+        assert await _previews(environment) == []
+
+    async def test_a_bundle_that_is_only_small_after_compression_fits_the_quota(
+        self, environment: Environment
+    ):
+        bundle = {"index.html": b"<h1>hoi</h1>", "app.css": STYLESHEET}
+        assert sum(len(body) for body in bundle.values()) > 1000
+        service = IngestService(
+            environment.store, _settings(environment.content_root, site_max_bytes=1000)
+        )
+        async with environment.session_factory() as session:
+            await service.deploy(
+                session, environment.site, "site.zip",
+                environment.source(_site_zip(bundle)), environment.deployer,
+            )
+        (version,) = await _versions(environment)
+        on_disk = _tree_size(environment.content_root / version_ref(version.site_id, version.id))
+        assert on_disk <= 1000
+        assert environment.store.site_bytes(environment.site.id) == on_disk
+
+    async def test_a_bundle_whose_compressed_size_is_over_the_quota_is_refused(
+        self, environment: Environment
+    ):
+        bundle = {"index.html": b"<h1>hoi</h1>", "data.txt": NOISE}
+        service = IngestService(
+            environment.store, _settings(environment.content_root, site_max_bytes=2000)
+        )
+        async with environment.session_factory() as session:
+            with pytest.raises(IngestError) as error:
+                await service.deploy(
+                    session, environment.site, "site.zip",
+                    environment.source(_site_zip(bundle)), environment.deployer,
+                )
+        assert error.value.reason == "SITE_QUOTA_EXCEEDED"
+        assert environment.version_dirs() == set()
+        assert _no_work_directories(environment)
+        assert await _versions(environment) == []
+
+    async def test_a_file_gzip_cannot_shrink_stays_plain_and_leaves_no_copy(
+        self, environment: Environment
+    ):
+        storage_ref = await self._deploy(environment, preview=False)
+        assert not any(
+            name.endswith("random.txt") and name.startswith("_encoded/")
+            for name in _stored(environment, storage_ref)
+        )
+
+    async def test_a_version_past_the_brotli_budget_still_gets_decodable_copies(
+        self, environment: Environment, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(precompress, "BROTLI_BEST_BUDGET", len(STYLESHEET))
+        bundle = {"index.html": b"x", "a.css": STYLESHEET, "b.css": STYLESHEET + b"/* b */"}
+        async with environment.session_factory() as session:
+            await environment.service.deploy(
+                session, environment.site, "site.zip",
+                environment.source(_site_zip(bundle)), environment.deployer,
+            )
+        (version,) = await _versions(environment)
+        for name in ("a.css", "b.css"):
+            copy = environment.store.encoded_path(version_ref(version.site_id, version.id), name, "br")
+            assert copy is not None
+            assert brotli.decompress(copy.read_bytes()) == bundle[name]

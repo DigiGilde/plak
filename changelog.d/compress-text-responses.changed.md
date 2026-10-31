@@ -1,0 +1,1 @@
+- Published sites load faster: HTML, CSS, JavaScript and other text files are sent compressed with brotli or gzip.

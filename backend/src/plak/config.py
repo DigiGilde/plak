@@ -199,6 +199,11 @@ class Settings(BaseSettings):
     # would, rather than running the volume dry, which would take the serving
     # of every other site down with it. 0 turns the check off.
     storage_min_free_bytes: int = Field(default=100 * 1024 * 1024)
+    # Whether a deploy keeps its text files compressed only (design.md §5.4a).
+    # Off, new deploys stay as published and the container puts back at start
+    # what earlier ones compressed (ingest/uncompress.py): the step before
+    # rolling back to an image that cannot read `_encoded/`.
+    store_compressed: bool = True
 
     # Forgejo instances whose Actions ID tokens are accepted for CI deploys,
     # comma-separated base URLs (https only). GitHub is always accepted.

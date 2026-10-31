@@ -97,7 +97,8 @@ see the CLI row above.
 | Old address after a change of address (design.md §5.11): only where the gate found no group or site does serving look the slugs up as old ones, and the unchanged gate decides again at the current address. Whoever it lets in gets a 301 there (`Cache-Control: no-store`, `Sunset`), the `Location` built from the requested path with every `key` taken out; a valid `?key=` sets its cookie for the new path, and the key cookie of the old path is set again for the new one on a top-level navigation only. Everyone else gets the answer of before the change, byte for byte and whatever `Referer` comes along: a refusal holds the `Referer` to the old prefix, so a guess at the new address is no oracle, and `returnTo` stays the old path. Not in the same time, an accepted risk: deciding again at the current address makes that answer slower (about 1.4 ms, measured locally), which can tell that a path is an old address, not where it leads now. The 301 writes no audit row; a refusal is audited with the slugs asked for | implemented: `serving/addresses.py`, `serving/router.py`, `serving/code_page.py`, `slug_window.py`, `backend/tests/test_serving.py` (`TestOldAddress`), `backend/tests/test_code_page.py`, `backend/tests/test_access_gate.py` (the matrix at the old and the new slugs), `backend/tests/test_sessions.py` |
 
 Serving (§5) is done entirely by the app itself:
-`FileResponse` with Range, ETag/304 and the fixed header set, and the
+`FileResponse` with Range, ETag/304 and the fixed header set (text files
+compressed at ingest, design.md §5.4a), and the
 host separation of §4a as app middleware (`host_separation.py`). There is no
 X-Accel path and no nginx logic.
 
@@ -431,7 +432,7 @@ unnecessary at once.
 |---|---|
 | Fail-closed ingest: absolute paths, `..` segments, symlinks/hardlinks, null bytes refused | implemented: `ingest/unpacker.py`, `backend/tests/test_unpacker.py` |
 | Bomb guard: decompression incrementally against limits before materialisation | implemented: `ingest/unpacker.py` (archive headers are not trusted), `backend/tests/test_unpacker.py` |
-| Top-level `_preview`/`_version` in a dist refused | implemented: `ingest/unpacker.py` (`RESERVED_SEGMENTS`), `backend/tests/test_unpacker.py` |
+| Top-level `_preview`/`_version`/`_encoded` in a dist refused | implemented: `ingest/unpacker.py` (`RESERVED_SEGMENTS`), `backend/tests/test_unpacker.py` |
 | Atomic rename on the same volume (no EXDEV/copy fallback) | implemented: `ingest/store.py`, `backend/tests/test_store.py` |
 | Atomic live swap and preview upsert | implemented: `ingest/service.py` (pointer swap in the same transaction, upsert with `ON CONFLICT`), `backend/tests/test_ingest_service.py` |
 | A filling content volume is visible: `GET /-/healthz` lists `storage` when the free space is below `PLAK_STORAGE_MIN_FREE_BYTES` plus `PLAK_INGEST_MAX_TOTAL`, and `content_root` when, in production, the content root is not a mount point (checked once at startup); an ERROR line at most once per hour for the low space, measured by a periodic task every five minutes. Neither refuses to start | implemented: `platform/health.py`, `ingest/storage_health.py`, `main.py`, `backend/tests/test_storage_health.py` |

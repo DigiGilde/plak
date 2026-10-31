@@ -172,6 +172,7 @@ anybody an administrator.
 | `PLAK_OPERATOR_NAME` | env-vars | optional, empty by default: the organisation that runs this installation, as people should read it (`Digi Gilde`). The public privacy and accessibility pages and `GET /-/api/v1/operator` show it |
 | `PLAK_OPERATOR_EMAIL` | env-vars | optional, empty by default: where people reach that organisation about privacy, accessibility and questions (`digigilde@rijksoverheid.nl`). It is also the mail `Contact` in `security.txt`, after the GitHub advisory form, so security reports about this installation reach the operator. A plain address without a display name, or the app does not start |
 | `PLAK_SECURITY_TXT_NCSC` | env-vars | optional, default `false`. `true` lists the CVD routes of NCSC-NL in `security.txt`, the central reporting point for the Dutch central government. The Digi Gilde's installation sets `true`. Leave it off for an installation outside the central government |
+| `PLAK_STORE_COMPRESSED` | env-vars | optional, default `true`; a deploy keeps its text files compressed only (design.md §5.4a). `false` keeps new deploys as published and puts back, at every start, what earlier ones compressed: the step before rolling back to an image from before compression (§7) |
 | `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
 | `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
 | `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
@@ -429,6 +430,18 @@ here there is a way back: `alembic stamp 0003_storage_by_site_id` from the
 current image (route 1 is enough, it needs no volume) marks the database as
 before `0004` and leaves the column in place, which the older code ignores.
 
+An image from before compression (design.md §5.4a) cannot serve a file that a
+newer one keeps compressed only: it looks at the file's own path, finds
+nothing and answers 404. Before rolling back past it, set
+`PLAK_STORE_COMPRESSED=false` and let the pod start once with the current
+image. Its entrypoint puts every such file back at its own path, and new
+deploys stay as published from then on. Wait for the log line `Put N files
+back at their own path; no version keeps a file compressed only.` before
+switching the image. An ERROR instead says why not: not enough room above
+`PLAK_STORAGE_MIN_FREE_BYTES` (the files take their full size again), or the
+files whose copy is damaged. Rolling back before that line breaks every site
+deployed since compression.
+
 Plak runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the
 purge job therefore all three use `PLAK_DB_URL`. Local runs the same way, so
@@ -561,7 +574,8 @@ unpacks). At the default site quota that is some nineteen sites at their
 maximum.
 
 What one site can hold is bounded twice. `PLAK_SITE_MAX_BYTES` (500 MiB by
-default, also on ZAD) caps all its versions together, and every night at 03:00 UTC the
+default, also on ZAD) caps all its versions together, as stored: text files
+count compressed (design.md §5.4a). Every night at 03:00 UTC the
 cleanup job removes the live versions beyond the current one and the ones
 before it that the site keeps, row and files, with a `version_cleanup` row in
 the audit log. That number is `PLAK_LIVE_VERSIONS_KEPT` (5) for every site,

@@ -47,6 +47,13 @@ def test_the_migration_runs_before_the_server(entrypoint: str) -> None:
     assert migration < server
 
 
+def test_files_are_put_back_after_the_migration_and_before_the_server(entrypoint: str) -> None:
+    migration = entrypoint.index("alembic upgrade head")
+    restore = entrypoint.index("python -m plak.ingest.uncompress")
+    server = entrypoint.index("exec uvicorn")
+    assert migration < restore < server
+
+
 def test_the_server_replaces_the_shell(entrypoint: str) -> None:
     # Without exec, uvicorn is a child of this shell and the SIGTERM that
     # ends a rollout reaches the shell, which ignores it; the pod then waits

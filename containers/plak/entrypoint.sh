@@ -21,6 +21,11 @@ done
 
 alembic upgrade head
 
+# With PLAK_STORE_COMPRESSED off: every file a version keeps compressed only
+# back at its own path, so an image from before compression can serve it.
+# Here because only this pod has the content volume; it never stops the start.
+python -m plak.ingest.uncompress
+
 # exec: uvicorn replaces this shell as PID 1, so the SIGTERM that ends a
 # rollout reaches the server instead of a shell that ignores it.
 #

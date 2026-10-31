@@ -5,6 +5,12 @@ Writing goes to {root}/_tmp/{uuid} in full first, and from there to
 the same filesystem as the final directory, so the rename is atomic and has
 no EXDEV/copy fallback. The spooled upload lives in {root}/_tmp as well:
 outside every servable path, on the volume instead of in memory.
+
+A text file that compresses well is kept compressed only (ingest/precompress.py):
+as gzip under `_encoded/gzip/{rel_path}` in the version, with brotli beside it
+under `_encoded/br/` where that is smaller still, and not at its own path. The
+ingest refuses a published `_encoded` in the root and `file_path` never hands
+out anything under it, so the site's own files and these cannot meet.
 """
 
 from __future__ import annotations
@@ -21,6 +27,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import IO
+
+from plak.constants import ENCODED_SEGMENT
 
 TMP_DIRNAME = "_tmp"
 RECLAIMED_DIRNAME = "_reclaimed"
@@ -64,6 +72,36 @@ class VersionWriter:
             return target.open("xb")
         except (FileExistsError, NotADirectoryError, IsADirectoryError) as error:
             raise StoreError(f"path collides with a previously written path: {rel_path!r}") from error
+
+    def files(self) -> list[tuple[str, Path]]:
+        """Every file of the site written so far, as relative path and path on
+        disk, in a stable order; the compressed copies are not among them."""
+        found = []
+        for directory, subdirectories, names in os.walk(self._workdir):
+            if directory == str(self._workdir) and ENCODED_SEGMENT in subdirectories:
+                subdirectories.remove(ENCODED_SEGMENT)
+            for name in names:
+                path = Path(directory) / name
+                found.append((path.relative_to(self._workdir).as_posix(), path))
+        return sorted(found)
+
+    def _encoded_target(self, rel_path: str, encoding: str) -> Path:
+        _check_rel_path(rel_path)
+        _check_rel_path(encoding)
+        return self._workdir / ENCODED_SEGMENT / encoding / rel_path
+
+    def open_encoded(self, rel_path: str, encoding: str) -> IO[bytes]:
+        target = self._encoded_target(rel_path, encoding)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target.open("xb")
+
+    def discard_encoded(self, rel_path: str, encoding: str) -> None:
+        self._encoded_target(rel_path, encoding).unlink()
+
+    def drop_plain(self, rel_path: str) -> None:
+        """Removes the file itself once its compressed copy stands in for it."""
+        _check_rel_path(rel_path)
+        (self._workdir / rel_path).unlink()
 
     def total_bytes(self) -> int:
         """What has been written so far, measured on disk rather than counted
@@ -161,14 +199,21 @@ class ContentStore:
     def file_path(self, storage_ref: str, rel_path: str) -> Path | None:
         try:
             base = self._version_root(storage_ref)
-            candidate = (base / rel_path).resolve()
         except (StoreError, ValueError, OSError):
             return None
-        if candidate == base or not candidate.is_relative_to(base):
-            return None
-        if not candidate.is_file():
+        candidate = _contained_file(base, rel_path)
+        if candidate is not None and candidate.is_relative_to(base / ENCODED_SEGMENT):
             return None
         return candidate
+
+    def encoded_path(self, storage_ref: str, rel_path: str, encoding: str) -> Path | None:
+        """The compressed copy of one file in one encoding, if the version
+        keeps the file that way."""
+        try:
+            base = self._version_root(storage_ref) / ENCODED_SEGMENT / encoding
+        except (StoreError, ValueError, OSError):
+            return None
+        return _contained_file(base, rel_path)
 
     def delete_version(self, storage_ref: str) -> None:
         path = self._version_root(storage_ref)
@@ -275,6 +320,18 @@ class ContentStore:
             return 0
         boundary = datetime.now(tz=UTC) - older_than
         return sum(_remove_if_older(entry, boundary) for entry in self._reclaimed.iterdir())
+
+
+def _contained_file(base: Path, rel_path: str) -> Path | None:
+    try:
+        candidate = (base / rel_path).resolve()
+    except (ValueError, OSError):
+        return None
+    if candidate == base or not candidate.is_relative_to(base):
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
 
 
 @dataclass(frozen=True)

@@ -433,9 +433,9 @@ class _Placement:
 
 
 def _reserved_error(segment: str, root: _Root) -> BundleError:
-    """`_preview` and `_version` are platform names and must not sit in the root
-    of the site. The message says where that root comes from, so the user is
-    not served a prefix they never typed."""
+    """`_preview`, `_version` and `_encoded` are platform names and must not sit
+    in the root of the site. The message says where that root comes from, so
+    the user is not served a prefix they never typed."""
     if root.base:
         where = Msg("where.base_path", {"base": "/".join(root.base)})
     elif root.peeled:
