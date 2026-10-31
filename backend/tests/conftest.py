@@ -18,12 +18,24 @@ import asyncpg
 import parts
 import pytest
 import pytest_asyncio
+import yaml
 from alembic.config import Config
 
 from alembic import command
 
 ALEMBIC_DIR = Path(__file__).resolve().parents[1] / "alembic"
 DB_URL_VAR = "PLAK_DB_URL"
+DEV_COMPOSE = Path(__file__).resolve().parents[2] / "dev" / "compose.yml"
+
+
+def postgres_image() -> str:
+    """The postgres image the dev stack pins, so the tests run on the very
+    image Dependabot keeps current in dev/compose.yml."""
+    compose = yaml.safe_load(DEV_COMPOSE.read_text(encoding="utf-8"))
+    image = ((compose.get("services") or {}).get("postgres") or {}).get("image")
+    if not isinstance(image, str) or not image:
+        raise RuntimeError(f"No postgres service with an image in {DEV_COMPOSE}")
+    return image
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
@@ -78,7 +90,7 @@ def postgres_container() -> Iterator[object]:
 
     from testcontainers.community.postgres import PostgresContainer
 
-    container = PostgresContainer("postgres:16", driver=None)
+    container = PostgresContainer(postgres_image(), driver=None)
     try:
         container.start()
     except Exception as error:  # pragma: no cover - depends on the environment
