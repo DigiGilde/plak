@@ -4,5 +4,7 @@
   others after the nightly cleanup.
 - A group admin can give a site an address that another site in the group
   recently gave up, which ends that site's redirect at once.
+- The Deploy tab of a site names the old addresses its workflows may still
+  hold, after a change of the site's address or its group's.
 - The API for it: `PUT /groups/{group}/slug` and `PUT /sites/{group}/{site}/slug`,
   `previousSlugs` on groups and sites, and `slugRedirectDays` on `/me`.

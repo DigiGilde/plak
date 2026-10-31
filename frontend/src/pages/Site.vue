@@ -243,6 +243,7 @@ function afterRemoval(): void {
           :site="siteSlug"
           :content-base="contentBase"
           :previous-slugs="site.previousSlugs"
+          :group-previous-slugs="detail!.group.previousSlugs"
           @removed="afterRemoval"
           @changed="refresh"
           @renamed="onRenamed"
