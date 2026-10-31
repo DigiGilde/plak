@@ -36,6 +36,11 @@ export class ApiError extends Error {
   }
 }
 
+/** The sentence a failed action shows: the API's own reason, or `fallback` for anything else. */
+export function errorText(f: unknown, fallback: string): string {
+  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
+}
+
 function readCookie(name: string): string | null {
   const row = document.cookie.split('; ').find((part) => part.startsWith(`${name}=`));
   return row ? decodeURIComponent(row.slice(name.length + 1)) : null;
@@ -98,4 +103,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   return (await response.json()) as T;
+}
+
+/** A request with a JSON body: the same `request`, so CSRF and errors behave alike. */
+export function sendJson<T>(method: string, path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }

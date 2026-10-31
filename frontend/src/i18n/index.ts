@@ -36,10 +36,8 @@ export type Locale = 'nl' | 'en';
 /** A member's own choice, or null when they leave it to their browser. */
 export type LanguageChoice = Locale | null;
 
-export const LOCALES: Locale[] = ['nl', 'en'];
-
 /** What a browser that asks for neither of our languages gets. */
-export const FALLBACK_LOCALE: Locale = 'en';
+const FALLBACK_LOCALE: Locale = 'en';
 
 const CATALOGUES: Record<Locale, Catalogue> = { nl, en };
 
@@ -53,7 +51,7 @@ const STORAGE_KEY = 'plak-taal';
  */
 const INTL_LOCALES: Record<Locale, string> = { nl: 'nl-NL', en: 'en-GB' };
 
-export function isLocale(value: string | null | undefined): value is Locale {
+function isLocale(value: string | null | undefined): value is Locale {
   return value === 'nl' || value === 'en';
 }
 

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import * as plak from '@/api/plak';
-import { ApiError } from '@/api/client';
+import { ApiError, errorText } from '@/api/client';
 import type { Me, PreviousSlug, RepositoryProvider, SiteRepository } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { useLoader } from '@/composables/loader';
 import { isSiteAdmin as isEffectiveSiteAdmin } from '@/composables/roles';
 import { type MessageKey, t } from '@/i18n';
 
@@ -45,8 +46,6 @@ const props = withDefaults(
   { previousSlugs: () => [], groupPreviousSlugs: () => [] },
 );
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 // currentMember caches the /me response typed as Member; ciForgejoHosts and
@@ -101,37 +100,23 @@ const requireOpen = ref(false);
 const requireBusy = ref(false);
 const siteIdNotice = ref('');
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  siteIdNotice.value = '';
-  try {
-    const [loggedIn, repo] = await Promise.all([
-      fetchCurrentMember(),
-      plak.siteRepository(props.group, props.site),
-    ]);
+const { loading, error } = useLoader(
+  () => Promise.all([fetchCurrentMember(), plak.siteRepository(props.group, props.site)]),
+  ([loggedIn, repo]) => {
     me.value = loggedIn as Me | null;
     repository.value = repo;
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
-}
+  },
+  () => [props.group, props.site],
+);
 
-onMounted(load);
 watch(
   () => [props.group, props.site],
   () => {
     closeForm();
     requireOpen.value = false;
-    return load();
+    siteIdNotice.value = '';
   },
 );
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
 
 function inputValue(event: Event): string {
   const detail = (event as CustomEvent<{ value?: string }>).detail;

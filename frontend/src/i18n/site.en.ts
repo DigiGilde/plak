@@ -20,7 +20,6 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.tabs.settings': 'Settings',
 
   // -- Overview tab ---------------------------------------------------------
-  'site.overview.loading': 'Loading site details',
   'site.overview.status.heading': 'Status',
   'site.overview.live': 'Live',
   'site.overview.addressLabel.public': 'Public URL',

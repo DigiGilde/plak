@@ -4,7 +4,6 @@ import '@nldd/design-system';
 import '@nldd/design-system/styles/system-font';
 import './global.css';
 
-import { VueQueryPlugin } from '@tanstack/vue-query';
 import { createApp } from 'vue';
 
 import App from './App.vue';
@@ -17,7 +16,6 @@ function start(): void {
 
   const app = createApp(App);
   app.use(router);
-  app.use(VueQueryPlugin);
   app.mount('#app');
 }
 

@@ -55,7 +55,7 @@ def test_the_slug_rule_of_the_frontend_is_the_one_of_the_backend():
 
 
 def test_the_upload_limits_of_the_frontend_are_the_ones_of_the_backend():
-    block = _capture(r"^export const LIMITS = \{(.*?)\} as const;", PACKING_TS)
+    block = _capture(r"^(?:export )?const LIMITS = \{(.*?)\} as const;", PACKING_TS)
     limits = {}
     for key, expression in re.findall(r"(\w+): ([\d\s*]+),", block):
         product = 1

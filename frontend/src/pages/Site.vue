@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, watchEffect } from 'vue';
+import { computed, provide, ref, watch, watchEffect, type ComputedRef, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import * as plak from '@/api/plak';
-import { ApiError } from '@/api/client';
 import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { useLoader } from '@/composables/loader';
 import { groupPath } from '@/composables/slug';
+import { SITE_GROUP, siteNotFound } from '@/composables/siteGroup';
 import { setDocumentTitle } from '@/title';
 import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -19,8 +20,6 @@ const router = useRouter();
 const groupSlug = computed(() => String(route.params.group ?? ''));
 const siteSlug = computed(() => String(route.params.site ?? ''));
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 const detail = ref<GroupDetail | null>(null);
 /** Content origin from `/me`; the tabs build every shared link on it. */
 const contentBase = ref('');
@@ -34,70 +33,63 @@ const site = computed<Site | null>(
   () => detail.value?.sites.find((p) => p.id === siteId.value) ?? null,
 );
 
+provide(SITE_GROUP, {
+  // Tabs render only once the site is there, so for them neither is null.
+  detail: detail as Ref<GroupDetail>,
+  site: site as ComputedRef<Site>,
+});
+
 /** Fetches group and session; throws when the site cannot be shown. */
-async function fetchData(): Promise<void> {
+async function fetchData(): Promise<{ fetched: GroupDetail; siteId: string; contentBase: string }> {
   const [fetched, loggedIn] = await Promise.all([
     plak.group(groupSlug.value),
     fetchCurrentMember(),
   ]);
-  // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
-  contentBase.value = (loggedIn as Me | null)?.contentBaseUrl ?? '';
   const found = fetched.sites.find((p) => p.slug === siteSlug.value);
   if (!found) {
-    throw new ApiError({
-      type: 'about:blank',
-      title: t('site.notFound.title'),
-      status: 404,
-      detail: t('site.notFound.detail', { site: siteSlug.value, group: groupSlug.value }),
-    });
+    throw siteNotFound(groupSlug.value, siteSlug.value);
   }
-  siteId.value = found.id;
-  detail.value = fetched;
+  // currentMember stores the /me response typed as Member; contentBaseUrl rides along.
+  return { fetched, siteId: found.id, contentBase: (loggedIn as Me | null)?.contentBaseUrl ?? '' };
 }
 
-async function load(): Promise<void> {
-  if (!groupSlug.value || !siteSlug.value) {
-    return;
-  }
-  loading.value = true;
-  error.value = null;
-  try {
-    await fetchData();
-  } catch (f) {
-    error.value = f;
-    detail.value = null;
-  } finally {
-    loading.value = false;
-  }
-}
+const { loading, error, reload } = useLoader(
+  fetchData,
+  (data) => {
+    siteId.value = data.siteId;
+    detail.value = data.fetched;
+    contentBase.value = data.contentBase;
+  },
+  null,
+  () => Boolean(groupSlug.value && siteSlug.value),
+);
+
+watch(error, (failure) => {
+  if (failure) detail.value = null;
+});
 
 /**
- * Refresh after a change in a tab, deliberately without `loading`: that would
- * tear down title, tab bar and the whole tab subtree and rebuild them. It would
+ * Refresh after a change in a tab, deliberately quiet: `loading` would tear
+ * down title, tab bar and the whole tab subtree and rebuild them. It would
  * take the tab's notification component with it, in the very tick where the tab
  * puts its confirmation into it ("Versie gepubliceerd", "Toegang
- * opgeslagen"), and make the tab bar flicker on every change.
+ * opgeslagen"), and make the tab bar flicker on every change. A failure leaves
+ * the header on the last known answer rather than pulling the page out from
+ * under the user.
  */
-async function refresh(): Promise<void> {
-  try {
-    await fetchData();
-  } catch {
-    // The tab refetches the same data itself and reports there what went
-    // wrong; leaving the header on the last known answer beats pulling the
-    // page out from under the user.
-  }
+function refresh(): Promise<void> {
+  return reload({ quiet: true });
 }
 
 /** The address this page has just moved the route to itself, which needs no load. */
 let movedTo: string | null = null;
 
-onMounted(load);
 watch(
   () => [groupSlug.value, siteSlug.value],
   () => {
     const own = movedTo === `${groupSlug.value}/${siteSlug.value}`;
     movedTo = null;
-    if (!own) void load();
+    if (!own) void reload();
   },
 );
 
