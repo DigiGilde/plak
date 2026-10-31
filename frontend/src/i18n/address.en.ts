@@ -19,7 +19,6 @@ export const addressEn: Record<keyof typeof addressNl, string> = {
   'address.previous.heading': 'Old addresses',
   'address.previous.until': 'Redirects up to and including {date}',
   'address.restore': 'Change back',
-  'address.restore.label': 'Change back to {address}',
 
   // -- Who may change it ------------------------------------------------------
   'address.readOnly.group': 'Only an administrator of the group can change the address.',

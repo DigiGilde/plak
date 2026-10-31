@@ -259,22 +259,20 @@ describe('AddressSection (site): what everyone sees', () => {
     );
   });
 
-  it('offers to change back to an old address, with a name that says to which', () => {
+  it('offers to change back to an old address in the menu of its row, named after that address', () => {
     const wrapper = makeWrapper(siteProps({ previousSlugs: [OLD] }));
 
-    const button = wrapper.find('[data-testid="site-address-restore-oude-naam"]');
-    expect(button.element.tagName.toLowerCase()).toBe('nldd-button');
-    expect(button.attributes('text')).toBe('Zet terug');
-    expect(button.attributes('accessible-label')).toBe(
-      'Zet terug naar https://sites.plak.test/team-aurora/oude-naam/',
-    );
-    expect(button.attributes('variant')).toBe('secondary');
-    expect(button.attributes('size')).toBe('sm');
-    expect(button.attributes('disabled')).toBeUndefined();
-    // At the end of the row, in a cell no wider than the button.
-    const cell = button.element.parentElement!;
+    const item = wrapper.find('[data-testid="site-address-restore-oude-naam"]');
+    expect(item.element.tagName.toLowerCase()).toBe('nldd-menu-item');
+    expect(item.attributes('text')).toBe('Zet terug');
+    // The menu is named after its row, so a screen reader hears which address.
+    const menu = item.element.closest('nldd-icon-button')!;
+    expect(menu.getAttribute('accessible-label')).toBe('Acties voor team-aurora/oude-naam');
+    // At the end of the row, in a cell no wider than the menu button.
+    const cell = menu.parentElement!;
     expect(cell.tagName.toLowerCase()).toBe('nldd-cell');
     expect(cell.getAttribute('width')).toBe('fit-content');
+    expect(cell.getAttribute('horizontal-alignment')).toBe('right');
     expect(cell.previousElementSibling?.tagName.toLowerCase()).toBe('nldd-text-cell');
     expect(cell.nextElementSibling).toBeNull();
   });
@@ -1202,7 +1200,7 @@ describe('AddressSection (site): changing the address', () => {
     it('asks the same question about the old address, and confirms it the same way', async () => {
       const wrapper = await renamedBefore();
 
-      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('click');
+      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('select');
       await untilIdle();
 
       expect(dialog(wrapper).props('open')).toBe(true);
@@ -1226,7 +1224,7 @@ describe('AddressSection (site): changing the address', () => {
       await openForm(wrapper);
       type(wrapper, 'iets-anders');
 
-      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('click');
+      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('select');
       await untilIdle();
       await confirm(wrapper);
 
@@ -1238,7 +1236,7 @@ describe('AddressSection (site): changing the address', () => {
 
     it('says a refusal in a notification when it comes from the page, as there is no field to say it at', async () => {
       const wrapper = await renamedBefore();
-      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('click');
+      await wrapper.find('[data-testid="site-address-restore-website"]').trigger('select');
       await untilIdle();
       vi.stubGlobal('fetch', problemFetch(409, { title: 'Conflict', detail: 'Not shown.', code: 'SLUG_EXISTS' }));
 
@@ -1591,7 +1589,7 @@ describe('AddressSection (site): an address another site in the group gave up', 
       await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
       await untilIdle();
 
-      await wrapper.find('[data-testid="site-address-restore-oude-naam"]').trigger('click');
+      await wrapper.find('[data-testid="site-address-restore-oude-naam"]').trigger('select');
       await untilIdle();
 
       expect(dialog(wrapper).props('text')).toBe(
@@ -1729,8 +1727,9 @@ describe('AddressSection (group)', () => {
     expect(cell.find('code').text()).toBe('oude-naam');
     expect(cell.attributes('supporting-text')).toBe('Stuurt door tot en met 6 november 2026');
     expect(
-      wrapper.find('[data-testid="group-address-restore-oude-naam"]').attributes('accessible-label'),
-    ).toBe('Zet terug naar oude-naam');
+      wrapper.find('[data-testid="group-address-restore-oude-naam"]').element.closest('nldd-icon-button')!
+        .getAttribute('accessible-label'),
+    ).toBe('Acties voor oude-naam');
   });
 
   it('says who may change it, in place of a form', () => {
@@ -1927,7 +1926,7 @@ describe('AddressSection (group)', () => {
       const before = await plak.setGroupSlug('team-aurora', 'aurora');
       const wrapper = await editing(groupProps({ group: 'aurora', previousSlugs: before.previousSlugs }));
 
-      await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('click');
+      await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('select');
       await untilIdle();
 
       expect(dialog(wrapper).props('title')).toBe('Adres van groep aurora wijzigen in team-aurora?');

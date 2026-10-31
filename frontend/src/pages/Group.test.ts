@@ -1047,7 +1047,7 @@ describe('Group: changing the address', () => {
     await changeAddress(wrapper, 'aurora');
     await dialogClosed(wrapper);
 
-    await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('click');
+    await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('select');
     await untilIdle();
     await wrapper.find(`${ADDRESS} [data-testid="confirm-continue"]`).trigger('click');
     await untilIdle();

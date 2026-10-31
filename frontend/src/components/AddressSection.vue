@@ -11,6 +11,7 @@ import * as plak from '@/api/plak';
 import type { Group, PreviousSlug, Site } from '@/api/types';
 import CodeSentence from '@/components/CodeSentence.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
+import RowActions from '@/components/RowActions.vue';
 import Notices from '@/components/site/Notices.vue';
 import { SLUG_MATCH, SLUG_PATTERN, SLUG_RE, slugifyTyped } from '@/composables/slug';
 import { lastRedirectDay, redirectDayFromToday, siteUrl } from '@/format';
@@ -73,11 +74,6 @@ const testPrefix = computed(() => `${props.kind}-address`);
 
 // -- How an address reads --------------------------------------------------
 
-/** On the page: a site as the URL it is served at, a group as its slug. */
-function shown(slug: string): string {
-  return props.kind === 'site' ? siteUrl(props.contentBase, props.group, slug) : slug;
-}
-
 /** The short form, for the title of the dialog and the status line, which are read out. */
 function short(slug: string): string {
   return props.kind === 'site' ? `${props.group}/${slug}` : slug;
@@ -113,7 +109,7 @@ const siteCount = computed(() => props.sites?.length ?? 0);
 
 const currentSentence = computed((): Sentence => {
   if (props.kind === 'site') {
-    const address = shown(current.value);
+    const address = siteUrl(props.contentBase, props.group, current.value);
     return { text: t('address.current.site'), codes: { address }, links: { address } };
   }
   const first = example.value;
@@ -432,23 +428,25 @@ async function change(): Promise<void> {
             :data-testid="`${testPrefix}-previous`"
           >
             <nldd-list-item v-for="previous in previousSlugs" :key="previous.slug" size="md">
-              <!-- The text wraps where it has to, so a long address stays in the row
-                   on a 320 px screen at 200 percent text (WCAG 1.4.10). -->
+              <!-- The text wraps where it has to, and "Zet terug" sits in the row
+                   menu rather than on a button: beside a button, 200 percent text on
+                   a 320 px screen left the address two characters wide. -->
               <nldd-text-cell
                 :supporting-text="t('address.previous.until', { date: lastRedirectDay(previous.redirectsUntil) })"
               >
                 <code translate="no">{{ short(previous.slug) }}</code>
               </nldd-text-cell>
-              <nldd-cell v-if="canChange" width="fit-content">
-                <nldd-button
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  :text="t('address.restore')"
-                  :accessible-label="t('address.restore.label', { address: shown(previous.slug) })"
-                  :data-testid="`${testPrefix}-restore-${previous.slug}`"
-                  @click="ask(previous.slug)"
-                ></nldd-button>
+              <nldd-cell v-if="canChange" width="fit-content" horizontal-alignment="right">
+                <RowActions
+                  :label="short(previous.slug)"
+                  :actions="[
+                    {
+                      text: t('address.restore'),
+                      testid: `${testPrefix}-restore-${previous.slug}`,
+                      run: () => ask(previous.slug),
+                    },
+                  ]"
+                />
               </nldd-cell>
             </nldd-list-item>
           </nldd-list>

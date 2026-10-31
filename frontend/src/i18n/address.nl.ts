@@ -21,7 +21,6 @@ export const addressNl = {
   'address.previous.heading': 'Oude adressen',
   'address.previous.until': 'Stuurt door tot en met {date}',
   'address.restore': 'Zet terug',
-  'address.restore.label': 'Zet terug naar {address}',
 
   // -- Who may change it ------------------------------------------------------
   'address.readOnly.group': 'Alleen een beheerder van de groep kan het adres wijzigen.',

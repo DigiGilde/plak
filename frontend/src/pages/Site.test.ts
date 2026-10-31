@@ -615,7 +615,7 @@ describe('Site: changing the address', () => {
     await changeAddress(wrapper, 'handboek');
     await dialogClosed(wrapper);
 
-    await wrapper.find('[data-testid="site-address-restore-website"]').trigger('click');
+    await wrapper.find('[data-testid="site-address-restore-website"]').trigger('select');
     await untilIdle();
     await wrapper.find(`${ADDRESS} [data-testid="confirm-continue"]`).trigger('click');
     await untilIdle();
