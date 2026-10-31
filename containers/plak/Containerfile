@@ -54,11 +54,12 @@ COPY --chown=plak:plak backend/alembic.ini ./alembic.ini
 # that runs it does not own it.
 COPY --chown=plak:plak --chmod=555 containers/plak/entrypoint.sh ./entrypoint.sh
 
-ARG PLAK_VERSION=dev
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
-    PLAK_SPA_PATH=/app/spa \
-    PLAK_VERSION=${PLAK_VERSION}
+    PLAK_SPA_PATH=/app/spa
+
+ARG PLAK_VERSION=dev
+LABEL org.opencontainers.image.version=${PLAK_VERSION}
 
 # Numeric: the kubelet cannot verify runAsNonRoot for a user name.
 USER 1000:1000

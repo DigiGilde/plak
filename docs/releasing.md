@@ -222,8 +222,8 @@ previous tag:
   version of the editable package `plak-api` in `backend/uv.lock`;
   `version` in `frontend/package.json` and both places it appears in
   `frontend/package-lock.json`. Every tag builds a new image, so these
-  follow every release. What the running server and the footer show
-  still comes from the tag itself, through `PLAK_VERSION` at build time.
+  follow every release. What the footer shows still comes from the tag
+  itself, through `PLAK_VERSION` at build time.
 - **The CLI**: `[project] version` in `cli/pyproject.toml` and the
   version of the editable package `plak` in `cli/uv.lock`, when anything
   under `cli/plak_cli/`, `cli/pyproject.toml` or `cli/uv.lock` changed,
