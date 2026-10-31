@@ -1,5 +1,11 @@
 # Plak
 
+[![status: beta](https://img.shields.io/badge/status-beta-orange.svg)](#disclaimer)
+[![Test and deploy](https://github.com/DigiGilde/plak/actions/workflows/deploy.yml/badge.svg?branch=beta)](https://github.com/DigiGilde/plak/actions/workflows/deploy.yml?query=branch%3Abeta)
+[![release](https://img.shields.io/github/v/release/DigiGilde/plak)](https://github.com/DigiGilde/plak/releases/latest)
+[![license: EUPL-1.2](https://img.shields.io/github/license/DigiGilde/plak)](LICENSE)
+[![Scheduled scan](https://github.com/DigiGilde/plak/actions/workflows/scan.yml/badge.svg)](https://github.com/DigiGilde/plak/actions/workflows/scan.yml)
+
 **Status: beta, in production.** Plak runs in production on ZAD and is
 still a beta: the design and the interface can change, as the disclaimer
 below says.
