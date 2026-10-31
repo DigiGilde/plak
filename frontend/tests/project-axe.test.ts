@@ -209,9 +209,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     const backend = makeMockBackend();
     backend.data.loggedInMemberId = 'lid-3';
     vi.stubGlobal('fetch', backend.fetch);
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
+      global: { provide },
     });
     await untilIdle();
     expect(wrapper.find('[data-testid="site-title-text"]').exists()).toBe(true);
@@ -220,9 +222,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
   });
 
   it('Instellingen met een geweigerde titel bij het veld is zonder violations', async () => {
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
+      global: { provide },
     });
     await untilIdle();
     fireDetailEvent(wrapper.find('[data-testid="site-title"]').element, 'input', {
@@ -244,9 +248,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
       { slug: 'oude-naam', redirectsUntil: '2099-11-06T23:00:00Z' },
     ];
     vi.stubGlobal('fetch', backend.fetch);
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
+      global: { provide },
     });
     await untilIdle();
     expect(wrapper.find('[data-testid="site-address-restore-oude-naam"]').exists()).toBe(true);
@@ -264,9 +270,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     });
     backend.data.loggedInMemberId = 'lid-6';
     vi.stubGlobal('fetch', backend.fetch);
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
+      global: { provide },
     });
     await untilIdle();
     expect(wrapper.find('[data-testid="site-address-readonly"]').exists()).toBe(true);
@@ -275,10 +283,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
   });
 
   it('has no violations on the settings with the confirmation of an address change open', async () => {
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
-      global: { stubs: { teleport: true } },
+      global: { stubs: { teleport: true }, provide },
     });
     await untilIdle();
     await wrapper.find('[data-testid="site-address-start"]').trigger('click');
@@ -302,10 +311,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
   it('has no violations on the settings with a refused address at the field', async () => {
     const backend = makeMockBackend();
     vi.stubGlobal('fetch', backend.fetch);
+    const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
       attachTo: document.body,
-      global: { stubs: { teleport: true } },
+      global: { stubs: { teleport: true }, provide },
     });
     await untilIdle();
     backend.data.sites.push({ ...backend.data.sites[0]!, id: 'x', slug: 'handboek' });
