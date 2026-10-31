@@ -9,17 +9,16 @@ import { nextTick, ref, watch } from 'vue';
 
 import * as plak from '@/api/plak';
 import { errorText } from '@/api/client';
-import type { GroupDetail, Me, Site } from '@/api/types';
+import type { Me, Site } from '@/api/types';
 import AddressSection from '@/components/AddressSection.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
-import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import { useAutosavedText } from '@/composables/autosavedText';
 import { useConfirm } from '@/composables/confirm';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { useLoader } from '@/composables/loader';
 import { isGroupAdmin, isGroupMember, isSiteAdmin } from '@/composables/roles';
-import { siteNotFound } from '@/composables/siteGroup';
+import { useSiteGroup } from '@/composables/siteGroup';
 import { type MessageKey, t } from '@/i18n';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
@@ -33,8 +32,11 @@ const emit = defineEmits<{
   renamed: [Site];
 }>();
 
-/** The site, once the data has arrived once; from then on the sections stay mounted. */
-const siteInfo = ref<Site | null>(null);
+// The site page fetches the group once and follows the site by its id, also
+// when this tab changes its address.
+const { detail, site: siteInfo } = useSiteGroup();
+/** The roles have arrived once; from then on the sections stay mounted. */
+const ready = ref(false);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const savedTitle = ref('');
@@ -83,47 +85,37 @@ const redirectDays = ref(0);
 const siblings = ref<Site[]>([]);
 const canRelease = ref(false);
 
-/** Fetches group and session; throws when the site is not in the group. */
-async function fetchData(): Promise<{ detail: GroupDetail; found: Site; member: Me | null }> {
-  // The session is not a precondition: without it the sections only lose
-  // what needs a role, and that is what an unknown role gets anyway.
-  const [detail, loggedIn] = await Promise.all([
-    plak.group(props.group),
-    fetchCurrentMember().catch(() => null),
-  ]);
-  const found = detail.sites.find((p) => p.slug === props.site);
-  if (!found) throw siteNotFound(props.group, props.site);
-  return { detail, found, member: loggedIn as Me | null };
-}
-
-const { loading, error, reload } = useLoader(fetchData, ({ detail, found, member }) => {
-  const admin = isSiteAdmin(member, props.group, props.site);
-  const inGroup = isGroupMember(member, props.group);
-  canAdmin.value = admin;
-  canChangeAddress.value = admin && inGroup;
-  siteOnlyAdmin.value = admin && !inGroup;
-  canRelease.value = isGroupAdmin(member, props.group);
-  redirectDays.value = member?.slugRedirectDays ?? 0;
-  siblings.value = detail.sites.filter((p) => p.id !== found.id);
-  title.reset(found.title);
-  siteInfo.value = found;
-});
+// The session is not a precondition: without it the sections only lose what
+// needs a role, and that is what an unknown role gets anyway.
+const { loading, reload } = useLoader(
+  () => fetchCurrentMember().catch(() => null),
+  (loggedIn) => {
+    const member = loggedIn as Me | null;
+    const found = siteInfo.value;
+    const admin = isSiteAdmin(member, props.group, props.site);
+    const inGroup = isGroupMember(member, props.group);
+    canAdmin.value = admin;
+    canChangeAddress.value = admin && inGroup;
+    siteOnlyAdmin.value = admin && !inGroup;
+    canRelease.value = isGroupAdmin(member, props.group);
+    redirectDays.value = member?.slugRedirectDays ?? 0;
+    siblings.value = detail.value.sites.filter((p) => p.id !== found.id);
+    title.reset(found.title);
+    ready.value = true;
+  },
+);
+// Out first, to the site it was typed on: the tab is reused for the next.
 watch(
   () => [props.group, props.site],
-  () => {
-    // Out first, to the site it was typed on: the tab is reused for the next.
-    void title.flush();
-    // The address was changed from here and the route has followed. Loading
-    // would switch the indicator on, which makes the tab inert for as long as
-    // it lasts: the button loses the focus and the status line is not heard.
-    if (
-      siteInfo.value &&
-      `${siteInfo.value.groupSlug}/${siteInfo.value.slug}` === `${props.group}/${props.site}`
-    ) {
-      return;
-    }
-    void reload();
-  },
+  () => void title.flush(),
+);
+// Another site, not a new address of this one: an address changed from here
+// keeps the id, and loading would switch the indicator on, which makes the tab
+// inert for as long as it lasts (the button loses the focus and the status line
+// is not heard).
+watch(
+  () => siteInfo.value.id,
+  () => void reload(),
 );
 
 function inputValue(event: Event): string {
@@ -145,7 +137,6 @@ async function say(text: string): Promise<void> {
 }
 
 function onRenamed(updated: Site): void {
-  siteInfo.value = updated;
   // Taken from another site, the address no longer redirects there.
   siblings.value = siblings.value.map((p) => ({
     ...p,
@@ -179,16 +170,13 @@ const {
 <template>
   <Notices ref="notices" />
 
-  <ErrorBanner v-if="error" :error="error" />
-
   <!-- The indicator stays mounted and switches on complete, because every
        remount restarts the second it waits before showing itself. -->
   <nldd-activity-indicator
-    v-else
     :text="t('site.settings.loading')"
     :complete="!loading || undefined"
   >
-    <nldd-container v-if="siteInfo" layout="stack" gap="24">
+    <nldd-container v-if="ready" layout="stack" gap="24">
       <section aria-labelledby="heading-site-title">
         <nldd-container layout="stack" gap="8">
           <nldd-title :size="4">

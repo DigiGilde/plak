@@ -1,12 +1,14 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computed, ref, type Ref } from 'vue';
 
-import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '../../../tests/mock-api';
-import type { PreviousSlug, Site } from '@/api/types';
+import { groupDetailOf, makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '../../../tests/mock-api';
+import type { GroupDetail, PreviousSlug, Site } from '@/api/types';
 import AddressSection from '@/components/AddressSection.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import { AUTOSAVE_PAUSE_MS } from '@/composables/autosavedText';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
+import { SITE_GROUP } from '@/composables/siteGroup';
 import TabSettings from './TabSettings.vue';
 import { fireDetailEvent, problemFetch, serverErrorFetch, untilIdle } from './testHelpers';
 
@@ -24,13 +26,49 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * What the site page does around the tab: it fetches the group, follows the
+ * site by its id and takes over a site the tab renamed.
+ */
+function sitePage(site: string) {
+  const fresh = (): GroupDetail =>
+    groupDetailOf(backend.data, backend.data.groups.find((g) => g.slug === 'team-aurora')!);
+  const detail = ref(fresh()) as Ref<GroupDetail>;
+  const siteId = ref(detail.value.sites.find((p) => p.slug === site)!.id);
+  return {
+    provide: {
+      [SITE_GROUP as symbol]: {
+        detail,
+        site: computed(() => detail.value.sites.find((p) => p.id === siteId.value)!),
+      },
+    },
+    onRenamed(updated: Site): void {
+      detail.value.sites = detail.value.sites.map((p) => (p.id === updated.id ? updated : p));
+    },
+    /** A navigation to another site of the group, as the page loads it. */
+    select(slug: string): void {
+      detail.value = fresh();
+      siteId.value = detail.value.sites.find((p) => p.slug === slug)!.id;
+    },
+  };
+}
+
+let page: ReturnType<typeof sitePage>;
+
 /** `attach` puts it in the document, for a test that needs to know where the focus is. */
 function makeWrapper(site = 'website', attach = false) {
+  page = sitePage(site);
   return mount(TabSettings, {
-    props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE },
-    global: { stubs: { teleport: true } },
+    props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE, onRenamed: page.onRenamed },
+    global: { stubs: { teleport: true }, provide: page.provide },
     attachTo: attach ? document.body : undefined,
   });
+}
+
+/** The route moves to another site and the page follows it. */
+async function switchSite(wrapper: ReturnType<typeof makeWrapper>, site: string): Promise<void> {
+  page.select(site);
+  await wrapper.setProps({ site });
 }
 
 async function loadedWrapper(site = 'website', attach = false) {
@@ -114,30 +152,14 @@ describe('site TabSettings: states', () => {
     ]);
   });
 
-  it('shows an error message on a server error', async () => {
-    vi.stubGlobal('fetch', serverErrorFetch());
-
-    const wrapper = await loadedWrapper();
-
-    expect(wrapper.html()).toContain('Serverfout');
-    expect(wrapper.find('nldd-form').exists()).toBe(false);
-  });
-
-  it('shows a 404 message for an unknown site', async () => {
-    const wrapper = await loadedWrapper('bestaat-niet');
-
-    expect(wrapper.html()).toContain('Onbekende site');
-    expect(wrapper.find('[data-testid="delete-site"]').exists()).toBe(false);
-  });
-
   it('loads the other site when the route changes under it', async () => {
-    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'site-andere', slug: 'andere', title: 'Een andere site' });
     const wrapper = await loadedWrapper();
     expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe(
       'Team Aurora website',
     );
 
-    await wrapper.setProps({ site: 'andere' });
+    await switchSite(wrapper, 'andere');
     await untilIdle();
 
     expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Een andere site');
@@ -469,11 +491,11 @@ describe('site TabSettings: title', () => {
     });
 
     it('saves a pending title to the site it was typed on when the tab is reused for another', async () => {
-      backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+      backend.data.sites.push({ ...backend.data.sites[0]!, id: 'site-andere', slug: 'andere', title: 'Een andere site' });
       const wrapper = await loadedWrapper();
 
       typeTitle(wrapper, 'Documentatie');
-      await wrapper.setProps({ site: 'andere' });
+      await switchSite(wrapper, 'andere');
       await untilIdle();
 
       expect(backend.data.sites[0]!.slug).toBe('website');
@@ -1037,7 +1059,7 @@ describe('site TabSettings: address', () => {
     await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
     // What the page does once it has taken the site over.
-    await wrapper.setProps({ site: 'handboek' });
+    await switchSite(wrapper, 'handboek');
     await untilIdle();
 
     expect(sent).toEqual(['PUT /-/api/v1/sites/team-aurora/website/slug']);
@@ -1045,18 +1067,18 @@ describe('site TabSettings: address', () => {
   });
 
   it('loads the site the route moves to while the first load is still on its way', async () => {
-    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'site-andere', slug: 'andere', title: 'Een andere site' });
     // No await: nothing is held yet.
     const wrapper = makeWrapper();
 
-    await wrapper.setProps({ site: 'andere' });
+    await switchSite(wrapper, 'andere');
     await untilIdle();
 
     expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Een andere site');
   });
 
   it('loads when the route moves to an address the tab has not been given', async () => {
-    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+    backend.data.sites.push({ ...backend.data.sites[0]!, id: 'site-andere', slug: 'andere', title: 'Een andere site' });
     const wrapper = await loadedWrapper();
     await openForm(wrapper);
     fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
@@ -1066,7 +1088,7 @@ describe('site TabSettings: address', () => {
     await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
     await untilIdle();
 
-    await wrapper.setProps({ site: 'andere' });
+    await switchSite(wrapper, 'andere');
     await untilIdle();
 
     expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Een andere site');
