@@ -1,6 +1,6 @@
 # Findings we know about and deliberately leave in place, with a date on
 # which they come back automatically. Trivy reads this file itself;
 # pip-audit and npm audit are hooked into it via
-# .github/scripts/kwetsbaarheden.py, so there is one place where an
+# scripts/vulnerabilities.py, so there is one place where an
 # accepted finding is written down.
 vulnerabilities: []

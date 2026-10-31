@@ -109,6 +109,34 @@ updates:
         patterns:
           - "*"
 
+  - package-ecosystem: uv
+    directory: /scripts
+    schedule:
+      interval: weekly
+      day: friday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      scripts:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      scripts-major:
+        patterns:
+          - "*"
+        update-types:
+          - major
+      scripts-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
   - package-ecosystem: npm
     directories:
       - /frontend

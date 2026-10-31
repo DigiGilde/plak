@@ -1,13 +1,15 @@
 # The changelog check (docs/releasing.md), run by
-# .github/scripts/release.py.
+# scripts/release.py.
 #
-# What fails the check: a malformed [Unreleased], an edit to a section
-# that was already released, a What's new note in one language only.
-# What only warns: shipped paths changed while [Unreleased] did not. On a
-# pull request that warning becomes one sticky comment, which goes away
-# once there is an entry or the description says `No changelog entry:`
-# with a reason; `edited` is a trigger so a changed description counts.
-# In the merge queue only the failing half runs.
+# What fails the check: a malformed CHANGELOG.md or fragment in
+# changelog.d/, an edit to a section that was already released, a What's
+# new note in one language only, and a release pull request that does not
+# release what it says. What only warns: shipped paths changed while no
+# entry fragment was added or changed. On a pull request that warning
+# becomes one sticky comment, which goes away once there is a fragment
+# or the description says `No changelog entry:` with a reason; `edited`
+# is a trigger so a changed description counts. In the merge queue only
+# the failing half runs.
 #
 # All third-party actions are pinned to a commit SHA; the tag after it is
 # the readable label, not the reference.
@@ -59,7 +61,7 @@ jobs:
           else
             args+=(--hard-only)
           fi
-          uv run --script .github/scripts/release.py "${args[@]}"
+          uv run --script scripts/release.py "${args[@]}"
 
       # A pull request from a fork, and one from Dependabot, gets a
       # read-only token: the comment fails there, and that must not fail

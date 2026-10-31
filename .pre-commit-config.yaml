@@ -35,9 +35,9 @@ repos:
 
   # Same ruff as `just lint`: the version pinned in backend/uv.lock. This
   # hook is also the only lint in CI, through the `pre-commit` job. Config resolution is per file, so backend/ uses
-  # backend/pyproject.toml and cli/ the ruff defaults, exactly as the
-  # justfile arranges it. No formatter hook: reformatting whole files is a
-  # deliberate no.
+  # backend/pyproject.toml, scripts/ extends it and cli/ gets the ruff
+  # defaults, exactly as the justfile arranges it. No formatter hook:
+  # reformatting whole files is a deliberate no.
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: 44b5042edab9382aba712eed4f9c7bab7a3d6a3e # v0.17.0
     hooks:

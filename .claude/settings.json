@@ -7,7 +7,7 @@
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": "uv run --quiet --script \"${CLAUDE_PROJECT_DIR}/.github/scripts/release.py\" hook",
+            "command": "uv run --quiet --script \"${CLAUDE_PROJECT_DIR}/scripts/release.py\" hook",
             "timeout": 30
           }
         ]

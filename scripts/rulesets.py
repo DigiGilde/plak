@@ -29,7 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-RULESETS_DIR = Path(__file__).resolve().parents[1] / "rulesets"
+RULESETS_DIR = Path(__file__).resolve().parents[1] / ".github" / "rulesets"
 
 #: Dicts under these keys must match key for key: a live rule that no file
 #: asks for is drift, not a server field.
@@ -61,7 +61,8 @@ def differences(expected: Any, actual: Any, path: str = "", strict: bool = False
     """What in `actual` departs from `expected`. A dict only has to hold the
     keys of `expected` unless strict; lists compare as sets."""
     if isinstance(expected, dict) and isinstance(actual, dict):
-        found = [f"{_join(path, key)}: live has it, the file does not" for key in sorted(actual.keys() - expected.keys()) if strict]
+        extra = sorted(actual.keys() - expected.keys()) if strict else []
+        found = [f"{_join(path, key)}: live has it, the file does not" for key in extra]
         for key in expected:
             if key in actual:
                 found += differences(expected[key], actual[key], _join(path, key), key in STRICT_KEYS)
@@ -106,7 +107,8 @@ def read_files(directory: Path) -> dict[str, dict[str, Any]]:
 
 
 def gh_api(endpoint: str) -> Any:
-    done = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True, check=False)
+    # gh via PATH, as in the workflow; the endpoint comes from this script.
+    done = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True, check=False)  # noqa: S603, S607
     if done.returncode != 0:
         raise RuntimeError(f"gh api {endpoint} failed: {done.stderr.strip()}")
     return json.loads(done.stdout)

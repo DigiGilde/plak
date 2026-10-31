@@ -606,7 +606,7 @@ which does four things: log in to ghcr, download the SBOM artefact, and run
 Containerfile and with it `npm ci` and `uv sync`; it keeps `contents: read` and
 `packages: write` and nothing more. The digest passes from `build` to `provenance`
 as a job output, so the split cannot make the two disagree about which image
-was attested. `backend/tests/test_workflows.py` holds both halves of that in
+was attested. `scripts/tests/test_workflows.py` holds both halves of that in
 place.
 
 What this is worth today is a fair question: nothing deploys to production and

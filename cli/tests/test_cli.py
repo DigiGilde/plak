@@ -1442,7 +1442,7 @@ def test_action_yml_does_not_capture_publish_stdout():
 
 def test_action_yml_pins_every_nested_action_to_a_commit_sha():
     """A tag can be moved, a commit cannot; the same rule as for the
-    workflows in .github/ (backend/tests/test_workflows.py)."""
+    workflows in .github/ (scripts/tests/test_workflows.py)."""
     content = ACTION_YML_PATH.read_text()
     uses = re.findall(r"^\s*(?:- )?uses:\s*(\S+)", content, re.MULTILINE)
     assert uses, "the action installs uv through a nested uses:"

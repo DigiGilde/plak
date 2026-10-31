@@ -45,8 +45,9 @@ The plugin manifest pins a version, and Claude Code keeps an installed
 copy until that string changes, however many commits land. So a change
 under `plugin/` reaches existing installs only with a new `version` in
 `plugin/.claude-plugin/plugin.json`, the one place it lives; the
-marketplace entry carries none. The release step writes it when
-`plugin/` changed (`docs/releasing.md`); a pull request leaves it alone.
+marketplace entry carries none. The release pull request writes it
+when `plugin/` changed (`docs/releasing.md`), so a feature pull request
+leaves it alone.
 
 The skill needs the `plak` CLI on your PATH:
 
