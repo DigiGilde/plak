@@ -72,6 +72,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   vite 8.3.5 and undici 8.12.3.
 - joserfc moves to 1.7.7, which rejects an oversized token before it
   splits it (GHSA-9pg5-8c7x-5hfx).
+- pyasn1 moves to 0.6.5 (CVE-2026-119194, CVE-2026-119195, CVE-2026-119196,
+  CVE-2026-119197).
 - A page never sees a secret link that was not meant for it: Plak takes a
   `key` in the shape of a secret link out of the address before it answers,
   also on a refusal, and refuses service worker scripts, which could read a
