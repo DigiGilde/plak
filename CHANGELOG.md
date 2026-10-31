@@ -10,6 +10,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
 
 ## [Unreleased]
 
+## [2026.10.31]
+
 ### Added
 
 - `site-id` for the publish action and `--site-id` for the CLI, and the
@@ -191,7 +193,8 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.7...HEAD
+[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.31...HEAD
+[2026.10.31]: https://github.com/DigiGilde/plak/compare/v2026.10.7...v2026.10.31
 [2026.10.7]: https://github.com/DigiGilde/plak/compare/v2026.10.4...v2026.10.7
 [2026.10.4]: https://github.com/DigiGilde/plak/compare/v2026.9.30...v2026.10.4
 [2026.9.30]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.30

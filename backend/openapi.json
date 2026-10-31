@@ -3,13 +3,13 @@
   "info": {
     "title": "Plak API",
     "summary": "Publish and share static sites, with previews per pull request.",
-    "description": "\nPlak publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Plak (`PLAK_BASE_URL`). It is valid only for the sites the repository of that workflow is linked\n    to (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep;\n  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\n",
+    "description": "\nPlak publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n    for that site, and only while the repository of that workflow is linked to it\n    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n    the admin URL itself, until another repository is linked or a site admin requires the site id;\n  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, the site id the workflow names, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\n",
     "contact": {
       "name": "Plak",
       "url": "https://github.com/DigiGilde/plak/issues",
       "email": "digigilde@rijksoverheid.nl"
     },
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "servers": [
     {
@@ -23,7 +23,7 @@
           "Deploys"
         ],
         "summary": "Publish a bundle, live or as a preview",
-        "description": "The endpoint CI uses. Send the built site as `multipart/form-data` with the `file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under `/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions (`Authorization: Bearer <JWT>`) whose audience is exactly Plak's admin URL, from the repository linked to this site; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any branch. (2) A CLI token from `plak login` (`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that accept a Bearer token; elsewhere that header yields 401.\n\n**Flow:** authorization comes first, only then is the body read, so a refused request costs no upload. The upload streams to disk and is unpacked against the limits below. Every deploy, whether it succeeds or is refused, ends up in the audit log.\n\n**Site root:** enclosing directories are repeatedly unwrapped while the root directory contains exactly one directory and nothing else, so an archive with only `mysite/dist/index.html` simply lands on the site root. Operating system metadata does not count and is not published either: the `__MACOSX` directory, `.DS_Store` and the AppleDouble files that start with `._`. A zip you make with a right-click in Finder therefore just works. After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, with the index paths found in `indexCandidates`. If the site is in a directory next to other things (a zipped project directory), send that directory as the `basePath` field: this confirms one of the suggestions. Plak never picks one of several candidates itself, because it would silently leave out files you thought you were publishing. The `basePath` is relative to the root directory after unwrapping, but a path that includes the unwrapped prefix works too, and a fixed value keeps working if unwrapping has already taken that directory away.\n\n**Limits** (configurable; these are the defaults): the request body is at most 100 MB (`PLAK_INGEST_MAX_BODY`), a single unpacked file 50 MB (`PLAK_INGEST_MAX_FILE`), the entire unpacked site 200 MB (`PLAK_INGEST_MAX_TOTAL`), with at most 1000 entries (`PLAK_INGEST_MAX_FILES`) and 10 levels of directory depth (`PLAK_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not count. The archive as a whole may contain at most fifty times as many entries, and for a `.tar.gz` the unpacked size of all members counts, including the unpublished ones: a tar has no index, so getting to the next header means decompressing everything in between. The limits are enforced during unpacking and the headers are checked against the same limits beforehand, so a zip or tar bomb does not get past either.\n\n**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n\n```\ncurl --fail --silent --show-error \\\n  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n  --form file=@dist.zip \\\n  --form preview=pr-42 \\\n  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n```\n\nResponse: `201` with `{\"versionId\": \"...\"}`. Omit `--form preview=...` for a live deploy.",
+        "description": "The endpoint CI uses. Send the built site as `multipart/form-data` with the `file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under `/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions (`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Plak's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link still accepts it, exactly the admin URL itself; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any branch. A token bound to another site is never used here: its own repository gets 409 `SITE_MOVED` with the address of that site. (2) A CLI token from `plak login` (`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that accept a Bearer token; elsewhere that header yields 401.\n\n**Flow:** authorization comes first, only then is the body read, so a refused request costs no upload. The upload streams to disk and is unpacked against the limits below. Every deploy, whether it succeeds or is refused, ends up in the audit log.\n\n**Site root:** enclosing directories are repeatedly unwrapped while the root directory contains exactly one directory and nothing else, so an archive with only `mysite/dist/index.html` simply lands on the site root. Operating system metadata does not count and is not published either: the `__MACOSX` directory, `.DS_Store` and the AppleDouble files that start with `._`. A zip you make with a right-click in Finder therefore just works. After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, with the index paths found in `indexCandidates`. If the site is in a directory next to other things (a zipped project directory), send that directory as the `basePath` field: this confirms one of the suggestions. Plak never picks one of several candidates itself, because it would silently leave out files you thought you were publishing. The `basePath` is relative to the root directory after unwrapping, but a path that includes the unwrapped prefix works too, and a fixed value keeps working if unwrapping has already taken that directory away.\n\n**Limits** (configurable; these are the defaults): the request body is at most 100 MB (`PLAK_INGEST_MAX_BODY`), a single unpacked file 50 MB (`PLAK_INGEST_MAX_FILE`), the entire unpacked site 200 MB (`PLAK_INGEST_MAX_TOTAL`), with at most 1000 entries (`PLAK_INGEST_MAX_FILES`) and 10 levels of directory depth (`PLAK_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not count. The archive as a whole may contain at most fifty times as many entries, and for a `.tar.gz` the unpacked size of all members counts, including the unpublished ones: a tar has no index, so getting to the next header means decompressing everything in between. The limits are enforced during unpacking and the headers are checked against the same limits beforehand, so a zip or tar bomb does not get past either.\n\n**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n\n```\ncurl --fail --silent --show-error \\\n  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n  --form file=@dist.zip \\\n  --form preview=pr-42 \\\n  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n```\n\nResponse: `201` with `{\"versionId\": \"...\"}`. Omit `--form preview=...` for a live deploy.",
         "operationId": "deploy___api_v1_sites__group_slug___site_slug__deploys_post",
         "parameters": [
           {
@@ -76,7 +76,7 @@
             }
           },
           "401": {
-            "description": "Not authenticated. Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is not exactly the admin URL (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`.",
+            "description": "Not authenticated. Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is neither exactly the admin URL nor exactly the admin URL followed by `/-/sites/` and a site id, or it names a site that the token's repository is not linked to, whatever the address (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -93,7 +93,7 @@
             }
           },
           "403": {
-            "description": "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch (`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active (`MEMBER_NOT_ACTIVE`); with a session also: the CSRF header is missing or wrong (`CSRF_INVALID`). A request from an origin other than the admin host is refused as well; CI and the CLI send no `Origin` and pass that check.",
+            "description": "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch (`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active (`MEMBER_NOT_ACTIVE`); with a session also: the CSRF header is missing or wrong (`CSRF_INVALID`). A request from an origin other than the admin host is refused as well; CI and the CLI send no `Origin` and pass that check.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -122,6 +122,23 @@
                   "status": 404,
                   "detail": "This does not exist, or you may not see it.",
                   "code": "UNKNOWN_SITE"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. The CI token is bound to a site that is not at this address, and the token's repository is linked to that site: the `site:` of the workflow is old or mistyped (`SITE_MOVED`). The `detail` names the current address of the site the token is bound to; nothing is published.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "This clashes with the current state.",
+                  "code": "SITE_MOVED"
                 }
               }
             }
@@ -290,7 +307,7 @@
             "description": "The preview no longer exists. No content is returned."
           },
           "401": {
-            "description": "Not authenticated. Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is not exactly the admin URL (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`.",
+            "description": "Not authenticated. Neither a bearer token nor a valid admin session was sent (`NO_AUTHENTICATION`), the CLI token is invalid, revoked or expired (`TOKEN_INVALID`), or the CI token is refused: it does not come from GitHub or a configured Forgejo (`CI_ISSUER_UNKNOWN`), the signature is invalid or the token is expired or not yet valid (`CI_TOKEN_INVALID`), or the audience is neither exactly the admin URL nor exactly the admin URL followed by `/-/sites/` and a site id, or it names a site that the token's repository is not linked to, whatever the address (`CI_AUDIENCE_MISMATCH`). The response then carries `WWW-Authenticate: Bearer`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -307,7 +324,7 @@
             }
           },
           "403": {
-            "description": "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), or a live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch (`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active (`MEMBER_NOT_ACTIVE`); with a session also: the CSRF header is missing or wrong (`CSRF_INVALID`). A request from an origin other than the admin host is refused as well; CI and the CLI send no `Origin` and pass that check.",
+            "description": "Forbidden. With a CI token: the repository is not linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a live deploy does not come from `push`, `workflow_dispatch` or `schedule`, or not from the live branch (`CI_BRANCH_NOT_ALLOWED`). With a CLI token or session: the member does not have at least the `editor` role on this site (`INSUFFICIENT_ROLE`) or is not active (`MEMBER_NOT_ACTIVE`); with a session also: the CSRF header is missing or wrong (`CSRF_INVALID`). A request from an origin other than the admin host is refused as well; CI and the CLI send no `Origin` and pass that check.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -336,6 +353,23 @@
                   "status": 404,
                   "detail": "This does not exist, or you may not see it.",
                   "code": "UNKNOWN_SITE"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. The CI token is bound to a site that is not at this address, and the token's repository is linked to that site: the `site:` of the workflow is old or mistyped (`SITE_MOVED`). The `detail` names the current address of the site the token is bound to; nothing is published.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "This clashes with the current state.",
+                  "code": "SITE_MOVED"
                 }
               }
             }
@@ -1269,6 +1303,139 @@
         ]
       }
     },
+    "/-/api/v1/groups/{group_slug}/name": {
+      "put": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Change the name of a group",
+        "description": "Sets the display name of the group. The slug, and with it every URL of the group, does not change. The audit log keeps the previous name, in full. Sending the name the group already has (after trimming spaces) changes nothing and writes no audit row.\n\n**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without a group role is not allowed.",
+        "operationId": "set_group_name___api_v1_groups__group_slug__name_put",
+        "parameters": [
+          {
+            "name": "group_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Slug"
+            },
+            "description": "Slug of the group; the first path segment of every site URL."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupNameBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The group with its new name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not authenticated",
+                  "status": 401,
+                  "detail": "There is no active session.",
+                  "code": "NO_SESSION"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`). The member's role in this group is insufficient for this action (`INSUFFICIENT_ROLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Unknown group (`UNKNOWN_GROUP`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not found",
+                  "status": 404,
+                  "detail": "This does not exist, or you may not see it.",
+                  "code": "UNKNOWN_GROUP"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable input. The name is empty (`FIELD_EMPTY`), contains control or formatting characters (`FIELD_CONTROL_CHARACTERS`) or is longer than 200 characters (`FIELD_TOO_LONG`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unprocessable input",
+                  "status": 422,
+                  "detail": "The input is not right.",
+                  "code": "FIELD_EMPTY"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests; try again later."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/-/api/v1/groups/{group_slug}/default-access": {
       "put": {
         "tags": [
@@ -1668,6 +1835,149 @@
                   "title": "Unprocessable input",
                   "status": 422,
                   "detail": "slug: String should match pattern '^[a-z0-9-]+$'"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/-/api/v1/sites/{group_slug}/{site_slug}/title": {
+      "put": {
+        "tags": [
+          "Sites"
+        ],
+        "summary": "Change the title of a site",
+        "description": "Sets the display title of the site. The slug, and with it every URL of the site, does not change. The audit log keeps the previous title, in full. Sending the title the site already has (after trimming spaces) changes nothing and writes no audit row.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header.",
+        "operationId": "set_site_title___api_v1_sites__group_slug___site_slug__title_put",
+        "parameters": [
+          {
+            "name": "group_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Slug"
+            },
+            "description": "Slug of the group; the first path segment of every site URL."
+          },
+          {
+            "name": "site_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Slug"
+            },
+            "description": "Slug of the site within that group."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteTitleBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The site with its new title.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not authenticated",
+                  "status": 401,
+                  "detail": "There is no active session.",
+                  "code": "NO_SESSION"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`). The member's role on this site is insufficient for this action (`INSUFFICIENT_ROLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Unknown group (`UNKNOWN_GROUP`) or unknown site (`UNKNOWN_SITE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not found",
+                  "status": 404,
+                  "detail": "This does not exist, or you may not see it.",
+                  "code": "UNKNOWN_GROUP"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable input. The title is empty (`FIELD_EMPTY`), contains control or formatting characters (`FIELD_CONTROL_CHARACTERS`) or is longer than 200 characters (`FIELD_TOO_LONG`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unprocessable input",
+                  "status": 422,
+                  "detail": "The input is not right.",
+                  "code": "FIELD_EMPTY"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests; try again later."
                 }
               }
             }
@@ -3495,6 +3805,149 @@
                   "title": "Unprocessable input",
                   "status": 422,
                   "detail": "slug: String should match pattern '^[a-z0-9-]+$'"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/-/api/v1/sites/{group_slug}/{site_slug}/repository/site-id-required": {
+      "put": {
+        "tags": [
+          "Publishing from CI"
+        ],
+        "summary": "Require the site id of a workflow",
+        "description": "For a link made before the site id existed: from now on the linked repository may publish to this site only with a CI ID token whose audience names the site id, `{PLAK_BASE_URL}/-/sites/{siteId}`. A workflow does that with `site-id` (action) or `--site-id` (CLI); a workflow without it is refused with 403 `CI_SITE_ID_REQUIRED`. A link made since then, or that got another repository since, requires it already.\n\nThis goes one way: `true` sets it, `false` on a link that requires the site id is refused, so no admin can quietly let a workflow without it in again. Asking for what already holds changes nothing and writes no audit row.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header.",
+        "operationId": "set_site_id_required___api_v1_sites__group_slug___site_slug__repository_site_id_required_put",
+        "parameters": [
+          {
+            "name": "group_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Slug"
+            },
+            "description": "Slug of the group; the first path segment of every site URL."
+          },
+          {
+            "name": "site_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Slug"
+            },
+            "description": "Slug of the site within that group."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteIdRequiredBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The linked repository, with its new setting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteRepositoryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not authenticated",
+                  "status": 401,
+                  "detail": "There is no active session.",
+                  "code": "NO_SESSION"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`). The member's role on this site is insufficient for this action (`INSUFFICIENT_ROLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Unknown group (`UNKNOWN_GROUP`) or unknown site (`UNKNOWN_SITE`). No repository is linked to this site (`REPOSITORY_NOT_SET`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not found",
+                  "status": 404,
+                  "detail": "This does not exist, or you may not see it.",
+                  "code": "UNKNOWN_GROUP"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable input. `siteIdRequired` is `false` while the link already requires the site id (`SITE_ID_REQUIRED_PERMANENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unprocessable input",
+                  "status": 422,
+                  "detail": "The input is not right.",
+                  "code": "SITE_ID_REQUIRED_PERMANENT"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests; try again later."
                 }
               }
             }
@@ -8604,6 +9057,27 @@
         "title": "GroupMemberOut",
         "description": "A member of a group, as the member list of that group shows it."
       },
+      "GroupNameBody": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name",
+            "description": "New display name, 1 to 200 characters after trimming spaces; no control or formatting characters."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "GroupNameBody",
+        "description": "The new display name of a group.",
+        "examples": [
+          {
+            "name": "Team Aurora"
+          }
+        ]
+      },
       "GroupOut": {
         "properties": {
           "slug": {
@@ -9702,6 +10176,26 @@
           }
         ]
       },
+      "SiteIdRequiredBody": {
+        "properties": {
+          "siteIdRequired": {
+            "type": "boolean",
+            "title": "Siteidrequired",
+            "description": "`true`: from now on only a CI ID token whose audience names the id of this site may publish. `false` is refused once that holds: a link that requires the site id keeps requiring it."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteIdRequired"
+        ],
+        "title": "SiteIdRequiredBody",
+        "description": "Whether the linked repository may publish only with a CI ID token bound to this site.",
+        "examples": [
+          {
+            "siteIdRequired": true
+          }
+        ]
+      },
       "SiteMemberAdd": {
         "properties": {
           "identifier": {
@@ -9835,6 +10329,12 @@
       },
       "SiteOut": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Fixed id of the site. A workflow names it as `site-id`, so a deploy can only land on this site, whatever its address."
+          },
           "groupSlug": {
             "type": "string",
             "title": "Groupslug",
@@ -9938,6 +10438,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "groupSlug",
           "slug",
           "title",
@@ -10080,6 +10581,12 @@
               "docs"
             ]
           },
+          "siteId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Siteid",
+            "description": "Fixed id of the site. A workflow names it as `site-id` (action) or `--site-id` (CLI); the CI ID token then names it in its audience."
+          },
           "provider": {
             "$ref": "#/components/schemas/CiProvider",
             "description": "`github` or `forgejo`."
@@ -10147,6 +10654,14 @@
               true
             ]
           },
+          "siteIdRequired": {
+            "type": "boolean",
+            "title": "Siteidrequired",
+            "description": "Whether only a CI ID token bound to this site may publish: its audience is the admin URL followed by `/-/sites/` and `siteId`. `true` for every link made since the site id exists, for one that got another repository since, and for an older link of a repository that was linked to several sites; `false` for any other older link, which also accepts a token whose audience is the admin URL itself until a site admin requires the site id (`PUT /sites/{groupSlug}/{siteSlug}/repository/site-id-required`). Once `true`, it stays `true`.",
+            "examples": [
+              true
+            ]
+          },
           "createdBy": {
             "type": "string",
             "title": "Createdby",
@@ -10173,6 +10688,7 @@
         "required": [
           "groupSlug",
           "siteSlug",
+          "siteId",
           "provider",
           "host",
           "owner",
@@ -10180,6 +10696,7 @@
           "repositoryId",
           "ownerId",
           "idsConfirmed",
+          "siteIdRequired",
           "createdBy"
         ],
         "title": "SiteRepositoryOut",
@@ -10260,6 +10777,27 @@
         ],
         "title": "SiteStorageOut",
         "description": "What a site takes up on the content volume, and how many live versions are kept."
+      },
+      "SiteTitleBody": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title",
+            "description": "New display title, 1 to 200 characters after trimming spaces; no control or formatting characters."
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SiteTitleBody",
+        "description": "The new display title of a site.",
+        "examples": [
+          {
+            "title": "Documentatie"
+          }
+        ]
       },
       "TokenRequest": {
         "properties": {
