@@ -89,7 +89,6 @@ class Binding:
             version = Version(
                 site_id=site.id,
                 target=VersionTarget.PREVIEW,
-                storage_ref=f"{site.id}/{uuid.uuid4()}",
                 ci_repository="github.com/minbzk/website",
             )
             db.add(version)

@@ -66,8 +66,8 @@ async def _make_site(conn: asyncpg.Connection, group_id: uuid.UUID, base: str = 
 async def _make_version(conn: asyncpg.Connection, site_id: uuid.UUID, member_id: uuid.UUID) -> uuid.UUID:
     return await conn.fetchval(
         """
-        INSERT INTO versions (id, site_id, target, storage_ref, member_id)
-        VALUES ($1, $2, 'preview', 'opslag/1', $3)
+        INSERT INTO versions (id, site_id, target, member_id)
+        VALUES ($1, $2, 'preview', $3)
         RETURNING id
         """,
         uuid.uuid4(),
@@ -742,8 +742,8 @@ async def test_ck_versions_origin_refuses_neither(db_connection: asyncpg.Connect
         async with db_connection.transaction():
             await db_connection.execute(
                 """
-                INSERT INTO versions (id, site_id, target, storage_ref)
-                VALUES ($1, $2, 'preview', 'opslag/1')
+                INSERT INTO versions (id, site_id, target)
+                VALUES ($1, $2, 'preview')
                 """,
                 uuid.uuid4(),
                 site_id,
@@ -759,8 +759,8 @@ async def test_ck_versions_origin_refuses_both(db_connection: asyncpg.Connection
         async with db_connection.transaction():
             await db_connection.execute(
                 """
-                INSERT INTO versions (id, site_id, target, storage_ref, member_id, ci_repository)
-                VALUES ($1, $2, 'preview', 'opslag/1', $3, 'github.com/minbzk/website')
+                INSERT INTO versions (id, site_id, target, member_id, ci_repository)
+                VALUES ($1, $2, 'preview', $3, 'github.com/minbzk/website')
                 """,
                 uuid.uuid4(),
                 site_id,
@@ -777,8 +777,8 @@ async def test_ck_versions_origin_allows_exactly_one(db_connection: asyncpg.Conn
     assert version_id is not None
     ci_version_id = await db_connection.fetchval(
         """
-        INSERT INTO versions (id, site_id, target, storage_ref, ci_repository)
-        VALUES ($1, $2, 'live', 'opslag/ci', 'github.com/minbzk/website')
+        INSERT INTO versions (id, site_id, target, ci_repository)
+        VALUES ($1, $2, 'live', 'github.com/minbzk/website')
         RETURNING id
         """,
         uuid.uuid4(),
@@ -985,6 +985,10 @@ async def test_deleting_a_group_does_clean_up_the_last_admin_role(
     assert await db_connection.fetchval("SELECT count(*) FROM group_members WHERE group_id = $1", group_id) == 0
 
 
+# The storage tests stop at their own revision: 0007 drops the column they read.
+_STORAGE_MOVE = "0003_storage_by_site_id"
+
+
 @pytest.fixture
 async def own_database(postgres_container):
     """A database of its own at the revision before the storage move, so the
@@ -1067,7 +1071,7 @@ async def test_the_storage_migration_moves_every_version_to_its_site_id_and_back
     (root / "_tmp").mkdir()
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["new"] for version in versions}
     for version in versions:
@@ -1087,7 +1091,7 @@ async def test_the_storage_migration_moves_every_version_to_its_site_id_and_back
         assert (root / version["old"] / "index.html").read_text() == str(version["id"])
     assert {entry.name for entry in root.iterdir()} == {group_slug, "_reclaimed", "_tmp", "backup"}
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["new"] for version in versions}
 
@@ -1105,7 +1109,7 @@ async def test_the_storage_migration_moves_every_group_and_every_target(
     assert len(group_slugs) == 2
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["new"] for version in versions}
     for version in versions:
@@ -1129,7 +1133,7 @@ async def test_the_storage_migration_stops_at_a_target_that_holds_files(
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
     with pytest.raises(OSError):
-        await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+        await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["old"]}
     assert (root / version["old"] / "index.html").read_text() == str(version["id"])
@@ -1146,7 +1150,7 @@ async def test_the_storage_migration_takes_over_an_empty_target(
     (root / version["new"]).mkdir(parents=True)
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["new"]}
     assert (root / version["new"] / "index.html").read_text() == str(version["id"])
@@ -1164,7 +1168,7 @@ async def test_the_storage_migration_finishes_a_run_that_stopped_halfway(
     (root / moved["old"]).rename(root / moved["new"])
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {moved["id"]: moved["new"], waiting["id"]: waiting["new"]}
     assert (root / moved["new"] / "index.html").is_file()
@@ -1180,7 +1184,7 @@ async def test_the_storage_migration_rewrites_a_row_whose_directory_is_missing(
     (root / missing["old"]).rmdir()
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
 
-    await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+    await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {present["id"]: present["new"], missing["id"]: missing["new"]}
     assert any(missing["old"] in record.getMessage() for record in caplog.records)
@@ -1197,7 +1201,7 @@ async def test_the_storage_migration_refuses_a_volume_without_any_version(
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(empty))
 
     with pytest.raises(RuntimeError, match="is the content volume mounted"):
-        await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+        await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
     assert list(empty.iterdir()) == []
@@ -1210,9 +1214,52 @@ async def test_the_storage_migration_needs_the_content_root_when_there_is_someth
     monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
 
     with pytest.raises(RuntimeError, match="PLAK_CONTENT_ROOT"):
-        await asyncio.to_thread(_alembic, own_database, "upgrade", "head")
+        await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
+
+
+async def test_dropping_storage_ref_goes_down_and_up_again(postgres_container) -> None:
+    """Going down fills storage_ref in from the ids again, as 0003 left it."""
+    base = postgres_container.get_connection_url(driver=None)
+    name = f"opslagverwijzing_{uuid.uuid4().hex[:8]}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE DATABASE "{name}"')
+    dsn = f"{base.rsplit('/', 1)[0]}/{name}"
+    try:
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+        conn = await asyncpg.connect(dsn)
+        try:
+            member_id = await _make_member(conn)
+            site_id = await _make_site(conn, await _make_group(conn))
+            version_ids = [await _make_version(conn, site_id, member_id) for _ in range(2)]
+        finally:
+            await conn.close()
+        assert "storage_ref" not in await _version_columns(dsn)
+
+        await asyncio.to_thread(_alembic, dsn, "downgrade", "0006_versions_and_keys_indexes")
+
+        assert await _storage_refs(dsn) == {version_id: f"{site_id}/{version_id}" for version_id in version_ids}
+        assert (await _version_columns(dsn))["storage_ref"] == "NO"
+
+        await asyncio.to_thread(_alembic, dsn, "upgrade", "head")
+
+        assert "storage_ref" not in await _version_columns(dsn)
+    finally:
+        await admin.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+        await admin.close()
+
+
+async def _version_columns(dsn: str) -> dict[str, str]:
+    """Every column of versions, with whether it is nullable."""
+    conn = await asyncpg.connect(dsn)
+    try:
+        rows = await conn.fetch(
+            "SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'versions'"
+        )
+        return {row["column_name"]: row["is_nullable"] for row in rows}
+    finally:
+        await conn.close()
 
 
 _LINK_INSERT = """

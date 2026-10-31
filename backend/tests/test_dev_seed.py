@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
+from plak.ingest.store import version_ref
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
 from plak.models.publication import AccessKey, Invitee, Preview, Site, Version
 
@@ -197,7 +198,8 @@ class TestSeed:
     ) -> None:
         result = await seed_module.seed(settings)
         async with session_factory() as db:
-            refs = list(await db.scalars(select(Version.storage_ref)))
+            rows = await db.execute(select(Version.site_id, Version.id))
+            refs = [version_ref(site_id, version_id) for site_id, version_id in rows]
             live = list(
                 await db.scalars(select(Site.slug).where(Site.live_version_id.is_not(None)))
             )
@@ -226,7 +228,8 @@ class TestSeed:
         first = await seed_module.seed(settings)
         second = await seed_module.seed(settings)
         async with session_factory() as db:
-            refs = set(await db.scalars(select(Version.storage_ref)))
+            rows = await db.execute(select(Version.site_id, Version.id))
+            refs = {version_ref(site_id, version_id) for site_id, version_id in rows}
             counts = (
                 await _count(db, Member),
                 await _count(db, Group),

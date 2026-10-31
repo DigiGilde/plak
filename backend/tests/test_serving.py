@@ -32,7 +32,7 @@ from plak.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore,
 from plak.config import Settings
 from plak.constants import AccessBase, AccessPolicy, Role
 from plak.head_requests import ContentHeadMiddleware
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
@@ -198,9 +198,9 @@ async def _seed(factory, store: ContentStore) -> World:
 
         def new_version(site: Site, files: dict[str, bytes], target=VersionTarget.LIVE) -> Version:
             version_id = uuid.uuid4()
-            storage_ref = store.store_version(site.id, version_id, files)
+            store.store_version(site.id, version_id, files)
             return Version(
-                id=version_id, site_id=site.id, target=target, storage_ref=storage_ref, member_id=member.id
+                id=version_id, site_id=site.id, target=target, member_id=member.id
             )
 
         site_live = new_version(
@@ -283,9 +283,9 @@ async def _seed(factory, store: ContentStore) -> World:
         key, plain = await keys.create_key(db, secret.id, "testsleutel")
         world = World(
             site_live_id=site_live.id,
-            site_storage=site_live.storage_ref,
+            site_storage=version_ref(site_live.site_id, site_live.id),
             preview_version_id=preview_version.id,
-            preview_storage=preview_version.storage_ref,
+            preview_storage=version_ref(preview_version.site_id, preview_version.id),
             secret_live_id=secret_live.id,
             key_plain=plain,
             key_id=key.id,
@@ -2624,13 +2624,12 @@ class TestOldAddress:
             db.add(claimant)
             await db.flush()
             version_id = uuid.uuid4()
-            storage_ref = environment.store.store_version(claimant.id, version_id, {"index.html": b"<h1>opvolger</h1>"})
+            environment.store.store_version(claimant.id, version_id, {"index.html": b"<h1>opvolger</h1>"})
             db.add(
                 Version(
                     id=version_id,
                     site_id=claimant.id,
                     target=VersionTarget.LIVE,
-                    storage_ref=storage_ref,
                     member_id=member.id,
                 )
             )

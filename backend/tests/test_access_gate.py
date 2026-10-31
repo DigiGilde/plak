@@ -28,6 +28,7 @@ from plak.access import keys
 from plak.access.decision import DecisionKind
 from plak.access.gate import Visitor, _is_invitee, code_page_needed, decide, decide_preview, decide_version
 from plak.constants import AccessBase, AccessPolicy, Role
+from plak.ingest.store import version_ref
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
 from plak.models.publication import AccessKey, Invitee, KeyStatus, Preview, Site, Version, VersionTarget
 
@@ -130,14 +131,13 @@ async def make_world(
     await db.flush()
 
     live = Version(
-        site_id=site.id, target=VersionTarget.LIVE, storage_ref="aurora/site/live", member_id=member_active.id
+        site_id=site.id, target=VersionTarget.LIVE, member_id=member_active.id
     )
     preview_version = Version(
-        site_id=site.id, target=VersionTarget.PREVIEW, storage_ref="aurora/site/pv", member_id=member_active.id
+        site_id=site.id, target=VersionTarget.PREVIEW, member_id=member_active.id
     )
     other_live = Version(
-        site_id=other_site.id, target=VersionTarget.LIVE, storage_ref="aurora/ander/live",
-        member_id=member_active.id,
+        site_id=other_site.id, target=VersionTarget.LIVE, member_id=member_active.id,
     )
     db.add_all([live, preview_version, other_live])
     await db.flush()
@@ -812,10 +812,12 @@ async def test_an_allow_carries_the_storage_and_switches_serving_needs(db):
         await decide_version(db, world.group_slug, world.site_slug, world.live_version_id, visitor),
     ]
 
+    live_ref = version_ref(world.site_id, world.live_version_id)
+    preview_ref = version_ref(world.site_id, world.preview_version_id)
     assert [(d.kind, d.storage_ref, d.external_sources, d.sandbox) for d in decisions] == [
-        (DecisionKind.ALLOW, "aurora/site/live", False, True),
-        (DecisionKind.ALLOW, "aurora/site/pv", False, True),
-        (DecisionKind.ALLOW, "aurora/site/live", False, True),
+        (DecisionKind.ALLOW, live_ref, False, True),
+        (DecisionKind.ALLOW, preview_ref, False, True),
+        (DecisionKind.ALLOW, live_ref, False, True),
     ]
 
 

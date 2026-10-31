@@ -98,7 +98,6 @@ class Version(IDMixin, Base):
         SAEnum(VersionTarget, name="version_target", values_callable=lambda c: [member.value for member in c]),
         nullable=False,
     )
-    storage_ref: Mapped[str] = mapped_column(String, nullable=False)
     member_id: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("members.id", ondelete="SET NULL"), nullable=True
     )

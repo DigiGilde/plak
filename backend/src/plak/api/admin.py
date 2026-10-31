@@ -103,6 +103,7 @@ from plak.constants import (
 from plak.db import request_db, violated_constraint
 from plak.expiry import MAX_VALIDITY, ExpiryError
 from plak.ingest.service import IngestError, IngestService
+from plak.ingest.store import version_ref
 from plak.models.audit import ActorKind, AuditLogEntry, ContentViewer
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.identity import (
@@ -956,7 +957,10 @@ class VersionOut(ApiModel):
     site_slug: str = Field(description="Slug of the site.", examples=["docs"])
     group_slug: str = Field(description="Slug of the group.", examples=["aurora"])
     target: VersionTarget = Field(description="`live` for the public URL, `preview` for a preview ref.")
-    storage_ref: str = Field(description="Internal reference to the unpacked file tree on disk.")
+    storage_ref: str = Field(
+        description="Internal reference to the unpacked file tree on disk. Deprecated, and gone in API 2.",
+        deprecated=True,
+    )
     origin: Literal["upload", "action"] = Field(
         description=(
             "`upload` if a member published this version themselves (in the admin interface or with the CLI), "
@@ -1777,7 +1781,7 @@ def _version_json(
         site_slug=site.slug,
         group_slug=group_slug,
         target=version.target,
-        storage_ref=version.storage_ref,
+        storage_ref=version_ref(version.site_id, version.id),
         origin="upload" if version.member_id is not None else "action",
         created_by_member=version.member_id,
         created_by_name=(deployer.name or deployer.email) if deployer is not None else None,

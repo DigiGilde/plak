@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from plak import i18n, messages
 from plak.config import Settings
-from plak.ingest.store import ContentStore, VersionWriter
+from plak.ingest.store import ContentStore, VersionWriter, version_ref
 from plak.ingest.unpacker import Limits, unpack
 from plak.messages import Msg
 from plak.models.publication import Preview, Site, Version, VersionTarget
@@ -182,7 +182,6 @@ class IngestService:
                         id=version_id,
                         site_id=site.id,
                         target=VersionTarget.LIVE,
-                        storage_ref=storage_ref,
                         member_id=deployer.member_id,
                         ci_repository=deployer.ci_repository,
                     )
@@ -216,7 +215,6 @@ class IngestService:
                         id=version_id,
                         site_id=site.id,
                         target=VersionTarget.PREVIEW,
-                        storage_ref=storage_ref,
                         member_id=deployer.member_id,
                         ci_repository=deployer.ci_repository,
                     )
@@ -256,11 +254,7 @@ class IngestService:
                             last_updated_at=func.now(),
                         )
                     )
-                    old_storage_ref = (
-                        await db.execute(
-                            select(Version.storage_ref).where(Version.id == old_version_id)
-                        )
-                    ).scalar_one()
+                    old_storage_ref = version_ref(site.id, old_version_id)
                     # Delete only after the preview row has been repointed:
                     # the FK previews.version_id cascades on delete.
                     await db.execute(delete(Version).where(Version.id == old_version_id))
@@ -283,12 +277,8 @@ class IngestService:
             ).scalar_one_or_none()
             if preview is None:
                 return False
-            storage_ref = (
-                await db.execute(
-                    select(Version.storage_ref).where(Version.id == preview.version_id)
-                )
-            ).scalar_one()
             version_id = preview.version_id
+            storage_ref = version_ref(site.id, version_id)
             await db.delete(preview)
             await db.flush()
             await db.execute(delete(Version).where(Version.id == version_id))

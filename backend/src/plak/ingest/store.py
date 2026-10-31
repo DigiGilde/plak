@@ -31,6 +31,11 @@ class StoreError(Exception):
     """Invalid call into the ContentStore (e.g. a path outside the root)."""
 
 
+def version_ref(site_id: uuid.UUID, version_id: uuid.UUID) -> str:
+    """Where a version lies, relative to the content root."""
+    return f"{site_id}/{version_id}"
+
+
 def _check_rel_path(rel_path: str) -> None:
     # Defence in depth: the unpacker has validated paths already, but the
     # store independently refuses anything that could reach outside the
@@ -133,7 +138,7 @@ class ContentStore:
     def write_version(self, site_id: uuid.UUID, version_id: uuid.UUID) -> Iterator[VersionWriter]:
         """Work directory for a new version; on a normal exit atomically renamed
         to its final place, on an exception cleaned up entirely."""
-        storage_ref = f"{site_id}/{version_id}"
+        storage_ref = version_ref(site_id, version_id)
         final_target = self._version_root(storage_ref)
 
         workdir = self._tmp / str(uuid.uuid4())
@@ -200,11 +205,12 @@ class ContentStore:
                 swept += 1
         return swept
 
-    def reclaim(self, site_ids: set[str], storage_refs: set[str], older_than: timedelta) -> Reclaimed:
+    def reclaim(self, sites: dict[str, set[str]], older_than: timedelta) -> Reclaimed:
         """Moves the directories no row points at into `_reclaimed/`.
 
-        `site_ids` and `storage_refs` are what the database holds, read before
-        this call: a site or version made after that read is younger than
+        `sites` maps every site id the database holds to the ids of its
+        versions, read before this call: a site or version made after that
+        read is younger than
         `older_than` and left alone. Ids never recur, so a directory that lost
         its row can never be claimed by a new one. At the top only directories
         named like a site id are considered: `lost+found` on a fresh volume or
@@ -218,30 +224,29 @@ class ContentStore:
         nothing to disagree with, so its old directories are ordinary orphans.
         """
         with self._removing:
-            return self._reclaim(site_ids, storage_refs, older_than)
+            return self._reclaim(sites, older_than)
 
-    def _reclaim(self, site_ids: set[str], storage_refs: set[str], older_than: timedelta) -> Reclaimed:
+    def _reclaim(self, sites: dict[str, set[str]], older_than: timedelta) -> Reclaimed:
         boundary = datetime.now(tz=UTC) - older_than
-        sites_with_rows = {ref.split("/", 1)[0] for ref in storage_refs}
         kept = 0
         orphans: list[tuple[str, int]] = []
         held: list[str] = []
         for site_dir in sorted(self._root.iterdir()):
             if not _is_id(site_dir.name) or not _is_directory(site_dir):
                 continue
-            if site_dir.name not in site_ids:
+            version_ids = sites.get(site_dir.name)
+            if version_ids is None:
                 if _older(site_dir, boundary):
                     orphans.append((site_dir.name, sum(1 for _ in site_dir.iterdir())))
                 continue
             versions = sorted(site_dir.iterdir())
-            refs = [f"{site_dir.name}/{version_dir.name}" for version_dir in versions]
-            with_row = sum(ref in storage_refs for ref in refs)
+            with_row = sum(version_dir.name in version_ids for version_dir in versions)
             without_row = [
-                ref
-                for ref, version_dir in zip(refs, versions, strict=True)
-                if ref not in storage_refs and _older(version_dir, boundary)
+                f"{site_dir.name}/{version_dir.name}"
+                for version_dir in versions
+                if version_dir.name not in version_ids and _older(version_dir, boundary)
             ]
-            if with_row == 0 and site_dir.name in sites_with_rows:
+            if with_row == 0 and version_ids:
                 held.extend(without_row)
                 continue
             kept += with_row

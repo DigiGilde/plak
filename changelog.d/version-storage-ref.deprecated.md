@@ -1,0 +1,1 @@
+- `storageRef` on a version in the admin API is deprecated and goes away in API 2.

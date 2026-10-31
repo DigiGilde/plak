@@ -121,9 +121,9 @@ async def _seed(factory, store: ContentStore) -> World:
 
         def new_version(site: Site, body: bytes, target=VersionTarget.LIVE) -> Version:
             version_id = uuid.uuid4()
-            storage_ref = store.store_version(site.id, version_id, {"index.html": body})
+            store.store_version(site.id, version_id, {"index.html": body})
             return Version(
-                id=version_id, site_id=site.id, target=target, storage_ref=storage_ref, member_id=member.id
+                id=version_id, site_id=site.id, target=target, member_id=member.id
             )
 
         secret_live = new_version(secret, SECRET_INDEX)
