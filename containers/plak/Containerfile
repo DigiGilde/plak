@@ -2,7 +2,7 @@
 # Builds the whole product image: backend plus the built admin SPA. Build
 # context is the repo root (dev/compose.yml: context ".."), because the
 # image bundles the built admin SPA from frontend/ alongside the backend.
-FROM docker.io/library/node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea AS spa
+FROM docker.io/library/node:24-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 AS spa
 
 WORKDIR /spa
 
@@ -13,7 +13,7 @@ ARG PLAK_VERSION=dev
 COPY frontend/ ./
 RUN PLAK_VERSION="${PLAK_VERSION}" npm run build
 
-FROM ghcr.io/astral-sh/uv:0.13-python3.15-trixie-slim@sha256:86a05dd8f19b21368fbb160c7e2ad0576780bebbe89114b6deeba2506f7612e1 AS build
+FROM ghcr.io/astral-sh/uv:0.13-python3.15-trixie-slim@sha256:60a1cfdc8945ea9d12c8fe6221bfa256b2d94df43a93cc957a503346de9ca53b AS build
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-ins
 COPY backend/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
-FROM docker.io/library/python:3.15-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS runtime
+FROM docker.io/library/python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS runtime
 
 # The app runs from the venv uv built, so pip is not needed here, and pip
 # 26.2.2 vendors urllib3, msgpack and setuptools with HIGH advisories. The CI

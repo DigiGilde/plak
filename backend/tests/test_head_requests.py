@@ -3,6 +3,7 @@ leaves without a body; everywhere else the request passes as it came."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -79,8 +80,15 @@ async def test_a_file_answers_a_head_without_reading_the_file(tmp_path: Path) ->
             sandbox=False,
         )
         sent: list[Message] = []
+        requested = False
 
         async def receive() -> Message:
+            # As a server: the request once, then nothing until a disconnect.
+            # Starlette's FileResponse listens for one while it sends.
+            nonlocal requested
+            if requested:
+                await asyncio.Event().wait()
+            requested = True
             return {"type": "http.request", "body": b"", "more_body": False}
 
         async def send(message: Message) -> None:
