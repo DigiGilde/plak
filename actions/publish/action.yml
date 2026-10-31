@@ -186,6 +186,7 @@ runs:
       if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown != 'true' }}
       shell: bash
       env:
+        PLAK_ACTION_PATH: ${{ github.action_path }}
         PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
         PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
@@ -217,16 +218,17 @@ runs:
         # '::add-mask::' command for the OIDC token, and $(...) would pull
         # that into the version-id variable.
         ARGS+=(--output-file "$GITHUB_OUTPUT")
-        # github.action_path is actions/publish/ inside the checked-out
+        # PLAK_ACTION_PATH (github.action_path) is actions/publish/ inside the checked-out
         # plak repository; the CLI project sits two levels up, in cli/.
         # --project, not uvx: the same invocation contributors use from a
         # checkout, so one form is documented and exercised.
-        uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
+        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" plak "${ARGS[@]}"
 
     - name: Remove preview
       if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown == 'true' }}
       shell: bash
       env:
+        PLAK_ACTION_PATH: ${{ github.action_path }}
         PLAK_INPUT_HOST: ${{ inputs.host }}
         PLAK_SITE: ${{ inputs.site }}
         PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
@@ -244,7 +246,7 @@ runs:
         if [ -n "$PLAK_INPUT_SITE_ID" ]; then
           ARGS+=(--site-id "$PLAK_INPUT_SITE_ID")
         fi
-        uv run --project "${{ github.action_path }}/../../cli" plak "${ARGS[@]}"
+        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" plak "${ARGS[@]}"
 
     # Forgejo shows a summary only where both runner and server support it;
     # elsewhere the variable is not set and this step writes nothing.
@@ -285,6 +287,7 @@ runs:
       if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       env:
+        PLAK_ACTION_PATH: ${{ github.action_path }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         PLAK_INPUT_ENVIRONMENT: ${{ inputs.environment }}
         PLAK_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
@@ -321,4 +324,4 @@ runs:
         if [ "$PLAK_INPUT_COMMENT" = "true" ]; then
           ARGS+=(--comment)
         fi
-        uv run --project "${{ github.action_path }}/../../cli" python -m plak_cli.github "${ARGS[@]}"
+        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" python -m plak_cli.github "${ARGS[@]}"

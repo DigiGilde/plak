@@ -7,7 +7,7 @@ FROM docker.io/library/node:24-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be8
 WORKDIR /spa
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 ARG PLAK_VERSION=dev
 COPY frontend/ ./
@@ -22,10 +22,10 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never
 
 COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
 
 COPY backend/src ./src
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
 
 FROM docker.io/library/python:3.15-slim-trixie@sha256:533b0b2f9b5d46fd097091cf826f27902f1d6c3bca714b6dc74551356aa97a51 AS runtime
 
@@ -60,7 +60,9 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PLAK_SPA_PATH=/app/spa \
     PLAK_VERSION=${PLAK_VERSION}
 
-USER plak
+# Numeric, so the kubelet can verify runAsNonRoot (the uid of the groupadd
+# and useradd above).
+USER 1000:1000
 
 EXPOSE 8080
 
