@@ -1,19 +1,19 @@
 # Plak - development commands
 
-# Standaard: toon beschikbare commands
+# Default: list the available commands
 default:
     @just --list
 
-# Start de backend lokaal met uvicorn (reload aan; geen accesslog, want die
-# zou geheime links met ?key= in klare tekst loggen)
+# Run the backend locally with uvicorn (reload on, no access log: it would
+# log secret links with ?key= in plain text)
 dev:
     cd backend && uv run uvicorn plak.main:create_app --factory --reload --no-access-log
 
-# Vul de draaiende dev-stack met voorbeeldinhoud: wist groepen en leden en zaait ze opnieuw (dev/seed.py)
+# Fill the running dev stack with sample content: wipes groups and members and seeds them again (dev/seed.py)
 seed:
     podman compose -f dev/compose.yml exec -T app python - < dev/seed.py
 
-# Draai de backend- en CLI-testsuites; testcontainers heeft de Podman-socket nodig
+# Run the backend and CLI test suites; Testcontainers needs the Podman socket
 test:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -31,11 +31,11 @@ test:
     cd backend && uv run python -m pytest -n 4
     cd "{{justfile_directory()}}" && just test-cli
 
-# Draai de CLI-tests (cli/tests); cli/ is een eigen uv-project, los van de backend
+# Run the CLI tests (cli/tests); cli/ is its own uv project, separate from the backend
 test-cli:
     cd cli && uv run pytest tests -q
 
-# Dekking van de drie suites; dezelfde socket-truc als `just test`
+# Coverage of the three suites; same socket trick as `just test`
 coverage:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -57,30 +57,30 @@ coverage:
     cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
     cd "{{justfile_directory()}}/frontend" && npm run coverage
 
-# Lint de backend en de CLI met ruff
+# Lint the backend and the CLI with ruff
 lint:
     cd backend && uv run ruff check src tests
     # From the repo root, so ruff uses its defaults for cli/ instead of
     # backend/pyproject.toml; --project only picks the pinned ruff.
     uv run --project backend ruff check cli/plak_cli cli/tests
 
-# Ruim verlopen auditregels op; vraagt PLAK_DB_URL
+# Purge expired audit entries; needs PLAK_DB_URL
 purge-audit-log:
     cd backend && uv run python -m plak.audit.retention
 
-# Controleer de integriteitsketen van het auditlog; vraagt PLAK_DB_URL
+# Verify the integrity chain of the audit log; needs PLAK_DB_URL
 verify-audit-log:
     cd backend && uv run python -m plak.audit.chain
 
-# Publiceer de kop van elke auditketen als logregel; vraagt PLAK_DB_URL
+# Publish the head of each audit chain as a log line; needs PLAK_DB_URL
 publish-audit-head:
     cd backend && uv run python -m plak.audit.checkpoint
 
-# Controleer de database tegen een eerder gepubliceerde kopregel (- voor stdin)
+# Check the database against a previously published head line (- for stdin)
 verify-audit-head bestand:
     cd backend && uv run python -m plak.audit.checkpoint --against {{bestand}}
 
-# Scan de afhankelijkheden zoals de CI-job `vulnerabilities` dat doet
+# Scan the dependencies like the CI job `vulnerabilities` does
 scan:
     #!/usr/bin/env bash
     # Same ignore list as the CI (.trivyignore.yaml). The image scan is not
@@ -102,16 +102,16 @@ scan:
     npm audit --json --prefix frontend > "$report" || true
     uv run --script .github/scripts/vulnerabilities.py npm-audit "$report"
 
-# E2E-suite (Playwright, spec 13): stack op eigen poorten omhoog, testen,
-# stack weer afbreken; zie e2e/run.sh voor de knoppen
+# E2E suite (Playwright, spec 13): bring the stack up on its own ports, test,
+# tear the stack down again; see e2e/run.sh for the options
 e2e *ARGS:
     ./e2e/run.sh {{ARGS}}
 
-# Bouw de Vue-SPA naar frontend/dist (de app serveert die onder /admin)
+# Build the Vue SPA to frontend/dist (the app serves it under /admin)
 build-spa:
     cd frontend && npm run build
 
-# Haal de Swagger UI-assets van /-/api/docs opnieuw op (versie in api/docs.py)
+# Fetch the Swagger UI assets for /-/api/docs again (version in api/docs.py)
 refresh-swagger-ui:
     #!/usr/bin/env bash
     set -euo pipefail
