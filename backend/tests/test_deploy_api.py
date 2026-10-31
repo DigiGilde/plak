@@ -47,7 +47,7 @@ from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
 from plak.ingest.service import IngestService, RoomGuard
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.messages import Msg
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.ci import CiProvider, SiteRepository
@@ -334,7 +334,7 @@ async def test_live_deploy_with_ci_token(environment: Environment) -> None:
     assert version.ci_repository == "github.com/minbzk/website"
     assert version.member_id is None
     assert live_id == version_id
-    assert (environment.settings.content_root / version.storage_ref / "index.html").is_file()
+    assert (environment.settings.content_root / version_ref(version.site_id, version.id) / "index.html").is_file()
     assert row.actor_kind == ActorKind.CI
     assert row.actor_pseudonym == pseudonymise(environment.settings.audit_pepper, "github:https://github.com:1001")
     assert row.result == "allowed"
@@ -774,7 +774,7 @@ async def test_deploy_of_archive_with_wrapping_dir(environment: Environment) -> 
     async with environment.session_factory() as db:
         version = await db.scalar(select(Version).where(Version.id == version_id))
     assert version is not None
-    version_dir = environment.settings.content_root / version.storage_ref
+    version_dir = environment.settings.content_root / version_ref(version.site_id, version.id)
     assert (version_dir / "index.html").is_file()
     assert (version_dir / "assets" / "s.css").is_file()
     assert not (version_dir / "dist").exists()
@@ -833,7 +833,7 @@ async def test_base_path_creates_that_dir_the_root(environment: Environment) -> 
     version_id = uuid.UUID(resp.json()["versionId"])
     async with environment.session_factory() as db:
         version = await db.scalar(select(Version).where(Version.id == version_id))
-    version_dir = environment.settings.content_root / version.storage_ref
+    version_dir = environment.settings.content_root / version_ref(version.site_id, version.id)
     assert (version_dir / "index.html").is_file()
     assert (version_dir / "assets" / "s.css").is_file()
     assert not (version_dir / "README.md").exists()
@@ -876,7 +876,7 @@ async def test_preview_deploy_with_base_path(environment: Environment) -> None:
         preview = await db.scalar(select(Preview).where(Preview.site_id == environment.site.id))
     assert version.target == VersionTarget.PREVIEW
     assert preview.ref == "pr-9"
-    index = environment.settings.content_root / version.storage_ref / "index.html"
+    index = environment.settings.content_root / version_ref(version.site_id, version.id) / "index.html"
     assert index.read_bytes() == b"<p>pr</p>"
 
 
@@ -1294,7 +1294,8 @@ async def test_teardown_idempotent_204(environment: Environment) -> None:
         version_id = uuid.UUID(resp.json()["versionId"])
 
         async with environment.session_factory() as db:
-            storage_ref = await db.scalar(select(Version.storage_ref).where(Version.id == version_id))
+            stored = await db.scalar(select(Version).where(Version.id == version_id))
+            storage_ref = version_ref(stored.site_id, stored.id)
         assert (environment.settings.content_root / storage_ref).is_dir()
 
         resp = await client.delete(
@@ -1648,7 +1649,8 @@ async def test_upload_streams_without_keeping_the_body_in_memory(
         assert resp.status_code == 201, resp.text
         version_id = uuid.UUID(resp.json()["versionId"])
         async with environment.session_factory() as db:
-            storage_ref = await db.scalar(select(Version.storage_ref).where(Version.id == version_id))
+            stored = await db.scalar(select(Version).where(Version.id == version_id))
+            storage_ref = version_ref(stored.site_id, stored.id)
         index = environment.settings.content_root / storage_ref / "index.html"
         assert index.stat().st_size == count * len(chunk)
         assert peak < 8 * 1024 * 1024, f"peak {peak} bytes for a body of {size} bytes"

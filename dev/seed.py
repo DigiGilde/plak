@@ -39,7 +39,7 @@ from plak.config import Settings, load_settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
 from plak.ingest.service import Deployer, IngestService
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.identity import (
     Group,
     GroupMember,
@@ -234,7 +234,8 @@ def _site(
 async def _wipe(session_factory: async_sessionmaker[AsyncSession], store: ContentStore) -> None:
     """Drops every group and member, and the version directories they owned."""
     async with session_factory() as db:
-        storage_refs = list(await db.scalars(select(Version.storage_ref)))
+        rows = await db.execute(select(Version.site_id, Version.id))
+        storage_refs = [version_ref(row.site_id, row.id) for row in rows]
         await db.execute(delete(Group))
         await db.execute(delete(Member))
         await db.commit()

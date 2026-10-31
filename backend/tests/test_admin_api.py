@@ -40,7 +40,7 @@ from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_session_factory
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.audit import AuditLogEntry, ContentViewer
 from plak.models.ci import CiProvider, SiteRepository
 from plak.models.cli import CliSession
@@ -968,7 +968,7 @@ class TestGroupsAndSites:
             db.add(busy)
             await db.flush()
             version = Version(
-                site_id=busy.id, target=VersionTarget.PREVIEW, storage_ref="ref-druk", member_id=data.member_b.id
+                site_id=busy.id, target=VersionTarget.PREVIEW, member_id=data.member_b.id
             )
             db.add(version)
             await db.flush()
@@ -2449,15 +2449,15 @@ class TestVersionDeployer:
             version = Version(
                 site_id=data.site.id,
                 target=VersionTarget.LIVE,
-                storage_ref="ref-naam",
                 member_id=data.member_a.id,
             )
             db.add(version)
             await db.commit()
+            version_id = version.id
 
         login(client, app, sub="lid-a", email="a@example.nl")
         rows = (await client.get(f"{BASE}/sites/team/site/versions")).json()
-        row = next(r for r in rows if r["storageRef"] == "ref-naam")
+        row = next(r for r in rows if r["id"] == str(version_id))
         assert row["createdByName"] == data.member_a.email
         assert row["createdByMember"] == str(data.member_a.id)
 
@@ -2465,23 +2465,38 @@ class TestVersionDeployer:
         """ck_versions_origin demands one of the two, so a CI deploy names its
         repository; what it must not have is a member to name."""
         async with factory() as db:
-            db.add(
-                Version(
-                    site_id=data.site.id,
-                    target=VersionTarget.LIVE,
-                    storage_ref="ref-ci",
-                    member_id=None,
-                    ci_repository="github.com/minbzk/website",
-                )
+            version = Version(
+                site_id=data.site.id,
+                target=VersionTarget.LIVE,
+                member_id=None,
+                ci_repository="github.com/minbzk/website",
             )
+            db.add(version)
             await db.commit()
+            version_id = version.id
 
         login(client, app, sub="lid-a", email="a@example.nl")
         rows = (await client.get(f"{BASE}/sites/team/site/versions")).json()
-        row = next(r for r in rows if r["storageRef"] == "ref-ci")
+        row = next(r for r in rows if r["id"] == str(version_id))
         assert row["createdByName"] is None
         assert row["createdByRepository"] == "github.com/minbzk/website"
         assert row["origin"] == "action"
+
+    async def test_the_storage_ref_of_a_version_is_its_site_and_version_id(self, client, app, data, factory):
+        async with factory() as db:
+            version = Version(site_id=data.site.id, target=VersionTarget.LIVE, member_id=data.member_a.id)
+            db.add(version)
+            await db.commit()
+            version_id = version.id
+
+        login(client, app, sub="lid-a", email="a@example.nl")
+        rows = (await client.get(f"{BASE}/sites/team/site/versions")).json()
+        row = next(r for r in rows if r["id"] == str(version_id))
+        assert row["storageRef"] == f"{data.site.id}/{version_id}" == version_ref(data.site.id, version_id)
+
+    async def test_the_schema_marks_the_storage_ref_as_deprecated(self, app):
+        schema = app.openapi()["components"]["schemas"]["VersionOut"]
+        assert schema["properties"]["storageRef"]["deprecated"] is True
 
 
 # -- Invitees ---------------------------------------------------------------

@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from plak.audit import vocabulary
 from plak.cli import service as cli
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.identity import Group
 from plak.models.publication import Preview, Site, Version, VersionTarget
@@ -81,14 +81,14 @@ async def _cleanup_expired_previews(
                     .returning(Preview.version_id)
                 )
             ).all()
-            storage_refs = []
+            removed = []
             if version_ids:
-                storage_refs = (
-                    await db.scalars(
-                        delete(Version).where(Version.id.in_(version_ids)).returning(Version.storage_ref)
+                removed = (
+                    await db.execute(
+                        delete(Version).where(Version.id.in_(version_ids)).returning(Version.site_id, Version.id)
                     )
                 ).all()
-        await store.delete_versions(storage_refs)
+        await store.delete_versions(version_ref(row.site_id, row.id) for row in removed)
         return len(version_ids)
 
 
@@ -97,7 +97,7 @@ async def _cleanup_orphan_preview_versions(
 ) -> int:
     async with factory() as db:
         async with db.begin():
-            orphan_selection = select(Version.id, Version.storage_ref).where(
+            orphan_selection = select(Version.site_id, Version.id).where(
                 Version.target == VersionTarget.PREVIEW,
                 Version.id.not_in(select(Preview.version_id)),
             )
@@ -105,7 +105,7 @@ async def _cleanup_orphan_preview_versions(
             ids = [row.id for row in rows]
             if ids:
                 await db.execute(delete(Version).where(Version.id.in_(ids)))
-        await store.delete_versions(row.storage_ref for row in rows)
+        await store.delete_versions(version_ref(row.site_id, row.id) for row in rows)
         return len(rows)
 
 
@@ -150,11 +150,11 @@ async def _cleanup_site_live_versions(
                 await db.execute(
                     delete(Version)
                     .where(others, Version.id.not_in(kept_ids))
-                    .returning(Version.id, Version.storage_ref)
+                    .returning(Version.id)
                 )
-            ).all()
-        await store.delete_versions(row.storage_ref for row in removed)
-        return [row.id for row in removed], site.kept
+            ).scalars().all()
+        await store.delete_versions(version_ref(site_id, version_id) for version_id in removed)
+        return list(removed), site.kept
 
 
 async def _record_live_cleanup(
@@ -213,9 +213,13 @@ async def _reclaim_orphan_directories(
     factory: async_sessionmaker[AsyncSession], store: ContentStore
 ) -> tuple[int, int, int]:
     async with factory() as db:
-        site_ids = {str(site_id) for site_id in await db.scalars(select(Site.id))}
-        storage_refs = set(await db.scalars(select(Version.storage_ref)))
-    reclaimed = await asyncio.to_thread(store.reclaim, site_ids, storage_refs, ORPHAN_OLDER_THAN)
+        rows = await db.execute(select(Site.id, Version.id).outerjoin(Version, Version.site_id == Site.id))
+        sites: dict[str, set[str]] = {}
+        for site_id, version_id in rows:
+            version_ids = sites.setdefault(str(site_id), set())
+            if version_id is not None:
+                version_ids.add(str(version_id))
+    reclaimed = await asyncio.to_thread(store.reclaim, sites, ORPHAN_OLDER_THAN)
     if reclaimed.moved:
         _logger.warning(
             "Moved %d directories without a row into _reclaimed: %s",

@@ -150,7 +150,6 @@ def subject(request, data) -> Subject:
         child=Version(
             site_id=data.site.id,
             target=VersionTarget.LIVE,
-            storage_ref="ref-deploy",
             ci_repository="github.com/minbzk/website",
         ),
     )

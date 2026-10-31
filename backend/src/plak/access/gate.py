@@ -39,6 +39,7 @@ from plak.access.decision import (
 )
 from plak.auth.sessions import Visitor
 from plak.constants import AccessBase, AccessPolicy
+from plak.ingest.store import version_ref
 from plak.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
 from plak.models.publication import Invitee, Preview, Site, Version
 
@@ -47,10 +48,9 @@ async def decide(
     db: AsyncSession, group_slug: str, site_slug: str, visitor: Visitor
 ) -> AccessDecision:
     """Access decision for live content."""
-    found = await _find_site(db, group_slug, site_slug)
-    if isinstance(found, AccessDecision):
-        return found
-    site, live_storage_ref = found
+    site = await _find_site(db, group_slug, site_slug)
+    if isinstance(site, AccessDecision):
+        return site
     if site.live_version_id is None:
         # Also on base publiek: without a live version the site
         # does not exist to the outside world (spec §5.6).
@@ -60,7 +60,6 @@ async def decide(
         site,
         _site_access(site),
         site.live_version_id,
-        live_storage_ref,
         visitor,
         login_redirect_allowed=True,
     )
@@ -71,20 +70,12 @@ async def decide_preview(
 ) -> AccessDecision:
     """Access decision for preview content; the expiry check happens here
     itself, the cleanup job is only the safety net."""
-    found = await _find_site(db, group_slug, site_slug)
-    if isinstance(found, AccessDecision):
-        return found
-    site, _ = found
-    row = (
-        await db.execute(
-            select(Preview, Version.storage_ref)
-            .join(Version, Version.id == Preview.version_id)
-            .where(Preview.site_id == site.id, Preview.ref == ref)
-        )
-    ).one_or_none()
-    if row is None:
+    site = await _find_site(db, group_slug, site_slug)
+    if isinstance(site, AccessDecision):
+        return site
+    preview = await db.scalar(select(Preview).where(Preview.site_id == site.id, Preview.ref == ref))
+    if preview is None:
         return neutral_404(REASON_UNKNOWN_PREVIEW)
-    preview, storage_ref = row
     if preview.expires_at is not None and preview.expires_at <= datetime.now(UTC):
         return neutral_404(REASON_PREVIEW_EXPIRED)
     return await _assess(
@@ -92,7 +83,6 @@ async def decide_preview(
         site,
         effective_access(site, preview),
         preview.version_id,
-        storage_ref,
         visitor,
         login_redirect_allowed=False,
     )
@@ -104,10 +94,9 @@ async def decide_version(
     """_version view: active members of the site's group only, whatever the
     site's access setting; for anyone else (also without a session) the neutral
     404, never a login redirect."""
-    found = await _find_site(db, group_slug, site_slug)
-    if isinstance(found, AccessDecision):
-        return found
-    site, _ = found
+    site = await _find_site(db, group_slug, site_slug)
+    if isinstance(site, AccessDecision):
+        return site
     # Membership before the version lookup: non-members cannot probe for the
     # existence of version ids.
     if visitor.sub is None or not await _belongs_to_site(db, site, visitor.sub):
@@ -118,7 +107,7 @@ async def decide_version(
     return allow(
         version.id,
         AccessPolicy(AccessBase.SITE_TEAM),
-        storage_ref=version.storage_ref,
+        storage_ref=version_ref(site.id, version.id),
         external_sources=bool(site.external_sources),
         sandbox=bool(site.sandbox),
     )
@@ -133,38 +122,34 @@ async def code_page_needed(db: AsyncSession, group_slug: str, site_slug: str, se
     on the secret link, and the selector has to belong to a key of this site
     that is neither revoked nor expired.
     """
-    found = await _find_site(db, group_slug, site_slug)
-    if isinstance(found, AccessDecision):
+    site = await _find_site(db, group_slug, site_slug)
+    if isinstance(site, AccessDecision):
         return False
-    site, _ = found
     if site.live_version_id is None or not site.access_keys:
         return False
     return await keys.selector_usable(db, site.id, selector)
 
 
-async def _find_site(
-    db: AsyncSession, group_slug: str, site_slug: str
-) -> tuple[Site, str | None] | AccessDecision:
-    """The site and the storage of its live version, or the refusal.
+async def _find_site(db: AsyncSession, group_slug: str, site_slug: str) -> Site | AccessDecision:
+    """The site, or the refusal.
 
     One statement: the group row comes back with or without a site, so an
     unknown group and an unknown site still carry their own reason.
     """
     row = (
         await db.execute(
-            select(Group.id, Site, Version.storage_ref)
+            select(Group.id, Site)
             .select_from(Group)
             .outerjoin(Site, (Site.group_id == Group.id) & (Site.slug == site_slug))
-            .outerjoin(Version, Version.id == Site.live_version_id)
             .where(Group.slug == group_slug)
         )
     ).one_or_none()
     if row is None:
         return neutral_404(REASON_UNKNOWN_GROUP)
-    _, site, live_storage_ref = row
+    _, site = row
     if site is None:
         return neutral_404(REASON_UNKNOWN_SITE)
-    return site, live_storage_ref
+    return site
 
 
 def effective_access(site: Site, preview: Preview | None) -> AccessPolicy:
@@ -190,7 +175,6 @@ async def _assess(
     site: Site,
     access: AccessPolicy,
     version_id: uuid.UUID,
-    storage_ref: str | None,
     visitor: Visitor,
     *,
     login_redirect_allowed: bool,
@@ -203,7 +187,7 @@ async def _assess(
         return allow(
             version_id,
             access,
-            storage_ref=storage_ref,
+            storage_ref=version_ref(site.id, version_id),
             external_sources=bool(site.external_sources),
             sandbox=bool(site.sandbox),
             key_selector=key_selector,

@@ -31,7 +31,7 @@ from plak.ingest.service import (
     IngestService,
     RoomGuard,
 )
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.ingest.unpacker import BundleError
 from plak.models.identity import Group, Member
 from plak.models.publication import Preview, Site, Version, VersionTarget
@@ -174,7 +174,7 @@ class TestDeploy:
         assert version.id == version_id
         assert version.target == VersionTarget.LIVE
         assert version.member_id == environment.member.id
-        path = environment.store.file_path(version.storage_ref, "index.html")
+        path = environment.store.file_path(version_ref(version.site_id, version.id), "index.html")
         assert path is not None
         assert path.read_bytes() == b"<h1>v1</h1>"
 
@@ -215,7 +215,7 @@ class TestDeploy:
 
         (version,) = await _versions(environment)
         assert version.id == version_id
-        version_dir = environment.content_root / version.storage_ref
+        version_dir = environment.content_root / version_ref(version.site_id, version.id)
         assert (version_dir / "index.html").read_bytes() == b"<h1>hoi</h1>"
         assert (version_dir / "assets" / "stijl.css").read_bytes() == b"body{}"
         assert not (version_dir / "dist").exists()
@@ -293,7 +293,7 @@ class TestDeploy:
 
         (version,) = await _versions(environment)
         assert version.id == version_id
-        version_dir = environment.content_root / version.storage_ref
+        version_dir = environment.content_root / version_ref(version.site_id, version.id)
         assert (version_dir / "index.html").read_bytes() == b"<h1>hoi</h1>"
         assert not (version_dir / "README.md").exists()
 

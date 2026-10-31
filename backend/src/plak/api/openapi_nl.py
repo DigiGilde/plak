@@ -3383,8 +3383,8 @@ NL: Final[dict[str, str]] = {
     "`live` for the public URL, `preview` for a preview ref.": (
         "`live` voor de publieke URL, `preview` voor een preview-ref."
     ),
-    "Internal reference to the unpacked file tree on disk.": (
-        "Interne verwijzing naar de uitgepakte bestandsboom op schijf."
+    "Internal reference to the unpacked file tree on disk. Deprecated, and gone in API 2.": (
+        "Interne verwijzing naar de uitgepakte bestandsboom op schijf. Verouderd, en verdwijnt in API 2."
     ),
     (
         "`upload` if a member published this version themselves (in the admin interface or with the CLI), `action` if "

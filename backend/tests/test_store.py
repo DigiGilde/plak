@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from plak.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError
+from plak.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError, version_ref
 
 SITE = uuid.uuid4()
 OLD = 1_000_000  # an mtime far in the past
@@ -38,7 +38,7 @@ class TestStoreVersion:
     def test_writes_and_returns_ref(self, store: ContentStore, root: Path):
         version_id = uuid.uuid4()
         ref = store.store_version(SITE, version_id, FILES)
-        assert ref == f"{SITE}/{version_id}"
+        assert ref == version_ref(SITE, version_id) == f"{SITE}/{version_id}"
         assert (root / ref / "index.html").read_bytes() == b"<html>"
         assert (root / ref / "assets" / "stijl.css").read_bytes() == b"body{}"
 
@@ -246,8 +246,18 @@ def _set_age(path: Path, age: timedelta) -> Path:
     return path
 
 
+def _held(*refs: str, sites: tuple[uuid.UUID, ...] = (SITE,)) -> dict[str, set[str]]:
+    """What the database holds, as `reclaim` gets it: the sites in `sites`,
+    and the versions `refs` name."""
+    held: dict[str, set[str]] = {str(site): set() for site in sites}
+    for ref in refs:
+        site, version = ref.split("/")
+        held.setdefault(site, set()).add(version)
+    return held
+
+
 class TestReclaim:
-    """`reclaim` gets the site ids and storage refs the database holds and
+    """`reclaim` gets the site ids and version ids the database holds and
     moves what none of them points at into `_reclaimed`."""
 
     @staticmethod
@@ -265,7 +275,7 @@ class TestReclaim:
         kept = self._version(store, SITE)
         orphan = self._version(store, SITE)
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == [orphan]
         assert result.held == []
@@ -282,7 +292,7 @@ class TestReclaim:
         self._version(store, gone_site)
         _age(root / str(gone_site))
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == [str(gone_site)]
         assert not (root / str(gone_site)).exists()
@@ -313,7 +323,7 @@ class TestReclaim:
         assert removing.wait(5)
         results: list[Any] = []
         walker = threading.Thread(
-            target=lambda: results.append(store.reclaim({str(SITE)}, {kept}, timedelta(hours=24)))
+            target=lambda: results.append(store.reclaim(_held(kept), timedelta(hours=24)))
         )
         walker.start()
 
@@ -336,7 +346,7 @@ class TestReclaim:
         new_site = uuid.uuid4()
         self._version(store, new_site, old=False)
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == []
         assert (root / in_flight).is_dir()
@@ -346,7 +356,7 @@ class TestReclaim:
     def test_never_touches_a_directory_with_a_row(self, store: ContentStore, root: Path):
         refs = {self._version(store, SITE) for _ in range(3)}
 
-        result = store.reclaim({str(SITE)}, refs, timedelta(hours=24))
+        result = store.reclaim(_held(*refs), timedelta(hours=24))
 
         assert result.moved == []
         assert result.held == []
@@ -368,7 +378,7 @@ class TestReclaim:
         _age(link)
         upper = _age(_mkdir(root / str(uuid.uuid4()).upper()))
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == []
         assert {entry.name for entry in root.iterdir()} == {
@@ -381,7 +391,7 @@ class TestReclaim:
         database holds no version at all."""
         empty = _age(_mkdir(root / str(uuid.uuid4())))
 
-        result = store.reclaim(set(), set(), timedelta(hours=24))
+        result = store.reclaim({}, timedelta(hours=24))
 
         assert result.moved == [empty.name]
 
@@ -394,7 +404,7 @@ class TestReclaim:
         leftover = self._version(store, disputed)
         elsewhere = f"{disputed}/{uuid.uuid4()}"
 
-        result = store.reclaim({str(SITE), str(disputed)}, {kept, elsewhere}, timedelta(hours=24))
+        result = store.reclaim(_held(kept, elsewhere), timedelta(hours=24))
 
         assert result.moved == []
         assert result.held == [leftover]
@@ -409,7 +419,7 @@ class TestReclaim:
         started = uuid.uuid4()
         leftover = self._version(store, started)
 
-        result = store.reclaim({str(SITE), str(started)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept, sites=(SITE, started)), timedelta(hours=24))
 
         assert result.moved == [leftover]
         assert result.held == []
@@ -422,7 +432,7 @@ class TestReclaim:
         started = uuid.uuid4()
         leftovers = sorted(self._version(store, started) for _ in range(2))
 
-        result = store.reclaim({str(SITE), str(started)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept, sites=(SITE, started)), timedelta(hours=24))
 
         assert result.moved == []
         assert result.held == leftovers
@@ -436,7 +446,7 @@ class TestReclaim:
         older = self._version(store, SITE, old=False)
         _set_age(root / older, timedelta(hours=24, minutes=1))
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == [older]
         assert result.held == []
@@ -449,7 +459,7 @@ class TestReclaim:
         kept = self._version(store, SITE)
         orphans = [self._version(store, SITE) for _ in range(2)]
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == []
         assert sorted(result.held) == sorted(orphans)
@@ -463,7 +473,7 @@ class TestReclaim:
         self._version(store, gone_site)
         _age(root / str(gone_site))
 
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
 
         assert result.moved == []
         assert result.held == [str(gone_site)]
@@ -472,7 +482,7 @@ class TestReclaim:
         refs = [self._version(store, SITE) for _ in range(3)]
         _age(root / str(SITE))
 
-        result = store.reclaim(set(), set(), timedelta(hours=24))
+        result = store.reclaim({}, timedelta(hours=24))
 
         assert result.moved == []
         assert result.held == [str(SITE)]
@@ -482,7 +492,7 @@ class TestReclaim:
         kept = self._version(store, SITE)
         orphan = self._version(store, SITE)
 
-        assert store.reclaim({str(SITE)}, {kept}, timedelta(hours=24)).moved == [orphan]
+        assert store.reclaim(_held(kept), timedelta(hours=24)).moved == [orphan]
 
     def test_a_directory_that_cannot_be_moved_is_not_reported_moved(
         self, store: ContentStore, root: Path, monkeypatch
@@ -494,7 +504,7 @@ class TestReclaim:
             raise OSError("bezet")
 
         monkeypatch.setattr(os, "rename", refuse)
-        result = store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        result = store.reclaim(_held(kept), timedelta(hours=24))
         monkeypatch.undo()
 
         assert result.moved == []
@@ -507,7 +517,7 @@ class TestReclaim:
         gone = _age(_mkdir(root / str(uuid.uuid4())))
         _vanish(monkeypatch, gone)
 
-        assert store.reclaim({str(SITE)}, {kept}, timedelta(hours=24)).moved == []
+        assert store.reclaim(_held(kept), timedelta(hours=24)).moved == []
 
     def test_a_version_directory_that_disappears_during_the_walk_is_skipped(
         self, store: ContentStore, root: Path, monkeypatch
@@ -516,7 +526,7 @@ class TestReclaim:
         orphan = self._version(store, SITE)
         _vanish(monkeypatch, root / orphan)
 
-        assert store.reclaim({str(SITE)}, {kept}, timedelta(hours=24)).moved == []
+        assert store.reclaim(_held(kept), timedelta(hours=24)).moved == []
 
 
 def _mkdir(path: Path) -> Path:
@@ -531,7 +541,7 @@ class TestSweepReclaimed:
     def test_removes_only_what_cooled_off(self, store: ContentStore, root: Path):
         kept = TestReclaim._version(store, SITE)
         orphan = TestReclaim._version(store, SITE)
-        store.reclaim({str(SITE)}, {kept}, timedelta(hours=24))
+        store.reclaim(_held(kept), timedelta(hours=24))
         (fresh,) = (root / "_reclaimed").iterdir()
         cooled = _age(_mkdir(root / "_reclaimed" / "20260901T030000-oud"))
 

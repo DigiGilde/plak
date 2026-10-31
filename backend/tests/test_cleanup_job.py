@@ -29,7 +29,7 @@ from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase
 from plak.ingest.service import Deployer, IngestError, IngestService
-from plak.ingest.store import ContentStore
+from plak.ingest.store import ContentStore, version_ref
 from plak.models.audit import ActorKind, AuditLogEntry
 from plak.models.cli import CliDeviceAuthorization, CliSession
 from plak.models.identity import Group, Member, MemberStatus
@@ -107,7 +107,6 @@ async def _make_preview_version(
                 id=version_id,
                 site_id=environment.site.id,
                 target=VersionTarget.PREVIEW,
-                storage_ref=storage_ref,
                 member_id=environment.member.id,
             )
         )
@@ -253,7 +252,7 @@ class TestExpiredPreviews:
         assert previews[0].expires_at > now_
         versions = await _all_versions(environment)
         assert [version.id for version in versions] == [new_version_id]
-        assert (environment.content_root / versions[0].storage_ref).exists()
+        assert (environment.content_root / version_ref(environment.site.id, versions[0].id)).exists()
         assert all(version.id != old_version_id for version in versions)
         assert not (environment.content_root / old_storage_ref).exists()
 
@@ -314,7 +313,6 @@ async def _make_live_versions(
                     id=version_id,
                     site_id=site.id,
                     target=VersionTarget.LIVE,
-                    storage_ref=storage_ref,
                     member_id=environment.member.id,
                     created_at=start + timedelta(hours=index),
                 )
