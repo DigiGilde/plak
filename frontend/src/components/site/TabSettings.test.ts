@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, type MockBackend } from '../../../tests/mock-api';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import { AUTOSAVE_PAUSE_MS } from '@/composables/autosavedText';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';

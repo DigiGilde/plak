@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, type Component } from 'vue';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 
-import { makeMockBackend, MOCK_CONTENT_BASE } from '../src/api/mock';
+import { makeMockBackend, MOCK_CONTENT_BASE } from './mock-api';
 import TabDeploy from '../src/components/site/TabDeploy.vue';
 import TabOverview from '../src/components/site/TabOverview.vue';
 import TabPreviews from '../src/components/site/TabPreviews.vue';

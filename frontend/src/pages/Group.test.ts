@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
 import TabSettings from '@/components/group/TabSettings.vue';
 import TabMembers from '@/components/group/TabMembers.vue';
 import TabSites from '@/components/group/TabSites.vue';

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-import { makeMockBackend, type MockBackend } from './api/mock';
+import { makeMockBackend, type MockBackend } from '../tests/mock-api';
 import App from './App.vue';
 import { _resetCurrentMemberCache } from './composables/currentMember';
 import { _resetBreadcrumbs, setBreadcrumbs } from './composables/breadcrumbs';

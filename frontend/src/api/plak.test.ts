@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from './client';
-import { makeMockBackend, type MockBackend } from './mock';
+import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
 import * as plak from './plak';
 
 let backend: MockBackend;

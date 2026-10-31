@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { expectNoAxeViolations } from '../../tests/a11y';
-import { MOCK_CONTENT_BASE } from '../api/mock';
+import { MOCK_CONTENT_BASE } from '../../tests/mock-api';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
 import Landing from './Landing.vue';
 

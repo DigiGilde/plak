@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, type MockBackend } from '../../../tests/mock-api';
 import { SEARCH_DEBOUNCE_MS } from '@/composables/memberSearch';
 import TabMembers from './TabMembers.vue';
 import { serverErrorFetch, untilIdle } from './testHelpers';

@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 
-import { makeMockBackend, type MockBackend } from '../src/api/mock';
+import { makeMockBackend, type MockBackend } from './mock-api';
 import TabSettings from '../src/components/group/TabSettings.vue';
 import TabMembers from '../src/components/group/TabMembers.vue';
 import TabSites from '../src/components/group/TabSites.vue';

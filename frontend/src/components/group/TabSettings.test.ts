@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, type MockBackend } from '../../../tests/mock-api';
 import type { Access, Site } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import { fireDetailEvent, problemFetch, serverErrorFetch } from '@/components/site/testHelpers';

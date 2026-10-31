@@ -4,7 +4,7 @@ import { createRouter, createMemoryHistory } from 'vue-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { _resetCurrentMemberCache } from '../src/composables/currentMember';
-import { makeMockBackend, type MockBackend } from '../src/api/mock';
+import { makeMockBackend, type MockBackend } from './mock-api';
 import { platformAdminGuard, routes } from '../src/router';
 
 let backend: MockBackend;

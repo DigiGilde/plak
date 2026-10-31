@@ -2,8 +2,7 @@
 /**
  * Site overview: the start page after login. One table per group,
  * with a row per site carrying the title as a link to the site detail.
- * Loads via the session API (`overview()`); see src/api/mock.ts for the dev
- * mock.
+ * Loads via the session API (`overview()`).
  *
  * The page has one primary action ("Zet een site online") that does the whole
  * task, including creating a group when the user has none yet. So the empty

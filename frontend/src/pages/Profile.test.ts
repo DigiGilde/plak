@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-import { makeMockBackend, type MockBackend } from '@/api/mock';
+import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
 import { serverErrorFetch, untilIdle } from '@/components/site/testHelpers';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MOCK_CONTENT_BASE } from '../api/mock';
+import { MOCK_CONTENT_BASE } from '../../tests/mock-api';
 import {
   _resetCurrentMemberCache,
   currentMemberState,

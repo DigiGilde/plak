@@ -3,7 +3,7 @@ import '@nldd/design-system';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MOCK_CONTENT_BASE } from '../api/mock';
+import { MOCK_CONTENT_BASE } from '../../tests/mock-api';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
 import Landing from './Landing.vue';
 import Start from './Start.vue';
