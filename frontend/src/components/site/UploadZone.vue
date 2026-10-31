@@ -12,7 +12,9 @@ import {
   formatCount,
   formatSize,
   pack,
+  readChosenFolder,
   readDrop,
+  type DropResult,
 } from './packing';
 import { t } from '@/i18n';
 
@@ -23,6 +25,7 @@ const emit = defineEmits<{
 }>();
 
 const field = ref<HTMLElement>();
+const folderInput = ref<HTMLInputElement>();
 const chosen = ref<File | null>(null);
 /** What is ready, in the user's own terms; empty until something is there. */
 const ready = ref('');
@@ -78,11 +81,24 @@ async function onDrop(event: DragEvent): Promise<void> {
   dropActive.value = false;
   const transfer = event.dataTransfer;
   if (!transfer) return;
+  await receive(() => readDrop(transfer));
+}
 
+/** A folder through the file dialog: the path to a whole folder without dragging (WCAG 2.5.7). */
+async function onFolderChoice(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const chosenFiles = Array.from(input.files!);
+  // So that choosing the same folder again is a change again.
+  input.value = '';
+  await receive(() => readChosenFolder(chosenFiles));
+}
+
+/** What a drop or a folder choice has in common: check it, pack it, make it the chosen file. */
+async function receive(read: () => DropResult | Promise<DropResult>): Promise<void> {
   dropError.value = null;
   step.value = 'reading';
   try {
-    const dropped = await readDrop(transfer);
+    const dropped = await read();
     if (dropped.kind === 'refusal') {
       dropError.value = dropped.reason;
       return;
@@ -228,6 +244,13 @@ function publish(): void {
 
       <nldd-form-actions>
         <nldd-button
+          variant="secondary"
+          type="button"
+          :text="t('publish.upload.folder')"
+          data-testid="upload-folder"
+          @click="folderInput?.click()"
+        ></nldd-button>
+        <nldd-button
           variant="primary"
           type="submit"
           :text="t('publish.upload.submit')"
@@ -236,6 +259,16 @@ function publish(): void {
         ></nldd-button>
       </nldd-form-actions>
     </nldd-form>
+    <!-- nldd-file-field wraps its own input and offers no directory mode; this
+         one is opened by the button above and never seen. -->
+    <input
+      ref="folderInput"
+      type="file"
+      webkitdirectory
+      hidden
+      data-testid="upload-folder-input"
+      @change="onFolderChoice"
+    />
   </div>
 </template>
 

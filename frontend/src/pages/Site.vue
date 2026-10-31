@@ -7,6 +7,7 @@ import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
+import { stayOnNextMove } from '@/composables/routeAnnouncer';
 import { useLoader } from '@/composables/loader';
 import { groupPath } from '@/composables/slug';
 import { SITE_GROUP, siteNotFound } from '@/composables/siteGroup';
@@ -109,6 +110,7 @@ async function onRenamed(updated: Site): Promise<void> {
   }
   current.sites = current.sites.map((p) => (p.id === updated.id ? updated : p));
   movedTo = `${updated.groupSlug}/${updated.slug}`;
+  stayOnNextMove();
   await router.replace({ params: { site: updated.slug } });
   // The router has put the slug in the title, as it does on every navigation,
   // and nothing the title is made of has changed to make it come back.
@@ -228,19 +230,22 @@ function afterRemoval(): void {
 
       <nldd-spacer size="24"></nldd-spacer>
 
-      <router-view v-slot="{ Component }">
-        <component
-          :is="Component"
-          :group="groupSlug"
-          :site="siteSlug"
-          :content-base="contentBase"
-          :previous-slugs="site.previousSlugs"
-          :group-previous-slugs="detail!.group.previousSlugs"
-          @removed="afterRemoval"
-          @changed="refresh"
-          @renamed="onRenamed"
-        />
-      </router-view>
+      <!-- Where focus goes when only the tab changes (routeAnnouncer.ts). -->
+      <div data-tab-panel>
+        <router-view v-slot="{ Component }">
+          <component
+            :is="Component"
+            :group="groupSlug"
+            :site="siteSlug"
+            :content-base="contentBase"
+            :previous-slugs="site.previousSlugs"
+            :group-previous-slugs="detail!.group.previousSlugs"
+            @removed="afterRemoval"
+            @changed="refresh"
+            @renamed="onRenamed"
+          />
+        </router-view>
+      </div>
     </template>
   </nldd-simple-section>
 </template>

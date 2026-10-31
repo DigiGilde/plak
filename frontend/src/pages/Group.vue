@@ -32,6 +32,7 @@ import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { resolveDroppedFile, useDropState, useWindowDropGuard } from '@/composables/fileDrop';
 import { goToDone } from '@/composables/publishedMark';
 import { isGroupAdmin, mayCreateSiteIn } from '@/composables/roles';
+import { stayOnNextMove } from '@/composables/routeAnnouncer';
 import { crumbOverview, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t, type MessageKey } from '@/i18n';
 import { setDocumentTitle } from '@/title';
@@ -246,6 +247,7 @@ async function onGroupRenamed(updated: Group): Promise<void> {
     shownSlug.value = updated.slug;
   }
   movedTo = updated.slug;
+  stayOnNextMove();
   await router.replace({ params: { group: updated.slug } });
   // The router has put the slug in the title, as it does on every navigation,
   // and nothing the title is made of has changed to make it come back.
@@ -352,28 +354,31 @@ function onGroupChanged(group: Group): void {
 
       <nldd-spacer size="24"></nldd-spacer>
 
-      <router-view v-slot="{ Component }">
-        <component
-          :is="Component"
-          :group="groupSlug"
-          :group-name="detail.group.name"
-          :sites="detail.sites"
-          :members="detail.members"
-          :access="detail.group.defaultAccess"
-          :previous-slugs="detail.group.previousSlugs"
-          :content-base="contentBase"
-          :redirect-days="redirectDays"
-          :can-delete="canDeleteGroup"
-          :can-rename="canRenameGroup"
-          :can-change-address="canChangeAddress"
-          @member-added="onMemberAdded"
-          @member-removed="onMemberRemoved"
-          @member-role-changed="onMemberRoleChanged"
-          @group-changed="onGroupChanged"
-          @renamed="onGroupRenamed"
-          @removed="afterRemoval"
-        />
-      </router-view>
+      <!-- Where focus goes when only the tab changes (routeAnnouncer.ts). -->
+      <div data-tab-panel>
+        <router-view v-slot="{ Component }">
+          <component
+            :is="Component"
+            :group="groupSlug"
+            :group-name="detail.group.name"
+            :sites="detail.sites"
+            :members="detail.members"
+            :access="detail.group.defaultAccess"
+            :previous-slugs="detail.group.previousSlugs"
+            :content-base="contentBase"
+            :redirect-days="redirectDays"
+            :can-delete="canDeleteGroup"
+            :can-rename="canRenameGroup"
+            :can-change-address="canChangeAddress"
+            @member-added="onMemberAdded"
+            @member-removed="onMemberRemoved"
+            @member-role-changed="onMemberRoleChanged"
+            @group-changed="onGroupChanged"
+            @renamed="onGroupRenamed"
+            @removed="afterRemoval"
+          />
+        </router-view>
+      </div>
 
       <PublishSheet
         v-model:open="sheetOpen"

@@ -40,6 +40,11 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.members.action.demote': 'Take away the administrator role',
   'admin.members.blocked.bootstrap': 'bootstrap account',
   'admin.members.blocked.lastAdmin': 'last administrator',
+  'admin.members.blocked.title': 'This is not possible for {name}',
+  'admin.members.blocked.bootstrap.explanation':
+    'The bootstrap account always keeps its access and administrator role.',
+  'admin.members.blocked.lastAdmin.explanation':
+    'At least one active administrator has to remain.',
   'admin.members.roleFailed': 'Changing the role of {name} did not work',
   'admin.members.activateFailed': 'Activating {name} did not work',
   'admin.members.deactivateFailed': 'Deactivating {name} did not work',

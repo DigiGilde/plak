@@ -50,9 +50,10 @@ export const publishNl = {
   'publish.drop.noFolder': 'Sleep geen map. {hint}',
   'publish.upload.field.label': 'Bestand of map',
   'publish.upload.field.hint': 'Sleep het hierheen, of kies het.',
-  'publish.upload.field.required': 'Een archief, een los HTML-bestand of een gesleepte map',
+  'publish.upload.field.required': 'Een archief, een los HTML-bestand of een map',
   'publish.upload.field.help':
-    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept. Een los HTML-bestand wordt de startpagina van je site; een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
+    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site; een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
+  'publish.upload.folder': 'Kies een map',
   'publish.upload.progress.reading': 'Map uitlezen',
   'publish.upload.progress.packing': 'Map inpakken',
   'publish.upload.ready.title': 'Klaar om te publiceren',

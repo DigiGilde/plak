@@ -70,6 +70,11 @@ export function useNotices() {
     add(text, guidance ? `${said} ${t(guidance)}` : said, again);
   }
 
+  /** A notification that is not about a failed request: why something is not possible. */
+  function explain(text: string, detail: string): void {
+    add(text, detail, '');
+  }
+
   function add(text: string, detail: string, retry: string): void {
     nextId += 1;
     notices.value = [...notices.value, { id: nextId, text, detail, retry }];
@@ -79,5 +84,5 @@ export function useNotices() {
     notices.value = notices.value.filter((notice) => notice.id !== id);
   }
 
-  return { notices, notify, dismissNotice };
+  return { notices, notify, explain, dismissNotice };
 }

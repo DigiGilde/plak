@@ -227,7 +227,6 @@ function actionsFor(version: Version): RowAction[] {
     actions.push({
       text: t('site.versions.setLive'),
       icon: 'globe',
-      disabled: busyWith.value === version.id,
       testid: `set-live-${version.id}`,
       run: () => void setLive(version),
     });
@@ -251,6 +250,8 @@ function origin(version: Version): string {
 // Rolling back changes what visitors see: carry it out explicitly and report
 // afterwards, do not assume optimistically.
 async function setLive(version: Version): Promise<void> {
+  // The item stays enabled: a second choice while one is running does nothing.
+  if (busyWith.value !== null) return;
   busyWith.value = version.id;
   try {
     await plak.setVersionLive(props.group, props.site, version.id);
