@@ -5,11 +5,11 @@
  * open the tab; each section says who can change what it holds when that is
  * not you.
  */
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 
 import * as plak from '@/api/plak';
-import { ApiError } from '@/api/client';
-import type { Me, Site } from '@/api/types';
+import { errorText } from '@/api/client';
+import type { GroupDetail, Me, Site } from '@/api/types';
 import AddressSection from '@/components/AddressSection.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -17,7 +17,9 @@ import Notices from '@/components/site/Notices.vue';
 import { useAutosavedText } from '@/composables/autosavedText';
 import { useConfirm } from '@/composables/confirm';
 import { fetchCurrentMember } from '@/composables/currentMember';
+import { useLoader } from '@/composables/loader';
 import { isGroupAdmin, isGroupMember, isSiteAdmin } from '@/composables/roles';
+import { siteNotFound } from '@/composables/siteGroup';
 import { type MessageKey, t } from '@/i18n';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
@@ -31,8 +33,6 @@ const emit = defineEmits<{
   renamed: [Site];
 }>();
 
-const loading = ref(true);
-const error = ref<unknown>(null);
 /** The site, once the data has arrived once; from then on the sections stay mounted. */
 const siteInfo = ref<Site | null>(null);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
@@ -83,45 +83,31 @@ const redirectDays = ref(0);
 const siblings = ref<Site[]>([]);
 const canRelease = ref(false);
 
-async function load(): Promise<void> {
-  loading.value = true;
-  error.value = null;
-  try {
-    // The session is not a precondition: without it the sections only lose
-    // what needs a role, and that is what an unknown role gets anyway.
-    const [detail, loggedIn] = await Promise.all([
-      plak.group(props.group),
-      fetchCurrentMember().catch(() => null),
-    ]);
-    const found = detail.sites.find((p) => p.slug === props.site);
-    if (!found) {
-      error.value = new ApiError({
-        type: 'about:blank',
-        title: t('site.notFound.title'),
-        status: 404,
-        detail: t('site.notFound.detail', { site: props.site, group: props.group }),
-      });
-      return;
-    }
-    const member = loggedIn as Me | null;
-    const admin = isSiteAdmin(member, props.group, props.site);
-    const inGroup = isGroupMember(member, props.group);
-    canAdmin.value = admin;
-    canChangeAddress.value = admin && inGroup;
-    siteOnlyAdmin.value = admin && !inGroup;
-    canRelease.value = isGroupAdmin(member, props.group);
-    redirectDays.value = member?.slugRedirectDays ?? 0;
-    siblings.value = detail.sites.filter((p) => p.id !== found.id);
-    title.reset(found.title);
-    siteInfo.value = found;
-  } catch (f) {
-    error.value = f;
-  } finally {
-    loading.value = false;
-  }
+/** Fetches group and session; throws when the site is not in the group. */
+async function fetchData(): Promise<{ detail: GroupDetail; found: Site; member: Me | null }> {
+  // The session is not a precondition: without it the sections only lose
+  // what needs a role, and that is what an unknown role gets anyway.
+  const [detail, loggedIn] = await Promise.all([
+    plak.group(props.group),
+    fetchCurrentMember().catch(() => null),
+  ]);
+  const found = detail.sites.find((p) => p.slug === props.site);
+  if (!found) throw siteNotFound(props.group, props.site);
+  return { detail, found, member: loggedIn as Me | null };
 }
 
-onMounted(load);
+const { loading, error, reload } = useLoader(fetchData, ({ detail, found, member }) => {
+  const admin = isSiteAdmin(member, props.group, props.site);
+  const inGroup = isGroupMember(member, props.group);
+  canAdmin.value = admin;
+  canChangeAddress.value = admin && inGroup;
+  siteOnlyAdmin.value = admin && !inGroup;
+  canRelease.value = isGroupAdmin(member, props.group);
+  redirectDays.value = member?.slugRedirectDays ?? 0;
+  siblings.value = detail.sites.filter((p) => p.id !== found.id);
+  title.reset(found.title);
+  siteInfo.value = found;
+});
 watch(
   () => [props.group, props.site],
   () => {
@@ -136,13 +122,9 @@ watch(
     ) {
       return;
     }
-    void load();
+    void reload();
   },
 );
-
-function errorText(f: unknown, fallback: string): string {
-  return f instanceof ApiError ? (f.problem.detail ?? f.problem.title) : fallback;
-}
 
 function inputValue(event: Event): string {
   return (
