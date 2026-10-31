@@ -38,9 +38,13 @@ Four things to know:
   public on 2026-09-27 with private vulnerability reporting switched on;
   before that they would have answered a 404, which is worse than one
   route fewer.
-- `digigilde@rijksoverheid.nl` is the same address as in
-  `publiccode.yml`. The CVD routes of NCSC-NL follow behind it, so a
-  reporter ends up somewhere either way.
+- The second `Contact` is `mailto:` the address in `PLAK_OPERATOR_EMAIL`,
+  the organisation that runs the installation. On the Digi Gilde's own
+  installation that is `digigilde@rijksoverheid.nl`, the same address as
+  in `publiccode.yml`. Without the setting there is no mail line of the
+  operator, and the advisory form keeps the required `Contact` present.
+  The CVD routes of NCSC-NL follow behind it, so a reporter ends up
+  somewhere either way.
 - There is no `Encryption` field. RFC 9116 cannot tie a key to one
   `Contact`, and the first contacts are the Plak team, which has no key of
   its own; NCSC-NL's key there would read as ours. The advisory form needs

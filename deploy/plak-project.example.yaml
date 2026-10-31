@@ -219,7 +219,8 @@ deployments:
           # environment.
           PLAK_BOOTSTRAP_ADMIN_SUB: "vul-in"
           # Who runs this installation and how to reach them, shown on the
-          # public privacy and accessibility pages.
+          # public privacy and accessibility pages. The address is also the
+          # mail Contact in security.txt.
           PLAK_OPERATOR_NAME: "Digi Gilde"
           PLAK_OPERATOR_EMAIL: "digigilde@rijksoverheid.nl"
         # The secrets are NOT here. Set them per deployment with
