@@ -9,13 +9,15 @@
  * actions are deliberately not in it: they belong next to the thing they act
  * on, so next to the h1 of the overview and below every group table.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { fetchCurrentMember, currentMemberState, isPlatformAdmin } from './composables/currentMember';
 import { breadcrumbsFor } from './composables/breadcrumbs';
-import { currentLocale, t, type Locale } from './i18n';
+import { useRouteAnnouncer } from './composables/routeAnnouncer';
+import { currentLocale, t, type Locale, type MessageKey } from './i18n';
 import { dayAnchor, groupByDate, loadReleases, versionDay } from './releases';
+import { setDocumentTitle } from './title';
 import { appVersion } from './version';
 
 interface MenuChoice {
@@ -29,6 +31,15 @@ const route = useRoute();
 const router = useRouter();
 const { member, loaded } = currentMemberState();
 const logoutForm = ref<HTMLFormElement | null>(null);
+const announcement = useRouteAnnouncer(router);
+
+// The router sets the title once per navigation, so a language switch on the
+// page that offers it would leave the old language in the tab until the next
+// navigation. Pages that set their own title follow the language by themselves.
+watch(currentLocale, () => {
+  const key = route.meta.titleKey;
+  if (typeof key === 'string') setDocumentTitle(t(key as MessageKey));
+});
 
 // A build without a version (`dev`) names none. The link points at the day of
 // the version only when the notes have that day; otherwise (no note for it, or
@@ -314,6 +325,9 @@ function logout(): void {
       </nldd-page-footer>
     </nldd-page>
   </nldd-app-view>
+  <!-- Always in the page, so a screen reader is already listening when the
+       text changes after a navigation. -->
+  <div class="visually-hidden" role="status" data-testid="route-announcer">{{ announcement }}</div>
   <form ref="logoutForm" method="post" action="/-/logout" hidden></form>
 </template>
 
