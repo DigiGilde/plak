@@ -85,6 +85,37 @@ describe('currentMember: cache', () => {
     expect((await fetchSession(true)).state).toBe('active');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('does not keep a failed read, so the next call tries again', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('netwerk weg'))
+      .mockResolvedValueOnce(response(200, MEMBER, 'application/json'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchSession()).rejects.toThrow('netwerk weg');
+
+    expect((await fetchSession()).state).toBe('active');
+    expect(await fetchCurrentMember()).toMatchObject({ email: 'lid@voorbeeld.nl' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the read of a refresh when an older read fails after it', async () => {
+    let failOlder!: (error: Error) => void;
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(new Promise((_, reject) => (failOlder = reject)))
+      .mockResolvedValueOnce(response(200, MEMBER, 'application/json'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const older = fetchSession();
+    expect((await fetchSession(true)).state).toBe('active');
+    failOlder(new TypeError('netwerk weg'));
+    await expect(older).rejects.toThrow('netwerk weg');
+
+    expect((await fetchSession()).state).toBe('active');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('currentMember: platform admin', () => {

@@ -67,7 +67,16 @@ export function fetchSession(refresh = false): Promise<Session> {
     fetchPromise = null;
   }
   if (!fetchPromise) {
-    fetchPromise = fetch();
+    const pending = fetch();
+    fetchPromise = pending;
+    // A failed read is not kept, or every later call would fail with it until
+    // a reload. Only while it is still the cached one: a refresh may have
+    // replaced it with a read that succeeded.
+    pending.catch(() => {
+      if (fetchPromise === pending) {
+        fetchPromise = null;
+      }
+    });
   }
   return fetchPromise;
 }
