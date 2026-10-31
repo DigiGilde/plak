@@ -23,7 +23,7 @@ This document describes how to run and test Plak locally.
   ```
 - A built SPA: `just build-spa` (npm run build) fills `frontend/dist`,
   which the compose stack mounts read-only into the app container. Without
-  that directory `/admin` answers with a 503 and a clear message.
+  that directory the admin host answers with a 503 and a clear message.
 
 ## Commit hooks
 
@@ -119,7 +119,7 @@ What ends up there:
   `editor` on `evaluatie`. A site role adds to the group role and never
   subtracts from it, so she only gets in at that one site.
 - **A deactivated member.** Kim Visser is on `deactivated`, so that
-  `/admin/-/platform` has something to do.
+  `/-/platform` has something to do.
 - **The person logging in.** The user from `PLAK_BOOTSTRAP_ADMIN_SUB`
   (default `dev-beheerder`) is platform administrator and group
   administrator of `rijksoverheid`, and deliberately not a member of
@@ -154,10 +154,10 @@ back.
 ## Compose topology
 
 The app serves everything itself: content via `FileResponse` (Range,
-ETag/304, the fixed header set from spec §5), the built admin SPA under
-`/admin` (spec §9 headers, `PLAK_SPA_PATH`) and the host separation of
-spec §4a (content paths only on the content host, `/admin` and the
-platform routes only on the admin host, otherwise the neutral 404). That
+ETag/304, the fixed header set from spec §5), the built admin SPA on the
+root of the admin host (spec §9 headers, `PLAK_SPA_PATH`) and the host
+separation of spec §4a (content paths only on the content host, the SPA
+and the platform routes only on the admin host, otherwise the neutral 404). That
 is necessary because ZAD knows one container per component, without
 sidecar, shared volume or
 ConfigMap; there is no X-Accel-Redirect.
@@ -165,12 +165,12 @@ ConfigMap; there is no X-Accel-Redirect.
 One path on the content host is neither content nor a 404: the root `/`
 redirects to the landing page on the admin host from `PLAK_BASE_URL`
 (`platform/pages.py`).
-The root of the admin host stays a 303 to `/admin/`, where the SPA shows the
-landing itself. To check without a browser:
+The root of the admin host is the SPA, which shows the landing page itself.
+To check without a browser:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/          # 302 to the admin host
-curl -s -o /dev/null -w '%{http_code}\n' http://beheer.plak.localhost:8080/   # 303 to /admin/
+curl -s -o /dev/null -w '%{http_code}\n' http://beheer.plak.localhost:8080/   # 200, the SPA
 ```
 
 nginx stays in the dev stack only as a dumb reverse proxy: it passes the
@@ -197,7 +197,7 @@ point at the same nginx on port `8080`; the app makes the distinction.
   listens on `127.0.0.1:8080`. Two server blocks (admin host and
   default/content host, `containers/nginx-dev/nginx.conf`) that proxy
   everything 1-to-1 to the app, plus the oidc alias block. No SPA root, no
-  `/admin` logic, no internal location. Only `/healthz-proxy` is nginx's
+  SPA logic, no internal location. Only `/healthz-proxy` is nginx's
   own (the e2e runner waits on it).
 - **app**: `containers/plak/Containerfile` (multi-stage: a node stage builds the
   SPA and puts it in the image at `/app/spa`; `uv` for the backend; the
@@ -214,7 +214,7 @@ point at the same nginx on port `8080`; the app makes the distinction.
   image. Gets `PLAK_BASE_URL` (the admin host) and
   `PLAK_CONTENT_BASE_URL` (the content host) for `TrustedHostMiddleware`,
   the host separation and the Origin check. Security headers (HSTS only on
-  https, `Permissions-Policy`, COOP and `frame-ancestors` under `/admin`)
+  https, `Permissions-Policy`, COOP and `frame-ancestors` on the admin host)
   the app sets itself.
 - **postgres**: PostgreSQL 16, with a healthcheck (`pg_isready`) that
   the app waits for.
@@ -228,7 +228,7 @@ machine.
 
 | Port | Service | Purpose |
 |---|---|---|
-| `127.0.0.1:8080` | nginx | `beheer.plak.localhost`: SPA and `/admin`; `plak.localhost`: content |
+| `127.0.0.1:8080` | nginx | `beheer.plak.localhost`: SPA and API; `plak.localhost`: content |
 | `127.0.0.1:8081` | mock-oidc | OIDC discovery and tokens (reachable separately for debugging) |
 
 ## Mock login as dev administrator
@@ -247,7 +247,7 @@ fixed `tokenCallback` that gives every login the same claims:
 
 The app container gets `PLAK_BOOTSTRAP_ADMIN_SUB=dev-beheerder`
 (see `dev/compose.yml`), so this sub record automatically gets the
-platform role `admin` and status `active` on the first `/admin` login
+platform role `admin` and status `active` on the first login
 (spec §7, bootstrap). Log in via
 `http://beheer.plak.localhost:8080/-/login`; there is no
 choice screen, every login comes in as `dev-beheerder`.
@@ -261,7 +261,7 @@ the revalidation would drop the session on a sub mismatch.
 To test other member profiles (a deactivated member or an ordinary
 group member, for instance), adjust `tokenCallbacks` with an extra
 `requestMappings` rule on a different `scope` value, or deactivate a
-second sub via `/admin/-/platform` after a first visit with that sub.
+second sub via `/-/platform` after a first visit with that sub.
 The login screen below is the quicker route.
 
 ### The login screen of the mock, for manual testing
@@ -283,7 +283,7 @@ What changes: `/-/login` now lands on a login page of the mock with a subject
 field. Whatever you type there becomes the `sub` of the session, so you can
 walk into the admin as any account: `dev-beheerder` for the bootstrap
 administrator, anything else for a member you created or deactivated
-yourself through `/admin/-/platform`. The config fills the rest of the claims
+yourself through `/-/platform`. The config fills the rest of the claims
 around it (`acr` at the required level, `email` as `<subject>@plak.local`),
 so the app sees a complete id token whichever subject you pick.
 
