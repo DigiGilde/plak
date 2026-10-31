@@ -63,6 +63,11 @@ def release() -> dict:
     return _load("release.yml")
 
 
+@pytest.fixture(scope="module")
+def prepare_release() -> dict:
+    return _load("prepare-release.yml")
+
+
 class TestTheCheckGate:
     def test_production_waits_for_the_checks(self, deploy) -> None:
         """BIO2 8.31.02: significant changes are tested before they go to
@@ -323,6 +328,7 @@ class TestTheScans:
             "codeql.yml",
             "deploy.yml",
             "plugin.yml",
+            "prepare-release.yml",
             "release.yml",
             "rulesets.yml",
         ]
@@ -661,17 +667,22 @@ class TestTheReleaseGuards:
         _git(work, "commit", "-q", "-m", "Release")
 
     def test_a_tag_on_its_release_commit_passes(self, guarded, work, tmp_path) -> None:
-        self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n## [2026.10.1]\n\n### Added\n\n- A thing.\n")
+        self._release_commit(work, "# Changelog\n\n## [2026.10.1]\n\n### Added\n\n- A thing.\n")
         self._tag(work, "v2026.10.1")
         result = _run(_step(guarded, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_tag_without_its_section_is_refused(self, guarded, work, tmp_path) -> None:
-        """A tag set by hand on an ordinary commit, whose changelog only has
-        [Unreleased]; a section that lands on beta later does not count."""
-        self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A thing.\n")
+        """A tag set by hand on an ordinary commit, whose changelog ends at
+        the release before; a section that lands on beta later does not
+        count."""
+        self._release_commit(work, "# Changelog\n\n## [2026.9.30]\n\n### Added\n\n- A thing.\n")
         self._tag(work, "v2026.10.1")
-        self._release_commit(work, "# Changelog\n\n## [Unreleased]\n\n## [2026.10.1]\n\n### Added\n\n- A thing.\n")
+        self._release_commit(
+            work,
+            "# Changelog\n\n## [2026.10.1]\n\n### Added\n\n- Another thing.\n\n"
+            "## [2026.9.30]\n\n### Added\n\n- A thing.\n",
+        )
         result = _run(_step(guarded, "Check that the tagged commit has its release notes"), work, TAG="v2026.10.1")
         assert _refused(result), result.stdout
 
@@ -961,17 +972,49 @@ class TestTheApiContractCheck:
         assert f'API_COMMENT_MARKER = "{step["env"]["MARKER"]}"\n' in script
 
 
+def _origin(tmp_path: Path) -> tuple[Path, Path]:
+    """A bare `origin` with beta at one commit, and a clone of it."""
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "beta", str(origin))
+    _git(tmp_path, "init", "-q", "-b", "beta", str(work))
+    _git(work, "remote", "add", "origin", str(origin))
+    _git(work, "commit", "-q", "--allow-empty", "-m", "Merge something")
+    _git(work, "push", "-q", "origin", "beta")
+    return origin, work
+
+
+def _gh(tmp_path: Path) -> tuple[str, Path]:
+    """A PATH with a `gh` that answers the bot's user id and logs every
+    other call, one NUL-separated argument list per line, with the token it
+    was given in front."""
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    log = tmp_path / "gh.log"
+    (stubs / "gh").write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = api ] && { echo 123456; exit 0; }\n'
+        f'{{ printf "%s\\0" "$GH_TOKEN" "$@"; echo; }} >> "{log}"\n',
+        encoding="utf-8",
+    )
+    (stubs / "gh").chmod(0o755)
+    return f"{stubs}:{os.environ['PATH']}", log
+
+
+def _gh_calls(log: Path) -> list[list[str]]:
+    """What `gh` was called with, other than for the user id: the token,
+    then the arguments."""
+    if not log.exists():
+        return []
+    return [call.split("\0") for call in log.read_text(encoding="utf-8").removesuffix("\0\n").split("\0\n")]
+
+
 class TestTheReleaseWorkflow:
-    """What a release writes is tested in test_release.py; here how the
-    workflow decides, when the App token exists and how it pushes."""
+    """What decide answers is tested in test_release.py; here how the
+    workflow acts on it, when the App token exists and what it pushes."""
 
     @pytest.fixture
     def job(self, release) -> dict:
-        return release["jobs"]["publish"]
-
-    @pytest.fixture
-    def prepare(self, release) -> dict:
-        return release["jobs"]["prepare"]
+        return release["jobs"]["tag"]
 
     def test_every_push_to_beta_and_nothing_else_runs_it(self, release) -> None:
         assert release[True] == {"push": {"branches": ["beta"]}}
@@ -986,16 +1029,157 @@ class TestTheReleaseWorkflow:
         assert decide["outputs"] == {
             "route": "${{ steps.decide.outputs.route }}",
             "tag": "${{ steps.decide.outputs.tag }}",
+            "commit": "${{ steps.decide.outputs.commit }}",
         }
         assert "permissions" not in decide and "environment" not in decide
 
-    def test_only_a_release_route_prepares_and_publishes(self, prepare, job) -> None:
-        """A hold or a push without entries never touches the App."""
-        assert prepare["needs"] == "decide"
-        assert prepare["if"] == "needs.decide.outputs.route == 'release'"
-        assert job["needs"] == ["decide", "prepare"]
+    def test_there_is_nothing_but_deciding_and_tagging(self, release) -> None:
+        """No job writes or pushes a release any more: that is the release
+        pull request, merged like any other."""
+        assert set(release["jobs"]) == {"decide", "tag"}
+
+    def test_only_a_release_route_tags(self, job) -> None:
+        """A push whose newest section is tagged already never touches the
+        App."""
+        assert job["needs"] == "decide"
+        assert job["if"] == "needs.decide.outputs.route == 'release'"
+        assert job["env"] == {
+            "TAG": "${{ needs.decide.outputs.tag }}",
+            "COMMIT": "${{ needs.decide.outputs.commit }}",
+        }
+
+    def test_the_job_with_the_key_runs_no_dependencies(self, job) -> None:
+        assert job["environment"] == "release"
+        assert job["permissions"] == {"contents": "read"}
+        assert [s["uses"].split("@")[0] for s in job["steps"] if "uses" in s] == [
+            "actions/checkout",
+            "actions/create-github-app-token",
+        ]
+        assert not any("uv " in s.get("run", "") or "docker " in s.get("run", "") for s in job["steps"])
+
+    def test_the_tag_is_checked_before_the_token_exists(self, job) -> None:
+        names = [s.get("name") or s["uses"].split("@")[0] for s in job["steps"]]
+        assert names == [
+            "actions/checkout",
+            "Check the tag",
+            "Get a token of the release App",
+            "Tag and push",
+        ]
+        assert job["steps"][0]["with"] == {"fetch-depth": 0, "persist-credentials": False}
+        assert _step(job, "Check the tag")["run"] == 'python3 .github/scripts/release.py validate-tag "$TAG"'
+        assert _step(job, "Get a token of the release App")["with"] == {
+            "client-id": "${{ vars.RELEASE_APP_CLIENT_ID }}",
+            "private-key": "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+            "permission-contents": "write",
+        }
+        pushing = _step(job, "Tag and push")
+        assert pushing["env"] == {
+            "GH_TOKEN": "${{ steps.app.outputs.token }}",
+            "APP_SLUG": "${{ steps.app.outputs.app-slug }}",
+        }
+        for step in job["steps"]:
+            assert "${{" not in step.get("run", ""), step.get("name")
+
+    def test_the_tag_goes_up_on_the_release_commit_and_nothing_else_does(self, job, tmp_path) -> None:
+        """Run against a real origin, with `gh` stubbed to answer the bot's
+        user id. The commit decide named is older than the checkout, and the
+        checkout has a commit origin lacks: only the annotated tag goes up,
+        on the named commit, and beta stays where it was."""
+        origin, work = _origin(tmp_path)
+        _git(work, "commit", "-q", "--allow-empty", "-m", "Release v2026.10.1")
+        released = _git(work, "rev-parse", "HEAD")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "Merge something after")
+        _git(work, "push", "-q", "origin", "beta")
+        beta = _git(origin, "rev-parse", "beta")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "Not on beta")
+        path, log = _gh(tmp_path)
+
+        result = _run_unnamed(
+            _step(job, "Tag and push"),
+            work,
+            PATH=path,
+            GH_TOKEN="token",
+            APP_SLUG="digigilde-plak-release",
+            TAG="v2026.10.1",
+            COMMIT=released,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert _git(origin, "cat-file", "-t", "v2026.10.1") == "tag"
+        assert _git(origin, "rev-parse", "v2026.10.1^{commit}") == released
+        tagged = _git(origin, "for-each-ref", "--format=%(contents:subject)|%(taggername)|%(taggeremail)", "refs/tags")
+        assert tagged == (
+            "Plak v2026.10.1|digigilde-plak-release[bot]|"
+            "<123456+digigilde-plak-release[bot]@users.noreply.github.com>"
+        )
+        assert _git(origin, "rev-parse", "beta") == beta
+        assert _git(origin, "for-each-ref", "--format=%(refname)") == "refs/heads/beta\nrefs/tags/v2026.10.1"
+        assert _gh_calls(log) == []
+
+    def test_a_tag_that_is_there_already_is_not_moved(self, job, tmp_path) -> None:
+        """A tag pushed by hand, or by a run that raced this one: the push is
+        refused rather than moving it, and the job goes red."""
+        origin, work = _origin(tmp_path)
+        first = _git(work, "rev-parse", "HEAD")
+        _git(work, "tag", "-a", "v2026.10.1", "-m", "Plak v2026.10.1")
+        _git(work, "push", "-q", "origin", "v2026.10.1")
+        _git(work, "tag", "-d", "v2026.10.1")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "Release v2026.10.1")
+        _git(work, "push", "-q", "origin", "beta")
+        path, _ = _gh(tmp_path)
+
+        result = _run_unnamed(
+            _step(job, "Tag and push"),
+            work,
+            PATH=path,
+            GH_TOKEN="token",
+            APP_SLUG="digigilde-plak-release",
+            TAG="v2026.10.1",
+            COMMIT=_git(work, "rev-parse", "HEAD"),
+        )
+
+        assert result.returncode != 0
+        assert _git(origin, "rev-parse", "v2026.10.1^{commit}") == first
+
+    def test_the_push_names_only_the_tag(self, job) -> None:
+        run = _step(job, "Tag and push")["run"]
+        assert run.rstrip().endswith('push origin "refs/tags/${TAG}"')
+        assert "refs/heads" not in run and "--force" not in run and "--atomic" not in run
+
+
+class TestThePrepareReleaseWorkflow:
+    """What prepare and verify-staged write and refuse is tested in
+    test_release.py; here when the workflow runs, when the App token exists
+    and what it pushes and opens."""
+
+    @pytest.fixture
+    def prepare(self, prepare_release) -> dict:
+        return prepare_release["jobs"]["prepare"]
+
+    @pytest.fixture
+    def job(self, prepare_release) -> dict:
+        return prepare_release["jobs"]["open"]
+
+    def test_only_the_button_runs_it(self, prepare_release) -> None:
+        """No push, no schedule, no pull request: a release is made when
+        someone decides to make one."""
+        assert prepare_release[True] == {"workflow_dispatch": None}
+        assert prepare_release["permissions"] == {"contents": "read"}
+        assert prepare_release["concurrency"] == {"group": "prepare-release", "cancel-in-progress": False}
+        assert set(prepare_release["jobs"]) == {"prepare", "open"}
+
+    def test_only_beta_is_released(self, prepare, job) -> None:
+        """The button offers every branch; pressed on another one, both jobs
+        stand down rather than release that branch."""
         for each in (prepare, job):
-            assert each["env"] == {"TAG": "${{ needs.decide.outputs.tag }}"}
+            assert each["if"] == "github.ref == 'refs/heads/beta'"
+        assert job["needs"] == "prepare"
+
+    def test_prepare_sees_every_tag_and_keeps_no_token(self, prepare) -> None:
+        """The tags decide the next one."""
+        checkout = prepare["steps"][0]
+        assert checkout["uses"].startswith("actions/checkout@")
+        assert checkout["with"] == {"ref": "${{ github.sha }}", "fetch-depth": 0, "persist-credentials": False}
 
     def test_the_job_that_runs_the_dependencies_never_holds_the_key(self, prepare, job) -> None:
         """uv sync installs dependencies and the backend prints its schema,
@@ -1011,29 +1195,23 @@ class TestTheReleaseWorkflow:
         ]
         assert not any("uv " in s.get("run", "") or "docker " in s.get("run", "") for s in job["steps"])
 
-    def test_the_patch_is_checked_before_the_token_exists(self, job) -> None:
-        names = [s.get("name") or s["uses"].split("@")[0] for s in job["steps"]]
-        assert names == [
-            "actions/checkout",
-            "actions/download-artifact",
-            "Apply the release",
-            "Check that it is the release and nothing else",
-            "Get a token of the release App",
-            "Commit, tag and push",
-        ]
-        assert job["steps"][0]["with"] == {"ref": "${{ github.sha }}", "persist-credentials": False}
-        assert _step(job, "Apply the release")["run"] == (
-            'git apply --cached --binary "$RUNNER_TEMP/release/release.patch"'
+    def test_oasdiff_and_the_schema_come_as_in_the_api_check(self, prepare, api) -> None:
+        """The release compares with the same oasdiff and the same schema
+        the pull request check used."""
+        check = api["jobs"]["api-contract"]
+        for name in ("Install oasdiff", "Print the API schema"):
+            assert _step(prepare, name)["run"].replace(" || true)", ")") == _step(check, name)["run"], name
+            assert _step(prepare, name).get("working-directory") == _step(check, name).get("working-directory")
+        # Under pipefail a grep without a match ends the step before its
+        # message; here the message gets its turn.
+        assert "| cut -d' ' -f2 || true)" in _step(prepare, "Install oasdiff")["run"]
+        writing = _step(prepare, "Write the release")
+        assert writing["id"] == "prepare"
+        assert writing["run"] == (
+            "python3 .github/scripts/release.py prepare \\\n"
+            '  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"\n'
         )
-        assert _step(job, "Check that it is the release and nothing else")["run"] == (
-            'python3 .github/scripts/release.py verify-staged --tag "$TAG"'
-        )
-        app = _step(job, "Get a token of the release App")
-        assert app["with"] == {
-            "client-id": "${{ vars.RELEASE_APP_CLIENT_ID }}",
-            "private-key": "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
-            "permission-contents": "write",
-        }
+        assert prepare["outputs"] == {"tag": "${{ steps.prepare.outputs.tag }}"}
 
     def test_the_patch_is_the_whole_staged_release_of_this_commit(self, prepare, job) -> None:
         handing = _step(prepare, "Hand the release on as a patch")
@@ -1043,90 +1221,133 @@ class TestTheReleaseWorkflow:
         assert upload["with"]["name"] == download["with"]["name"] == "release-${{ github.sha }}"
         assert upload["with"]["if-no-files-found"] == "error"
 
-    def test_the_tag_is_checked_before_it_is_used(self, prepare, job) -> None:
-        names = [s.get("name") for s in prepare["steps"]]
-        assert names.index("Check the tag") < names.index("Write the release")
-        assert _step(prepare, "Check the tag")["run"] == 'python3 .github/scripts/release.py validate-tag "$TAG"'
-        for step in (*prepare["steps"], *job["steps"]):
+    def test_the_tag_and_the_patch_are_checked_before_the_token_exists(self, job) -> None:
+        """Both come from the job that ran the dependencies. The patch goes
+        into the index only, so the release.py that checks it is the one in
+        the commit, whatever the patch holds."""
+        names = [s.get("name") or s["uses"].split("@")[0] for s in job["steps"]]
+        assert names == [
+            "actions/checkout",
+            "actions/download-artifact",
+            "Check the tag",
+            "Apply the release",
+            "Check that it is the release and nothing else",
+            "Get a token of the release App",
+            "Push the branch and open the pull request",
+        ]
+        assert job["env"] == {"TAG": "${{ needs.prepare.outputs.tag }}"}
+        # verify-staged holds the tag against the existing ones, so it sees them all.
+        assert job["steps"][0]["with"] == {"ref": "${{ github.sha }}", "fetch-depth": 0, "persist-credentials": False}
+        assert _step(job, "Check the tag")["run"] == 'python3 .github/scripts/release.py validate-tag "$TAG"'
+        assert _step(job, "Apply the release")["run"] == (
+            'git apply --cached --binary "$RUNNER_TEMP/release/release.patch"'
+        )
+        assert _step(job, "Check that it is the release and nothing else")["run"] == (
+            'python3 .github/scripts/release.py verify-staged --tag "$TAG"'
+        )
+        for step in job["steps"]:
             assert "${{" not in step.get("run", ""), step.get("name")
 
-    def test_oasdiff_and_the_schema_come_as_in_the_api_check(self, prepare, api) -> None:
-        """The release compares with the same oasdiff and the same schema
-        the pull request check used."""
-        check = api["jobs"]["api-contract"]
-        for name in ("Install oasdiff", "Print the API schema"):
-            assert _step(prepare, name)["run"] == _step(check, name)["run"], name
-        assert _step(prepare, "Write the release")["run"] == (
-            'python3 .github/scripts/release.py promote --tag "$TAG" \\\n'
-            '  --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$RUNNER_TEMP/oasdiff"\n'
-        )
+    def test_the_token_may_push_a_branch_and_open_a_pull_request(self, job) -> None:
+        """And nothing else: a release reaches beta through the merge queue."""
+        assert _step(job, "Get a token of the release App")["with"] == {
+            "client-id": "${{ vars.RELEASE_APP_CLIENT_ID }}",
+            "private-key": "${{ secrets.RELEASE_APP_PRIVATE_KEY }}",
+            "permission-contents": "write",
+            "permission-pull-requests": "write",
+        }
 
-    def test_the_commit_and_the_tag_go_up_together_as_the_app(self, job, tmp_path) -> None:
-        """Run against a real origin, with `gh` stubbed to answer the bot's
-        user id: one atomic push leaves the release commit on beta and the
-        annotated tag on it."""
-        origin, work = tmp_path / "origin.git", tmp_path / "work"
-        _git(tmp_path, "init", "-q", "--bare", "-b", "beta", str(origin))
-        _git(tmp_path, "init", "-q", "-b", "beta", str(work))
-        _git(work, "remote", "add", "origin", str(origin))
-        _git(work, "commit", "-q", "--allow-empty", "-m", "Merge something")
-        _git(work, "push", "-q", "origin", "beta")
+    def test_the_pull_request_is_opened_with_the_app_token(self, job) -> None:
+        """One opened with GITHUB_TOKEN would start no checks, and the merge
+        queue would wait for them for ever."""
+        opening = _step(job, "Push the branch and open the pull request")
+        assert opening["env"] == {
+            "GH_TOKEN": "${{ steps.app.outputs.token }}",
+            "APP_SLUG": "${{ steps.app.outputs.app-slug }}",
+        }
+        assert "--force" not in opening["run"] and " -f " not in opening["run"]
+
+    def test_the_release_goes_up_as_a_branch_and_a_pull_request_of_the_app(self, job, tmp_path) -> None:
+        """Run against a real origin, with `gh` stubbed: the release commit
+        lands on release/vX on top of beta, beta and the tags stay as they
+        were, and the pull request into beta is opened with the App token."""
+        origin, work = _origin(tmp_path)
+        beta = _git(origin, "rev-parse", "beta")
         (work / "CHANGELOG.md").write_text("released\n", encoding="utf-8")
         _git(work, "add", "CHANGELOG.md")
-        stubs = tmp_path / "bin"
-        stubs.mkdir()
-        (stubs / "gh").write_text("#!/bin/sh\necho 123456\n", encoding="utf-8")
-        (stubs / "gh").chmod(0o755)
+        path, log = _gh(tmp_path)
 
         result = _run_unnamed(
-            _step(job, "Commit, tag and push"),
+            _step(job, "Push the branch and open the pull request"),
             work,
-            PATH=f"{stubs}:{os.environ['PATH']}",
-            GH_TOKEN="token",
+            PATH=path,
+            GH_TOKEN="app-token",
             APP_SLUG="digigilde-plak-release",
             TAG="v2026.10.1",
+            GITHUB_REPOSITORY="DigiGilde/plak",
         )
 
         assert result.returncode == 0, result.stdout + result.stderr
-        assert _git(origin, "log", "-1", "--format=%s|%an|%ae", "beta") == (
+        assert _git(origin, "log", "-1", "--format=%s|%an|%ae|%P", "release/v2026.10.1") == (
             "Release v2026.10.1|digigilde-plak-release[bot]|"
-            "123456+digigilde-plak-release[bot]@users.noreply.github.com"
+            f"123456+digigilde-plak-release[bot]@users.noreply.github.com|{beta}"
         )
-        assert _git(origin, "cat-file", "-t", "v2026.10.1") == "tag"
-        assert _git(origin, "rev-parse", "v2026.10.1^{commit}") == _git(origin, "rev-parse", "beta")
-        assert _git(origin, "tag", "-l", "--format=%(contents:subject)", "v2026.10.1") == "Plak v2026.10.1"
+        assert _git(origin, "show", "release/v2026.10.1:CHANGELOG.md") == "released"
+        assert _git(origin, "rev-parse", "beta") == beta
+        assert _git(origin, "tag", "-l") == ""
+        [call] = _gh_calls(log)
+        token, *args = call
+        assert token == "app-token"
+        body = args.pop(args.index("--body") + 1)
+        assert args == [
+            "pr",
+            "create",
+            "--repo",
+            "DigiGilde/plak",
+            "--base",
+            "beta",
+            "--head",
+            "release/v2026.10.1",
+            "--title",
+            "Release v2026.10.1",
+            "--body",
+        ]
+        paragraphs = body.split("\n\n")
+        assert len(paragraphs) == 2
+        assert all(p and "\n" not in p for p in paragraphs)
+        assert "releases v2026.10.1" in paragraphs[0]
+        assert "may be edited in this pull request" in paragraphs[1]
 
-    def test_a_beta_that_moved_on_takes_neither_the_commit_nor_the_tag(self, job, tmp_path) -> None:
-        """Another merge landed while this one was writing: the push is
-        refused as a whole, and the next run releases what collected."""
-        origin, work, other = tmp_path / "origin.git", tmp_path / "work", tmp_path / "other"
-        _git(tmp_path, "init", "-q", "--bare", "-b", "beta", str(origin))
-        _git(tmp_path, "init", "-q", "-b", "beta", str(work))
-        _git(work, "remote", "add", "origin", str(origin))
-        _git(work, "commit", "-q", "--allow-empty", "-m", "Merge something")
-        _git(work, "push", "-q", "origin", "beta")
-        _git(tmp_path, "clone", "-q", str(origin), str(other))
-        _git(other, "commit", "-q", "--allow-empty", "-m", "Merge something else")
-        _git(other, "push", "-q", "origin", "beta")
+    def test_a_release_branch_that_is_there_already_is_left_alone(self, job, tmp_path) -> None:
+        """The button pressed twice for one tag, or pressed again after a run
+        that pushed and then failed to open the pull request: nothing is
+        forced, no second pull request is opened, and the message names the
+        branch to delete."""
+        origin, work = _origin(tmp_path)
+        _git(work, "switch", "-q", "-c", "earlier")
+        _git(work, "commit", "-q", "--allow-empty", "-m", "Release v2026.10.1")
+        _git(work, "push", "-q", "origin", "HEAD:refs/heads/release/v2026.10.1")
+        earlier = _git(work, "rev-parse", "HEAD")
+        _git(work, "switch", "-q", "beta")
         (work / "CHANGELOG.md").write_text("released\n", encoding="utf-8")
         _git(work, "add", "CHANGELOG.md")
-        stubs = tmp_path / "bin"
-        stubs.mkdir()
-        (stubs / "gh").write_text("#!/bin/sh\necho 123456\n", encoding="utf-8")
-        (stubs / "gh").chmod(0o755)
+        path, log = _gh(tmp_path)
 
         result = _run_unnamed(
-            _step(job, "Commit, tag and push"),
+            _step(job, "Push the branch and open the pull request"),
             work,
-            PATH=f"{stubs}:{os.environ['PATH']}",
-            GH_TOKEN="token",
+            PATH=path,
+            GH_TOKEN="app-token",
             APP_SLUG="digigilde-plak-release",
             TAG="v2026.10.1",
+            GITHUB_REPOSITORY="DigiGilde/plak",
         )
 
         assert result.returncode != 0
-        assert _git(origin, "log", "-1", "--format=%s", "beta") == "Merge something else"
-        assert _git(origin, "tag", "-l") == ""
+        assert "The branch release/v2026.10.1 exists already. Delete it and run the workflow again." in result.stderr
+        assert _git(origin, "rev-parse", "release/v2026.10.1") == earlier
+        assert _git(work, "log", "-1", "--format=%s") == "Merge something"
+        assert _gh_calls(log) == []
 
 
 class TestTheGitHubRelease:
@@ -1204,13 +1425,15 @@ class TestTheRulesets:
     """The rulesets docs/releasing.md applies, kept in the repository. The
     App id is filled in when they are applied; 0 stands in for it here."""
 
-    def test_the_app_bypasses_only_what_a_release_has_to_pass(self) -> None:
+    def test_the_app_bypasses_only_the_creation_of_a_release_tag(self) -> None:
         """A bypass covers its whole ruleset, so what nobody may do, the App
         included, sits in a ruleset without one: deleting or rewriting beta,
-        moving or deleting a release tag."""
+        moving or deleting a release tag. A release reaches beta as a pull
+        request through the merge queue like any other, so the App has no
+        bypass on beta at all."""
         app = [{"actor_id": 0, "actor_type": "Integration", "bypass_mode": "always"}]
         rulesets = {
-            "beta": (app, {"pull_request", "required_status_checks", "merge_queue"}),
+            "beta": ([], {"pull_request", "required_status_checks", "merge_queue"}),
             "beta-history": ([], {"deletion", "non_fast_forward"}),
             "release-tags": (app, {"creation"}),
             "release-tags-fixed": ([], {"update", "deletion"}),

@@ -1,7 +1,7 @@
 /**
- * The release notes shipped with the SPA: `content/releases/<calver>.<nl|en>.md`.
- * At release time `unreleased.*` is renamed to the version it ships in (or
- * removed when empty), so only versioned files count here.
+ * The release notes shipped with the SPA: `content/releases/<calver>.<nl|en>.md`,
+ * written by the release from the note fragments in `changelog.d/`. A name in
+ * any other form is not a release and is left out.
  */
 import type { Locale } from './i18n';
 

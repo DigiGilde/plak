@@ -1,5 +1,6 @@
-"""The release tooling (.github/scripts/release.py): CHANGELOG.md, CalVer
-tags, component versions, the pull request check and the Claude Code hook.
+"""The release tooling (.github/scripts/release.py): CHANGELOG.md, the
+fragments under changelog.d/, CalVer tags, component versions, the pull
+request check and the Claude Code hook.
 
 The git side runs against real repositories in tmp_path, so what is pinned
 down here is what git does, not what a mock says it does.
@@ -37,7 +38,11 @@ release = _load()
 
 DAY = date(2026, 10, 1)
 TAG = "v2026.10.1"
+FRAGMENT = {"changelog.d/something-new.added.md": "- Something new.\n"}
 ENTRY = "### Added\n\n- Something new."
+NOTE_FRAGMENTS = {"changelog.d/x.note.nl.md": "Nieuw.\n", "changelog.d/x.note.en.md": "New.\n"}
+NOTES = release.NOTES_DIR
+BOTH_LANGUAGES = "a What's new note comes in Dutch and English."
 
 PYPROJECT = (
     '[build-system]\nversion = "keep"\n\n'
@@ -86,19 +91,12 @@ PACKAGE_LOCK = (
 )
 
 
-def changelog(unreleased: str = "", released: str = "") -> str:
-    text = "# Changelog\n\nWhat changed, newest first.\n\n## [Unreleased]\n"
-    if unreleased:
-        text += "\n" + unreleased.strip("\n") + "\n"
+def changelog(released: str = "") -> str:
+    """A changelog with `released` as its sections, links included."""
+    text = "# Changelog\n\nWhat changed, newest first.\n"
     if released:
         text += "\n" + released.strip("\n") + "\n"
     return release.with_links(text)
-
-
-def with_entry(repo: Repo, entry: str = ENTRY) -> str:
-    """The repository's changelog with `entry` under [Unreleased], released
-    sections untouched."""
-    return repo.read("CHANGELOG.md").replace("## [Unreleased]\n", f"## [Unreleased]\n\n{entry}\n", 1)
 
 
 class Repo:
@@ -133,16 +131,23 @@ class Repo:
         self.git("rm", "-q", name)
         self.git("commit", "-q", "-m", f"Remove {name}")
 
+    def head(self) -> str:
+        return self.git("rev-parse", "HEAD").strip()
+
     @property
     def handle(self):
         return release.Git(self.path)
 
-    def release(self, tag: str, day: date, spec: str | None = None, diff=None) -> None:
-        """The cycle the release workflow will run: promote, commit, tag."""
-        spec, diff = spec or SPEC, diff or NO_CHANGES
-        release.promote(self.handle, tag, day, spec, diff)
+    def prepare(self, tag: str | None = None, day: date = DAY, spec: str | None = None, diff=None) -> str:
+        """What a release pull request holds: the release prepared and
+        committed, not tagged. Returns the tag."""
+        tag, _ = release.prepare(self.handle, day, spec or SPEC, diff or NO_CHANGES, tag)
         self.git("commit", "-q", "-m", f"Release {tag}")
-        self.git("tag", tag)
+        return tag
+
+    def release(self, tag: str, day: date, spec: str | None = None, diff=None) -> None:
+        """The whole cycle: the release prepared, merged and tagged."""
+        self.git("tag", self.prepare(tag, day, spec, diff))
 
 
 @pytest.fixture(autouse=True)
@@ -189,7 +194,7 @@ def repo(tmp_path, monkeypatch) -> Repo:
 @pytest.fixture
 def released(repo) -> Repo:
     """The same repository after its first release, v2026.9.1."""
-    repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+    repo.commit(FRAGMENT)
     repo.release("v2026.9.1", date(2026, 9, 1))
     return repo
 
@@ -257,6 +262,9 @@ class TestTags:
         with pytest.raises(release.ReleaseError, match=re.escape("not newer than v2026.10.2")):
             release.next_tag(DAY, ["v2026.10.2"])
 
+    def test_the_tag_names_its_date(self):
+        assert release.tag_date("v2026.10.1.3") == DAY
+
     def test_today_is_the_date_in_amsterdam_not_in_utc(self, monkeypatch):
         """Half past eleven at night UTC is already the next day here."""
 
@@ -281,40 +289,38 @@ class TestChangelogLinks:
     BASE = "https://github.com/DigiGilde/plak"
 
     def test_each_version_compares_with_the_one_before_and_the_first_is_its_tag(self):
-        assert release.changelog_links(["Unreleased", "2026.10.4.1", "2026.10.4", "2026.9.30"]) == [
-            f"[Unreleased]: {self.BASE}/compare/v2026.10.4.1...HEAD",
+        assert release.changelog_links(["2026.10.4.1", "2026.10.4", "2026.9.30"]) == [
             f"[2026.10.4.1]: {self.BASE}/compare/v2026.10.4...v2026.10.4.1",
             f"[2026.10.4]: {self.BASE}/compare/v2026.9.30...v2026.10.4",
             f"[2026.9.30]: {self.BASE}/releases/tag/v2026.9.30",
         ]
 
     def test_without_a_release_there_is_nothing_to_link(self):
-        assert release.changelog_links(["Unreleased"]) == []
-        text = "# Changelog\n\n## [Unreleased]\n\n[Unreleased]: https://example.org\n"
-        assert release.with_links(text) == "# Changelog\n\n## [Unreleased]\n"
+        assert release.changelog_links([]) == []
+        assert release.with_links("# Changelog\n\n[stale]: https://example.org\n") == "# Changelog\n"
 
     def test_the_links_are_written_anew_and_nothing_else_moves(self):
-        stale = changelog(ENTRY, "## [2026.9.1]\n\n- Old.").replace("v2026.9.1...HEAD", "v2026.1.1...HEAD")
+        stale = changelog("## [2026.9.1]\n\n- Old.").replace("/releases/tag/v2026.9.1", "/releases/tag/v2026.1.1")
         fresh = release.with_links(stale)
-        assert fresh == changelog(ENTRY, "## [2026.9.1]\n\n- Old.")
+        assert fresh == changelog("## [2026.9.1]\n\n- Old.")
         assert release.with_links(fresh) == fresh
 
     def test_the_links_are_no_part_of_the_last_section(self):
         """So the oldest release's notes and its freeze ignore them."""
-        sections = release.split_sections(changelog("", "## [2026.9.1]\n\n- Old."))
+        sections = release.split_sections(changelog("## [2026.9.1]\n\n- Old."))
         assert sections[-1].body == "- Old."
 
     @pytest.mark.parametrize(
         "edit",
         [
-            lambda text: text[: text.index("\n[Unreleased]: ")] + "\n",
+            lambda text: text[: text.index("\n[2026.9.1]: ")] + "\n",
             lambda text: text.replace("/releases/tag/v2026.9.1", "/releases/tag/v2026.9.2"),
-            lambda text: text + "[extra]: https://example.org\n",
+            lambda text: text + "[Unreleased]: https://example.org\n",
         ],
         ids=["missing", "wrong", "extra"],
     )
     def test_links_that_do_not_follow_the_headings_fail_the_check(self, edit):
-        text = edit(changelog(ENTRY, "## [2026.9.1]\n\n- Old."))
+        text = edit(changelog("## [2026.9.1]\n\n- Old."))
         assert release.changelog_problems(text) == [
             "CHANGELOG.md: the link references at the bottom are not the ones its headings need; "
             "`release.py links` writes them."
@@ -322,53 +328,37 @@ class TestChangelogLinks:
 
     def test_main_writes_them(self, repo, capsys):
         (repo.path / "CHANGELOG.md").write_text(
-            changelog(ENTRY, "## [2026.9.1]\n\n- Old.").split("\n[Unreleased]: ")[0] + "\n", encoding="utf-8"
+            changelog("## [2026.9.1]\n\n- Old.").split("\n[2026.9.1]: ")[0] + "\n", encoding="utf-8"
         )
         assert release.main(["links"]) == 0
         assert capsys.readouterr().out == "updated CHANGELOG.md\n"
-        assert repo.read("CHANGELOG.md") == changelog(ENTRY, "## [2026.9.1]\n\n- Old.")
+        assert repo.read("CHANGELOG.md") == changelog("## [2026.9.1]\n\n- Old.")
 
 
 class TestChangelogStructure:
     def test_a_full_changelog_is_valid(self):
         text = changelog(
-            "<!-- release: hold -->\n\n### Added\n\n- One line,\n  wrapped onto a second.\n\n"
-            "<!-- a note to the next reader -->\n\n### Security\n\n- Another.",
-            "## [2026.9.1]\n\nA paragraph before the list.\n\n### Fixed\n\n- Bump.\n\n## [2026.8.31.1]\n\n- Old.",
+            "## [2026.10.1]\n\n### Added\n\n- One line,\n  wrapped onto a second.\n\n### Security\n\n- Another.\n\n"
+            "## [2026.9.1]\n\nA paragraph before the list.\n\n### Fixed\n\n- Bump.\n\n## [2026.8.31.1]\n\n- Old."
         )
         assert release.changelog_problems(text) == []
 
-    def test_an_empty_unreleased_is_valid(self):
+    def test_a_changelog_without_a_release_yet_is_valid(self):
         assert release.changelog_problems(changelog()) == []
 
     def test_the_changelog_of_this_repository_is_valid(self):
         assert release.changelog_problems((ROOT / "CHANGELOG.md").read_text(encoding="utf-8")) == []
 
     @pytest.mark.parametrize(
-        "text",
-        ["# Changelog\n", "# Changelog\n\n## [2026.9.1]\n\n- x\n\n## [Unreleased]\n"],
-        ids=["no-sections", "unreleased-not-first"],
+        "sections",
+        ["## [Unreleased]", "## [Unreleased]\n\n### Added\n\n- x\n\n## [2026.9.1]\n\n- y"],
+        ids=["alone", "above-a-release"],
     )
-    def test_unreleased_has_to_come_first(self, text):
-        assert release.changelog_problems(text) == ["CHANGELOG.md: the first section has to be '## [Unreleased]'."]
-
-    @pytest.mark.parametrize(
-        ("unreleased", "reason"),
-        [
-            ("### New\n\n- x", "'### New' is not one of: ### Added, ### Changed"),
-            ("### Maintenance\n\n- x", "'### Maintenance' is not one of: ### Added, ### Changed"),
-            ("### Added\n\n- x\n\n### Added\n\n- y", "'### Added' appears twice"),
-            ("### Added\n\n### Fixed\n\n- y", "'### Added' has no entries."),
-            ("- x", "'- x' sits under no heading"),
-            ("### Added\n\n- x\n\nSome prose.", "'Some prose.' is not an entry"),
-            ("### Added\n\n  indented, no entry above\n- x", "'  indented, no entry above' is not an entry"),
-            ("### Added\n\n- x\n\n#### Deeper", "'#### Deeper' is not an entry"),
-        ],
-    )
-    def test_a_malformed_unreleased_is_refused(self, unreleased, reason):
-        [problem] = release.changelog_problems(changelog(unreleased))
-        assert problem.startswith("CHANGELOG.md: [Unreleased]: ")
-        assert reason in problem
+    def test_an_unreleased_section_is_refused(self, sections):
+        """Changes wait in changelog.d/, not in the changelog."""
+        assert release.changelog_problems(changelog(sections)) == [
+            "CHANGELOG.md: [Unreleased] is gone; a change adds a fragment under changelog.d/ (docs/releasing.md)."
+        ]
 
     @pytest.mark.parametrize(
         ("heading", "reason"),
@@ -378,17 +368,16 @@ class TestChangelogStructure:
             ("## [2026.09.1]", "'## [2026.09.1]': 'v2026.09.1' has a leading zero"),
             ("## [2026.2.30]", "'## [2026.2.30]': 'v2026.2.30' does not name a real date"),
             ("## [1.0.0]", "'## [1.0.0]': 'v1.0.0' is not a CalVer tag"),
-            ("## [Unreleased]", "'## [Unreleased]' appears twice"),
         ],
     )
-    def test_a_malformed_released_heading_is_refused(self, heading, reason):
-        [problem] = release.changelog_problems(changelog(ENTRY, f"{heading}\n\n- x"))
+    def test_a_malformed_heading_is_refused(self, heading, reason):
+        [problem] = release.changelog_problems(changelog(f"{heading}\n\n- x"))
         assert reason in problem
 
     @pytest.mark.parametrize("heading", ["## [v2026.9.1] - 2026-09-01", "## [v2026.9.1]"])
     def test_the_old_heading_with_the_tag_and_a_date_is_refused(self, heading):
         """The version is the date already; the old form repeated it."""
-        [problem] = release.changelog_problems(changelog(ENTRY, f"{heading}\n\n- x"))
+        [problem] = release.changelog_problems(changelog(f"{heading}\n\n- x"))
         assert problem == (
             f"CHANGELOG.md: '{heading}' is the old form; write '## [2026.9.1]', "
             "the version without the v and without a date."
@@ -396,13 +385,181 @@ class TestChangelogStructure:
 
     def test_a_version_twice_is_refused(self):
         section = "## [2026.9.1]\n\n- x\n"
-        [problem] = release.changelog_problems(changelog(ENTRY, section + "\n" + section))
+        [problem] = release.changelog_problems(changelog(section + "\n" + section))
         assert "'## [2026.9.1]' appears twice" in problem
 
     def test_parse_raises_with_every_problem(self):
         with pytest.raises(release.ReleaseError) as refused:
-            release.parse_changelog(changelog("### New\n\n- x\n\nprose"))
+            release.parse_changelog(changelog("## 2026.9.1\n\n- x\n\n## [1.0.0]\n\n- y"))
         assert len(refused.value.problems) == 2
+
+
+class TestPendingVersion:
+    """The newest section whose tag does not exist is a release on its way."""
+
+    def test_the_newest_section_without_a_tag_is_pending(self):
+        sections = release.split_sections(changelog("## [2026.10.1]\n\n- x\n\n## [2026.9.1]\n\n- y"))
+        assert release.pending_version(sections, ["v2026.9.1"]) == "2026.10.1"
+
+    def test_a_tagged_newest_section_is_not(self):
+        sections = release.split_sections(changelog("## [2026.10.1]\n\n- x\n\n## [2026.9.1]\n\n- y"))
+        assert release.pending_version(sections, ["v2026.9.1", "v2026.10.1"]) is None
+
+    def test_without_sections_nothing_is_pending(self):
+        assert release.pending_version([], []) is None
+
+
+class TestReleaseText:
+    def test_the_section_goes_above_the_newest_one(self):
+        text = release.release_text(changelog("## [2026.9.1]\n\n- Old."), "2026.10.1", ENTRY)
+        assert text == changelog(f"## [2026.10.1]\n\n{ENTRY}\n\n## [2026.9.1]\n\n- Old.")
+        assert release.changelog_problems(text) == []
+
+    def test_the_first_section_follows_the_intro_with_a_blank_line(self):
+        assert release.release_text(changelog(), "2026.10.1", ENTRY) == changelog(f"## [2026.10.1]\n\n{ENTRY}")
+
+    def test_an_empty_changelog_gets_the_section_alone(self):
+        assert release.release_text("", "2026.10.1", "- x") == (
+            "## [2026.10.1]\n\n- x\n\n[2026.10.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.10.1\n"
+        )
+
+
+class TestFragments:
+    FORMS = (
+        "is not <slug>.<kind>.md with kind one of added, changed, deprecated, removed, fixed, security, "
+        "or <slug>.note.nl.md and <slug>.note.en.md."
+    )
+
+    def test_entries_notes_and_the_readme_are_fine(self):
+        files = {
+            "README.md": "What goes here.\n",
+            "site-id.added.md": "- One,\n  wrapped onto a second line.\n\n- Two.\n\t  tabbed continuation.\n",
+            "a1.changed.md": "- x\n",
+            "b.deprecated.md": "- x\n",
+            "c.removed.md": "- x\n",
+            "d.fixed.md": "- x\n",
+            "e.security.md": "- x\n",
+            "site-id.note.nl.md": "## Kop\n\nTekst.\n",
+            "site-id.note.en.md": "## Heading\n\nText.\n",
+        }
+        assert release.fragment_problems(files) == []
+        assert release.release_fragment_problems(files) == []
+
+    def test_the_fragments_of_this_repository_are_valid(self):
+        git = release.Git(ROOT)
+        files, modes = git.tree("HEAD", release.FRAGMENTS), git.modes("HEAD", release.FRAGMENTS)
+        assert release.fragment_problems(files, modes) == []
+
+    @pytest.mark.parametrize(
+        ("name", "mode"),
+        [("x.added.md", "120000"), ("x.added.md", "100755"), ("x.added.md", "160000"), ("README.md", "100755")],
+        ids=["symlink", "executable", "submodule", "readme-executable"],
+    )
+    def test_anything_but_a_plain_file_is_refused(self, name, mode):
+        """A symlink's text is its target, so nothing else is said about it."""
+        files = {name: "../../etc/passwd", "y.fixed.md": "- y\n"}
+        assert release.fragment_problems(files, {name: mode, "y.fixed.md": "100644"}) == [
+            f"changelog.d/{name} is not a plain file."
+        ]
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Site-Id.added.md",
+            "site_id.added.md",
+            "-site.added.md",
+            "site-.added.md",
+            "site.improved.md",
+            "site.note.md",
+            "site.note.de.md",
+            "site.added.txt",
+            "site.added",
+            "notes.md",
+            ".gitkeep",
+            "sub/site.added.md",
+            "sub/README.md",
+        ],
+    )
+    def test_a_name_in_neither_form_is_refused(self, name):
+        assert release.fragment_problems({name: "- x\n"}) == [f"changelog.d/{name} {self.FORMS}"]
+
+    @pytest.mark.parametrize(
+        ("text", "reason"),
+        [
+            ("### Added\n\n- x\n", "'### Added' is not an entry: every change is a list item starting with '- '."),
+            ("- x\n\nSome prose.\n", "'Some prose.' is not an entry"),
+            ("  indented, no entry above\n- x\n", "'  indented, no entry above' is not an entry"),
+            ("<!-- a comment -->\n- x\n", "'<!-- a comment -->' is not an entry"),
+            ("- x\n#### Deeper\n", "'#### Deeper' is not an entry"),
+        ],
+    )
+    def test_anything_but_list_items_is_refused(self, text, reason):
+        [problem] = release.fragment_problems({"x.fixed.md": text})
+        assert problem.startswith("changelog.d/x.fixed.md: ")
+        assert reason in problem
+
+    @pytest.mark.parametrize("text", ["", "  \n\n"])
+    def test_an_entry_fragment_without_an_entry_is_refused(self, text):
+        assert release.fragment_problems({"x.fixed.md": text}) == ["changelog.d/x.fixed.md has no entries."]
+
+    @pytest.mark.parametrize(
+        ("files", "problem"),
+        [
+            ({"x.note.nl.md": "Nieuw"}, "x.note.nl.md has no x.note.en.md: " + BOTH_LANGUAGES),
+            ({"x.note.en.md": "New"}, "x.note.en.md has no x.note.nl.md: " + BOTH_LANGUAGES),
+            ({"x.note.nl.md": " \n", "x.note.en.md": "New"}, "x.note.nl.md is empty."),
+        ],
+        ids=["no-english", "no-dutch", "empty"],
+    )
+    def test_a_note_comes_in_both_languages_with_content(self, files, problem):
+        assert release.fragment_problems(files) == [f"changelog.d/{problem}"]
+
+    @pytest.mark.parametrize(
+        "files",
+        [{}, {"README.md": "x"}, {"x.note.nl.md": "a", "x.note.en.md": "b"}],
+        ids=["nothing", "readme", "notes-only"],
+    )
+    def test_without_entries_there_is_nothing_to_release(self, files):
+        assert release.release_fragment_problems(files) == [
+            "Nothing to release: changelog.d/ has no entries, and they are the release notes."
+        ]
+
+    def test_a_malformed_fragment_is_the_problem_not_the_emptiness(self):
+        assert release.release_fragment_problems({"bad.md": "- x"}) == [f"changelog.d/bad.md {self.FORMS}"]
+
+    def test_the_paths_leave_the_readme_out(self):
+        assert release.fragment_paths({"b.added.md": "", "README.md": "", "a.note.nl.md": ""}) == [
+            "changelog.d/a.note.nl.md",
+            "changelog.d/b.added.md",
+        ]
+
+    def test_the_section_follows_the_headings_then_the_file_names(self):
+        files = {
+            "README.md": "ignored\n",
+            "b.added.md": "- B.\n",
+            "a.added.md": "- A,\n  continued.\n\n\n- A2.\n",
+            "x.security.md": "- X.\n",
+            "m.fixed.md": "- M.\n",
+            "a.note.nl.md": "ignored here\n",
+            "a.note.en.md": "ignored here\n",
+        }
+        assert release.assemble_section(files) == (
+            "### Added\n\n- A,\n  continued.\n- A2.\n- B.\n\n### Fixed\n\n- M.\n\n### Security\n\n- X."
+        )
+
+    def test_the_notes_are_joined_by_name_with_a_blank_line_between(self):
+        files = {
+            "b.note.nl.md": "## B\n\nTekst.\n",
+            "a.note.nl.md": "\n## A\n\nTekst A.",
+            "a.note.en.md": "## A\n\nText A.\n\n",
+            "b.note.en.md": "## B\n\nText.\n",
+            "a.added.md": "- x\n",
+        }
+        assert release.assemble_notes(files) == {
+            "nl": "## A\n\nTekst A.\n\n## B\n\nTekst.\n",
+            "en": "## A\n\nText A.\n\n## B\n\nText.\n",
+        }
+        assert release.assemble_notes({"a.added.md": "- x\n"}) == {}
 
 
 class TestShippedPaths:
@@ -415,7 +572,7 @@ class TestShippedPaths:
             "backend/alembic/versions/0001_base.py",
             "backend/alembic.ini",
             "frontend/src/App.vue",
-            "frontend/src/content/releases/unreleased.nl.md",
+            "frontend/src/content/releases/2026.10.1.nl.md",
             "frontend/package.json",
             "frontend/package-lock.json",
             "frontend/index.html",
@@ -449,6 +606,7 @@ class TestShippedPaths:
             "backend/pyproject.toml.orig",
             "README.md",
             "CHANGELOG.md",
+            "changelog.d/site-id.added.md",
             "docs/releasing.md",
             ".github/workflows/ci.yml",
         ],
@@ -568,20 +726,24 @@ class TestVersionEdits:
         assert (lock["version"], lock["packages"][""]["version"]) == ("2026.10.1", "2026.10.1")
         assert sum(a != b for a, b in zip(edited.splitlines(), package_lock.splitlines(), strict=True)) == 2
 
+    def test_the_versions_the_real_files_carry_can_be_read_back(self):
+        """What decide and check read is what prepare wrote."""
+        for path, version_of in release.VERSION_OF.items():
+            found = version_of((ROOT / path).read_text(encoding="utf-8"))
+            assert isinstance(found, str) and found, path
+
 
 class TestNotes:
     def test_pairs_in_both_languages_are_fine(self):
-        notes = {"unreleased.nl.md": "Nieuw", "unreleased.en.md": "New", "2026.9.1.nl.md": "a", "2026.9.1.en.md": "b"}
-        assert release.note_problems(notes | {"index.ts": "", "README.md": ""}) == []
-        assert release.note_problems({"unreleased.nl.md": "", "unreleased.en.md": " \n"}) == []
+        notes = {"2026.9.1.nl.md": "a", "2026.9.1.en.md": "b", "2026.10.4.1.nl.md": "", "2026.10.4.1.en.md": " \n"}
+        assert release.note_problems(notes) == []
 
     @pytest.mark.parametrize(
         ("notes", "reason"),
         [
-            ({"unreleased.nl.md": "Nieuw"}, "unreleased.nl.md has no unreleased.en.md"),
-            ({"unreleased.en.md": "New"}, "unreleased.en.md has no unreleased.nl.md"),
             ({"2026.9.1.nl.md": "Nieuw"}, "2026.9.1.nl.md has no 2026.9.1.en.md"),
-            ({"unreleased.nl.md": "Nieuw", "unreleased.en.md": "\n"}, "one is empty and the other is not"),
+            ({"2026.9.1.en.md": "New"}, "2026.9.1.en.md has no 2026.9.1.nl.md"),
+            ({"2026.9.1.nl.md": "Nieuw", "2026.9.1.en.md": "\n"}, "one is empty and the other is not"),
         ],
     )
     def test_a_note_in_one_language_is_refused(self, notes, reason):
@@ -589,83 +751,171 @@ class TestNotes:
         assert problem.startswith(release.NOTES_DIR)
         assert reason in problem
 
-    def test_notes_with_content_are_named_after_the_version(self):
-        notes = {"unreleased.nl.md": "Nieuw", "unreleased.en.md": "New"}
-        assert release.note_operations(notes, "2026.10.1") == [
-            ("unreleased.nl.md", "2026.10.1.nl.md"),
-            ("unreleased.en.md", "2026.10.1.en.md"),
+    @pytest.mark.parametrize(
+        "name", ["unreleased.nl.md", "index.ts", "README.md", "v2026.9.1.nl.md", "2026.9.1.de.md", "sub/2026.9.1.nl.md"]
+    )
+    def test_anything_not_named_after_a_release_is_refused(self, name):
+        """The same rule the frontend test holds the directory to."""
+        assert release.note_problems({name: "x", "2026.9.1.nl.md": "a", "2026.9.1.en.md": "b"}) == [
+            f"frontend/src/content/releases/{name} is not <version>.nl.md or <version>.en.md, the note of a release."
         ]
 
-    def test_empty_notes_are_deleted(self):
-        notes = {"unreleased.nl.md": "", "unreleased.en.md": "  \n"}
-        assert release.note_operations(notes, "2026.10.1") == [("unreleased.nl.md", None), ("unreleased.en.md", None)]
 
-    def test_no_notes_means_nothing_to_do(self):
-        assert release.note_operations({}, "2026.10.1") == []
-        assert release.note_operations({"2026.9.1.nl.md": "a", "2026.9.1.en.md": "b"}, "2026.10.1") == []
+class TestReleaseProblems:
+    """What a commit has to look like to be tagged as a release."""
 
-    def test_a_note_for_the_version_that_exists_already_is_refused(self):
-        notes = {"unreleased.nl.md": "a", "unreleased.en.md": "b", "2026.10.1.nl.md": "c", "2026.10.1.en.md": "d"}
-        with pytest.raises(release.ReleaseError, match=re.escape("2026.10.1.nl.md already exists")):
-            release.note_operations(notes, "2026.10.1")
+    @pytest.fixture
+    def pending(self, released) -> Repo:
+        """A release prepared on top of v2026.9.1 and committed, not tagged."""
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        return released
 
-    def test_a_one_language_note_stops_the_release(self):
-        with pytest.raises(release.ReleaseError, match=re.escape("has no unreleased.en.md")):
-            release.note_operations({"unreleased.nl.md": "Nieuw"}, "2026.10.1")
+    def test_a_prepared_release_passes(self, pending):
+        assert release.release_problems(pending.handle, "HEAD", "2026.10.1") == []
+
+    @pytest.mark.parametrize(
+        ("files", "path"),
+        [
+            ({"backend/pyproject.toml": '[project]\nname = "plak-api"\n'}, "backend/pyproject.toml"),
+            ({"backend/pyproject.toml": BACKEND_PYPROJECT}, "backend/pyproject.toml"),
+            ({"frontend/package.json": "{"}, "frontend/package.json"),
+            ({"frontend/package.json": "[]\n"}, "frontend/package.json"),
+            ({"frontend/package.json": PACKAGE}, "frontend/package.json"),
+            ({"publiccode.yml": "name: Plak\n"}, "publiccode.yml"),
+            ({"publiccode.yml": "softwareVersion: 2026.9.1\n"}, "publiccode.yml"),
+        ],
+        ids=[
+            "pyproject-without-version",
+            "pyproject-old-version",
+            "package-not-json",
+            "package-not-an-object",
+            "package-old-version",
+            "publiccode-without-line",
+            "publiccode-old-version",
+        ],
+    )
+    def test_a_version_file_that_does_not_carry_the_version_fails(self, pending, files, path):
+        pending.commit(files)
+        assert release.release_problems(pending.handle, "HEAD", "2026.10.1") == [
+            f"{path} at HEAD does not carry version 2026.10.1."
+        ]
+
+    def test_a_version_file_that_is_missing_fails(self, pending):
+        pending.remove("publiccode.yml")
+        assert release.release_problems(pending.handle, "HEAD", "2026.10.1") == [
+            "publiccode.yml at HEAD does not carry version 2026.10.1."
+        ]
+
+    def test_a_fragment_left_behind_fails(self, pending):
+        pending.commit({"changelog.d/late.added.md": "- Late.\n", "changelog.d/README.md": "Fine here.\n"})
+        assert release.release_problems(pending.handle, "HEAD", "2026.10.1") == [
+            "changelog.d/late.added.md is still there: a release removes every fragment."
+        ]
+
+    def test_a_version_behind_the_newest_tag_fails(self, released):
+        problems = release.release_problems(released.handle, "HEAD", "2026.8.1")
+        assert problems[0] == "v2026.8.1 is not newer than v2026.9.1."
+
+    def test_a_version_that_is_no_calver_fails(self, released):
+        problems = release.release_problems(released.handle, "HEAD", "Unreleased")
+        assert problems[0].startswith("'vUnreleased' is not a CalVer tag")
 
 
 class TestDecide:
-    def test_an_empty_unreleased_without_tags_releases_nothing(self, repo):
-        assert release.decide(repo.handle, DAY) == ("none", "")
+    def test_without_a_section_there_is_nothing_to_tag(self, repo):
+        assert release.decide(repo.handle) == ("none", "", "")
 
-    def test_entries_release_under_todays_tag(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
-        assert release.decide(repo.handle, DAY) == ("release", TAG)
+    def test_a_tagged_newest_section_releases_nothing(self, released):
+        """Also what a rerun of the workflow sees after the tag went out."""
+        assert release.decide(released.handle) == ("none", "", "")
 
-    def test_nothing_since_the_last_tag_releases_nothing(self, released):
-        assert release.decide(released.handle, DAY) == ("none", "")
+    def test_a_change_without_a_release_releases_nothing(self, released):
+        released.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
+        assert release.decide(released.handle) == ("none", "", "")
 
-    @pytest.mark.parametrize(
-        "path",
-        ["backend/src/plak/main.py", "backend/uv.lock", "cli/plak_cli/__init__.py", "docs/releasing.md"],
-    )
-    def test_a_change_without_an_entry_releases_nothing(self, released, path):
-        """No entry, no release notes, no release, shipped path or not.
-        The change reaches production with the next release that does have
-        an entry."""
-        released.commit({path: "changed\n"})
-        assert release.decide(released.handle, DAY) == ("none", "")
+    def test_an_untagged_newest_section_is_tagged_at_the_commit_that_added_it(self, released):
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        commit = released.head()
+        released.commit({"README.md": "later\n"})
+        assert release.decide(released.handle) == ("release", TAG, commit)
 
-    @pytest.mark.parametrize("unreleased", [release.HOLD + "\n\n" + ENTRY, release.HOLD])
-    def test_the_hold_marker_holds(self, repo, unreleased):
-        repo.commit({"CHANGELOG.md": changelog(unreleased)})
-        assert release.decide(repo.handle, DAY) == ("hold", "")
+    def test_an_edit_in_the_pull_request_moves_the_tag_to_the_edit(self, released):
+        """beta merges by rebase, so a reword made in the pull request lands
+        as a commit of its own after the release commit; the tag has to
+        carry it."""
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        released.commit({"CHANGELOG.md": released.read("CHANGELOG.md").replace("Something new", "Something newer")})
+        released.commit({NOTES + "2026.10.1.nl.md": "Nieuw.\n", NOTES + "2026.10.1.en.md": "New.\n"})
+        edit = released.head()
+        released.commit({"README.md": "later\n"})
+        assert release.decide(released.handle) == ("release", TAG, edit)
 
-    def test_a_second_release_the_same_day_gets_a_suffix(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
-        repo.release(TAG, DAY)
-        repo.commit({"CHANGELOG.md": with_entry(repo)})
-        assert release.decide(repo.handle, DAY) == ("release", "v2026.10.1.1")
+    def test_a_commit_that_adds_or_edits_a_fragment_ends_the_release(self, released):
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        commit = released.head()
+        reworded = released.read("CHANGELOG.md") + "\n"
+        released.commit({"changelog.d/late.added.md": "- Late.\n", "CHANGELOG.md": reworded})
+        assert release.release_head(released.handle, "2026.10.1") == commit
+        released.commit({"changelog.d/late.added.md": "- Later.\n"})
+        assert release.release_head(released.handle, "2026.10.1") == commit
 
-    def test_a_malformed_changelog_is_refused(self, repo):
-        repo.commit({"CHANGELOG.md": changelog("### New\n\n- x")})
-        with pytest.raises(release.ReleaseError, match="'### New' is not one of"):
-            release.decide(repo.handle, DAY)
+    def test_a_commit_that_removes_a_fragment_is_part_of_the_release(self, released):
+        """A fragment that reached beta after the release was prepared, with
+        the release rebased on top of it: taken out in the pull request, its
+        line added to the section, and the tag carries that commit."""
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        release_commit = released.head()
+        released.git("switch", "-q", "--detach", "HEAD^")
+        released.commit({"changelog.d/late.added.md": "- Late.\n"})
+        released.git("cherry-pick", release_commit)
+        released.git("rm", "-q", "changelog.d/late.added.md")
+        with_late = released.read("CHANGELOG.md").replace("- Something new.", "- Something new.\n- Late.")
+        released.commit({"CHANGELOG.md": with_late})
+        released.git("switch", "-q", "-C", "beta")
+        assert release.decide(released.handle) == ("release", TAG, released.head())
 
-    def test_main_prints_the_route_and_writes_the_step_output(self, repo, monkeypatch, tmp_path, capsys):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+    def test_a_fragment_added_after_the_release_is_the_next_releases(self, released):
+        """It ends the release, which is tagged without it."""
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        commit = released.head()
+        released.commit({"changelog.d/late.added.md": "- Late.\n"})
+        assert release.decide(released.handle) == ("release", TAG, commit)
+
+    def test_a_release_commit_that_is_not_releasable_fails(self, released):
+        """The job goes red instead of tagging a commit that left a fragment
+        behind or forgot a version."""
+        released.commit({"CHANGELOG.md": changelog(f"## [2026.10.1]\n\n- Hand made.\n\n## [2026.9.1]\n\n{ENTRY}")})
+        with pytest.raises(release.ReleaseError) as refused:
+            release.decide(released.handle)
+        assert refused.value.problems[0].startswith("backend/pyproject.toml at ")
+        assert refused.value.problems[0].endswith(" does not carry version 2026.10.1.")
+
+    def test_a_malformed_newest_heading_fails(self, released):
+        released.commit({"CHANGELOG.md": changelog(f"## [Unreleased]\n\n- x\n\n## [2026.9.1]\n\n{ENTRY}")})
+        with pytest.raises(release.ReleaseError, match="'vUnreleased' is not a CalVer tag"):
+            release.decide(released.handle)
+
+    def test_main_prints_the_route_and_writes_the_step_output(self, released, monkeypatch, tmp_path, capsys):
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        commit = released.head()
         output = tmp_path / "output"
         output.write_text("earlier=1\n")
         monkeypatch.setenv("GITHUB_OUTPUT", str(output))
-        monkeypatch.setattr(release, "today", lambda: DAY)
 
         assert release.main(["decide"]) == 0
-        assert capsys.readouterr().out == f"route=release\ntag={TAG}\n"
-        assert output.read_text() == f"earlier=1\nroute=release\ntag={TAG}\n"
+        assert capsys.readouterr().out == f"route=release\ntag={TAG}\ncommit={commit}\n"
+        assert output.read_text() == f"earlier=1\nroute=release\ntag={TAG}\ncommit={commit}\n"
 
     def test_main_without_a_step_output_only_prints(self, repo, capsys):
         assert release.main(["decide"]) == 0
-        assert capsys.readouterr().out == "route=none\ntag=\n"
+        assert capsys.readouterr().out == "route=none\ntag=\ncommit=\n"
 
     def test_main_outside_a_repository_fails(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
@@ -673,27 +923,38 @@ class TestDecide:
         assert capsys.readouterr().err.startswith("error: git rev-parse --show-toplevel:")
 
 
-class TestPromote:
-    def test_unreleased_becomes_the_section_for_the_tag(self, repo):
+class TestPrepare:
+    def test_the_fragments_become_the_section_for_the_tag(self, repo):
         older = "## [2026.9.1]\n\n### Fixed\n\n- Old."
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, older)})
+        repo.commit({"CHANGELOG.md": changelog(older), "changelog.d/README.md": "Read docs/releasing.md.\n"})
+        repo.git("tag", "v2026.9.1")
+        repo.commit({**FRAGMENT, "changelog.d/a-fix.fixed.md": "- Fixed it,\n  at last.\n"})
 
-        touched = release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        tag, touched = release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
 
+        assert tag == TAG
         assert repo.read("CHANGELOG.md") == (
-            "# Changelog\n\nWhat changed, newest first.\n\n## [Unreleased]\n\n"
-            f"## [2026.10.1]\n\n{ENTRY}\n\n{older}\n\n"
-            "[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.1...HEAD\n"
+            "# Changelog\n\nWhat changed, newest first.\n\n"
+            f"## [2026.10.1]\n\n{ENTRY}\n\n### Fixed\n\n- Fixed it,\n  at last.\n\n{older}\n\n"
             "[2026.10.1]: https://github.com/DigiGilde/plak/compare/v2026.9.1...v2026.10.1\n"
             "[2026.9.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.1\n"
         )
         assert release.changelog_problems(repo.read("CHANGELOG.md")) == []
         staged = repo.git("diff", "--cached", "--name-only").split()
         assert sorted(staged) == sorted(touched)
+        assert sorted(os.listdir(repo.path / "changelog.d")) == ["README.md"]
+        assert "D  changelog.d/something-new.added.md" in repo.git("status", "--porcelain").splitlines()
+
+    def test_the_tag_is_todays_unless_given(self, released):
+        released.commit(FRAGMENT)
+        tag, _ = release.prepare(released.handle, DAY, SPEC, NO_CHANGES, "v2026.10.5")
+        assert tag == "v2026.10.5"
+        assert "## [2026.10.5]" in released.read("CHANGELOG.md")
+        assert 'softwareVersion: "2026.10.5"\nreleaseDate: "2026-10-05"' in released.read("publiccode.yml")
 
     def test_the_first_release_sets_every_component_version(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
-        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        repo.commit(FRAGMENT)
+        release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
 
         assert _versions(repo) == ("2026.10.1", "2026.10.1")
         assert 'name = "plak"\nversion = "2026.10.1"' in repo.read("cli/uv.lock")
@@ -701,8 +962,8 @@ class TestPromote:
         assert _image_versions(repo) == {"2026.10.1"}
 
     def test_a_backend_change_leaves_the_cli_and_plugin_versions(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY), "backend/src/plak/app.py": "app = 2\n"})
-        touched = release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+        released.commit({**FRAGMENT, "backend/src/plak/app.py": "app = 2\n"})
+        _, touched = release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
 
         assert _versions(released) == ("2026.9.1", "2026.9.1")
         assert sorted(touched) == [
@@ -710,6 +971,7 @@ class TestPromote:
             "backend/openapi.json",
             "backend/pyproject.toml",
             "backend/uv.lock",
+            "changelog.d/something-new.added.md",
             "frontend/package-lock.json",
             "frontend/package.json",
             "publiccode.yml",
@@ -718,17 +980,17 @@ class TestPromote:
 
     def test_the_image_gets_every_release_also_when_only_the_cli_changed(self, released):
         """Every tag builds and ships a new image, whatever changed."""
-        released.commit({"CHANGELOG.md": changelog(ENTRY), "cli/plak_cli/__init__.py": "x = 2\n"})
-        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+        released.commit({**FRAGMENT, "cli/plak_cli/__init__.py": "x = 2\n"})
+        release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert _image_versions(released) == {"2026.10.1"}
         assert 'name = "plak"\nversion = "9.9.9"' in released.read("backend/uv.lock")
 
     def test_a_missing_image_package_file_stops_the_release(self, released):
         released.remove("frontend/package-lock.json")
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.commit(FRAGMENT)
         with pytest.raises(release.ReleaseError, match=re.escape("frontend/package-lock.json is missing")):
-            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
-        assert released.read("CHANGELOG.md") == changelog(ENTRY)
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
+        assert released.git("status", "--porcelain") == ""
 
     @pytest.mark.parametrize(
         ("files", "expected"),
@@ -743,8 +1005,8 @@ class TestPromote:
         ids=["cli-code", "cli-dependency", "cli-lock", "plugin-skill", "cli-test-only", "plugin-evals-only"],
     )
     def test_a_component_gets_a_new_version_only_when_it_changed(self, released, files, expected):
-        released.commit({"CHANGELOG.md": changelog(ENTRY), **files})
-        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+        released.commit({**FRAGMENT, **files})
+        release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert _versions(released) == expected
 
     def test_a_version_line_changed_by_hand_is_no_change(self, released):
@@ -752,7 +1014,7 @@ class TestPromote:
         comparison; everything around it still counts."""
         released.commit(
             {
-                "CHANGELOG.md": changelog(ENTRY),
+                **FRAGMENT,
                 "cli/pyproject.toml": release.set_pyproject_version(released.read("cli/pyproject.toml"), "9.9.9"),
                 "cli/uv.lock": release.set_lock_version(released.read("cli/uv.lock"), "9.9.9"),
                 "plugin/.claude-plugin/plugin.json": release.set_plugin_version(
@@ -760,115 +1022,182 @@ class TestPromote:
                 ),
             }
         )
-        release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+        release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert _versions(released) == ("9.9.9", "9.9.9")
 
     def test_a_file_that_did_not_exist_at_the_last_tag_is_a_change(self, repo):
         section = "## [2026.9.1]\n\n- x"
         repo.remove("cli/uv.lock")
-        repo.commit({"CHANGELOG.md": changelog("", section)})
+        repo.commit({"CHANGELOG.md": changelog(section)})
         repo.git("tag", "v2026.9.1")
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, section), "cli/uv.lock": LOCK})
-        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        repo.commit({**FRAGMENT, "cli/uv.lock": LOCK})
+        release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
         assert _versions(repo) == ("2026.10.1", "0.3.1")
+
+    def test_the_fragments_are_read_from_the_commit_not_the_working_tree(self, released):
+        """A fragment that is not committed is not released, and an ignored
+        file next to the fragments plays no part."""
+        released.commit({".gitignore": ".DS_Store\nuncommitted.added.md\n"})
+        released.write({"changelog.d/uncommitted.added.md": "- Not yet.\n", "changelog.d/.DS_Store": "junk"})
+        with pytest.raises(release.ReleaseError, match="Nothing to release"):
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
+        released.commit(FRAGMENT)
+        _, touched = release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
+        assert "changelog.d/something-new.added.md" in touched
+        assert "Not yet." not in released.read("CHANGELOG.md")
+        assert (released.path / "changelog.d" / ".DS_Store").exists()
+
+    @pytest.mark.parametrize("mode", ["symlink", "executable"])
+    def test_a_fragment_that_is_not_a_plain_file_is_refused(self, released, mode):
+        released.commit(FRAGMENT)
+        if mode == "symlink":
+            os.symlink("../README.md", released.path / "changelog.d" / "link.fixed.md")
+            released.commit()
+            name = "link.fixed.md"
+        else:
+            released.git("update-index", "--chmod=+x", "changelog.d/something-new.added.md")
+            released.git("commit", "-q", "-m", "Mode")
+            name = "something-new.added.md"
+        with pytest.raises(release.ReleaseError) as refused:
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
+        assert refused.value.problems == [f"changelog.d/{name} is not a plain file."]
 
     def test_a_shipped_change_without_an_entry_is_refused_and_writes_nothing(self, released):
         """Without entries there are no release notes, so nothing is made up
         from commit subjects either."""
         released.commit({"backend/src/plak/main.py": "app = 2\n"}, "Update urllib3 to 2.8.0")
         with pytest.raises(release.ReleaseError) as refused:
-            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert refused.value.problems == [
-            "Nothing to release: [Unreleased] has no entries, and they are the release notes."
+            "Nothing to release: changelog.d/ has no entries, and they are the release notes."
         ]
         assert released.git("status", "--porcelain") == ""
 
     def test_without_a_tag_or_entries_there_is_nothing_to_release(self, repo):
         with pytest.raises(release.ReleaseError, match="Nothing to release"):
-            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+            release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
 
     @pytest.mark.parametrize(
-        ("unreleased", "tag", "reason"),
+        ("files", "tag", "reason"),
         [
-            (release.HOLD + "\n\n" + ENTRY, TAG, "on hold"),
-            (ENTRY, "v2026.10.01", "leading zero"),
-            (ENTRY, "v2026.9.1", "already exists"),
-            (ENTRY, "v2026.8.1", "not newer than v2026.9.1"),
+            (NOTE_FRAGMENTS, None, "Nothing to release"),
+            ({"changelog.d/bad name.md": "- x\n"}, None, "changelog.d/bad name.md is not <slug>"),
+            ({"changelog.d/sub/x.added.md": "- x\n"}, None, "changelog.d/sub/x.added.md is not <slug>"),
+            ({"changelog.d/x.added.md": "Prose.\n"}, None, "'Prose.' is not an entry"),
+            ({**FRAGMENT, "changelog.d/x.note.nl.md": "a\n"}, None, "x.note.nl.md has no x.note.en.md"),
+            (FRAGMENT, "v2026.10.01", "leading zero"),
+            (FRAGMENT, "v2026.9.1", "already exists"),
+            (FRAGMENT, "v2026.8.1", "not newer than v2026.9.1"),
         ],
-        ids=["hold", "invalid-tag", "tag-exists", "older-tag"],
+        ids=[
+            "notes-only",
+            "bad-name",
+            "subdirectory",
+            "bad-content",
+            "unpaired-note",
+            "invalid-tag",
+            "tag-exists",
+            "older-tag",
+        ],
     )
-    def test_refusals(self, released, unreleased, tag, reason):
-        released.commit({"CHANGELOG.md": changelog(unreleased)})
-        with pytest.raises(release.ReleaseError, match=reason):
-            release.promote(released.handle, tag, DAY, SPEC, NO_CHANGES)
+    def test_refusals_write_nothing(self, released, files, tag, reason):
+        released.commit(files)
+        with pytest.raises(release.ReleaseError, match=re.escape(reason)):
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES, tag)
+        assert released.git("status", "--porcelain") == ""
+
+    def test_a_release_waiting_for_its_tag_blocks_the_next(self, released):
+        released.commit(FRAGMENT)
+        released.prepare(TAG)
+        released.commit({"changelog.d/next.added.md": "- Next.\n"})
+        with pytest.raises(release.ReleaseError) as refused:
+            release.prepare(released.handle, date(2026, 10, 2), SPEC, NO_CHANGES)
+        assert refused.value.problems == ["v2026.10.1 is waiting for its tag: merge or close that release first."]
+        assert released.git("status", "--porcelain") == ""
 
     def test_a_section_for_the_tag_already_in_the_changelog_is_refused(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.10.1]\n\n- x")})
+        """Even one further down, which no tag answers to yet."""
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\n- y\n\n## [2026.10.1]\n\n- x"), **FRAGMENT})
+        repo.git("tag", "v2026.9.1")
         with pytest.raises(release.ReleaseError, match=f"already has a section for {TAG}"):
-            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+            release.prepare(repo.handle, DAY, SPEC, NO_CHANGES, TAG)
 
     def test_a_refusal_writes_nothing(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+        repo.commit(FRAGMENT)
         repo.remove("publiccode.yml")
         with pytest.raises(release.ReleaseError, match=re.escape("publiccode.yml is missing")):
-            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+            release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
         assert repo.git("status", "--porcelain") == ""
 
-    def test_notes_with_content_are_renamed_to_the_version(self, repo):
-        notes = release.NOTES_DIR
+    def test_the_note_fragments_become_the_notes_of_the_version(self, repo):
         repo.commit(
             {
-                "CHANGELOG.md": changelog(ENTRY),
-                notes + "unreleased.nl.md": "Nieuw\n",
-                notes + "unreleased.en.md": "New\n",
+                **FRAGMENT,
+                "changelog.d/b.note.nl.md": "## B\n\nTekst.\n",
+                "changelog.d/a.note.nl.md": "## A\n\nTekst A.",
+                "changelog.d/a.note.en.md": "## A\n\nText A.\n\n",
+                "changelog.d/b.note.en.md": "## B\n\nText.\n",
             }
         )
-        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        _, touched = release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
 
-        assert sorted(os.listdir(repo.path / notes)) == ["2026.10.1.en.md", "2026.10.1.nl.md"]
-        assert repo.read(notes + "2026.10.1.nl.md") == "Nieuw\n"
+        assert sorted(os.listdir(repo.path / NOTES)) == ["2026.10.1.en.md", "2026.10.1.nl.md"]
+        assert repo.read(NOTES + "2026.10.1.nl.md") == "## A\n\nTekst A.\n\n## B\n\nTekst.\n"
+        assert repo.read(NOTES + "2026.10.1.en.md") == "## A\n\nText A.\n\n## B\n\nText.\n"
         status = repo.git("status", "--porcelain").splitlines()
-        assert f"R  {notes}unreleased.nl.md -> {notes}2026.10.1.nl.md" in status
+        assert f"A  {NOTES}2026.10.1.nl.md" in status
+        assert "D  changelog.d/a.note.nl.md" in status
+        assert {NOTES + "2026.10.1.nl.md", NOTES + "2026.10.1.en.md", "changelog.d/b.note.en.md"} <= set(touched)
+        assert not (repo.path / "changelog.d").exists()
 
-    def test_empty_notes_are_removed(self, repo):
-        notes = release.NOTES_DIR
-        repo.commit(
-            {"CHANGELOG.md": changelog(ENTRY), notes + "unreleased.nl.md": "", notes + "unreleased.en.md": "\n"}
-        )
-        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
-        assert not (repo.path / notes / "unreleased.nl.md").exists()
-        assert f"D  {notes}unreleased.en.md" in repo.git("status", "--porcelain").splitlines()
+    def test_without_note_fragments_there_are_no_notes(self, repo):
+        repo.commit(FRAGMENT)
+        _, touched = release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
+        assert not (repo.path / NOTES).exists()
+        assert not any(path.startswith(NOTES) for path in touched)
 
-    def test_a_one_language_note_is_refused_before_anything_is_written(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY), release.NOTES_DIR + "sub/unreleased.nl.md": "Nieuw\n"})
-        with pytest.raises(release.ReleaseError, match=re.escape("sub/unreleased.nl.md has no sub/unreleased.en.md")):
-            release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+    def test_a_note_for_the_version_that_exists_already_is_refused(self, repo):
+        repo.commit({**FRAGMENT, **NOTE_FRAGMENTS, NOTES + "2026.10.1.nl.md": "a\n", NOTES + "2026.10.1.en.md": "b\n"})
+        with pytest.raises(release.ReleaseError, match=re.escape(f"{NOTES}2026.10.1.en.md already exists.")):
+            release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
         assert repo.git("status", "--porcelain") == ""
 
-    def test_main_lists_what_it_touched(self, repo, monkeypatch, tmp_path, capsys):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+    def test_main_prints_the_tag_first_and_then_what_it_touched(self, repo, monkeypatch, tmp_path, capsys):
+        repo.commit(FRAGMENT)
         monkeypatch.setattr(release, "today", lambda: DAY)
+        output = tmp_path / "output"
+        monkeypatch.setenv("GITHUB_OUTPUT", str(output))
         (tmp_path / "openapi.json").write_text(SPEC, encoding="utf-8")
-        args = ["promote", "--tag", TAG, "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "unused"]
+        args = ["prepare", "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "unused"]
         assert release.main(args) == 0
-        out = capsys.readouterr().out
-        assert "updated CHANGELOG.md\n" in out
-        assert "updated backend/openapi.json\n" in out
+        out = capsys.readouterr().out.splitlines()
+        assert out[0] == f"tag={TAG}"
+        assert "updated CHANGELOG.md" in out
+        assert "updated backend/openapi.json" in out
+        assert "updated changelog.d/something-new.added.md" in out
+        assert output.read_text() == f"tag={TAG}\n"
+
+    def test_main_takes_the_tag(self, repo, tmp_path, capsys):
+        repo.commit(FRAGMENT)
+        (tmp_path / "openapi.json").write_text(SPEC, encoding="utf-8")
+        args = ["prepare", "--tag", "v2026.10.5", "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "unused"]
+        assert release.main(args) == 0
+        assert capsys.readouterr().out.startswith("tag=v2026.10.5\n")
 
     def test_main_reports_a_refusal(self, repo, capsys):
-        assert release.main(["promote", "--tag", "v2026.1", "--spec", "x", "--oasdiff", "x"]) == 1
+        assert release.main(["prepare", "--spec", "x", "--oasdiff", "x"]) == 1
         assert "error: x: cannot read the API schema." in capsys.readouterr().err
 
     def test_main_reports_a_refused_tag(self, repo, tmp_path, capsys):
         (tmp_path / "openapi.json").write_text(SPEC, encoding="utf-8")
-        args = ["promote", "--tag", "v2026.1", "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "x"]
+        args = ["prepare", "--tag", "v2026.1", "--spec", str(tmp_path / "openapi.json"), "--oasdiff", "x"]
         assert release.main(args) == 1
         assert "error: 'v2026.1' is not a CalVer tag" in capsys.readouterr().err
 
 
 class TestReleaseNotes:
     def test_the_body_is_the_section_with_the_component_versions(self, released):
-        released.commit({"CHANGELOG.md": changelog("### Fixed\n\n- A fix."), "cli/plak_cli/__init__.py": "x = 2\n"})
+        released.commit({"changelog.d/a-fix.fixed.md": "- A fix.\n", "cli/plak_cli/__init__.py": "x = 2\n"})
         released.release(TAG, DAY)
 
         assert release.release_notes(released.handle, TAG) == (
@@ -876,7 +1205,7 @@ class TestReleaseNotes:
         )
 
     def test_it_reads_the_tag_not_the_working_tree(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\n- Reworded.")})
         assert release.release_notes(released.handle, "v2026.9.1").startswith(ENTRY + "\n\nCLI 2026.9.1")
 
     @pytest.mark.parametrize("tag", ["v2026.9.2", "v2026.1"], ids=["no-such-tag", "invalid"])
@@ -885,14 +1214,14 @@ class TestReleaseNotes:
             release.release_notes(released.handle, tag)
 
     def test_an_empty_section_is_refused(self, repo):
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n")})
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n")})
         repo.git("tag", "v2026.9.1")
         with pytest.raises(release.ReleaseError, match=re.escape("No section for v2026.9.1")):
             release.release_notes(repo.handle, "v2026.9.1")
 
     def test_a_tag_without_the_manifests_is_refused(self, repo):
         repo.remove("plugin/.claude-plugin/plugin.json")
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\n- x")})
         repo.git("tag", "v2026.9.1")
         with pytest.raises(release.ReleaseError, match=re.escape("is missing at v2026.9.1")):
             release.release_notes(repo.handle, "v2026.9.1")
@@ -937,7 +1266,7 @@ class TestReleaseNotes:
 
     def test_a_tag_from_before_the_schema_has_no_api_line(self, repo):
         """v2026.9.30 was tagged by hand, before releases wrote the schema."""
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\n- x")})
         repo.git("tag", "v2026.9.1")
         assert release.release_notes(repo.handle, "v2026.9.1").endswith("Plugin unchanged (0.3.1)\n")
 
@@ -1066,21 +1395,21 @@ class TestOasdiff:
             release.oasdiff(fake_oasdiff(tmp_path, "API changes:"))("a", "b")
 
 
-class TestPromoteTheApi:
+class TestPrepareTheApi:
     def test_the_first_release_commits_the_schema_at_the_version_the_code_has(self, repo):
         def unused(base, head):
             raise AssertionError("nothing to compare with")
 
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
-        release.promote(repo.handle, TAG, DAY, SPEC, unused)
+        repo.commit(FRAGMENT)
+        release.prepare(repo.handle, DAY, SPEC, unused)
         assert json.loads(repo.read("backend/openapi.json"))["info"]["version"] == "1.0.0"
         assert repo.read("backend/src/plak/main.py") == MAIN
 
     def test_a_hand_made_tag_without_a_schema_counts_as_the_first(self, repo):
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\n- x")})
         repo.git("tag", "v2026.9.1")
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.9.1]\n\n- x")})
-        release.promote(repo.handle, TAG, DAY, SPEC, NO_CHANGES)
+        repo.commit(FRAGMENT)
+        release.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
         assert json.loads(repo.read("backend/openapi.json"))["info"]["version"] == "1.0.0"
 
     def test_an_addition_raises_the_minor_in_the_schema_and_the_code(self, released):
@@ -1091,8 +1420,8 @@ class TestPromoteTheApi:
             seen.append((base, revision))
             return [change(1)]
 
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
-        release.promote(released.handle, TAG, DAY, head, diff)
+        released.commit(FRAGMENT)
+        release.prepare(released.handle, DAY, head, diff)
 
         assert seen == [(released.git("show", "v2026.9.1:backend/openapi.json"), head)]
         assert json.loads(released.read("backend/openapi.json")) == {
@@ -1102,65 +1431,112 @@ class TestPromoteTheApi:
         assert 'API_VERSION = "1.1.0"' in released.read("backend/src/plak/main.py")
 
     def test_a_breaking_change_stops_the_release_before_it_writes(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.commit(FRAGMENT)
         with pytest.raises(release.ReleaseError, match="Breaking API change"):
-            release.promote(released.handle, TAG, DAY, spec_with(paths=()), lambda b, h: [change(3)])
+            release.prepare(released.handle, DAY, spec_with(paths=()), lambda b, h: [change(3)])
         assert released.git("status", "--porcelain") == ""
 
     def test_a_schema_that_is_not_json_stops_the_release(self, repo):
-        repo.commit({"CHANGELOG.md": changelog(ENTRY)})
+        repo.commit(FRAGMENT)
         with pytest.raises(release.ReleaseError, match="The API schema is not JSON"):
-            release.promote(repo.handle, TAG, DAY, "{", NO_CHANGES)
+            release.prepare(repo.handle, DAY, "{", NO_CHANGES)
 
     def test_a_committed_schema_that_is_not_json_stops_the_release(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.commit(FRAGMENT)
         released.git("tag", "-d", "v2026.9.1")
         released.git("checkout", "-q", "HEAD~1")
         released.commit({"backend/openapi.json": "{"})
         released.git("tag", "v2026.9.1")
         released.git("checkout", "-q", "-")
         with pytest.raises(release.ReleaseError, match=r"backend/openapi\.json at v2026\.9\.1 is not JSON"):
-            release.promote(released.handle, TAG, DAY, SPEC, NO_CHANGES)
-
-
-UNRELEASED_NOTES = {
-    "frontend/src/content/releases/unreleased.nl.md": "Nieuw.\n",
-    "frontend/src/content/releases/unreleased.en.md": "New.\n",
-}
+            release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
 
 
 class TestVerifyStaged:
-    """The publishing job applies a patch from a job that ran the
-    dependencies, then pushes it past every review with the App. So what
-    it commits has to be exactly what promote writes."""
+    """The job that commits applies a patch from a job that ran the
+    dependencies, then pushes it with the App. So what it commits has to
+    be exactly what prepare writes."""
+
+    @pytest.fixture(autouse=True)
+    def _today(self, monkeypatch) -> None:
+        monkeypatch.setattr(release, "today", lambda: DAY)
 
     @pytest.fixture
-    def promoted(self, released) -> Repo:
+    def prepared(self, released) -> Repo:
         """v2026.9.1 released, then a change with an entry and a note,
-        promoted to TAG with an addition to the API."""
-        released.commit({"CHANGELOG.md": changelog(ENTRY), "cli/plak_cli/__init__.py": "x = 2\n", **UNRELEASED_NOTES})
-        release.promote(released.handle, TAG, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
+        prepared as TAG with an addition to the API."""
+        released.commit({**FRAGMENT, **NOTE_FRAGMENTS, "cli/plak_cli/__init__.py": "x = 2\n"})
+        release.prepare(released.handle, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
         return released
 
-    def test_what_promote_writes_passes(self, promoted):
-        assert release.verify_staged(promoted.handle, TAG) == []
+    def test_what_prepare_writes_passes(self, prepared):
+        assert release.verify_staged(prepared.handle, TAG) == []
 
-    def test_the_patch_survives_the_hand_over_to_a_clean_checkout(self, promoted, tmp_path):
-        """What release.yml does between its two jobs: the staged release as
+    def test_a_release_prepared_yesterday_still_passes(self, prepared, monkeypatch):
+        """Midnight between the two jobs."""
+        monkeypatch.setattr(release, "today", lambda: date(2026, 10, 2))
+        assert release.verify_staged(prepared.handle, TAG) == []
+
+    @pytest.mark.parametrize("now", [date(2026, 10, 3), date(2026, 9, 30)], ids=["two-days-later", "tomorrow"])
+    def test_a_tag_dated_outside_today_and_yesterday_is_refused(self, prepared, monkeypatch, now):
+        """The tag comes from the job that ran the dependencies; one dated
+        at will is refused before anything else is looked at."""
+        monkeypatch.setattr(release, "today", lambda: now)
+        assert release.verify_staged(prepared.handle, TAG) == [
+            f"{TAG} is not dated today or yesterday ({now.isoformat()})."
+        ]
+
+    def test_a_tag_behind_the_newest_one_is_refused(self, prepared, monkeypatch):
+        monkeypatch.setattr(release, "today", lambda: date(2026, 8, 1))
+        assert release.verify_staged(prepared.handle, "v2026.8.1") == ["v2026.8.1 is not newer than v2026.9.1."]
+
+    @pytest.mark.parametrize(
+        "path",
+        ["CHANGELOG.md", "publiccode.yml", "backend/uv.lock", "frontend/package.json", f"{NOTES}2026.10.1.en.md"],
+    )
+    def test_a_file_the_release_writes_has_to_be_staged(self, prepared, path):
+        """A patch that leaves a version or the notes behind is not the
+        release either."""
+        prepared.git("reset", "-q", "--", path)
+        assert release.verify_staged(prepared.handle, TAG) == [f"{path} is missing from the release."]
+
+    def test_the_cli_and_plugin_files_are_only_written_when_they_changed(self, released):
+        released.commit({**FRAGMENT, "backend/src/plak/app.py": "app = 2\n"})
+        release.prepare(released.handle, DAY, SPEC, NO_CHANGES)
+        assert "cli/pyproject.toml" not in release._staged_modes(released.handle)
+        assert release.verify_staged(released.handle, TAG) == []
+
+    def test_a_fragment_that_is_not_a_plain_file_is_refused(self, released):
+        released.commit(FRAGMENT)
+        os.symlink("../README.md", released.path / "changelog.d" / "link.added.md")
+        released.git("add", "-A")
+        released.git("update-index", "--chmod=+x", "changelog.d/something-new.added.md")
+        released.git("commit", "-q", "-m", "Mode")
+        released.write({"Makefile": "all:\n"})
+        released.git("add", "Makefile")
+        assert release.verify_staged(released.handle, TAG) == [
+            "changelog.d/link.added.md is not a plain file.",
+            "changelog.d/something-new.added.md is not a plain file.",
+        ]
+
+    def test_the_patch_survives_the_hand_over_to_a_clean_checkout(self, prepared, tmp_path):
+        """What the workflow does between its two jobs: the staged release as
         a patch, applied to a fresh clone of the same commit."""
         patch = tmp_path / "release.patch"
-        patch.write_text(promoted.git("diff", "--cached", "--binary", "--no-renames"), encoding="utf-8")
+        patch.write_text(prepared.git("diff", "--cached", "--binary", "--no-renames"), encoding="utf-8")
         clean = Repo(tmp_path / "clean")
         subprocess.run(  # noqa: S603
-            ["git", "clone", "-q", str(promoted.path), str(clean.path)],  # noqa: S607
+            ["git", "clone", "-q", str(prepared.path), str(clean.path)],  # noqa: S607
             check=True,
             capture_output=True,
         )
         clean.git("apply", "--cached", "--binary", str(patch))
         assert release.verify_staged(clean.handle, TAG) == []
-        assert "frontend/src/content/releases/2026.10.1.nl.md" in clean.git("diff", "--cached", "--name-only")
+        staged = clean.git("diff", "--cached", "--name-only", "--no-renames").split()
+        assert f"{NOTES}2026.10.1.nl.md" in staged
+        assert "changelog.d/x.note.nl.md" in staged
 
-    def test_main_says_so(self, promoted, capsys):
+    def test_main_says_so(self, prepared, capsys):
         assert release.main(["verify-staged", "--tag", TAG]) == 0
         assert capsys.readouterr().out == f"The index holds the release for {TAG} and nothing else.\n"
 
@@ -1179,7 +1555,7 @@ class TestVerifyStaged:
                 MAIN.replace("app = 1", "app = __import__('os')"),
                 "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
             ),
-            ("CHANGELOG.md", changelog("", "## [2026.10.1]\n\n- Something else."), "CHANGELOG.md is not"),
+            ("CHANGELOG.md", changelog("## [2026.10.1]\n\n- Something else."), "CHANGELOG.md is not"),
             (
                 ".github/scripts/release.py",
                 "def verify_staged(*a): return []\n",
@@ -1201,14 +1577,16 @@ class TestVerifyStaged:
                 "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
             ),
             (
-                "frontend/src/content/releases/2026.10.1.nl.md",
+                f"{NOTES}2026.10.1.nl.md",
                 "<script>x</script>\n",
-                "frontend/src/content/releases/2026.10.1.nl.md is not a file a release writes.",
+                f"{NOTES}2026.10.1.nl.md is not what the release writes for v2026.10.1.",
             ),
+            (f"{NOTES}2026.9.2.en.md", "New.\n", f"{NOTES}2026.9.2.en.md is not a file a release writes."),
+            ("changelog.d/evil.added.md", "- Evil.\n", "changelog.d/evil.added.md is not a file a release writes."),
             (
-                "frontend/src/content/releases/2026.9.2.en.md",
-                "New.\n",
-                "frontend/src/content/releases/2026.9.2.en.md is not a file a release writes.",
+                "changelog.d/something-new.added.md",
+                "- Edited, not removed.\n",
+                "changelog.d/something-new.added.md is a fragment the release removes.",
             ),
         ],
         ids=[
@@ -1223,79 +1601,113 @@ class TestVerifyStaged:
             "api-version-not-the-schemas",
             "note-text",
             "note-version",
+            "new-fragment",
+            "fragment-kept",
         ],
     )
-    def test_anything_beyond_the_release_is_refused(self, promoted, path, text, problem):
-        promoted.write({path: text})
-        promoted.git("add", "--", path)
-        problems = release.verify_staged(promoted.handle, TAG)
+    def test_anything_beyond_the_release_is_refused(self, prepared, path, text, problem):
+        prepared.write({path: text})
+        prepared.git("add", "--", path)
+        problems = release.verify_staged(prepared.handle, TAG)
         assert len(problems) == 1 and problems[0].startswith(problem), problems
 
-    def test_an_executable_or_a_symlink_is_refused(self, promoted):
+    def test_a_fragment_the_patch_leaves_in_place_is_refused(self, prepared):
+        prepared.git("reset", "-q", "--", "changelog.d/x.note.nl.md")
+        assert release.verify_staged(prepared.handle, TAG) == [
+            "changelog.d/x.note.nl.md is a fragment the release removes."
+        ]
+
+    def test_a_note_written_over_an_existing_one_is_refused(self, released):
+        """prepare refuses when the version's note exists, so a staged one
+        is not its work, whatever its text."""
+        existing = {NOTES + "2026.10.1.nl.md": "a\n", NOTES + "2026.10.1.en.md": "b\n"}
+        released.commit({**FRAGMENT, **NOTE_FRAGMENTS, **existing})
+        released.git("rm", "-q", "--cached", *FRAGMENT, *NOTE_FRAGMENTS)
+        released.write({NOTES + "2026.10.1.en.md": "New.\n"})
+        released.git("add", "--", NOTES + "2026.10.1.en.md")
+        problems = release.verify_staged(released.handle, TAG)
+        assert problems[0] == f"{NOTES}2026.10.1.en.md is not what the release writes for v2026.10.1."
+
+    def test_an_executable_or_a_symlink_is_refused(self, prepared):
         """Same text, other kind of file: what the release writes is plain."""
-        promoted.git("update-index", "--chmod=+x", "publiccode.yml")
-        (promoted.path / "CHANGELOG.md").unlink()
-        (promoted.path / "CHANGELOG.md").symlink_to("README.md")
-        promoted.git("add", "CHANGELOG.md")
-        assert sorted(release.verify_staged(promoted.handle, TAG)) == [
+        prepared.git("update-index", "--chmod=+x", "publiccode.yml")
+        (prepared.path / "CHANGELOG.md").unlink()
+        (prepared.path / "CHANGELOG.md").symlink_to("README.md")
+        prepared.git("add", "CHANGELOG.md")
+        assert sorted(release.verify_staged(prepared.handle, TAG)) == [
             "CHANGELOG.md is not staged as a plain file.",
             "publiccode.yml is not staged as a plain file.",
         ]
 
-    def test_the_schema_has_to_declare_the_version_api_version_gets(self, promoted):
+    def test_the_schema_has_to_declare_the_version_api_version_gets(self, prepared):
         """API_VERSION follows the staged schema; one without that line
         staged has to match what the code has."""
-        promoted.git("reset", "-q", "--", "backend/src/plak/main.py")
-        assert release.verify_staged(promoted.handle, TAG) == [
+        prepared.git("reset", "-q", "--", "backend/src/plak/main.py")
+        assert release.verify_staged(prepared.handle, TAG) == [
             "backend/src/plak/main.py is not what the release writes for v2026.10.1."
         ]
 
-    def test_a_schema_without_a_semver_version_is_refused(self, promoted):
-        promoted.write({"backend/openapi.json": spec_with("one")})
-        promoted.git("add", "backend/openapi.json")
-        problems = release.verify_staged(promoted.handle, TAG)
+    def test_a_schema_without_a_semver_version_is_refused(self, prepared):
+        prepared.write({"backend/openapi.json": spec_with("one")})
+        prepared.git("add", "backend/openapi.json")
+        problems = release.verify_staged(prepared.handle, TAG)
         assert problems[0] == "backend/openapi.json: info.version 'one' is not MAJOR.MINOR.PATCH."
 
-    def test_a_file_the_release_removes_has_to_be_an_unreleased_note(self, promoted):
-        promoted.git("rm", "-q", "--cached", "README.md")
-        assert release.verify_staged(promoted.handle, TAG) == ["README.md is not a file a release writes."]
+    def test_a_file_the_release_removes_has_to_be_a_fragment(self, prepared):
+        prepared.git("rm", "-q", "--cached", "README.md")
+        assert release.verify_staged(prepared.handle, TAG) == ["README.md is not a file a release writes."]
 
-    def test_a_version_file_that_disappears_is_refused(self, promoted):
-        promoted.git("rm", "-q", "--cached", "publiccode.yml")
-        assert release.verify_staged(promoted.handle, TAG) == [
+    def test_a_version_file_that_disappears_is_refused(self, prepared):
+        prepared.git("rm", "-q", "--cached", "publiccode.yml")
+        assert release.verify_staged(prepared.handle, TAG) == [
             "publiccode.yml is not what the release writes for v2026.10.1."
         ]
 
-    def test_api_version_moves_only_with_the_schema(self, promoted):
+    def test_api_version_moves_only_with_the_schema(self, prepared):
         """The schema unstaged, API_VERSION still raised: refused."""
-        promoted.git("reset", "-q", "--", "backend/openapi.json")
-        assert release.verify_staged(promoted.handle, TAG) == [
+        prepared.git("reset", "-q", "--", "backend/openapi.json")
+        assert release.verify_staged(prepared.handle, TAG) == [
             "backend/src/plak/main.py is not what the release writes for v2026.10.1."
         ]
 
-    def test_a_file_promote_could_not_have_written_is_refused(self, released):
-        """HEAD's publiccode.yml has no version lines, so promote would have
+    def test_a_file_prepare_could_not_have_written_is_refused(self, released):
+        """HEAD's publiccode.yml has no version lines, so prepare would have
         refused; a staged one is not its work."""
-        released.commit({"publiccode.yml": "name: Plak\n"})
+        released.commit({**FRAGMENT, "publiccode.yml": "name: Plak\n"})
+        released.git("rm", "-q", "--cached", *FRAGMENT)
         released.write({"publiccode.yml": 'name: Plak\nsoftwareVersion: "2026.10.1"\n'})
         released.git("add", "publiccode.yml")
-        assert release.verify_staged(released.handle, TAG) == [
-            "publiccode.yml is not what the release writes for v2026.10.1."
-        ]
+        problems = release.verify_staged(released.handle, TAG)
+        assert problems[0] == "publiccode.yml is not what the release writes for v2026.10.1."
 
-    def test_the_tag_has_to_be_the_one_promoted(self, promoted):
+    def test_a_head_prepare_would_refuse_is_refused(self, released):
+        """Without entries at HEAD there is no release to compare with."""
+        released.write({"Makefile": "all:\n"})
+        released.git("add", "Makefile")
+        assert release.verify_staged(released.handle, TAG) == [
+            "Nothing to release: changelog.d/ has no entries, and they are the release notes."
+        ]
+        released.commit({"changelog.d/x.improved.md": "- x\n"})
+        released.write({"Makefile": "all: build\n"})
+        released.git("add", "Makefile")
+        [problem] = release.verify_staged(released.handle, TAG)
+        assert problem.startswith("changelog.d/x.improved.md is not <slug>")
+
+    def test_the_tag_has_to_be_the_one_prepared(self, prepared, monkeypatch):
         """Another tag gives another changelog section, and notes named
         after another version."""
-        problems = release.verify_staged(promoted.handle, "v2026.10.2")
+        monkeypatch.setattr(release, "today", lambda: date(2026, 10, 2))
+        problems = release.verify_staged(prepared.handle, "v2026.10.2")
         assert "CHANGELOG.md is not what the release writes for v2026.10.2." in problems
+        assert f"{NOTES}2026.10.1.nl.md is not a file a release writes." in problems
 
     def test_nothing_staged_or_no_calver_tag_is_refused(self, released):
         assert release.verify_staged(released.handle, TAG) == ["Nothing is staged to release."]
         assert release.verify_staged(released.handle, "v2026.1")[0].startswith("'v2026.1' is not a CalVer tag")
 
-    def test_main_fails_with_every_problem(self, promoted, capsys):
-        promoted.write({"Makefile": "all:\n"})
-        promoted.git("add", "Makefile")
+    def test_main_fails_with_every_problem(self, prepared, capsys):
+        prepared.write({"Makefile": "all:\n"})
+        prepared.git("add", "Makefile")
         assert release.main(["verify-staged", "--tag", TAG]) == 1
         assert "error: Makefile is not a file a release writes." in capsys.readouterr().err
 
@@ -1317,7 +1729,7 @@ class TestApiCheck:
         assert (result.errors, result.notice, result.comment) == ([], None, "")
 
     def test_it_compares_with_the_newest_tag(self, released):
-        released.commit({"CHANGELOG.md": changelog(ENTRY)})
+        released.commit(FRAGMENT)
         released.release(TAG, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
         seen = []
         release.api_check(released.handle, SPEC, lambda base, head: seen.append(base) or [])
@@ -1341,6 +1753,55 @@ class TestApiCheck:
         result = release.api_check(released.handle, spec_with("2.0.0", paths=()), lambda b, h: [change(3)])
         assert result.errors == []
         assert result.comment.endswith("The next release makes it API 2.0.0.\n")
+
+    @pytest.fixture
+    def release_pr(self, released) -> Repo:
+        """A release prepared with an addition to the API, committed and not
+        tagged: the release pull request, or its commit in the merge queue."""
+        released.commit(FRAGMENT)
+        released.prepare(TAG, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
+        return released
+
+    def test_a_release_that_ships_the_schema_of_its_code_passes(self, release_pr):
+        result = release.api_check(release_pr.handle, spec_with("1.1.0", paths=("/a", "/b")), lambda b, h: [change(1)])
+        assert result.errors == []
+
+    def test_an_edit_in_the_release_pull_request_is_still_the_release(self, release_pr):
+        release_pr.commit({"CHANGELOG.md": release_pr.read("CHANGELOG.md").replace("Something new", "Something newer")})
+        spec = spec_with("1.1.0", paths=("/a", "/b", "/c"))
+        result = release.api_check(release_pr.handle, spec, lambda b, h: [change(1), change(1, path="/c")])
+        assert result.errors == [release.STALE_SCHEMA]
+
+    def test_a_change_behind_the_release_is_the_next_releases(self, release_pr):
+        """An API pull request in the queue after the release, or checked
+        between its merge and its tag: not this release's schema to ship."""
+        release_pr.commit({"backend/src/plak/app.py": "route = '/c'\n"})
+        spec = spec_with("1.1.0", paths=("/a", "/b", "/c"))
+        result = release.api_check(release_pr.handle, spec, lambda b, h: [change(1), change(1, path="/c")])
+        assert result.errors == []
+        assert "The next release makes it API 1.1.0." in result.comment
+
+    def test_a_release_whose_api_changed_after_it_was_prepared_fails(self, release_pr):
+        """An API pull request merged between preparing and merging the
+        release: the queue rebases the release on top of it, so the schema
+        the release commit carries is no longer the one its code prints."""
+        spec = spec_with("1.1.0", paths=("/a", "/b", "/c"))
+        result = release.api_check(release_pr.handle, spec, lambda b, h: [change(1), change(1, path="/c")])
+        assert result.errors == [
+            "backend/openapi.json is not the schema this release ships: the API changed after the release "
+            "was prepared; prepare it again."
+        ]
+
+    @pytest.mark.parametrize("main", [MAIN, "app = 1\n"], ids=["old-version", "no-line"])
+    def test_a_release_whose_code_does_not_carry_the_api_version_fails(self, release_pr, main):
+        release_pr.commit({"backend/src/plak/main.py": main})
+        result = release.api_check(release_pr.handle, spec_with("1.0.0", paths=("/a", "/b")), lambda b, h: [change(1)])
+        assert result.errors == [release.STALE_SCHEMA]
+
+    def test_a_release_with_a_breaking_change_reports_only_that(self, release_pr):
+        result = release.api_check(release_pr.handle, spec_with("1.1.0", paths=()), lambda b, h: [change(3)])
+        assert result.errors[0].startswith("Breaking API change")
+        assert release.STALE_SCHEMA not in result.errors
 
     def test_main_runs_oasdiff_and_fails_on_a_breaking_change(self, released, tmp_path, monkeypatch, capsys):
         summary = tmp_path / "summary.md"
@@ -1400,16 +1861,28 @@ def branch(released) -> Repo:
     return released
 
 
+RELEASED_SECTION = f"## [2026.9.1]\n\n{ENTRY}"
+
+
 class TestCheck:
-    def test_a_shipped_change_with_an_entry_is_in_order(self, branch):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n", "CHANGELOG.md": with_entry(branch)})
+    def test_a_shipped_change_with_a_fragment_is_in_order(self, branch):
+        branch.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
         assert release.check(branch.handle, "beta") == release.CheckResult()
 
-    def test_a_shipped_change_without_an_entry_warns(self, branch):
+    def test_a_shipped_change_without_a_fragment_warns(self, branch):
         branch.commit({"backend/src/plak/main.py": "app = 2\n"})
         result = release.check(branch.handle, "beta")
         assert result.errors == []
         assert result.warning == release.WARNING
+
+    def test_a_fragment_removed_is_no_entry(self, released):
+        """What counts is a fragment this branch adds or edits, not one it
+        takes away."""
+        released.commit(FRAGMENT)
+        released.git("switch", "-q", "-c", "feature")
+        released.git("rm", "-q", "changelog.d/something-new.added.md")
+        released.commit({"backend/src/plak/main.py": "app = 2\n"})
+        assert release.check(released.handle, "beta").warning == release.WARNING
 
     @pytest.mark.parametrize(
         "body",
@@ -1432,7 +1905,7 @@ class TestCheck:
         """A shipped change that landed on beta after the branch started is
         beta's, and does not ask this branch for an entry."""
         branch.git("switch", "-q", "beta")
-        branch.commit({"backend/src/plak/main.py": "app = 2\n", "CHANGELOG.md": with_entry(branch)})
+        branch.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
         branch.git("switch", "-q", "feature")
         branch.commit({"README.md": "better\n"})
         assert release.check(branch.handle, "beta").warning is None
@@ -1443,13 +1916,33 @@ class TestCheck:
         repo.git("init", "-q", "-b", "beta")
         repo.commit({"README.md": "x\n"})
         repo.git("switch", "-q", "-c", "feature")
-        repo.commit({"CHANGELOG.md": changelog(ENTRY), "backend/src/plak/main.py": "app = 1\n"})
+        repo.commit({"CHANGELOG.md": changelog(), "backend/src/plak/main.py": "app = 1\n", **FRAGMENT})
         assert release.check(repo.handle, "beta") == release.CheckResult()
 
-    def test_a_malformed_unreleased_fails(self, branch):
-        branch.commit({"CHANGELOG.md": with_entry(branch, "### Improved\n\n- x")})
+    @pytest.mark.parametrize(
+        ("files", "reason"),
+        [
+            ({"changelog.d/x.improved.md": "- x\n"}, "changelog.d/x.improved.md is not <slug>"),
+            ({"changelog.d/x.added.md": "### Added\n\n- x\n"}, "'### Added' is not an entry"),
+            ({"changelog.d/x.note.nl.md": "Nieuw\n"}, "x.note.nl.md has no x.note.en.md"),
+        ],
+        ids=["name", "content", "unpaired-note"],
+    )
+    def test_a_malformed_fragment_fails(self, branch, files, reason):
+        branch.commit({"backend/src/plak/main.py": "app = 2\n", **files})
         [error] = release.check(branch.handle, "beta").errors
-        assert "'### Improved' is not one of" in error
+        assert reason in error
+
+    def test_a_fragment_that_is_a_symlink_fails(self, branch):
+        (branch.path / "changelog.d").mkdir()
+        os.symlink("../README.md", branch.path / "changelog.d" / "link.added.md")
+        branch.commit(FRAGMENT)
+        assert release.check(branch.handle, "beta").errors == ["changelog.d/link.added.md is not a plain file."]
+
+    def test_an_unreleased_section_fails(self, branch):
+        branch.commit({"CHANGELOG.md": changelog(f"## [Unreleased]\n\n{ENTRY}\n\n{RELEASED_SECTION}")})
+        [error] = release.check(branch.handle, "beta").errors
+        assert error.startswith("CHANGELOG.md: [Unreleased] is gone")
 
     def test_a_missing_changelog_fails(self, branch):
         branch.remove("CHANGELOG.md")
@@ -1467,73 +1960,115 @@ class TestCheck:
     def test_editing_a_released_section_fails(self, branch, edit):
         """With the links following the edit, so only the freeze is left."""
         branch.commit({"CHANGELOG.md": release.with_links(edit(branch.read("CHANGELOG.md")))})
-        [error] = release.check(branch.handle, "beta").errors
-        assert error == (
-            "CHANGELOG.md: [2026.9.1] was released as v2026.9.1 and is frozen; put the change under [Unreleased]."
+        errors = release.check(branch.handle, "beta").errors
+        assert errors[0] == (
+            "CHANGELOG.md: [2026.9.1] was released as v2026.9.1 and is frozen; "
+            "describe the change in a fragment under changelog.d/ instead."
         )
 
-    def test_a_section_for_an_existing_tag_that_the_base_lacks_is_new(self, repo):
-        """A version tagged by hand gets its section afterwards, in a pull
-        request; the base has nothing there to freeze yet. Once that has
-        landed, the section is frozen like any other."""
+    def test_a_section_for_an_existing_tag_is_no_release(self, repo):
+        """A version tagged by hand cannot get its section afterwards: the
+        section that comes in is a release, and that tag is taken."""
         repo.git("tag", "v2026.9.1")
         repo.git("switch", "-q", "-c", "feature")
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.9.1]\n\nWhat ran then.\n\n- x")})
-        assert release.check(repo.handle, "beta").errors == []
+        repo.commit({"CHANGELOG.md": changelog("## [2026.9.1]\n\nWhat ran then.\n\n- x")})
+        assert "v2026.9.1 is not newer than v2026.9.1." in release.check(repo.handle, "beta").errors
 
-        repo.git("switch", "-q", "beta")
-        repo.git("merge", "-q", "--ff-only", "feature")
-        repo.git("switch", "-q", "-c", "later")
-        repo.commit({"CHANGELOG.md": changelog(ENTRY, "## [2026.9.1]\n\nWhat ran then.\n\n- y")})
-        [error] = release.check(repo.handle, "beta").errors
-        assert "[2026.9.1] was released as v2026.9.1 and is frozen" in error
+    def test_a_section_without_a_tag_is_not_frozen(self, released):
+        """The release pull request may be edited until it merges."""
+        released.commit({"changelog.d/other.fixed.md": "- Other thing.\n"})
+        released.prepare(TAG)
+        released.git("switch", "-q", "-c", "reword")
+        released.commit({"CHANGELOG.md": released.read("CHANGELOG.md").replace("Other thing", "Other things")})
+        assert release.check(released.handle, "beta").errors == []
 
-    def test_a_section_without_a_tag_is_not_frozen(self, repo):
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- x")})
-        repo.git("switch", "-q", "-c", "feature")
-        repo.commit({"CHANGELOG.md": changelog("", "## [2026.9.1]\n\n- y")})
-        assert release.check(repo.handle, "beta").errors == []
+    @pytest.fixture
+    def release_pr(self, released) -> Repo:
+        """The fragments on beta, the release prepared on its own branch."""
+        released.commit({**FRAGMENT, **NOTE_FRAGMENTS, "frontend/src/App.vue": "x\n"})
+        released.git("switch", "-q", "-c", f"release/{TAG}")
+        released.prepare(TAG)
+        return released
+
+    def test_a_release_pull_request_passes_without_a_warning(self, release_pr):
+        """It changes shipped paths and adds no fragment: that is the point."""
+        assert release.check(release_pr.handle, "beta") == release.CheckResult()
+
+    def test_a_release_pull_request_with_a_fragment_left_fails(self, release_pr):
+        """A fragment that merged between preparing and merging: the release
+        no longer says everything it ships."""
+        release_pr.commit({"changelog.d/late.fixed.md": "- Late.\n"})
+        assert release.check(release_pr.handle, "beta").errors == [
+            "changelog.d/late.fixed.md is still there: a release removes every fragment."
+        ]
+
+    def test_a_release_pull_request_with_a_wrong_version_fails(self, release_pr):
+        release_pr.commit({"publiccode.yml": PUBLICCODE})
+        assert release.check(release_pr.handle, "beta").errors == [
+            "publiccode.yml at HEAD does not carry version 2026.10.1."
+        ]
 
     @pytest.mark.parametrize(
-        "files",
+        ("sections", "added"),
         [
-            {"unreleased.nl.md": "Nieuw\n"},
-            {"unreleased.en.md": "New\n"},
-            {"2026.9.1.nl.md": "Nieuw\n"},
+            (f"{RELEASED_SECTION}\n\n## [2026.8.1]\n\n- Old.", "[2026.8.1]"),
+            (f"## [2026.10.2]\n\n- b\n\n## [2026.10.1]\n\n- a\n\n{RELEASED_SECTION}", "[2026.10.2], [2026.10.1]"),
         ],
+        ids=["below", "two"],
     )
-    def test_a_note_in_one_language_fails(self, branch, files):
-        notes = {release.NOTES_DIR + name: text for name, text in files.items()}
-        branch.commit(notes | {"CHANGELOG.md": with_entry(branch)})
+    def test_a_release_adds_exactly_one_section_on_top(self, branch, sections, added):
+        branch.commit({"CHANGELOG.md": changelog(sections)})
+        assert release.check(branch.handle, "beta").errors == [
+            f"CHANGELOG.md: a release adds one section, on top; this adds {added}."
+        ]
+
+    def test_a_new_section_with_a_malformed_heading_is_reported_once(self, branch):
+        branch.commit({"CHANGELOG.md": changelog(f"## [2026.10.01]\n\n- a\n\n{RELEASED_SECTION}")})
         [error] = release.check(branch.handle, "beta").errors
-        assert "What's new note comes in Dutch and English" in error
+        assert "'v2026.10.01' has a leading zero" in error
+
+    @pytest.mark.parametrize(
+        ("files", "reason"),
+        [
+            ({"2026.9.1.nl.md": "Nieuw\n"}, "What's new note comes in Dutch and English"),
+            ({"unreleased.nl.md": "Nieuw\n", "unreleased.en.md": "New\n"}, "is not <version>.nl.md or <version>.en.md"),
+        ],
+        ids=["one-language", "not-a-version"],
+    )
+    def test_a_note_that_is_not_a_pair_for_a_release_fails(self, branch, files, reason):
+        branch.commit({NOTES + name: text for name, text in files.items()})
+        errors = release.check(branch.handle, "beta").errors
+        assert reason in errors[0]
 
     @pytest.mark.parametrize("path", ["frontend/src/App.vue", "cli/plak_cli/__init__.py"])
     def test_a_member_facing_change_without_a_note_gets_a_hint(self, branch, path):
-        branch.commit({path: "changed\n", "CHANGELOG.md": with_entry(branch)})
+        branch.commit({path: "changed\n", **FRAGMENT})
         result = release.check(branch.handle, "beta")
         assert (result.errors, result.warning, result.hint) == ([], None, release.HINT)
+
+    def test_a_note_fragment_removed_is_no_note(self, released):
+        released.commit(NOTE_FRAGMENTS)
+        released.git("switch", "-q", "-c", "feature")
+        released.git("rm", "-q", "changelog.d/x.note.nl.md", "changelog.d/x.note.en.md")
+        released.commit({"frontend/src/App.vue": "x\n", **FRAGMENT})
+        assert release.check(released.handle, "beta").hint == release.HINT
 
     @pytest.mark.parametrize(
         "files",
         [
-            {"frontend/src/App.vue": "x\n", "frontend/src/content/releases/unreleased.nl.md": "Nieuw\n",
-             "frontend/src/content/releases/unreleased.en.md": "New\n"},
+            {"frontend/src/App.vue": "x\n", **NOTE_FRAGMENTS},
             {"frontend/src/App.test.ts": "x\n"},
             {"backend/src/plak/main.py": "app = 2\n"},
-            {
-                "frontend/src/content/releases/2026.9.1.nl.md": "a\n",
-                "frontend/src/content/releases/2026.9.1.en.md": "b\n",
-            },
+            {NOTES + "2026.9.1.nl.md": "a\n", NOTES + "2026.9.1.en.md": "b\n"},
         ],
         ids=["with-note", "test-only", "backend", "notes-only"],
     )
     def test_no_hint_otherwise(self, branch, files):
-        branch.commit(files | {"CHANGELOG.md": with_entry(branch)})
+        branch.commit({**files, **FRAGMENT})
         assert release.check(branch.handle, "beta").hint is None
 
     def test_hard_only_skips_the_warning_and_the_hint(self, branch):
-        branch.commit({"frontend/src/App.vue": "x\n", "CHANGELOG.md": with_entry(branch, "### New\n\n- x")})
+        branch.commit({"frontend/src/App.vue": "x\n", "changelog.d/x.improved.md": "- x\n"})
         result = release.check(branch.handle, "beta", hard_only=True)
         assert len(result.errors) == 1
         assert (result.warning, result.hint) == (None, None)
@@ -1541,12 +2076,12 @@ class TestCheck:
 
 class TestCheckCommand:
     def test_errors_fail_with_annotations_and_a_summary(self, branch, monkeypatch, tmp_path, capsys):
-        branch.commit({"CHANGELOG.md": with_entry(branch, "### New\n\n- x")})
+        branch.commit({"changelog.d/x.improved.md": "- x\n"})
         summary = tmp_path / "summary.md"
         monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
 
         assert release.main(["check", "--base", "beta"]) == 1
-        assert capsys.readouterr().out.startswith("::error title=Changelog::CHANGELOG.md: [Unreleased]: '### New'")
+        assert capsys.readouterr().out.startswith("::error title=Changelog::changelog.d/x.improved.md is not <slug>")
         assert summary.read_text().startswith("## Changelog\n\n- **Error:** ")
 
     def test_a_warning_passes_and_fills_the_comment(self, branch, monkeypatch, tmp_path, capsys):
@@ -1570,7 +2105,7 @@ class TestCheckCommand:
 
         args = ["check", "--base", "beta", "--body-file", str(body), "--comment-file", str(comment)]
         assert release.main(args) == 0
-        assert capsys.readouterr().out == "CHANGELOG.md and the What's new notes are in order.\n"
+        assert capsys.readouterr().out == "CHANGELOG.md, changelog.d/ and the What's new notes are in order.\n"
         assert comment.read_text() == ""
 
     def test_the_merge_queue_runs_only_the_hard_checks(self, branch, capsys):
@@ -1592,7 +2127,7 @@ def _event(repo: Repo, command: str) -> str:
 
 @pytest.fixture
 def pushed(branch) -> Repo:
-    """The feature branch with a shipped change and no entry, and an
+    """The feature branch with a shipped change and no fragment, and an
     origin/beta to compare with."""
     branch.git("update-ref", "refs/remotes/origin/beta", "beta")
     branch.commit({"backend/src/plak/main.py": "app = 2\n"})
@@ -1600,18 +2135,28 @@ def pushed(branch) -> Repo:
 
 
 class TestHook:
-    def test_a_pull_request_without_an_entry_is_denied(self, pushed):
+    def test_a_pull_request_without_a_fragment_is_denied(self, pushed):
         decision = json.loads(release.hook(_event(pushed, "gh pr create --title x --body 'Fix it'")))
         assert decision["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
         assert decision["hookSpecificOutput"]["permissionDecision"] == "deny"
         reason = decision["hookSpecificOutput"]["permissionDecisionReason"]
-        assert "Shipped paths changed without an entry under [Unreleased]" in reason
+        assert "Shipped paths changed without a changelog fragment" in reason
+        assert "changelog.d/<slug>.<kind>.md" in reason
         assert "changelog skill" in reason
         assert "No changelog entry: <reason>" in reason
 
-    def test_a_pull_request_with_an_entry_passes(self, pushed):
-        pushed.commit({"CHANGELOG.md": with_entry(pushed)})
+    def test_a_pull_request_with_a_fragment_passes(self, pushed):
+        pushed.commit(FRAGMENT)
         assert release.hook(_event(pushed, "gh pr create --fill")) is None
+
+    def test_a_release_pull_request_passes(self, released):
+        """It changes shipped paths and adds no fragment: that is what a
+        release does, as check() knows too."""
+        released.commit(FRAGMENT)
+        released.git("update-ref", "refs/remotes/origin/beta", "beta")
+        released.git("switch", "-q", "-c", f"release/{TAG}")
+        released.prepare(TAG)
+        assert release.hook(_event(released, "gh pr create --fill")) is None
 
     @pytest.mark.parametrize(
         "command",
