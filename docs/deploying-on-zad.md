@@ -171,6 +171,7 @@ anybody an administrator.
 | `PLAK_CI_FORGEJO_HOSTS` | env-vars | optional, comma-separated list of https base URLs, default `https://code.overheid.nl`; every Forgejo instance whose OIDC ID token from Actions is accepted for CI publishing |
 | `PLAK_OPERATOR_NAME` | env-vars | optional, empty by default: the organisation that runs this installation, as people should read it (`Digi Gilde`). The public privacy and accessibility pages and `GET /-/api/v1/operator` show it |
 | `PLAK_OPERATOR_EMAIL` | env-vars | optional, empty by default: where people reach that organisation about privacy, accessibility and questions (`digigilde@rijksoverheid.nl`). It is also the mail `Contact` in `security.txt`, after the GitHub advisory form, so security reports about this installation reach the operator. A plain address without a display name, or the app does not start |
+| `PLAK_SECURITY_TXT_NCSC` | env-vars | optional, default `false`. `true` lists the CVD routes of NCSC-NL in `security.txt`, the central reporting point for the Dutch central government. The Digi Gilde's installation sets `true`. Leave it off for an installation outside the central government |
 | `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
 | `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
 | `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |

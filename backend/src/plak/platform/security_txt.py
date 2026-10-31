@@ -33,7 +33,10 @@ VALIDITY = timedelta(days=90)
 
 EXPIRES_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-PREAMBLE = (
+# The NCSC-NL lines (PREAMBLE_NCSC, POLICY_NCSC, CONTACT_NCSC) hold only for an
+# installation inside the Dutch central government, so they appear only when
+# PLAK_SECURITY_TXT_NCSC is on.
+PREAMBLE_NCSC = (
     "# NCSC-NL blijft het centrale CVD-meldpunt voor kwetsbaarheden en incidenten",
     "# voor de Rijksoverheid.",
     "#",
@@ -42,7 +45,7 @@ PREAMBLE = (
 )
 
 # Only when PLAK_OPERATOR_EMAIL is set: without it there is no address of the
-# operator below, and the sentence would point at NCSC-NL's.
+# operator below, and the sentence would point at NCSC-NL's or at none.
 PREAMBLE_OPERATOR_EMAIL = (
     "# Het e-mailadres hieronder is de directe lijn naar de organisatie die deze",
     "# installatie van Plak beheert.",
@@ -51,21 +54,23 @@ PREAMBLE_OPERATOR_EMAIL = (
     "# this installation of Plak.",
 )
 
-POLICY = (
-    "Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md",
+POLICY = ("Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md",)
+
+POLICY_NCSC = (
     "Policy: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "Policy: https://www.ncsc.nl/en/cvd-report-form",
 )
 
-# In order of preference (RFC 9116 section 2.5.4). The GitHub advisory route
+# In order of preference (RFC 9116 section 2.5.3). The GitHub advisory route
 # leads: it keeps the report private until there is a fix and asks nothing of
 # the reporter beyond an account. It exists only because the repository is
 # public with private vulnerability reporting on; while it was private that
 # URL answered a 404. See docs/security.md, "Now the repo is on GitHub".
-# The operator's address (PLAK_OPERATOR_EMAIL) goes between the two tuples.
+# The operator's address (PLAK_OPERATOR_EMAIL) goes between this and
+# CONTACT_NCSC.
 CONTACT = ("Contact: https://github.com/DigiGilde/plak/security/advisories/new",)
 
-CONTACT_FALLBACK = (
+CONTACT_NCSC = (
     "Contact: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "Contact: https://www.ncsc.nl/en/cvd-report-form",
     "Contact: mailto:security@ncsc.nl",
@@ -88,6 +93,19 @@ def canonical_origins(settings: Settings) -> tuple[str, ...]:
     return tuple(origin.rstrip("/") for origin in origins if is_https(origin))
 
 
+def preamble(settings: Settings) -> tuple[str, ...]:
+    blocks = [PREAMBLE_NCSC] if settings.security_txt_ncsc else []
+    if settings.operator_email:
+        blocks.append(PREAMBLE_OPERATOR_EMAIL)
+    lines: list[str] = []
+    for block in blocks:
+        if lines:
+            lines.append("#")
+        lines.extend(block)
+    # Without a comment there is no blank line either: the file opens with Expires.
+    return (*lines, "") if lines else ()
+
+
 def operator_contact(settings: Settings) -> tuple[str, ...]:
     if not settings.operator_email:
         return ()
@@ -99,18 +117,18 @@ def operator_contact(settings: Settings) -> tuple[str, ...]:
 
 
 def security_txt(settings: Settings, now: datetime) -> str:
+    ncsc = settings.security_txt_ncsc
     lines = [
-        *PREAMBLE,
-        *(("#", *PREAMBLE_OPERATOR_EMAIL) if settings.operator_email else ()),
-        "",
+        *preamble(settings),
         f"Expires: {expires_at(now).strftime(EXPIRES_FORMAT)}",
         *(f"Canonical: {origin}{PATH_SECURITY_TXT}" for origin in canonical_origins(settings)),
         "",
         *POLICY,
+        *(POLICY_NCSC if ncsc else ()),
         "",
         *CONTACT,
         *operator_contact(settings),
-        *CONTACT_FALLBACK,
+        *(CONTACT_NCSC if ncsc else ()),
         *CLOSING,
     ]
     return "\n".join(lines) + "\n"
@@ -119,15 +137,17 @@ def security_txt(settings: Settings, now: datetime) -> str:
 __all__ = [
     "CLOSING",
     "CONTACT",
-    "CONTACT_FALLBACK",
+    "CONTACT_NCSC",
     "EXPIRES_FORMAT",
     "PATH_SECURITY_TXT",
     "POLICY",
-    "PREAMBLE",
+    "POLICY_NCSC",
+    "PREAMBLE_NCSC",
     "PREAMBLE_OPERATOR_EMAIL",
     "VALIDITY",
     "canonical_origins",
     "expires_at",
     "operator_contact",
+    "preamble",
     "security_txt",
 ]

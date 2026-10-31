@@ -213,6 +213,9 @@ class Settings(BaseSettings):
     # Contact. Empty means not configured.
     operator_name: str = ""
     operator_email: str = ""
+    # Lists NCSC-NL's CVD routes in security.txt (preamble, Policy, Contact).
+    # Only true for an installation inside the Dutch central government.
+    security_txt_ncsc: bool = False
 
     ratelimit_login_max: int = Field(default=10)
     ratelimit_login_window_s: int = Field(default=60)

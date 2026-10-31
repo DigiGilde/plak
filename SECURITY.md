@@ -31,7 +31,7 @@ rendered per request (`backend/src/plak/platform/security_txt.py`);
 `Expires` lies 90 days ahead, counted from the start of the current UTC
 day, so that it never expires without anyone doing anything.
 
-Four things to know:
+Five things to know:
 
 - The GitHub advisory form is the first `Contact`, and this file the
   first `Policy`. Both only became reachable when the repository went
@@ -43,8 +43,12 @@ Four things to know:
   installation that is `digigilde@rijksoverheid.nl`, the same address as
   in `publiccode.yml`. Without the setting there is no mail line of the
   operator, and the advisory form keeps the required `Contact` present.
-  The CVD routes of NCSC-NL follow behind it, so a reporter ends up
-  somewhere either way.
+- The CVD routes of NCSC-NL, the central reporting point for the Dutch
+  central government, are listed only when the installation enables
+  them with `PLAK_SECURITY_TXT_NCSC=true`. They then add two `Policy`
+  lines after this file and three `Contact` lines after the operator's
+  address, under a preamble that names NCSC-NL. The Digi Gilde's own
+  installation enables them.
 - There is no `Encryption` field. RFC 9116 cannot tie a key to one
   `Contact`, and the first contacts are the Plak team, which has no key of
   its own; NCSC-NL's key there would read as ours. The advisory form needs
