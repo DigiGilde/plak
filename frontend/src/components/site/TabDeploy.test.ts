@@ -1786,15 +1786,17 @@ describe('TabDeploy: the address of the site has changed', () => {
   function makeMovedWrapper(
     previousSlugs: { slug: string; redirectsUntil: string }[],
     site = 'website',
+    groupPreviousSlugs: { slug: string; redirectsUntil: string }[] = [],
   ) {
     return mount(TabDeploy, {
-      props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE, previousSlugs },
+      props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE, previousSlugs, groupPreviousSlugs },
       global: { stubs: { teleport: true } },
     });
   }
 
   const OLD = { slug: 'oude-naam', redirectsUntil: '2099-11-06T23:00:00Z' };
   const OLDER = { slug: 'oudere-naam', redirectsUntil: '2099-10-20T22:00:00Z' };
+  const GROUP_OLD = { slug: 'team-oud', redirectsUntil: '2099-11-02T23:00:00Z' };
 
   it('says nothing of it while the site has kept its address', async () => {
     const wrapper = makeWrapper();
@@ -1828,6 +1830,32 @@ describe('TabDeploy: the address of the site has changed', () => {
     expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
       'Workflows met site: team-aurora/oude-naam of site: team-aurora/oudere-naam publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
     );
+  });
+
+  it('warns too when only the group changed its address, which moved this site with it', async () => {
+    const wrapper = makeMovedWrapper([], 'website', [GROUP_OLD]);
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="deploy-moved"]').attributes('text')).toBe(
+      'Het adres van deze site is gewijzigd.',
+    );
+    expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
+      'Workflows met site: team-oud/website publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+    );
+  });
+
+  it('pairs every address the group had with every address the site had, but the current pair', async () => {
+    const wrapper = makeMovedWrapper([OLD], 'website', [GROUP_OLD]);
+    await untilIdle();
+
+    expect(
+      wrapper.findAll('[data-testid="deploy-moved"] code').map((code) => code.text()),
+    ).toEqual([
+      'site: team-aurora/oude-naam',
+      'site: team-oud/website',
+      'site: team-oud/oude-naam',
+      'site: team-aurora/website',
+    ]);
   });
 
   it('stands above everything else on the tab', async () => {

@@ -39,8 +39,10 @@ const props = withDefaults(
     contentBase: string;
     /** The old addresses of the site that still redirect, from the page. */
     previousSlugs?: PreviousSlug[];
+    /** The same for its group, which every site in the group moves with. */
+    groupPreviousSlugs?: PreviousSlug[];
   }>(),
-  { previousSlugs: () => [] },
+  { previousSlugs: () => [], groupPreviousSlugs: () => [] },
 );
 
 const loading = ref(true);
@@ -609,8 +611,17 @@ const workflowPathHint = computed(() => segments('publish.deploy.workflow.path',
 
 const movedSentence = computed(() => segments('publish.deploy.moved.text', ['old', 'new']));
 
-/** What `site:` held in a workflow that has not been told about the new address. */
-const oldSiteValues = computed(() => props.previousSlugs.map((p) => `${props.group}/${p.slug}`));
+/**
+ * What `site:` held in a workflow that has not been told about the new address:
+ * every pairing of a group address with a site address but the current one. The
+ * redirect dates cannot tell which pairs really existed, a slug that was changed
+ * back having been current twice, so a pair that never did may be named too.
+ */
+const oldSiteValues = computed(() => {
+  const groups = [props.group, ...props.groupPreviousSlugs.map((p) => p.slug)];
+  const sites = [props.site, ...props.previousSlugs.map((p) => p.slug)];
+  return groups.flatMap((group) => sites.map((site) => `${group}/${site}`)).slice(1);
+});
 
 const siteIdOptional = computed(() => segments('publish.deploy.siteId.optional', ['code']));
 
@@ -653,7 +664,7 @@ plak logout
 
   <nldd-container v-else layout="stack" gap="24" class="deploy">
     <!-- In a container of its own, which the reading width below applies to. -->
-    <nldd-container v-if="previousSlugs.length > 0" layout="stack">
+    <nldd-container v-if="oldSiteValues.length > 0" layout="stack">
       <nldd-banner
         variant="warning"
         :text="t('publish.deploy.moved.title')"

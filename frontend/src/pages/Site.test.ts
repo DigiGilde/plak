@@ -618,6 +618,18 @@ describe('Site: changing the address', () => {
     );
   });
 
+  it('shows the Deploy tab of a site whose group changed its address', async () => {
+    backend.data.groups[0]!.previousSlugs = [
+      { slug: 'team-oud', redirectsUntil: '2099-11-06T23:00:00Z' },
+    ];
+
+    const { wrapper } = await makeWrapper('/team-aurora/website/deploy');
+
+    expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
+      'Workflows met site: team-oud/website publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+    );
+  });
+
   it('has no such notice on the Deploy tab of a site that kept its address', async () => {
     const { wrapper } = await makeWrapper('/team-aurora/website/deploy');
 
