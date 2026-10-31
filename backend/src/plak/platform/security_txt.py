@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from plak.security_headers import is_https
 
@@ -34,12 +35,20 @@ EXPIRES_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 PREAMBLE = (
     "# NCSC-NL blijft het centrale CVD-meldpunt voor kwetsbaarheden en incidenten",
-    "# voor de Rijksoverheid. Het e-mailadres hieronder is de directe lijn naar",
-    "# het team achter Plak.",
+    "# voor de Rijksoverheid.",
     "#",
     "# NCSC-NL remains the central CVD reporting point for vulnerabilities and",
-    "# incidents for the Dutch central government. The email address below is",
-    "# the direct line to the team behind Plak.",
+    "# incidents for the Dutch central government.",
+)
+
+# Only when PLAK_OPERATOR_EMAIL is set: without it there is no address of the
+# operator below, and the sentence would point at NCSC-NL's.
+PREAMBLE_OPERATOR_EMAIL = (
+    "# Het e-mailadres hieronder is de directe lijn naar de organisatie die deze",
+    "# installatie van Plak beheert.",
+    "#",
+    "# The email address below is the direct line to the organisation that runs",
+    "# this installation of Plak.",
 )
 
 POLICY = (
@@ -53,9 +62,10 @@ POLICY = (
 # the reporter beyond an account. It exists only because the repository is
 # public with private vulnerability reporting on; while it was private that
 # URL answered a 404. See docs/security.md, "Now the repo is on GitHub".
-CONTACT = (
-    "Contact: https://github.com/DigiGilde/plak/security/advisories/new",
-    "Contact: mailto:digigilde@rijksoverheid.nl",
+# The operator's address (PLAK_OPERATOR_EMAIL) goes between the two tuples.
+CONTACT = ("Contact: https://github.com/DigiGilde/plak/security/advisories/new",)
+
+CONTACT_FALLBACK = (
     "Contact: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "Contact: https://www.ncsc.nl/en/cvd-report-form",
     "Contact: mailto:security@ncsc.nl",
@@ -78,9 +88,20 @@ def canonical_origins(settings: Settings) -> tuple[str, ...]:
     return tuple(origin.rstrip("/") for origin in origins if is_https(origin))
 
 
+def operator_contact(settings: Settings) -> tuple[str, ...]:
+    if not settings.operator_email:
+        return ()
+    # RFC 6068 section 2: outside the unreserved characters and these
+    # some-delims, an addr-spec in a mailto URI is percent-encoded UTF-8. The
+    # setting has already refused the delimiters that would split the URI.
+    address = quote(settings.operator_email, safe="@!$'*+")
+    return (f"Contact: mailto:{address}",)
+
+
 def security_txt(settings: Settings, now: datetime) -> str:
     lines = [
         *PREAMBLE,
+        *(("#", *PREAMBLE_OPERATOR_EMAIL) if settings.operator_email else ()),
         "",
         f"Expires: {expires_at(now).strftime(EXPIRES_FORMAT)}",
         *(f"Canonical: {origin}{PATH_SECURITY_TXT}" for origin in canonical_origins(settings)),
@@ -88,6 +109,8 @@ def security_txt(settings: Settings, now: datetime) -> str:
         *POLICY,
         "",
         *CONTACT,
+        *operator_contact(settings),
+        *CONTACT_FALLBACK,
         *CLOSING,
     ]
     return "\n".join(lines) + "\n"
@@ -96,12 +119,15 @@ def security_txt(settings: Settings, now: datetime) -> str:
 __all__ = [
     "CLOSING",
     "CONTACT",
+    "CONTACT_FALLBACK",
     "EXPIRES_FORMAT",
     "PATH_SECURITY_TXT",
     "POLICY",
     "PREAMBLE",
+    "PREAMBLE_OPERATOR_EMAIL",
     "VALIDITY",
     "canonical_origins",
     "expires_at",
+    "operator_contact",
     "security_txt",
 ]

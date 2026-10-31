@@ -209,7 +209,8 @@ class Settings(BaseSettings):
     # The organisation that runs this installation, as people should read its
     # name, and the address where they reach it about privacy, accessibility
     # and questions. The public privacy and accessibility pages show both
-    # (GET /-/api/v1/operator). Empty means not configured.
+    # (GET /-/api/v1/operator), and security.txt names the address as a
+    # Contact. Empty means not configured.
     operator_name: str = ""
     operator_email: str = ""
 

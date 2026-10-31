@@ -29,6 +29,13 @@ from plak.serving.response import NEUTRAL_404_BODY
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"
+ADVISORY = "https://github.com/DigiGilde/plak/security/advisories/new"
+NCSC = [
+    "https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
+    "https://www.ncsc.nl/en/cvd-report-form",
+    "mailto:security@ncsc.nl",
+]
+OPERATOR_LINE = "# The email address below is the direct line to the organisation that runs"
 
 
 def _settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -45,6 +52,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "base_url": ADMIN,
         "content_base_url": CONTENT,
         "spa_path": tmp_path / "dist",
+        "operator_email": "",
     }
     base.update(overrides)
     return Settings(**base)
@@ -82,6 +90,15 @@ class TestServing:
         assert on_content.status_code == 200
         assert on_admin.text == on_content.text
 
+    async def test_the_served_file_takes_the_address_from_the_app_settings(self, tmp_path: Path) -> None:
+        """Read per request from the settings the app was built with, not at
+        import time, so each installation names its own operator."""
+        app = create_app(_settings(tmp_path, operator_email="cvd@operator.example"))
+        async with app.router.lifespan_context(app), _client(app, CONTENT) as content:
+            response = await content.get(PATH_SECURITY_TXT)
+
+        assert _fields(response.text, "Contact") == [ADVISORY, "mailto:cvd@operator.example", *NCSC]
+
     async def test_the_content_type_is_the_one_the_rfc_demands(self, two_hosts) -> None:
         # RFC 9116 section 3: text/plain with charset utf-8, not a guess.
         _, content = two_hosts
@@ -116,13 +133,39 @@ class TestContent:
         assert _fields(body, "Contact")
         # Section 2.5.4: the order is the order of preference, and the private
         # advisory is the route a reporter should see first.
-        assert _fields(body, "Contact")[0] == (
-            "https://github.com/DigiGilde/plak/security/advisories/new"
-        )
-        assert "mailto:digigilde@rijksoverheid.nl" in _fields(body, "Contact")
+        assert _fields(body, "Contact")[0] == ADVISORY
         assert _fields(body, "Policy")[0] == (
             "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
         )
+
+    def test_the_operator_address_follows_the_advisory_form(self, tmp_path: Path) -> None:
+        """The advisory form is about the software and holds on every
+        installation. The mail line is the operator's, so a report about this
+        installation goes to whoever runs it, ahead of the NCSC-NL routes."""
+        settings = _settings(tmp_path, operator_email="digigilde@rijksoverheid.nl")
+        body = security_txt(settings, datetime.now(UTC))
+
+        assert _fields(body, "Contact") == [ADVISORY, "mailto:digigilde@rijksoverheid.nl", *NCSC]
+        assert OPERATOR_LINE in body.splitlines()
+
+    def test_without_an_operator_address_there_is_no_mail_line_of_ours(self, tmp_path: Path) -> None:
+        """No address of another installation fills the gap, and the comment
+        that announces the operator's address goes too, or it would point at
+        NCSC-NL's. The advisory form keeps Contact present."""
+        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+
+        assert _fields(body, "Contact") == [ADVISORY, *NCSC]
+        assert "digigilde@rijksoverheid.nl" not in body
+        assert "direct line" not in body
+
+    def test_an_address_outside_ascii_is_percent_encoded(self, tmp_path: Path) -> None:
+        """A Contact value must be a URI (RFC 9116 section 2.5.3), and RFC 6068
+        writes what a mailto URI cannot carry as percent-encoded UTF-8. The
+        setting accepts such an address, so the URI has to encode it."""
+        settings = _settings(tmp_path, operator_email="meld/ë@bücher.example")
+        body = security_txt(settings, datetime.now(UTC))
+
+        assert _fields(body, "Contact")[1] == "mailto:meld%2F%C3%AB@b%C3%BCcher.example"
 
     def test_no_encryption_key_is_offered(self, tmp_path: Path) -> None:
         """An Encryption field names the key researchers should use (RFC 9116
@@ -189,13 +232,14 @@ class TestContent:
 
 
 class TestAgainstTheParser:
-    def test_the_document_passes_the_dtc_parser(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("operator_email", ["", "digigilde@rijksoverheid.nl"])
+    def test_the_document_passes_the_dtc_parser(self, tmp_path: Path, operator_email: str) -> None:
         """sectxt is the parser behind the Digital Trust Center's own check.
         Signing and an Encryption key are the two things it recommends that we
         deliberately leave out; see SECURITY.md."""
         sectxt = pytest.importorskip("sectxt")
 
-        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+        body = security_txt(_settings(tmp_path, operator_email=operator_email), datetime.now(UTC))
         parser = sectxt.Parser(body.encode(), urls=[f"{CONTENT}{PATH_SECURITY_TXT}"])
 
         assert parser.errors == []
