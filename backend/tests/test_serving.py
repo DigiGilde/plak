@@ -473,13 +473,13 @@ class TestLiveServing:
         assert response.headers["cache-control"] == "max-age=31536000, immutable"
         assert response.headers["content-type"] == "text/css; charset=utf-8"
 
-    async def test_private_asset_is_not_immutable(self, client, environment):
-        # The URL is not content-addressed and survives a redeploy, so
-        # `immutable` would hide a new version even on a reload.
+    async def test_private_asset_is_not_stored(self, client, environment):
+        # Stored, it would be readable from another site's page on the shared
+        # origin with `cache: "only-if-cached"`, past the access gate.
         set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/",))
         response = await client.get("/aurora/intern/stijl.css")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, max-age=31536000"
+        assert response.headers["cache-control"] == "no-store"
 
     async def test_mjs_gets_text_javascript(self, client):
         response = await client.get("/aurora/site/app.mjs")
@@ -838,7 +838,7 @@ class TestKey:
         followed = await client.get(response.headers["location"])
         assert followed.status_code == 200
         assert followed.content == SECRET_INDEX
-        assert followed.headers["cache-control"] == "private, no-cache, must-revalidate"
+        assert followed.headers["cache-control"] == "no-store"
         assert followed.headers["referrer-policy"] == "same-origin"
         assert "set-cookie" not in followed.headers
 
@@ -957,7 +957,7 @@ class TestKey:
         client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
         response = await client.get("/aurora/geheim/map/")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, no-cache, must-revalidate"
+        assert response.headers["cache-control"] == "no-store"
 
 
 class TestPreview:
@@ -980,7 +980,7 @@ class TestPreview:
         set_content_session_cookie(client, environment.app, sub="willekeurige-kijker", sites=("/aurora/site/",))
         response = await client.get("/aurora/site/_preview/pr-besloten/")
         assert response.status_code == 200
-        assert response.headers["cache-control"] == "private, no-cache, must-revalidate"
+        assert response.headers["cache-control"] == "no-store"
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
 
     async def test_unknown_preview_neutral_404(self, client):
@@ -994,8 +994,8 @@ class TestVersionView:
         response = await client.get(f"/aurora/site/_version/{environment.world.preview_version_id}/")
         assert response.status_code == 200
         assert response.content == PREVIEW_INDEX
-        # Always private for _version views, plus noindex.
-        assert response.headers["cache-control"].startswith("private, ")
+        # Never stored for _version views, also of a public site, plus noindex.
+        assert response.headers["cache-control"] == "no-store"
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
 
     async def test_anonymous_neutral_404(self, client, environment):
@@ -2122,7 +2122,7 @@ class TestLoginRedirect:
         response = await client.get("/aurora/intern/")
         assert response.status_code == 200
         assert response.content == b"<h1>intern</h1>"
-        assert response.headers["cache-control"] == "private, no-cache, must-revalidate"
+        assert response.headers["cache-control"] == "no-store"
 
     async def test_admin_session_counts_not_as_viewer(self, client, environment):
         # An admin session carries no viewing right on content: the serving

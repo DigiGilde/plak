@@ -165,18 +165,19 @@ def if_none_match_matches(header: str | None, etag: str) -> bool:
 
 
 def cache_control(content_type: str, access: AccessPolicy, *, version_view: bool) -> str:
-    private = version_view or not access.is_public
+    if version_view or not access.is_public:
+        # Not stored at all, not even to revalidate: every site shares one
+        # origin, and a page of a site without the sandbox reads a stored
+        # response with `fetch(url, {cache: "only-if-cached"})`, which skips
+        # both the revalidation and the server, and so the access gate.
+        return "no-store"
     if content_type.startswith("text/html"):
-        base = "no-cache, must-revalidate"
-    elif private:
-        # An asset URL is not content-addressed: `/{group}/{site}/assets/x.css`
-        # survives a redeploy, so `immutable` keeps a new version out of sight
-        # even on a reload. Public content keeps it for the reach a shared
-        # cache gives it; private content has no shared cache to gain from.
-        base = "max-age=31536000"
-    else:
-        base = "max-age=31536000, immutable"
-    return f"private, {base}" if private else base
+        return "no-cache, must-revalidate"
+    # An asset URL is not content-addressed: `/{group}/{site}/assets/x.css`
+    # survives a redeploy, so a returning visitor keeps an old file under the
+    # same name until it leaves the cache, even on a reload. Accepted for the
+    # reach a shared cache gives public content.
+    return "max-age=31536000, immutable"
 
 
 def _base_headers(
