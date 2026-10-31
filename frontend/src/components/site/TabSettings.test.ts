@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { makeMockBackend, type MockBackend } from '../../../tests/mock-api';
+import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '../../../tests/mock-api';
+import type { PreviousSlug, Site } from '@/api/types';
+import AddressSection from '@/components/AddressSection.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import { AUTOSAVE_PAUSE_MS } from '@/composables/autosavedText';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
@@ -25,7 +27,7 @@ afterEach(() => {
 /** `attach` puts it in the document, for a test that needs to know where the focus is. */
 function makeWrapper(site = 'website', attach = false) {
   return mount(TabSettings, {
-    props: { group: 'team-aurora', site },
+    props: { group: 'team-aurora', site, contentBase: MOCK_CONTENT_BASE },
     global: { stubs: { teleport: true } },
     attachTo: attach ? document.body : undefined,
   });
@@ -94,13 +96,20 @@ describe('site TabSettings: states', () => {
     expect(wrapper.find('h2').exists()).toBe(true);
   });
 
-  it('puts the title first and the danger zone last, for a site admin', async () => {
+  it('puts the title first, then the address, and the danger zone last, for a site admin', async () => {
     const wrapper = await loadedWrapper();
 
-    expect(wrapper.findAll('h2').map((h) => h.text())).toEqual(['Titel van de site', 'Gevarenzone']);
+    // The sheet of the address has a heading of its own, on the document root.
+    const onPage = wrapper.findAll('h2').filter((h) => !h.element.closest('nldd-sheet'));
+    expect(onPage.map((h) => h.text())).toEqual([
+      'Titel van de site',
+      'Adres van de site',
+      'Gevarenzone',
+    ]);
     const sections = wrapper.findAll('nldd-container > section');
     expect(sections.map((s) => s.attributes('aria-labelledby'))).toEqual([
       'heading-site-title',
+      'heading-site-address',
       'heading-danger-zone',
     ]);
   });
@@ -163,7 +172,7 @@ describe('site TabSettings: title', () => {
     expect(field.element.parentElement?.getAttribute('label')).toBe('Titel');
 
     // It saves by itself: no button, so no way to press one and see nothing happen.
-    expect(wrapper.find('nldd-form nldd-button').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-title-form"] nldd-button').exists()).toBe(false);
     expect(wrapper.find('[data-testid="site-title-save"]').exists()).toBe(false);
     expect(wrapper.find('nldd-form-section').exists()).toBe(false);
     expect(wrapper.find('[data-testid="site-title-text"]').exists()).toBe(false);
@@ -204,7 +213,7 @@ describe('site TabSettings: title', () => {
     const wrapper = await loadedWrapper();
 
     expect(wrapper.html()).not.toContain('hoogstens 200 tekens');
-    expect(wrapper.find('nldd-validation-item[hint]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="site-title-form"] nldd-validation-item[hint]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="site-title"]').attributes('invalid')).toBeUndefined();
   });
 
@@ -816,7 +825,10 @@ describe('site TabSettings: who sees what', () => {
 
     const wrapper = await loadedWrapper();
 
-    expect(wrapper.findAll('h2').map((h) => h.text())).toEqual(['Titel van de site']);
+    expect(wrapper.findAll('h2').map((h) => h.text())).toEqual([
+      'Titel van de site',
+      'Adres van de site',
+    ]);
     expect(wrapper.find('nldd-box[background="critical"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="delete-site"]').exists()).toBe(false);
     expect(wrapper.findComponent(ConfirmModal).exists()).toBe(false);
@@ -854,12 +866,299 @@ describe('site TabSettings: who sees what', () => {
   });
 });
 
+describe('site TabSettings: address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const address = (wrapper: ReturnType<typeof makeWrapper>) =>
+    wrapper.find('section[aria-labelledby="heading-site-address"]');
+
+  async function openForm(wrapper: ReturnType<typeof makeWrapper>): Promise<void> {
+    await wrapper.find('[data-testid="site-address-start"]').trigger('click');
+    await untilIdle();
+  }
+
+  it('shows the address of the site as it is served, and an old one that still redirects', async () => {
+    backend.data.sites[0]!.previousSlugs = [
+      { slug: 'oude-naam', redirectsUntil: '2026-11-06T23:00:00Z' },
+    ];
+
+    const wrapper = await loadedWrapper();
+
+    expect(address(wrapper).find('[data-testid="site-address-current"]').text()).toBe(
+      'Het adres van deze site is https://sites.plak.test/team-aurora/website/.',
+    );
+    expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-title-cell').find('code').text()).toBe('team-aurora/oude-naam');
+    expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-title-cell').attributes('supporting-text')).toBe(
+      'Stuurt door tot en met 6 november 2026',
+    );
+  });
+
+  it('gives an admin of the group the form, counting the days /me says', async () => {
+    const wrapper = await loadedWrapper();
+    await openForm(wrapper);
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await untilIdle();
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(true);
+    expect(address(wrapper).find('[data-testid="site-address-consequences"]').text()).toContain(
+      'Tot en met 7 november 2026 kun je het oude adres terugzetten.',
+    );
+    expect(address(wrapper).find('[data-testid="site-address-consequences"]').text()).toContain(
+      backend.data.sites[0]!.id,
+    );
+  });
+
+  it('gives an admin of the site who is a reader in the group the form too', async () => {
+    // lid-4 (Zoë de Wit) is a reader in the group and admin of this site.
+    backend.data.loggedInMemberId = 'lid-4';
+
+    const wrapper = await loadedWrapper();
+    await openForm(wrapper);
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(true);
+  });
+
+  it('tells an admin of the site alone why they cannot change it, and still lets them rename the title', async () => {
+    backend.data.siteRoles.push({
+      groupSlug: 'team-aurora',
+      siteSlug: 'website',
+      identifier: 'sanne@voorbeeld.nl',
+      role: 'admin',
+    });
+    backend.data.loggedInMemberId = 'lid-6';
+
+    const wrapper = await loadedWrapper();
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(false);
+    expect(address(wrapper).find('[data-testid="site-address-readonly"]').text()).toBe(
+      'Je beheert deze site, maar je bent geen lid van de groep. Het adres wijzigen kan alleen een sitebeheerder die ook lid is van de groep.',
+    );
+    expect(wrapper.find('[data-testid="site-title-form"]').exists()).toBe(true);
+  });
+
+  it('says who may to anyone who is not an admin of the site', async () => {
+    // lid-3 (Ada Vermeer) is editor in the group.
+    backend.data.loggedInMemberId = 'lid-3';
+
+    const wrapper = await loadedWrapper();
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(false);
+    expect(address(wrapper).find('[data-testid="site-address-readonly"]').text()).toBe(
+      'Alleen een beheerder van de site die ook lid is van de groep kan het adres wijzigen.',
+    );
+  });
+
+  it('gives a platform admin without a role in the group nothing extra either', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const wrapper = await loadedWrapper();
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(false);
+  });
+
+  it('carries on without the session, as a reader of the address', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/me') ? serverErrorFetch()(input, init) : backend.fetch(input, init),
+    );
+
+    const wrapper = await loadedWrapper();
+
+    expect(address(wrapper).find('[data-testid="site-address-form"]').exists()).toBe(false);
+    expect(address(wrapper).find('[data-testid="site-address-current"]').exists()).toBe(true);
+  });
+
+  it('warns that the address of a public site may be out there, and of nothing else', async () => {
+    const open = await loadedWrapper();
+    await openForm(open);
+    expect(open.find('[data-testid="site-address-public"]').exists()).toBe(true);
+
+    backend.data.sites[0]!.access = { base: 'sso', keys: true, invitees: true };
+    const closed = await loadedWrapper();
+    await openForm(closed);
+    expect(closed.find('[data-testid="site-address-public"]').exists()).toBe(false);
+  });
+
+  it('changes the address, takes over the site it gets back and tells the page', async () => {
+    const wrapper = await loadedWrapper();
+    await openForm(wrapper);
+
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    expect(backend.data.sites[0]!.slug).toBe('handboek');
+    expect(wrapper.emitted('renamed')).toHaveLength(1);
+    expect(wrapper.emitted('renamed')![0]![0]).toMatchObject({ slug: 'handboek' });
+    // Not yet on the new route, but the section already speaks of the new address.
+    expect(address(wrapper).find('[data-testid="site-address-current"]').text()).toContain(
+      'https://sites.plak.test/team-aurora/handboek/',
+    );
+    expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-title-cell').find('code').text()).toBe('team-aurora/website');
+    expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-title-cell').attributes('supporting-text')).toBe(
+      'Stuurt door tot en met 7 november 2026',
+    );
+    // Neither a change of the title.
+    expect(wrapper.emitted('changed')).toBeUndefined();
+  });
+
+  it('stays as it is when the route follows the change: nothing is loaded, and nothing goes inert', async () => {
+    const wrapper = await loadedWrapper();
+    const indicator = wrapper.find('nldd-activity-indicator').element;
+    // A loading indicator makes what it wraps inert, and with it the focus
+    // and the line that says what happened.
+    const completeness: boolean[] = [];
+    new MutationObserver(() => completeness.push(indicator.hasAttribute('complete'))).observe(
+      indicator,
+      { attributes: true, attributeFilter: ['complete'] },
+    );
+    const sent: string[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(`${init?.method ?? 'GET'} ${new URL(String(input), 'http://plak.test').pathname}`);
+      return backend.fetch(input, init);
+    });
+
+    await openForm(wrapper);
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+    // What the page does once it has taken the site over.
+    await wrapper.setProps({ site: 'handboek' });
+    await untilIdle();
+
+    expect(sent).toEqual(['PUT /-/api/v1/sites/team-aurora/website/slug']);
+    expect(completeness).toEqual([]);
+  });
+
+  it('loads the site the route moves to while the first load is still on its way', async () => {
+    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+    // No await: nothing is held yet.
+    const wrapper = makeWrapper();
+
+    await wrapper.setProps({ site: 'andere' });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Een andere site');
+  });
+
+  it('loads when the route moves to an address the tab has not been given', async () => {
+    backend.data.sites.push({ ...backend.data.sites[0]!, slug: 'andere', title: 'Een andere site' });
+    const wrapper = await loadedWrapper();
+    await openForm(wrapper);
+    fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+      value: 'handboek',
+    });
+    await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+    await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+    await untilIdle();
+
+    await wrapper.setProps({ site: 'andere' });
+    await untilIdle();
+
+    expect(wrapper.find('[data-testid="site-title"]').attributes('value')).toBe('Een andere site');
+  });
+  describe('an address another site in the group gave up', () => {
+    function section(wrapper: ReturnType<typeof makeWrapper>) {
+      return wrapper.findComponent(AddressSection);
+    }
+
+    beforeEach(() => {
+      backend.data.sites.push({
+        ...backend.data.sites[0]!,
+        id: 'tweede-id',
+        slug: 'handboek',
+        title: 'Handboek',
+        previousSlugs: [{ slug: 'gids', redirectsUntil: '2026-11-06T23:00:00Z' }],
+      });
+    });
+
+    it('hands the section the other sites of the group, without this one', async () => {
+      const wrapper = await loadedWrapper();
+
+      expect(section(wrapper).props('siblings')!.map((p: Site) => p.id)).toEqual(['tweede-id']);
+    });
+
+    it('lets an admin of the group take it', async () => {
+      const wrapper = await loadedWrapper();
+
+      expect(section(wrapper).props('canRelease')).toBe(true);
+    });
+
+    it.each([
+      ['lid-4', 'an admin of the site who is a reader in the group'],
+      ['lid-3', 'an editor in the group'],
+    ])('does not let %s (%s) take it', async (memberId) => {
+      backend.data.loggedInMemberId = memberId;
+
+      const wrapper = await loadedWrapper();
+
+      expect(section(wrapper).props('canRelease')).toBe(false);
+    });
+
+    it('takes it from the other site, and forgets that the address redirected there', async () => {
+      const wrapper = await loadedWrapper();
+      await openForm(wrapper);
+      fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+        value: 'gids',
+      });
+      await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+      await untilIdle();
+      expect(address(wrapper).findComponent(ConfirmModal).props('confirmLabel')).toBe('Toch gebruiken');
+
+      await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+      await untilIdle();
+
+      expect(backend.data.sites[0]!.slug).toBe('gids');
+      expect(backend.data.sites[1]!.previousSlugs).toEqual([]);
+      expect(section(wrapper).props('siblings')![0]!.previousSlugs).toEqual([]);
+    });
+
+    it('keeps what the other sites gave up when the address goes elsewhere', async () => {
+      const wrapper = await loadedWrapper();
+      await openForm(wrapper);
+      fireDetailEvent(wrapper.find('[data-testid="site-address"]').element, 'input', {
+        value: 'nieuw',
+      });
+      await wrapper.find('[data-testid="site-address-form"]').trigger('submit');
+      await address(wrapper).find('[data-testid="confirm-continue"]').trigger('click');
+      await untilIdle();
+
+      expect(section(wrapper).props('siblings')![0]!.previousSlugs.map((p: PreviousSlug) => p.slug)).toEqual([
+        'gids',
+      ]);
+    });
+  });
+});
+
 describe('site TabSettings: danger zone', () => {
+  // The address section has a dialog of its own, earlier on the page: this one is told by its section.
+  const DANGER = 'section[aria-labelledby="heading-danger-zone"]';
+  const DANGER_CONTINUE = `${DANGER} [data-testid="confirm-continue"]`;
+  const DANGER_CANCEL = `${DANGER} [data-testid="confirm-cancel"]`;
+
+  function deleteDialog(wrapper: ReturnType<typeof makeWrapper>) {
+    return wrapper.find(DANGER).findComponent(ConfirmModal);
+  }
+
   it('deletes the site only after explicit confirmation', async () => {
     const wrapper = await loadedWrapper();
 
     // Confirming while the dialog is not open does nothing.
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     await untilIdle();
     expect(backend.data.sites).toHaveLength(1);
     expect(wrapper.emitted('removed')).toBeFalsy();
@@ -868,7 +1167,7 @@ describe('site TabSettings: danger zone', () => {
     // disappears.
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(0);
@@ -882,10 +1181,10 @@ describe('site TabSettings: danger zone', () => {
     const wrapper = await loadedWrapper();
 
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    expect(wrapper.findComponent(ConfirmModal).props('confirmPhrase')).toBe('team-aurora/website');
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    expect(deleteDialog(wrapper).props('confirmPhrase')).toBe('team-aurora/website');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     typeAddress(wrapper, 'website');
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(1);
@@ -897,7 +1196,7 @@ describe('site TabSettings: danger zone', () => {
     const wrapper = await loadedWrapper();
 
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    const actions = wrapper.findAll('nldd-modal-dialog nldd-button');
+    const actions = wrapper.findAll(`${DANGER} nldd-modal-dialog nldd-button`);
     expect(actions[0]!.attributes('data-testid')).toBe('confirm-cancel');
     expect(actions[0]!.attributes('variant')).toBe('primary');
     expect(actions[0]!.attributes('text')).toBe('Behoud site');
@@ -911,7 +1210,7 @@ describe('site TabSettings: danger zone', () => {
 
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
 
-    expect(wrapper.findComponent(ConfirmModal).props('title')).toBe(
+    expect(deleteDialog(wrapper).props('title')).toBe(
       'Site team-aurora/website verwijderen?',
     );
   });
@@ -920,12 +1219,12 @@ describe('site TabSettings: danger zone', () => {
     const wrapper = await loadedWrapper();
 
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
-    await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
+    await wrapper.find(DANGER_CANCEL).trigger('click');
     await untilIdle();
 
     expect(backend.data.sites).toHaveLength(1);
     expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.findComponent(ConfirmModal).props('open')).toBe(false);
+    expect(deleteDialog(wrapper).props('open')).toBe(false);
   });
 
   it('closes the dialog and reports it when deleting fails', async () => {
@@ -934,18 +1233,18 @@ describe('site TabSettings: danger zone', () => {
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
     vi.stubGlobal('fetch', serverErrorFetch());
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     await untilIdle();
 
     // The modal renders the page below it inert: the notification can only be
     // read once the dialog is closed.
-    expect(wrapper.findComponent(ConfirmModal).props('open')).toBe(false);
+    expect(deleteDialog(wrapper).props('open')).toBe(false);
     const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');
     expect(notice.exists()).toBe(true);
     expect(notice.attributes('variant')).toBe('critical');
     expect(notice.attributes('supporting-text')).toBe('Serverfout');
     expect(wrapper.emitted('removed')).toBeFalsy();
-    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('loading')).toBeUndefined();
+    expect(wrapper.find(DANGER_CONTINUE).attributes('loading')).toBeUndefined();
   });
 
   it('reports a generic failure when deleting throws something other than an ApiError', async () => {
@@ -954,7 +1253,7 @@ describe('site TabSettings: danger zone', () => {
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
     typeAddress(wrapper);
-    await wrapper.find('[data-testid="confirm-continue"]').trigger('click');
+    await wrapper.find(DANGER_CONTINUE).trigger('click');
     await untilIdle();
 
     const notice = wrapper.find('nldd-notification[text="Site niet verwijderd"]');

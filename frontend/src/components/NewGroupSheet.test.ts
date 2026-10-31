@@ -19,7 +19,7 @@ function typeNative(wrapper: ReturnType<typeof mount>, selector: string, value: 
   el.dispatchEvent(new Event('input'));
 }
 
-const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false } };
+const newGroup: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 
 // `Mock` and not `ReturnType<typeof vi.fn>`: since vitest 4 that ReturnType
 // resolves the generic to its constraint `Procedure | Constructable`, which no

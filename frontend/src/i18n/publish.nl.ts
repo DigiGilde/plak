@@ -211,6 +211,12 @@ export const publishNl = {
   'publish.deploy.requireSiteId.keep': 'Behoud de huidige koppeling',
   'publish.deploy.requireSiteId.confirm': 'Alleen met site-ID',
 
+  // -- Deploy tab: the address of the site has changed ---------------------------------
+  'publish.deploy.moved.title': 'Het adres van deze site is gewijzigd.',
+  'publish.deploy.moved.text':
+    'Workflows met {old} publiceren niet meer; gebruik {new} en het site-ID.',
+  'publish.deploy.moved.or': ' of ',
+
   // -- Access tab: the base ------------------------------------------------------
   'publish.access.loading': 'Toegangsinstellingen laden',
   'publish.access.unknownSite.title': 'Onbekende site',
