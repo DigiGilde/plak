@@ -5,7 +5,7 @@
  * platform admin may do this; the toolbar accordingly shows the menu item to
  * that role only, and the backend refuses it again.
  */
-import { nextTick, ref, watch } from 'vue';
+import { ref } from 'vue';
 
 import { ApiError } from '@/api/client';
 import type { Group } from '@/api/types';
@@ -13,6 +13,7 @@ import ErrorBanner from '@/components/ErrorBanner.vue';
 import { SLUG_MATCH, SLUG_PATTERN, SLUG_RE, slugify, slugifyTyped } from '@/composables/slug';
 import { t } from '@/i18n';
 import SectionHeading from '@/components/SectionHeading.vue';
+import { useSheetOpen } from '@/composables/sheetOpen';
 
 const props = defineProps<{
   open: boolean;
@@ -92,18 +93,7 @@ function onClose(): void {
   emit('update:open', false);
 }
 
-watch(
-  () => props.open,
-  async (open) => {
-    if (!open) {
-      sheetEl.value?.hide?.();
-      return;
-    }
-    await nextTick();
-    sheetEl.value?.show?.();
-  },
-  { immediate: true },
-);
+useSheetOpen(() => props.open, sheetEl);
 </script>
 
 <template>

@@ -20,20 +20,16 @@
 import { computed, ref } from 'vue';
 
 import ConfirmModal from '@/components/ConfirmModal.vue';
+import MemberAddForm from '@/components/MemberAddForm.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
 import type { MemberSuggestion, Role, SiteMember } from '@/api/types';
-import { SEARCH_MIN_LENGTH, useMemberSearch } from '@/composables/memberSearch';
-import { useNotices, type Notice } from '@/composables/notices';
+import { useMemberAddForm } from '@/composables/memberAddForm';
 import { groupPath } from '@/composables/slug';
-import {
-  keepEverySuggestion,
-  NOTE_SEPARATOR,
-  useMenuEmptyState,
-  useStartingList,
-} from '@/composables/suggestionField';
+import { NOTE_SEPARATOR, useStartingList } from '@/composables/suggestionField';
 import { roleLabel, ROLES, ROLE_ICONS, siteRoleHint } from '@/format';
 import { t } from '@/i18n';
 import DisclosureBox from '@/components/DisclosureBox.vue';
+import { useConfirm } from '@/composables/confirm';
 
 const props = defineProps<{
   members: SiteMember[];
@@ -99,42 +95,6 @@ function keepsViaGroup(role: Role): string {
   return t('admin.siteMembers.keepsViaGroup', { role: roleLabel(role).toLowerCase() });
 }
 
-/** What gets submitted: an e-mail address, typed or picked from the list. */
-const newIdentifier = ref('');
-/**
- * What the field shows, which is the name once a suggestion is picked. Bound
- * alongside the value so the combo box never derives a label of its own: it
- * would rewrite what someone is still typing the moment it happens to match
- * an address in the list.
- */
-const newLabel = ref('');
-/** Lezer by default, as on the group: promoting is the deliberate step. */
-const newRole = ref<Role>('reader');
-const emptyField = ref(false);
-
-const {
-  suggestions,
-  searching,
-  query: searchFor,
-  clear: clearSuggestions,
-} = useMemberSearch((text) => props.search(text));
-
-/**
- * The menu opens on the first keystroke, long before an answer is in, so its
- * empty state has to tell three situations apart rather than call all three
- * "niemand gevonden".
- */
-const emptyText = computed(() => {
-  if (newLabel.value.trim().length < SEARCH_MIN_LENGTH) {
-    return t('admin.siteMembers.form.tooShort');
-  }
-  return searching.value
-    ? t('admin.siteMembers.form.searching')
-    : t('admin.siteMembers.form.noSuggestions');
-});
-
-const identifierField = ref<HTMLElement | null>(null);
-
 /**
  * One row, as a row of facts: the name, the address it is known by, and what
  * this person already reaches this site with. Separated rather than welded
@@ -163,45 +123,6 @@ function suggestionText(person: MemberSuggestion): string {
     );
   }
   return facts.join(NOTE_SEPARATOR);
-}
-
-function onIdentifierInput(event: CustomEvent<{ value?: string }>): void {
-  // The component reports what stands in the input as `detail.value`. The
-  // native input event of its own inner field is composed and bubbles out
-  // here as well, carrying no detail; that one is the same keystroke twice.
-  const typed = event.detail?.value;
-  if (typeof typed !== 'string') return;
-  // Only a pick is an identifier: typing on takes back the one before it.
-  newIdentifier.value = '';
-  newLabel.value = typed;
-  emptyField.value = false;
-  searchFor(typed);
-}
-
-/**
- * A suggestion carries the name as its label and the address as its value, so
- * picking one submits the address while the field keeps showing the name.
- */
-function onIdentifierChange(event: CustomEvent<{ value?: string }>): void {
-  // Same double event as on input: the inner field's own change bubbles out
-  // here too, without a detail, and would wipe the pick it follows.
-  const identifier = event.detail?.value;
-  if (typeof identifier !== 'string') return;
-  newIdentifier.value = identifier;
-  newLabel.value = nameOf(identifier) || identifier;
-  emptyField.value = false;
-}
-
-/**
- * The name behind a picked address, looked up in both lists rather than in the
- * one on screen: filling the field is itself what swaps the starting list for
- * the search answers, so by now the list it came out of may be the other one.
- */
-function nameOf(identifier: string): string {
-  const person =
-    suggestions.value.find((candidate) => candidate.identifier === identifier) ??
-    groupSuggestions.value.find((candidate) => candidate.identifier === identifier);
-  return person?.name ?? '';
 }
 
 // Optimistic overlay on props.members: what has been added but not confirmed
@@ -251,22 +172,6 @@ const groupSuggestions = computed<MemberSuggestion[]>(() =>
   })),
 );
 
-/**
- * The group as the starting point, the whole platform once someone types. On
- * what is on screen, not on what is picked: a pick leaves the field holding a
- * name, and the typing that led to it is what the answers belong to.
- */
-const shownSuggestions = computed<MemberSuggestion[]>(() =>
-  newLabel.value.trim() === '' ? groupSuggestions.value : suggestions.value,
-);
-
-/**
- * Whether the list on screen is still the group it starts with. The open menu
- * covers the help text under the field, so while it hides that line the list
- * has to say for itself that there is more behind it than the group.
- */
-const startingList = computed(() => newLabel.value.trim().length < SEARCH_MIN_LENGTH);
-
 /** The group role of whoever stands in the field, as far as a list knows it. */
 const pickedGroupRole = computed<Role | null>(() => {
   const identifier = newIdentifier.value.trim();
@@ -287,11 +192,6 @@ const roleChangesNothing = computed(
   () => pickedGroupRole.value !== null && !widens(pickedGroupRole.value, newRole.value),
 );
 
-// An empty menu opening on arrival would only read as a broken dropdown.
-useStartingList(identifierField, () => shownSuggestions.value.length > 0);
-
-// The rows arrive after the menu has already decided that it is empty.
-useMenuEmptyState(identifierField, () => shownSuggestions.value);
 
 const inheritedSummary = computed(() => {
   const count = inherited.value.length;
@@ -310,35 +210,20 @@ const inheritedSummary = computed(() => {
  */
 const inheritedNote = computed(() => t('admin.siteMembers.inherited.note').split('{link}'));
 
-const { notices, notify, dismissNotice } = useNotices();
-
-function reopen(notice: Notice): void {
-  newIdentifier.value = notice.retry;
-  newLabel.value = notice.retry;
-  emptyField.value = false;
-  dismissNotice(notice.id);
-}
-
-async function onAdd(): Promise<void> {
-  const identifier = newIdentifier.value.trim();
-  emptyField.value = identifier === '';
-  if (emptyField.value) return;
-  // The field only submits what was picked, so the label beside the address is
-  // the name of whoever was picked. Read before the field is emptied.
-  /* v8 ignore start -- newLabel is always set together with newIdentifier (by
-   * onIdentifierChange), to the picked name or the identifier itself, so it
-   * is never blank once emptyField has let this line run. */
-  const name = newLabel.value.trim() || identifier;
-  /* v8 ignore stop */
-
-  newIdentifier.value = '';
-  newLabel.value = '';
-  clearSuggestions();
-  // Someone already on the list gets no provisional row: they are either on
-  // this list twice or they move up out of the inherited block, and both need
-  // the server's answer. A second row would get the same :key.
-  const newRow = !rows.value.some((row) => row.identifier === identifier);
-  if (newRow) {
+const form = useMemberAddForm<SiteMember>({
+  search: (text) => props.search(text),
+  emptyText: {
+    tooShort: 'admin.siteMembers.form.tooShort',
+    searching: 'admin.siteMembers.form.searching',
+    none: 'admin.siteMembers.form.noSuggestions',
+  },
+  addFailed: 'admin.siteMembers.addFailed',
+  add: (identifier, role) => props.add(identifier, role),
+  onAdded: (member) => emit('added', member),
+  // Someone already on the list is either on it twice or moves up out of the
+  // inherited block, and both need the server's answer.
+  isListed: (identifier) => rows.value.some((row) => row.identifier === identifier),
+  addProvisional: (identifier, role) => {
     provisional.value = [
       ...provisional.value,
       {
@@ -347,26 +232,55 @@ async function onAdd(): Promise<void> {
         name: identifier,
         email: identifier,
         groupRole: null,
-        siteRole: newRole.value,
-        effectiveRole: newRole.value,
+        siteRole: role,
+        effectiveRole: role,
       },
     ];
-  }
-  try {
-    const member = await props.add(identifier, newRole.value);
-    emit('added', member);
-  } catch (error) {
-    notify(t('admin.siteMembers.addFailed', { name }), error, identifier);
-  } finally {
-    if (newRow) {
-      provisional.value = provisional.value.filter((row) => row.identifier !== identifier);
-    }
-  }
-}
+  },
+  dropProvisional: (identifier) => {
+    provisional.value = provisional.value.filter((row) => row.identifier !== identifier);
+  },
+  // The group as the starting point, the whole platform once someone types.
+  starting: () => groupSuggestions.value,
+});
+const {
+  newIdentifier,
+  newRole,
+  identifierField,
+  suggestions,
+  shownSuggestions,
+  // Whether the list on screen is still the group it starts with. The open
+  // menu covers the help text under the field, so while it hides that line the
+  // list has to say for itself that there is more behind it than the group.
+  tooShort: startingList,
+  notices,
+  notify,
+  dismissNotice,
+  reopen,
+} = form;
 
-/** The row whose site role is up for removal, once the menu asked for it. */
-const removing = ref<Row | null>(null);
-const removeBusy = ref(false);
+// An empty menu opening on arrival would only read as a broken dropdown.
+useStartingList(identifierField, () => shownSuggestions.value.length > 0);
+
+const addLabels = computed(() => ({
+  legend: t('admin.siteMembers.form.heading'),
+  supportingText: t('admin.siteMembers.form.hint'),
+  identifier: t('admin.siteMembers.form.identifier'),
+  placeholder: t('admin.siteMembers.form.identifier.placeholder'),
+  identifierHelp: t('admin.siteMembers.form.identifier.help'),
+  required: t('admin.siteMembers.form.identifier.required'),
+  role: t('admin.siteMembers.form.role'),
+  submit: t('admin.siteMembers.form.submit'),
+}));
+
+/** `removing` is the row whose site role is up for removal, once the menu asked for it. */
+const {
+  target: removing,
+  busy: removeBusy,
+  ask: askRemove,
+  cancel: cancelRemove,
+  confirm: confirmRemove,
+} = useConfirm<Row>((row) => onRemove(row));
 
 /**
  * Every site role this member does not have, plus taking the site role away.
@@ -391,9 +305,7 @@ function actionsFor(row: Row): RowAction[] {
       icon: 'trash',
       destructive: true,
       testid: `site-role-remove-${row.identifier}`,
-      run: () => {
-        removing.value = row;
-      },
+      run: () => askRemove(row),
     },
   ];
 }
@@ -413,20 +325,6 @@ const removeText = computed(() => {
         role: roleLabel(row.groupRole).toLowerCase(),
       });
 });
-
-async function confirmRemove(): Promise<void> {
-  const row = removing.value;
-  /* v8 ignore start -- the modal only confirms while it is open, so there is a row. */
-  if (row === null) return;
-  /* v8 ignore stop */
-  removeBusy.value = true;
-  try {
-    await onRemove(row);
-  } finally {
-    removeBusy.value = false;
-    removing.value = null;
-  }
-}
 
 async function onRole(row: Row, role: Role): Promise<void> {
   try {
@@ -539,101 +437,33 @@ async function onRemove(row: Row): Promise<void> {
         </nldd-table-row>
       </nldd-table>
 
-      <!-- A box, not just spacing: nldd-box draws its own surface, which is
-         what says at a glance that these controls belong together and are
-         not one more row of the table above. -->
-    <nldd-box>
-      <nldd-container layout="stack" padding="16">
-        <nldd-form data-testid="site-role-form" @submit.prevent="onAdd">
-          <nldd-form-section
-            :text="t('admin.siteMembers.form.heading')"
-            :supporting-text="t('admin.siteMembers.form.hint')"
-          >
-            <!-- Who comes first, what they may second: the role only makes
-                 sense once you know whom it is for. -->
-            <!-- A combo box without allow-custom: typing searches, but only a
-                 name from the list can be submitted. An address that is not in
-                 it belongs to nobody who has ever logged in on the admin, and
-                 the server would refuse it. -->
-            <nldd-form-field :label="t('admin.siteMembers.form.identifier')">
-              <nldd-combo-box
-                ref="identifierField"
-                name="identifier"
-                :placeholder="t('admin.siteMembers.form.identifier.placeholder')"
-                required
-                :value="newIdentifier"
-                :text="newLabel"
-                :invalid="emptyField || undefined"
-                @input="onIdentifierInput"
-                @change="onIdentifierChange"
-              >
-                <nldd-menu
-                  :empty-text="emptyText"
-                  :filterFn.prop="keepEverySuggestion"
-                  data-testid="site-role-suggestions"
-                >
-                  <!-- The footer sits outside role="menu", so it is neither a
-                       choosable option nor a stop for arrow keys; it holds no
-                       control, so it is no tab stop either. The slot is
-                       unpadded, hence the container. -->
-                  <nldd-container v-if="startingList" slot="footer" padding="8">
-                    <nldd-text size="sm" data-testid="site-role-further-search">
-                      {{ t('admin.siteMembers.form.searchFurther') }}
-                    </nldd-text>
-                  </nldd-container>
-                  <nldd-menu-item
-                    v-for="person in shownSuggestions"
-                    :key="person.identifier"
-                    :text="suggestionText(person)"
-                    :value="person.identifier"
-                    :data-testid="`site-role-suggestion-${person.identifier}`"
-                  ></nldd-menu-item>
-                </nldd-menu>
-              </nldd-combo-box>
-              <nldd-form-field-help-text>
-                {{ t('admin.siteMembers.form.identifier.help') }}
-              </nldd-form-field-help-text>
-              <!-- The value to check, handed over rather than read off the
-                   control: the list re-checks on the control's `input` event,
-                   and picking from the menu is a `change` without one. -->
-              <nldd-validation-list :value="newIdentifier">
-                <nldd-validation-item id="site-role-add-required" required>
-                  {{ t('admin.siteMembers.form.identifier.required') }}
-                </nldd-validation-item>
-              </nldd-validation-list>
-            </nldd-form-field>
-
-            <nldd-form-field :label="t('admin.siteMembers.form.role')">
-              <nldd-dropdown>
-                <select v-model="newRole" name="role" data-testid="site-role-new">
-                  <option v-for="role in ROLES" :key="role" :value="role">
-                    {{ roleLabel(role) }}
-                  </option>
-                </select>
-              </nldd-dropdown>
-              <nldd-form-field-help-text>
-                {{ siteRoleHint(newRole) }}
-                <template v-if="roleChangesNothing">
-                  <span data-testid="site-role-no-effect">{{
-                    t('admin.siteMembers.form.role.noEffect', {
-                      role: roleLabel(pickedGroupRole!).toLowerCase(),
-                    })
-                  }}</span>
-                </template>
-              </nldd-form-field-help-text>
-            </nldd-form-field>
-
-            <nldd-form-actions>
-              <nldd-button
-                variant="primary"
-                :text="t('admin.siteMembers.form.submit')"
-                type="submit"
-              ></nldd-button>
-            </nldd-form-actions>
-          </nldd-form-section>
-          </nldd-form>
-      </nldd-container>
-    </nldd-box>
+      <MemberAddForm
+        :form="form"
+        :labels="addLabels"
+        :role-hint="siteRoleHint(newRole)"
+        :suggestion-text="suggestionText"
+        testid-prefix="site-role"
+        role-testid="site-role-new"
+      >
+        <template #menu-footer>
+          <!-- The footer sits outside role="menu", so it is neither a
+               choosable option nor a stop for arrow keys; it holds no
+               control, so it is no tab stop either. The slot is unpadded,
+               hence the container. -->
+          <nldd-container v-if="startingList" slot="footer" padding="8">
+            <nldd-text size="sm" data-testid="site-role-further-search">
+              {{ t('admin.siteMembers.form.searchFurther') }}
+            </nldd-text>
+          </nldd-container>
+        </template>
+        <template #role-help>
+          <span v-if="roleChangesNothing" data-testid="site-role-no-effect">{{
+            t('admin.siteMembers.form.role.noEffect', {
+              role: roleLabel(pickedGroupRole!).toLowerCase(),
+            })
+          }}</span>
+        </template>
+      </MemberAddForm>
     </nldd-container>
   </nldd-container>
 
@@ -645,7 +475,7 @@ async function onRemove(row: Row): Promise<void> {
     :confirm-label="t('admin.siteMembers.confirm.remove.confirm')"
     :busy="removeBusy"
     @confirm="confirmRemove"
-    @close="removing = null"
+    @close="cancelRemove"
   />
 
   <nldd-notification
