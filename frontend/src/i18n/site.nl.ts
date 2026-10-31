@@ -21,7 +21,6 @@ export const siteNl = {
   'site.tabs.settings': 'Instellingen',
 
   // -- Overzicht tab --------------------------------------------------------
-  'site.overview.loading': 'Sitegegevens laden',
   'site.overview.status.heading': 'Status',
   'site.overview.live': 'Live',
   'site.overview.addressLabel.public': 'Publieke URL',

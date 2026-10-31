@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, request } from './client';
+import { ApiError, errorText, request, sendJson } from './client';
 import { _setLocaleForTest } from '../i18n';
 
 let calls: Array<{ url: string; init: RequestInit }>;
@@ -172,5 +172,30 @@ describe('response bodies', () => {
     const result = await request<{ id: string }>('/-/api/sites/x');
 
     expect(result).toEqual({ id: '1' });
+  });
+});
+
+describe('sendJson', () => {
+  it('sends the body as JSON with the method asked for', async () => {
+    await sendJson('PUT', '/-/api/thing', { name: 'x' });
+
+    expect(calls[0]!.url).toBe('/-/api/thing');
+    expect(calls[0]!.init.method).toBe('PUT');
+    expect(calls[0]!.init.body).toBe('{"name":"x"}');
+    expect(headersOf().get('content-type')).toBe('application/json');
+  });
+});
+
+describe('errorText', () => {
+  it('prefers the detail of the problem, then its title', () => {
+    const detailed = new ApiError({ type: 'about:blank', title: 'Titel', status: 422, detail: 'Reden' });
+    const bare = new ApiError({ type: 'about:blank', title: 'Titel', status: 500 });
+
+    expect(errorText(detailed, 'terugval')).toBe('Reden');
+    expect(errorText(bare, 'terugval')).toBe('Titel');
+  });
+
+  it('uses the fallback for anything that is not an ApiError', () => {
+    expect(errorText(new TypeError('network down'), 'terugval')).toBe('terugval');
   });
 });

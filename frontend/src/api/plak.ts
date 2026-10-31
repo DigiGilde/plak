@@ -5,7 +5,7 @@
  * paths, shared with CI; the rest follow the same slug addressing and NL API
  * Design Rules conventions.
  */
-import { ApiError, request } from './client';
+import { ApiError, request, sendJson } from './client';
 import type {
   CliSession,
   DeviceAuthorization,
@@ -35,6 +35,11 @@ import type {
 
 const BASE = '/-/api/v1';
 
+/** `base` untouched, every further segment percent-encoded. */
+function join(base: string, ...segments: string[]): string {
+  return [base, ...segments.map(encodeURIComponent)].join('/');
+}
+
 // -- Session --------------------------------------------------------------
 
 /**
@@ -53,19 +58,15 @@ export function me(): Promise<Me> {
  * travels with the member instead of with the device.
  */
 export function setMyLanguage(language: MemberLanguage | null): Promise<void> {
-  return request<void>(`${BASE}/me/language`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ language }),
-  });
+  return sendJson<void>('PUT', `${BASE}/me/language`, { language });
 }
 
 function sitePath(group: string, site: string): string {
-  return `${BASE}/sites/${encodeURIComponent(group)}/${encodeURIComponent(site)}`;
+  return join(BASE, 'sites', group, site);
 }
 
 function groupPath(group: string): string {
-  return `${BASE}/groups/${encodeURIComponent(group)}`;
+  return join(BASE, 'groups', group);
 }
 
 // -- Overview and groups ----------------------------------------------------
@@ -79,11 +80,7 @@ export function group(slug: string): Promise<GroupDetail> {
 }
 
 export function createGroup(name: string, slug: string): Promise<Group> {
-  return request<Group>(`${BASE}/groups`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name, slug }),
-  });
+  return sendJson<Group>('POST', `${BASE}/groups`, { name, slug });
 }
 
 export function deleteGroup(slug: string): Promise<void> {
@@ -111,21 +108,13 @@ export function setGroupSlug(groupSlug: string, slug: string): Promise<Group> {
 }
 
 export function setGroupDefaultAccess(slug: string, access: Access): Promise<Group> {
-  return request<Group>(`${groupPath(slug)}/default-access`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(access),
-  });
+  return sendJson<Group>('PUT', `${groupPath(slug)}/default-access`, access);
 }
 
 // -- Sites ----------------------------------------------------------------
 
 export function createSite(groupSlug: string, title: string, slug: string): Promise<Site> {
-  return request<Site>(`${groupPath(groupSlug)}/sites`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ title, slug }),
-  });
+  return sendJson<Site>('POST', `${groupPath(groupSlug)}/sites`, { title, slug });
 }
 
 export function deleteSite(groupSlug: string, siteSlug: string): Promise<void> {
@@ -167,11 +156,7 @@ export function setAccess(
   siteSlug: string,
   access: Access,
 ): Promise<Site> {
-  return request<Site>(`${sitePath(groupSlug, siteSlug)}/access`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(access),
-  });
+  return sendJson<Site>('PUT', `${sitePath(groupSlug, siteSlug)}/access`, access);
 }
 
 export function setExternalSources(
@@ -179,11 +164,7 @@ export function setExternalSources(
   siteSlug: string,
   externalSources: boolean,
 ): Promise<Site> {
-  return request<Site>(`${sitePath(groupSlug, siteSlug)}/external-sources`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ externalSources }),
-  });
+  return sendJson<Site>('PUT', `${sitePath(groupSlug, siteSlug)}/external-sources`, { externalSources });
 }
 
 export function setSandbox(
@@ -191,11 +172,7 @@ export function setSandbox(
   siteSlug: string,
   sandbox: boolean,
 ): Promise<Site> {
-  return request<Site>(`${sitePath(groupSlug, siteSlug)}/sandbox`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ sandbox }),
-  });
+  return sendJson<Site>('PUT', `${sitePath(groupSlug, siteSlug)}/sandbox`, { sandbox });
 }
 
 export function setLiveVersionsKept(
@@ -203,11 +180,7 @@ export function setLiveVersionsKept(
   siteSlug: string,
   liveVersionsKept: number | null,
 ): Promise<Site> {
-  return request<Site>(`${sitePath(groupSlug, siteSlug)}/live-versions-kept`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ liveVersionsKept }),
-  });
+  return sendJson<Site>('PUT', `${sitePath(groupSlug, siteSlug)}/live-versions-kept`, { liveVersionsKept });
 }
 
 // -- Invitees -----------------------------------------------------------------
@@ -221,11 +194,7 @@ export function addInvitee(
   siteSlug: string,
   identifier: string,
 ): Promise<Invitee> {
-  return request<Invitee>(`${sitePath(groupSlug, siteSlug)}/invitees`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ identifier }),
-  });
+  return sendJson<Invitee>('POST', `${sitePath(groupSlug, siteSlug)}/invitees`, { identifier });
 }
 
 export function removeInvitee(
@@ -234,7 +203,7 @@ export function removeInvitee(
   inviteeId: string,
 ): Promise<void> {
   return request<void>(
-    `${sitePath(groupSlug, siteSlug)}/invitees/${encodeURIComponent(inviteeId)}`,
+    join(sitePath(groupSlug, siteSlug), 'invitees', inviteeId),
     { method: 'DELETE' },
   );
 }
@@ -251,11 +220,7 @@ export function createKey(
   label: string | null,
   expiresAt: string | null,
 ): Promise<KeyCreated> {
-  return request<KeyCreated>(`${sitePath(groupSlug, siteSlug)}/keys`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ label, expiresAt }),
-  });
+  return sendJson<KeyCreated>('POST', `${sitePath(groupSlug, siteSlug)}/keys`, { label, expiresAt });
 }
 
 export function revokeKey(
@@ -264,7 +229,7 @@ export function revokeKey(
   selector: string,
 ): Promise<void> {
   return request<void>(
-    `${sitePath(groupSlug, siteSlug)}/keys/${encodeURIComponent(selector)}`,
+    join(sitePath(groupSlug, siteSlug), 'keys', selector),
     { method: 'DELETE' },
   );
 }
@@ -295,11 +260,7 @@ export function setSiteRepository(
   siteSlug: string,
   input: SiteRepositoryInput,
 ): Promise<SiteRepository> {
-  return request<SiteRepository>(`${sitePath(groupSlug, siteSlug)}/repository`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+  return sendJson<SiteRepository>('PUT', `${sitePath(groupSlug, siteSlug)}/repository`, input);
 }
 
 /**
@@ -322,27 +283,15 @@ export function deleteSiteRepository(groupSlug: string, siteSlug: string): Promi
 // -- CLI device approval ---------------------------------------------------
 
 export function lookupDeviceAuthorization(userCode: string): Promise<DeviceAuthorization> {
-  return request<DeviceAuthorization>(`${BASE}/cli/device-authorizations/lookup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userCode }),
-  });
+  return sendJson<DeviceAuthorization>('POST', `${BASE}/cli/device-authorizations/lookup`, { userCode });
 }
 
 export function approveDeviceAuthorization(userCode: string): Promise<void> {
-  return request<void>(`${BASE}/cli/device-authorizations/approve`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userCode }),
-  });
+  return sendJson<void>('POST', `${BASE}/cli/device-authorizations/approve`, { userCode });
 }
 
 export function denyDeviceAuthorization(userCode: string): Promise<void> {
-  return request<void>(`${BASE}/cli/device-authorizations/deny`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ userCode }),
-  });
+  return sendJson<void>('POST', `${BASE}/cli/device-authorizations/deny`, { userCode });
 }
 
 // -- Linked sessions (CLI sessions) -----------------------------------------
@@ -352,7 +301,7 @@ export function cliSessions(): Promise<CliSession[]> {
 }
 
 export function revokeCliSession(id: string): Promise<void> {
-  return request<void>(`${BASE}/me/cli-sessions/${encodeURIComponent(id)}`, {
+  return request<void>(join(BASE, 'me', 'cli-sessions', id), {
     method: 'DELETE',
   });
 }
@@ -368,11 +317,7 @@ export function addGroupMember(
   identifier: string,
   role: Role = 'reader',
 ): Promise<GroupMember> {
-  return request<GroupMember>(`${groupPath(groupSlug)}/members`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ identifier, role }),
-  });
+  return sendJson<GroupMember>('POST', `${groupPath(groupSlug)}/members`, { identifier, role });
 }
 
 export function setGroupRole(
@@ -380,14 +325,7 @@ export function setGroupRole(
   memberId: string,
   role: Role,
 ): Promise<GroupMember> {
-  return request<GroupMember>(
-    `${groupPath(groupSlug)}/members/${encodeURIComponent(memberId)}/role`,
-    {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ role }),
-    },
-  );
+  return sendJson<GroupMember>('PUT', join(groupPath(groupSlug), 'members', memberId, 'role'), { role });
 }
 
 /**
@@ -437,11 +375,7 @@ export function addSiteMember(
   identifier: string,
   role: Role = 'reader',
 ): Promise<SiteMember> {
-  return request<SiteMember>(`${sitePath(group, site)}/members`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ identifier, role }),
-  });
+  return sendJson<SiteMember>('POST', `${sitePath(group, site)}/members`, { identifier, role });
 }
 
 export function setSiteRole(
@@ -450,14 +384,7 @@ export function setSiteRole(
   memberId: string,
   role: Role,
 ): Promise<SiteMember> {
-  return request<SiteMember>(
-    `${sitePath(group, site)}/members/${encodeURIComponent(memberId)}/role`,
-    {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ role }),
-    },
-  );
+  return sendJson<SiteMember>('PUT', join(sitePath(group, site), 'members', memberId, 'role'), { role });
 }
 
 /** The same search as on the group, against the members of one site. */
@@ -472,7 +399,7 @@ export function searchSiteMembers(
 }
 
 export function removeSiteMember(group: string, site: string, memberId: string): Promise<void> {
-  return request<void>(`${sitePath(group, site)}/members/${encodeURIComponent(memberId)}`, {
+  return request<void>(join(sitePath(group, site), 'members', memberId), {
     method: 'DELETE',
   });
 }
@@ -484,23 +411,19 @@ export function platformMembers(): Promise<Member[]> {
 }
 
 export function activatePlatformMember(memberId: string): Promise<Member> {
-  return request<Member>(`${BASE}/platform/members/${encodeURIComponent(memberId)}/_activate`, {
+  return request<Member>(join(BASE, 'platform', 'members', memberId, '_activate'), {
     method: 'POST',
   });
 }
 
 export function deactivatePlatformMember(memberId: string): Promise<Member> {
-  return request<Member>(`${BASE}/platform/members/${encodeURIComponent(memberId)}/_deactivate`, {
+  return request<Member>(join(BASE, 'platform', 'members', memberId, '_deactivate'), {
     method: 'POST',
   });
 }
 
 export function setPlatformRole(memberId: string, platformRole: PlatformRole): Promise<Member> {
-  return request<Member>(`${BASE}/platform/members/${encodeURIComponent(memberId)}/platform-role`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ platformRole }),
-  });
+  return sendJson<Member>('PUT', join(BASE, 'platform', 'members', memberId, 'platform-role'), { platformRole });
 }
 
 // -- Content volume (platform admins only) ---------------------------------------
@@ -525,7 +448,7 @@ export function setVersionLive(
   versionId: string,
 ): Promise<Site> {
   return request<Site>(
-    `${sitePath(groupSlug, siteSlug)}/versions/${encodeURIComponent(versionId)}/_set-live`,
+    join(sitePath(groupSlug, siteSlug), 'versions', versionId, '_set-live'),
     { method: 'POST' },
   );
 }
@@ -542,14 +465,7 @@ export function setPreviewAccess(
   ref: string,
   access: Access | null,
 ): Promise<Preview> {
-  return request<Preview>(
-    `${sitePath(groupSlug, siteSlug)}/previews/${encodeURIComponent(ref)}/access`,
-    {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ access }),
-    },
-  );
+  return sendJson<Preview>('PUT', join(sitePath(groupSlug, siteSlug), 'previews', ref, 'access'), { access });
 }
 
 /** Idempotent (204), like the deploy-API teardown. */
@@ -559,7 +475,7 @@ export function deletePreview(
   ref: string,
 ): Promise<void> {
   return request<void>(
-    `${sitePath(groupSlug, siteSlug)}/previews/${encodeURIComponent(ref)}`,
+    join(sitePath(groupSlug, siteSlug), 'previews', ref),
     { method: 'DELETE' },
   );
 }
