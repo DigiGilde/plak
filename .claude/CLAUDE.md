@@ -28,14 +28,16 @@ branch nobody knows the behaviour of.
   check the refusal is the interesting case, not the pass. For the
   access gate, the sessions, the ingest and the serving: every ground
   for refusal has a test of its own.
-- **Measure it, do not guess.** `just coverage` runs the three suites
+- **Measure it, do not guess.** `just coverage` runs the four suites
   with coverage (backend and CLI `pytest --cov`, frontend
-  `vitest --coverage`). In a report, name the measured number, never an
-  estimate.
+  `vitest --coverage`, the CI tooling under `scripts/` with
+  `coverage run -m pytest` in its own uv project). In a report, name
+  the measured number, never an estimate.
 
-All three suites sit at 100% and the floors are set there
+All four suites sit at 100% and the floors are set there
 (`backend/pyproject.toml`, `cli/pyproject.toml`,
-`frontend/vite.config.ts`), so anything uncovered and unmarked fails CI.
+`frontend/vite.config.ts`, `scripts/pyproject.toml`), so anything
+uncovered and unmarked fails CI.
 
 ## Language
 
@@ -104,9 +106,14 @@ No em dashes or en dashes, not in code and not in docs.
 
 ## Changelog
 
-Every pull request that changes shipped behaviour adds a line under
-`## [Unreleased]` in `CHANGELOG.md`; releases are cut from it
-automatically. See `docs/releasing.md` and the `changelog` skill.
+Every pull request that changes shipped behaviour adds a fragment
+`changelog.d/<slug>.<kind>.md`, never a line in `CHANGELOG.md`; its
+`## [Unreleased]` section is one pointer line to `changelog.d/`. A
+release pull request turns the fragments into a section, is refreshed
+from `beta` on every push (hand edits in it are overwritten), and
+merging it tags the release. The tooling lives in `scripts/`, a uv
+project of its own with its tests. See `docs/releasing.md` and the
+`changelog` skill.
 
 ## Design of the interface
 

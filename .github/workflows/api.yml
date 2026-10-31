@@ -1,5 +1,5 @@
 # The API contract check (docs/releasing.md), run by
-# .github/scripts/release.py.
+# scripts/release.py.
 #
 # The schema of the pull request is compared, with oasdiff, with
 # backend/openapi.json at the newest release tag: the contract that
@@ -70,7 +70,7 @@ jobs:
           if [ "$EVENT" = pull_request ]; then
             args+=(--comment-file "$COMMENT_FILE")
           fi
-          uv run --script .github/scripts/release.py "${args[@]}"
+          uv run --script scripts/release.py "${args[@]}"
 
       # A pull request from a fork, and one from Dependabot, gets a
       # read-only token: the comment fails there, and that must not fail

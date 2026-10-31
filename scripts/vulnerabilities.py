@@ -21,7 +21,7 @@ from typing import Any
 
 import yaml
 
-IGNORE_FILE = Path(__file__).resolve().parents[2] / ".trivyignore.yaml"
+IGNORE_FILE = Path(__file__).resolve().parents[1] / ".trivyignore.yaml"
 
 #: The identifier namespaces the scanners in this repo emit. Trivy accepts
 #: anything here, so a typo would silently mute nothing at all.
@@ -39,9 +39,7 @@ def read_ignore_list(path: Path) -> list[dict[str, Any]]:
         # ValueError, not TypeError: all three checks report the same thing,
         # a line in the ignore file that cannot be used.
         if not isinstance(entry.get("expired_at"), date):
-            raise ValueError(  # noqa: TRY004
-                f"{path.name}: {entry['id']} has no date in expired_at"
-            )
+            raise ValueError(f"{path.name}: {entry['id']} has no date in expired_at")
         if not str(entry.get("statement", "")).strip():
             raise ValueError(f"{path.name}: {entry['id']} has no statement")
     return entries
@@ -101,5 +99,5 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - the script entry; main() is tested directly
     raise SystemExit(main())

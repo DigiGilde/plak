@@ -383,7 +383,7 @@ just seed        # vult de draaiende dev-stack met voorbeeldinhoud
 just test        # draait de backend- en CLI-testsuites (testcontainers, zie hieronder)
 just test-cli    # draait alleen de CLI-tests (cli/tests)
 just lint        # ruff check op backend/src, backend/tests en cli/
-just coverage    # de drie suites met dekking
+just coverage    # de vier suites met dekking
 ```
 
 `just coverage` measures branch coverage and fails below 100%, the floor
@@ -393,8 +393,9 @@ exclusion with its reason (`# pragma: no cover - ...` in Python,
 `/* v8 ignore start */ ... /* v8 ignore stop */` in TypeScript; `next` is
 silently ignored there). CI enforces the floors without running the
 suites a second time: the CLI and frontend inside their test jobs, the
-backend in `backend-coverage` over the data of its test parts, and
-`.github/scripts/release.py` in `release-script`.
+backend in `backend-coverage` over the data of its test parts, and the
+CI tooling under `scripts/` (its own uv project, tests in
+`scripts/tests/`) in `release-script`.
 
 On the backend the measurement needs `concurrency = ["thread",
 "greenlet"]`: SQLAlchemy's async adapter runs most of an async route body

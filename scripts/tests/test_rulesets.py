@@ -1,4 +1,4 @@
-"""The ruleset drift check (.github/scripts/rulesets.py): what in the live
+"""The ruleset drift check (scripts/rulesets.py): what in the live
 rulesets departs from .github/rulesets/*.json, and what it leaves alone."""
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / ".github" / "scripts" / "rulesets.py"
+SCRIPT = ROOT / "scripts" / "rulesets.py"
 
 
 def _load():

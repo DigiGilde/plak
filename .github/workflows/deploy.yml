@@ -284,11 +284,11 @@ jobs:
           fi
 
       # A release carries its notes: the section for its version in
-      # CHANGELOG.md at the tagged commit, which the release step writes. A
-      # tag set by hand on any other commit goes nowhere.
+      # CHANGELOG.md at the tagged commit, which the release pull request
+      # writes. A tag set by hand on any other commit goes nowhere.
       - name: Check that the tagged commit has its release notes
         run: |
-          if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then
+          if ! python3 scripts/release.py notes --tag "${TAG}" > /dev/null; then
             echo "::error::${TAG} has no section in CHANGELOG.md at the tagged commit"
             exit 1
           fi
@@ -305,7 +305,7 @@ jobs:
             exit 0
           fi
           notes="$RUNNER_TEMP/release-notes.md"
-          python3 .github/scripts/release.py notes --tag "$TAG" --image "$IMAGE" --digest "$DIGEST" > "$notes"
+          python3 scripts/release.py notes --tag "$TAG" --image "$IMAGE" --digest "$DIGEST" > "$notes"
           gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$notes"
 
   # Only a released tag reaches production, never a branch push. Without a
@@ -367,11 +367,11 @@ jobs:
           fi
 
       # A release carries its notes: the section for its version in
-      # CHANGELOG.md at the tagged commit, which the release step writes. A
-      # tag set by hand on any other commit goes nowhere.
+      # CHANGELOG.md at the tagged commit, which the release pull request
+      # writes. A tag set by hand on any other commit goes nowhere.
       - name: Check that the tagged commit has its release notes
         run: |
-          if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then
+          if ! python3 scripts/release.py notes --tag "${TAG}" > /dev/null; then
             echo "::error::${TAG} has no section in CHANGELOG.md at the tagged commit"
             exit 1
           fi
