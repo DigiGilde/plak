@@ -330,6 +330,38 @@ the cache. Code:
 `serving/response.py` (`etag_for`, `if_none_match_matches`, `make_304`).
 Guarded by: `test_serving.py`.
 
+### 5.4a Compression
+
+A text file of 1 KiB or more whose gzip is smaller than itself is kept
+compressed only: as gzip under `_encoded/gzip/` in the version, and as brotli
+under `_encoded/br/` where that is smaller than the gzip
+(`ingest/precompress.py`, at ingest, before the quota is measured). Text means
+`text/*`, `+json` and `+xml` types, JSON, XML, SVG, WebAssembly, `.ico`, TTF
+and OTF. The request's `Accept-Encoding` picks the copy: the highest weight
+wins, a tie goes to brotli, and no header means the file as published. A
+client that takes neither (curl without `--compressed`, a link checker) gets
+the gzip unpacked on the way out, without `Content-Length` and without Range:
+a range request gets the whole file. Every browser takes gzip.
+
+The ETag names the encoding (`"{version_id}-br"`, `"{version_id}-gzip"`, the
+bare version id for the file as published), and a response for a file kept
+compressed carries `Vary: Service-Worker, Accept-Encoding`, the 304 included,
+so no cache confirms one representation for a request that gets another.
+`If-Range` is honoured on the ETag only: the two copies of a file are written
+in the same second, so a date cannot tell them apart. Range on a copy covers
+its compressed bytes. `_encoded` is refused in the root of a bundle, and the
+store never serves a path under it, so a site's own files and these never
+meet. Versions published before this keep their files as they were.
+`PLAK_STORE_COMPRESSED=false` keeps new deploys as published, and the
+container's entrypoint then puts every file kept compressed only back at its
+own path (`ingest/uncompress.py`): the way back to an image from before this.
+Code:
+`ingest/precompress.py`, `ingest/store.py`, `ingest/uncompress.py`,
+`serving/resolution.py` (`locate`, `choose_encoding`, `representation`),
+`serving/response.py`. Guarded by: `test_precompress.py`, `test_store.py`,
+`test_uncompress.py`, `test_resolution.py`, `test_serving.py`,
+`test_ingest_service.py`.
+
 ### 5.5 Cache-Control
 
 Public content: HTML gets `no-cache, must-revalidate`, every other asset
@@ -572,8 +604,8 @@ every servable path, with the body limit checked as it goes.
 
 Validation is fail-closed: absolute paths, `..` segments, symlinks and
 hardlinks, null bytes and empty paths are refused, backslashes are normalised,
-and `_preview` and `_version` are refused as top-level entries of the published
-tree. Decompression is checked incrementally against the limits, so an archive
+and `_preview`, `_version` and `_encoded` are refused as top-level entries of
+the published tree. Decompression is checked incrementally against the limits, so an archive
 bomb never gets past them; header sizes are not trusted, though a header already
 claiming more than the limit is an early refusal.
 

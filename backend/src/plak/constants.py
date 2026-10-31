@@ -47,10 +47,14 @@ SPA_ROOT_PAGES = frozenset({"cli-link"})
 # they can never be somebody's group; nor can a root-level SPA page.
 RESERVED_SLUGS = frozenset(location.lstrip("/") for location in STANDARD_LOCATIONS) | SPA_ROOT_PAGES
 
+# Where a version keeps the compressed copies of its text files
+# (ingest/store.py).
+ENCODED_SEGMENT = "_encoded"
+
 # Refused as a top-level segment inside dists (unpacked content): these are
 # the platform's own names under a site, so a bundle that carries one would
-# shadow a preview or a version view.
-RESERVED_SEGMENTS = frozenset({"_preview", "_version"})
+# shadow a preview, a version view or the compressed copies.
+RESERVED_SEGMENTS = frozenset({"_preview", "_version", ENCODED_SEGMENT})
 
 # The name both the ingest (which requires it in the root) and the serving
 # (which looks it up for a directory request) key on. Case-sensitive: on the

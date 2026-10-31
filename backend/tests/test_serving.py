@@ -8,7 +8,9 @@ grants access to content.
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
+import os
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote, unquote
 
+import brotli
 import httpx
 import pytest
 import pytest_asyncio
@@ -31,15 +34,16 @@ from plak.access.decision import allow
 from plak.audit.log import AuditLog
 from plak.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
 from plak.config import Settings
-from plak.constants import AccessBase, AccessPolicy, Role
+from plak.constants import ENCODED_SEGMENT, HEAD_SCOPE_KEY, AccessBase, AccessPolicy, Role
 from plak.head_requests import ContentHeadMiddleware
+from plak.ingest import precompress
 from plak.ingest.store import ContentStore, version_ref
 from plak.models.audit import AuditLogEntry
 from plak.models.identity import Group, GroupMember, Member, MemberStatus
 from plak.models.publication import Preview, Site, Version, VersionTarget
 from plak.models.slugs import GroupSlug, SiteSlug
 from plak.serving import addresses
-from plak.serving.response import PLATFORM_CSP, _ContentFileResponse
+from plak.serving.response import PLATFORM_CSP, _ContentFileResponse, _GunzipResponse
 from plak.serving.router import router as serving_router
 from plak.slug_window import redirect_ends_at
 
@@ -328,7 +332,7 @@ async def client(environment: Environment) -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def _raw_request(
-    app: FastAPI, raw_path: str, method: str = "GET"
+    app: FastAPI, raw_path: str, method: str = "GET", extra_headers: tuple[tuple[bytes, bytes], ...] = ()
 ) -> tuple[int, list[tuple[str, str]], bytes]:
     """Sends a request with an exactly given raw path, the way a real ASGI
     server delivers it (path URL-decoded once). Needed because httpx can
@@ -343,7 +347,7 @@ async def _raw_request(
         "raw_path": raw_path.encode("ascii"),
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"host", b"plak.example")],
+        "headers": [(b"host", b"plak.example"), *extra_headers],
         "client": ("203.0.113.5", 4711),
         "server": ("plak.example", 443),
     }
@@ -2206,6 +2210,613 @@ class TestContentFileResponse:
         assert b"".join(bodies) == content
         # 512 + 512 + 256 KiB, against twenty reads at Starlette's default.
         assert [len(b) for b in bodies] == [512 * 1024, 512 * 1024, 256 * 1024]
+
+
+async def _storage_ref(environment: Environment, slug: str) -> str:
+    async with environment.factory() as db:
+        site = (await db.scalars(select(Site).where(Site.slug == slug))).one()
+        return version_ref(site.id, site.live_version_id)
+
+
+def _version_dir(environment: Environment, storage_ref: str) -> Path:
+    return environment.app.state.settings.content_root / storage_ref
+
+
+def _store_compressed(
+    environment: Environment,
+    storage_ref: str,
+    rel_path: str,
+    encodings: tuple[str, ...] = ("gzip", "br"),
+    content: bytes | None = None,
+) -> dict[str, bytes]:
+    """Keeps one file of a version the way ingest keeps a text file that
+    compresses well: only as `_encoded/{encoding}/{rel_path}` in the version,
+    with the real bytes of each encoding, and no longer at its own path.
+    `content` replaces what was stored there first, or adds a new file.
+    Returns the copies by encoding, plus the file itself under "identity"."""
+    version_dir = _version_dir(environment, storage_ref)
+    plain = version_dir / rel_path
+    original = plain.read_bytes() if content is None else content
+    written: dict[str, bytes] = {"identity": original}
+    for encoding in encodings:
+        data = brotli.compress(original) if encoding == "br" else gzip.compress(original, mtime=0)
+        target = version_dir / ENCODED_SEGMENT / encoding / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        assert environment.store.encoded_path(storage_ref, rel_path, encoding) == target.resolve()
+        written[encoding] = data
+    plain.unlink(missing_ok=True)
+    assert environment.store.file_path(storage_ref, rel_path) is None
+    return written
+
+
+async def _on_the_wire(
+    client: httpx.AsyncClient,
+    path: str,
+    accept_encoding: str | None,
+    *,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+) -> tuple[httpx.Response, bytes]:
+    """The response and its body as the server sent it: httpx decodes gzip and
+    br by itself, and adds an Accept-Encoding of its own unless told
+    otherwise. `None` sends no Accept-Encoding at all."""
+    request = client.build_request(method, path, headers=headers)
+    if accept_encoding is None:
+        del request.headers["accept-encoding"]
+    else:
+        request.headers["accept-encoding"] = accept_encoding
+    response = await client.send(request, stream=True)
+    try:
+        body = b"".join([chunk async for chunk in response.aiter_raw()])
+    finally:
+        await response.aclose()
+    return response, body
+
+
+IDENTITY_CLIENTS = [None, "", "identity", "br;q=0, gzip;q=0", "deflate, zstd", "br;q=x, gzip;q=2"]
+
+
+class TestContentEncoding:
+    """Ingest keeps a text file that compresses well as gzip, plus brotli
+    where that is smaller still, and not as itself; serving picks the copy
+    the request accepts and unpacks the gzip for a client that takes neither.
+    The ETag names the encoding, so a 304 and an If-Range only ever confirm
+    the bytes the cache really holds, and a refusal never says how a file is
+    kept."""
+
+    CSS = "/aurora/site/stijl.css"
+    VARIES = "Service-Worker, Accept-Encoding"
+    # Differ between the copies of one file by nature.
+    PER_REPRESENTATION: ClassVar[set[str]] = {"content-encoding", "content-length", "etag", "last-modified"}
+    GUNZIP_HEADERS: ClassVar[set[str]] = {
+        "content-type",
+        "cache-control",
+        "etag",
+        "x-content-type-options",
+        "content-security-policy",
+        "referrer-policy",
+        "vary",
+    }
+
+    @staticmethod
+    def _css_compressed(environment: Environment, encodings: tuple[str, ...] = ("gzip", "br")) -> dict[str, bytes]:
+        return _store_compressed(environment, environment.world.site_storage, "stijl.css", encodings)
+
+    @staticmethod
+    def _etag(version_id: uuid.UUID, encoding: str | None = None) -> str:
+        return f'"{version_id}-{encoding}"' if encoding else f'"{version_id}"'
+
+    async def test_brotli_accepted_gets_the_brotli_copy(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(client, self.CSS, "gzip, deflate, br")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"]
+        assert brotli.decompress(body) == b"body{}"
+        assert response.headers["content-length"] == str(len(copies["br"]))
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "br")
+        assert response.headers["vary"] == self.VARIES
+        assert response.headers["content-type"] == "text/css; charset=utf-8"
+
+    async def test_a_copy_keeps_every_other_header_of_the_file(self, client, environment):
+        before, _ = await _on_the_wire(client, self.CSS, "br")
+        assert "content-encoding" not in before.headers
+        self._css_compressed(environment)
+        encoded, _ = await _on_the_wire(client, self.CSS, "br")
+        assert encoded.headers["content-encoding"] == "br"
+        assert {k: v for k, v in encoded.headers.items() if k not in self.PER_REPRESENTATION | {"vary"}} == {
+            k: v for k, v in before.headers.items() if k not in self.PER_REPRESENTATION | {"vary"}
+        }
+        assert encoded.headers["content-security-policy"] == FULL_CSP
+        assert encoded.headers["cache-control"] == "max-age=31536000, immutable"
+        assert {k for k in encoded.headers if k not in TestHeaderSet.EXCLUDED} == {
+            *self.GUNZIP_HEADERS,
+            "content-encoding",
+        }
+
+    async def test_gzip_only_gets_the_gzip_copy(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(client, self.CSS, "gzip")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "gzip"
+        assert body == copies["gzip"]
+        assert gzip.decompress(body) == b"body{}"
+        assert response.headers["content-length"] == str(len(copies["gzip"]))
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "gzip")
+        assert response.headers["vary"] == self.VARIES
+
+    async def test_a_file_kept_as_gzip_alone_is_offered_as_gzip(self, client, environment):
+        """Ingest keeps no brotli copy that came out no smaller than the gzip."""
+        copies = self._css_compressed(environment, ("gzip",))
+        response, body = await _on_the_wire(client, self.CSS, "br, gzip")
+        assert response.headers["content-encoding"] == "gzip"
+        assert body == copies["gzip"]
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "gzip")
+        only_br, body = await _on_the_wire(client, self.CSS, "br")
+        assert "content-encoding" not in only_br.headers
+        assert body == b"body{}"
+        assert only_br.headers["etag"] == self._etag(environment.world.site_live_id)
+        assert only_br.headers["vary"] == self.VARIES
+
+    async def test_a_brotli_copy_without_gzip_is_no_file(self, client, environment):
+        """Every compressed file has its gzip copy; without one there is
+        nothing to unpack for an identity client, so it is not served at all."""
+        self._css_compressed(environment, ("br",))
+        missing, missing_body = await _on_the_wire(client, "/aurora/site/bestaat-niet", "br")
+        response, body = await _on_the_wire(client, self.CSS, "br")
+        assert response.status_code == 404
+        assert body == missing_body == SITE_404
+        assert _header_list(response) == _header_list(missing)
+
+    @pytest.mark.parametrize(
+        ("accept_encoding", "expected"),
+        [
+            ("gzip, br", "br"),
+            ("br;q=0.4, gzip;q=0.5", "gzip"),
+            ("*", "br"),
+            ("*, br;q=0", "gzip"),
+            ("x-gzip", "gzip"),
+            ("BR", "br"),
+            (" , gzip,, ", "gzip"),
+            ("gzip;level=9, br;q=0.5", "gzip"),
+        ],
+    )
+    async def test_the_client_weights_decide_and_a_tie_goes_to_brotli(
+        self, client, environment, accept_encoding, expected
+    ):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(client, self.CSS, accept_encoding)
+        assert response.headers["content-encoding"] == expected
+        assert body == copies[expected]
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, expected)
+
+    @pytest.mark.parametrize("accept_encoding", IDENTITY_CLIENTS)
+    async def test_an_identity_client_gets_the_file_unpacked(self, client, environment, accept_encoding):
+        """Vary stays: a cache that stored this answer must not hand it to a
+        request that would have got brotli, nor the other way round. Without
+        Content-Length, which is only known once unpacked, and without the
+        range support of a file on disk."""
+        self._css_compressed(environment)
+        response, body = await _on_the_wire(client, self.CSS, accept_encoding)
+        assert response.status_code == 200
+        assert body == b"body{}"
+        assert "content-encoding" not in response.headers
+        assert "content-length" not in response.headers
+        assert response.headers["content-type"] == "text/css; charset=utf-8"
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id)
+        assert response.headers["vary"] == self.VARIES
+        assert set(response.headers) == self.GUNZIP_HEADERS
+        assert response.headers["content-security-policy"] == FULL_CSP
+
+    async def test_a_large_file_is_unpacked_whole(self, client, environment):
+        content = b"".join(f"/* rule {n} */ .c{n} {{ margin: {n}px; }}\n".encode() for n in range(80_000))
+        assert len(content) > 3 * 1024 * 1024
+        _store_compressed(environment, environment.world.site_storage, "groot.css", ("gzip",), content=content)
+        response, body = await _on_the_wire(client, "/aurora/site/groot.css", "identity")
+        assert response.status_code == 200
+        assert "content-length" not in response.headers
+        assert body == content
+
+    async def test_a_plain_file_does_not_vary(self, client, environment):
+        self._css_compressed(environment)
+        response, body = await _on_the_wire(client, "/aurora/site/", "br, gzip")
+        assert response.status_code == 200
+        assert "content-encoding" not in response.headers
+        assert body == SITE_INDEX
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id)
+        assert response.headers["vary"] == "Service-Worker"
+
+    async def test_stray_copies_beside_a_plain_file_are_never_served(self, client, environment):
+        """The file at its own path wins: copies beside a small text file or
+        an image change nothing. A file kept only as a copy is served from it,
+        whatever its type: the version decides, not today's type table."""
+        storage_ref = environment.world.site_storage
+        version_dir = _version_dir(environment, storage_ref)
+        png = b"\x89PNG\r\n\x1a\n" + bytes(range(64))
+        (version_dir / "logo.png").write_bytes(png)
+        for encoding, data in (("gzip", gzip.compress(png, mtime=0)), ("br", brotli.compress(png))):
+            for rel_path, payload in (("logo.png", data), ("stijl.css", data), ("alleen.png", data)):
+                stray = version_dir / ENCODED_SEGMENT / encoding / rel_path
+                stray.parent.mkdir(parents=True, exist_ok=True)
+                stray.write_bytes(payload)
+        for path, expected in (("/aurora/site/logo.png", png), (self.CSS, b"body{}")):
+            response, body = await _on_the_wire(client, path, "br, gzip")
+            assert response.status_code == 200, path
+            assert "content-encoding" not in response.headers, path
+            assert body == expected, path
+            assert response.headers["etag"] == self._etag(environment.world.site_live_id), path
+            assert response.headers["vary"] == "Service-Worker", path
+        response, body = await _on_the_wire(client, "/aurora/site/alleen.png", "br")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "br"
+        assert response.headers["content-type"] == "image/png"
+        assert brotli.decompress(body) == png
+
+    async def test_the_encoded_etag_revalidates_the_encoded_copy(self, client, environment):
+        self._css_compressed(environment)
+        etag = self._etag(environment.world.site_live_id, "br")
+        response, body = await _on_the_wire(client, self.CSS, "br", headers={"If-None-Match": etag})
+        assert response.status_code == 304
+        assert body == b""
+        assert response.headers["etag"] == etag
+        assert response.headers["vary"] == self.VARIES
+        assert "content-encoding" not in response.headers
+        assert "content-type" not in response.headers
+        assert response.headers["content-security-policy"] == FULL_CSP
+
+    async def test_the_plain_etag_revalidates_the_unpacked_file(self, client, environment):
+        self._css_compressed(environment)
+        etag = self._etag(environment.world.site_live_id)
+        response, body = await _on_the_wire(client, self.CSS, "identity", headers={"If-None-Match": etag})
+        assert response.status_code == 304
+        assert body == b""
+        assert response.headers["etag"] == etag
+        assert response.headers["vary"] == self.VARIES
+        assert "content-encoding" not in response.headers
+
+    async def test_a_cached_identity_copy_is_not_confirmed_for_brotli(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(
+            client, self.CSS, "br", headers={"If-None-Match": self._etag(environment.world.site_live_id)}
+        )
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"]
+
+    async def test_a_cached_brotli_copy_is_not_confirmed_for_gzip(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(
+            client, self.CSS, "gzip", headers={"If-None-Match": self._etag(environment.world.site_live_id, "br")}
+        )
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "gzip"
+        assert body == copies["gzip"]
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "gzip")
+
+    async def test_a_cached_gzip_copy_is_not_confirmed_for_an_identity_client(self, client, environment):
+        self._css_compressed(environment)
+        response, body = await _on_the_wire(
+            client, self.CSS, "identity", headers={"If-None-Match": self._etag(environment.world.site_live_id, "gzip")}
+        )
+        assert response.status_code == 200
+        assert "content-encoding" not in response.headers
+        assert body == b"body{}"
+
+    async def test_a_range_is_taken_from_the_copy(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(client, self.CSS, "br", headers={"Range": "bytes=1-3"})
+        assert response.status_code == 206
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"][1:4]
+        assert response.headers["content-range"] == f"bytes 1-3/{len(copies['br'])}"
+        assert response.headers["content-length"] == "3"
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "br")
+        assert response.headers["vary"] == self.VARIES
+
+    async def test_a_range_for_an_identity_client_gets_the_whole_file(self, client, environment):
+        """Unpacked on the way out, the file has no offsets to seek to; RFC
+        9110 lets a server answer a range with the whole representation."""
+        self._css_compressed(environment)
+        for headers in (
+            {"Range": "bytes=1-3"},
+            {"Range": "bytes=1-3", "If-Range": self._etag(environment.world.site_live_id)},
+        ):
+            response, body = await _on_the_wire(client, self.CSS, "identity", headers=headers)
+            assert response.status_code == 200, headers
+            assert body == b"body{}", headers
+            assert "content-range" not in response.headers, headers
+
+    async def test_if_range_with_the_encoded_etag_keeps_the_range(self, client, environment):
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(
+            client,
+            self.CSS,
+            "br",
+            headers={"Range": "bytes=1-3", "If-Range": self._etag(environment.world.site_live_id, "br")},
+        )
+        assert response.status_code == 206
+        assert body == copies["br"][1:4]
+
+    @pytest.mark.parametrize(("accept_encoding", "if_range_encoding"), [("br", None), ("gzip", "br"), ("br", "gzip")])
+    async def test_if_range_with_another_representations_etag_gets_it_whole(
+        self, client, environment, accept_encoding, if_range_encoding
+    ):
+        """A partial copy of one representation must never be completed with
+        bytes of another."""
+        copies = self._css_compressed(environment)
+        response, body = await _on_the_wire(
+            client,
+            self.CSS,
+            accept_encoding,
+            headers={
+                "Range": "bytes=1-3",
+                "If-Range": self._etag(environment.world.site_live_id, if_range_encoding),
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == accept_encoding
+        assert body == copies[accept_encoding]
+
+    async def test_if_range_with_a_date_gets_it_whole(self, client, environment):
+        """The copies of one file are written in the same second, so their
+        Last-Modified cannot tell a gzip copy from a brotli one."""
+        copies = self._css_compressed(environment)
+        encoded = _version_dir(environment, environment.world.site_storage) / ENCODED_SEGMENT
+        stamp = (encoded / "gzip" / "stijl.css").stat().st_mtime
+        os.utime(encoded / "br" / "stijl.css", (stamp, stamp))
+        cached, _ = await _on_the_wire(client, self.CSS, "gzip")
+        response, body = await _on_the_wire(
+            client,
+            self.CSS,
+            "br",
+            headers={"Range": "bytes=1-3", "If-Range": cached.headers["last-modified"]},
+        )
+        assert response.status_code == 200
+        assert body == copies["br"]
+
+    async def test_head_answers_with_the_headers_of_the_encoded_get(self, client, environment):
+        copies = self._css_compressed(environment)
+        get, _ = await _on_the_wire(client, self.CSS, "br")
+        head, body = await _on_the_wire(client, self.CSS, "br", method="HEAD")
+        assert head.status_code == 200
+        assert body == b""
+        assert head.headers["content-encoding"] == "br"
+        assert head.headers["content-length"] == str(len(copies["br"]))
+        assert _header_list(head) == _header_list(get)
+
+    async def test_head_of_an_identity_client_answers_without_unpacking(self, client, environment):
+        self._css_compressed(environment)
+        get, _ = await _on_the_wire(client, self.CSS, "identity")
+        head, body = await _on_the_wire(client, self.CSS, "identity", method="HEAD")
+        assert head.status_code == 200
+        assert body == b""
+        assert _header_list(head) == _header_list(get)
+        assert "content-length" not in head.headers
+
+    async def test_the_sites_404_html_kept_compressed_is_negotiated_too(self, client, environment):
+        copies = _store_compressed(environment, environment.world.site_storage, "404.html")
+        response, body = await _on_the_wire(client, "/aurora/site/bestaat-niet", "br")
+        assert response.status_code == 404
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"]
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "br")
+        assert response.headers["vary"] == self.VARIES
+        assert response.headers["content-type"] == "text/html; charset=utf-8"
+        for accept_encoding in (None, "identity"):
+            plain, body = await _on_the_wire(client, "/aurora/site/bestaat-niet", accept_encoding)
+            assert plain.status_code == 404, accept_encoding
+            assert "content-encoding" not in plain.headers, accept_encoding
+            assert "content-length" not in plain.headers, accept_encoding
+            assert body == SITE_404, accept_encoding
+            assert plain.headers["etag"] == self._etag(environment.world.site_live_id), accept_encoding
+            assert plain.headers["vary"] == self.VARIES, accept_encoding
+
+    async def test_a_directory_whose_index_is_kept_compressed(self, client, environment):
+        _store_compressed(environment, environment.world.site_storage, "docs/index.html")
+        redirect, _ = await _on_the_wire(client, "/aurora/site/docs", "br")
+        assert redirect.status_code == 301
+        assert redirect.headers["location"] == "/aurora/site/docs/"
+        for accept_encoding, encoding in (("identity", None), ("br", "br")):
+            response, body = await _on_the_wire(client, "/aurora/site/docs/", accept_encoding)
+            assert response.status_code == 200, accept_encoding
+            assert response.headers.get("content-encoding") == encoding, accept_encoding
+            decoded = brotli.decompress(body) if encoding else body
+            assert decoded == b"<h1>docs</h1>", accept_encoding
+
+    async def test_a_refusal_stays_the_neutral_404_however_files_are_kept(self, client, environment):
+        """Copies of a site the visitor may not see, its 404.html included,
+        change nothing about the refusal: same bytes, no Content-Encoding and
+        no Vary that would hint at a text file behind it."""
+        secret_ref = await _storage_ref(environment, "geheim")
+        for rel_path in ("index.html", "stijl.css", "404.html"):
+            _store_compressed(environment, secret_ref, rel_path)
+        reference, reference_body = await _on_the_wire(client, "/nergens/niks/", None)
+        assert reference.status_code == 404
+        for path in (
+            "/nergens/niks/",
+            "/aurora/bestaat-niet/",
+            "/aurora/geheim/",
+            "/aurora/geheim/stijl.css",
+            "/aurora/geheim/bestaat-niet",
+            f"/aurora/geheim/{ENCODED_SEGMENT}/gzip/stijl.css",
+            "/aurora/site/_preview/pr-besloten/",
+            "/aurora/zonder404/bestaat-niet",
+        ):
+            for accept_encoding in (None, "identity", "br", "gzip", "br, gzip"):
+                response, body = await _on_the_wire(client, path, accept_encoding)
+                assert response.status_code == 404, (path, accept_encoding)
+                assert body == reference_body, (path, accept_encoding)
+                assert _header_list(response) == _header_list(reference), (path, accept_encoding)
+                assert "content-encoding" not in response.headers, (path, accept_encoding)
+                assert "vary" not in response.headers, (path, accept_encoding)
+
+    async def test_the_same_files_reach_a_visitor_who_may_see_them(self, client, environment):
+        """The counterpart of the refusal above: the copies are there."""
+        secret_ref = await _storage_ref(environment, "geheim")
+        copies = _store_compressed(environment, secret_ref, "index.html")
+        await client.get(f"/aurora/geheim/?key={environment.world.key_plain}")
+        response, body = await _on_the_wire(client, "/aurora/geheim/", "br")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"]
+        assert response.headers["etag"] == self._etag(environment.world.secret_live_id, "br")
+        unpacked, body = await _on_the_wire(client, "/aurora/geheim/", None)
+        assert unpacked.status_code == 200
+        assert body == SECRET_INDEX
+
+    async def test_an_invalid_path_stays_the_neutral_404(self, client, environment):
+        self._css_compressed(environment)
+        reference, reference_body = await _on_the_wire(client, "/nergens/niks/", None)
+        for raw_path in ("/aurora/site/..%2fstijl.css", f"/aurora/site/{ENCODED_SEGMENT}/gzip/..%2f..%2fstijl.css"):
+            status, headers, body = await _raw_request(
+                environment.app, raw_path, extra_headers=((b"accept-encoding", b"br"),)
+            )
+            assert status == 404, raw_path
+            assert body == reference_body, raw_path
+            assert headers == _header_list(reference), raw_path
+
+    @pytest.mark.parametrize("accept_encoding", [None, "identity", "br", "gzip"])
+    async def test_the_compressed_copies_are_no_path_of_the_site(self, client, environment, accept_encoding):
+        """`_encoded` in a content path is a file the site does not have:
+        never the compressed bytes, whatever the request accepts."""
+        self._css_compressed(environment)
+        missing, missing_body = await _on_the_wire(client, "/aurora/site/bestaat-niet", accept_encoding)
+        for path in (
+            f"/aurora/site/{ENCODED_SEGMENT}/gzip/stijl.css",
+            f"/aurora/site/{ENCODED_SEGMENT}/br/stijl.css",
+            f"/aurora/site/{ENCODED_SEGMENT}/gzip/",
+            f"/aurora/site/{ENCODED_SEGMENT}/gzip",
+            f"/aurora/site/{ENCODED_SEGMENT}/",
+        ):
+            response, body = await _on_the_wire(client, path, accept_encoding)
+            assert response.status_code == 404, path
+            assert body == missing_body == SITE_404, path
+            assert _header_list(response) == _header_list(missing), path
+
+    async def test_the_compressed_copies_of_a_site_without_404_html_are_the_neutral_404(self, client, environment):
+        bare_ref = await _storage_ref(environment, "zonder404")
+        _store_compressed(environment, bare_ref, "index.html", content=b"<h1>kaal</h1>" * 200)
+        reference, reference_body = await _on_the_wire(client, "/nergens/niks/", "br")
+        for path in (
+            f"/aurora/zonder404/{ENCODED_SEGMENT}/br/index.html",
+            f"/aurora/zonder404/{ENCODED_SEGMENT}/gzip/",
+        ):
+            response, body = await _on_the_wire(client, path, "br")
+            assert response.status_code == 404, path
+            assert body == reference_body, path
+            assert _header_list(response) == _header_list(reference), path
+
+    async def test_a_preview_is_negotiated(self, client, environment):
+        copies = _store_compressed(environment, environment.world.preview_storage, "index.html")
+        response, body = await _on_the_wire(client, "/aurora/site/_preview/pr-42/", "br")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "br"
+        assert body == copies["br"]
+        assert response.headers["etag"] == self._etag(environment.world.preview_version_id, "br")
+        assert response.headers["vary"] == self.VARIES
+        assert response.headers["x-robots-tag"] == "noindex, nofollow"
+        unpacked, body = await _on_the_wire(client, "/aurora/site/_preview/pr-42/", None)
+        assert body == PREVIEW_INDEX
+        assert unpacked.headers["x-robots-tag"] == "noindex, nofollow"
+
+    async def test_a_version_view_is_negotiated(self, client, environment):
+        copies = self._css_compressed(environment)
+        set_content_session_cookie(client, environment.app, sub="lid-actief", sites=("/aurora/site/",))
+        path = f"/aurora/site/_version/{environment.world.site_live_id}/stijl.css"
+        response, body = await _on_the_wire(client, path, "gzip")
+        assert response.status_code == 200
+        assert response.headers["content-encoding"] == "gzip"
+        assert body == copies["gzip"]
+        assert response.headers["etag"] == self._etag(environment.world.site_live_id, "gzip")
+        assert response.headers["vary"] == self.VARIES
+        assert response.headers["cache-control"] == "no-store"
+        unpacked, body = await _on_the_wire(client, path, "identity")
+        assert body == b"body{}"
+        assert unpacked.headers["cache-control"] == "no-store"
+
+
+class TestGunzipResponse:
+    """The unpacking itself, against a bare ASGI send: bounded pieces however
+    well the file compresses, and a HEAD that never opens the file."""
+
+    @staticmethod
+    async def _run(response: _GunzipResponse, scope: dict) -> list[dict]:
+        sent: list[dict] = []
+
+        async def receive() -> dict:
+            # A client that stays connected: an answer that came back at once
+            # would keep Starlette's disconnect listener spinning forever.
+            await asyncio.Event().wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        await response({"type": "http", "method": "GET", "headers": [], "extensions": {}, **scope}, receive, send)
+        return sent
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"a" * (6 * 1024 * 1024),  # 6 MiB that packs into a few KiB
+            b"".join(f"{n:08d} ".encode() for n in range(300_000)),  # 2.7 MB that packs less
+            b"x",
+            b"",
+        ],
+    )
+    def test_pieces_stay_within_512_kib_and_join_to_the_file(self, tmp_path: Path, content: bytes):
+        path = tmp_path / "bestand.gz"
+        path.write_bytes(gzip.compress(content, mtime=0))
+        pieces = list(precompress.gunzip(path))
+        assert b"".join(pieces) == content
+        assert all(0 < len(piece) <= 512 * 1024 for piece in pieces)
+        if len(content) > 512 * 1024:
+            assert len(pieces) > 1
+
+    def test_a_truncated_copy_fails_after_what_it_holds(self, tmp_path: Path):
+        """A chunked answer without Content-Length would otherwise end as if
+        the file were complete."""
+        content = b"".join(f"{n:08d} ".encode() for n in range(300_000))
+        whole = gzip.compress(content, mtime=0)
+        path = tmp_path / "afgekapt.gz"
+        path.write_bytes(whole[: len(whole) // 2])
+        pieces = precompress.gunzip(path)
+        received = b"".join(next(pieces) for _ in range(2))
+        assert content.startswith(received)
+        with pytest.raises(OSError, match="ends before its stream does"):
+            list(pieces)
+
+    async def test_a_large_file_goes_out_over_several_body_messages(self, tmp_path: Path):
+        content = b"a" * (3 * 1024 * 1024)
+        path = tmp_path / "groot.css.gz"
+        path.write_bytes(gzip.compress(content, mtime=0))
+        response = _GunzipResponse(path, status_code=200, headers={}, media_type="text/css")
+        sent = await self._run(response, {})
+        start = sent[0]
+        assert start["type"] == "http.response.start"
+        assert b"content-length" not in dict(start["headers"])
+        bodies = [m["body"] for m in sent if m["type"] == "http.response.body" and m["body"]]
+        assert b"".join(bodies) == content
+        assert len(bodies) >= 6
+        assert all(len(body) <= 512 * 1024 for body in bodies)
+
+    async def test_head_answers_without_opening_the_file(self, tmp_path: Path):
+        response = _GunzipResponse(
+            tmp_path / "bestaat-niet.gz", status_code=404, headers={"ETag": '"x"'}, media_type="text/html"
+        )
+        sent = await self._run(response, {HEAD_SCOPE_KEY: True})
+        assert [m["type"] for m in sent] == ["http.response.start", "http.response.body"]
+        assert sent[0]["status"] == 404
+        assert (b"etag", b'"x"') in sent[0]["headers"]
+        assert sent[1]["body"] == b""
+        assert sent[1]["more_body"] is False
+
+    async def test_a_get_does_open_the_file(self, tmp_path: Path):
+        """The counterpart of the HEAD above: the missing file is noticed."""
+        response = _GunzipResponse(tmp_path / "bestaat-niet.gz", status_code=200, headers={}, media_type="text/css")
+        with pytest.raises(FileNotFoundError):
+            await self._run(response, {})
 
 
 class TestAudit:

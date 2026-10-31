@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from plak import i18n, messages
 from plak.config import Settings
+from plak.ingest import precompress
 from plak.ingest.store import ContentStore, VersionWriter, version_ref
 from plak.ingest.unpacker import Limits, unpack
 from plak.messages import Msg
@@ -113,6 +114,18 @@ class _GuardedDestination:
     def open_file(self, rel_path: str) -> _GuardedFile:
         return _GuardedFile(self._writer.open_file(rel_path), self._room)
 
+    def files(self) -> list[tuple[str, Path]]:
+        return self._writer.files()
+
+    def open_encoded(self, rel_path: str, encoding: str) -> _GuardedFile:
+        return _GuardedFile(self._writer.open_encoded(rel_path, encoding), self._room)
+
+    def discard_encoded(self, rel_path: str, encoding: str) -> None:
+        self._writer.discard_encoded(rel_path, encoding)
+
+    def drop_plain(self, rel_path: str) -> None:
+        self._writer.drop_plain(rel_path)
+
 
 class IngestService:
     def __init__(self, store: ContentStore, settings: Settings) -> None:
@@ -120,6 +133,7 @@ class IngestService:
         self._limits = Limits.from_settings(settings)
         self._site_max_bytes = settings.site_max_bytes
         self._min_free = settings.storage_min_free_bytes
+        self._store_compressed = settings.store_compressed
 
     def check_room(self, incoming: int = 0) -> None:
         """Refuses before the first byte is spooled when `incoming` more bytes
@@ -139,10 +153,13 @@ class IngestService:
         with self._content_store.write_version(site.id, version_id) as writer:
             destination = _GuardedDestination(writer, self.room_guard())
             unpack(filename, source, destination, self._limits, base_path=base_path)
+            if self._store_compressed:
+                precompress.encode_version(destination)
             # Inside the with: on a refusal the work directory is cleaned up
             # and nothing is renamed into place. The site is measured only now
             # because the size of this version is not known before it is
-            # unpacked, and the older versions are all still there.
+            # unpacked and compressed, and the older versions are all still
+            # there.
             self._check_quota(site, writer.total_bytes())
         return version_id, writer.storage_ref
 

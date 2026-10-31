@@ -692,3 +692,13 @@ class TestZadSourceMapping:
         message = str(excinfo.value)
         assert "OIDC_DISCOVERY_URL" in message
         assert "PLAK_OIDC_ISSUER" in message
+
+
+def test_store_compressed_defaults_to_on(monkeypatch):
+    _set_required_env(monkeypatch)
+    assert load_settings().store_compressed is True
+
+
+def test_store_compressed_can_be_turned_off(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_STORE_COMPRESSED="false")
+    assert load_settings().store_compressed is False

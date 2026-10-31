@@ -648,3 +648,271 @@ class TestMeasuring:
 
     def test_free_bytes_reports_the_volume(self, root: Path):
         assert ContentStore(root).free_bytes() > 0
+
+
+def _version_with_copies(store: ContentStore) -> str:
+    """A version whose `a/b.css` is kept compressed only."""
+    version_id = uuid.uuid4()
+    with store.write_version(SITE, version_id) as writer:
+        with writer.open_file("a/b.css") as out:
+            out.write(b"plain" * 20)
+        with writer.open_file("index.html") as out:
+            out.write(b"<html>")
+        with writer.open_encoded("a/b.css", "gzip") as out:
+            out.write(b"GZ")
+        with writer.open_encoded("a/b.css", "br") as out:
+            out.write(b"BR")
+        writer.drop_plain("a/b.css")
+    return f"{SITE}/{version_id}"
+
+
+class TestVersionWriterFiles:
+    def test_lists_every_written_file_sorted_with_posix_paths(self, store: ContentStore):
+        names = ["z.html", "assets/stijl.css", "één map/bestand met spatie.txt", "a/b/c.js"]
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            for name in names:
+                with writer.open_file(name) as out:
+                    out.write(name.encode())
+            found = writer.files()
+            assert [rel for rel, _ in found] == sorted(names)
+            for rel, path in found:
+                assert path.read_bytes() == rel.encode()
+
+    def test_is_empty_before_anything_is_written(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            assert writer.files() == []
+
+    def test_leaves_out_the_compressed_copies_in_the_root(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_file("index.html") as out:
+                out.write(b"x")
+            with writer.open_encoded("index.html", "br") as out:
+                out.write(b"y")
+            assert [rel for rel, _ in writer.files()] == ["index.html"]
+
+    def test_lists_a_deeper_directory_named_encoded_as_site_files(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_file("assets/_encoded/x.css") as out:
+                out.write(b"x")
+            with writer.open_file("index.html") as out:
+                out.write(b"x")
+            with writer.open_encoded("index.html", "br") as out:
+                out.write(b"y")
+            assert [rel for rel, _ in writer.files()] == ["assets/_encoded/x.css", "index.html"]
+
+
+class TestVersionWriterEncoded:
+    def test_writes_under_encoded_in_the_workdir(self, store: ContentStore, root: Path):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_encoded("a/b.css", "br") as out:
+                out.write(b"variant")
+            found = [p for p in (root / "_tmp").rglob("*") if p.is_file()]
+            assert len(found) == 1
+            assert found[0].as_posix().endswith("/_encoded/br/a/b.css")
+
+    def test_refuses_the_same_copy_twice(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_encoded("a.css", "gzip") as out:
+                out.write(b"1")
+            with pytest.raises(FileExistsError):
+                writer.open_encoded("a.css", "gzip")
+            # Another encoding of the same file is a different copy.
+            with writer.open_encoded("a.css", "br") as out:
+                out.write(b"2")
+
+    @pytest.mark.parametrize("rel_path", ["../x", "/abs", "a\\b", "", "./a", "a/../b", "a\x00b"])
+    def test_refuses_an_unsafe_rel_path(self, store: ContentStore, rel_path: str):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with pytest.raises(StoreError):
+                writer.open_encoded(rel_path, "br")
+            with pytest.raises(StoreError):
+                writer.discard_encoded(rel_path, "br")
+            with pytest.raises(StoreError):
+                writer.drop_plain(rel_path)
+            assert writer.total_bytes() == 0
+
+    @pytest.mark.parametrize("encoding", ["..", "/br", "br\\x", "", "a/../b"])
+    def test_refuses_an_unsafe_encoding(self, store: ContentStore, encoding: str):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with pytest.raises(StoreError):
+                writer.open_encoded("a.css", encoding)
+            with pytest.raises(StoreError):
+                writer.discard_encoded("a.css", encoding)
+
+    def test_discard_removes_the_copy_and_it_can_be_written_again(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_encoded("a.css", "br") as out:
+                out.write(b"1")
+            with writer.open_encoded("a.css", "gzip") as out:
+                out.write(b"22")
+            writer.discard_encoded("a.css", "br")
+            assert writer.total_bytes() == 2
+            with writer.open_encoded("a.css", "br") as out:
+                out.write(b"333")
+            assert writer.total_bytes() == 5
+
+    def test_discarding_a_copy_that_is_not_there_raises(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer, pytest.raises(FileNotFoundError):
+            writer.discard_encoded("a.css", "br")
+
+    def test_drop_plain_removes_only_that_file(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            for name in ("a.css", "b.css"):
+                with writer.open_file(name) as out:
+                    out.write(b"x" * 10)
+            writer.drop_plain("a.css")
+            assert [rel for rel, _ in writer.files()] == ["b.css"]
+            assert writer.total_bytes() == 10
+
+    def test_drop_plain_of_a_missing_file_raises(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer, pytest.raises(FileNotFoundError):
+            writer.drop_plain("niet-aanwezig.css")
+
+
+class TestEncodedInTheVersion:
+    def test_copies_sit_inside_the_version_next_to_the_content(self, store: ContentStore, root: Path):
+        ref = _version_with_copies(store)
+        version = root / ref
+        assert (version / "_encoded" / "gzip" / "a" / "b.css").read_bytes() == b"GZ"
+        assert (version / "_encoded" / "br" / "a" / "b.css").read_bytes() == b"BR"
+        assert not (version / "a" / "b.css").exists()
+        assert (version / "index.html").read_bytes() == b"<html>"
+        assert not (root / "_encoded").exists()
+        assert list((root / "_tmp").iterdir()) == []
+
+    def test_an_error_leaves_nothing_behind(self, store: ContentStore, root: Path):
+        version_id = uuid.uuid4()
+        with pytest.raises(RuntimeError), store.write_version(SITE, version_id) as writer:
+            with writer.open_encoded("index.html", "br") as out:
+                out.write(b"y")
+            raise RuntimeError("boom")
+        assert not (root / str(SITE) / str(version_id)).exists()
+        assert list((root / "_tmp").iterdir()) == []
+
+    def test_total_bytes_counts_the_copies_and_not_the_dropped_plain_file(self, store: ContentStore):
+        with store.write_version(SITE, uuid.uuid4()) as writer:
+            with writer.open_file("a.css") as out:
+                out.write(b"x" * 100)
+            with writer.open_file("b.html") as out:
+                out.write(b"y" * 10)
+            with writer.open_encoded("a.css", "br") as out:
+                out.write(b"z" * 7)
+            with writer.open_encoded("a.css", "gzip") as out:
+                out.write(b"w" * 8)
+            assert writer.total_bytes() == 125
+            writer.drop_plain("a.css")
+            assert writer.total_bytes() == 25
+
+    def test_site_bytes_counts_the_copies(self, store: ContentStore):
+        _version_with_copies(store)
+        assert store.site_bytes(SITE) == len(b"<html>") + 2 + 2
+
+    def test_delete_version_takes_the_copies_along(self, store: ContentStore, root: Path):
+        ref = _version_with_copies(store)
+        store.delete_version(ref)
+        assert not (root / ref).exists()
+        assert store.encoded_path(ref, "a/b.css", "gzip") is None
+
+    def test_reclaim_quarantines_the_copies_with_their_version(self, store: ContentStore, root: Path):
+        kept = _version_with_copies(store)
+        orphan = _version_with_copies(store)
+        _age(root / orphan)
+
+        result = store.reclaim(_held(kept), timedelta(hours=24))
+
+        assert result.moved == [orphan]
+        assert not (root / orphan).exists()
+        (moved,) = (root / "_reclaimed").iterdir()
+        assert moved.name.endswith("-" + orphan.replace("/", "_"))
+        assert (moved / "_encoded" / "gzip" / "a" / "b.css").is_file()
+        assert store.encoded_path(kept, "a/b.css", "gzip") is not None
+
+
+class TestEncodedPath:
+    def test_returns_the_copy(self, store: ContentStore, root: Path):
+        ref = _version_with_copies(store)
+        path = store.encoded_path(ref, "a/b.css", "br")
+        assert path == (root / ref / "_encoded" / "br" / "a" / "b.css").resolve()
+        assert path is not None and path.read_bytes() == b"BR"
+
+    def test_none_for_a_missing_copy(self, store: ContentStore):
+        ref = _version_with_copies(store)
+        assert store.encoded_path(ref, "a/other.css", "br") is None
+        assert store.encoded_path(ref, "index.html", "br") is None
+
+    def test_none_for_a_missing_encoding(self, store: ContentStore):
+        ref = _version_with_copies(store)
+        assert store.encoded_path(ref, "a/b.css", "zstd") is None
+
+    def test_none_for_a_version_without_copies(self, store: ContentStore):
+        ref = store.store_version(SITE, uuid.uuid4(), FILES)
+        assert store.encoded_path(ref, "index.html", "br") is None
+
+    def test_none_on_traversal(self, store: ContentStore, root: Path):
+        ref = _version_with_copies(store)
+        (root / "geheim.txt").write_bytes(b"geheim")
+        assert store.encoded_path(ref, "../../../../geheim.txt", "br") is None
+        assert store.encoded_path(ref, "../gzip/a/b.css", "br") is None
+        assert store.encoded_path(ref, "../../index.html", "br") is None
+        assert store.encoded_path(ref, "/etc/passwd", "br") is None
+        assert store.encoded_path(ref, "a\x00b", "br") is None
+        assert store.encoded_path(ref, "a/b.css", "../gzip") is None
+        assert store.encoded_path(ref, "index.html", "..") is None
+
+    def test_none_for_the_encoding_base_itself(self, store: ContentStore):
+        ref = _version_with_copies(store)
+        assert store.encoded_path(ref, "", "br") is None
+        assert store.encoded_path(ref, ".", "br") is None
+
+    def test_none_for_a_directory(self, store: ContentStore):
+        ref = _version_with_copies(store)
+        assert store.encoded_path(ref, "a", "br") is None
+
+    def test_none_on_a_symlink_that_escapes(self, store: ContentStore, root: Path):
+        ref = _version_with_copies(store)
+        outside = root.parent / "buiten.txt"
+        outside.write_bytes(b"geheim")
+        (root / ref / "_encoded" / "br" / "ontsnap").symlink_to(outside)
+        assert store.encoded_path(ref, "ontsnap", "br") is None
+
+    def test_none_on_an_invalid_storage_ref(self, store: ContentStore, root: Path):
+        (root / "_tmp" / "x" / "_encoded" / "br").mkdir(parents=True)
+        (root / "_tmp" / "x" / "_encoded" / "br" / "a.css").write_bytes(b"x")
+        (root.parent / "buiten" / "_encoded" / "br").mkdir(parents=True)
+        (root.parent / "buiten" / "_encoded" / "br" / "a.css").write_bytes(b"x")
+        for ref in ("..", "../buiten", "_tmp/x", "a/\x00"):
+            assert store.encoded_path(ref, "a.css", "br") is None
+
+
+class TestFilePathHidesEncoded:
+    @pytest.fixture
+    def ref(self, store: ContentStore, root: Path) -> str:
+        ref = _version_with_copies(store)
+        deeper = root / ref / "assets" / "_encoded"
+        deeper.mkdir(parents=True)
+        (deeper / "x.css").write_bytes(b"site file")
+        return ref
+
+    @pytest.mark.parametrize(
+        "rel_path",
+        [
+            "_encoded/gzip/a/b.css",
+            "_encoded/br/a/b.css",
+            "./_encoded/br/a/b.css",
+            "_encoded",
+            "_encoded/",
+            "a/../_encoded/gzip/a/b.css",
+        ],
+    )
+    def test_refuses_anything_under_the_root_encoded_directory(self, store: ContentStore, ref: str, rel_path: str):
+        assert store.file_path(ref, rel_path) is None
+
+    def test_refuses_a_symlink_that_points_into_encoded(self, store: ContentStore, root: Path, ref: str):
+        (root / ref / "doorgang.css").symlink_to(root / ref / "_encoded" / "gzip" / "a" / "b.css")
+        assert store.file_path(ref, "doorgang.css") is None
+
+    def test_serves_a_deeper_directory_named_encoded(self, store: ContentStore, root: Path, ref: str):
+        assert store.file_path(ref, "assets/_encoded/x.css") == root / ref / "assets" / "_encoded" / "x.css"
+
+    def test_still_serves_the_plain_files(self, store: ContentStore, root: Path, ref: str):
+        assert store.file_path(ref, "index.html") == root / ref / "index.html"

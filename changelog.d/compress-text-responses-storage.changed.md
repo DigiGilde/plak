@@ -1,0 +1,1 @@
+- Text files are stored compressed, so a version published from now on takes up less of the site's storage and quota.

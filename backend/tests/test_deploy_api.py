@@ -46,6 +46,7 @@ from plak.cli import service as cli
 from plak.config import Settings
 from plak.constants import AccessBase, Role
 from plak.db import make_engine, make_session_factory
+from plak.ingest import precompress
 from plak.ingest.service import IngestService, RoomGuard
 from plak.ingest.store import ContentStore, version_ref
 from plak.messages import Msg
@@ -1651,8 +1652,10 @@ async def test_upload_streams_without_keeping_the_body_in_memory(
         async with environment.session_factory() as db:
             stored = await db.scalar(select(Version).where(Version.id == version_id))
             storage_ref = version_ref(stored.site_id, stored.id)
-        index = environment.settings.content_root / storage_ref / "index.html"
-        assert index.stat().st_size == count * len(chunk)
+        store = ContentStore(environment.settings.content_root)
+        index = store.encoded_path(storage_ref, "index.html", precompress.GZIP)
+        assert index is not None
+        assert sum(len(piece) for piece in precompress.gunzip(index)) == count * len(chunk)
         assert peak < 8 * 1024 * 1024, f"peak {peak} bytes for a body of {size} bytes"
         assert list(_tmp_dir(environment).iterdir()) == []
 

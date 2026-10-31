@@ -1,0 +1,1 @@
+- A bundle with `_encoded` in the root of the site is refused, like `_preview` and `_version`.

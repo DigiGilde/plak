@@ -78,6 +78,8 @@ async def test_a_file_answers_a_head_without_reading_the_file(tmp_path: Path) ->
             noindex=False,
             external_sources=False,
             sandbox=False,
+            encoding=None,
+            varies=False,
         )
         sent: list[Message] = []
         requested = False

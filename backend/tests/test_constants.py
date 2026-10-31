@@ -60,8 +60,8 @@ def test_every_root_level_spa_route_is_reserved():
     assert SLUG_RE.match("-") is None
 
 
-def test_reserved_segments_contains_preview_and_version():
-    assert {"_preview", "_version"} == RESERVED_SEGMENTS
+def test_reserved_segments_are_preview_version_and_encoded():
+    assert {"_preview", "_version", "_encoded"} == RESERVED_SEGMENTS
 
 
 def test_access_base_contains_exactly_four_values():

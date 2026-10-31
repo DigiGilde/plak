@@ -10,9 +10,9 @@ app has to supply on app.state: settings (Settings), session_store
 
 Order per request: service worker refusal -> path validation -> access
 decision -> fetch-metadata guard -> audit -> key redeem or removal -> file
-resolution -> If-None-Match -> response. The lexical 301 (site or subroute
-root without a slash) sits in separate routes before any existence or access
-check and therefore leaks nothing.
+resolution -> choice of encoding -> If-None-Match -> response. The lexical
+301 (site or subroute root without a slash) sits in separate routes before any
+existence or access check and therefore leaks nothing.
 
 Viewers are content sessions only; a management session never
 counts here. The content session cookie is scoped to `/{group}/{site}/`, so a
@@ -433,12 +433,13 @@ async def _serve(
     if (
         outcome_.kind is resolution.ResolutionKind.FILE
         and outcome_.rel_path is not None
-        and outcome_.file_path is not None
+        and outcome_.stored is not None
     ):
+        chosen = resolution.representation(outcome_.stored, request.headers.get("accept-encoding"))
         # The conditional answer comes after resolution, not before: a 304 for
         # a path that has no file would tell an intermediary that a
         # non-existent resource is fresh.
-        etag = response.etag_for(version_id_allowed)
+        etag = response.etag_for(version_id_allowed, chosen.encoding)
         if response.if_none_match_matches(request.headers.get("if-none-match"), etag):
             return response.make_304(
                 outcome_.rel_path,
@@ -448,31 +449,40 @@ async def _serve(
                 noindex=noindex,
                 external_sources=external_sources,
                 sandbox=sandbox,
+                encoding=chosen.encoding,
+                varies=chosen.varies,
             )
         return response.make_content_response(
             rel_path=outcome_.rel_path,
-            file_path=outcome_.file_path,
+            file_path=chosen.file_path,
             version_id=version_id_allowed,
             access=access,
             version_view=version_view,
             noindex=noindex,
             external_sources=external_sources,
             sandbox=sandbox,
+            encoding=chosen.encoding,
+            varies=chosen.varies,
+            gunzip=chosen.gunzip,
         )
 
-    path_404 = await asyncio.to_thread(resolution.find_404_page, store, storage_ref)
-    if path_404 is None:
+    stored_404 = await asyncio.to_thread(resolution.find_404_page, store, storage_ref)
+    if stored_404 is None:
         return response.neutral_404_response()
+    chosen = resolution.representation(stored_404, request.headers.get("accept-encoding"))
     # The version's root 404.html, for authorised visitors only.
     return response.make_content_response(
         rel_path=resolution.NOT_FOUND_FILE,
-        file_path=path_404,
+        file_path=chosen.file_path,
         version_id=version_id_allowed,
         access=access,
         version_view=version_view,
         noindex=noindex,
         external_sources=external_sources,
         sandbox=sandbox,
+        encoding=chosen.encoding,
+        varies=chosen.varies,
+        gunzip=chosen.gunzip,
         status_code=404,
     )
 

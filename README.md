@@ -337,7 +337,8 @@ ZAD environment to deploy to yet.
 ## The technology in short
 
 - `backend/`: Python 3.15, FastAPI, SQLAlchemy (async, asyncpg),
-  Alembic, joserfc (JWT and JWKS for OIDC and CI tokens), pydantic-settings.
+  Alembic, joserfc (JWT and JWKS for OIDC and CI tokens), pydantic-settings,
+  brotli (text files are stored and sent compressed).
 - `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`.
 - `cli/`: the publishing CLI, a uv project of its own that installs the
   `plak` command; its only dependency is httpx and it shares no code with
