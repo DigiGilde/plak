@@ -322,8 +322,9 @@ overwrites only the headers a 304 repeats (RFC 9111 §3.2, verified in
 Chromium, Firefox and WebKit), and turning a site switch or secret links on
 or off changes the CSP or the Referrer-Policy without changing the version, so
 without them a cached page would keep the policy it was first served with.
-That reaches what revalidates: HTML, which is `no-cache`. Any other file of a
-public site is `immutable` and never revalidates, so a worker script or an SVG
+That reaches what revalidates: public HTML, which is `no-cache`; restricted
+content is not stored at all (§5.5). Any other file of a public site is
+`immutable` and never revalidates, so a worker script or an SVG
 opened on its own keeps the policy it was first served with until it leaves
 the cache. Code:
 `serving/response.py` (`etag_for`, `if_none_match_matches`, `make_304`).
@@ -331,14 +332,21 @@ Guarded by: `test_serving.py`.
 
 ### 5.5 Cache-Control
 
-HTML gets `no-cache, must-revalidate`, every other asset
-`max-age=31536000`, with `immutable` on top for public content only: an asset
-URL is not content-addressed and survives a redeploy, and private content has
-no shared cache to win the extra reach back from. The prefix `private, ` is
-added whenever the effective access is not public, and always for a `_version`
-view. The login redirect and the directory 301 carry `no-store`, because a 301
-is heuristically cacheable. Code: `serving/response.py` (`cache_control`),
-`serving/router.py`. Guarded by: `test_serving.py`.
+Public content: HTML gets `no-cache, must-revalidate`, every other asset
+`max-age=31536000, immutable`. An asset URL is not content-addressed and
+survives a redeploy, so a returning visitor keeps an old file under the same
+name until it leaves the cache; accepted for the reach a shared cache gives
+public content. Content whose effective access is not public,
+and every `_version` view, gets `no-store`: every site shares one origin, and
+what the browser stored of a restricted site a page of another site without
+the sandbox reads with `fetch(url, {cache: "only-if-cached"})`, which skips
+the server and so the access gate. `no-cache` is not enough, because
+`only-if-cached` and `force-cache` skip the revalidation too (#152). An
+origin per site would make the browser refuse that read, and is the moment
+to cache restricted content again. The login redirect and the directory 301
+carry `no-store`, because a 301 is heuristically cacheable. Code:
+`serving/response.py` (`cache_control`), `serving/router.py`. Guarded by:
+`test_serving.py`, `e2e/tests/shared-origin.spec.ts`.
 
 ### 5.6 The neutral 404
 

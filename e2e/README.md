@@ -64,6 +64,8 @@ and on the usual Linux setups).
   removing the preview and logging out. It points `PLAK_CONFIG_DIR` at
   a temp directory, because the CLI keeps its session per user account
   and a run must not touch a contributor's own.
+- `tests/shared-origin.spec.ts`: a page of another site cannot read a
+  restricted site from the browser cache (#152).
 
 Scenarios that need the content origin login handoff (spec §4a, task
 6.3) detect whether it is present in the stack and otherwise skip with a
