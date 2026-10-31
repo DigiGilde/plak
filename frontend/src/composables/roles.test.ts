@@ -14,6 +14,7 @@ function me(groupRoles: Me['groupRoles'], siteRoles: Me['siteRoles'] = []): Me {
     status: 'active',
     createdAt: '2026-01-01T00:00:00Z',
     lastLoginAt: null,
+    lastActiveAt: null,
     contentBaseUrl: 'https://sites.plak.test',
     groupRoles,
     siteRoles,

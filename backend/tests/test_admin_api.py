@@ -368,6 +368,65 @@ class TestAuthorization:
         # A request is not a login: whoever never signed in has no date.
         assert by_sub["lid-a"]["lastLoginAt"] is None
 
+    async def test_last_active_is_the_later_of_signing_in_and_using_the_cli(self, client, app, factory, data):
+        """Someone who only publishes with the CLI signs in to the admin once in
+        up to 90 days; the list has to show them as active all the same."""
+        login_at = datetime(2026, 9, 12, 9, 30, tzinfo=UTC)
+        async with factory() as db:
+            await db.execute(update(Member).where(Member.id == data.admin_member.id).values(last_login_at=login_at))
+            await db.execute(
+                update(Member)
+                .where(Member.id == data.member_b.id)
+                .values(last_login_at=datetime(2026, 10, 5, 8, 0, tzinfo=UTC))
+            )
+            nobody = Member(sso_subject="lid-c", email="c@example.nl", status=MemberStatus.ACTIVE)
+            db.add(nobody)
+            for member_id, used_at in (
+                (data.admin_member.id, datetime(2026, 10, 1, 14, 0, tzinfo=UTC)),
+                (data.admin_member.id, datetime(2026, 9, 20, 14, 0, tzinfo=UTC)),
+                (data.member_a.id, datetime(2026, 9, 20, 7, 15, tzinfo=UTC)),
+                (data.member_b.id, datetime(2026, 9, 1, 12, 0, tzinfo=UTC)),
+                (data.member_b.id, None),
+            ):
+                db.add(
+                    CliSession(
+                        member_id=member_id,
+                        last_used_at=used_at,
+                        expires_at=datetime(2027, 1, 1, tzinfo=UTC),
+                        max_expires_at=datetime(2027, 1, 1, tzinfo=UTC),
+                        access_selector=uuid.uuid4().hex,
+                        access_hash="x",
+                        access_expires_at=datetime(2027, 1, 1, tzinfo=UTC),
+                    )
+                )
+            await db.commit()
+        headers = login(client, app, sub="admin-sub", email="admin@example.nl")
+
+        members = (await client.get(f"{BASE}/platform/members")).json()
+
+        by_sub = {member["ssoSubject"]: member for member in members}
+        # The latest CLI use wins over an older sign-in.
+        assert by_sub["admin-sub"]["lastActiveAt"] == "2026-10-01T14:00:00Z"
+        assert by_sub["admin-sub"]["lastLoginAt"] == "2026-09-12T09:30:00Z"
+        # Only the CLI, never signed in.
+        assert by_sub["lid-a"]["lastActiveAt"] == "2026-09-20T07:15:00Z"
+        # A later sign-in wins over an older CLI use, and an unused session counts for nothing.
+        assert by_sub["lid-b"]["lastActiveAt"] == "2026-10-05T08:00:00Z"
+        assert by_sub["lid-c"]["lastActiveAt"] is None
+
+        # The answer about one member says the same as the list.
+        response = await client.put(
+            f"{BASE}/platform/members/{data.member_a.id}/platform-role",
+            json={"platformRole": "member"},
+            headers=headers,
+        )
+        assert response.json()["lastActiveAt"] == "2026-09-20T07:15:00Z"
+        response = await client.post(f"{BASE}/platform/members/{data.member_b.id}/_deactivate", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["lastActiveAt"] == "2026-10-05T08:00:00Z"
+        me = (await client.get(f"{BASE}/me")).json()
+        assert me["lastActiveAt"] == "2026-10-01T14:00:00Z"
+
     async def test_platform_storage_refuses_anonymous(self, client, app, data):
         response = await client.get(f"{BASE}/platform/storage")
         assert response.status_code == 401

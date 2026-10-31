@@ -556,6 +556,7 @@ describe('derived member rows: edge cases', () => {
         status: 'active',
         createdAt: '2026-01-01T00:00:00Z',
         lastLoginAt: null,
+        lastActiveAt: null,
       },
       {
         id: 'lid-dup-1',
@@ -566,6 +567,7 @@ describe('derived member rows: edge cases', () => {
         status: 'active',
         createdAt: '2026-01-01T00:00:00Z',
         lastLoginAt: null,
+        lastActiveAt: null,
       },
     );
 

@@ -360,7 +360,9 @@ as `NO_SESSION`, `CSRF_INVALID`, `ORIGIN_REFUSED`, `MEMBER_DEACTIVATED`,
 `TOKEN_INVALID` (unknown, revoked or expired token, or the member no longer
 active); for a CI ID token `CI_ISSUER_UNKNOWN` (the `iss` belongs to no
 configured provider), `CI_TOKEN_INVALID` (not a valid JWT, wrong algorithm,
-signature or claims are wrong), `CI_AUDIENCE_MISMATCH` (the `aud` is
+signature or claims are wrong), `CI_TOKEN_REPLAYED` (a token with a `jti`
+that was already used once; the response still carries the code
+`CI_TOKEN_INVALID`), `CI_AUDIENCE_MISMATCH` (the `aud` is
 neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/{site id}`,
 or it names a site that does not exist or that the token's repository is
 not linked to, whatever the requested address),

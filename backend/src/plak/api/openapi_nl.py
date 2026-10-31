@@ -2902,6 +2902,11 @@ NL: Final[dict[str, str]] = {
     "Last successful sign-in, or `null` if there was none yet.": (
         "Laatste succesvolle login, of `null` als die er nog niet was."
     ),
+    "When the member was last active: the later of the last sign-in and the last use of a CLI session "
+    "that still exists, or `null` if there was neither yet.": (
+        "Wanneer het lid voor het laatst actief was: het laatste van de laatste login en het laatste gebruik van "
+        "een CLI-sessie die nog bestaat, of `null` als geen van beide er nog was."
+    ),
     "A platform member.": "Een platformlid.",
     "What you use to add this member: the e-mail address.": "Waarmee je dit lid toevoegt: het e-mailadres.",
     (

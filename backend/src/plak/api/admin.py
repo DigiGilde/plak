@@ -742,6 +742,14 @@ class MemberOut(ApiModel):
         description="Last successful sign-in, or `null` if there was none yet.",
         json_schema_extra=_timestamp_schema(),
     )
+    last_active_at: str | None = Field(
+        default=None,
+        description=(
+            "When the member was last active: the later of the last sign-in and the last use of a CLI session "
+            "that still exists, or `null` if there was neither yet."
+        ),
+        json_schema_extra=_timestamp_schema(),
+    )
 
 
 class VolumeOut(ApiModel):
@@ -1702,7 +1710,8 @@ class IpRevealOut(ApiModel):
 # -- Serialization ----------------------------------------------------------
 
 
-def _member_json(member: Member, *, bootstrap_sub: str = "") -> MemberOut:
+def _member_json(member: Member, *, bootstrap_sub: str = "", cli_used_at: datetime | None = None) -> MemberOut:
+    moments = [moment for moment in (member.last_login_at, cli_used_at) if moment is not None]
     return MemberOut(
         id=member.id,
         sso_subject=member.sso_subject,
@@ -1713,7 +1722,13 @@ def _member_json(member: Member, *, bootstrap_sub: str = "") -> MemberOut:
         is_bootstrap=bool(bootstrap_sub) and member.sso_subject == bootstrap_sub,
         created_at=iso_utc(member.created_at) or "",
         last_login_at=iso_utc(member.last_login_at),
+        last_active_at=iso_utc(max(moments, default=None)),
     )
+
+
+async def _member_out(db: AsyncSession, member: Member, bootstrap_sub: str = "") -> MemberOut:
+    used_at = (await cli.last_use_per_member(db, [member.id])).get(member.id)
+    return _member_json(member, bootstrap_sub=bootstrap_sub, cli_used_at=used_at)
 
 
 def _group_json(group: Group, previous_slugs: list[PreviousSlugOut]) -> GroupOut:
@@ -3007,7 +3022,7 @@ def make_admin_router() -> APIRouter:
     )
     async def me(request: Request, member: ActiveMember, db: Db) -> MyProfile:
         return MyProfile(
-            **_member_json(member).model_dump(),
+            **(await _member_out(db, member)).model_dump(),
             content_base_url=_content_base(request),
             group_roles=await _my_group_roles(db, member),
             site_roles=await _my_site_roles(db, member),
@@ -4648,8 +4663,9 @@ def make_admin_router() -> APIRouter:
     )
     async def platform_members(request: Request, member: PlatformAdmin, db: Db) -> list[MemberOut]:
         bootstrap_sub = request.app.state.settings.bootstrap_admin_sub
-        members = await db.scalars(select(Member).order_by(Member.email))
-        return [_member_json(row, bootstrap_sub=bootstrap_sub) for row in members]
+        members = list(await db.scalars(select(Member).order_by(Member.email)))
+        used_at = await cli.last_use_per_member(db, [row.id for row in members])
+        return [_member_json(row, bootstrap_sub=bootstrap_sub, cli_used_at=used_at.get(row.id)) for row in members]
 
     # -- Content volume --
 
@@ -4702,7 +4718,7 @@ def make_admin_router() -> APIRouter:
             refs["cli_sessions_revoked"] = await cli.revoke_all_of(db, target.id)
         await db.commit()
         await _audit(request, member, action, refs)
-        return _member_json(target, bootstrap_sub=request.app.state.settings.bootstrap_admin_sub)
+        return await _member_out(db, target, request.app.state.settings.bootstrap_admin_sub)
 
     @router.post(
         "/platform/members/{member_id}/_activate",
@@ -4784,7 +4800,7 @@ def make_admin_router() -> APIRouter:
         await _audit(
             request, member, "member_platform_role", {"member_id": str(member_id), "role": body.platform_role.value}
         )
-        return _member_json(target, bootstrap_sub=request.app.state.settings.bootstrap_admin_sub)
+        return await _member_out(db, target, request.app.state.settings.bootstrap_admin_sub)
 
     # -- Auditlog --
 

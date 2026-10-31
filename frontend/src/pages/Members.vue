@@ -117,9 +117,9 @@ const sortedMembers = computed<Member[]>(() => {
         (a.name || a.email).localeCompare(b.name || b.email, 'nl'),
     );
   }
-  const field = sortKey.value === 'created' ? 'createdAt' : 'lastLoginAt';
+  const field = sortKey.value === 'created' ? 'createdAt' : 'lastActiveAt';
   return rows.sort((a, b) => {
-    // A member who never logged in has no activity date. Those go last whichever
+    // A member who was never active has no activity date. Those go last whichever
     // way the column is sorted, rather than sorting as 1970 and heading the
     // "oldest first" end of the list.
     const left = a[field] ?? '';
@@ -432,7 +432,7 @@ onMounted(() => {
           hide-below="md"
         ></nldd-text-cell>
         <nldd-text-cell
-          :text="formatTimestamp(member.lastLoginAt)"
+          :text="formatTimestamp(member.lastActiveAt)"
           hide-below="md"
         ></nldd-text-cell>
         <!-- Right aligned, so the menu of every row sits on one edge with the
