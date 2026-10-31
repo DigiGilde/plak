@@ -171,6 +171,14 @@ def test_the_operator_is_named_with_an_address_the_app_accepts() -> None:
     assert normalise_operator_email(env["PLAK_OPERATOR_EMAIL"]) == env["PLAK_OPERATOR_EMAIL"]
 
 
+def test_security_txt_lists_ncsc_for_this_central_government_installation() -> None:
+    """The Digi Gilde runs inside the Dutch central government, where NCSC-NL
+    is the central CVD reporting point. The setting is off by default, so
+    without this line the NCSC-NL routes leave the live security.txt."""
+    env = PROJECT["deployments"][0]["components"][0]["env-vars"]
+    assert env["PLAK_SECURITY_TXT_NCSC"] == "true"
+
+
 @pytest.mark.skipif(
     not ZAD_SCHEMA_FILE.exists(), reason="no local RIG-Cluster checkout with opi/schemas/project_v2.json"
 )

@@ -24,12 +24,24 @@ from helpers_oidc import make_client_jwk
 
 from plak.config import Settings
 from plak.main import create_app
-from plak.platform.security_txt import PATH_SECURITY_TXT, VALIDITY, expires_at, security_txt
+from plak.platform.security_txt import (
+    PATH_SECURITY_TXT,
+    PREAMBLE_NCSC,
+    PREAMBLE_OPERATOR_EMAIL,
+    VALIDITY,
+    expires_at,
+    security_txt,
+)
 from plak.serving.response import NEUTRAL_404_BODY
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"
 ADVISORY = "https://github.com/DigiGilde/plak/security/advisories/new"
+SECURITY_MD = "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
+NCSC_POLICY = [
+    "https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
+    "https://www.ncsc.nl/en/cvd-report-form",
+]
 NCSC = [
     "https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "https://www.ncsc.nl/en/cvd-report-form",
@@ -80,6 +92,10 @@ def _fields(body: str, name: str) -> list[str]:
     return [line[len(prefix) :] for line in body.splitlines() if line.startswith(prefix)]
 
 
+def _head(body: str) -> str:
+    return body.split("Expires: ", 1)[0]
+
+
 class TestServing:
     async def test_both_hosts_serve_the_same_document(self, two_hosts) -> None:
         admin, content = two_hosts
@@ -92,8 +108,9 @@ class TestServing:
 
     async def test_the_served_file_takes_the_address_from_the_app_settings(self, tmp_path: Path) -> None:
         """Read per request from the settings the app was built with, not at
-        import time, so each installation names its own operator."""
-        app = create_app(_settings(tmp_path, operator_email="cvd@operator.example"))
+        import time, so each installation names its own operator and decides
+        on NCSC-NL itself."""
+        app = create_app(_settings(tmp_path, operator_email="cvd@operator.example", security_txt_ncsc=True))
         async with app.router.lifespan_context(app), _client(app, CONTENT) as content:
             response = await content.get(PATH_SECURITY_TXT)
 
@@ -131,7 +148,7 @@ class TestContent:
         # MUST NOT appear more than once.
         assert len(_fields(body, "Expires")) == 1
         assert _fields(body, "Contact")
-        # Section 2.5.4: the order is the order of preference, and the private
+        # Section 2.5.3: the order is the order of preference, and the private
         # advisory is the route a reporter should see first.
         assert _fields(body, "Contact")[0] == ADVISORY
         assert _fields(body, "Policy")[0] == (
@@ -142,7 +159,7 @@ class TestContent:
         """The advisory form is about the software and holds on every
         installation. The mail line is the operator's, so a report about this
         installation goes to whoever runs it, ahead of the NCSC-NL routes."""
-        settings = _settings(tmp_path, operator_email="digigilde@rijksoverheid.nl")
+        settings = _settings(tmp_path, operator_email="digigilde@rijksoverheid.nl", security_txt_ncsc=True)
         body = security_txt(settings, datetime.now(UTC))
 
         assert _fields(body, "Contact") == [ADVISORY, "mailto:digigilde@rijksoverheid.nl", *NCSC]
@@ -152,7 +169,7 @@ class TestContent:
         """No address of another installation fills the gap, and the comment
         that announces the operator's address goes too, or it would point at
         NCSC-NL's. The advisory form keeps Contact present."""
-        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+        body = security_txt(_settings(tmp_path, security_txt_ncsc=True), datetime.now(UTC))
 
         assert _fields(body, "Contact") == [ADVISORY, *NCSC]
         assert "digigilde@rijksoverheid.nl" not in body
@@ -172,7 +189,7 @@ class TestContent:
         section 2.5.4), tied to no Contact in particular, so NCSC's key would
         read as the key for the Plak team's address. The NCSC routes stay as
         contacts; they publish their own key."""
-        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+        body = security_txt(_settings(tmp_path, security_txt_ncsc=True), datetime.now(UTC))
 
         assert _fields(body, "Encryption") == []
         assert "mailto:security@ncsc.nl" in _fields(body, "Contact")
@@ -231,17 +248,72 @@ class TestContent:
         assert expires_at(early) == early.replace(hour=0, minute=0, second=0) + VALIDITY
 
 
+class TestNcscSwitch:
+    """NCSC-NL is the central CVD reporting point for the Dutch central
+    government only. PLAK_SECURITY_TXT_NCSC decides whether the file says so,
+    and it is off unless an installation turns it on."""
+
+    def test_off_and_without_an_operator_address_the_file_opens_with_its_first_field(
+        self, tmp_path: Path
+    ) -> None:
+        """No route to NCSC-NL for an installation outside the central
+        government. With no comment left, the file starts with Expires, not
+        with a blank line or a lone "#", and the advisory form keeps Contact
+        present."""
+        body = security_txt(_settings(tmp_path), datetime.now(UTC))
+
+        assert "ncsc" not in body.lower()
+        assert body.startswith("Expires: ")
+        assert _fields(body, "Policy") == [SECURITY_MD]
+        assert _fields(body, "Contact") == [ADVISORY]
+
+    def test_off_with_an_operator_address_only_the_operator_sentence_remains(self, tmp_path: Path) -> None:
+        settings = _settings(tmp_path, operator_email="cvd@operator.example")
+        body = security_txt(settings, datetime.now(UTC))
+
+        assert "ncsc" not in body.lower()
+        assert _head(body) == "\n".join(PREAMBLE_OPERATOR_EMAIL) + "\n\n"
+        assert _fields(body, "Policy") == [SECURITY_MD]
+        assert _fields(body, "Contact") == [ADVISORY, "mailto:cvd@operator.example"]
+
+    def test_on_without_an_operator_address_the_ncsc_routes_follow_the_advisory_form(
+        self, tmp_path: Path
+    ) -> None:
+        body = security_txt(_settings(tmp_path, security_txt_ncsc=True), datetime.now(UTC))
+
+        assert _head(body) == "\n".join(PREAMBLE_NCSC) + "\n\n"
+        assert _fields(body, "Policy") == [SECURITY_MD, *NCSC_POLICY]
+        assert _fields(body, "Contact") == [ADVISORY, *NCSC]
+
+    def test_on_with_an_operator_address_the_operator_goes_between(self, tmp_path: Path) -> None:
+        """The order of preference: the advisory form, the operator, then
+        NCSC-NL. The two comments are kept apart by a "#" line."""
+        settings = _settings(tmp_path, operator_email="cvd@operator.example", security_txt_ncsc=True)
+        body = security_txt(settings, datetime.now(UTC))
+
+        assert _head(body) == "\n".join((*PREAMBLE_NCSC, "#", *PREAMBLE_OPERATOR_EMAIL)) + "\n\n"
+        assert _fields(body, "Policy") == [SECURITY_MD, *NCSC_POLICY]
+        assert _fields(body, "Contact") == [ADVISORY, "mailto:cvd@operator.example", *NCSC]
+
+
 class TestAgainstTheParser:
+    @pytest.mark.parametrize("security_txt_ncsc", [False, True])
     @pytest.mark.parametrize("operator_email", ["", "digigilde@rijksoverheid.nl"])
-    def test_the_document_passes_the_dtc_parser(self, tmp_path: Path, operator_email: str) -> None:
+    def test_the_document_passes_the_dtc_parser(
+        self, tmp_path: Path, operator_email: str, security_txt_ncsc: bool
+    ) -> None:
         """sectxt is the parser behind the Digital Trust Center's own check.
         Signing and an Encryption key are the two things it recommends that we
-        deliberately leave out; see SECURITY.md."""
+        deliberately leave out; see SECURITY.md. It asks for the key only when
+        a Contact is a mail address, and with neither the operator's nor
+        NCSC-NL's there is none."""
         sectxt = pytest.importorskip("sectxt")
 
-        body = security_txt(_settings(tmp_path, operator_email=operator_email), datetime.now(UTC))
+        settings = _settings(tmp_path, operator_email=operator_email, security_txt_ncsc=security_txt_ncsc)
+        body = security_txt(settings, datetime.now(UTC))
         parser = sectxt.Parser(body.encode(), urls=[f"{CONTENT}{PATH_SECURITY_TXT}"])
 
+        expected = ["no_encryption", "not_signed"] if operator_email or security_txt_ncsc else ["not_signed"]
         assert parser.errors == []
         assert parser.is_valid()
-        assert sorted(item["code"] for item in parser.recommendations) == ["no_encryption", "not_signed"]
+        assert sorted(item["code"] for item in parser.recommendations) == expected

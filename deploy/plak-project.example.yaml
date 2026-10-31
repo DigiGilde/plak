@@ -223,6 +223,8 @@ deployments:
           # mail Contact in security.txt.
           PLAK_OPERATOR_NAME: "Digi Gilde"
           PLAK_OPERATOR_EMAIL: "digigilde@rijksoverheid.nl"
+          # A Rijksoverheid installation: security.txt lists NCSC-NL's CVD routes.
+          PLAK_SECURITY_TXT_NCSC: "true"
         # The secrets are NOT here. Set them per deployment with
         # `zadctl env` (AGE-encrypted in this file as user-env-vars):
         #   PLAK_SESSION_SECRET   at least 32 bytes

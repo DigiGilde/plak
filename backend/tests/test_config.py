@@ -406,6 +406,17 @@ def test_operator_email_that_is_not_a_plain_address_refused(monkeypatch, value):
     assert "PLAK_OPERATOR_EMAIL" in str(excinfo.value)
 
 
+def test_security_txt_ncsc_is_off_by_default(monkeypatch):
+    _set_required_env(monkeypatch)
+    assert load_settings().security_txt_ncsc is False
+
+
+@pytest.mark.parametrize(("value", "expected"), [("true", True), ("false", False)])
+def test_security_txt_ncsc_is_read_from_env(monkeypatch, value, expected):
+    _set_required_env(monkeypatch, PLAK_SECURITY_TXT_NCSC=value)
+    assert load_settings().security_txt_ncsc is expected
+
+
 def test_production_full_configured_loads(monkeypatch):
     _set_required_env(
         monkeypatch,
