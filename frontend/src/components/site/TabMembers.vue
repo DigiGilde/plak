@@ -16,6 +16,7 @@ import { useSiteGroup } from '@/composables/siteGroup';
 import { t } from '@/i18n';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import SiteMembersManager from '@/components/SiteMembersManager.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
 defineOptions({ inheritAttrs: false });
@@ -82,10 +83,7 @@ function onRemoved(identifier: string): void {
   >
     <section aria-labelledby="heading-site-members">
       <nldd-container layout="stack" gap="8">
-        <nldd-title :size="4">
-          <h2 id="heading-site-members">{{ t('site.members.heading') }}</h2>
-          <span slot="subtitle">{{ t('site.members.intro') }}</span>
-        </nldd-title>
+        <SectionHeading id="heading-site-members" :text="t('site.members.heading')" :intro="t('site.members.intro')" />
 
         <SiteMembersManager
           :members="members"

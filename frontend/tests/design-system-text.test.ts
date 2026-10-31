@@ -61,6 +61,9 @@ const UNREACHED: Record<string, string> = {
   'components.badge.notification-label': 'every badge here sets text or accessible-label',
   'components.rich-text.table-scroll-label': 'no rich text here holds a table',
   'components.skip-link.action': 'the one skip link sets its own text',
+  'components.token.dismiss-action': 'the one token here sets dismiss-text',
+  'components.token.open-menu-action': 'no token here has a menu',
+  'components.token.open-token-menu-action': 'no token here has a menu',
   'components.toolbar.opens-in-new-tab-label':
     'the toolbar title links to the overview in this tab',
 };

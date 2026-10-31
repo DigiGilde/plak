@@ -278,13 +278,13 @@ function publish(): void {
  * border says "something can go in here" without imitating a control.
  */
 .dropzone {
-  border: 2px dashed var(--semantics-dividers-color, #e6e8ea);
-  border-radius: var(--semantics-surfaces-corner-radius, 12px);
-  padding: var(--primitives-space-16, 16px);
+  border: var(--primitives-border-width-regular) dashed var(--semantics-dividers-color);
+  border-radius: var(--primitives-corner-radius-lg);
+  padding: var(--primitives-space-16);
 }
 
 .dropzone--active {
-  border-color: var(--semantics-content-accent-color, #0b5fff);
-  background: var(--semantics-categories-accent-tinted-background-color, #eef4ff);
+  border-color: var(--semantics-content-accent-color);
+  background: var(--semantics-categories-accent-tinted-background-color);
 }
 </style>

@@ -548,7 +548,7 @@ describe('Site: changing the address', () => {
 
     await changeAddress(wrapper, 'handboek');
 
-    expect(wrapper.find('nldd-title span[slot="subtitle"]').text()).toBe('team-aurora/handboek');
+    expect(wrapper.find('nldd-title span[slot="supporting-text"]').text()).toBe('team-aurora/handboek');
     expect(breadcrumbsFor('/team-aurora/handboek/settings')).toEqual([
       { text: 'Overzicht', href: '/' },
       { text: 'Team Aurora', href: '/team-aurora' },
@@ -693,7 +693,7 @@ describe('Site: changing the address', () => {
     await router.push('/team-aurora/handboek/settings');
     await untilIdle();
     expect(wrapper.find('[data-testid="site-tabs"]').exists()).toBe(true);
-    expect(wrapper.find('nldd-title span[slot="subtitle"]').text()).toBe('team-aurora/handboek');
+    expect(wrapper.find('nldd-title span[slot="supporting-text"]').text()).toBe('team-aurora/handboek');
   });
 
   it('moves on even when the roles cannot be fetched again, and the member can go on from there', async () => {

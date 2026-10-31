@@ -12,6 +12,7 @@ import type { Group } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { SLUG_MATCH, SLUG_PATTERN, SLUG_RE, slugify, slugifyTyped } from '@/composables/slug';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const props = defineProps<{
   open: boolean;
@@ -117,7 +118,7 @@ watch(
       <!-- nldd-page brings the scroller the sheet expects; see PublishSheet. -->
       <nldd-page>
         <nldd-container padding="24" gap="16">
-          <nldd-title :size="4"><h2>{{ t('group.new.title') }}</h2></nldd-title>
+          <SectionHeading :text="t('group.new.title')" />
 
           <ErrorBanner v-if="error" :error="error" />
 

@@ -27,6 +27,8 @@ import { siteNotFound } from '@/composables/siteGroup';
 import SecretLink from '@/components/site/SecretLink.vue';
 import { accessSummary, formatTimestamp, siteUrl } from '@/format';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
+import CopyNotice from '@/components/CopyNotice.vue';
 
 interface Address {
   id: string;
@@ -210,14 +212,10 @@ function keyErrorText(): string {
               ></nldd-button>
             </nldd-button-group>
 
-            <!-- A status line, not a toast: it belongs to these buttons and
-                 has to be announced when it appears after the copy too. -->
-            <nldd-text
-              size="sm"
-              role="status"
+            <CopyNotice
+              :text="copyNotice[address.id] ?? ''"
               :data-testid="`done-copy-notice-${address.id}`"
-              >{{ copyNotice[address.id] ?? '' }}</nldd-text
-            >
+            />
           </nldd-container>
 
           <nldd-banner
@@ -247,7 +245,7 @@ function keyErrorText(): string {
         </nldd-inline-dialog>
 
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="5"><h2>{{ t('page.done.visibility.heading') }}</h2></nldd-title>
+          <SectionHeading :size="5" :text="t('page.done.visibility.heading')" />
           <nldd-text data-testid="done-visibility">
             {{ accessSummary(site.access) }}
           </nldd-text>
@@ -288,7 +286,7 @@ function keyErrorText(): string {
         </nldd-container>
 
         <nldd-container layout="stack" gap="8">
-          <nldd-title :size="5"><h2>{{ t('page.done.next.heading') }}</h2></nldd-title>
+          <SectionHeading :size="5" :text="t('page.done.next.heading')" />
           <nldd-link :href="sitePath" size="md" data-testid="done-to-site"
             >{{ t('page.done.next.site') }}</nldd-link
           >

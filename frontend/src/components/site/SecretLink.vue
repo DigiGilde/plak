@@ -12,6 +12,7 @@
 import { computed, ref } from 'vue';
 
 import { t } from '@/i18n';
+import CopyNotice from '@/components/CopyNotice.vue';
 
 const props = defineProps<{
   /** The plaintext `selector.verifier`; it exists only at this moment. */
@@ -123,14 +124,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
       </nldd-button-group>
     </nldd-container>
 
-    <!-- A status line, not a toast: it belongs to these buttons and has to be
-         announced when it appears after a copy too. -->
-    <nldd-text
-      size="sm"
-      role="status"
-      :data-testid="`${prefix}-notice`"
-      >{{ notice }}</nldd-text
-    >
+    <CopyNotice :text="notice" :data-testid="`${prefix}-notice`" />
   </nldd-container>
 </template>
 

@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router';
 
 import { setBreadcrumbs } from '../composables/breadcrumbs';
 import { t } from '@/i18n';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 const props = withDefaults(defineProps<{ title: string }>(), {});
 const route = useRoute();
@@ -20,7 +21,7 @@ watch(() => [route.path, props.title], setCrumbs);
 
 <template>
   <nldd-simple-section class="reading-width">
-    <nldd-title :size="1"><h1>{{ title }}</h1></nldd-title>
+    <SectionHeading :level="1" :size="1" :text="title" />
     <nldd-spacer size="16"></nldd-spacer>
     <nldd-rich-text>
       <slot />

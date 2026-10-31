@@ -13,6 +13,7 @@ import { formatSize } from '@/components/site/packing';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import Notices from '@/components/site/Notices.vue';
 import RowActions, { type RowAction } from '@/components/RowActions.vue';
+import SectionHeading from '@/components/SectionHeading.vue';
 
 // See TabOverview.vue for why inheritAttrs is off on every tab.
 defineOptions({ inheritAttrs: false });
@@ -283,10 +284,7 @@ async function setLive(version: Version): Promise<void> {
 
   <section v-else aria-labelledby="heading-versions">
     <nldd-container layout="stack" gap="8">
-      <nldd-title :size="4">
-        <h2 id="heading-versions">{{ t('site.versions.heading') }}</h2>
-        <span slot="subtitle">{{ t('site.versions.intro') }}</span>
-      </nldd-title>
+      <SectionHeading id="heading-versions" :text="t('site.versions.heading')" :intro="t('site.versions.intro')" />
 
       <nldd-rich-text v-if="!loading && storageText" data-testid="versions-storage">
         <p>{{ storageText }}</p>
@@ -495,13 +493,13 @@ async function setLive(version: Version): Promise<void> {
 .skeleton__text {
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-space-6, 6px);
+  gap: var(--primitives-space-6);
 }
 
 .skeleton__bar {
   display: block;
-  border-radius: var(--primitives-corner-radius-xs, 4px);
-  background: var(--semantics-dividers-color, #e6e8ea);
+  border-radius: var(--primitives-corner-radius-xs);
+  background: var(--semantics-dividers-color);
 }
 
 .skeleton__bar--timestamp {
@@ -515,14 +513,14 @@ async function setLive(version: Version): Promise<void> {
 }
 
 .skeleton__bar--marker {
-  width: var(--primitives-space-12, 12px);
-  height: var(--primitives-space-12, 12px);
-  border-radius: var(--primitives-corner-radius-full, 9999px);
+  width: var(--primitives-space-12);
+  height: var(--primitives-space-12);
+  border-radius: var(--primitives-corner-radius-full);
 }
 
 .skeleton__bar--actions {
-  width: var(--primitives-space-32, 32px);
-  height: var(--primitives-space-32, 32px);
-  border-radius: var(--primitives-corner-radius-md, 8px);
+  width: var(--primitives-space-32);
+  height: var(--primitives-space-32);
+  border-radius: var(--primitives-corner-radius-md);
 }
 </style>
