@@ -126,3 +126,34 @@ refresh-swagger-ui:
     # purpose; regenerate them only once you have checked the new bytes
     # against the npm registry, never just because this line went red.
     cd "$target" && shasum -a 256 -c SHA256SUMS
+
+# Maak de release-pull-request vanaf beta, zoals de knop Prepare release onder Actions; oasdiff via Podman
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -n "$(git status --porcelain)" ]]; then
+        echo "De werkboom is niet schoon; commit je wijzigingen of zet ze eerst opzij." >&2
+        exit 1
+    fi
+    git fetch origin beta --tags
+    echo "Naar origin/beta (losgekoppeld); terug naar je branch met: git switch -"
+    git switch --detach origin/beta
+    spec="$(mktemp -t plak-openapi)"
+    trap 'trash "$spec" 2>/dev/null || true' EXIT
+    uv run --project backend python -m plak.api.openapi_file > "$spec"
+    output="$(uv run --script .github/scripts/release.py prepare --spec "$spec" --oasdiff dev/oasdiff)"
+    printf '%s\n' "$output"
+    first="${output%%$'\n'*}"
+    tag="${first#tag=}"
+    if [[ "$first" != tag=* ]] || ! uv run --script .github/scripts/release.py validate-tag "$tag" > /dev/null; then
+        echo "release.py prepare gaf geen geldige tag op de eerste regel: ${first}" >&2
+        exit 1
+    fi
+    git switch -c "release/$tag"
+    git commit -q -m "Release $tag"
+    # No --force: a release branch for this tag that is there already refuses the push.
+    git push -u origin "release/$tag"
+    body="Merging this pull request releases ${tag}: on beta, release.yml tags the commit that adds its CHANGELOG section, and production follows the tag."
+    body+=$'\n\n'"The CHANGELOG section and the What's new notes may be edited in this pull request before it merges. If an API change or another changelog fragment reaches beta first, close this one, delete its branch and prepare the release again (docs/releasing.md)."
+    gh pr create --base beta --head "release/$tag" --title "Release $tag" --body "$body"
+    echo "Release-pull-request voor $tag geopend; je staat nu op release/$tag."

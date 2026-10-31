@@ -103,9 +103,10 @@ No em dashes or en dashes, not in code and not in docs.
 
 ## Changelog
 
-Every pull request that changes shipped behaviour adds a line under
-`## [Unreleased]` in `CHANGELOG.md`; releases are cut from it
-automatically. See `docs/releasing.md` and the `changelog` skill.
+Every pull request that changes shipped behaviour adds a fragment
+`changelog.d/<slug>.<kind>.md`, never a line in `CHANGELOG.md`. A
+release pull request turns the fragments into a section, and merging
+it tags the release. See `docs/releasing.md` and the `changelog` skill.
 
 ## Design of the interface
 

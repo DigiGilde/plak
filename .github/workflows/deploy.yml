@@ -284,8 +284,8 @@ jobs:
           fi
 
       # A release carries its notes: the section for its version in
-      # CHANGELOG.md at the tagged commit, which the release step writes. A
-      # tag set by hand on any other commit goes nowhere.
+      # CHANGELOG.md at the tagged commit, which the release pull request
+      # writes. A tag set by hand on any other commit goes nowhere.
       - name: Check that the tagged commit has its release notes
         run: |
           if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then
@@ -367,8 +367,8 @@ jobs:
           fi
 
       # A release carries its notes: the section for its version in
-      # CHANGELOG.md at the tagged commit, which the release step writes. A
-      # tag set by hand on any other commit goes nowhere.
+      # CHANGELOG.md at the tagged commit, which the release pull request
+      # writes. A tag set by hand on any other commit goes nowhere.
       - name: Check that the tagged commit has its release notes
         run: |
           if ! python3 .github/scripts/release.py notes --tag "${TAG}" > /dev/null; then

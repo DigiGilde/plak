@@ -3,12 +3,12 @@
 Every change to what Plak ships, newest first, in the format of
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A section is
 a CalVer version, the date of its release: `## [2026.10.1]` is the tag
-`v2026.10.1`, and a second release on the same day adds `.N`. A push
-to `beta` with entries under `[Unreleased]` and no hold marker becomes
-a release, with those entries as its notes, and goes to production. How to write an entry, the hold marker and the
-rest of the model are in [docs/releasing.md](docs/releasing.md).
-
-## [Unreleased]
+`v2026.10.1`, and a second release on the same day adds `.N`. A pull
+request describes its change in a fragment under `changelog.d/`; a
+release pull request turns the fragments into the next section here,
+and merging it tags the release and sends it to production. How to
+write a fragment and the rest of the model are in
+[docs/releasing.md](docs/releasing.md).
 
 ## [2026.10.31]
 
@@ -193,7 +193,6 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.31...HEAD
 [2026.10.31]: https://github.com/DigiGilde/plak/compare/v2026.10.7...v2026.10.31
 [2026.10.7]: https://github.com/DigiGilde/plak/compare/v2026.10.4...v2026.10.7
 [2026.10.4]: https://github.com/DigiGilde/plak/compare/v2026.9.30...v2026.10.4
