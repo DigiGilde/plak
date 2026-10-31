@@ -1,6 +1,6 @@
 """security.txt under /.well-known/ (RFC 9116; BIO2 5.24.08).
 
-One document for two origins. RFC 9116 section 2.5.3 says a file whose
+One document for two origins. RFC 9116 section 2.5.2 says a file whose
 retrieval URI appears in none of its Canonical fields should not be trusted,
 so the content origin and the admin origin each get a Canonical line of their
 own and both hosts serve the same body. A Canonical web URI must be https, so
