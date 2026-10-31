@@ -74,6 +74,8 @@ rest of the model are in [docs/releasing.md](docs/releasing.md).
   splits it (GHSA-9pg5-8c7x-5hfx).
 - pyasn1 moves to 0.6.5 (CVE-2026-119194, CVE-2026-119195, CVE-2026-119196,
   CVE-2026-119197).
+- The SPA's tests run with glob 14.0.3 (GHSA-3g3m-2fjr-6pw4) and minimatch
+  11.0.3 (GHSA-g3hv-75wg-m249).
 - A page never sees a secret link that was not meant for it: Plak takes a
   `key` in the shape of a secret link out of the address before it answers,
   also on a refusal, and refuses service worker scripts, which could read a
