@@ -223,7 +223,7 @@ function edit(event: Event): void {
 function left(): void {
   if (typed.value === '') return;
   judged.value = true;
-  if (!typedIsAddress.value) leftVerdict.value = t('address.field.rule');
+  if (!typedIsAddress.value) leftVerdict.value = t('address.field.hyphen');
   else if (typed.value === current.value) leftVerdict.value = t('address.field.differs');
 }
 
@@ -515,8 +515,11 @@ async function change(): Promise<void> {
                         <nldd-validation-item :id="`${testPrefix}-required`" required>
                           {{ t('address.field.required') }}
                         </nldd-validation-item>
+                        <!-- slugifyTyped lowercases, turns anything else into a hyphen and
+                             stops at 63 characters, so a hyphen at either end is all
+                             this rule can still catch. -->
                         <nldd-validation-item :id="`${testPrefix}-rule`" :match="SLUG_MATCH">
-                          {{ t('address.field.rule') }}
+                          {{ t('address.field.hyphen') }}
                         </nldd-validation-item>
                         <!-- Looks ahead, so any value but this one has it. -->
                         <nldd-validation-item :id="`${testPrefix}-differs`" :match="`^(?!${current}$)`">

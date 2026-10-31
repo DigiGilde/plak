@@ -11,7 +11,7 @@ import {
   serverErrorFetch,
   untilIdle,
 } from '@/components/site/testHelpers';
-import { SLUG_MATCH, SLUG_PATTERN } from '@/composables/slug';
+import { SLUG_MATCH, SLUG_PATTERN, slugifyTyped } from '@/composables/slug';
 import { _setLocaleForTest } from '@/i18n';
 
 import AddressSection from './AddressSection.vue';
@@ -485,12 +485,24 @@ describe('AddressSection (site): the form', () => {
     const wrapper = await editing(siteProps());
 
     const rule = wrapper.find('nldd-validation-item#site-address-rule');
-    expect(rule.text()).toBe(
-      'Een adres bevat alleen kleine letters, cijfers en koppeltekens, begint en eindigt niet met een koppelteken en is hoogstens 63 tekens lang',
-    );
+    expect(rule.text()).toBe('Een adres begint en eindigt niet met een koppelteken');
     expect(rule.attributes('match')).toBe(SLUG_MATCH);
     expect(wrapper.find('nldd-validation-list').attributes('hint')).toBeUndefined();
     expect(wrapper.find('[hint]').exists()).toBe(false);
+  });
+
+  it('names only the hyphen at either end in its rule, as that is all the field can still hold wrong', () => {
+    // Not anchored by the list, so it anchors itself.
+    const rule = new RegExp(SLUG_MATCH, 'u');
+    for (const value of ['mijn-', '-mijn', '-', '-mijn-']) {
+      expect(rule.test(slugifyTyped(value))).toBe(false);
+    }
+    // Capitals, other characters and a 64th character never reach it.
+    for (const value of ['Mijn', 'mijn_site', 'a'.repeat(64), 'mijn-site', 'mijn--site']) {
+      expect(rule.test(slugifyTyped(value))).toBe(true);
+    }
+    // An empty value is the requirement's business, not this one's.
+    expect(rule.test('')).toBe(true);
   });
 
   it('refuses the address it already has, with a rule of its own', async () => {
@@ -592,10 +604,36 @@ describe('AddressSection (site): the form', () => {
       await leave(wrapper);
 
       expect(field(wrapper).attributes('invalid')).toBeDefined();
-      expect(alertText(wrapper)).toBe(
-        'Een adres bevat alleen kleine letters, cijfers en koppeltekens, begint en eindigt niet met een koppelteken en is hoogstens 63 tekens lang',
-      );
+      expect(alertText(wrapper)).toBe('Een adres begint en eindigt niet met een koppelteken');
       expect(wrapper.find('[role="alert"]').element.closest('nldd-sheet')).not.toBeNull();
+    });
+
+    it.each([
+      ['a hyphen at the start', ' mijn', '-mijn'],
+      ['only a hyphen', '-', '-'],
+    ])('marks %s with the same rule', async (_, typed, value) => {
+      const wrapper = await editing(siteProps());
+      type(wrapper, typed);
+
+      await leave(wrapper);
+
+      expect(field(wrapper).attributes('value')).toBe(value);
+      expect(field(wrapper).attributes('invalid')).toBeDefined();
+      expect(alertText(wrapper)).toBe('Een adres begint en eindigt niet met een koppelteken');
+    });
+
+    it.each([
+      ['capitals', 'Mijn', 'mijn'],
+      ['a 64th character', 'a'.repeat(64), 'a'.repeat(63)],
+    ])('has no rule to break for %s: the field has made an address of them', async (_, typed, value) => {
+      const wrapper = await editing(siteProps());
+      type(wrapper, typed);
+
+      await leave(wrapper);
+
+      expect(field(wrapper).attributes('value')).toBe(value);
+      expect(field(wrapper).attributes('invalid')).toBeUndefined();
+      expect(alertText(wrapper)).toBeNull();
     });
 
     it('marks the address it already has, with the rule about that', async () => {
@@ -666,6 +704,16 @@ describe('AddressSection (site): the form', () => {
       await leave(wrapper);
 
       expect(alertText(wrapper)).toBe('The new address differs from the current address');
+    });
+
+    it('names the hyphen rule in English in English', async () => {
+      _setLocaleForTest('en');
+      const wrapper = await editing(siteProps());
+      type(wrapper, 'mijn ');
+
+      await leave(wrapper);
+
+      expect(alertText(wrapper)).toBe('An address does not start or end with a hyphen');
     });
   });
 

@@ -41,8 +41,7 @@ export const addressNl = {
   // -- The field ----------------------------------------------------------------
   'address.field.label': 'Nieuw adres',
   'address.field.required': 'Een adres is nodig',
-  'address.field.rule':
-    'Een adres bevat alleen kleine letters, cijfers en koppeltekens, begint en eindigt niet met een koppelteken en is hoogstens 63 tekens lang',
+  'address.field.hyphen': 'Een adres begint en eindigt niet met een koppelteken',
   'address.field.differs': 'Het nieuwe adres verschilt van het huidige adres',
   'address.field.preview': 'Het nieuwe adres wordt {address}',
   'address.placeholder.site': '<site>',
