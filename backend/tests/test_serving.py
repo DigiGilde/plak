@@ -7,6 +7,7 @@ grants access to content.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -2185,8 +2186,15 @@ class TestContentFileResponse:
         path = tmp_path / "groot.bin"
         path.write_bytes(content)
         sent: list[dict] = []
+        requested = False
 
         async def receive() -> dict:
+            # As a server: the request once, then nothing until a disconnect.
+            # Starlette's FileResponse listens for one while it sends.
+            nonlocal requested
+            if requested:
+                await asyncio.Event().wait()
+            requested = True
             return {"type": "http.request", "body": b"", "more_body": False}
 
         async def send(message: dict) -> None:

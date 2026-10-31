@@ -12,6 +12,7 @@ alike. Both directions are pinned there.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -118,8 +119,15 @@ def _raw_scope(raw_path: str, method: str = "GET") -> Scope:
 async def _raw(spa_path: Path, raw_path: str) -> tuple[int, bytes]:
     app = SpaMiddleware(_inner, spa_path=spa_path, content_host=CONTENT_HOST)
     messages: list[dict] = []
+    requested = False
 
     async def receive() -> dict:
+        # As a server: the request once, then nothing until a disconnect.
+        # Starlette's FileResponse listens for one while it sends.
+        nonlocal requested
+        if requested:
+            await asyncio.Event().wait()
+        requested = True
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(message: dict) -> None:

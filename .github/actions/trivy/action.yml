@@ -53,4 +53,4 @@ runs:
         exit-code: ${{ inputs.exit-code }}
         format: ${{ inputs.format }}
         output: ${{ inputs.output }}
-        version: v0.74.0
+        version: v0.76.1
