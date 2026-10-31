@@ -1,5 +1,5 @@
 # The dependency scans of the vulnerabilities job in ci.yml and of the
-# weekly scan.yml: pip-audit over the backend and CLI lockfiles, npm audit
+# daily scan.yml: pip-audit over the backend and CLI lockfiles, npm audit
 # over the frontend lockfile, all against the ignore list in
 # .trivyignore.yaml. Needs a checkout.
 name: Audit the dependencies

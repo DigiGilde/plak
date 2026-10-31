@@ -238,6 +238,13 @@ class TestTheCheckGate:
             "e2e",
         }
 
+    def test_a_hung_e2e_run_does_not_hold_up_the_queue(self, ci, deploy) -> None:
+        """deploy.yml queues its runs instead of cancelling them, so a hung
+        Playwright install would block every later run for GitHub's default
+        of 360 minutes. A normal e2e job takes two to eight minutes."""
+        assert deploy["concurrency"]["cancel-in-progress"] is False
+        assert ci["jobs"]["e2e"]["timeout-minutes"] == 15
+
     def test_the_cli_runs_on_every_python_it_supports(self, ci) -> None:
         """People install the CLI with whatever Python they have, so every
         minor from the floor in requires-python up to cli/.python-version,
@@ -278,6 +285,15 @@ class TestTheScans:
         assert len(gate) == 1
         assert gate[0]["with"]["severity"] == "CRITICAL,HIGH"
         assert gate[0]["with"]["trivyignores"] == ".trivyignore.yaml"
+
+    def test_what_runs_is_scanned_every_day(self) -> None:
+        """Dependabot raises no alerts for uv.lock or for the OS packages
+        in the image, so a new advisory against what runs in production
+        is seen here first."""
+        triggers = _load("scan.yml")[True]
+        assert set(triggers) == {"schedule", "workflow_dispatch"}
+        [schedule] = triggers["schedule"]
+        assert schedule["cron"].endswith(" * * *")
 
     def test_the_image_is_scanned_by_the_digest_that_was_pushed(self, deploy) -> None:
         """A tag can move between the push and the scan."""

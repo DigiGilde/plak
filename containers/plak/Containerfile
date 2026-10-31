@@ -60,8 +60,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PLAK_SPA_PATH=/app/spa \
     PLAK_VERSION=${PLAK_VERSION}
 
-# Numeric, so the kubelet can verify runAsNonRoot (the uid of the groupadd
-# and useradd above).
+# Numeric: the kubelet cannot verify runAsNonRoot for a user name.
 USER 1000:1000
 
 EXPOSE 8080
