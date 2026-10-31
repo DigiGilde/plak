@@ -39,8 +39,10 @@ All three suites sit at 100% and the floors are set there
 
 ## Language
 
-Dutch for everything a person sees: UI texts, error messages and the
-output of the shell scripts in `dev/`.
+The interface speaks Dutch and English: the admin SPA, the pages the
+server renders itself (`backend/src/plak/i18n.py`), the problem+json
+messages and the API docs, each described below. The output of the shell
+scripts in `dev/` is still Dutch only.
 
 English for everything around it: code and identifiers, code comments,
 tests, commit messages, branch names, `README.md`, `SECURITY.md` and
@@ -50,10 +52,10 @@ everything under `docs/`, the route paths of the admin SPA
 the SPA answers in two languages under one. An id is an identifier too:
 do not copy a Dutch one from older code around it.
 
-The admin SPA is the exception: it is bilingual, Dutch and English.
-Every string it shows lives in `frontend/src/i18n/`, in a shared
-catalogue plus one section per area, always in both languages; a key in
-one and not the other is a compile error. Which language a member gets
+The admin SPA is bilingual, Dutch and English. Every string it shows
+lives in `frontend/src/i18n/`, in a shared catalogue plus one section
+per area, always in both languages; a key in one and not the other is a
+compile error. Which language a member gets
 follows their own choice on their account (`members.language`, set on
 `/-/profile`), then their browser, then English. So a Dutch literal in a
 component is a bug, and `frontend/tests/dutch-literals.test.ts` says so.
