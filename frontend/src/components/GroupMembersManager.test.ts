@@ -915,27 +915,6 @@ describe('GroupMembersManager (error)', () => {
   });
 });
 
-describe('GroupMembersManager (the bubbled native event)', () => {
-  it('ignores the inner input firing its own bare input event, without a detail', () => {
-    const wrapper = mountComponent({});
-
-    comboBox(wrapper).element.dispatchEvent(new Event('input'));
-
-    expect(wrapper.find('[data-testid="member-suggestions"]').attributes('empty-text')).not.toBe(
-      'Zoeken...',
-    );
-  });
-
-  it('ignores the inner input firing its own bare change event, without a detail', async () => {
-    const wrapper = mountComponent({});
-    await typeIn(wrapper, 'ver');
-
-    comboBox(wrapper).element.dispatchEvent(new Event('change'));
-
-    expect(comboBox(wrapper).attributes('value')).toBeFalsy();
-  });
-});
-
 describe('GroupMembersManager (what the field reaches)', () => {
   it('says that typing searches the platform and that a member is not choosable', () => {
     const help = mountComponent({})

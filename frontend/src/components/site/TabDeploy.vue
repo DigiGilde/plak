@@ -13,6 +13,7 @@ import { isSiteAdmin as isEffectiveSiteAdmin } from '@/composables/roles';
 import { type MessageKey, t } from '@/i18n';
 import SectionHeading from '@/components/SectionHeading.vue';
 import DisclosureBox from '@/components/DisclosureBox.vue';
+import { useConfirm } from '@/composables/confirm';
 
 /**
  * A sentence cut apart at the placeholders that stand for an element rather
@@ -95,8 +96,6 @@ const idsPath = ref('');
 // Ids copied from the existing link belong to that repository only.
 const idsPrefilled = ref(false);
 
-const unlinkOpen = ref(false);
-const unlinkBusy = ref(false);
 
 const requireOpen = ref(false);
 const requireBusy = ref(false);
@@ -395,24 +394,25 @@ async function submitRepository(): Promise<void> {
 }
 
 async function unlinkRepository(): Promise<void> {
-  unlinkBusy.value = true;
   try {
     await plak.deleteSiteRepository(props.group, props.site);
     repository.value = null;
-    unlinkOpen.value = false;
   } catch (f) {
-    // The modal sits in the top layer and renders the page below it inert; a
-    // notification there would be unreachable. So close first, then notify.
-    unlinkOpen.value = false;
     notices.value?.notify(
       'critical',
       t('publish.deploy.repo.unlinkFailed'),
       errorText(f, t('publish.deploy.repo.unlinkFailedDetail')),
     );
-  } finally {
-    unlinkBusy.value = false;
   }
 }
+
+const {
+  open: unlinkOpen,
+  busy: unlinkBusy,
+  ask: askUnlink,
+  cancel: cancelUnlink,
+  confirm: confirmUnlink,
+} = useConfirm<true>(unlinkRepository);
 
 async function copySiteId(siteId: string): Promise<void> {
   try {
@@ -734,7 +734,7 @@ plak logout
                   variant="critical-transparent"
                   :text="t('publish.deploy.repo.unlink')"
                   data-testid="repository-unlink"
-                  @click="unlinkOpen = true"
+                  @click="askUnlink(true)"
                 ></nldd-button>
               </nldd-button-group>
             </template>
@@ -1023,8 +1023,8 @@ plak logout
     :keep-label="t('publish.deploy.unlink.keep')"
     :confirm-label="t('publish.deploy.unlink.confirm')"
     :busy="unlinkBusy"
-    @confirm="unlinkRepository"
-    @close="unlinkOpen = false"
+    @confirm="confirmUnlink"
+    @close="cancelUnlink"
   />
 
   <ConfirmModal

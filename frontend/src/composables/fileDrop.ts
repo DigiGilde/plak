@@ -128,3 +128,54 @@ export function useWindowDropGuard(active: Ref<boolean>): void {
     { immediate: true },
   );
 }
+
+/**
+ * Dropping a file straight onto a page: the drag state of the page, the
+ * window guard, and what a drop does. A valid file lands in `droppedFile` and
+ * opens the sheet (`open`); a rejected one lands in `dropError`. All of it is
+ * gated by `enabled`, the same condition as the button that opens the sheet,
+ * and the file is forgotten when the sheet closes so that opening it again
+ * through the button does not carry it along.
+ */
+export function usePageDrop(enabled: Ref<boolean>, open: Ref<boolean>) {
+  const { isOver, onDragEnter, onDragOver, onDragLeave, reset } = useDropState();
+  const droppedFile = ref<File | null>(null);
+  const dropError = ref<string | null>(null);
+
+  useWindowDropGuard(enabled);
+
+  function onPageDrop(event: DragEvent): void {
+    if (!enabled.value) return;
+    event.preventDefault();
+    reset();
+    const { file, error: rejection } = resolveDroppedFile(event.dataTransfer);
+    if (rejection) {
+      dropError.value = rejection;
+      return;
+    }
+    if (!file) return;
+    dropError.value = null;
+    droppedFile.value = file;
+    open.value = true;
+  }
+
+  watch(open, (isOpen) => {
+    if (!isOpen) droppedFile.value = null;
+  });
+
+  return {
+    dropTargetActive: isOver,
+    droppedFile,
+    dropError,
+    onPageDragEnter: (event: DragEvent) => {
+      if (enabled.value) onDragEnter(event);
+    },
+    onPageDragOver: (event: DragEvent) => {
+      if (enabled.value) onDragOver(event);
+    },
+    onPageDragLeave: (event: DragEvent) => {
+      if (enabled.value) onDragLeave(event);
+    },
+    onPageDrop,
+  };
+}
