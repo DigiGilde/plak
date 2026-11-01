@@ -19,7 +19,7 @@ export const groupNl = {
   'group.overview.errorFallback': 'Onbekende fout',
   'group.overview.empty': 'Er staat hier nog niets online.',
   'group.overview.empty.supportingText':
-    'Kies een bestand of een archief van je map, geef het een titel, en zet het online. Een groep maak je in dezelfde stap aan.',
+    'Kies een map, een archief of een los HTML-bestand, geef het een titel en zet het online. Een groep maak je in dezelfde stap aan.',
   'group.overview.table.label': 'Sites in {group}',
   'group.overview.table.empty': 'Nog geen sites in deze groep.',
 
@@ -68,8 +68,8 @@ export const groupNl = {
     'De sites van deze groep. Open een site om te publiceren, de toegang te regelen of de versies te bekijken.',
   'group.sites.table.label': 'Sites in deze groep',
   'group.sites.table.empty': 'Nog geen sites in deze groep',
-  'group.sites.table.empty.supportingText':
-    "Kies 'Zet een site online' om de eerste erin te zetten.",
+  'group.sites.table.empty.readOnly':
+    'Alleen een redacteur of beheerder van de groep kan hier een site zetten.',
 
   // -- Group page: members tab ---------------------------------------------
   'group.members.heading': 'Leden',

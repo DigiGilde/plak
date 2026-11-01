@@ -69,6 +69,12 @@ const props = defineProps<{
    * it goes the way a drop on the sheet itself does.
    */
   initialDrop?: Promise<DropResult> | null;
+  /**
+   * The group to have chosen when the sheet opens, for a button that sits on
+   * one group. Taken once, on the transition to `open`; a slug outside
+   * `eligibleGroups` is ignored.
+   */
+  initialGroup?: string | null;
   createGroup: (name: string, slug: string) => Promise<Group>;
   createSite: (groupSlug: string, title: string, slug: string) => Promise<Site>;
   setAccess: (groupSlug: string, siteSlug: string, access: Access) => Promise<Site>;
@@ -527,10 +533,21 @@ watch(
   { immediate: true },
 );
 
+// Set when the last opening was pinned to a group, so the next one starts clean.
+let startedInGroup = false;
+
 useSheetOpen(
   () => props.open,
   sheetEl,
   () => {
+    const wanted = eligibleGroups.value.find((group) => group.slug === props.initialGroup);
+    if (wanted) {
+      groupSlug.value = wanted.slug;
+      startedInGroup = true;
+    } else if (startedInGroup) {
+      groupSlug.value = eligibleGroups.value[0]?.slug ?? '';
+      startedInGroup = false;
+    }
     const dropped = props.initialDrop;
     if (dropped) void receive(() => dropped);
   },

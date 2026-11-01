@@ -26,8 +26,8 @@ function site(slug: string, title: string): Site {
   };
 }
 
-function makeWrapper(sites: Site[] = []) {
-  return { wrapper: mount(TabSites, { props: { sites } }) };
+function makeWrapper(sites: Site[] = [], canPublish = true) {
+  return { wrapper: mount(TabSites, { props: { sites, canPublish } }) };
 }
 
 describe('TabSites', () => {
@@ -43,7 +43,7 @@ describe('TabSites', () => {
     expect(link.text()).toBe('Team Aurora website');
   });
 
-  it('offers no publish button of its own: the group page already has one in the header', () => {
+  it('offers no publish button below a list with sites: the group page has one in the header', () => {
     const { wrapper } = makeWrapper([site('website', 'Team Aurora website')]);
 
     // Two buttons for the same task, one blue and one grey, only invite
@@ -61,5 +61,39 @@ describe('TabSites', () => {
       'Nog geen sites in deze groep',
     );
     expect(wrapper.findAll('nldd-list-item')).toHaveLength(0);
+  });
+
+  it('offers a primary publish button in the empty state', async () => {
+    const { wrapper } = makeWrapper();
+
+    const button = wrapper.find('nldd-inline-dialog[slot="empty"] [data-testid="group-empty-publish"]');
+    expect(button.attributes('slot')).toBe('actions');
+    const props = button.element as HTMLElement & {
+      appearance?: string;
+      startIcon?: string;
+      text?: string;
+    };
+    expect(props.appearance).toBe('primary');
+    expect(props.startIcon).toBe('plus');
+    expect(props.text).toBe('Zet een site online');
+    // The button is the instruction, so the dialog adds no sentence of its own.
+    expect(
+      (wrapper.find('[data-testid="sites-empty"]').element as HTMLElement & { supportingText?: string })
+        .supportingText,
+    ).toBe('');
+    expect(wrapper.find('[data-testid="sites-empty"]').attributes('supporting-text')).toBeUndefined();
+
+    await button.trigger('click');
+    expect(wrapper.emitted('publish')).toHaveLength(1);
+  });
+
+  it('shows no empty-state button to someone who may not publish here', () => {
+    const { wrapper } = makeWrapper([], false);
+
+    expect(wrapper.find('[data-testid="sites-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-empty-publish"]').exists()).toBe(false);
+    expect((wrapper.find('[data-testid="sites-empty"]').element as HTMLElement & { supportingText?: string }).supportingText).toBe(
+      'Alleen een redacteur of beheerder van de groep kan hier een site zetten.',
+    );
   });
 });

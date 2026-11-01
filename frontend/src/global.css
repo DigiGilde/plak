@@ -112,3 +112,11 @@ nldd-form-field-help-text,
 nldd-validation-item {
   overflow-wrap: anywhere;
 }
+
+/* A centred nldd-inline-dialog stretches its actions to the full inner width
+   and has no attribute to stop that; both declarations are needed to keep the
+   button its own width and centred. */
+.empty-state-action {
+  width: fit-content;
+  align-self: center;
+}

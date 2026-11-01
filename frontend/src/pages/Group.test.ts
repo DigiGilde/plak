@@ -1212,4 +1212,64 @@ describe('Group: empty', () => {
       wrapper.find('nldd-table > nldd-inline-dialog[slot="empty"]').attributes('text'),
     ).toBe('Nog geen groepsleden');
   });
+
+  it('opens the publish sheet from the button in the empty state', async () => {
+    backend.data.groups.push({
+      slug: 'leeg',
+      name: 'Lege groep',
+      defaultAccess: { base: 'public', keys: false, invitees: false },
+      previousSlugs: [],
+    });
+
+    backend.data.groupMembers.push({
+      groupSlug: 'leeg',
+      memberId: 'lid-1',
+      identifier: 'beheerder@voorbeeld.nl',
+      name: 'Bea Heerder',
+      email: 'beheerder@voorbeeld.nl',
+      role: 'editor',
+    });
+
+    const { wrapper } = await makeWrapper('/leeg');
+    expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
+
+    await wrapper.find('[data-testid="group-empty-publish"]').trigger('click');
+
+    expect(wrapper.findComponent(PublishSheet).props('open')).toBe(true);
+    expect(wrapper.find('[data-testid="sites-empty"]').attributes('supporting-text')).toBeUndefined();
+  });
+
+  it('shows a reader of an empty group no publish button, in the header or the empty state', async () => {
+    backend.data.loggedInMemberId = 'lid-4';
+    backend.data.groups.push({
+      slug: 'leeg',
+      name: 'Lege groep',
+      defaultAccess: { base: 'public', keys: false, invitees: false },
+      previousSlugs: [],
+    });
+    backend.data.groupMembers.push({
+      groupSlug: 'leeg',
+      memberId: 'lid-4',
+      identifier: 'zoe@voorbeeld.nl',
+      name: 'Zoë de Wit',
+      email: 'zoe@voorbeeld.nl',
+      role: 'reader',
+    });
+
+    const { wrapper } = await makeWrapper('/leeg');
+
+    expect(wrapper.find('[data-testid="sites-empty"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="group-empty-publish"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sites-empty"]').attributes('supporting-text')).toBe(
+      'Alleen een redacteur of beheerder van de groep kan hier een site zetten.',
+    );
+  });
+
+  it('adds no empty-state button to a group with sites', async () => {
+    const { wrapper } = await makeWrapper('/team-aurora');
+
+    expect(wrapper.find('[data-testid="group-empty-publish"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="group-publish"]').exists()).toBe(true);
+  });
 });

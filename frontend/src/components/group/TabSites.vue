@@ -3,9 +3,10 @@
  * Sites tab of the group page: every site in this group as a row to its own
  * site page.
  *
- * No add action of its own: the group page carries one in its header, and a
- * second button for the same job below the list only asks which of the two
- * you are supposed to press.
+ * A list with sites has no add action of its own: the group page carries one
+ * in its header, and a second button for the same job below the list only asks
+ * which of the two you are supposed to press. Only the empty state, where
+ * there is nothing else to look at, repeats it.
  */
 import type { Site } from '@/api/types';
 import SiteRow, { SITE_COLUMNS, SITE_COLUMNS_SM } from '@/components/SiteRow.vue';
@@ -16,9 +17,8 @@ import SectionHeading from '@/components/SectionHeading.vue';
 // to the markup.
 defineOptions({ inheritAttrs: false });
 
-defineProps<{ sites: Site[] }>();
-
-
+defineProps<{ sites: Site[]; canPublish: boolean }>();
+defineEmits<{ publish: [] }>();
 </script>
 
 <template>
@@ -56,9 +56,20 @@ defineProps<{ sites: Site[] }>();
           slot="empty"
           icon="rectangle-stack"
           :text="t('group.sites.table.empty')"
-          :supporting-text="t('group.sites.table.empty.supportingText')"
+          :supporting-text="canPublish ? undefined : t('group.sites.table.empty.readOnly')"
           data-testid="sites-empty"
-        ></nldd-inline-dialog>
+        >
+          <nldd-button
+            v-if="canPublish && sites.length === 0"
+            slot="actions"
+            appearance="primary"
+            :text="t('group.action.publishSite')"
+            start-icon="plus"
+            class="empty-state-action"
+            data-testid="group-empty-publish"
+            @click="$emit('publish')"
+          ></nldd-button>
+        </nldd-inline-dialog>
         <SiteRow v-for="site in sites" :key="site.slug" :site="site" />
       </nldd-table>
     </nldd-container>
