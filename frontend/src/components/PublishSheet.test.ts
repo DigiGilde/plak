@@ -1,11 +1,21 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import type { Mock } from 'vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { watch } from 'vue';
 
 import { ApiError } from '@/api/client';
 import type { Group, Me, MyGroupRole, Site } from '@/api/types';
 
 import PublishSheet from './PublishSheet.vue';
+import { type DropResult } from './site/packing';
+import UploadBlock from './site/UploadBlock.vue';
+import {
+  FakeDataTransfer,
+  fireDropThatExpires,
+  giveFieldAnInput,
+  makeTransfer,
+  untilQuiet,
+} from './site/testHelpers';
 
 const AURORA: Group = { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 const TEAM: Group = { slug: 'team', name: 'Team', defaultAccess: { base: 'site_team', keys: false, invitees: false }, previousSlugs: [] };
@@ -156,8 +166,8 @@ describe('PublishSheet (the file drives the rest)', () => {
     expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe(expect_);
   });
 
-  it.each(['index.html', 'index.htm', '.zip'])(
-    'leaves the title empty for %s, since that is the name of the mechanism',
+  it.each(['index.html', 'index.htm', '.zip', 'public.tar.gz', 'dist.zip', 'build.tgz', 'out.zip', '_site.tar.gz'])(
+    'leaves the title empty for %s, since that names the mechanism and not the site',
     async (name) => {
       const { wrapper } = mountComponent();
 
@@ -210,7 +220,7 @@ describe('PublishSheet (the file drives the rest)', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
-    const field = wrapper.find('[data-testid="publish-file"]');
+    const field = wrapper.find('[data-testid="upload-input"]');
     expect(field.attributes('required')).toBeDefined();
     expect(field.attributes('invalid')).toBeUndefined();
   });
@@ -218,9 +228,36 @@ describe('PublishSheet (the file drives the rest)', () => {
   it('says upfront what is allowed, instead of only after a failed attempt', () => {
     const { wrapper } = mountComponent();
 
-    const field = wrapper.find('nldd-form-field[label="Bestand"]');
-    expect(field.attributes('supporting-label')).toContain('.zip');
-    expect(field.attributes('supporting-label')).toContain('HTML-bestand');
+    const field = wrapper.find('nldd-form-field[label="Bestand of map"]');
+    const help = field.find('nldd-form-field-help-text').text();
+    expect(help).toContain('.zip');
+    expect(help).toContain('.tar.gz');
+    expect(help).toContain('map');
+    expect(help).toContain('HTML-bestand');
+  });
+
+  it('marks the field as one that takes a folder too, for the words it shows during a drag', () => {
+    const { wrapper } = mountComponent();
+
+    expect(wrapper.find('[data-testid="upload-input"]').attributes()).toHaveProperty(
+      'data-takes-folders',
+    );
+  });
+
+  it('says a chosen file is ready, as the upload zone of an existing site does', async () => {
+    const { wrapper } = mountComponent();
+
+    choose(wrapper, file('mijn-site.zip'));
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'mijn-site.zip',
+    );
+
+    choose(wrapper);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
   });
 });
 
@@ -910,7 +947,7 @@ describe('PublishSheet (closing and showing)', () => {
     expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
     // The way out sits in the heading, not up against "Zet online".
     expect(wrapper.find('[data-testid="publish-close"]').attributes('slot')).toBe('end');
-    expect(wrapper.find('nldd-form-actions nldd-button[type="button"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-form-actions [data-testid="publish-close"]').exists()).toBe(false);
   });
 
   it('opens and closes the sheet itself via show and hide', async () => {
@@ -955,17 +992,9 @@ describe('PublishSheet (closing and showing)', () => {
 });
 
 describe('PublishSheet (dragging)', () => {
-  /** Enough of DataTransfer for `resolveDroppedFile`: `types`, `files`, and
-   * `items` with `webkitGetAsEntry`. */
-  function fakeDataTransfer(files: File[], directory = false): DataTransfer {
-    return {
-      types: files.length ? ['Files'] : [],
-      files,
-      items: files.map(() => ({
-        kind: 'file',
-        webkitGetAsEntry: () => (directory ? { isDirectory: true } : { isDirectory: false }),
-      })),
-    } as unknown as DataTransfer;
+  /** A DataTransfer with one file per entry, the way readDrop reads it. */
+  function fakeDataTransfer(files: File[]): DataTransfer {
+    return makeTransfer(Object.fromEntries(files.map((one) => [one.name, one])));
   }
 
   function dragEvent(type: string, dt: DataTransfer): Event {
@@ -985,7 +1014,7 @@ describe('PublishSheet (dragging)', () => {
     await flushPromises();
 
     expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
     // No shadow DOM here, so the field cannot be given the file and the chip
     // is the fallback. In a browser the field holds it and shows it itself.
     expect(textOf(wrapper, 'publish-file-chosen')).toContain('mijn-site.zip');
@@ -998,7 +1027,7 @@ describe('PublishSheet (dragging)', () => {
     await flushPromises();
 
     // Its own required rule would block the submit over a file it never got.
-    const field = wrapper.find('[data-testid="publish-file"]');
+    const field = wrapper.find('[data-testid="upload-input"]');
     expect(field.attributes('required')).toBeUndefined();
     expect(field.attributes('invalid')).toBeUndefined();
 
@@ -1014,7 +1043,7 @@ describe('PublishSheet (dragging)', () => {
     await wrapper.find('[data-testid="publish-file-chosen"]').trigger('dismiss');
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publish-file"]').attributes('required')).toBeDefined();
+    expect(wrapper.find('[data-testid="upload-input"]').attributes('required')).toBeDefined();
   });
 
   it('clears a dragged file again, with the same button as on a choice', async () => {
@@ -1031,28 +1060,139 @@ describe('PublishSheet (dragging)', () => {
     expect(actions.publish).not.toHaveBeenCalled();
   });
 
-  it('refuses two files at once, without filling the file', async () => {
+  /** What the sheet would publish, read off the call the submit makes. */
+  async function published(wrapper: Wrapper, actions: Flow, title = 'Mijn site'): Promise<File> {
+    typeIn(wrapper, 'title', title);
+    await submit(wrapper);
+    return actions.publish.mock.calls[0]![2] as File;
+  }
+
+  function hugoPublic() {
+    return {
+      'index.html': file('index.html'),
+      css: { 'style.css': new File(['a{}'], 'style.css') },
+      posts: { hallo: { 'index.html': file('index.html') } },
+    };
+  }
+
+  it('packs a dragged folder, and publishes the archive', async () => {
+    const { wrapper, actions } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), { 'hugo-blog': hugoPublic() });
+    await untilQuiet();
+
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
+    expect(notice).toContain('hugo-blog');
+    expect(notice).toContain('3 bestanden');
+    // The folder has a name of its own, and that is what the title follows.
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Hugo blog');
+
+    await submit(wrapper);
+    const sent = actions.publish.mock.calls[0]![2] as File;
+    expect(sent.name).toBe('hugo-blog.tar.gz');
+    expect(sent.size).toBeGreaterThan(0);
+  });
+
+  it('asks for a title on a folder called public, since that is what the build calls it', async () => {
+    const { wrapper } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), { public: hugoPublic() });
+    await untilQuiet();
+
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'public',
+    );
+  });
+
+  it('packs the loose contents of a folder, reported by count and asking for a title', async () => {
+    const { wrapper, actions } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), hugoPublic());
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toMatch(
+      /^3 bestanden ingepakt, /,
+    );
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+
+    const sent = await published(wrapper, actions);
+    expect(sent.name).toBe('site.tar.gz');
+  });
+
+  it('does not name the site after the made-up archive when the field echoes the hand-over', async () => {
+    const { wrapper } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), hugoPublic());
+    await untilQuiet();
+
+    // jsdom has no DataTransfer, so the hand-over itself cannot run here. In a
+    // browser the field answers it with its own File, same name and size.
+    const packed = (wrapper.vm as unknown as { file: File }).file;
+    choose(wrapper, new File([packed], packed.name));
+    await flushPromises();
+
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+    expect(wrapper.find('nldd-text-field[name="slug"]').attributes('value')).toBe('');
+  });
+
+  it('follows the file name again once a named file replaces the loose contents', async () => {
+    const { wrapper } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), hugoPublic());
+    await untilQuiet();
+    // Same name and size as the packed archive: only the drop tells them apart.
+    const packed = (wrapper.vm as unknown as { file: File }).file;
+    sheetEl(wrapper).dispatchEvent(
+      dragEvent('drop', fakeDataTransfer([new File([packed], packed.name)])),
+    );
+    await untilQuiet();
+
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Site');
+  });
+
+  it('refuses two loose archives, which together have no start page', async () => {
     const { wrapper, actions } = mountComponent();
 
     sheetEl(wrapper).dispatchEvent(
       dragEvent('drop', fakeDataTransfer([file('een.zip'), file('twee.zip')])),
     );
-    await flushPromises();
+    await untilQuiet();
 
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      'index.html',
+    );
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
 
-  it('refuses a folder', async () => {
+  it('refuses a folder without a start page', async () => {
     const { wrapper, actions } = mountComponent();
 
-    sheetEl(wrapper).dispatchEvent(
-      dragEvent('drop', fakeDataTransfer([file('map')], true)),
-    );
-    await flushPromises();
+    fireDropThatExpires(sheetEl(wrapper), {
+      map: { 'lees-mij.txt': file('lees-mij.txt') },
+    });
+    await untilQuiet();
 
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      'map',
+    );
+    await submit(wrapper);
+    expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('refuses a folder with a secret in it, and says which file', async () => {
+    const { wrapper, actions } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), {
+      project: { 'index.html': file('index.html'), '.env': file('.env') },
+    });
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      '.env',
+    );
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
   });
@@ -1061,11 +1201,126 @@ describe('PublishSheet (dragging)', () => {
     const { wrapper, actions } = mountComponent();
 
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
-    await flushPromises();
+    await untilQuiet();
 
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      'foto.png',
+    );
     await submit(wrapper);
     expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('says so when this browser cannot pack', async () => {
+    vi.stubGlobal('CompressionStream', undefined);
+    const { wrapper, actions } = mountComponent();
+
+    fireDropThatExpires(sheetEl(wrapper), { public: hugoPublic() });
+    await untilQuiet();
+    vi.unstubAllGlobals();
+
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      'Deze browser kan een map niet zelf inpakken',
+    );
+    await submit(wrapper);
+    expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('keeps the submit away while a folder is still being packed', async () => {
+    const { wrapper, actions } = mountComponent();
+    let finish!: (result: DropResult) => void;
+    await wrapper.setProps({
+      open: false,
+      initialDrop: new Promise<DropResult>((resolve) => {
+        finish = resolve;
+      }),
+    });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="drag-progress"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="publish-submit"]').attributes('loading')).toBeDefined();
+    typeIn(wrapper, 'title', 'Mijn site');
+    await submit(wrapper);
+    expect(actions.createSite).not.toHaveBeenCalled();
+
+    finish({ kind: 'file', file: file('mijn-site.zip') });
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="publish-submit"]').attributes('loading')).toBeUndefined();
+    await submit(wrapper);
+    expect(actions.publish).toHaveBeenCalled();
+  });
+
+  it('does not publish the earlier file while a newer drop is still being read', async () => {
+    const { wrapper, actions } = mountComponent();
+    choose(wrapper, file('eerder.zip'));
+    await flushPromises();
+
+    let finish!: (read: File) => void;
+    const transfer = {
+      types: ['Files'],
+      files: [],
+      items: [
+        {
+          webkitGetAsEntry: () => ({
+            name: 'nieuw.zip',
+            isFile: true,
+            isDirectory: false,
+            file: (resolve: (read: File) => void) => {
+              finish = resolve;
+            },
+          }),
+        },
+      ],
+    } as unknown as DataTransfer;
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', transfer));
+    await flushPromises();
+
+    await submit(wrapper);
+    expect(actions.createSite).not.toHaveBeenCalled();
+    expect(actions.publish).not.toHaveBeenCalled();
+
+    const newer = file('nieuw.zip');
+    finish(newer);
+    await untilQuiet();
+    await submit(wrapper);
+
+    expect(actions.publish.mock.calls[0]![2]).toBe(newer);
+  });
+
+  it('drops what is still under way when the sheet closes, so it does not come back on reopening', async () => {
+    const { wrapper } = mountComponent();
+    let finish!: (result: DropResult) => void;
+    await wrapper.setProps({
+      open: false,
+      initialDrop: new Promise<DropResult>((resolve) => {
+        finish = resolve;
+      }),
+    });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    await wrapper.find('[data-testid="publish-close"]').trigger('click');
+    expect(wrapper.find('[data-testid="drag-progress"]').exists()).toBe(false);
+    finish({ kind: 'file', file: file('te-laat.zip') });
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+  });
+
+  it('clears a refusal as soon as something usable arrives', async () => {
+    const { wrapper } = mountComponent();
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
+    await untilQuiet();
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+
+    choose(wrapper, file('mijn-site.zip'));
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
   });
 
   it('shows the drag state on dragenter and hides it again on dragleave or drop', async () => {
@@ -1141,7 +1396,7 @@ describe('PublishSheet (dragging)', () => {
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
   });
 
@@ -1154,46 +1409,76 @@ describe('PublishSheet (dragging)', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('dismisses the drop error banner on its own dismiss', async () => {
-    const { wrapper } = mountComponent();
-
-    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('foto.png')])));
-    await flushPromises();
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(true);
-
-    await wrapper.find('[data-testid="publish-drag-error"]').trigger('dismiss');
-
-    expect(wrapper.find('[data-testid="publish-drag-error"]').exists()).toBe(false);
-  });
-
-  it('lets a second drop win over the async handoff of the first, without racing it', async () => {
+  it('lets a second drop win over the first, without racing it', async () => {
     const { wrapper } = mountComponent();
 
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('eerste.zip')])));
     sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('tweede.zip')])));
-    for (let i = 0; i < 5; i += 1) await flushPromises();
+    await untilQuiet();
 
-    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Eerste');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Tweede');
     expect(textOf(wrapper, 'publish-file-chosen')).toContain('tweede.zip');
   });
 
-  it('fills the file right away when the sheet opens with a file already chosen', async () => {
+  it('does not take a file back from the field that was chosen right after a drop', async () => {
+    const { wrapper } = mountComponent();
+    // The title is set right after the hand-over to the field has begun, and
+    // that hand-over waits a tick: the only gap in which a choice can land.
+    const stop = watch(
+      () => (wrapper.vm as unknown as { title: string }).title,
+      () => choose(wrapper, file('gekozen.zip')),
+      { flush: 'sync' },
+    );
+
+    sheetEl(wrapper).dispatchEvent(dragEvent('drop', fakeDataTransfer([file('gedropt.zip')])));
+    await untilQuiet();
+    stop();
+
+    // The field holds the chosen file, so it says so itself and no chip is needed.
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
+  });
+
+  it('takes over a drop on the page when the sheet opens', async () => {
+    const actions = flow();
+    const dropped: DropResult = { kind: 'file', file: file('gedropt.zip') };
+    const wrapper = mount(PublishSheet, {
+      props: {
+        open: false,
+        groups: [AURORA],
+        contentBase: 'https://sites.plak.test',
+        initialDrop: Promise.resolve(dropped),
+        ...actions,
+      },
+      global: { stubs: { teleport: true } },
+    });
+    await flushPromises();
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('');
+
+    await wrapper.setProps({ open: true });
+    await untilQuiet();
+
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Gedropt');
+  });
+
+  it('shows a refusal from a drop on the page, and reports a read that fails', async () => {
     const actions = flow();
     const wrapper = mount(PublishSheet, {
       props: {
         open: false,
         groups: [AURORA],
         contentBase: 'https://sites.plak.test',
-        initialFile: file('gedropt.zip'),
+        initialDrop: Promise.reject(new Error('niet leesbaar')),
         ...actions,
       },
       global: { stubs: { teleport: true } },
     });
 
     await wrapper.setProps({ open: true });
-    await flushPromises();
+    await untilQuiet();
 
-    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Gedropt');
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+      'Inpakken is niet gelukt',
+    );
   });
 
   it('slots an nldd-page, the component that brings the sheet its scroller', () => {
@@ -1219,5 +1504,602 @@ describe('PublishSheet (dragging)', () => {
       expect(field, `${id} has no nldd-form-field around it`).not.toBeNull();
       expect(field!.querySelector(':scope > nldd-form-field-help-text')?.textContent).toBeTruthy();
     }
+  });
+});
+
+describe('PublishSheet (the same upload block as on a site)', () => {
+  it('holds the field, the help text and the folder button in the dashed zone', () => {
+    const { wrapper } = mountComponent();
+
+    const zone = wrapper.findComponent(UploadBlock).find('[data-testid="dropzone"]');
+    expect(zone.classes()).toContain('dropzone');
+    expect(zone.find('nldd-form-field[label="Bestand of map"]').exists()).toBe(true);
+    expect(zone.find('[data-testid="upload-input"]').exists()).toBe(true);
+    expect(zone.find('nldd-validation-list').exists()).toBe(true);
+    expect(zone.find('nldd-form-field-help-text').exists()).toBe(true);
+    expect(zone.find('nldd-button-group > [data-testid="upload-folder"]').exists()).toBe(true);
+    expect(zone.find('[data-testid="upload-folder-input"]').exists()).toBe(true);
+  });
+
+  it('keeps its own submit at the bottom of its form, outside the zone', () => {
+    const { wrapper } = mountComponent();
+
+    const zone = wrapper.find('[data-testid="dropzone"]');
+    expect(zone.find('[data-testid="publish-submit"]').exists()).toBe(false);
+    const submit = wrapper.find('nldd-form-actions > [data-testid="publish-submit"]');
+    expect(submit.exists()).toBe(true);
+    expect(zone.element.closest('nldd-form')).toBe(submit.element.closest('nldd-form'));
+  });
+
+  it('shows the feedback inside the zone', async () => {
+    const { wrapper } = mountComponent();
+
+    choose(wrapper, file('mijn-site.zip'));
+    await flushPromises();
+
+    const zone = wrapper.find('[data-testid="dropzone"]');
+    expect(zone.find('[data-testid="drag-done"]').exists()).toBe(true);
+  });
+
+  it('shows the fallback for a file the field could not take right under the field', async () => {
+    const { wrapper } = mountComponent();
+
+    wrapper.find('nldd-sheet').element.dispatchEvent(dropOf(file('mijn-site.zip')));
+    await untilQuiet();
+
+    const chip = wrapper.find('[data-testid="dropzone"] [data-testid="publish-file-chosen"]');
+    expect(chip.element.previousElementSibling?.getAttribute('data-testid')).toBe('upload-input');
+  });
+
+  it('stays a drop target as a whole sheet: a drop beside the zone counts', async () => {
+    const { wrapper } = mountComponent();
+    const title = wrapper.find('nldd-text-field[name="title"]').element;
+    expect(wrapper.find('[data-testid="dropzone"]').element.contains(title)).toBe(false);
+
+    title.dispatchEvent(dropOf(file('mijn-site.zip')));
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'mijn-site.zip',
+    );
+  });
+
+  it('lights the zone up as long as a file is over the sheet', async () => {
+    const { wrapper } = mountComponent();
+    // Asked anew each time: the teleport stub rebuilds its contents on a render.
+    const zone = () => wrapper.find('[data-testid="dropzone"]');
+    const sheet = () => wrapper.find('nldd-sheet').element;
+
+    sheet().dispatchEvent(dragOf('dragenter'));
+    await flushPromises();
+    expect(zone().classes()).toContain('dropzone--active');
+
+    sheet().dispatchEvent(dragOf('dragleave'));
+    await flushPromises();
+    expect(zone().classes()).not.toContain('dropzone--active');
+  });
+
+  it('keeps the field in place during a drag, since a new one would lose its file', async () => {
+    const actions = flow();
+    const wrapper = mount(PublishSheet, {
+      props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...actions },
+      attachTo: document.body,
+    });
+    const field = document.body.querySelector('nldd-file-field');
+    expect(field).not.toBeNull();
+
+    document.body.querySelector('nldd-sheet')!.dispatchEvent(dragOf('dragenter'));
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="publish-drag-active"]')).not.toBeNull();
+    expect(document.body.querySelector('nldd-file-field')).toBe(field);
+
+    wrapper.unmount();
+  });
+
+  it('gives the validation list the name of the file, and takes it back on clearing', async () => {
+    const { wrapper } = mountComponent();
+    const valueOfList = () => {
+      const list = wrapper.find('nldd-validation-list').element as HTMLElement & { value?: string };
+      return list.getAttribute('value') ?? list.value;
+    };
+    expect(valueOfList()).toBe('');
+
+    wrapper.find('nldd-sheet').element.dispatchEvent(dropOf(file('mijn-site.zip')));
+    await untilQuiet();
+    expect(valueOfList()).toBe('mijn-site.zip');
+
+    await wrapper.find('[data-testid="publish-file-chosen"]').trigger('dismiss');
+    await flushPromises();
+    expect(valueOfList()).toBe('');
+  });
+
+  describe('with the field nldd-form marks red', () => {
+    /** A real teleport: the stub rebuilds its contents, and the mark along with them. */
+    function mountAttached() {
+      const wrapper = mount(PublishSheet, {
+        props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...flow() },
+        attachTo: document.body,
+      });
+      const field = document.body.querySelector('nldd-file-field')!;
+      field.setAttribute('invalid', '');
+      return { wrapper, field };
+    }
+
+    it('takes the mark off once a dropped file has arrived, and tells the form', async () => {
+      const { wrapper, field } = mountAttached();
+      const told = vi.fn();
+      field.addEventListener('input', told);
+
+      document.body.querySelector('nldd-sheet')!.dispatchEvent(dropOf(file('mijn-site.zip')));
+      await untilQuiet();
+
+      expect(field.hasAttribute('invalid')).toBe(false);
+      expect(told).toHaveBeenCalled();
+
+      wrapper.unmount();
+    });
+
+    it('takes the mark off when the fallback token clears the file', async () => {
+      const { wrapper, field } = mountAttached();
+      document.body.querySelector('nldd-sheet')!.dispatchEvent(dropOf(file('mijn-site.zip')));
+      await untilQuiet();
+      field.setAttribute('invalid', '');
+
+      document.body
+        .querySelector('[data-testid="publish-file-chosen"]')!
+        .dispatchEvent(new CustomEvent('dismiss'));
+      await flushPromises();
+
+      expect(field.hasAttribute('invalid')).toBe(false);
+
+      wrapper.unmount();
+    });
+
+    it('leaves the mark on while a refusal brought no file', async () => {
+      const { wrapper, field } = mountAttached();
+
+      document.body.querySelector('nldd-sheet')!.dispatchEvent(dropOf(file('foto.png')));
+      await untilQuiet();
+
+      expect(field.hasAttribute('invalid')).toBe(true);
+
+      wrapper.unmount();
+    });
+  });
+
+  function dragOf(type: string): Event {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', {
+      value: makeTransfer({ 'mijn-site.zip': file('mijn-site.zip') }),
+    });
+    return event;
+  }
+
+  /** A drop event carrying one file, bubbling up from wherever it is fired. */
+  function dropOf(one: File): Event {
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', {
+      value: makeTransfer({ [one.name]: one }),
+    });
+    return event;
+  }
+});
+
+describe('PublishSheet (a refused upload forgets the earlier choice)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  function drop(wrapper: Wrapper, tree: Parameters<typeof makeTransfer>[0]): void {
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: makeTransfer(tree) });
+    wrapper.find('nldd-sheet').element.dispatchEvent(event);
+  }
+
+  function chooseFolderOf(wrapper: Wrapper, paths: string[]): void {
+    const input = wrapper.find('[data-testid="upload-folder-input"]').element as HTMLInputElement;
+    const files = paths.map((path) => {
+      const one = file(path.split('/').pop()!);
+      Object.defineProperty(one, 'webkitRelativePath', { value: path });
+      return one;
+    });
+    Object.defineProperty(input, 'files', { value: files, configurable: true });
+    input.dispatchEvent(new Event('change'));
+  }
+
+  function titleOf(wrapper: Wrapper): string | undefined {
+    return wrapper.find('nldd-text-field[name="title"]').attributes('value');
+  }
+
+  function slugOf(wrapper: Wrapper): string | undefined {
+    return wrapper.find('nldd-text-field[name="slug"]').attributes('value');
+  }
+
+  const ROUTES: [string, (wrapper: Wrapper) => void][] = [
+    [
+      'a dropped folder without a start page',
+      (wrapper) => drop(wrapper, { map: { 'lees-mij.txt': file('lees-mij.txt') } }),
+    ],
+    [
+      'a dropped folder with a secret in it',
+      (wrapper) => drop(wrapper, { map: { 'index.html': file('index.html'), '.env': file('.env') } }),
+    ],
+    ['a dropped file that is no site', (wrapper) => drop(wrapper, { 'foto.png': file('foto.png') })],
+    [
+      'loose contents without a start page',
+      (wrapper) => drop(wrapper, { 'a.txt': file('a.txt'), css: { 'b.css': file('b.css') } }),
+    ],
+    ['a chosen folder without a start page', (wrapper) => chooseFolderOf(wrapper, ['map/a.txt'])],
+    ['an empty chosen folder', (wrapper) => chooseFolderOf(wrapper, [])],
+  ];
+
+  function expectNothingChosen(wrapper: Wrapper): void {
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="publish-file-chosen"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="upload-input"]').attributes('required')).toBeDefined();
+    const list = wrapper.find('nldd-validation-list').element as HTMLElement & { value?: string };
+    expect(list.getAttribute('value') ?? list.value).toBe('');
+  }
+
+  it.each(ROUTES)('after %s, a submit sends nothing', async (_route, refuse) => {
+    const { wrapper, actions } = mountComponent();
+    drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+    await untilQuiet();
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(true);
+
+    refuse(wrapper);
+    await untilQuiet();
+    expectNothingChosen(wrapper);
+
+    typeIn(wrapper, 'title', 'Mijn site');
+    await submit(wrapper);
+
+    expect(actions.createSite).not.toHaveBeenCalled();
+    expect(actions.publish).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="upload-input"]').attributes('invalid')).toBeDefined();
+  });
+
+  it('after a browser that cannot pack, a submit sends nothing', async () => {
+    const { wrapper, actions } = mountComponent();
+    drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+    await untilQuiet();
+    vi.stubGlobal('CompressionStream', undefined);
+
+    drop(wrapper, { map: { 'index.html': file('index.html') } });
+    await untilQuiet();
+    expectNothingChosen(wrapper);
+
+    typeIn(wrapper, 'title', 'Mijn site');
+    await submit(wrapper);
+
+    expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('after a read that fails on the page, a submit sends nothing', async () => {
+    const actions = flow();
+    const wrapper = mount(PublishSheet, {
+      props: {
+        open: false,
+        groups: [AURORA],
+        contentBase: 'https://sites.plak.test',
+        initialDrop: Promise.reject(new Error('niet leesbaar')),
+        ...actions,
+      },
+      global: { stubs: { teleport: true } },
+    });
+    await wrapper.setProps({ open: true });
+    await untilQuiet();
+    expectNothingChosen(wrapper);
+
+    typeIn(wrapper, 'title', 'Mijn site');
+    await submit(wrapper);
+
+    expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('publishes a good choice after a refusal, and only that one', async () => {
+    const { wrapper, actions } = mountComponent();
+    drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+    await untilQuiet();
+    drop(wrapper, { 'foto.png': file('foto.png') });
+    await untilQuiet();
+
+    const good = file('goed.zip');
+    drop(wrapper, { 'goed.zip': good });
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
+    await submit(wrapper);
+    expect(actions.publish.mock.calls[0]![2]).toBe(good);
+  });
+
+  describe('the title', () => {
+    it('goes with the file it came from, and the address along with it', async () => {
+      const { wrapper } = mountComponent();
+      drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+      await untilQuiet();
+      expect(titleOf(wrapper)).toBe('Eerder');
+      expect(slugOf(wrapper)).toBe('eerder');
+
+      drop(wrapper, { 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('');
+      expect(slugOf(wrapper)).toBe('');
+    });
+
+    it('follows a good file that replaces the earlier one', async () => {
+      const { wrapper } = mountComponent();
+      drop(wrapper, { 'eerste.zip': file('eerste.zip') });
+      await untilQuiet();
+
+      drop(wrapper, { 'tweede.zip': file('tweede.zip') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('Tweede');
+    });
+
+    it('follows a file chosen in the field as well', async () => {
+      const { wrapper } = mountComponent();
+      choose(wrapper, file('eerste.zip'));
+      await flushPromises();
+
+      choose(wrapper, file('tweede.zip'));
+      await flushPromises();
+
+      expect(titleOf(wrapper)).toBe('Tweede');
+    });
+
+    it('stays when the user typed it, whatever happens to the file', async () => {
+      const { wrapper } = mountComponent();
+      drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+      await untilQuiet();
+      typeIn(wrapper, 'title', 'Eigen titel');
+      await flushPromises();
+
+      drop(wrapper, { 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('Eigen titel');
+      expect(slugOf(wrapper)).toBe('eigen-titel');
+    });
+
+    it('stays when the user typed it before there was any file', async () => {
+      const { wrapper } = mountComponent();
+      typeIn(wrapper, 'title', 'Eigen titel');
+      await flushPromises();
+
+      drop(wrapper, { 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('Eigen titel');
+    });
+
+    it('stays when the user typed back exactly what the file had put there', async () => {
+      const { wrapper } = mountComponent();
+      drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+      await untilQuiet();
+      typeIn(wrapper, 'title', 'Eerder');
+      await flushPromises();
+
+      drop(wrapper, { 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('Eerder');
+    });
+
+    it('leaves an address the user typed in place when the title goes', async () => {
+      const { wrapper } = mountComponent();
+      drop(wrapper, { 'eerder.zip': file('eerder.zip') });
+      await untilQuiet();
+      typeIn(wrapper, 'slug', 'eigen-adres');
+      await flushPromises();
+
+      drop(wrapper, { 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(titleOf(wrapper)).toBe('');
+      expect(slugOf(wrapper)).toBe('eigen-adres');
+    });
+
+    it('stays when only the field is emptied: that is no new upload', async () => {
+      const { wrapper } = mountComponent();
+      choose(wrapper, file('eerder.zip'));
+      await flushPromises();
+
+      choose(wrapper);
+      await flushPromises();
+
+      expect(titleOf(wrapper)).toBe('Eerder');
+    });
+  });
+
+  describe('with a field that really takes the file', () => {
+    /** A real teleport: the stub rebuilds its contents, and the field's input with them. */
+    function mountWithFieldInput() {
+      vi.stubGlobal('DataTransfer', FakeDataTransfer);
+      const actions = flow();
+      const wrapper = mount(PublishSheet, {
+        props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...actions },
+        attachTo: document.body,
+      });
+      const field = document.body.querySelector('nldd-file-field')!;
+      const input = giveFieldAnInput(field);
+      const q = (id: string) => document.body.querySelector(`[data-testid="${id}"]`);
+      return { wrapper, actions, field, input, q };
+    }
+
+    function dropOnBody(tree: Parameters<typeof makeTransfer>[0]): void {
+      const event = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', { value: makeTransfer(tree) });
+      document.body.querySelector('nldd-sheet')!.dispatchEvent(event);
+    }
+
+    function hugo() {
+      return {
+        'index.html': file('index.html'),
+        css: { 'style.css': new File(['a{}'], 'style.css') },
+      };
+    }
+
+    function valueOf(element: Element | null): string | null | undefined {
+      return element?.getAttribute('value');
+    }
+
+    it('holds a packed folder without a chip, and goes on describing it as a folder', async () => {
+      const { wrapper, input, q } = mountWithFieldInput();
+
+      dropOnBody({ 'hugo-blog': hugo() });
+      await untilQuiet();
+
+      expect(input.files?.[0]?.name).toBe('hugo-blog.tar.gz');
+      expect(q('publish-file-chosen')).toBeNull();
+      expect(q('drag-done')?.getAttribute('supporting-text')).toContain('Map "hugo-blog" ingepakt');
+
+      wrapper.unmount();
+    });
+
+    it('does not name the site after the made-up archive for loose contents', async () => {
+      // The bug only a browser could show so far: the field answers the hand-over
+      // with a change event, which named the site "Site".
+      const { wrapper, input, q } = mountWithFieldInput();
+
+      dropOnBody(hugo());
+      await untilQuiet();
+
+      expect(input.files?.[0]?.name).toBe('site.tar.gz');
+      expect(valueOf(q('publish-title'))).toBe('');
+      expect(q('drag-done')?.getAttribute('supporting-text')).toMatch(/^2 bestanden ingepakt, /);
+
+      wrapper.unmount();
+    });
+
+    it('takes the title from the folder once, through the answer of the field', async () => {
+      const { wrapper, q } = mountWithFieldInput();
+
+      dropOnBody({ 'hugo-blog': hugo() });
+      await untilQuiet();
+
+      expect(valueOf(q('publish-title'))).toBe('Hugo blog');
+
+      wrapper.unmount();
+    });
+
+    it('is emptied by a refusal, so field, message and submit agree', async () => {
+      const { wrapper, actions, input, q } = mountWithFieldInput();
+      dropOnBody({ 'hugo-blog': hugo() });
+      await untilQuiet();
+      expect(input.files).toHaveLength(1);
+
+      dropOnBody({ 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      expect(input.files).toHaveLength(0);
+      expect(q('drag-error')).not.toBeNull();
+      expect(q('drag-done')).toBeNull();
+      expect(valueOf(q('publish-title'))).toBe('');
+
+      document.body
+        .querySelector('nldd-form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flushPromises();
+      expect(actions.createSite).not.toHaveBeenCalled();
+      expect(actions.publish).not.toHaveBeenCalled();
+
+      wrapper.unmount();
+    });
+
+    it('lets a good folder land after a refusal, in the field and in the submit', async () => {
+      const { wrapper, actions, input } = mountWithFieldInput();
+      dropOnBody({ 'eerste-map': hugo() });
+      await untilQuiet();
+      dropOnBody({ 'foto.png': file('foto.png') });
+      await untilQuiet();
+
+      dropOnBody({ 'tweede-map': hugo() });
+      await untilQuiet();
+
+      expect(input.files?.[0]?.name).toBe('tweede-map.tar.gz');
+      document.body
+        .querySelector('nldd-form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await untilQuiet();
+      expect((actions.publish.mock.calls[0]![2] as File).name).toBe('tweede-map.tar.gz');
+
+      wrapper.unmount();
+    });
+  });
+});
+
+describe('PublishSheet (choosing a folder without dragging)', () => {
+  /** A folder as the file dialog hands it over: flat files that carry their path. */
+  function chosenFolder(paths: string[]): File[] {
+    return paths.map((path) => {
+      const chosen = file(path.split('/').pop()!);
+      Object.defineProperty(chosen, 'webkitRelativePath', { value: path });
+      return chosen;
+    });
+  }
+
+  function chooseFolder(wrapper: Wrapper, files: File[]): Promise<void> {
+    const input = wrapper.find('[data-testid="upload-folder-input"]').element as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: files, configurable: true });
+    input.dispatchEvent(new Event('change'));
+    return untilQuiet();
+  }
+
+  it('opens the folder dialog from a button', async () => {
+    const { wrapper } = mountComponent();
+    const input = wrapper.find('[data-testid="upload-folder-input"]').element as HTMLInputElement;
+    const click = vi.spyOn(input, 'click');
+
+    await wrapper.find('[data-testid="upload-folder"]').trigger('click');
+
+    expect(click).toHaveBeenCalledOnce();
+    const button = wrapper.find('[data-testid="upload-folder"]');
+    expect(button.attributes('text')).toBe('Kies een map');
+    // type="button": anything else would submit the form around it.
+    expect(button.attributes('type')).toBe('button');
+    expect(input.hasAttribute('webkitdirectory')).toBe(true);
+  });
+
+  it('packs the chosen folder and publishes the archive', async () => {
+    const { wrapper, actions } = mountComponent();
+
+    await chooseFolder(
+      wrapper,
+      chosenFolder(['mijn-site/index.html', 'mijn-site/css/style.css', 'mijn-site/.DS_Store']),
+    );
+
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
+    expect(notice).toContain('mijn-site');
+    expect(notice).toContain('2 bestanden');
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
+
+    await submit(wrapper);
+    expect((actions.publish.mock.calls[0]![2] as File).name).toBe('mijn-site.tar.gz');
+  });
+
+  it('refuses a chosen folder without a start page', async () => {
+    const { wrapper, actions } = mountComponent();
+
+    await chooseFolder(wrapper, chosenFolder(['mijn-site/lees-mij.txt']));
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+    await submit(wrapper);
+    expect(actions.publish).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty folder', async () => {
+    const { wrapper } = mountComponent();
+
+    await chooseFolder(wrapper, []);
+
+    expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toBe(
+      'In deze map staat niets dat gepubliceerd kan worden.',
+    );
   });
 });

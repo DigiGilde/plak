@@ -16,10 +16,7 @@ export const publishNl = {
   'publish.sheet.submit': 'Zet online',
 
   // -- Publish sheet: the fields ----------------------------------------------
-  'publish.sheet.file.label': 'Bestand',
-  'publish.sheet.file.hint': 'Een .zip of .tar.gz van je map, of een los HTML-bestand.',
   'publish.sheet.file.clear': 'Verwijder het gekozen bestand',
-  'publish.sheet.file.required': 'Een archief (.zip, .tar.gz) of een los HTML-bestand',
   'publish.sheet.title.label': 'Titel',
   'publish.sheet.title.required': 'Een titel',
   'publish.sheet.group.label': 'Groep',
@@ -46,8 +43,6 @@ export const publishNl = {
     'Genodigden zet je daarna op de lijst, op het tabblad Toegang van de site.',
 
   // -- Upload zone ------------------------------------------------------------
-  'publish.drop.oneFile': 'Sleep één bestand: een .zip, .tar.gz, .tgz of los HTML-bestand.',
-  'publish.drop.noFolder': 'Sleep geen map. {hint}',
   'publish.upload.field.label': 'Bestand of map',
   'publish.upload.field.hint': 'Sleep het hierheen, of kies het.',
   'publish.upload.field.required': 'Een archief, een los HTML-bestand of een map',
@@ -80,17 +75,17 @@ export const publishNl = {
   'publish.packing.folderEmpty': 'In deze map staat niets dat gepubliceerd kan worden.',
   'publish.packing.bundleEmpty': 'In "{name}" staat niets dat gepubliceerd kan worden.',
   'publish.packing.tooManyFiles':
-    '"{name}" heeft meer dan {count} bestanden; dat is meer dan een publicatie mag bevatten.',
+    '"{name}" heeft meer dan {count} bestanden. Dat is meer dan een publicatie mag bevatten.',
   'publish.packing.tooDeep':
-    '"{path}" zit dieper dan {depth} mappen; maak de mappenstructuur ondieper.',
+    '"{path}" zit dieper dan {depth} mappen. Maak de mappenstructuur ondieper.',
   'publish.packing.pathTooLong':
-    'Het pad "{path}" is te lang voor een archief; kort de map- of bestandsnamen in.',
+    'Het pad "{path}" is te lang voor een archief. Kort de map- of bestandsnamen in.',
   'publish.packing.fileTooLarge':
-    '"{path}" is {size}; een los bestand mag hoogstens {max} zijn.',
+    '"{path}" is {size}. Een los bestand mag hoogstens {max} zijn.',
   'publish.packing.totalTooLarge':
-    '"{name}" is samen {size}; een publicatie mag hoogstens {max} zijn.',
+    '"{name}" is samen {size}. Een publicatie mag hoogstens {max} zijn.',
   'publish.packing.indexCase':
-    'De startpagina heet "{found}"; hij moet "{index}" heten, met kleine letters.',
+    'De startpagina heet "{found}". Hij moet "{index}" heten, met kleine letters.',
   'publish.packing.indexInFolder':
     'Er staat geen {index} in de hoofdmap van "{name}", wel op "{path}". Sleep de map "{folder}" zelf.',
   'publish.packing.indexMissing':

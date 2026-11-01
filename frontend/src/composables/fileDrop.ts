@@ -1,63 +1,13 @@
 /**
  * Drag-and-drop plumbing shared between PublishSheet and the pages that open
- * it from a drop (Overview, Group): the file types the upload API accepts
- * (`docs/publishing.md`, mirrored in PublishSheet's `nldd-file-field
- * accept`), the dragenter/dragleave counting that keeps a drag crossing into
- * a nested element from flickering the drop state off, and the window-level
- * guard against the browser's own "open this file" default.
+ * it from a drop (Overview, Group): the dragenter/dragleave counting that
+ * keeps a drag crossing into a nested element from flickering the drop state
+ * off, and the window-level guard against the browser's own "open this file"
+ * default.
  */
-import { type Ref, ref, watch } from 'vue';
+import { type Ref, ref, shallowRef, watch } from 'vue';
 
-import { t } from '@/i18n';
-
-const ACCEPTED_EXTENSIONS = ['.tar.gz', '.tgz', '.zip', '.html'] as const;
-
-/**
- * A function, not a constant: a constant is built once, when the module is
- * imported, and would freeze the language of whoever loaded the page first.
- */
-function dropFileHint(): string {
-  return t('publish.drop.oneFile');
-}
-
-function hasAcceptedExtension(name: string): boolean {
-  const lower = name.toLowerCase();
-  return ACCEPTED_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
-export interface DropResult {
-  /** Set when the drop carried exactly one file of an accepted type. */
-  file: File | null;
-  /** Dutch, ready to show, when the drop was rejected. */
-  error: string | null;
-}
-
-/**
- * Validates what a drop offered, mirroring `nldd-file-field
- * accept=".zip,.tar.gz,.tgz,.html"` in PublishSheet.vue: a single file, not a
- * directory, matching one of the accepted extensions. Both `file` and `error`
- * come back null for a drop that carried nothing file-shaped (e.g. dragged
- * text), so callers can ignore it silently rather than complain.
- */
-export function resolveDroppedFile(dataTransfer: DataTransfer | null): DropResult {
-  const files = dataTransfer?.files;
-  if (!files || files.length === 0) return { file: null, error: null };
-
-  const items = dataTransfer?.items;
-  if (items) {
-    for (const item of items) {
-      const entry = item.kind === 'file' ? item.webkitGetAsEntry?.() : null;
-      if (entry?.isDirectory) return { file: null, error: t('publish.drop.noFolder', { hint: dropFileHint() }) };
-    }
-  }
-
-  if (files.length > 1) return { file: null, error: dropFileHint() };
-
-  const file = files[0];
-  if (!hasAcceptedExtension(file.name)) return { file: null, error: dropFileHint() };
-
-  return { file, error: null };
-}
+import { type DropResult, readDrop } from '@/components/site/packing';
 
 /**
  * Drag-over state for one drop target, meant to be wired to a single element
@@ -133,17 +83,17 @@ export function useWindowDropGuard(active: Ref<boolean>): void {
 }
 
 /**
- * Dropping a file straight onto a page: the drag state of the page, the
- * window guard, and what a drop does. A valid file lands in `droppedFile` and
- * opens the sheet (`open`); a rejected one lands in `dropError`. All of it is
- * gated by `enabled`, the same condition as the button that opens the sheet,
- * and the file is forgotten when the sheet closes so that opening it again
+ * Dropping something straight onto a page: the drag state of the page, the
+ * window guard, and what a drop does. The read starts here, and the sheet it
+ * opens (`open`) carries on from `droppedRead`, because a DataTransfer only
+ * answers during the drop event itself and the sheet opens after it. All of it
+ * is gated by `enabled`, the same condition as the button that opens the sheet,
+ * and the read is forgotten when the sheet closes so that opening it again
  * through the button does not carry it along.
  */
 export function usePageDrop(enabled: Ref<boolean>, open: Ref<boolean>) {
   const { isOver, onDragEnter, onDragOver, onDragLeave, reset } = useDropState();
-  const droppedFile = ref<File | null>(null);
-  const dropError = ref<string | null>(null);
+  const droppedRead = shallowRef<Promise<DropResult> | null>(null);
 
   useWindowDropGuard(enabled);
 
@@ -151,25 +101,19 @@ export function usePageDrop(enabled: Ref<boolean>, open: Ref<boolean>) {
     if (!enabled.value) return;
     event.preventDefault();
     reset();
-    const { file, error: rejection } = resolveDroppedFile(event.dataTransfer);
-    if (rejection) {
-      dropError.value = rejection;
-      return;
-    }
-    if (!file) return;
-    dropError.value = null;
-    droppedFile.value = file;
+    const transfer = event.dataTransfer;
+    if (!transfer?.types.includes('Files')) return;
+    droppedRead.value = readDrop(transfer);
     open.value = true;
   }
 
   watch(open, (isOpen) => {
-    if (!isOpen) droppedFile.value = null;
+    if (!isOpen) droppedRead.value = null;
   });
 
   return {
     dropTargetActive: isOver,
-    droppedFile,
-    dropError,
+    droppedRead,
     onPageDragEnter: (event: DragEvent) => {
       if (enabled.value) onDragEnter(event);
     },
