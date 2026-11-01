@@ -12,9 +12,9 @@ import pytest
 import pytest_asyncio
 from fastapi import APIRouter, Depends, FastAPI
 
-from plak.api.errors import register_error_handlers
-from plak.api.origin_guard import _is_local_origin, normalise_origin, require_admin_origin
-from plak.config import Settings
+from toon.api.errors import register_error_handlers
+from toon.api.origin_guard import _is_local_origin, normalise_origin, require_admin_origin
+from toon.config import Settings
 
 ADMIN_ORIGIN = "https://beheer.plak.example"
 CONTENT_ORIGIN = "https://plak.example"

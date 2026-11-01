@@ -16,7 +16,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { createGroup, overview, createSite, setAccess, upload } from '../api/plak';
+import { createGroup, overview, createSite, setAccess, upload } from '../api/toon';
 import type { Group, Me, Overview, Site } from '../api/types';
 import GroupHeading from '../components/GroupHeading.vue';
 import NewGroupSheet from '../components/NewGroupSheet.vue';

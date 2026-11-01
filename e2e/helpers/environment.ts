@@ -8,9 +8,9 @@
  * the app does the host separation itself.
  */
 
-export const PORT = process.env.PLAK_E2E_PORT ?? '18888';
-export const OIDC_PORT = process.env.PLAK_E2E_OIDC_PORT ?? '18889';
-export const PROXY_PORT = process.env.PLAK_E2E_PROXY_PORT ?? '18890';
+export const PORT = process.env.TOON_E2E_PORT ?? '18888';
+export const OIDC_PORT = process.env.TOON_E2E_OIDC_PORT ?? '18889';
+export const PROXY_PORT = process.env.TOON_E2E_PROXY_PORT ?? '18890';
 
 // The hostname itself stays Dutch: the SPA sits on the root of this host and
 // everything the app owns sits under /-/ (dictionary).

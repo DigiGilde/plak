@@ -1,0 +1,57 @@
+"""Role checks for the admin API: a route demands a minimum role.
+
+Same shape as the existing `_require_*` helpers in api/admin.py: a call at the
+start of the route that returns nothing and otherwise raises a 403. The role
+computation itself lives in access/roles.py, so that the API and the access
+gate use the same answer.
+
+There is deliberately no platformbeheerder bypass here: the platformbeheerder
+manages people and groups, not sites, and gets into a group by visibly
+giving themselves a group role.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from toon.access import roles
+from toon.api.errors import ApiError
+from toon.constants import Role
+from toon.models.identity import Member
+from toon.models.publication import Site
+
+REASON_INSUFFICIENT_ROLE = "INSUFFICIENT_ROLE"
+
+
+def insufficient_role_params(minimum: Role) -> dict[str, object]:
+    """The role names double as the UI names, so the enum value can go into the
+    message as is, in either language."""
+    return {"role": minimum.value}
+
+
+def require_at_least(role: Role | None, minimum: Role) -> None:
+    """Refuses with the 403 when `role` is narrower than `minimum`, or absent."""
+    if not roles.at_least(role, minimum):
+        raise ApiError(403, REASON_INSUFFICIENT_ROLE, params=insufficient_role_params(minimum))
+
+
+async def require_group_role(db: AsyncSession, member: Member, group_id: uuid.UUID, minimum: Role) -> None:
+    """Demands a group role of at least `minimum`; a site role never counts here."""
+    require_at_least(await roles.group_role(db, group_id, member.id), minimum)
+
+
+async def require_site_role(db: AsyncSession, member: Member, site: Site, minimum: Role) -> None:
+    """Demands an effective site role of at least `minimum`: the widest of
+    group role and site role."""
+    require_at_least(await roles.effective_site_role(db, site, member.id), minimum)
+
+
+__all__ = [
+    "REASON_INSUFFICIENT_ROLE",
+    "insufficient_role_params",
+    "require_at_least",
+    "require_group_role",
+    "require_site_role",
+]

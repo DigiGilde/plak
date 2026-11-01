@@ -11,8 +11,8 @@ from pathlib import Path
 import brotli
 import pytest
 
-from plak.ingest import precompress
-from plak.ingest.store import ContentStore
+from toon.ingest import precompress
+from toon.ingest.store import ContentStore
 
 
 def text(size: int) -> bytes:

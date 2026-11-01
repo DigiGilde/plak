@@ -968,7 +968,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    const cliLink = wrapper.find('[data-testid="plak-cli-repo-link"]');
+    const cliLink = wrapper.find('[data-testid="toon-cli-repo-link"]');
     expect(cliLink.attributes('href')).toBe('https://github.com/DigiGilde/plak');
 
     const linkCliLink = wrapper.find('[data-testid="cli-link-link"]');

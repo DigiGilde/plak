@@ -26,9 +26,9 @@ from helpers_oidc import make_client_jwk
 from starlette.responses import PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
-from plak.config import Settings
-from plak.main import API_VERSION, create_app
-from plak.platform.spa import (
+from toon.config import Settings
+from toon.main import API_VERSION, create_app
+from toon.platform.spa import (
     ADMIN_CSP,
     CACHE_ASSETS,
     CACHE_OTHER,
@@ -39,7 +39,7 @@ from plak.platform.spa import (
     is_spa_path,
     spa_headers,
 )
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.serving.response import NEUTRAL_404_BODY
 
 ADMIN_URL = "https://beheer.plak.example"
 CONTENT_URL = "https://plak.example"
@@ -441,7 +441,7 @@ class TestFullApp:
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         app = create_app(_settings(tmp_path, tmp_path / "geen-dist"))
-        with caplog.at_level(logging.WARNING, logger="plak.main"):
+        with caplog.at_level(logging.WARNING, logger="toon.main"):
             async with (
                 app.router.lifespan_context(app),
                 httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=ADMIN_URL) as client,

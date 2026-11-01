@@ -11,11 +11,11 @@ import re
 from datetime import date, timedelta
 from pathlib import Path
 
-from plak.audit import vocabulary
+from toon.audit import vocabulary
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = (ROOT / "docs" / "audit-log.md").read_text(encoding="utf-8")
-SRC = ROOT / "backend" / "src" / "plak"
+SRC = ROOT / "backend" / "src" / "toon"
 
 
 def _backticked(text: str) -> set[str]:

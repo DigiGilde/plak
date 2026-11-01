@@ -326,7 +326,7 @@ describe('site TabSettings: title', () => {
     expect(field.attributes('valid')).toBeUndefined();
   });
 
-  it('saves the typed title through the real plak.setSiteTitle and tells the page', async () => {
+  it('saves the typed title through the real toon.setSiteTitle and tells the page', async () => {
     const wrapper = await loadedWrapper();
 
     typeTitle(wrapper, 'Documentatie');

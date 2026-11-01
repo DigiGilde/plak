@@ -9,8 +9,8 @@ import uuid
 
 import pytest
 
-from plak.audit import ip_crypto
-from plak.audit.ip_crypto import IpDecryptError, decrypt_ip, encrypt_ip
+from toon.audit import ip_crypto
+from toon.audit.ip_crypto import IpDecryptError, decrypt_ip, encrypt_ip
 
 _KEY_A = b"a" * 32
 _KEY_B = b"b" * 32

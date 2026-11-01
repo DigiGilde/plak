@@ -15,10 +15,10 @@ import asyncpg
 import pytest
 from helpers_audit import insert_aged_audit_row
 
-from plak import i18n
-from plak.audit import vocabulary
-from plak.constants import RESERVED_SLUGS, ROLE_RANK, AccessBase, Role
-from plak.models.identity import MemberLanguage
+from toon import i18n
+from toon.audit import vocabulary
+from toon.constants import RESERVED_SLUGS, ROLE_RANK, AccessBase, Role
+from toon.models.identity import MemberLanguage
 
 pytestmark = pytest.mark.asyncio
 

@@ -6,7 +6,7 @@
  */
 import { ref, type Ref } from 'vue';
 
-import { operator } from '@/api/plak';
+import { operator } from '@/api/toon';
 import type { Operator } from '@/api/types';
 
 /**

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { errorText } from '@/api/client';
 import { useLoader } from '@/composables/loader';
 import type { Access, AccessBase, Preview } from '@/api/types';
@@ -22,7 +22,7 @@ const previews = ref<Preview[]>([]);
 const notices = ref<InstanceType<typeof Notices> | null>(null);
 
 const { loading, error } = useLoader(
-  () => plak.previews(props.group, props.site),
+  () => toon.previews(props.group, props.site),
   (list) => {
     previews.value = list;
   },
@@ -40,7 +40,7 @@ async function setOverride(preview: Preview, access: Access | null): Promise<voi
     p.ref === preview.ref ? { ...p, accessOverride: access } : p,
   );
   try {
-    const updated = await plak.setPreviewAccess(props.group, props.site, preview.ref, access);
+    const updated = await toon.setPreviewAccess(props.group, props.site, preview.ref, access);
     previews.value = previews.value.map((p) => (p.ref === preview.ref ? updated : p));
   } catch (f) {
     previews.value = previous;
@@ -132,7 +132,7 @@ async function remove(preview: Preview): Promise<void> {
   const previous = previews.value;
   previews.value = previews.value.filter((p) => p.ref !== preview.ref);
   try {
-    await plak.deletePreview(props.group, props.site, preview.ref);
+    await toon.deletePreview(props.group, props.site, preview.ref);
   } catch (f) {
     previews.value = previous;
     notices.value?.notify(

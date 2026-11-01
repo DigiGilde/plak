@@ -1,4 +1,4 @@
-# Build context for containers/plak/Containerfile is the repo root; only
+# Build context for containers/toon/Containerfile is the repo root; only
 # backend/ and frontend/ (without dependencies and build artifacts) go to
 # the build.
 # Named .dockerignore because the compose provider (docker-compose) only

@@ -833,75 +833,6 @@ wheels = [
 ]
 
 [[package]]
-name = "plak-api"
-version = "2026.11.1"
-source = { editable = "." }
-dependencies = [
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "brotli" },
-    { name = "cryptography" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "joserfc" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-multipart" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "jsonschema" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-xdist" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "sectxt" },
-    { name = "testcontainers" },
-]
-tools = [
-    { name = "pip-audit" },
-    { name = "pre-commit" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.14,<2" },
-    { name = "asyncpg", specifier = ">=0.30,<1" },
-    { name = "brotli", specifier = ">=1.2,<2" },
-    { name = "cryptography", specifier = ">=44,<51" },
-    { name = "fastapi", specifier = ">=0.115,<1" },
-    { name = "httpx", specifier = ">=0.28,<1" },
-    { name = "joserfc", specifier = ">=1.7,<2" },
-    { name = "pydantic", specifier = ">=2.10,<3" },
-    { name = "pydantic-settings", specifier = ">=2.7,<3" },
-    { name = "python-multipart", specifier = ">=0.0.18,<1" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jsonschema", specifier = ">=4,<5" },
-    { name = "pytest", specifier = ">=9,<10" },
-    { name = "pytest-asyncio", specifier = ">=0.25,<2" },
-    { name = "pytest-cov", specifier = ">=6,<8" },
-    { name = "pytest-xdist", specifier = ">=3,<4" },
-    { name = "pyyaml", specifier = ">=6,<7" },
-    { name = "ruff", specifier = ">=0.9,<1" },
-    { name = "sectxt", specifier = ">=0.9,<1" },
-    { name = "testcontainers", specifier = ">=4,<5" },
-]
-tools = [
-    { name = "pip-audit", specifier = ">=2.10,<3" },
-    { name = "pre-commit", specifier = ">=4.5,<5" },
-]
-
-[[package]]
 name = "platformdirs"
 version = "4.14.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1418,6 +1349,75 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/19/75/241269d1da26b624c0d5e110e8149093c759b7a286138f4efd61a60e75fe/tomli_w-1.2.0.tar.gz", hash = "sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021", size = 7184, upload-time = "2025-01-15T12:07:24.262Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/18/c86eb8e0202e32dd3df50d43d7ff9854f8e0603945ff398974c1d91ac1ef/tomli_w-1.2.0-py3-none-any.whl", hash = "sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90", size = 6675, upload-time = "2025-01-15T12:07:22.074Z" },
+]
+
+[[package]]
+name = "toon-api"
+version = "2026.11.1"
+source = { editable = "." }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "brotli" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "joserfc" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-multipart" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "jsonschema" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-xdist" },
+    { name = "pyyaml" },
+    { name = "ruff" },
+    { name = "sectxt" },
+    { name = "testcontainers" },
+]
+tools = [
+    { name = "pip-audit" },
+    { name = "pre-commit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14,<2" },
+    { name = "asyncpg", specifier = ">=0.30,<1" },
+    { name = "brotli", specifier = ">=1.2,<2" },
+    { name = "cryptography", specifier = ">=44,<51" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "joserfc", specifier = ">=1.7,<2" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pydantic-settings", specifier = ">=2.7,<3" },
+    { name = "python-multipart", specifier = ">=0.0.18,<1" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34,<1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jsonschema", specifier = ">=4,<5" },
+    { name = "pytest", specifier = ">=9,<10" },
+    { name = "pytest-asyncio", specifier = ">=0.25,<2" },
+    { name = "pytest-cov", specifier = ">=6,<8" },
+    { name = "pytest-xdist", specifier = ">=3,<4" },
+    { name = "pyyaml", specifier = ">=6,<7" },
+    { name = "ruff", specifier = ">=0.9,<1" },
+    { name = "sectxt", specifier = ">=0.9,<1" },
+    { name = "testcontainers", specifier = ">=4,<5" },
+]
+tools = [
+    { name = "pip-audit", specifier = ">=2.10,<3" },
+    { name = "pre-commit", specifier = ">=4.5,<5" },
 ]
 
 [[package]]

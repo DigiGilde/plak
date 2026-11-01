@@ -6,7 +6,7 @@
 # readable label, not the reference. Dependabot keeps the pins current
 # (.github/dependabot.yml, ecosystem `pre-commit`).
 #
-# The vendored Swagger UI assets under backend/src/plak/static/docs/ are
+# The vendored Swagger UI assets under backend/src/toon/static/docs/ are
 # excluded per hook where it matters: they are fetched verbatim by
 # `just refresh-swagger-ui` and must stay byte-identical to what the CDN
 # serves.
@@ -16,9 +16,9 @@ repos:
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^backend/src/plak/static/docs/
+        exclude: ^backend/src/toon/static/docs/
       - id: end-of-file-fixer
-        exclude: ^(backend/src/plak/static/docs/|frontend/public/touch-icon\.png$)
+        exclude: ^(backend/src/toon/static/docs/|frontend/public/touch-icon\.png$)
       - id: check-yaml
         exclude: ^e2e/compose\.e2e\.yml$
       # e2e/compose.e2e.yml uses the Compose merge tag `!override`, which a
@@ -67,4 +67,4 @@ repos:
         language: pygrep
         entry: '\xe2\x80\x93|\xe2\x80\x94'
         types: [text]
-        exclude: ^backend/src/plak/static/docs/
+        exclude: ^backend/src/toon/static/docs/

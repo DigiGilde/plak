@@ -1,8 +1,8 @@
-"""Language negotiation for the pages the server renders itself (plak/i18n.py)."""
+"""Language negotiation for the pages the server renders itself (toon/i18n.py)."""
 
 from __future__ import annotations
 
-from plak import i18n
+from toon import i18n
 
 
 class TestNegotiate:

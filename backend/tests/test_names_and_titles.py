@@ -33,14 +33,14 @@ from test_admin_api import (  # noqa: F401 - fixtures are found by name
     login,
 )
 
-from plak.api import admin, openapi_file
-from plak.api.admin import _has_forbidden_characters, _validate_text
-from plak.api.errors import ApiError
-from plak.audit.pseudonymisation import pseudonymise
-from plak.constants import AccessBase, Role
-from plak.models.audit import AuditLogEntry
-from plak.models.identity import Group
-from plak.models.publication import Site, Version, VersionTarget
+from toon.api import admin, openapi_file
+from toon.api.admin import _has_forbidden_characters, _validate_text
+from toon.api.errors import ApiError
+from toon.audit.pseudonymisation import pseudonymise
+from toon.constants import AccessBase, Role
+from toon.models.audit import AuditLogEntry
+from toon.models.identity import Group
+from toon.models.publication import Site, Version, VersionTarget
 
 NAME = f"{BASE}/groups/team/name"
 TITLE = f"{BASE}/sites/team/site/title"

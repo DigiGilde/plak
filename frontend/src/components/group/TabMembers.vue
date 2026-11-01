@@ -8,7 +8,7 @@
  * GroupMembersManager stays testable on its own; the group page keeps the member
  * list and listens to the emits.
  */
-import * as api from '@/api/plak';
+import * as api from '@/api/toon';
 import type { GroupMember, MemberSuggestion, Role } from '@/api/types';
 import GroupMembersManager from '@/components/GroupMembersManager.vue';
 import { t } from '@/i18n';

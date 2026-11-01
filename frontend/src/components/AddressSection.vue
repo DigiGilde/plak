@@ -7,7 +7,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 
 import { ApiError } from '@/api/client';
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import type { Group, PreviousSlug, Site } from '@/api/types';
 import CodeSentence from '@/components/CodeSentence.vue';
 import ConfirmModal from '@/components/ConfirmModal.vue';
@@ -378,8 +378,8 @@ async function change(): Promise<void> {
   try {
     updated =
       props.kind === 'group'
-        ? await plak.setGroupSlug(props.group, pending.value)
-        : await plak.setSiteSlug(props.group, from, pending.value, release.value !== null);
+        ? await toon.setGroupSlug(props.group, pending.value)
+        : await toon.setSiteSlug(props.group, from, pending.value, release.value !== null);
   } catch (failure) {
     failed(failure);
     return;

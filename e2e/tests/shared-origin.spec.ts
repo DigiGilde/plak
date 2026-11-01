@@ -5,7 +5,7 @@
  * browser stored of a restricted site, it hands out without asking. So the
  * browser must have stored nothing (#152).
  *
- * Its own group, after plak.spec.ts, which it does not depend on.
+ * Its own group, independent of toon.spec.ts.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { adminFetch, uploadViaSession } from '../helpers/api';

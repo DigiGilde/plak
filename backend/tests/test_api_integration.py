@@ -16,14 +16,14 @@ import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, make_client_jwk, set_session_cookie
 
-from plak.api.origin_guard import REASON_OTHER_ORIGIN
-from plak.cli import service as cli
-from plak.config import Settings
-from plak.constants import AccessBase, Role
-from plak.main import API_VERSION, create_app
-from plak.models.identity import Group, GroupMember, Member, MemberLanguage, MemberStatus
-from plak.models.publication import Site
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.api.origin_guard import REASON_OTHER_ORIGIN
+from toon.cli import service as cli
+from toon.config import Settings
+from toon.constants import AccessBase, Role
+from toon.main import API_VERSION, create_app
+from toon.models.identity import Group, GroupMember, Member, MemberLanguage, MemberStatus
+from toon.models.publication import Site
+from toon.serving.response import NEUTRAL_404_BODY
 
 BASE = "/-/api/v1"
 PROBLEM = "application/problem+json"

@@ -500,6 +500,6 @@ async function onRemove(row: Row): Promise<void> {
 <style scoped>
 /* Same cap as the group's member table, see global.css. */
 .member-table {
-  max-width: var(--plak-table-max-width);
+  max-width: var(--toon-table-max-width);
 }
 </style>

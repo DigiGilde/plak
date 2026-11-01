@@ -1,4 +1,4 @@
-"""Shipped paths and the version lines a release writes (plak_release.versions)."""
+"""Shipped paths and the version lines a release writes (toon_release.versions)."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import re
 import pytest
 from release_support import BACKEND_LOCK, DAY, LOCK, PACKAGE, PACKAGE_LOCK, PLUGIN, PUBLICCODE, PYPROJECT, ROOT
 
-from plak_release import errors, versions
+from toon_release import errors, versions
 
 
 class TestShippedPaths:
     @pytest.mark.parametrize(
         "path",
         [
-            "backend/src/plak/main.py",
+            "backend/src/toon/main.py",
             "backend/pyproject.toml",
             "backend/uv.lock",
             "backend/alembic/versions/0001_base.py",
@@ -27,7 +27,7 @@ class TestShippedPaths:
             "frontend/index.html",
             "frontend/vite.config.ts",
             "frontend/public/favicon.svg",
-            "containers/plak/Containerfile",
+            "containers/toon/Containerfile",
             "cli/plak_cli/__init__.py",
             "cli/pyproject.toml",
             "cli/uv.lock",
@@ -49,8 +49,8 @@ class TestShippedPaths:
             "frontend/src/format.spec.ts",
             "frontend/src/components/__snapshots__/Card.snap",
             "frontend/tests/dutch-literals.test.ts",
-            "backend/src/plak/test_helpers.py",
-            "backend/src/plak/conftest.py",
+            "backend/src/toon/test_helpers.py",
+            "backend/src/toon/conftest.py",
             "containers/nginx-dev/Containerfile",
             "backend/pyproject.toml.orig",
             "README.md",
@@ -106,13 +106,13 @@ class TestVersionEdits:
 
     def test_a_pyproject_refusal_names_the_file(self):
         with pytest.raises(errors.ReleaseError, match=r"^backend/pyproject\.toml: no version"):
-            versions.set_pyproject_version('[project]\nname = "plak-api"\n', "2026.10.1", "backend/pyproject.toml")
+            versions.set_pyproject_version('[project]\nname = "toon-api"\n', "2026.10.1", "backend/pyproject.toml")
 
     def test_the_lock_edit_picks_the_named_root_package(self):
-        edited = versions.set_lock_version(BACKEND_LOCK, "2026.10.1", "plak-api", "backend/uv.lock")
-        assert edited == BACKEND_LOCK.replace('"plak-api"\nversion = "0.1.0"', '"plak-api"\nversion = "2026.10.1"')
-        with pytest.raises(errors.ReleaseError, match=r"^backend/uv\.lock: expected one editable package 'plak-api'"):
-            versions.set_lock_version(LOCK, "2026.10.1", "plak-api", "backend/uv.lock")
+        edited = versions.set_lock_version(BACKEND_LOCK, "2026.10.1", "toon-api", "backend/uv.lock")
+        assert edited == BACKEND_LOCK.replace('"toon-api"\nversion = "0.1.0"', '"toon-api"\nversion = "2026.10.1"')
+        with pytest.raises(errors.ReleaseError, match=r"^backend/uv\.lock: expected one editable package 'toon-api'"):
+            versions.set_lock_version(LOCK, "2026.10.1", "toon-api", "backend/uv.lock")
 
     def test_package_json_keeps_its_formatting(self):
         edited = versions.set_package_version(PACKAGE, "2026.10.1")
@@ -126,7 +126,7 @@ class TestVersionEdits:
     @pytest.mark.parametrize(
         ("text", "reason"),
         [
-            ('{\n  "name": "plak-frontend"\n}\n', 'no top-level "version"'),
+            ('{\n  "name": "toon-frontend"\n}\n', 'no top-level "version"'),
             ('{\n  "a": {\n  "version": "1"\n}}\n', 'no top-level "version"'),
             (PACKAGE_LOCK.replace('      "version": "0.1.0",\n', ""), 'no "version" line in the root package'),
         ],
@@ -166,7 +166,7 @@ class TestVersionEdits:
 
         edited = versions.set_pyproject_version(backend, "2026.10.1", "backend/pyproject.toml")
         assert versions.pyproject_version(edited, "backend/pyproject.toml") == "2026.10.1"
-        lock_diff = set(versions.set_lock_version(backend_lock, "2026.10.1", "plak-api").splitlines())
+        lock_diff = set(versions.set_lock_version(backend_lock, "2026.10.1", "toon-api").splitlines())
         lock_diff ^= set(backend_lock.splitlines())
         assert lock_diff == {'version = "2026.10.1"', f'version = "{versions.pyproject_version(backend)}"'}
         assert json.loads(versions.set_package_version(package, "2026.10.1"))["version"] == "2026.10.1"

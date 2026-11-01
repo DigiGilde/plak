@@ -17,11 +17,11 @@ from helpers_audit import install_audit_recorder
 from helpers_oidc import OMIT, MockIdP, make_app, make_settings, make_test_client
 from joserfc.jwk import RSAKey
 
-from plak.audit import vocabulary
-from plak.auth.sessions import SessionStore
-from plak.constants import PATH_BACKCHANNEL_LOGOUT
-from plak.host_separation import belongs_to_content
-from plak.platform.backchannel import ReplayCache, replay_cache
+from toon.audit import vocabulary
+from toon.auth.sessions import SessionStore
+from toon.constants import PATH_BACKCHANNEL_LOGOUT
+from toon.host_separation import belongs_to_content
+from toon.platform.backchannel import ReplayCache, replay_cache
 
 pytestmark = pytest.mark.asyncio
 
@@ -65,7 +65,7 @@ async def test_a_valid_sid_logout_drops_the_session() -> None:
 
 
 async def test_a_sid_logout_drops_both_session_kinds_of_that_login() -> None:
-    from plak.auth.sessions import SessionKind
+    from toon.auth.sessions import SessionKind
 
     idp, app = _make()
     admin = _session(app)

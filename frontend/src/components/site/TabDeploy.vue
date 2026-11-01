@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { ApiError, errorText } from '@/api/client';
 import type { Me, PreviousSlug, RepositoryProvider, SiteRepository } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
@@ -100,7 +100,7 @@ const idsPrefilled = ref(false);
 const siteIdNotice = ref('');
 
 const { loading, error } = useLoader(
-  () => Promise.all([fetchCurrentMember(), plak.siteRepository(props.group, props.site)]),
+  () => Promise.all([fetchCurrentMember(), toon.siteRepository(props.group, props.site)]),
   ([loggedIn, repo]) => {
     me.value = loggedIn as Me | null;
     repository.value = repo;
@@ -355,7 +355,7 @@ async function submitRepository(): Promise<void> {
   }
   formBusy.value = true;
   try {
-    const result = await plak.setSiteRepository(props.group, props.site, {
+    const result = await toon.setSiteRepository(props.group, props.site, {
       provider: formProvider.value,
       host: formProvider.value === 'forgejo' ? formHost.value : undefined,
       owner: parsed.owner,
@@ -393,7 +393,7 @@ async function submitRepository(): Promise<void> {
 
 async function unlinkRepository(): Promise<void> {
   try {
-    await plak.deleteSiteRepository(props.group, props.site);
+    await toon.deleteSiteRepository(props.group, props.site);
     repository.value = null;
   } catch (f) {
     notices.value?.notify(
@@ -424,7 +424,7 @@ async function copySiteId(siteId: string): Promise<void> {
 
 async function requireSiteId(): Promise<void> {
   try {
-    repository.value = await plak.requireSiteId(props.group, props.site);
+    repository.value = await toon.requireSiteId(props.group, props.site);
   } catch (f) {
     notices.value?.notify(
       'critical',
@@ -999,7 +999,7 @@ plak logout
         <nldd-rich-text>
           <p>
             {{ cliInstall[0]
-            }}<nldd-link href="https://github.com/DigiGilde/plak" data-testid="plak-cli-repo-link"
+            }}<nldd-link href="https://github.com/DigiGilde/plak" data-testid="toon-cli-repo-link"
               >github.com/DigiGilde/plak</nldd-link
             >{{ cliInstall[1] }}<code>cli/</code>{{ cliInstall[2] }}
           </p>
@@ -1043,6 +1043,6 @@ plak logout
 /* The reading width for everything but the code: nldd-rich-text keeps its own
    text at 720 px and lets a code viewer run to the full work width. */
 .deploy nldd-container > :not(nldd-container, nldd-rich-text) {
-  max-width: var(--plak-reading-width);
+  max-width: var(--toon-reading-width);
 }
 </style>

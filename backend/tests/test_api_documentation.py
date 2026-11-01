@@ -20,9 +20,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
-from plak import messages
-from plak.api.deploys import accepts_bearer
-from plak.api.docs import (
+from toon import messages
+from toon.api.deploys import accepts_bearer
+from toon.api.docs import (
     _ASSETS,
     PATH_PARAMETERS,
     SECURITY_BEARER,
@@ -35,7 +35,7 @@ from plak.api.docs import (
     docs_asset,
     localised_openapi,
 )
-from plak.api.errors import (
+from toon.api.errors import (
     _CODE_RE,
     FIELD_INDEX_CANDIDATES,
     PROBLEM_CONTENT_TYPE,
@@ -44,10 +44,10 @@ from plak.api.errors import (
     ApiError,
     error_example,
 )
-from plak.api.schema import ApiModel
-from plak.auth.sessions import SESSION_COOKIE
-from plak.config import Settings
-from plak.main import create_app
+from toon.api.schema import ApiModel
+from toon.auth.sessions import SESSION_COOKIE
+from toon.config import Settings
+from toon.main import create_app
 
 # Status codes where HTTP forbids a body: precisely there no schema belongs.
 WITHOUT_BODY = {"204", "304"}

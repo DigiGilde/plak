@@ -17,9 +17,9 @@ import pytest_asyncio
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from plak.cli import service as cli
-from plak.models.cli import CliDeviceAuthorization, CliDeviceStatus, CliRefreshToken, CliSession
-from plak.models.identity import Member, MemberStatus
+from toon.cli import service as cli
+from toon.models.cli import CliDeviceAuthorization, CliDeviceStatus, CliRefreshToken, CliSession
+from toon.models.identity import Member, MemberStatus
 
 NOW = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
 

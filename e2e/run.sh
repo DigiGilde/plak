@@ -4,18 +4,18 @@
 # runs Playwright and tears the stack down again.
 #
 # Environment variables:
-#   PLAK_E2E_PORT        host port for nginx (default 18888)
-#   PLAK_E2E_OIDC_PORT   host port for the mock OIDC (default 18889)
-#   PLAK_E2E_KEEP_UP=1   keep the stack running afterwards (debugging)
-#   PLAK_E2E_ENGINE      container engine (default podman; the GitHub
+#   TOON_E2E_PORT        host port for nginx (default 18888)
+#   TOON_E2E_OIDC_PORT   host port for the mock OIDC (default 18889)
+#   TOON_E2E_KEEP_UP=1   keep the stack running afterwards (debugging)
+#   TOON_E2E_ENGINE      container engine (default podman; the GitHub
 #                        runner has only docker, so the CI job sets it)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="plak-e2e"
-export PLAK_E2E_PORT="${PLAK_E2E_PORT:-18888}"
-export PLAK_E2E_OIDC_PORT="${PLAK_E2E_OIDC_PORT:-18889}"
-ENGINE="${PLAK_E2E_ENGINE:-podman}"
+export TOON_E2E_PORT="${TOON_E2E_PORT:-18888}"
+export TOON_E2E_OIDC_PORT="${TOON_E2E_OIDC_PORT:-18889}"
+ENGINE="${TOON_E2E_ENGINE:-podman}"
 
 COMPOSE=("${ENGINE}" compose -p "${PROJECT}" -f dev/compose.yml -f e2e/compose.e2e.yml)
 
@@ -45,8 +45,8 @@ cleanup() {
     # The Playwright step leaves the CWD in e2e/; the COMPOSE paths are
     # relative to the repo root, so back to the root for logs and teardown.
     cd "${REPO_ROOT}"
-    if [[ "${PLAK_E2E_KEEP_UP:-0}" == "1" ]]; then
-        echo "PLAK_E2E_KEEP_UP=1: stack blijft draaien (project ${PROJECT})."
+    if [[ "${TOON_E2E_KEEP_UP:-0}" == "1" ]]; then
+        echo "TOON_E2E_KEEP_UP=1: stack blijft draaien (project ${PROJECT})."
         return "${status}"
     fi
     if [[ ${status} -ne 0 ]]; then
@@ -58,18 +58,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "== stack starten (project ${PROJECT}, poort ${PLAK_E2E_PORT}) =="
+echo "== stack starten (project ${PROJECT}, poort ${TOON_E2E_PORT}) =="
 "${COMPOSE[@]}" up -d --build
 
 echo "== wachten op gezondheid =="
 ready=""
 for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
-            "http://127.0.0.1:${PLAK_E2E_PORT}/healthz-proxy" \
+            "http://127.0.0.1:${TOON_E2E_PORT}/healthz-proxy" \
         && curl -fsS -o /dev/null -H "Host: plak.localhost" \
-            "http://127.0.0.1:${PLAK_E2E_PORT}/healthz-proxy" \
+            "http://127.0.0.1:${TOON_E2E_PORT}/healthz-proxy" \
         && curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
-            "http://127.0.0.1:${PLAK_E2E_PORT}/"; then
+            "http://127.0.0.1:${TOON_E2E_PORT}/"; then
         ready="ja"
         break
     fi

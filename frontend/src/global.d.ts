@@ -12,7 +12,7 @@ import '@nldd/design-system/vue';
 
 /** The release this build ships as (vite.config.ts `define`); `dev` outside a release build. */
 declare global {
-  const __PLAK_VERSION__: string;
+  const __TOON_VERSION__: string;
 }
 
 export {};

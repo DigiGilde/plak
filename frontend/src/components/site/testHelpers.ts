@@ -5,7 +5,7 @@
 import { flushPromises } from '@vue/test-utils';
 import { computed, ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { SITE_GROUP, type SiteGroup } from '@/composables/siteGroup';
 import { groupDetailOf, type MockBackend } from '../../../tests/mock-api';
 
@@ -207,7 +207,7 @@ export async function provideSiteGroupFromApi(
   group = 'team-aurora',
   site = 'website',
 ): Promise<Record<symbol, SiteGroup>> {
-  const detail = ref(await plak.group(group));
+  const detail = ref(await toon.group(group));
   return {
     [SITE_GROUP as symbol]: {
       detail,

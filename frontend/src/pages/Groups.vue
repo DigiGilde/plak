@@ -10,7 +10,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { createGroup, overview } from '@/api/plak';
+import { createGroup, overview } from '@/api/toon';
 import type { Group, OverviewGroup } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import NewGroupSheet from '@/components/NewGroupSheet.vue';

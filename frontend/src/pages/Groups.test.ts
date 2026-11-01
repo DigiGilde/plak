@@ -5,7 +5,7 @@ import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-import * as plakApi from '../api/plak';
+import * as toonApi from '../api/toon';
 import type { Group, Overview as OverviewData, Site } from '../api/types';
 import NewGroupSheet from '../components/NewGroupSheet.vue';
 import { _resetBreadcrumbs, breadcrumbsFor } from '../composables/breadcrumbs';
@@ -26,7 +26,7 @@ import Groups from './Groups.vue';
   }
 }
 
-vi.mock('../api/plak', () => ({
+vi.mock('../api/toon', () => ({
   overview: vi.fn(),
   createGroup: vi.fn(),
 }));
@@ -106,14 +106,14 @@ describe('Groups', () => {
   });
 
   afterEach(() => {
-    vi.mocked(plakApi.overview).mockReset();
-    vi.mocked(plakApi.createGroup).mockReset();
+    vi.mocked(toonApi.overview).mockReset();
+    vi.mocked(toonApi.createGroup).mockReset();
     document.body.innerHTML = '';
   });
 
   it('loading: shows an indicator and no rows yet', async () => {
     let release!: (data: OverviewData) => void;
-    vi.mocked(plakApi.overview).mockImplementation(
+    vi.mocked(toonApi.overview).mockImplementation(
       () => new Promise((resolve) => (release = resolve)),
     );
 
@@ -132,7 +132,7 @@ describe('Groups', () => {
   });
 
   it('shows per group the name, the slug and what the overview already knows', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
 
     const wrapper = await mountComponent();
 
@@ -147,13 +147,13 @@ describe('Groups', () => {
       'Nog geen sites',
       'Niets online',
     ]);
-    expect(plakApi.overview).toHaveBeenCalledTimes(1);
+    expect(toonApi.overview).toHaveBeenCalledTimes(1);
 
     wrapper.unmount();
   });
 
   it('counts a single site and a single live site in the singular', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue({
+    vi.mocked(toonApi.overview).mockResolvedValue({
       groups: [
         {
           group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
@@ -170,7 +170,7 @@ describe('Groups', () => {
   });
 
   it('counts more than one live site in the plural, distinct from the total', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue({
+    vi.mocked(toonApi.overview).mockResolvedValue({
       groups: [
         {
           group: { slug: 'team-aurora', name: 'Team Aurora', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
@@ -187,7 +187,7 @@ describe('Groups', () => {
   });
 
   it('links each row to the group page', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
 
     const wrapper = await mountComponent();
 
@@ -199,7 +199,7 @@ describe('Groups', () => {
   });
 
   it('sets the breadcrumb path under the overview', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
 
     const wrapper = await mountComponent();
 
@@ -212,7 +212,7 @@ describe('Groups', () => {
   });
 
   it('empty: says you are not a member of anything yet and offers the same single action', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
+    vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
 
     const wrapper = await mountComponent({ teleport: true });
 
@@ -225,7 +225,7 @@ describe('Groups', () => {
   });
 
   it('error: shows an error banner instead of an empty list', async () => {
-    vi.mocked(plakApi.overview).mockRejectedValue(new Error('Kon groepen niet laden'));
+    vi.mocked(toonApi.overview).mockRejectedValue(new Error('Kon groepen niet laden'));
 
     const wrapper = await mountComponent();
 
@@ -238,8 +238,8 @@ describe('Groups', () => {
   });
 
   it('creates a group beside the heading and adds it right away', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-    vi.mocked(plakApi.createGroup).mockResolvedValue(newGroup);
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.createGroup).mockResolvedValue(newGroup);
 
     const wrapper = await mountComponent({ teleport: true });
     expect(wrapper.findComponent(NewGroupSheet).props('open')).toBe(false);
@@ -267,7 +267,7 @@ describe('Groups', () => {
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await flushPromises();
 
-    expect(plakApi.createGroup).toHaveBeenCalledWith('Team', 'team');
+    expect(toonApi.createGroup).toHaveBeenCalledWith('Team', 'team');
     expect(cellTexts(wrapper, 'nldd-title-cell')).toEqual(['Team Aurora', 'Lege groep', 'Team']);
     // A fresh group has nothing yet; the counts should say so.
     expect(cellTexts(wrapper, 'nldd-text-cell').slice(-2)).toEqual([
@@ -280,7 +280,7 @@ describe('Groups', () => {
 
   describe('a11y', () => {
     it('has no axe violations in the filled state', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
 
       const wrapper = await mountComponent({ attach: true });
 
@@ -291,7 +291,7 @@ describe('Groups', () => {
     });
 
     it('has no axe violations in the empty state', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
+      vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
 
       const wrapper = await mountComponent({ teleport: true, attach: true });
 

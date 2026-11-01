@@ -19,7 +19,7 @@ defineProps<{ summary: string; summaryTestid?: string }>();
 
 <style scoped>
 .disclosure {
-  max-width: var(--plak-table-max-width);
+  max-width: var(--toon-table-max-width);
   border: var(--primitives-border-width-thin) solid var(--semantics-surfaces-base-border-color);
   border-radius: var(--primitives-corner-radius-lg);
   background: var(--semantics-surfaces-tinted-background-color);

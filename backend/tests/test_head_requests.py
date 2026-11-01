@@ -9,9 +9,9 @@ from pathlib import Path
 
 from starlette.types import Message, Receive, Scope, Send
 
-from plak.constants import HEAD_SCOPE_KEY, AccessBase, AccessPolicy
-from plak.head_requests import ContentHeadMiddleware
-from plak.serving.response import make_content_response
+from toon.constants import HEAD_SCOPE_KEY, AccessBase, AccessPolicy
+from toon.head_requests import ContentHeadMiddleware
+from toon.serving.response import make_content_response
 
 CONTENT_HOST = "plak.example"
 ADMIN_HOST = "beheer.plak.example"

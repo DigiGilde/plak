@@ -26,10 +26,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from plak.config import Settings
-from plak.constants import AccessBase
-from plak.ingest import precompress
-from plak.ingest.service import (
+from toon.config import Settings
+from toon.constants import AccessBase
+from toon.ingest import precompress
+from toon.ingest.service import (
     PREVIEW_VALIDITY,
     ROOM_CHECK_STRIDE,
     Deployer,
@@ -37,10 +37,10 @@ from plak.ingest.service import (
     IngestService,
     RoomGuard,
 )
-from plak.ingest.store import ContentStore, version_ref
-from plak.ingest.unpacker import BundleError
-from plak.models.identity import Group, Member
-from plak.models.publication import Preview, Site, Version, VersionTarget
+from toon.ingest.store import ContentStore, version_ref
+from toon.ingest.unpacker import BundleError
+from toon.models.identity import Group, Member
+from toon.models.publication import Preview, Site, Version, VersionTarget
 
 
 @pytest_asyncio.fixture

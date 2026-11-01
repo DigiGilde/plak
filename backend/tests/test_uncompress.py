@@ -12,10 +12,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from plak.config import Settings
-from plak.constants import ENCODED_SEGMENT
-from plak.ingest import precompress, uncompress
-from plak.ingest.store import ContentStore, version_ref
+from toon.config import Settings
+from toon.constants import ENCODED_SEGMENT
+from toon.ingest import precompress, uncompress
+from toon.ingest.store import ContentStore, version_ref
 
 
 def text(size: int, seed: str = "lorem ipsum dolor ") -> bytes:

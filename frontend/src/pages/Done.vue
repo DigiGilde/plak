@@ -14,7 +14,7 @@
 import { computed, ref, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { ApiError } from '@/api/client';
 import type { Me, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -71,7 +71,7 @@ async function fetchDone() {
   keyRequested = false;
   site.value = null;
   const fromPublish = takePublishedMark(router);
-  const [detail, loggedIn] = await Promise.all([plak.group(groupSlug.value), fetchCurrentMember()]);
+  const [detail, loggedIn] = await Promise.all([toon.group(groupSlug.value), fetchCurrentMember()]);
   const found = detail.sites.find((p) => p.slug === siteSlug.value);
   if (!found) {
     throw siteNotFound(groupSlug.value, siteSlug.value);
@@ -112,11 +112,11 @@ async function ensureKeyLink(): Promise<void> {
   /* v8 ignore stop */
   keyRequested = true;
   try {
-    const existing = await plak.keys(groupSlug.value, siteSlug.value);
+    const existing = await toon.keys(groupSlug.value, siteSlug.value);
     // A key already exists (e.g. navigating back to this screen): its value
     // was shown once already and cannot be shown again, so do not make another.
     if (existing.some((k) => k.status === 'active')) return;
-    const result = await plak.createKey(groupSlug.value, siteSlug.value, null, null);
+    const result = await toon.createKey(groupSlug.value, siteSlug.value, null, null);
     keyValue.value = result.value;
   } catch (f) {
     keyError.value = f;

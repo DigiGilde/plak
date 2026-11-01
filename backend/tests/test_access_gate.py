@@ -24,13 +24,13 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from plak.access import keys
-from plak.access.decision import DecisionKind
-from plak.access.gate import Visitor, _is_invitee, code_page_needed, decide, decide_preview, decide_version
-from plak.constants import AccessBase, AccessPolicy, Role
-from plak.ingest.store import version_ref
-from plak.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
-from plak.models.publication import AccessKey, Invitee, KeyStatus, Preview, Site, Version, VersionTarget
+from toon.access import keys
+from toon.access.decision import DecisionKind
+from toon.access.gate import Visitor, _is_invitee, code_page_needed, decide, decide_preview, decide_version
+from toon.constants import AccessBase, AccessPolicy, Role
+from toon.ingest.store import version_ref
+from toon.models.identity import Group, GroupMember, Member, MemberStatus, SiteMember
+from toon.models.publication import AccessKey, Invitee, KeyStatus, Preview, Site, Version, VersionTarget
 
 
 @pytest_asyncio.fixture

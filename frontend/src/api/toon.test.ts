@@ -1,0 +1,1603 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiError } from './client';
+import { makeMockBackend, type MockBackend } from '../../tests/mock-api';
+import * as toon from './toon';
+
+let backend: MockBackend;
+
+/**
+ * vue-tsc cannot type `rejects.toSatisfy`: vitest wraps the chai matcher in
+ * `Promisify`, which drops the call signature. So we catch the rejection
+ * ourselves and return the error to assert on.
+ */
+async function refusedWith(promise: Promise<unknown>): Promise<ApiError> {
+  await expect(promise).rejects.toBeInstanceOf(ApiError);
+  return (await promise.catch((error: unknown) => error)) as ApiError;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+beforeEach(() => {
+  backend = makeMockBackend();
+  vi.stubGlobal('fetch', backend.fetch);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('platformStorage', () => {
+  it('returns the fill level of the content volume', async () => {
+    const volume = await toon.platformStorage();
+
+    expect(volume.totalBytes).toBeGreaterThan(volume.usedBytes);
+    expect(volume.reserveBytes).toBeGreaterThan(0);
+    expect(Object.keys(volume).sort()).toEqual([
+      'freeBytes',
+      'maxDeployBytes',
+      'reserveBytes',
+      'totalBytes',
+      'usedBytes',
+    ]);
+  });
+});
+
+describe('operator', () => {
+  it('says who runs this installation, also without a session', async () => {
+    backend.data.loggedInMemberId = null;
+
+    expect(await toon.operator()).toEqual({ name: 'Digi Gilde', email: 'digigilde@rijksoverheid.nl' });
+  });
+});
+
+describe('me (session)', () => {
+  it('returns the logged-in member, with the content origin for shared links', async () => {
+    const loggedIn = await toon.me();
+    expect(loggedIn.ssoSubject).toBe('dev-beheerder');
+    expect(loggedIn.contentBaseUrl).toBe('https://sites.plak.test');
+  });
+
+  it('says how many days an old address keeps redirecting', async () => {
+    expect((await toon.me()).slugRedirectDays).toBe(30);
+  });
+
+  it('returns 401 when there is no session', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(toon.me());
+    expect(error.problem.status).toBe(401);
+  });
+});
+
+describe('interface language on the account', () => {
+  it('records a chosen language', async () => {
+    await toon.setMyLanguage('en');
+    expect(backend.data.myLanguage).toBe('en');
+  });
+
+  it('hands the choice back to the browser default with null', async () => {
+    await toon.setMyLanguage('en');
+    await toon.setMyLanguage(null);
+    expect(backend.data.myLanguage).toBeNull();
+  });
+
+  it('refuses a language code that is neither nl nor en', async () => {
+    const error = await refusedWith(
+      toon.setMyLanguage('de' as unknown as import('@/api/types').MemberLanguage),
+    );
+    expect(error.problem.status).toBe(422);
+  });
+});
+
+describe('overview (filled and empty)', () => {
+  it('returns the seeded groups with their sites', async () => {
+    const result = await toon.overview();
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]!.group.slug).toBe('team-aurora');
+    expect(result.groups[0]!.sites).toHaveLength(1);
+    expect(result.groups[0]!.sites[0]!.slug).toBe('website');
+  });
+
+  it('shows a new group without sites as an empty list', async () => {
+    await toon.createGroup('Lege groep', 'leeg');
+
+    const result = await toon.overview();
+    const emptyGroup = result.groups.find((g) => g.group.slug === 'leeg');
+
+    expect(emptyGroup).toBeDefined();
+    expect(emptyGroup!.sites).toEqual([]);
+  });
+
+  it('makes the creator of a new group a group member right away', async () => {
+    await toon.createGroup('Nieuwe groep', 'nieuw');
+
+    const members = await toon.groupMembers('nieuw');
+    expect(members.map((l) => l.identifier)).toEqual(['beheerder@voorbeeld.nl']);
+  });
+});
+
+describe('error handling', () => {
+  it('carries the machine-readable code along, not just the sentence', async () => {
+    // The code is stable across rewordings and across an interface in a
+    // different language; without this rule nothing in the SPA could
+    // branch on it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: 'about:blank',
+              title: 'Geen toegang',
+              status: 403,
+              detail: 'Je toegang is ingetrokken door een platformbeheerder.',
+              code: 'MEMBER_DEACTIVATED',
+            }),
+            { status: 403, headers: { 'content-type': 'application/problem+json' } },
+          ),
+        ),
+      ),
+    );
+
+    const error = await refusedWith(toon.me());
+    expect(error.problem.code).toBe('MEMBER_DEACTIVATED');
+    expect(error.problem.status).toBe(403);
+  });
+});
+
+describe('groups', () => {
+  it('fetches group detail including members', async () => {
+    const detail = await toon.group('team-aurora');
+
+    expect(detail.group.name).toBe('Team Aurora');
+    expect(detail.members.map((l) => l.identifier)).toContain('dev-beheerder');
+    expect(detail.members.every((l) => l.groupSlug === 'team-aurora')).toBe(true);
+  });
+
+  it('returns 404 problem+json for an unknown group', async () => {
+    const error = await refusedWith(toon.group('onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses a duplicate group slug with 409', async () => {
+    const error = await refusedWith(toon.createGroup('Team Aurora nogmaals', 'team-aurora'));
+    expect(error.problem.status).toBe(409);
+  });
+
+  it('refuses an invalid slug with 422', async () => {
+    const error = await refusedWith(toon.createGroup('Hoofdletters', 'Niet-Geldig'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('deletes a group along with its members, sites and everything on them', async () => {
+    await toon.createGroup('Ander', 'ander');
+    await toon.createSite('ander', 'Blijft', 'blijft');
+
+    await toon.deleteGroup('team-aurora');
+
+    expect((await refusedWith(toon.group('team-aurora'))).problem.status).toBe(404);
+    expect((await refusedWith(toon.groupMembers('team-aurora'))).problem.status).toBe(404);
+    expect((await refusedWith(toon.versions('team-aurora', 'website'))).problem.status).toBe(404);
+    expect((await toon.group('ander')).sites.map((s) => s.slug)).toEqual(['blijft']);
+  });
+
+  it('returns 404 when deleting an unknown group', async () => {
+    const error = await refusedWith(toon.deleteGroup('onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+});
+
+describe('sites', () => {
+  it('creates a site and deletes it again', async () => {
+    const site = await toon.createSite('team-aurora', 'Nieuw site', 'nieuw');
+    expect(site.access).toEqual({ base: 'public', keys: false, invitees: false });
+    expect(site.hasLiveVersion).toBe(false);
+
+    await toon.deleteSite('team-aurora', 'nieuw');
+
+    const error = await refusedWith(
+      toon.setAccess('team-aurora', 'nieuw', { base: 'sso', keys: false, invitees: false }),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('gives every site an id of its own', async () => {
+    const created = await toon.createSite('team-aurora', 'Nieuw site', 'nieuw');
+    const other = await toon.createSite('team-aurora', 'Ander site', 'ander');
+    const seeded = (await toon.group('team-aurora')).sites.find((site) => site.slug === 'website')!;
+
+    const ids = [seeded.id, created.id, other.id];
+    for (const id of ids) expect(id).toMatch(UUID);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('sets base and exceptions of an existing site in one go', async () => {
+    const access = { base: 'sso', keys: true, invitees: true } as const;
+    const site = await toon.setAccess('team-aurora', 'website', access);
+    expect(site.access).toEqual(access);
+  });
+
+  it('turns off an exception by leaving it out', async () => {
+    // A PUT sets access as a whole, so a missing field is a choice, not
+    // "leave what was there".
+    await toon.setAccess('team-aurora', 'website', { base: 'sso', keys: true, invitees: true });
+    const site = await toon.setAccess('team-aurora', 'website', {
+      base: 'sso',
+      keys: false,
+      invitees: false,
+    });
+    expect(site.access).toEqual({ base: 'sso', keys: false, invitees: false });
+  });
+
+  it('refuses an invalid slug with 422', async () => {
+    const error = await refusedWith(toon.createSite('team-aurora', 'Hoofdletters', 'Niet-Geldig'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('refuses a duplicate slug within the same group with 409', async () => {
+    const error = await refusedWith(toon.createSite('team-aurora', 'Website nogmaals', 'website'));
+    expect(error.problem.status).toBe(409);
+  });
+});
+
+describe('group name', () => {
+  it('puts the new name on the name of the group and hands back the group', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const group = await toon.setGroupName('team-aurora', 'Team Zonsopgang');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/groups/team-aurora/name');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ name: 'Team Zonsopgang' });
+    expect(group).toMatchObject({ slug: 'team-aurora', name: 'Team Zonsopgang' });
+    expect((await toon.group('team-aurora')).group.name).toBe('Team Zonsopgang');
+  });
+
+  it('strips the spaces around the name, like the backend', async () => {
+    const group = await toon.setGroupName('team-aurora', '  Team Zonsopgang \n');
+
+    expect(group.name).toBe('Team Zonsopgang');
+  });
+
+  it('accepts 200 characters and refuses 201 with FIELD_TOO_LONG', async () => {
+    expect((await toon.setGroupName('team-aurora', 'a'.repeat(200))).name).toHaveLength(200);
+
+    const error = await refusedWith(toon.setGroupName('team-aurora', 'b'.repeat(201)));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+    expect((await toon.group('team-aurora')).group.name).toBe('a'.repeat(200));
+  });
+
+  it('counts characters, not UTF-16 code units', async () => {
+    expect((await toon.setGroupName('team-aurora', '\u{1F600}'.repeat(200))).name).toBe(
+      '\u{1F600}'.repeat(200),
+    );
+  });
+
+  it.each(['', '   \t '])('refuses %j with FIELD_EMPTY', async (name) => {
+    const error = await refusedWith(toon.setGroupName('team-aurora', name));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_EMPTY');
+    expect((await toon.group('team-aurora')).group.name).toBe('Team Aurora');
+  });
+
+  it.each(['Team\tAurora', 'Team\nAurora', 'Team\u200BAurora'])(
+    'refuses %j with FIELD_CONTROL_CHARACTERS',
+    async (name) => {
+      const error = await refusedWith(toon.setGroupName('team-aurora', name));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('FIELD_CONTROL_CHARACTERS');
+    },
+  );
+
+  it('gives 201 characters with a tab in them FIELD_TOO_LONG, the length being checked first', async () => {
+    const text = `${'a'.repeat(100)}\t${'a'.repeat(100)}`;
+    expect(text).toHaveLength(201);
+
+    const error = await refusedWith(toon.setGroupName('team-aurora', text));
+
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an unknown group with UNKNOWN_GROUP', async () => {
+    const error = await refusedWith(toon.setGroupName('onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_GROUP');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-4', 'a reader of the group'],
+    ['lid-7', 'someone with no role in the group'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(toon.setGroupName('team-aurora', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.groups[0]!.name).toBe('Team Aurora');
+  });
+
+  it('gives a platform admin without a role in the group no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(toon.setGroupName('team-aurora', 'Nieuw'));
+
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(toon.setGroupName('onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('site title', () => {
+  it('puts the new title on the title of the site and hands back the site', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const site = await toon.setSiteTitle('team-aurora', 'website', 'Documentatie');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/sites/team-aurora/website/title');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ title: 'Documentatie' });
+    expect(site).toMatchObject({ slug: 'website', title: 'Documentatie', previewCount: 1 });
+    const stored = (await toon.group('team-aurora')).sites.find((s) => s.slug === 'website');
+    expect(stored?.title).toBe('Documentatie');
+  });
+
+  it('strips the spaces around the title, like the backend', async () => {
+    const site = await toon.setSiteTitle('team-aurora', 'website', '  Documentatie  ');
+
+    expect(site.title).toBe('Documentatie');
+  });
+
+  it('accepts 200 characters and refuses 201 with FIELD_TOO_LONG', async () => {
+    expect((await toon.setSiteTitle('team-aurora', 'website', 'a'.repeat(200))).title).toHaveLength(
+      200,
+    );
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'b'.repeat(201)));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an empty title with FIELD_EMPTY and one with control characters', async () => {
+    const empty = await refusedWith(toon.setSiteTitle('team-aurora', 'website', '  '));
+    expect(empty.problem.code).toBe('FIELD_EMPTY');
+
+    const control = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'Doc\tumentatie'));
+    expect(control.problem.code).toBe('FIELD_CONTROL_CHARACTERS');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('gives 201 characters with a tab in them FIELD_TOO_LONG, the length being checked first', async () => {
+    const text = `${'a'.repeat(100)}\t${'a'.repeat(100)}`;
+    expect(text).toHaveLength(201);
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', text));
+
+    expect(error.problem.code).toBe('FIELD_TOO_LONG');
+  });
+
+  it('refuses an unknown site with UNKNOWN_SITE', async () => {
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it.each([
+    ['lid-1', 'an admin of the group'],
+    ['lid-4', 'an admin of this site alone'],
+  ])('lets %s (%s) change it', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const site = await toon.setSiteTitle('team-aurora', 'website', 'Nieuw');
+
+    expect(site.title).toBe('Nieuw');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-2', 'an editor of this site alone'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('refuses a reader of the group the same way', async () => {
+    // lid-4 holds an admin role on this one site as well; without it she only reads.
+    backend.data.siteRoles = backend.data.siteRoles.filter((r) => r.identifier !== 'zoe@voorbeeld.nl');
+    backend.data.loggedInMemberId = 'lid-4';
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('answers someone with no role on the site as if it was not there', async () => {
+    backend.data.loggedInMemberId = 'lid-7';
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+    expect(backend.data.sites[0]!.title).toBe('Team Aurora website');
+  });
+
+  it('gives a platform admin without a role on the site no way round it', async () => {
+    // Past the 404 for strangers, and then refused by the role.
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'website', 'Nieuw'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(toon.setSiteTitle('team-aurora', 'onbekend', 'Nieuw'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('group address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('puts the new slug on the slug of the group and hands back the group with its old address', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const group = await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/groups/team-aurora/slug');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ slug: 'team-zon' });
+    expect(group).toMatchObject({ slug: 'team-zon', name: 'Team Aurora' });
+    expect(group.previousSlugs).toEqual([
+      { slug: 'team-aurora', redirectsUntil: '2026-11-07T23:00:00.000Z' },
+    ]);
+  });
+
+  it('knows the group on the new slug only: the API follows no old address', async () => {
+    await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    expect((await toon.group('team-zon')).group.slug).toBe('team-zon');
+    const error = await refusedWith(toon.group('team-aurora'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('takes everything that hangs on the group along', async () => {
+    await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    const detail = await toon.group('team-zon');
+    expect(detail.sites.map((s) => s.groupSlug)).toEqual(['team-zon']);
+    expect(detail.members.map((l) => l.groupSlug)).toEqual(['team-zon', 'team-zon', 'team-zon']);
+    // The role of a member on one site is found by the slug of its group.
+    expect(
+      detail.members.find((l) => l.memberId === 'lid-4')!.siteRoles.map((r) => r.siteSlug),
+    ).toEqual(['website']);
+    expect((await toon.versions('team-zon', 'website')).map((v) => v.groupSlug)).toEqual([
+      'team-zon',
+      'team-zon',
+      'team-zon',
+    ]);
+    expect((await toon.previews('team-zon', 'website'))[0]).toMatchObject({
+      groupSlug: 'team-zon',
+      url: '/team-zon/website/_preview/pr-42/',
+    });
+    expect((await toon.invitees('team-zon', 'website'))[0]!.groupSlug).toBe('team-zon');
+    expect((await toon.keys('team-zon', 'website'))[0]!.groupSlug).toBe('team-zon');
+    expect((await toon.siteRepository('team-zon', 'website'))?.groupSlug).toBe('team-zon');
+    // Someone with a role on this one site alone is found by the slug of its group too.
+    expect((await toon.siteMembers('team-zon', 'website')).map((l) => l.identifier)).toContain(
+      'weg@voorbeeld.nl',
+    );
+    const me = await toon.me();
+    expect(me.groupRoles).toEqual([{ groupSlug: 'team-zon', role: 'admin' }]);
+  });
+
+  it('ends the redirect at midnight in Amsterdam after the 30th day, the clocks changing in between', async () => {
+    // 23:30 in Amsterdam on the last Saturday of October, the night before the clocks go back.
+    vi.setSystemTime(new Date('2026-10-24T21:30:00Z'));
+
+    const group = await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    // Day 0 is the 24th, day 30 the 23rd of November, and the midnight after it is 00:00 CET.
+    expect(group.previousSlugs[0]!.redirectsUntil).toBe('2026-11-23T23:00:00.000Z');
+  });
+
+  it('counts the day after Amsterdam midnight as day 0, though it is still yesterday in UTC', async () => {
+    vi.setSystemTime(new Date('2026-10-07T22:10:00Z'));
+
+    const group = await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    expect(group.previousSlugs[0]!.redirectsUntil).toBe('2026-11-07T23:00:00.000Z');
+  });
+
+  it('lists the newest old address first', async () => {
+    await toon.setGroupSlug('team-aurora', 'team-zon');
+    vi.setSystemTime(new Date('2026-10-09T10:00:00Z'));
+
+    const group = await toon.setGroupSlug('team-zon', 'team-maan');
+
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-zon', 'team-aurora']);
+  });
+
+  it('changes back to an old address of its own, which then leaves the list', async () => {
+    await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    const group = await toon.setGroupSlug('team-zon', 'team-aurora');
+
+    expect(group.slug).toBe('team-aurora');
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-zon']);
+  });
+
+  it('answers a change to the slug it already has with the group, unchanged', async () => {
+    const group = await toon.setGroupSlug('team-aurora', 'team-aurora');
+
+    expect(group).toMatchObject({ slug: 'team-aurora', previousSlugs: [] });
+  });
+
+  it('forgets an old address once its redirect has ended', async () => {
+    backend.data.groups[0]!.previousSlugs = [
+      { slug: 'team-oud', redirectsUntil: '2026-10-08T09:59:59.999Z' },
+      { slug: 'team-ouder', redirectsUntil: '2026-10-08T10:00:00.001Z' },
+    ];
+
+    const group = await toon.setGroupSlug('team-aurora', 'team-zon');
+
+    expect(group.previousSlugs.map((p) => p.slug)).toEqual(['team-aurora', 'team-ouder']);
+  });
+
+  it.each(['', 'Team Zon', '-zon', 'zon-', 'a'.repeat(64), 'admin', 'cli-link'])(
+    'refuses %j with SLUG_INVALID',
+    async (slug) => {
+      const error = await refusedWith(toon.setGroupSlug('team-aurora', slug));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('SLUG_INVALID');
+      expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+    },
+  );
+
+  it('treats a request without a body as an empty slug', async () => {
+    const response = await backend.fetch('/-/api/v1/groups/team-aurora/slug', { method: 'PUT' });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('SLUG_INVALID');
+  });
+
+  it('refuses the slug of another group with SLUG_EXISTS', async () => {
+    await toon.createGroup('Team Zon', 'team-zon');
+
+    const error = await refusedWith(toon.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('Er bestaat al een groep');
+  });
+
+  it('refuses the recent address of another group with SLUG_EXISTS too, its text telling them apart', async () => {
+    await toon.createGroup('Team Zon', 'team-zon');
+    await toon.setGroupSlug('team-zon', 'team-maan');
+
+    const error = await refusedWith(toon.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('kort geleden');
+    expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+  });
+
+  it('lets another group take an address whose redirect has ended', async () => {
+    await toon.createGroup('Team Zon', 'team-zon');
+    backend.data.groups[1]!.previousSlugs = [
+      { slug: 'team-maan', redirectsUntil: '2026-10-08T09:00:00.000Z' },
+    ];
+
+    const group = await toon.setGroupSlug('team-aurora', 'team-maan');
+
+    expect(group.slug).toBe('team-maan');
+  });
+
+  it('keeps five old addresses and refuses a sixth address with TOO_MANY_PREVIOUS_SLUGS', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await toon.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+    expect((await toon.group('team-f')).group.previousSlugs).toHaveLength(5);
+
+    const error = await refusedWith(toon.setGroupSlug('team-f', 'team-g'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+    expect(backend.data.groups[0]!.slug).toBe('team-f');
+  });
+
+  it('still lets a group with five old addresses change back to one of them', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await toon.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+
+    const group = await toon.setGroupSlug('team-f', 'team-c');
+
+    expect(group.slug).toBe('team-c');
+    expect(group.previousSlugs).toHaveLength(5);
+  });
+
+  it('counts only the old addresses that still redirect towards the limit', async () => {
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await toon.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+    backend.data.groups[0]!.previousSlugs[4]!.redirectsUntil = '2026-10-08T09:00:00.000Z';
+
+    const group = await toon.setGroupSlug('team-f', 'team-g');
+
+    expect(group.slug).toBe('team-g');
+    expect(group.previousSlugs).toHaveLength(5);
+  });
+
+  it('refuses the limit before it refuses a taken slug', async () => {
+    await toon.createGroup('Team Zon', 'team-zon');
+    for (const slug of ['b', 'c', 'd', 'e', 'f']) {
+      await toon.setGroupSlug(await currentGroupSlug(), `team-${slug}`);
+    }
+
+    const error = await refusedWith(toon.setGroupSlug('team-f', 'team-zon'));
+
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+  });
+
+  /** The slug the first group has now. */
+  async function currentGroupSlug(): Promise<string> {
+    return backend.data.groups[0]!.slug;
+  }
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-4', 'a reader of the group'],
+    ['lid-7', 'someone with no role in the group'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(toon.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(backend.data.groups[0]!.slug).toBe('team-aurora');
+  });
+
+  it('gives a platform admin without a role in the group no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(toon.setGroupSlug('team-aurora', 'team-zon'));
+
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses an unknown group with UNKNOWN_GROUP', async () => {
+    const error = await refusedWith(toon.setGroupSlug('onbekend', 'team-zon'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_GROUP');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(toon.setGroupSlug('onbekend', 'team-zon'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('site address', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T10:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('puts the new slug on the slug of the site and hands back the site with its old address', async () => {
+    const spy = vi.fn(backend.fetch);
+    vi.stubGlobal('fetch', spy);
+
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const [path, init] = spy.mock.calls[0]!;
+    expect(path).toBe('/-/api/v1/sites/team-aurora/website/slug');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ slug: 'handboek' });
+    expect(site).toMatchObject({ slug: 'handboek', groupSlug: 'team-aurora', previewCount: 1 });
+    expect(site.id).toBe(backend.data.sites[0]!.id);
+    expect(site.previousSlugs).toEqual([
+      { slug: 'website', redirectsUntil: '2026-11-07T23:00:00.000Z' },
+    ]);
+  });
+
+  it('knows the site on the new slug only: the API follows no old address', async () => {
+    await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const sites = (await toon.group('team-aurora')).sites;
+    expect(sites.map((s) => s.slug)).toEqual(['handboek']);
+    const error = await refusedWith(toon.versions('team-aurora', 'website'));
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('takes everything that hangs on the site along', async () => {
+    await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect((await toon.versions('team-aurora', 'handboek')).map((v) => v.siteSlug)).toEqual([
+      'handboek',
+      'handboek',
+      'handboek',
+    ]);
+    expect((await toon.previews('team-aurora', 'handboek'))[0]).toMatchObject({
+      siteSlug: 'handboek',
+      url: '/team-aurora/handboek/_preview/pr-42/',
+    });
+    expect((await toon.invitees('team-aurora', 'handboek'))[0]!.siteSlug).toBe('handboek');
+    expect((await toon.keys('team-aurora', 'handboek'))[0]!.siteSlug).toBe('handboek');
+    expect((await toon.siteRepository('team-aurora', 'handboek'))?.siteSlug).toBe('handboek');
+    expect((await toon.siteMembers('team-aurora', 'handboek')).map((l) => l.identifier)).toContain(
+      'weg@voorbeeld.nl',
+    );
+    const group = await toon.group('team-aurora');
+    expect(group.members.flatMap((l) => l.siteRoles.map((r) => r.siteSlug))).toEqual([
+      'handboek',
+    ]);
+  });
+
+  it('moves the site roles of the member along in /me', async () => {
+    backend.data.loggedInMemberId = 'lid-4';
+
+    await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect((await toon.me()).siteRoles).toEqual([
+      { groupSlug: 'team-aurora', siteSlug: 'handboek', role: 'admin', effectiveRole: 'admin' },
+    ]);
+  });
+
+  it('ends the redirect at midnight in Amsterdam after the 30th day, the clocks changing in between', async () => {
+    vi.setSystemTime(new Date('2026-10-24T21:30:00Z'));
+
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.previousSlugs[0]!.redirectsUntil).toBe('2026-11-23T23:00:00.000Z');
+  });
+
+  it('changes back to an old address of its own, which then leaves the list', async () => {
+    await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    const site = await toon.setSiteSlug('team-aurora', 'handboek', 'website');
+
+    expect(site.slug).toBe('website');
+    expect(site.previousSlugs.map((p) => p.slug)).toEqual(['handboek']);
+  });
+
+  it('answers a change to the slug it already has with the site, unchanged', async () => {
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'website');
+
+    expect(site).toMatchObject({ slug: 'website', previousSlugs: [] });
+  });
+
+  it.each(['', 'Hand Boek', '-boek', 'boek-', 'a'.repeat(64)])(
+    'refuses %j with SLUG_INVALID',
+    async (slug) => {
+      const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', slug));
+
+      expect(error.problem.status).toBe(422);
+      expect(error.problem.code).toBe('SLUG_INVALID');
+      expect(backend.data.sites[0]!.slug).toBe('website');
+    },
+  );
+
+  it('lets a site take a slug that a reserved group name would not get', async () => {
+    // Only groups share the namespace of the platform paths.
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'admin');
+
+    expect(site.slug).toBe('admin');
+  });
+
+  it('treats a request without a body as an empty slug', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/slug', {
+      method: 'PUT',
+    });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { code: string }).code).toBe('SLUG_INVALID');
+  });
+
+  it('refuses the slug of another site in the group with SLUG_EXISTS', async () => {
+    await toon.createSite('team-aurora', 'Handboek', 'handboek');
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('Er bestaat al een site');
+  });
+
+  it('refuses the recent address of another site in the group with SLUG_EXISTS too, its text telling them apart', async () => {
+    await toon.createSite('team-aurora', 'Handboek', 'handboek');
+    await toon.setSiteSlug('team-aurora', 'handboek', 'gids');
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('SLUG_EXISTS');
+    expect(error.problem.detail).toContain('kort geleden');
+  });
+
+  describe('releasing the recent address of another site', () => {
+    beforeEach(async () => {
+      await toon.createSite('team-aurora', 'Handboek', 'handboek');
+      await toon.setSiteSlug('team-aurora', 'handboek', 'gids');
+    });
+
+    it('sends release only when asked to', async () => {
+      const spy = vi.fn(backend.fetch);
+      vi.stubGlobal('fetch', spy);
+
+      await toon.setSiteSlug('team-aurora', 'website', 'handboek', true);
+
+      expect(JSON.parse(String(spy.mock.calls[0]![1]?.body))).toEqual({ slug: 'handboek', release: true });
+    });
+
+    it('takes it for a group admin, and ends the redirect of the site that gave it up', async () => {
+      const site = await toon.setSiteSlug('team-aurora', 'website', 'handboek', true);
+
+      expect(site.slug).toBe('handboek');
+      const gids = (await toon.group('team-aurora')).sites.find((p) => p.slug === 'gids')!;
+      expect(gids.previousSlugs).toEqual([]);
+    });
+
+    it('still refuses the current address of another site with SLUG_EXISTS', async () => {
+      const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'gids', true));
+
+      expect(error.problem.status).toBe(409);
+      expect(error.problem.code).toBe('SLUG_EXISTS');
+    });
+
+    it('releases nothing when the change is refused for another reason', async () => {
+      let slug = 'website';
+      for (const next of ['b', 'c', 'd', 'e', 'f']) {
+        await toon.setSiteSlug('team-aurora', slug, `site-${next}`);
+        slug = `site-${next}`;
+      }
+
+      const error = await refusedWith(toon.setSiteSlug('team-aurora', 'site-f', 'handboek', true));
+
+      expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+      const gids = (await toon.group('team-aurora')).sites.find((p) => p.slug === 'gids')!;
+      expect(gids.previousSlugs.map((p) => p.slug)).toEqual(['handboek']);
+    });
+
+    it('refuses it to an admin of the site who is not an admin of the group with INSUFFICIENT_ROLE', async () => {
+      // lid-4 is a reader in the group and admin of this site.
+      backend.data.loggedInMemberId = 'lid-4';
+
+      const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek', true));
+
+      expect(error.problem.status).toBe(403);
+      expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+      expect(backend.data.sites[0]!.slug).toBe('website');
+    });
+  });
+
+  it('lets the same slug live in another group', async () => {
+    await toon.createGroup('Team Zon', 'team-zon');
+    await toon.createSite('team-zon', 'Handboek', 'handboek');
+
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.slug).toBe('handboek');
+  });
+
+  it('keeps five old addresses and refuses a sixth address with TOO_MANY_PREVIOUS_SLUGS', async () => {
+    let slug = 'website';
+    for (const next of ['b', 'c', 'd', 'e', 'f']) {
+      await toon.setSiteSlug('team-aurora', slug, `site-${next}`);
+      slug = `site-${next}`;
+    }
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'site-f', 'site-g'));
+
+    expect(error.problem.status).toBe(409);
+    expect(error.problem.code).toBe('TOO_MANY_PREVIOUS_SLUGS');
+    expect((await toon.setSiteSlug('team-aurora', 'site-f', 'site-c')).slug).toBe('site-c');
+  });
+
+  it.each([
+    ['lid-1', 'an admin of the group'],
+    ['lid-4', 'an admin of this site who is a reader in the group'],
+  ])('lets %s (%s) change it', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const site = await toon.setSiteSlug('team-aurora', 'website', 'handboek');
+
+    expect(site.slug).toBe('handboek');
+  });
+
+  it('refuses an admin of this site alone, who has no role in the group, with INSUFFICIENT_ROLE', async () => {
+    backend.data.siteRoles.push({
+      groupSlug: 'team-aurora',
+      siteSlug: 'website',
+      identifier: 'sanne@voorbeeld.nl',
+      role: 'admin',
+    });
+    backend.data.loggedInMemberId = 'lid-6';
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+    expect(error.problem.detail).toContain('rol in de groep');
+    expect(backend.data.sites[0]!.slug).toBe('website');
+  });
+
+  it.each([
+    ['lid-3', 'an editor of the group'],
+    ['lid-2', 'an editor of this site alone'],
+  ])('refuses %s (%s) with INSUFFICIENT_ROLE', async (memberId) => {
+    backend.data.loggedInMemberId = memberId;
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('answers someone with no role on the site as if it was not there', async () => {
+    backend.data.loggedInMemberId = 'lid-7';
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('gives a platform admin without a role on the site no way round it', async () => {
+    backend.data.groupMembers = backend.data.groupMembers.filter((l) => l.memberId !== 'lid-1');
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'website', 'handboek'));
+
+    expect(error.problem.status).toBe(403);
+    expect(error.problem.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('refuses an unknown site with UNKNOWN_SITE', async () => {
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'onbekend', 'handboek'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('UNKNOWN_SITE');
+  });
+
+  it('refuses a request without a session with 401 NO_SESSION, before anything else', async () => {
+    backend.data.loggedInMemberId = null;
+
+    const error = await refusedWith(toon.setSiteSlug('team-aurora', 'onbekend', 'handboek'));
+
+    expect(error.problem.status).toBe(401);
+    expect(error.problem.code).toBe('NO_SESSION');
+  });
+});
+
+describe('invitees (empty, filled, error)', () => {
+  it('starts empty for a fresh site', async () => {
+    await toon.createSite('team-aurora', 'Vers site', 'vers');
+    const list = await toon.invitees('team-aurora', 'vers');
+    expect(list).toEqual([]);
+  });
+
+  it('contains the seeded invitee for the existing site', async () => {
+    const list = await toon.invitees('team-aurora', 'website');
+    expect(list).toHaveLength(1);
+    expect(list[0]!.identifier).toBe('reviewer@voorbeeld.nl');
+  });
+
+  it('refuses an invalid email address with 422', async () => {
+    const error = await refusedWith(toon.addInvitee('team-aurora', 'website', 'niet-een-email'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('adds and removes again, by id and not by address', async () => {
+    const added = await toon.addInvitee('team-aurora', 'website', 'extra@voorbeeld.nl');
+    let list = await toon.invitees('team-aurora', 'website');
+    expect(list.map((g) => g.identifier)).toContain('extra@voorbeeld.nl');
+
+    await toon.removeInvitee('team-aurora', 'website', added.id);
+    list = await toon.invitees('team-aurora', 'website');
+    expect(list.map((g) => g.identifier)).not.toContain('extra@voorbeeld.nl');
+  });
+});
+
+describe('keys (shown once)', () => {
+  it('shows the full value only on creation', async () => {
+    const created = await toon.createKey('team-aurora', 'website', 'Nieuwe demo', null);
+    expect(created.value).toContain(created.key.selector);
+
+    const list = await toon.keys('team-aurora', 'website');
+    const found = list.find((s) => s.selector === created.key.selector);
+    expect(found).toBeDefined();
+    expect((found as unknown as { value?: string }).value).toBeUndefined();
+  });
+
+  it('refuses an expiry date that already lies in the past', async () => {
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const error = await refusedWith(toon.createKey('team-aurora', 'website', 'Verlopen', past));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('EXPIRY_IN_PAST');
+  });
+
+  it('refuses an expiry date too far in the future', async () => {
+    const farFuture = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString();
+    const error = await refusedWith(toon.createKey('team-aurora', 'website', 'Te ver', farFuture));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('EXPIRY_TOO_FAR');
+  });
+
+  it('revokes a key', async () => {
+    await toon.revokeKey('team-aurora', 'website', 'sel-abc123');
+    const list = await toon.keys('team-aurora', 'website');
+    const revoked = list.find((s) => s.selector === 'sel-abc123');
+    expect(revoked?.status).toBe('revoked');
+  });
+});
+
+describe('site repository (trusted publishing)', () => {
+  it('returns the linked repository', async () => {
+    const repository = await toon.siteRepository('team-aurora', 'website');
+    expect(repository).not.toBeNull();
+    expect(repository?.owner).toBe('team-aurora');
+    expect(repository?.repo).toBe('website');
+  });
+
+  it('names the site it belongs to and whether a workflow has to name it too', async () => {
+    const site = (await toon.group('team-aurora')).sites[0]!;
+
+    const repository = await toon.siteRepository('team-aurora', 'website');
+
+    expect(repository?.siteId).toBe(site.id);
+    expect(repository?.siteIdRequired).toBe(false);
+  });
+
+  it('returns null instead of an error when nothing is linked', async () => {
+    await toon.deleteSiteRepository('team-aurora', 'website');
+    const repository = await toon.siteRepository('team-aurora', 'website');
+    expect(repository).toBeNull();
+  });
+
+  it('lets a different error pass through unchanged', async () => {
+    const error = await refusedWith(toon.siteRepository('onbekend', 'website'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('links and unlinks a repository', async () => {
+    await toon.deleteSiteRepository('team-aurora', 'website');
+    const linked = await toon.setSiteRepository('team-aurora', 'website', {
+      provider: 'forgejo',
+      host: 'https://code.overheid.nl',
+      owner: 'robbertbos',
+      repo: 'waggle',
+      liveBranch: null,
+    });
+    expect(linked.provider).toBe('forgejo');
+    expect(linked.liveBranch).toBeNull();
+
+    await toon.deleteSiteRepository('team-aurora', 'website');
+    const error = await refusedWith(toon.deleteSiteRepository('team-aurora', 'website'));
+    expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
+  });
+
+  it('requires the site id of the link and hands the link back', async () => {
+    const link = await toon.requireSiteId('team-aurora', 'website');
+
+    expect(link.siteIdRequired).toBe(true);
+    expect(link.repo).toBe('website');
+    expect((await toon.siteRepository('team-aurora', 'website'))?.siteIdRequired).toBe(true);
+  });
+
+  it('answers a second request to require the site id with the unchanged link', async () => {
+    await toon.requireSiteId('team-aurora', 'website');
+
+    expect((await toon.requireSiteId('team-aurora', 'website')).siteIdRequired).toBe(true);
+  });
+
+  it('refuses to require the site id while nothing is linked', async () => {
+    await toon.deleteSiteRepository('team-aurora', 'website');
+
+    const error = await refusedWith(toon.requireSiteId('team-aurora', 'website'));
+
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('REPOSITORY_NOT_SET');
+  });
+
+  it('refuses to link a repository without an owner or a repo name', async () => {
+    const error = await refusedWith(
+      toon.setSiteRepository('team-aurora', 'website', {
+        provider: 'github',
+        host: 'https://github.com',
+        owner: '',
+        repo: '',
+        liveBranch: null,
+      }),
+    );
+    expect(error.problem.code).toBe('REPOSITORY_INVALID');
+  });
+
+  it('refuses a Forgejo host that is not on the allowlist', async () => {
+    const error = await refusedWith(
+      toon.setSiteRepository('team-aurora', 'website', {
+        provider: 'forgejo',
+        host: 'https://onbekende-forge.example',
+        owner: 'team-aurora',
+        repo: 'website',
+        liveBranch: null,
+      }),
+    );
+    expect(error.problem.code).toBe('HOST_NOT_ALLOWED');
+  });
+});
+
+describe('cli device linking', () => {
+  it('looks up a valid code', async () => {
+    const found = await toon.lookupDeviceAuthorization('abcd-efgh');
+    expect(found.userCode).toBe('ABCD-EFGH');
+    expect(found.clientName).toBe('plak-cli');
+  });
+
+  it('returns 404 USER_CODE_UNKNOWN for an unknown code', async () => {
+    const error = await refusedWith(toon.lookupDeviceAuthorization('ZZZZ-ZZZZ'));
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('USER_CODE_UNKNOWN');
+  });
+
+  it('approves a code and adds a linked session', async () => {
+    const before = await toon.cliSessions();
+    await toon.approveDeviceAuthorization('ABCD-EFGH');
+    const after = await toon.cliSessions();
+    expect(after.length).toBe(before.length + 1);
+
+    const error = await refusedWith(toon.lookupDeviceAuthorization('ABCD-EFGH'));
+    expect(error.problem.code).toBe('USER_CODE_UNKNOWN');
+  });
+
+  it('refuses a code again after denying it', async () => {
+    await toon.denyDeviceAuthorization('ABCD-EFGH');
+    const error = await refusedWith(toon.lookupDeviceAuthorization('ABCD-EFGH'));
+    expect(error.problem.code).toBe('USER_CODE_UNKNOWN');
+  });
+});
+
+describe('linked sessions', () => {
+  it('returns the seeded session and revokes it again', async () => {
+    const before = await toon.cliSessions();
+    expect(before.map((s) => s.id)).toContain('cli-sessie-1');
+
+    await toon.revokeCliSession('cli-sessie-1');
+    const after = await toon.cliSessions();
+    expect(after.map((s) => s.id)).not.toContain('cli-sessie-1');
+  });
+
+  it('returns 404 CLI_SESSION_UNKNOWN for an unknown device', async () => {
+    const error = await refusedWith(toon.revokeCliSession('onbekend'));
+    expect(error.problem.status).toBe(404);
+    expect(error.problem.code).toBe('CLI_SESSION_UNKNOWN');
+  });
+});
+
+describe('group members and platform members', () => {
+  it('adds a group member and removes it again', async () => {
+    const added = await toon.addGroupMember('team-aurora', 'collega@voorbeeld.nl');
+    // Without a role given the wire carries reader: adding someone grants no
+    // more than looking on.
+    expect(added.role).toBe('reader');
+    let members = await toon.groupMembers('team-aurora');
+    expect(members.map((l) => l.identifier)).toContain('collega@voorbeeld.nl');
+
+    await toon.removeGroupMember('team-aurora', added.memberId);
+    members = await toon.groupMembers('team-aurora');
+    expect(members.map((l) => l.identifier)).not.toContain('collega@voorbeeld.nl');
+  });
+
+  it('refuses to add a group member with an invalid identifier', async () => {
+    const error = await refusedWith(toon.addGroupMember('team-aurora', 'niet-een-email'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('reports the site roles a group member holds in this group', async () => {
+    const zoe = (await toon.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+    expect(zoe.siteRoles).toEqual([
+      { siteSlug: 'website', siteTitle: 'Team Aurora website', role: 'admin' },
+    ]);
+  });
+
+  it('sorts several site roles for the same member by site slug', async () => {
+    await toon.createSite('team-aurora', 'Alpha', 'alpha');
+    backend.data.siteRoles.push({
+      groupSlug: 'team-aurora',
+      siteSlug: 'alpha',
+      identifier: 'zoe@voorbeeld.nl',
+      role: 'reader',
+    });
+
+    const zoe = (await toon.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    expect(zoe.siteRoles.map((r) => r.siteSlug)).toEqual(['alpha', 'website']);
+  });
+
+  it('leaves the site roles standing unless the removal asks for them', async () => {
+    const zoe = (await toon.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    await toon.removeGroupMember('team-aurora', zoe.memberId);
+
+    const site = await toon.siteMembers('team-aurora', 'website');
+    expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')?.siteRole).toBe('admin');
+  });
+
+  it('takes the site roles along when the removal asks for them', async () => {
+    const zoe = (await toon.groupMembers('team-aurora')).find((l) => l.identifier === 'zoe@voorbeeld.nl')!;
+
+    await toon.removeGroupMember('team-aurora', zoe.memberId, 'remove');
+
+    const site = await toon.siteMembers('team-aurora', 'website');
+    expect(site.find((l) => l.identifier === 'zoe@voorbeeld.nl')).toBeUndefined();
+  });
+
+  it('changes the role of a group member', async () => {
+    const ada = (await toon.groupMembers('team-aurora')).find((l) => l.identifier === 'ada@voorbeeld.nl')!;
+    const changed = await toon.setGroupRole('team-aurora', ada.memberId, 'admin');
+    expect(changed.role).toBe('admin');
+
+    const members = await toon.groupMembers('team-aurora');
+    expect(members.find((l) => l.identifier === 'ada@voorbeeld.nl')?.role).toBe('admin');
+  });
+
+  it('activates and deactivates a platform member', async () => {
+    const activated = await toon.activatePlatformMember('lid-2');
+    expect(activated.status).toBe('active');
+
+    const deactivated = await toon.deactivatePlatformMember('lid-2');
+    expect(deactivated.status).toBe('deactivated');
+  });
+});
+
+describe('site members', () => {
+  it('refuses an invalid identifier with 422', async () => {
+    const error = await refusedWith(toon.addSiteMember('team-aurora', 'website', 'niet-een-email', 'reader'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('refuses a member who already has a role on the site, with 409', async () => {
+    await toon.addSiteMember('team-aurora', 'website', 'ada@voorbeeld.nl', 'reader');
+    const error = await refusedWith(
+      toon.addSiteMember('team-aurora', 'website', 'ada@voorbeeld.nl', 'editor'),
+    );
+    expect(error.problem.status).toBe(409);
+  });
+
+  it('refuses to change the role of a member who has none on the site, with 404', async () => {
+    const error = await refusedWith(
+      toon.setSiteRole('team-aurora', 'website', 'onbekend-lid-id', 'editor'),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses to remove a member who has no role on the site, with 404', async () => {
+    const error = await refusedWith(toon.removeSiteMember('team-aurora', 'website', 'onbekend-lid-id'));
+    expect(error.problem.status).toBe(404);
+  });
+});
+
+describe('searching members', () => {
+  it('searches by name and by email address, regardless of case', async () => {
+    const byName = await toon.searchGroupMembers('team-aurora', 'VERMEULEN');
+    expect(byName.map((hit) => hit.identifier)).toEqual(['sanne@voorbeeld.nl']);
+
+    const byEmail = await toon.searchGroupMembers('team-aurora', 'jamal@');
+    expect(byEmail.map((hit) => hit.name)).toEqual(['Jamal Verhoeven']);
+  });
+
+  it('refuses a single character, so the field does not spill the whole address list', async () => {
+    const error = await refusedWith(toon.searchGroupMembers('team-aurora', 'a'));
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('SEARCH_TOO_SHORT');
+  });
+
+  it('marks who is already in the group instead of leaving them out', async () => {
+    const hits = await toon.searchGroupMembers('team-aurora', 'ver');
+
+    // Ordered by name, with Ada in the list although she is a group member.
+    expect(hits.map((hit) => hit.name)).toEqual([
+      'Ada Vermeer',
+      'Jamal Verhoeven',
+      'Sanne Vermeulen',
+    ]);
+    expect(hits.map((hit) => hit.alreadyMember)).toEqual([true, false, false]);
+  });
+
+  it('leaves whoever no longer has access out of the suggestions', async () => {
+    // Karel Oud and Wim Weg are both deactivated: neither is someone you add
+    // to a group.
+    expect(await toon.searchGroupMembers('team-aurora', 'oud')).toEqual([]);
+    expect(await toon.searchGroupMembers('team-aurora', 'weg')).toEqual([]);
+  });
+
+  it('looks at the roles of that site at the site level', async () => {
+    const hits = await toon.searchSiteMembers('team-aurora', 'website', 'de wit');
+    // Zoe holds a role of her own on this site, so here she counts as a member.
+    expect(hits.map((hit) => hit.alreadyMember)).toEqual([true]);
+
+    const outsider = await toon.searchSiteMembers('team-aurora', 'website', 'bakker');
+    expect(outsider.map((hit) => hit.identifier)).toEqual(['iris@voorbeeld.nl']);
+    expect(outsider[0]!.alreadyMember).toBe(false);
+    expect(outsider[0]!.groupRole).toBeNull();
+  });
+
+  it('offers a group member on a site, with the role the group gives them', async () => {
+    const hits = await toon.searchSiteMembers('team-aurora', 'website', 'ada');
+
+    // Ada is redacteur in the group and has no role of her own on this site:
+    // a site role would still widen what she may here.
+    expect(hits.map((hit) => hit.alreadyMember)).toEqual([false]);
+    expect(hits.map((hit) => hit.groupRole)).toEqual(['editor']);
+  });
+});
+
+describe('site storage', () => {
+  it('reports the usage and the retention rule of a site', async () => {
+    expect(await toon.siteStorage('team-aurora', 'website')).toEqual({
+      usedBytes: 77594624,
+      maxBytes: 524288000,
+      liveVersionsKept: 5,
+      liveVersionsKeptIsDefault: true,
+      defaultLiveVersionsKept: 5,
+    });
+  });
+
+  it('reports the site\'s own number as the effective one', async () => {
+    await toon.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect(await toon.siteStorage('team-aurora', 'website')).toMatchObject({
+      liveVersionsKept: 3,
+      liveVersionsKeptIsDefault: false,
+      defaultLiveVersionsKept: 5,
+    });
+  });
+
+  it('follows an overridden platform default', async () => {
+    backend.data.defaultLiveVersionsKept = 0;
+
+    expect(await toon.siteStorage('team-aurora', 'website')).toMatchObject({
+      liveVersionsKept: 0,
+      liveVersionsKeptIsDefault: true,
+    });
+  });
+
+  it('refuses an unknown site', async () => {
+    expect((await refusedWith(toon.siteStorage('team-aurora', 'bestaat-niet'))).problem.status).toBe(404);
+  });
+});
+
+describe('live versions kept', () => {
+  it('sets an own number and hands back the site', async () => {
+    const site = await toon.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect(site.liveVersionsKept).toBe(3);
+  });
+
+  it('accepts 0 (keep all) and a large number', async () => {
+    expect((await toon.setLiveVersionsKept('team-aurora', 'website', 0)).liveVersionsKept).toBe(0);
+    expect((await toon.setLiveVersionsKept('team-aurora', 'website', 5000)).liveVersionsKept).toBe(5000);
+  });
+
+  it('goes back to the platform default with null', async () => {
+    await toon.setLiveVersionsKept('team-aurora', 'website', 3);
+
+    expect((await toon.setLiveVersionsKept('team-aurora', 'website', null)).liveVersionsKept).toBeNull();
+  });
+
+  it.each([-1, 2.5])('refuses %s with LIVE_VERSIONS_KEPT_INVALID', async (value) => {
+    const error = await refusedWith(toon.setLiveVersionsKept('team-aurora', 'website', value));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('LIVE_VERSIONS_KEPT_INVALID');
+  });
+
+  it('refuses a number the column cannot hold with LIVE_VERSIONS_KEPT_TOO_LARGE', async () => {
+    const error = await refusedWith(toon.setLiveVersionsKept('team-aurora', 'website', 2 ** 31));
+
+    expect(error.problem.status).toBe(422);
+    expect(error.problem.code).toBe('LIVE_VERSIONS_KEPT_TOO_LARGE');
+  });
+
+  it('refuses an unknown site', async () => {
+    expect((await refusedWith(toon.setLiveVersionsKept('team-aurora', 'bestaat-niet', 3))).problem.status).toBe(404);
+  });
+});
+
+describe('versions and rollback', () => {
+  it('puts an older live version back live (rollback)', async () => {
+    const before = await toon.versions('team-aurora', 'website');
+    const parentVersion = before.find((v) => v.id === 'versie-0');
+    expect(parentVersion?.isLive).toBe(false);
+
+    const site = await toon.setVersionLive('team-aurora', 'website', 'versie-0');
+    expect(site.liveVersionId).toBe('versie-0');
+
+    const after = await toon.versions('team-aurora', 'website');
+    expect(after.find((v) => v.id === 'versie-0')?.isLive).toBe(true);
+    expect(after.find((v) => v.id === 'versie-1')?.isLive).toBe(false);
+  });
+
+  it('refuses a preview version as a rollback target', async () => {
+    const error = await refusedWith(toon.setVersionLive('team-aurora', 'website', 'versie-preview-42'));
+    expect(error.problem.status).toBe(422);
+  });
+
+  it('returns 404 for setting an unknown version live', async () => {
+    const error = await refusedWith(toon.setVersionLive('team-aurora', 'website', 'onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for setting a version live on an unknown site', async () => {
+    const error = await refusedWith(toon.setVersionLive('team-aurora', 'onbekend', 'versie-0'));
+    expect(error.problem.status).toBe(404);
+  });
+});
+
+describe('previews and override', () => {
+  it('contains the seeded preview and can override its access', async () => {
+    const voor = await toon.previews('team-aurora', 'website');
+    expect(voor).toHaveLength(1);
+
+    const override = { base: 'public', keys: false, invitees: false } as const;
+    const updated = await toon.setPreviewAccess('team-aurora', 'website', 'pr-42', override);
+    expect(updated.accessOverride).toEqual(override);
+
+    const back = await toon.setPreviewAccess('team-aurora', 'website', 'pr-42', null);
+    expect(back.accessOverride).toBeNull();
+  });
+
+  it('defaults the base to public when the override leaves it out', async () => {
+    const updated = await toon.setPreviewAccess(
+      'team-aurora',
+      'website',
+      'pr-42',
+      { keys: true, invitees: false } as unknown as import('@/api/types').Access,
+    );
+    expect(updated.accessOverride?.base).toBe('public');
+  });
+
+  it('returns 404 for listing previews of an unknown site', async () => {
+    const error = await refusedWith(toon.previews('team-aurora', 'onbekend'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for overriding preview access on an unknown site', async () => {
+    const error = await refusedWith(
+      toon.setPreviewAccess('team-aurora', 'onbekend', 'pr-42', { base: 'public', keys: false, invitees: false }),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('returns 404 for overriding access on an unknown preview', async () => {
+    const error = await refusedWith(
+      toon.setPreviewAccess('team-aurora', 'website', 'onbekend-ref', { base: 'public', keys: false, invitees: false }),
+    );
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('deletes a preview idempotently (204 twice)', async () => {
+    await toon.deletePreview('team-aurora', 'website', 'pr-42');
+    await expect(toon.deletePreview('team-aurora', 'website', 'pr-42')).resolves.toBeUndefined();
+
+    const list = await toon.previews('team-aurora', 'website');
+    expect(list).toEqual([]);
+  });
+
+  it('returns 404 for deleting a preview on an unknown site', async () => {
+    const error = await refusedWith(toon.deletePreview('team-aurora', 'onbekend', 'pr-42'));
+    expect(error.problem.status).toBe(404);
+  });
+});
+
+describe('upload', () => {
+  it('does a live deploy and puts the new version live', async () => {
+    const file = new Blob(['<html></html>'], { type: 'text/html' });
+    const result = await toon.upload('team-aurora', 'website', file, 'index.html');
+
+    expect(result.versionId).toBeTruthy();
+    const detail = await toon.group('team-aurora');
+    const site = detail.sites.find((p) => p.slug === 'website');
+    expect(site?.liveVersionId).toBe(result.versionId);
+  });
+
+  it('does a preview deploy and counts the preview in the overview', async () => {
+    const file = new Blob(['<html></html>'], { type: 'text/html' });
+    await toon.upload('team-aurora', 'website', file, 'index.html', 'pr-99');
+
+    const previews = await toon.previews('team-aurora', 'website');
+    expect(previews.some((p) => p.ref === 'pr-99')).toBe(true);
+
+    const overview = await toon.overview();
+    const site = overview.groups[0]!.sites.find((p) => p.slug === 'website');
+    expect(site?.previewCount).toBe(2);
+  });
+
+  it('replaces the previous preview version on a second deploy to the same ref', async () => {
+    const file = new Blob(['<html></html>'], { type: 'text/html' });
+    const first = await toon.upload('team-aurora', 'website', file, 'index.html', 'pr-42');
+    const second = await toon.upload('team-aurora', 'website', file, 'index.html', 'pr-42');
+
+    expect(second.versionId).not.toBe(first.versionId);
+    const previews = await toon.previews('team-aurora', 'website');
+    const preview = previews.find((p) => p.ref === 'pr-42');
+    expect(preview?.versionId).toBe(second.versionId);
+  });
+
+  // The mock mirrors the real backend's defensive checks on the raw request,
+  // which toon.upload() itself can never trigger (it always builds a proper
+  // FormData with a "file" field); this reaches them directly, the way a
+  // malformed request from outside the SPA would.
+  it('returns 404 for a deploy to an unknown site', async () => {
+    const file = new Blob(['<html></html>'], { type: 'text/html' });
+    const error = await refusedWith(toon.upload('team-aurora', 'onbekend', file, 'index.html'));
+    expect(error.problem.status).toBe(404);
+  });
+
+  it('refuses a deploy whose body is not multipart/form-data', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/deploys', {
+      method: 'POST',
+      body: JSON.stringify({ not: 'a form' }),
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it('refuses a deploy whose form carries no file field', async () => {
+    const response = await backend.fetch('/-/api/v1/sites/team-aurora/website/deploys', {
+      method: 'POST',
+      body: new FormData(),
+    });
+    expect(response.status).toBe(422);
+  });
+});

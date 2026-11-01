@@ -32,29 +32,29 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import Request
 
-from plak import i18n, messages
-from plak.api import deploys
-from plak.api.deploys import BearerOutsideDeploysMiddleware
-from plak.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
-from plak.audit.log import AuditLog
-from plak.audit.pseudonymisation import pseudonymise
-from plak.auth import sessions
-from plak.ci import trust
-from plak.ci.providers import ProviderClient
-from plak.ci.tokens import CiTokenVerifier
-from plak.cli import service as cli
-from plak.config import Settings
-from plak.constants import AccessBase, Role
-from plak.db import make_engine, make_session_factory
-from plak.ingest import precompress
-from plak.ingest.service import IngestService, RoomGuard
-from plak.ingest.store import ContentStore, version_ref
-from plak.messages import Msg
-from plak.models.audit import ActorKind, AuditLogEntry
-from plak.models.ci import CiProvider, SiteRepository
-from plak.models.cli import CliSession
-from plak.models.identity import Group, GroupMember, Member, MemberStatus
-from plak.models.publication import Preview, Site, Version, VersionTarget
+from toon import i18n, messages
+from toon.api import deploys
+from toon.api.deploys import BearerOutsideDeploysMiddleware
+from toon.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
+from toon.audit.log import AuditLog
+from toon.audit.pseudonymisation import pseudonymise
+from toon.auth import sessions
+from toon.ci import trust
+from toon.ci.providers import ProviderClient
+from toon.ci.tokens import CiTokenVerifier
+from toon.cli import service as cli
+from toon.config import Settings
+from toon.constants import AccessBase, Role
+from toon.db import make_engine, make_session_factory
+from toon.ingest import precompress
+from toon.ingest.service import IngestService, RoomGuard
+from toon.ingest.store import ContentStore, version_ref
+from toon.messages import Msg
+from toon.models.audit import ActorKind, AuditLogEntry
+from toon.models.ci import CiProvider, SiteRepository
+from toon.models.cli import CliSession
+from toon.models.identity import Group, GroupMember, Member, MemberStatus
+from toon.models.publication import Preview, Site, Version, VersionTarget
 
 BASE_URL = "https://plak.example"
 DEPLOY_PATH = "/-/api/v1/sites/team-aurora/website/deploys"

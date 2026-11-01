@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from plak.serving import mime
+from toon.serving import mime
 
 
 @pytest.mark.parametrize(

@@ -28,9 +28,9 @@ BACKEND_SRC = REPO_ROOT / "backend" / "src"
 if str(BACKEND_SRC) not in sys.path:
     sys.path.insert(0, str(BACKEND_SRC))
 
-from plak.constants import AccessBase, AccessPolicy
-from plak.platform import spa
-from plak.serving import response
+from toon.constants import AccessBase, AccessPolicy
+from toon.platform import spa
+from toon.serving import response
 
 # The SPA middleware steps aside on the content host, so it has to know
 # which host that is; the value only has to differ from the base_url below.

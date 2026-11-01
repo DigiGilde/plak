@@ -24,9 +24,9 @@ from test_admin_api import (  # noqa: F401 - fixtures are found by name
     login,
 )
 
-from plak.audit import vocabulary
-from plak.audit.log import ANONYMOUS, Actor
-from plak.models.audit import ActorKind, AuditLogEntry
+from toon.audit import vocabulary
+from toon.audit.log import ANONYMOUS, Actor
+from toon.models.audit import ActorKind, AuditLogEntry
 
 AUDIT = f"{BASE}/platform/audit"
 REASON = "onderzoek naar een melding over misbruik"

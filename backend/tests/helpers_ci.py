@@ -16,7 +16,7 @@ import httpx
 from joserfc import jwt
 from joserfc.jwk import OctKey, RSAKey
 
-from plak.ci.providers import GITHUB_API, GITHUB_ISSUER
+from toon.ci.providers import GITHUB_API, GITHUB_ISSUER
 
 FORGEJO_HOST = "https://code.overheid.nl"
 FORGEJO_ISSUER = FORGEJO_HOST + "/api/actions"

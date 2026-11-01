@@ -23,19 +23,19 @@ from sqlalchemy import Delete, event, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.util import await_only
 
-from plak.api.docs import _ASSETS, _DOCS_HTML, DOCS_CSP, STATIC_DOCS_DIR
-from plak.audit import vocabulary
-from plak.cli import service as cli
-from plak.config import Settings
-from plak.constants import AccessBase
-from plak.ingest.service import Deployer, IngestError, IngestService
-from plak.ingest.store import ContentStore, version_ref
-from plak.models.audit import ActorKind, AuditLogEntry
-from plak.models.cli import CliDeviceAuthorization, CliSession
-from plak.models.identity import Group, Member, MemberStatus
-from plak.models.publication import Preview, Site, Version, VersionTarget
-from plak.models.slugs import GroupSlug, SiteSlug
-from plak.previews.cleanup_job import (
+from toon.api.docs import _ASSETS, _DOCS_HTML, DOCS_CSP, STATIC_DOCS_DIR
+from toon.audit import vocabulary
+from toon.cli import service as cli
+from toon.config import Settings
+from toon.constants import AccessBase
+from toon.ingest.service import Deployer, IngestError, IngestService
+from toon.ingest.store import ContentStore, version_ref
+from toon.models.audit import ActorKind, AuditLogEntry
+from toon.models.cli import CliDeviceAuthorization, CliSession
+from toon.models.identity import Group, Member, MemberStatus
+from toon.models.publication import Preview, Site, Version, VersionTarget
+from toon.models.slugs import GroupSlug, SiteSlug
+from toon.previews.cleanup_job import (
     ORPHAN_OLDER_THAN,
     RECLAIMED_KEPT,
     TIMESTAMP_DEFAULT,
@@ -47,7 +47,7 @@ from plak.previews.cleanup_job import (
     cleanup_job,
     delete_expired,
 )
-from plak.slug_window import redirect_ends_at
+from toon.slug_window import redirect_ends_at
 
 
 @pytest_asyncio.fixture
@@ -463,7 +463,7 @@ class TestOldLiveVersions:
         def broken_entry(**_kwargs):
             raise RuntimeError("audit storing")
 
-        monkeypatch.setattr("plak.previews.cleanup_job.AuditLogEntry", broken_entry)
+        monkeypatch.setattr("toon.previews.cleanup_job.AuditLogEntry", broken_entry)
         with caplog.at_level(logging.ERROR):
             result = await delete_expired(
                 environment.session_factory, environment.store, datetime.now(tz=UTC), live_versions_kept=1
@@ -853,9 +853,9 @@ class TestRunDaily:
             second_call.set()
             return CleanupResult(expired_previews=0, orphan_versions=0, tmp_swept=0)
 
-        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        monkeypatch.setattr("toon.previews.cleanup_job.delete_expired", fake_delete_expired)
         # No real day-long wait between ticks: each iteration is due at once.
-        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
+        monkeypatch.setattr("toon.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
 
         stop = asyncio.Event()
         with caplog.at_level(logging.ERROR):
@@ -886,9 +886,9 @@ class TestRunDaily:
             nonlocal called
             called = True
 
-        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        monkeypatch.setattr("toon.previews.cleanup_job.delete_expired", fake_delete_expired)
         # A long wait, so the task is still blocked on stop.wait() when stop is set.
-        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 3600.0)
+        monkeypatch.setattr("toon.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 3600.0)
 
         stop = asyncio.Event()
         task = asyncio.create_task(
@@ -914,8 +914,8 @@ class TestRunDaily:
             received.put_nowait(live_versions_kept)
             return CleanupResult(expired_previews=0, orphan_versions=0, tmp_swept=0)
 
-        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
-        monkeypatch.setattr("plak.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
+        monkeypatch.setattr("toon.previews.cleanup_job.delete_expired", fake_delete_expired)
+        monkeypatch.setattr("toon.previews.cleanup_job._seconds_until", lambda occurred_at, reference: 0.0)
 
         async with cleanup_job(environment.session_factory, environment.store, live_versions_kept=3):
             assert await asyncio.wait_for(received.get(), timeout=5) == 3
@@ -929,7 +929,7 @@ class TestRunDaily:
             nonlocal called
             called = True
 
-        monkeypatch.setattr("plak.previews.cleanup_job.delete_expired", fake_delete_expired)
+        monkeypatch.setattr("toon.previews.cleanup_job.delete_expired", fake_delete_expired)
 
         stop = asyncio.Event()
         stop.set()

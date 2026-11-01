@@ -26,12 +26,12 @@ from helpers_oidc import make_client_jwk
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
-from plak.api.docs import DOCS_CSP
-from plak.api.origin_guard import normalise_origin
-from plak.config import Settings
-from plak.main import create_app
-from plak.platform.spa import ADMIN_CSP, admin_csp
-from plak.security_headers import (
+from toon.api.docs import DOCS_CSP
+from toon.api.origin_guard import normalise_origin
+from toon.config import Settings
+from toon.main import create_app
+from toon.platform.spa import ADMIN_CSP, admin_csp
+from toon.security_headers import (
     COOP,
     FRAME_ANCESTORS_CSP,
     FRAME_OPTIONS,
@@ -44,7 +44,7 @@ from plak.security_headers import (
     is_html,
     is_https,
 )
-from plak.serving.response import (
+from toon.serving.response import (
     CONTENT_CSP,
     CONTENT_CSP_EXTERNAL,
     CONTENT_CSP_EXTERNAL_SANDBOX,
@@ -261,7 +261,7 @@ class TestMiddleware:
         """Chrome checks each redirect of a form navigation against
         form-action, and logout passes the content host and, with RP-initiated
         logout on, the IdP. Nothing else gets in."""
-        from plak.main import create_app
+        from toon.main import create_app
 
         settings_on = _settings(tmp_path, oidc_rp_logout=True)
         off = create_app(_settings(tmp_path))

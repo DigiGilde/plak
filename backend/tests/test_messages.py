@@ -1,4 +1,4 @@
-"""plak/messages.py: the problem+json catalogue and how it is rendered.
+"""toon/messages.py: the problem+json catalogue and how it is rendered.
 
 The point of this file is the parity: the Dutch and the English side say the
 same things, and every raise site says something the catalogue knows. Without
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-import plak
-from plak import i18n, messages
-from plak.messages import Msg
+import toon
+from toon import i18n, messages
+from toon.messages import Msg
 
 
 def test_both_catalogues_hold_the_same_keys() -> None:
@@ -164,7 +164,7 @@ def test_rendering_an_unknown_key_is_an_error_rather_than_a_raw_key() -> None:
 # languages. The check reads the source rather than the runtime, so a refusal
 # that no test happens to trigger is held to it too.
 
-_SOURCE_ROOT = Path(plak.__file__).parent
+_SOURCE_ROOT = Path(toon.__file__).parent
 
 # The first argument of each is the message key, except ApiError, where the
 # status comes first.

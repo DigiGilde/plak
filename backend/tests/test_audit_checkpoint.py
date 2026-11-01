@@ -1,5 +1,5 @@
 """Tests for publishing the head of every audit chain and for checking the
-database against a head published earlier (plak/audit/checkpoint.py).
+database against a head published earlier (toon/audit/checkpoint.py).
 
 The interesting case is the one `chain.py` cannot see: an attacker who owns the
 schema, rewrites a row and recomputes the hashes. The chain then verifies, and
@@ -23,7 +23,7 @@ import pytest
 import pytest_asyncio
 from helpers_audit import id_in_chain, insert_chained_audit_row
 
-from plak.audit import chain, checkpoint, retention
+from toon.audit import chain, checkpoint, retention
 
 # asyncio_mode = "auto" (pyproject.toml) picks up the async tests by itself; this
 # file deliberately mixes sync and async tests, so no module-wide asyncio marker.

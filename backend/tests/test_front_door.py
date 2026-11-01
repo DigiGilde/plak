@@ -24,9 +24,9 @@ import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import make_client_jwk
 
-from plak.config import Settings
-from plak.main import create_app
-from plak.serving.response import NEUTRAL_404_BODY, PLATFORM_CSP
+from toon.config import Settings
+from toon.main import create_app
+from toon.serving.response import NEUTRAL_404_BODY, PLATFORM_CSP
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"

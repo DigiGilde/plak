@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-CONTAINER = Path(__file__).resolve().parents[2] / "containers" / "plak"
+CONTAINER = Path(__file__).resolve().parents[2] / "containers" / "toon"
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +32,7 @@ def test_the_image_starts_the_entrypoint(containerfile: str) -> None:
 
 
 def test_the_entrypoint_is_copied_into_the_image(containerfile: str) -> None:
-    assert "containers/plak/entrypoint.sh ./entrypoint.sh" in containerfile
+    assert "containers/toon/entrypoint.sh ./entrypoint.sh" in containerfile
 
 
 def test_a_failing_step_stops_the_script(entrypoint: str) -> None:
@@ -49,7 +49,7 @@ def test_the_migration_runs_before_the_server(entrypoint: str) -> None:
 
 def test_files_are_put_back_after_the_migration_and_before_the_server(entrypoint: str) -> None:
     migration = entrypoint.index("alembic upgrade head")
-    restore = entrypoint.index("python -m plak.ingest.uncompress")
+    restore = entrypoint.index("python -m toon.ingest.uncompress")
     server = entrypoint.index("exec uvicorn")
     assert migration < restore < server
 

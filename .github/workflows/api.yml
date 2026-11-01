@@ -48,7 +48,7 @@ jobs:
 
       - name: Print the API schema
         working-directory: backend
-        run: uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"
+        run: uv run python -m toon.api.openapi_file > "$RUNNER_TEMP/openapi.json"
 
       - name: Check the API contract
         env:
@@ -73,5 +73,5 @@ jobs:
         uses: ./.github/actions/sticky-comment
         with:
           token: ${{ github.token }}
-          marker: "<!-- plak-api-check -->"
+          marker: "<!-- toon-api-check -->"
           comment-file: ${{ runner.temp }}/api-comment.md

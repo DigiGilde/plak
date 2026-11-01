@@ -188,7 +188,7 @@ updates:
 
   - package-ecosystem: docker
     directories:
-      - /containers/plak
+      - /containers/toon
       - /containers/nginx-dev
       - /.github/oasdiff
     multi-ecosystem-group: tooling

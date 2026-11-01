@@ -13,11 +13,11 @@ from typing import Any
 
 import pytest
 
-from plak import messages
-from plak.api.errors import PROBLEM_CONTENT_TYPE, PROBLEM_SCHEMA_NAME
-from plak.api.openapi_file import schema as english_schema
-from plak.api.openapi_i18n import localise, texts
-from plak.api.openapi_nl import NL
+from toon import messages
+from toon.api.errors import PROBLEM_CONTENT_TYPE, PROBLEM_SCHEMA_NAME
+from toon.api.openapi_file import schema as english_schema
+from toon.api.openapi_i18n import localise, texts
+from toon.api.openapi_nl import NL
 
 # Texts that read the same in both languages: names and loanwords Dutch uses
 # as they are. Anything else that comes out of the Dutch schema unchanged is

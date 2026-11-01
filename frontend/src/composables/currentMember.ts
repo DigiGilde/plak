@@ -6,7 +6,7 @@
 import { ref } from 'vue';
 
 import { ApiError } from '../api/client';
-import { me } from '../api/plak';
+import { me } from '../api/toon';
 import type { Member } from '../api/types';
 import { applyMemberLanguage } from '../i18n';
 

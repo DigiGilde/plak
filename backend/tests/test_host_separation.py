@@ -19,10 +19,10 @@ from helpers_oidc import MockIdP, make_client_jwk, make_oidc_client
 from starlette.responses import PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
-from plak.config import Settings
-from plak.host_separation import HostSeparationMiddleware, belongs_to_content
-from plak.main import create_app
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.config import Settings
+from toon.host_separation import HostSeparationMiddleware, belongs_to_content
+from toon.main import create_app
+from toon.serving.response import NEUTRAL_404_BODY
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"

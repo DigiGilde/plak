@@ -10,9 +10,9 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from plak.auth.content_viewers import upsert_content_viewer
-from plak.db import make_session_factory
-from plak.models.audit import ContentViewer
+from toon.auth.content_viewers import upsert_content_viewer
+from toon.db import make_session_factory
+from toon.models.audit import ContentViewer
 
 
 @pytest_asyncio.fixture

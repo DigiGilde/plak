@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from plak.slug_window import AMSTERDAM, redirect_ends_at, still_redirects
+from toon.slug_window import AMSTERDAM, redirect_ends_at, still_redirects
 
 
 def _amsterdam(*parts: int) -> datetime:

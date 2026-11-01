@@ -5,7 +5,7 @@ import axe from 'axe-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 
-import * as plakApi from '../api/plak';
+import * as toonApi from '../api/toon';
 import type { Group, Overview as OverviewData, Site } from '../api/types';
 import NewGroupSheet from '../components/NewGroupSheet.vue';
 import PublishSheet from '../components/PublishSheet.vue';
@@ -31,7 +31,7 @@ import Overview from './Overview.vue';
   }
 }
 
-vi.mock('../api/plak', () => ({
+vi.mock('../api/toon', () => ({
   overview: vi.fn(),
   createSite: vi.fn(),
   createGroup: vi.fn(),
@@ -78,13 +78,13 @@ function makeRouter(): Router {
 
 describe('Overview', () => {
   afterEach(() => {
-    vi.mocked(plakApi.overview).mockReset();
+    vi.mocked(toonApi.overview).mockReset();
     _resetCurrentMemberCache();
   });
 
   it('loading: shows an activity indicator while the request is in flight', async () => {
     let release!: (data: OverviewData) => void;
-    vi.mocked(plakApi.overview).mockImplementation(
+    vi.mocked(toonApi.overview).mockImplementation(
       () =>
         new Promise((resolve) => {
           release = resolve;
@@ -109,7 +109,7 @@ describe('Overview', () => {
   });
 
   it('filled: shows groups with their site rows', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+    vi.mocked(toonApi.overview).mockResolvedValue(filledData);
 
     const wrapper = mount(Overview, { global: { plugins: [makeRouter()] } });
     await flushPromises();
@@ -125,7 +125,7 @@ describe('Overview', () => {
   });
 
   it('filled: the page has a primary action that names the whole task', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+    vi.mocked(toonApi.overview).mockResolvedValue(filledData);
 
     const wrapper = mount(Overview, {
       global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -161,7 +161,7 @@ describe('Overview', () => {
   });
 
   it('filled: the site list is a table with a header row and a tinted fill', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+    vi.mocked(toonApi.overview).mockResolvedValue(filledData);
 
     const wrapper = mount(Overview, {
       attachTo: document.body,
@@ -189,7 +189,7 @@ describe('Overview', () => {
   });
 
   it('filled: group heading and table sit closer together than groups do to each other', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+    vi.mocked(toonApi.overview).mockResolvedValue(filledData);
 
     const wrapper = mount(Overview, {
       attachTo: document.body,
@@ -209,7 +209,7 @@ describe('Overview', () => {
   });
 
   it('filled: both create actions carry text, no bare plus in the heading', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+    vi.mocked(toonApi.overview).mockResolvedValue(filledData);
 
     const wrapper = mount(Overview, {
       attachTo: document.body,
@@ -241,7 +241,7 @@ describe('Overview', () => {
   });
 
   it('filled: a group without sites shows an empty-table notice, no crash', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue({
+    vi.mocked(toonApi.overview).mockResolvedValue({
       groups: [
         {
           group: { slug: 'empty', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] },
@@ -265,7 +265,7 @@ describe('Overview', () => {
   });
 
   it('empty: offers everyone the same one action, and sends no one to a platform admin', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
+    vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
 
     const wrapper = mount(Overview, {
       global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -292,7 +292,7 @@ describe('Overview', () => {
   });
 
   it('error: a failed request shows an error banner instead of crashing', async () => {
-    vi.mocked(plakApi.overview).mockRejectedValue(new Error('Kon overzicht niet laden'));
+    vi.mocked(toonApi.overview).mockRejectedValue(new Error('Kon overzicht niet laden'));
 
     const wrapper = mount(Overview, { global: { plugins: [makeRouter()] } });
     await flushPromises();
@@ -306,7 +306,7 @@ describe('Overview', () => {
   });
 
   it('error: a rejection that is not an Error still yields a readable message', async () => {
-    vi.mocked(plakApi.overview).mockRejectedValue('zomaar een string');
+    vi.mocked(toonApi.overview).mockRejectedValue('zomaar een string');
 
     const wrapper = mount(Overview, { global: { plugins: [makeRouter()] } });
     await flushPromises();
@@ -317,8 +317,8 @@ describe('Overview', () => {
   });
 
   it('passes the content origin from /me to the sheet, so the address is correct', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-    vi.mocked(plakApi.me).mockResolvedValue({
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.me).mockResolvedValue({
       id: 'lid-1',
       ssoSubject: 'sub-1',
       email: 'lid@example.org',
@@ -350,8 +350,8 @@ describe('Overview', () => {
   });
 
   it('does not let a failed session fetch break the overview', async () => {
-    vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-    vi.mocked(plakApi.me).mockRejectedValue(new Error('geen sessie'));
+    vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+    vi.mocked(toonApi.me).mockRejectedValue(new Error('geen sessie'));
 
     const wrapper = mount(Overview, {
       global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -465,11 +465,11 @@ describe('Overview', () => {
     let router: Router | null = null;
 
     beforeEach(() => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.createSite).mockReset();
-      vi.mocked(plakApi.createGroup).mockReset();
-      vi.mocked(plakApi.upload).mockReset();
-      vi.mocked(plakApi.me).mockResolvedValue(undefined as never);
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.createSite).mockReset();
+      vi.mocked(toonApi.createGroup).mockReset();
+      vi.mocked(toonApi.upload).mockReset();
+      vi.mocked(toonApi.me).mockResolvedValue(undefined as never);
     });
 
     afterEach(() => {
@@ -479,8 +479,8 @@ describe('Overview', () => {
     });
 
     it('publishes a file and takes the user to the result screen', async () => {
-      vi.mocked(plakApi.createSite).mockResolvedValue(newSite);
-      vi.mocked(plakApi.upload).mockResolvedValue({ versionId: 'versie-9' });
+      vi.mocked(toonApi.createSite).mockResolvedValue(newSite);
+      vi.mocked(toonApi.upload).mockResolvedValue({ versionId: 'versie-9' });
       mountComponent();
       await flushPromises();
       expect(titles()).toEqual(['Team Aurora website']);
@@ -492,8 +492,8 @@ describe('Overview', () => {
       submit(form);
       await flushPromises();
 
-      expect(plakApi.createSite).toHaveBeenCalledWith('team-aurora', 'Handboek', 'handboek');
-      expect(plakApi.upload).toHaveBeenCalledWith('team-aurora', 'handboek', file, 'handboek.zip');
+      expect(toonApi.createSite).toHaveBeenCalledWith('team-aurora', 'Handboek', 'handboek');
+      expect(toonApi.upload).toHaveBeenCalledWith('team-aurora', 'handboek', file, 'handboek.zip');
       expect(titles()).toEqual(['Team Aurora website', 'Handboek']);
       expect(router!.currentRoute.value.fullPath).toBe('/team-aurora/handboek/done');
       // Marked as the publish flow, so the result screen may make a secret link.
@@ -501,13 +501,13 @@ describe('Overview', () => {
     });
 
     it('creates a group in the same flow when there are no groups', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
-      vi.mocked(plakApi.createGroup).mockResolvedValue(newGroup);
-      vi.mocked(plakApi.createSite).mockResolvedValue({
+      vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
+      vi.mocked(toonApi.createGroup).mockResolvedValue(newGroup);
+      vi.mocked(toonApi.createSite).mockResolvedValue({
         ...newSite,
         groupSlug: 'team',
       });
-      vi.mocked(plakApi.upload).mockResolvedValue({ versionId: 'versie-9' });
+      vi.mocked(toonApi.upload).mockResolvedValue({ versionId: 'versie-9' });
       mountComponent();
       await flushPromises();
       expect(listLabels()).toEqual([]);
@@ -518,7 +518,7 @@ describe('Overview', () => {
       submit(form);
       await flushPromises();
 
-      expect(plakApi.createGroup).toHaveBeenCalledWith('Team', 'team');
+      expect(toonApi.createGroup).toHaveBeenCalledWith('Team', 'team');
       // The fresh group should be in the overview at once, with the site in
       // it: the user will come back to this later.
       expect(listLabels()).toEqual(['Sites in Team']);
@@ -529,7 +529,7 @@ describe('Overview', () => {
     });
 
     it('asks for a group as soon as the user has more than one', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue({
+      vi.mocked(toonApi.overview).mockResolvedValue({
         groups: [
           ...structuredClone(filledData).groups,
           { group: newGroup, sites: [] },
@@ -544,7 +544,7 @@ describe('Overview', () => {
     });
 
     it('creates a group from the split button menu and adds it to the overview', async () => {
-      vi.mocked(plakApi.createGroup).mockResolvedValue(newGroup);
+      vi.mocked(toonApi.createGroup).mockResolvedValue(newGroup);
       mountComponent();
       await flushPromises();
 
@@ -559,7 +559,7 @@ describe('Overview', () => {
       submit(form);
       await flushPromises();
 
-      expect(plakApi.createGroup).toHaveBeenCalledWith('Team', 'team');
+      expect(toonApi.createGroup).toHaveBeenCalledWith('Team', 'team');
       expect(listLabels()).toEqual(['Sites in Team Aurora', 'Sites in Team']);
     });
   });
@@ -610,8 +610,8 @@ describe('Overview', () => {
     }
 
     it('opens the sheet with the file when it is dropped anywhere on the page', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -631,8 +631,8 @@ describe('Overview', () => {
     });
 
     it('does nothing for a member without an editor or admin role in any group', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -653,8 +653,8 @@ describe('Overview', () => {
     });
 
     it('opens the sheet also for someone without groups, who creates one along the way', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
-      vi.mocked(plakApi.me).mockResolvedValue({
+      vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
+      vi.mocked(toonApi.me).mockResolvedValue({
         ...meWithGroupRole('team-aurora', 'editor'),
         groupRoles: [],
       });
@@ -677,8 +677,8 @@ describe('Overview', () => {
     });
 
     it('shows the drag state on dragenter and hides it again on dragleave', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -698,8 +698,8 @@ describe('Overview', () => {
     });
 
     it('does not intercept dragleave for a member without an editor or admin role in any group', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -717,8 +717,8 @@ describe('Overview', () => {
     });
 
     it('prevents the browser default while dragging over the target', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -735,8 +735,8 @@ describe('Overview', () => {
     });
 
     it('does not intercept dragover for a member without an editor or admin role in any group', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'reader'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -753,8 +753,8 @@ describe('Overview', () => {
     });
 
     it('opens the sheet with the packed result when a folder is dropped', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -778,8 +778,8 @@ describe('Overview', () => {
     });
 
     it('opens the sheet with the refusal for a dropped file of an unsupported type', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -803,8 +803,8 @@ describe('Overview', () => {
     });
 
     it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
-      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+      vi.mocked(toonApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(toonApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
       const wrapper = mount(Overview, {
         global: { plugins: [makeRouter()], stubs: { teleport: true } },
@@ -825,7 +825,7 @@ describe('Overview', () => {
 
   describe('a11y', () => {
     beforeEach(() => {
-      vi.mocked(plakApi.overview).mockResolvedValue(filledData);
+      vi.mocked(toonApi.overview).mockResolvedValue(filledData);
     });
 
     it('has no axe violations in the filled state', async () => {
@@ -842,7 +842,7 @@ describe('Overview', () => {
     });
 
     it('has no axe violations in the empty state with action', async () => {
-      vi.mocked(plakApi.overview).mockResolvedValue({ groups: [] });
+      vi.mocked(toonApi.overview).mockResolvedValue({ groups: [] });
 
       const wrapper = mount(Overview, {
         attachTo: document.body,
@@ -886,9 +886,9 @@ describe('Overview: publish button in an empty group', () => {
   let wrapper: ReturnType<typeof mount> | null = null;
 
   async function open(data: OverviewData, me: ReturnType<typeof meWith> | 'fails') {
-    vi.mocked(plakApi.overview).mockResolvedValue(data);
-    if (me === 'fails') vi.mocked(plakApi.me).mockRejectedValue(new Error('geen sessie'));
-    else vi.mocked(plakApi.me).mockResolvedValue(me);
+    vi.mocked(toonApi.overview).mockResolvedValue(data);
+    if (me === 'fails') vi.mocked(toonApi.me).mockRejectedValue(new Error('geen sessie'));
+    else vi.mocked(toonApi.me).mockResolvedValue(me);
     wrapper = mount(Overview, { global: { plugins: [makeRouter()], stubs: { teleport: true } } });
     await flushPromises();
     return wrapper;
@@ -901,8 +901,8 @@ describe('Overview: publish button in an empty group', () => {
   afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
-    vi.mocked(plakApi.overview).mockReset();
-    vi.mocked(plakApi.me).mockReset();
+    vi.mocked(toonApi.overview).mockReset();
+    vi.mocked(toonApi.me).mockReset();
     _resetCurrentMemberCache();
   });
 
@@ -991,7 +991,7 @@ describe('Overview: publish button in an empty group', () => {
     it('shows the button and offers the group in the sheet without a reload', async () => {
       await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
       expect(buttons()).toHaveLength(1);
-      vi.mocked(plakApi.me).mockResolvedValue(
+      vi.mocked(toonApi.me).mockResolvedValue(
         meWith([
           { groupSlug: 'een', role: 'editor' },
           { groupSlug: 'nieuw', role: 'editor' },
@@ -1011,7 +1011,7 @@ describe('Overview: publish button in an empty group', () => {
 
     it('has neither button nor choice with the old roles, which is what a reload fixed', async () => {
       await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
-      vi.mocked(plakApi.me).mockResolvedValue(meWith([{ groupSlug: 'een', role: 'editor' }]));
+      vi.mocked(toonApi.me).mockResolvedValue(meWith([{ groupSlug: 'een', role: 'editor' }]));
 
       wrapper!.findComponent(NewGroupSheet).vm.$emit('created', fresh);
       await flushPromises();
@@ -1022,7 +1022,7 @@ describe('Overview: publish button in an empty group', () => {
 
     it('keeps the page working when the refetch fails, without a button for the new group', async () => {
       await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
-      vi.mocked(plakApi.me).mockRejectedValue(new Error('geen sessie'));
+      vi.mocked(toonApi.me).mockRejectedValue(new Error('geen sessie'));
 
       wrapper!.findComponent(NewGroupSheet).vm.$emit('created', fresh);
       await flushPromises();
@@ -1034,23 +1034,23 @@ describe('Overview: publish button in an empty group', () => {
     it('finishes a publish that creates the first group while the roles are refetched', async () => {
       let release!: (me: ReturnType<typeof meWith>) => void;
       await open({ groups: [] }, meWith([]));
-      vi.mocked(plakApi.me).mockImplementation(
+      vi.mocked(toonApi.me).mockImplementation(
         () => new Promise((resolve) => (release = resolve as typeof release)),
       );
-      vi.mocked(plakApi.createGroup).mockResolvedValue(fresh);
+      vi.mocked(toonApi.createGroup).mockResolvedValue(fresh);
       const site: Site = {
         id: 'x', groupSlug: 'nieuw', slug: 'handboek', title: 'Handboek', access,
         externalSources: false, sandbox: true, liveVersionsKept: null, liveVersionId: null,
         createdBy: 'dev', hasLiveVersion: false, lastPublishedAt: null, previewCount: 0, previousSlugs: [],
       };
-      vi.mocked(plakApi.createSite).mockImplementation(async () => {
+      vi.mocked(toonApi.createSite).mockImplementation(async () => {
         // The refetched roles arrive in the middle of the submit.
         release(meWith([{ groupSlug: 'nieuw', role: 'editor' }]));
         await flushPromises();
         return site;
       });
-      vi.mocked(plakApi.setAccess).mockImplementation(async (_g, _s, a) => ({ ...site, access: a }));
-      vi.mocked(plakApi.upload).mockResolvedValue({ versionId: 'v1' });
+      vi.mocked(toonApi.setAccess).mockImplementation(async (_g, _s, a) => ({ ...site, access: a }));
+      vi.mocked(toonApi.upload).mockResolvedValue({ versionId: 'v1' });
       const root = wrapper!.find('nldd-sheet[accessible-label="Zet een site online"]').element as HTMLElement;
       const field = (name: string) => [...root.querySelectorAll('nldd-text-field')].find((el) => (el as never as { name: string }).name === name)!;
       field('group-name').dispatchEvent(new CustomEvent('input', { detail: { value: 'Nieuw' } }));
@@ -1061,8 +1061,8 @@ describe('Overview: publish button in an empty group', () => {
       await flushPromises();
 
       await flushPromises();
-      expect(plakApi.createSite).toHaveBeenCalledWith('nieuw', 'Handboek', 'handboek');
-      expect(plakApi.upload).toHaveBeenCalledWith('nieuw', 'handboek', expect.any(File), 'handboek.zip');
+      expect(toonApi.createSite).toHaveBeenCalledWith('nieuw', 'Handboek', 'handboek');
+      expect(toonApi.upload).toHaveBeenCalledWith('nieuw', 'handboek', expect.any(File), 'handboek.zip');
     });
   });
 });

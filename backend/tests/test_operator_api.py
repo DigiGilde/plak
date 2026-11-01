@@ -13,10 +13,10 @@ import httpx
 import pytest
 from fastapi import Depends, FastAPI
 
-from plak.api import operator
-from plak.api.errors import register_error_handlers
-from plak.api.origin_guard import REASON_OTHER_ORIGIN, require_admin_origin
-from plak.config import Settings
+from toon.api import operator
+from toon.api.errors import register_error_handlers
+from toon.api.origin_guard import REASON_OTHER_ORIGIN, require_admin_origin
+from toon.config import Settings
 
 URL = "/-/api/v1/operator"
 APP_BASE_URL = "https://beheer.plak.example"

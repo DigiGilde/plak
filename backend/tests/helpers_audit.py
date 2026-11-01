@@ -15,7 +15,7 @@ from datetime import timedelta
 import asyncpg
 from fastapi import FastAPI
 
-from plak.audit.log import Actor
+from toon.audit.log import Actor
 
 
 @dataclass(frozen=True)

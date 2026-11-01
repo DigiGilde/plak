@@ -9,7 +9,7 @@
  */
 import { computed, ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import type { MemberSuggestion, Role, SiteMember } from '@/api/types';
 import { useLoader } from '@/composables/loader';
 import { useSiteGroup } from '@/composables/siteGroup';
@@ -28,7 +28,7 @@ const siteGroup = useSiteGroup();
 const groupName = computed(() => siteGroup.detail.value.group.name);
 
 const { loading, error } = useLoader(
-  () => plak.siteMembers(props.group, props.site),
+  () => toon.siteMembers(props.group, props.site),
   (rows) => {
     members.value = rows;
   },
@@ -36,19 +36,19 @@ const { loading, error } = useLoader(
 );
 
 function add(identifier: string, role: Role): Promise<SiteMember> {
-  return plak.addSiteMember(props.group, props.site, identifier, role);
+  return toon.addSiteMember(props.group, props.site, identifier, role);
 }
 
 function remove(memberId: string): Promise<void> {
-  return plak.removeSiteMember(props.group, props.site, memberId);
+  return toon.removeSiteMember(props.group, props.site, memberId);
 }
 
 function setRole(memberId: string, role: Role): Promise<SiteMember> {
-  return plak.setSiteRole(props.group, props.site, memberId, role);
+  return toon.setSiteRole(props.group, props.site, memberId, role);
 }
 
 function search(query: string): Promise<MemberSuggestion[]> {
-  return plak.searchSiteMembers(props.group, props.site, query);
+  return toon.searchSiteMembers(props.group, props.site, query);
 }
 
 /** The server answers with the whole row, so a change lands as a replacement. */

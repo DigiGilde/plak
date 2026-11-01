@@ -20,14 +20,14 @@ from fastapi import FastAPI
 from helpers_oidc import MockIdP, make_client_jwk, make_oidc_client, set_content_session_cookie
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from plak.audit.ip_crypto import _key_id
-from plak.audit.log import AuditLog
-from plak.auth.oidc import OidcClient
-from plak.auth.sessions import SessionStore
-from plak.config import Settings
-from plak.ingest.store import ContentStore
-from plak.main import ApiVersionHeaderMiddleware, SessionRecheckMiddleware, create_app
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.audit.ip_crypto import _key_id
+from toon.audit.log import AuditLog
+from toon.auth.oidc import OidcClient
+from toon.auth.sessions import SessionStore
+from toon.config import Settings
+from toon.ingest.store import ContentStore
+from toon.main import ApiVersionHeaderMiddleware, SessionRecheckMiddleware, create_app
+from toon.serving.response import NEUTRAL_404_BODY
 
 BASE_URL = "https://plak.example"
 
@@ -83,11 +83,11 @@ async def test_startup_logs_the_idp_configuration_without_any_secret(
     )
     app = create_app(settings)
 
-    with caplog.at_level(logging.INFO, logger="plak.main"):
+    with caplog.at_level(logging.INFO, logger="toon.main"):
         async with app.router.lifespan_context(app):
             pass
 
-    lines = [row.getMessage() for row in caplog.records if row.name == "plak.main"]
+    lines = [row.getMessage() for row in caplog.records if row.name == "toon.main"]
     configuration = [line for line in lines if "OIDC configuration" in line]
     assert len(configuration) == 1
     assert "https://idp.example/realms/plak" in configuration[0]
@@ -108,7 +108,7 @@ async def test_startup_log_of_the_idp_configuration_carries_no_client_secret(
     )
     app = create_app(settings)
 
-    with caplog.at_level(logging.INFO, logger="plak.main"):
+    with caplog.at_level(logging.INFO, logger="toon.main"):
         async with app.router.lifespan_context(app):
             pass
 
@@ -140,11 +140,11 @@ async def test_startup_logs_a_secret_rotation_as_counts_only(
     settings = _make_settings(tmp_path, **previous)
     app = create_app(settings)
 
-    with caplog.at_level(logging.WARNING, logger="plak.main"):
+    with caplog.at_level(logging.WARNING, logger="toon.main"):
         async with app.router.lifespan_context(app):
             pass
 
-    lines = [row.getMessage() for row in caplog.records if row.name == "plak.main"]
+    lines = [row.getMessage() for row in caplog.records if row.name == "toon.main"]
     assert [line for line in lines if "rotation" in line] == [f"Audit secret rotation in progress: {counts}"]
     for pepper in settings.audit_peppers:
         assert pepper not in caplog.text
@@ -158,7 +158,7 @@ async def test_startup_without_a_secret_rotation_logs_no_rotation(
 ) -> None:
     app = create_app(_make_settings(tmp_path))
 
-    with caplog.at_level(logging.INFO, logger="plak.main"):
+    with caplog.at_level(logging.INFO, logger="toon.main"):
         async with app.router.lifespan_context(app):
             pass
 

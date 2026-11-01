@@ -12,10 +12,10 @@ import pytest_asyncio
 from helpers_ci import FORGEJO_HOST, FORGEJO_ISSUER, MockCi
 from sqlalchemy import update
 
-from plak.audit import vocabulary
-from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer, ProviderClient
-from plak.ci.tokens import CiTokenError, VerifiedCiToken
-from plak.ci.trust import (
+from toon.audit import vocabulary
+from toon.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer, ProviderClient
+from toon.ci.tokens import CiTokenError, VerifiedCiToken
+from toon.ci.trust import (
     AUDIT_CLAIMS,
     audit_refs,
     check_live_deploy,
@@ -24,11 +24,11 @@ from plak.ci.trust import (
     refused_actor_identifier,
     trusted_repository,
 )
-from plak.constants import AccessBase
-from plak.db import make_engine, make_session_factory
-from plak.models.ci import CiProvider, SiteRepository
-from plak.models.identity import Group
-from plak.models.publication import Site
+from toon.constants import AccessBase
+from toon.db import make_engine, make_session_factory
+from toon.models.ci import CiProvider, SiteRepository
+from toon.models.identity import Group
+from toon.models.publication import Site
 
 DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
 GITHUB_ISSUER_OBJ = Issuer(CiProvider.GITHUB, GITHUB_HOST, GITHUB_ISSUER)
@@ -41,7 +41,7 @@ def _token(issuer: Issuer, **claims: object) -> VerifiedCiToken:
 
 @pytest_asyncio.fixture
 async def factory(migrated_dsn: str):
-    from plak.config import Settings
+    from toon.config import Settings
 
     settings = Settings(
         db_url=migrated_dsn,
@@ -492,7 +492,7 @@ class TestTrustedRepositoryForgejoNamePath:
 
 class TestCheckLiveDeploy:
     def _repository(self, live_branch):
-        from plak.ci.trust import TrustedRepository
+        from toon.ci.trust import TrustedRepository
 
         return TrustedRepository(
             provider=CiProvider.GITHUB,
@@ -596,7 +596,7 @@ class TestAuditAndIdentifiers:
         assert refused_actor_identifier(token) == ci_actor_identifier(CiProvider.GITHUB, GITHUB_HOST, "")
 
     def test_trusted_repository_origin_github(self):
-        from plak.ci.trust import TrustedRepository
+        from toon.ci.trust import TrustedRepository
 
         repository = TrustedRepository(
             provider=CiProvider.GITHUB, host=GITHUB_HOST, owner="minbzk", repo="website",
@@ -606,7 +606,7 @@ class TestAuditAndIdentifiers:
         assert repository.actor_identifier == ci_actor_identifier(CiProvider.GITHUB, GITHUB_HOST, 1001)
 
     def test_trusted_repository_origin_forgejo(self):
-        from plak.ci.trust import TrustedRepository
+        from toon.ci.trust import TrustedRepository
 
         repository = TrustedRepository(
             provider=CiProvider.FORGEJO, host=FORGEJO_HOST, owner="robbertbos", repo="waggle",

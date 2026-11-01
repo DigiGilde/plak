@@ -26,9 +26,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from plak_release.api import oasdiff
-from plak_release.changelog import CHANGELOG, tag_error, today, with_links
-from plak_release.commands import (
+from toon_release.api import oasdiff
+from toon_release.changelog import CHANGELOG, tag_error, today, with_links
+from toon_release.commands import (
     _append,
     _read,
     _read_spec,
@@ -45,8 +45,8 @@ from plak_release.commands import (
     report_check,
     verify_staged,
 )
-from plak_release.errors import ReleaseError
-from plak_release.git import Git
+from toon_release.errors import ReleaseError
+from toon_release.git import Git
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     api_checking.add_argument("--comment-file", type=Path, help="write the sticky comment here, empty for none")
     for command in (preparing, api_checking):
         command.add_argument(
-            "--spec", type=Path, required=True, help="the schema `python -m plak.api.openapi_file` prints"
+            "--spec", type=Path, required=True, help="the schema `python -m toon.api.openapi_file` prints"
         )
         command.add_argument("--oasdiff", required=True, help="the oasdiff binary")
     commands.add_parser("hook", help="Claude Code PreToolUse hook, reads the event on stdin")

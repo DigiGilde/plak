@@ -12,8 +12,8 @@ import pytest
 from starlette.responses import PlainTextResponse
 from starlette.types import Receive, Scope, Send
 
-from plak.config import Settings
-from plak.ratelimit import (
+from toon.config import Settings
+from toon.ratelimit import (
     _CLEANUP_INTERVAL,
     InMemoryCounter,
     RateLimitClass,

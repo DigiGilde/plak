@@ -10,14 +10,14 @@ the frontend is TypeScript.
 import re
 from pathlib import Path
 
-from plak.config import Settings
-from plak.constants import SLUG_RE
+from toon.config import Settings
+from toon.constants import SLUG_RE
 
 ROOT = Path(__file__).resolve().parents[2]
 SLUG_TS = ROOT / "frontend" / "src" / "composables" / "slug.ts"
 PACKING_TS = ROOT / "frontend" / "src" / "components" / "site" / "packing.ts"
 CLI = ROOT / "cli" / "plak_cli" / "__init__.py"
-UNPACKER = ROOT / "backend" / "src" / "plak" / "ingest" / "unpacker.py"
+UNPACKER = ROOT / "backend" / "src" / "toon" / "ingest" / "unpacker.py"
 
 LIMIT_SETTINGS = {
     "files": "ingest_max_files",

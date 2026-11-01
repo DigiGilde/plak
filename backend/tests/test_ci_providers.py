@@ -9,7 +9,7 @@ import httpx
 import pytest
 from helpers_ci import FORGEJO_HOST, FORGEJO_ISSUER, MockCi
 
-from plak.ci.providers import (
+from toon.ci.providers import (
     GITHUB_API,
     GITHUB_HOST,
     GITHUB_ISSUER,
@@ -23,8 +23,8 @@ from plak.ci.providers import (
     repository_api_url,
     valid_name,
 )
-from plak.config import Settings
-from plak.models.ci import CiProvider
+from toon.config import Settings
+from toon.models.ci import CiProvider
 
 DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
 

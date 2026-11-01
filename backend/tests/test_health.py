@@ -15,9 +15,9 @@ import httpx
 import pytest
 from helpers_oidc import APP_BASE_URL, CONTENT_BASE_URL, MockIdP, make_settings
 
-from plak.ingest.store import ContentStore
-from plak.main import create_app
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.ingest.store import ContentStore
+from toon.main import create_app
+from toon.serving.response import NEUTRAL_404_BODY
 
 UNREACHABLE_DB = "postgresql+asyncpg://plak:plak@127.0.0.1:1/plak"
 
@@ -55,7 +55,7 @@ class TestStatus:
 
     async def test_an_unreachable_database_is_503_fail(self, tmp_path: Path, caplog) -> None:
         app = _app(tmp_path, UNREACHABLE_DB)
-        with caplog.at_level(logging.WARNING, logger="plak.platform.health"):
+        with caplog.at_level(logging.WARNING, logger="toon.platform.health"):
             async with app.router.lifespan_context(app), _client(app) as client:
                 response = await client.get("/-/healthz")
 
@@ -75,7 +75,7 @@ class TestStatus:
                 return None
 
         app = _app(tmp_path, migrated_dsn)
-        monkeypatch.setattr("plak.platform.health.DATABASE_TIMEOUT_SECONDS", 0.05)
+        monkeypatch.setattr("toon.platform.health.DATABASE_TIMEOUT_SECONDS", 0.05)
         async with app.router.lifespan_context(app):
             app.state.session_factory = Hanging
             async with _client(app) as client:
@@ -104,7 +104,7 @@ class TestStatus:
 
         monkeypatch.setattr(ContentStore, "free_bytes", gone)
         app = _app(tmp_path, migrated_dsn)
-        with caplog.at_level(logging.WARNING, logger="plak.platform.health"):
+        with caplog.at_level(logging.WARNING, logger="toon.platform.health"):
             async with app.router.lifespan_context(app), _client(app) as client:
                 response = await client.get("/-/healthz")
 
