@@ -69,7 +69,7 @@ const loginHref = computed(
     <nldd-button
       v-if="renamed"
       slot="actions"
-      variant="secondary"
+      appearance="secondary"
       :text="t('error.renamed.link')"
       href="/"
       data-testid="renamed-overview"
@@ -77,7 +77,7 @@ const loginHref = computed(
     <nldd-button
       v-if="expired"
       slot="actions"
-      variant="primary"
+      appearance="primary"
       :text="t('error.expired.action')"
       :href="loginHref"
       data-testid="sign-in-again"

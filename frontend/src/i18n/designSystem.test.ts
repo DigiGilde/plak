@@ -14,6 +14,9 @@ interface Translated extends HTMLElement {
 }
 
 const OPEN_MENU = 'components.combo-box.open-menu-action';
+const DRAG_HERE = 'components.file-field.drag-here-text';
+const DROP_HERE = 'components.file-field.drop-here-text';
+const CHOOSE = 'components.file-field.to-choose-file-action';
 
 let stop: (() => void) | null = null;
 let root: HTMLElement | null = null;
@@ -68,7 +71,7 @@ describe('useDesignSystemText', () => {
     const parent = container();
     stop = useDesignSystemText(parent);
 
-    const untouched = document.createElement('nldd-button') as Translated;
+    const untouched = document.createElement('nldd-badge') as Translated;
     parent.append(untouched, document.createTextNode('los'));
     await nextTick();
 
@@ -85,6 +88,23 @@ describe('useDesignSystemText', () => {
     await nextTick();
 
     expect(field.translations?.[OPEN_MENU]).toBe('Show options');
+  });
+
+  it('tells a field that takes folders that a folder may be dragged too', () => {
+    _setLocaleForTest('en');
+    const parent = container();
+    const plain = document.createElement('nldd-file-field') as Translated;
+    const folders = document.createElement('nldd-file-field') as Translated;
+    folders.setAttribute('data-takes-folders', '');
+    parent.append(plain, folders);
+
+    stop = useDesignSystemText(parent);
+
+    expect(plain.translations?.[DRAG_HERE]).toBe('Drag the file here');
+    expect(folders.translations?.[DRAG_HERE]).toBe('Drag the file or folder here');
+    expect(folders.translations?.[DROP_HERE]).toBe('Drop the file or folder here');
+    // The rest of the field's words stay the shared ones.
+    expect(folders.translations?.[CHOOSE]).toBe('Choose file');
   });
 
   it('stops when it is told to', async () => {

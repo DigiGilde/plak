@@ -163,7 +163,7 @@ describe('NewGroupSheet', () => {
     const create = vi.fn();
     const wrapper = mountComponent(create);
 
-    await wrapper.find('nldd-button[variant="secondary"]').trigger('click');
+    await wrapper.find('nldd-button[appearance="secondary"]').trigger('click');
 
     expect(create).not.toHaveBeenCalled();
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);

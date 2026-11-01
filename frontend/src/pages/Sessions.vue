@@ -100,7 +100,7 @@ const {
     <ErrorBanner v-else-if="error" :error="error" />
 
     <template v-else>
-      <nldd-list variant="box-tinted" :accessible-label="t('nav.sessions')">
+      <nldd-list appearance="box-tinted" :accessible-label="t('nav.sessions')">
         <nldd-inline-dialog
           v-if="sessions.length === 0"
           slot="empty"

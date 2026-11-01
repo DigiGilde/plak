@@ -152,14 +152,14 @@ function confirm(): void {
            be the safe way out, not the irreversible action. -->
       <nldd-button
         slot="actions"
-        variant="primary"
+        appearance="primary"
         :text="keepText"
         data-testid="confirm-cancel"
         @click="keep"
       ></nldd-button>
       <nldd-button
         slot="actions"
-        :variant="confirmVariant"
+        :appearance="confirmVariant"
         :text="confirmLabel"
         :loading="busy || undefined"
         data-testid="confirm-continue"

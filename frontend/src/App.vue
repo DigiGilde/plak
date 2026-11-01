@@ -153,7 +153,7 @@ function logout(): void {
 
 <template>
   <nldd-skip-link href="#main-content" :text="t('shell.skip')"></nldd-skip-link>
-  <nldd-app-view>
+  <nldd-shell>
     <nldd-page>
       <div slot="header">
         <!-- Above everything, the way invulhulpen carries the same notice: a
@@ -166,7 +166,7 @@ function logout(): void {
           data-testid="beta-banner"
         ></nldd-status-bar>
         <div class="toolbar">
-          <nldd-toolbar label="Plak">
+          <nldd-toolbar accessible-label="Plak">
             <!-- The whole wordmark sits in the media slot and there is no
                  `text`: with both, the P would be read twice ("[P] Plak"). The
                  min-width is the width of that wordmark: without it the title
@@ -188,7 +188,7 @@ function logout(): void {
                    aria-expanded here and sets aria-haspopup, so the chevron can
                    go without losing the keyboard and screen reader state. -->
               <nldd-button
-                variant="neutral-transparent"
+                appearance="neutral-transparent"
                 :text="t('shell.menu')"
                 start-icon="menu"
                 popup-type="menu"
@@ -324,7 +324,7 @@ function logout(): void {
         </nldd-page-footer-legal-bar>
       </nldd-page-footer>
     </nldd-page>
-  </nldd-app-view>
+  </nldd-shell>
   <!-- Always in the page, so a screen reader is already listening when the
        text changes after a navigation. -->
   <div class="visually-hidden" role="status" data-testid="route-announcer">{{ announcement }}</div>
@@ -389,11 +389,11 @@ function logout(): void {
   width: var(--primitives-space-40);
   height: var(--primitives-space-40);
   border-radius: var(--primitives-corner-radius-sm);
-  /* A pair from one family: the content colour moves with the background, so
-     the "P" keeps its contrast in both schemes. Standalone link or text colours
-     do not. */
-  background: var(--semantics-categories-accent-filled-background-color);
-  color: var(--semantics-categories-accent-filled-content-color);
+  /* The colour of the ribbon in the footer, which stays the same in both schemes.
+     The accent tokens do not: in dark mode they follow the button. The content
+     colour is white in both schemes. */
+  background: var(--semantics-brand-ribbon-color);
+  color: var(--semantics-content-on-accent-filled-color);
   /* The letter stands apart from the wordmark: inside the block it fills the
      space, beside it it reads as text. Without a size of its own it inherits
      the wordmark size and swims in a block half again as large. */

@@ -267,7 +267,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
 
       <nldd-list
         type="radiogroup"
-        variant="box-base"
+        appearance="box-base"
         :accessible-label="t('group.settings.list.label')"
         data-testid="default-access-group"
       >
@@ -341,7 +341,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
             </nldd-rich-text>
             <nldd-button-group orientation="horizontal">
               <nldd-button
-                variant="destructive"
+                appearance="destructive"
                 :text="t('group.settings.danger.action')"
                 data-testid="delete-group"
                 @click="askDelete(true)"
@@ -369,7 +369,7 @@ function toggle(field: 'keys' | 'invitees', event: Event): void {
         <nldd-list
           v-if="sites.length > 0"
           type="form"
-          variant="box-tinted"
+          appearance="box-tinted"
           :accessible-label="t('group.settings.danger.confirm.sites.list')"
           data-testid="group-sites-list"
         >

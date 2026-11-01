@@ -725,13 +725,13 @@ plak logout
               </nldd-box>
               <nldd-button-group v-if="isSiteAdmin" orientation="horizontal">
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   :text="t('publish.deploy.repo.change')"
                   data-testid="repository-change"
                   @click="openChangeForm"
                 ></nldd-button>
                 <nldd-button
-                  variant="critical-transparent"
+                  appearance="critical-transparent"
                   :text="t('publish.deploy.repo.unlink')"
                   data-testid="repository-unlink"
                   @click="askUnlink(true)"
@@ -746,7 +746,7 @@ plak logout
                 data-testid="repository-empty"
               ></nldd-inline-dialog>
               <nldd-button
-                variant="primary"
+                appearance="primary"
                 :text="t('publish.deploy.repo.link')"
                 width="fit-content"
                 data-testid="repository-link"
@@ -906,14 +906,14 @@ plak logout
             <nldd-form-actions>
               <nldd-button-group>
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   :text="t('publish.deploy.form.cancel')"
                   type="button"
                   data-testid="repository-cancel"
                   @click="closeForm"
                 ></nldd-button>
                 <nldd-button
-                  variant="primary"
+                  appearance="primary"
                   type="submit"
                   :text="t('publish.deploy.form.submit')"
                   :loading="formBusy || undefined"
@@ -934,7 +934,7 @@ plak logout
 
               <nldd-button-group orientation="horizontal">
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   :text="t('publish.deploy.siteId.copy')"
                   start-icon="copy"
                   type="button"
@@ -964,7 +964,7 @@ plak logout
                 orientation="horizontal"
               >
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   :text="t('publish.deploy.siteId.require')"
                   type="button"
                   data-testid="site-id-require"

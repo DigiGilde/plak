@@ -132,9 +132,9 @@ describe('Overview', () => {
     await flushPromises();
 
     const button = wrapper.find('[data-testid="overview-publish"]');
-    const el = button.element as HTMLElement & { text?: string; variant?: string };
+    const el = button.element as HTMLElement & { text?: string; appearance?: string };
     expect(el.text).toBe('Zet een site online');
-    expect(el.variant).toBe('primary');
+    expect(el.appearance).toBe('primary');
     // Deliberately NOT in the end slot of nldd-title: that slot neither shrinks
     // nor drops, which broke the title letter by letter at 320 px and pushed the
     // button outside the viewport. The button now sits beside the title in a

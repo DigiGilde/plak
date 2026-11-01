@@ -368,7 +368,7 @@ onMounted(() => {
     >
       <nldd-button
         slot="actions"
-        variant="critical-tinted"
+        appearance="critical-tinted"
         :text="t('admin.retry')"
         @click="refresh"
       ></nldd-button>
@@ -421,7 +421,10 @@ onMounted(() => {
       ></nldd-inline-dialog>
 
       <nldd-table-row v-for="member in sortedMembers" :key="member.id">
-        <nldd-text-cell :text="member.name" :supporting-text="member.email"></nldd-text-cell>
+        <nldd-text-cell
+          :text="member.name || member.email"
+          :supporting-text="member.name ? member.email : undefined"
+        ></nldd-text-cell>
         <nldd-text-cell
           :color="standing(member).color"
           :text="standing(member).text"

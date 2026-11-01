@@ -408,7 +408,7 @@ async function change(): Promise<void> {
           <nldd-button-group orientation="horizontal">
             <nldd-button
               ref="startButton"
-              variant="secondary"
+              appearance="secondary"
               type="button"
               :text="t('address.change')"
               :data-testid="`${testPrefix}-start`"
@@ -427,7 +427,7 @@ async function change(): Promise<void> {
           </nldd-title>
           <nldd-list
             type="form"
-            variant="box-base"
+            appearance="box-base"
             :accessible-label="t('address.previous.heading')"
             :data-testid="`${testPrefix}-previous`"
           >
@@ -441,7 +441,7 @@ async function change(): Promise<void> {
               </nldd-text-cell>
               <nldd-cell v-if="canChange" width="fit-content">
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   size="sm"
                   type="button"
                   :text="t('address.restore')"
@@ -473,7 +473,7 @@ async function change(): Promise<void> {
                          button (NLDD guideline: give the way out physical distance). -->
                     <nldd-button
                       slot="end"
-                      variant="neutral-transparent"
+                      appearance="neutral-transparent"
                       size="sm"
                       :text="t('address.sheet.close')"
                       type="button"
@@ -565,7 +565,7 @@ async function change(): Promise<void> {
 
                     <nldd-form-actions>
                       <nldd-button
-                        variant="primary"
+                        appearance="primary"
                         type="submit"
                         :text="t('address.change')"
                         :data-testid="`${testPrefix}-change`"

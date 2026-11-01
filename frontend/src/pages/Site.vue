@@ -5,9 +5,9 @@ import { useRoute, useRouter } from 'vue-router';
 import * as plak from '@/api/plak';
 import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
-import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
 import { stayOnNextMove } from '@/composables/routeAnnouncer';
+import { useTabBarMenuInApp } from '@/composables/tabBarMenu';
 import { useLoader } from '@/composables/loader';
 import { groupPath } from '@/composables/slug';
 import { SITE_GROUP, siteNotFound } from '@/composables/siteGroup';
@@ -18,6 +18,7 @@ import SectionHeading from '@/components/SectionHeading.vue';
 
 const route = useRoute();
 const router = useRouter();
+const onTabBarClick = useTabBarMenuInApp();
 
 const groupSlug = computed(() => String(route.params.group ?? ''));
 const siteSlug = computed(() => String(route.params.site ?? ''));
@@ -161,9 +162,6 @@ const TABS = computed<readonly TabDefinition[]>(() => [
 
 const currentTab = computed(() => TABS.value.find((tab) => tab.name === route.name));
 
-const tabsScroll = ref<HTMLElement | null>(null);
-useCurrentTabInView(tabsScroll, () => TABS.value.findIndex((tab) => tab.name === route.name));
-
 // The site name is the distinguishing part, so it comes first; the tab is
 // dropped on the overview, where it would only repeat the page itself.
 function showTitle(): void {
@@ -212,19 +210,22 @@ function afterRemoval(): void {
 
       <nldd-spacer size="16"></nldd-spacer>
 
-      <div ref="tabsScroll" class="tabs-scroll">
-        <nldd-tab-bar navigation :accessible-label="t('site.tabs.label')" data-testid="site-tabs">
-          <nldd-tab-bar-item
-            v-for="tab in TABS"
-            :key="tab.name"
-            :text="tab.label"
-            :href="tabPath(tab)"
-            :current="route.name === tab.name || undefined"
-            :data-testid="tab.testid"
-            @click.prevent="goToTab(tab)"
-          ></nldd-tab-bar-item>
-        </nldd-tab-bar>
-      </div>
+      <nldd-tab-bar
+        navigation
+        :accessible-label="t('site.tabs.label')"
+        data-testid="site-tabs"
+        @click="onTabBarClick"
+      >
+        <nldd-tab-bar-item
+          v-for="tab in TABS"
+          :key="tab.name"
+          :text="tab.label"
+          :href="tabPath(tab)"
+          :current="route.name === tab.name || undefined"
+          :data-testid="tab.testid"
+          @click.prevent="goToTab(tab)"
+        ></nldd-tab-bar-item>
+      </nldd-tab-bar>
 
       <nldd-spacer size="24"></nldd-spacer>
 

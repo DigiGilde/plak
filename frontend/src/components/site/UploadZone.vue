@@ -130,13 +130,15 @@ async function receive(read: () => DropResult | Promise<DropResult>): Promise<vo
       progress.value = { done, total };
     });
     const packed = dropped.files.length;
+    const params = { count: formatCount(packed), size: formatSize(archive.size) };
     take(
       archive,
-      t(packed === 1 ? 'publish.upload.ready.bundleOne' : 'publish.upload.ready.bundle', {
-        name: dropped.name,
-        count: formatCount(packed),
-        size: formatSize(archive.size),
-      }),
+      dropped.name === null
+        ? t(packed === 1 ? 'publish.upload.ready.looseOne' : 'publish.upload.ready.loose', params)
+        : t(packed === 1 ? 'publish.upload.ready.bundleOne' : 'publish.upload.ready.bundle', {
+            ...params,
+            name: dropped.name,
+          }),
     );
   } catch {
     dropError.value = t('publish.upload.error.packFailed');
@@ -179,9 +181,9 @@ function publish(): void {
     :class="{ 'dropzone--active': dropActive }"
     data-testid="dropzone"
     @dragenter.prevent="onDragenter"
-    @dragover.prevent="onDragover"
+    @dragover.capture.prevent.stop="onDragover"
     @dragleave="onDragleave"
-    @drop.prevent.stop="onDrop"
+    @drop.capture.prevent.stop="onDrop"
   >
     <nldd-form data-testid="upload-form" @submit.prevent="publish">
       <nldd-form-field
@@ -192,6 +194,7 @@ function publish(): void {
           ref="field"
           name="file"
           accept=".zip,.tar.gz,.tgz,.html"
+          data-takes-folders
           :required="chosen === null || undefined"
           data-testid="upload-input"
           @change="onChoice"
@@ -243,20 +246,22 @@ function publish(): void {
       ></nldd-banner>
 
       <nldd-form-actions>
-        <nldd-button
-          variant="secondary"
-          type="button"
-          :text="t('publish.upload.folder')"
-          data-testid="upload-folder"
-          @click="folderInput?.click()"
-        ></nldd-button>
-        <nldd-button
-          variant="primary"
-          type="submit"
-          :text="t('publish.upload.submit')"
-          :loading="busy || undefined"
-          data-testid="upload-publish"
-        ></nldd-button>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            type="button"
+            :text="t('publish.upload.folder')"
+            data-testid="upload-folder"
+            @click="folderInput?.click()"
+          ></nldd-button>
+          <nldd-button
+            appearance="primary"
+            type="submit"
+            :text="t('publish.upload.submit')"
+            :loading="busy || undefined"
+            data-testid="upload-publish"
+          ></nldd-button>
+        </nldd-button-group>
       </nldd-form-actions>
     </nldd-form>
     <!-- nldd-file-field wraps its own input and offers no directory mode; this

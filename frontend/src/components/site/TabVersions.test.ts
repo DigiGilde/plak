@@ -75,7 +75,7 @@ describe('TabVersions: states', () => {
   it('renders the version list and its skeleton as box-tinted', async () => {
     const loadWrapper = makeWrapper();
     // Not finished loading: this is the skeleton behind the indicator.
-    expect(loadWrapper.find('[data-testid="versions-skeleton"]').attributes('variant')).toBe(
+    expect(loadWrapper.find('[data-testid="versions-skeleton"]').attributes('appearance')).toBe(
       'box-tinted',
     );
 
@@ -84,7 +84,7 @@ describe('TabVersions: states', () => {
 
     // The tab sits on the same plain page background as the site overview;
     // box-base is for a list on an already tinted parent.
-    expect(wrapper.find('[data-testid="versions-list"]').attributes('variant')).toBe('box-tinted');
+    expect(wrapper.find('[data-testid="versions-list"]').attributes('appearance')).toBe('box-tinted');
   });
 
   it('lets the marker open the row and keeps a single menu on the right', async () => {
@@ -414,7 +414,7 @@ describe('TabVersions: previous versions kept', () => {
 
     const box = wrapper.find('[data-testid="retention-box"]');
     expect(box.attributes('type')).toBe('form');
-    expect(box.attributes('variant')).toBe('box-tinted');
+    expect(box.attributes('appearance')).toBe('box-tinted');
     const choice = box.find('[data-testid="retention-choice"]');
     expect(choice.attributes('type')).toBe('radiogroup');
     expect(choice.attributes('dividers')).toBe('never');

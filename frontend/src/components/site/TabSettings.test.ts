@@ -1220,10 +1220,10 @@ describe('site TabSettings: danger zone', () => {
     await wrapper.find('[data-testid="delete-site"]').trigger('click');
     const actions = wrapper.findAll(`${DANGER} nldd-modal-dialog nldd-button`);
     expect(actions[0]!.attributes('data-testid')).toBe('confirm-cancel');
-    expect(actions[0]!.attributes('variant')).toBe('primary');
+    expect(actions[0]!.attributes('appearance')).toBe('primary');
     expect(actions[0]!.attributes('text')).toBe('Behoud site');
     expect(actions[1]!.attributes('data-testid')).toBe('confirm-continue');
-    expect(actions[1]!.attributes('variant')).toBe('destructive');
+    expect(actions[1]!.attributes('appearance')).toBe('destructive');
     expect(actions[1]!.attributes('disabled')).toBeUndefined();
   });
 

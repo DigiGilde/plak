@@ -383,7 +383,7 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
     <nldd-button
       v-if="notice.retry"
       slot="actions"
-      variant="secondary"
+      appearance="secondary"
       size="sm"
       :text="t('group.members.retry')"
       @click="reopen(notice)"

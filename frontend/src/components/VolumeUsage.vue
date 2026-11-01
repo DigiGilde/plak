@@ -63,7 +63,7 @@ onMounted(async () => {
         "
       ></nldd-banner>
 
-      <nldd-list variant="box-tinted" :accessible-label="t('admin.volume.summary.label')">
+      <nldd-list appearance="box-tinted" :accessible-label="t('admin.volume.summary.label')">
         <nldd-list-item size="md">
           <nldd-title-cell :text="t('admin.volume.used')"></nldd-title-cell>
           <nldd-text-cell

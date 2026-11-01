@@ -11,10 +11,8 @@ import TabAccess from '@/components/site/TabAccess.vue';
 import TabSettings from '@/components/site/TabSettings.vue';
 import TabVersions from '@/components/site/TabVersions.vue';
 import {
-  fakeTabBarLayout,
   fireDetailEvent,
   serverErrorFetch,
-  stubFrames,
   untilIdle,
 } from '@/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
@@ -261,47 +259,21 @@ describe('Site: tab navigation', () => {
     expect(wrapper.text()).toContain('Wie kan deze site bekijken?');
     expect(wrapper.find('[data-testid="tab-access"]').attributes('current')).toBeDefined();
   });
-});
 
-describe('Site: tab bar', () => {
-  // Seven tabs of 100 in a bar that shows 250.
-  const LAYOUT = { barWidth: 250, tabWidth: 100 };
+  it('opens a tab chosen from the "Meer tabs" menu within the app', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora/website');
+    // The bar renders the tabs that do not fit as menu items with their href;
+    // jsdom lays nothing out, so put one where the bar's click handler sees it.
+    const item = document.createElement('nldd-menu-item');
+    item.setAttribute('href', '/team-aurora/website/versions');
+    wrapper.find('[data-testid="site-tabs"]').element.append(item);
 
-  function scroller(wrapper: ReturnType<typeof mount>): HTMLElement {
-    return wrapper.find('.tabs-scroll').element as HTMLElement;
-  }
-
-  it('lets the bar scroll in a wrapper of its own instead of squeezing its labels', async () => {
-    const { wrapper } = await makeWrapper('/team-aurora/website');
-
-    const bar = wrapper.find('[data-testid="site-tabs"]');
-    expect(bar.element.parentElement?.classList.contains('tabs-scroll')).toBe(true);
-    expect(wrapper.findAll('.tabs-scroll')).toHaveLength(1);
-  });
-
-  it('brings the current tab into view when the page opens on it', async () => {
-    const frames = stubFrames();
-    const { wrapper } = await makeWrapper('/team-aurora/website/settings');
-    fakeTabBarLayout(scroller(wrapper), LAYOUT);
-
-    frames.run();
-
-    // The seventh tab ends at 700 and the bar shows 250.
-    expect(scroller(wrapper).scrollLeft).toBe(450);
-  });
-
-  it('follows the route to the next tab', async () => {
-    const frames = stubFrames();
-    const { wrapper, router } = await makeWrapper('/team-aurora/website/settings');
-    fakeTabBarLayout(scroller(wrapper), LAYOUT);
-    frames.run();
-
-    await router.push('/team-aurora/website/versions');
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    item.dispatchEvent(click);
     await untilIdle();
-    frames.run();
 
-    // The third tab spans 200 to 300, behind the 450 to 700 the bar showed.
-    expect(scroller(wrapper).scrollLeft).toBe(200);
+    expect(click.defaultPrevented).toBe(true);
+    expect(router.currentRoute.value.name).toBe('site-versions');
   });
 });
 

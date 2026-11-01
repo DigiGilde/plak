@@ -1,7 +1,7 @@
 import '@nldd/design-system';
-// The system-font build: RijksSans is licensed for Rijksoverheid publications
+// The open-font build (Inter): RijksSans is licensed for Rijksoverheid publications
 // only, and anyone may run Plak.
-import '@nldd/design-system/styles/system-font';
+import '@nldd/design-system/styles/open-font';
 import './global.css';
 
 import { createApp } from 'vue';

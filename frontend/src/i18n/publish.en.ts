@@ -51,6 +51,8 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.upload.field.label': 'File or folder',
   'publish.upload.field.hint': 'Drag it here, or choose it.',
   'publish.upload.field.required': 'An archive, a single HTML file or a folder',
+  'publish.upload.field.dragHere': 'Drag the file or folder here',
+  'publish.upload.field.dropHere': 'Drop the file or folder here',
   'publish.upload.field.help':
     'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site; a folder is packed by Plak in your browser, without the metadata of your operating system.',
   'publish.upload.folder': 'Choose a folder',
@@ -60,6 +62,8 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.upload.ready.file': '"{name}" is ready, {size}.',
   'publish.upload.ready.bundleOne': 'Folder "{name}" packed: {count} file, {size}.',
   'publish.upload.ready.bundle': 'Folder "{name}" packed: {count} files, {size}.',
+  'publish.upload.ready.looseOne': '{count} file packed, {size}.',
+  'publish.upload.ready.loose': '{count} files packed, {size}.',
   'publish.upload.error.title': 'This cannot be published as it is',
   'publish.upload.error.cannotPack':
     'This browser cannot pack a folder by itself. Make a .zip of it and choose that with "Choose file".',
@@ -91,6 +95,14 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'There is no {index} in the root of "{name}", but there is one at "{path}". Drag the folder "{folder}" itself.',
   'publish.packing.indexMissing':
     'There is no {index} in "{name}". Without a start page nobody can open the site.',
+  'publish.packing.looseTooManyFiles':
+    'These are more than {count} files. A publication may not hold that many.',
+  'publish.packing.looseTotalTooLarge':
+    'These files are {size} together. A publication may be {max} at most.',
+  'publish.packing.looseIndexInFolder':
+    'There is no {index} among these files, but there is one at "{path}". Drag the folder "{folder}" itself.',
+  'publish.packing.looseIndexMissing':
+    'There is no {index} among these files. Without a start page nobody can open the site.',
 
   // -- Deploy tab: the linked repository ---------------------------------------
   'publish.deploy.loading': 'Loading deploy settings',

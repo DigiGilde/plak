@@ -198,7 +198,7 @@ function clientLine(authorization: DeviceAuthorization): string {
       </nldd-rich-text>
       <nldd-spacer size="24"></nldd-spacer>
       <nldd-button
-        variant="primary"
+        appearance="primary"
         :href="loginHref"
         :text="t('page.cliPair.login.action')"
         data-testid="code-sign-in"
@@ -243,7 +243,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         </nldd-form-field>
         <nldd-form-actions>
           <nldd-button
-            variant="primary"
+            appearance="primary"
             type="submit"
             :text="t('page.cliPair.codeEntry.submit')"
             :loading="lookupBusy || undefined"
@@ -259,7 +259,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         <p>{{ t('page.cliPair.confirm.question') }}</p>
       </nldd-rich-text>
       <nldd-spacer size="8"></nldd-spacer>
-      <nldd-code-viewer variant="simple" no-copy data-testid="code-display">{{
+      <nldd-code-viewer appearance="simple" no-copy data-testid="code-display">{{
         view.authorization.userCode
       }}</nldd-code-viewer>
       <nldd-spacer size="16"></nldd-spacer>
@@ -298,14 +298,14 @@ function clientLine(authorization: DeviceAuthorization): string {
       <nldd-spacer size="16"></nldd-spacer>
       <nldd-button-group orientation="horizontal">
         <nldd-button
-          variant="primary"
+          appearance="primary"
           :text="t('page.cliPair.confirm.approve')"
           :loading="actionBusy === 'approve' || undefined"
           data-testid="code-link"
           @click="respond('approve', view.authorization.userCode)"
         ></nldd-button>
         <nldd-button
-          variant="secondary"
+          appearance="secondary"
           :text="t('page.cliPair.confirm.deny')"
           :loading="actionBusy === 'deny' || undefined"
           data-testid="code-deny"

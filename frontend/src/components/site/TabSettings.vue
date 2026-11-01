@@ -256,7 +256,7 @@ const {
               </nldd-rich-text>
               <nldd-button-group orientation="horizontal">
                 <nldd-button
-                  variant="destructive"
+                  appearance="destructive"
                   :text="t('site.settings.danger.action')"
                   data-testid="delete-site"
                   @click="askDelete(true)"

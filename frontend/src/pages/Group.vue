@@ -28,11 +28,11 @@ import type { Group, GroupDetail, GroupMember, Me, Member, Site } from '@/api/ty
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import { fetchCurrentMember } from '@/composables/currentMember';
-import { useCurrentTabInView } from '@/composables/currentTabInView';
 import { usePageDrop } from '@/composables/fileDrop';
 import { goToDone } from '@/composables/publishedMark';
 import { isGroupAdmin, mayCreateSiteIn } from '@/composables/roles';
 import { stayOnNextMove } from '@/composables/routeAnnouncer';
+import { useTabBarMenuInApp } from '@/composables/tabBarMenu';
 import { crumbOverview, setBreadcrumbs } from '@/composables/breadcrumbs';
 import { t, type MessageKey } from '@/i18n';
 import { setDocumentTitle } from '@/title';
@@ -41,6 +41,7 @@ import PageHeader from '@/components/PageHeader.vue';
 
 const route = useRoute();
 const router = useRouter();
+const onTabBarClick = useTabBarMenuInApp();
 /* v8 ignore start -- the '?? ''' fallback is unreachable while this page
    only mounts under the ':group' route, which always supplies the param. */
 const groupSlug = computed(() => String(route.params.group ?? ''));
@@ -128,9 +129,6 @@ const TABS: readonly TabDefinition[] = [
 ];
 
 const currentTab = computed(() => TABS.find((tab) => tab.name === route.name));
-
-const tabsScroll = ref<HTMLElement | null>(null);
-useCurrentTabInView(tabsScroll, () => TABS.findIndex((tab) => tab.name === route.name));
 
 function showTitle(): void {
   setDocumentTitle(detail.value?.group.name ?? groupSlug.value, currentTab.value?.path ? t(currentTab.value.labelKey) : null);
@@ -291,7 +289,7 @@ function onGroupChanged(group: Group): void {
       <PageHeader :text="detail.group.name" :size="3">
         <nldd-button
           v-if="canPublish"
-          variant="primary"
+          appearance="primary"
           :text="t('group.action.publishSite')"
           start-icon="plus"
           data-testid="group-publish"
@@ -301,23 +299,22 @@ function onGroupChanged(group: Group): void {
 
       <nldd-spacer size="16"></nldd-spacer>
 
-      <div ref="tabsScroll" class="tabs-scroll">
-        <nldd-tab-bar
-          navigation
-          :accessible-label="t('group.page.tabs.label')"
-          data-testid="group-tabs"
-        >
-          <nldd-tab-bar-item
-            v-for="tab in TABS"
-            :key="tab.name"
-            :text="t(tab.labelKey)"
-            :href="tabPath(tab)"
-            :current="route.name === tab.name || undefined"
-            :data-testid="tabTestId(tab)"
-            @click.prevent="goToTab(tab)"
-          ></nldd-tab-bar-item>
-        </nldd-tab-bar>
-      </div>
+      <nldd-tab-bar
+        navigation
+        :accessible-label="t('group.page.tabs.label')"
+        data-testid="group-tabs"
+        @click="onTabBarClick"
+      >
+        <nldd-tab-bar-item
+          v-for="tab in TABS"
+          :key="tab.name"
+          :text="t(tab.labelKey)"
+          :href="tabPath(tab)"
+          :current="route.name === tab.name || undefined"
+          :data-testid="tabTestId(tab)"
+          @click.prevent="goToTab(tab)"
+        ></nldd-tab-bar-item>
+      </nldd-tab-bar>
 
       <nldd-spacer size="24"></nldd-spacer>
 

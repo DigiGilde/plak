@@ -228,7 +228,7 @@ describe('AddressSection (site): what everyone sees', () => {
     const list = wrapper.find('[data-testid="site-address-previous"]');
     expect(list.element.tagName.toLowerCase()).toBe('nldd-list');
     expect(list.attributes('type')).toBe('form');
-    expect(list.attributes('variant')).toBe('box-base');
+    expect(list.attributes('appearance')).toBe('box-base');
     expect(list.attributes('accessible-label')).toBe('Oude adressen');
     const position = heading.element.compareDocumentPosition(list.element);
     expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -268,7 +268,7 @@ describe('AddressSection (site): what everyone sees', () => {
     expect(button.attributes('accessible-label')).toBe(
       'Zet terug naar https://sites.plak.test/team-aurora/oude-naam/',
     );
-    expect(button.attributes('variant')).toBe('secondary');
+    expect(button.attributes('appearance')).toBe('secondary');
     expect(button.attributes('size')).toBe('sm');
     expect(button.attributes('disabled')).toBeUndefined();
     // At the end of the row, in a cell no wider than the button.
@@ -325,7 +325,7 @@ describe('AddressSection (site): the sheet', () => {
     const button = startButton(wrapper);
     expect(button.element.tagName.toLowerCase()).toBe('nldd-button');
     expect(button.attributes('text')).toBe('Adres wijzigen');
-    expect(button.attributes('variant')).toBe('secondary');
+    expect(button.attributes('appearance')).toBe('secondary');
     expect(button.attributes('type')).toBe('button');
     expect(button.element.closest('nldd-sheet')).toBeNull();
     for (const testid of ['form', 'public', 'close', 'change']) {
@@ -380,7 +380,7 @@ describe('AddressSection (site): the sheet', () => {
 
       const close = wrapper.find('[data-testid="site-address-close"]');
       expect(close.attributes('slot')).toBe('end');
-      expect(close.attributes('variant')).toBe('neutral-transparent');
+      expect(close.attributes('appearance')).toBe('neutral-transparent');
       expect(close.attributes('text')).toBe('Sluiten');
       expect(close.attributes('type')).toBe('button');
       expect(close.element.parentElement?.tagName.toLowerCase()).toBe('nldd-title');
@@ -758,7 +758,7 @@ describe('AddressSection (site): the form', () => {
     expect(buttons).toHaveLength(1);
     expect(buttons[0]!.attributes('text')).toBe('Adres wijzigen');
     expect(buttons[0]!.attributes('type')).toBe('submit');
-    expect(buttons[0]!.attributes('variant')).toBe('primary');
+    expect(buttons[0]!.attributes('appearance')).toBe('primary');
     expect(buttons[0]!.attributes('disabled')).toBeUndefined();
     expect(buttons[0]!.attributes('data-testid')).toBe('site-address-change');
     expect(buttons[0]!.element.parentElement?.tagName.toLowerCase()).toBe('nldd-form-actions');
@@ -971,7 +971,7 @@ describe('AddressSection (site): changing the address', () => {
     await submit(wrapper);
     const actions = wrapper.findAll('nldd-modal-dialog nldd-button');
     expect(actions[0]!.attributes('data-testid')).toBe('confirm-cancel');
-    expect(actions[0]!.attributes('variant')).toBe('primary');
+    expect(actions[0]!.attributes('appearance')).toBe('primary');
 
     await wrapper.find('[data-testid="confirm-cancel"]').trigger('click');
     await untilIdle();

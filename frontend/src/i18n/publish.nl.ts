@@ -51,6 +51,8 @@ export const publishNl = {
   'publish.upload.field.label': 'Bestand of map',
   'publish.upload.field.hint': 'Sleep het hierheen, of kies het.',
   'publish.upload.field.required': 'Een archief, een los HTML-bestand of een map',
+  'publish.upload.field.dragHere': 'Sleep het bestand of de map hierheen',
+  'publish.upload.field.dropHere': 'Zet het bestand of de map hier neer',
   'publish.upload.field.help':
     'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site; een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
   'publish.upload.folder': 'Kies een map',
@@ -60,6 +62,8 @@ export const publishNl = {
   'publish.upload.ready.file': '"{name}" staat klaar, {size}.',
   'publish.upload.ready.bundleOne': 'Map "{name}" ingepakt: {count} bestand, {size}.',
   'publish.upload.ready.bundle': 'Map "{name}" ingepakt: {count} bestanden, {size}.',
+  'publish.upload.ready.looseOne': '{count} bestand ingepakt, {size}.',
+  'publish.upload.ready.loose': '{count} bestanden ingepakt, {size}.',
   'publish.upload.error.title': 'Dit kan zo niet gepubliceerd worden',
   'publish.upload.error.cannotPack':
     'Deze browser kan een map niet zelf inpakken. Maak er een .zip van en kies die met "Bestand kiezen".',
@@ -91,6 +95,14 @@ export const publishNl = {
     'Er staat geen {index} in de hoofdmap van "{name}", wel op "{path}". Sleep de map "{folder}" zelf.',
   'publish.packing.indexMissing':
     'Er staat geen {index} in "{name}". Zonder startpagina kan niemand de site openen.',
+  'publish.packing.looseTooManyFiles':
+    'Dit zijn meer dan {count} bestanden. Zoveel mag een publicatie niet bevatten.',
+  'publish.packing.looseTotalTooLarge':
+    'Deze bestanden zijn samen {size}. Een publicatie mag hoogstens {max} zijn.',
+  'publish.packing.looseIndexInFolder':
+    'Er staat geen {index} tussen deze bestanden, wel op "{path}". Sleep de map "{folder}" zelf.',
+  'publish.packing.looseIndexMissing':
+    'Er staat geen {index} tussen deze bestanden. Zonder startpagina kan niemand de site openen.',
 
   // -- Deploy tab: the linked repository ---------------------------------------
   'publish.deploy.loading': 'Deploy-instellingen laden',

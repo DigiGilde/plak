@@ -333,6 +333,14 @@ describe('App', () => {
     expect(bar.attributes('slot')).toBeUndefined();
   });
 
+  it('names the toolbar for assistive technology', async () => {
+    const app = await mountApp();
+    const bar = app.find('nldd-toolbar');
+    // nldd-toolbar ignores `label` without a warning; only accessible-label names it.
+    expect(bar.attributes('accessible-label')).toBe('Plak');
+    expect(bar.attributes('label')).toBeUndefined();
+  });
+
   // jsdom computes no layout, so whether the wordmark really sits at the same x
   // as the h1 cannot be measured here; what can, is that the gutter comes from
   // the same tokens as the page sections and the footer, not from a loose
@@ -369,7 +377,7 @@ describe('App', () => {
     expect(property<string>(button.element, 'popupType')).toBe('menu');
     // This app's quiet variant: no filled button lying over the page like a
     // bar.
-    expect(property<string>(button.element, 'variant')).toBe('neutral-transparent');
+    expect(property<string>(button.element, 'appearance')).toBe('neutral-transparent');
     expect(button.find('nldd-menu[slot="popup"]').exists()).toBe(true);
   });
 

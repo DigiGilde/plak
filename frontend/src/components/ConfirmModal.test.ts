@@ -55,9 +55,9 @@ describe('ConfirmModal (teleport)', () => {
     });
 
     const actions = wrapper.findAll('nldd-button');
-    expect(actions[0]!.attributes('variant')).toBe('primary');
+    expect(actions[0]!.attributes('appearance')).toBe('primary');
     expect(actions[0]!.attributes('text')).toBe('Behoud site');
-    expect(actions[1]!.attributes('variant')).toBe('destructive');
+    expect(actions[1]!.attributes('appearance')).toBe('destructive');
     // Action in flight: a loading state on the button, not a disabled one.
     expect(actions[1]!.attributes('loading')).toBeDefined();
     expect(actions[1]!.attributes('disabled')).toBeUndefined();
@@ -71,7 +71,7 @@ describe('ConfirmModal (variant of the confirmation)', () => {
       global: { stubs: { teleport: true } },
     });
 
-    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('variant')).toBe(
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('appearance')).toBe(
       'destructive',
     );
   });
@@ -82,8 +82,8 @@ describe('ConfirmModal (variant of the confirmation)', () => {
       global: { stubs: { teleport: true } },
     });
 
-    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('variant')).toBe('secondary');
-    expect(wrapper.find('[data-testid="confirm-cancel"]').attributes('variant')).toBe('primary');
+    expect(wrapper.find('[data-testid="confirm-continue"]').attributes('appearance')).toBe('secondary');
+    expect(wrapper.find('[data-testid="confirm-cancel"]').attributes('appearance')).toBe('primary');
   });
 });
 

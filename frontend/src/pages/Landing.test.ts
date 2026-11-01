@@ -84,7 +84,7 @@ describe('Landing: no session', () => {
     expect(wrapper.text()).toContain('Log in met je Rijksoverheid-account om te beginnen.');
     const login = wrapper.find('nldd-button[href="/-/login"]');
     expect(login.exists()).toBe(true);
-    expect(login.attributes('variant')).toBe('primary');
+    expect(login.attributes('appearance')).toBe('primary');
   });
 
   it('explains the steps to share a page and mentions a whole site afterwards', async () => {
