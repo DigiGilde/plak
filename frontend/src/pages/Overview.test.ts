@@ -9,6 +9,7 @@ import * as plakApi from '../api/plak';
 import type { Group, Overview as OverviewData, Site } from '../api/types';
 import NewGroupSheet from '../components/NewGroupSheet.vue';
 import PublishSheet from '../components/PublishSheet.vue';
+import { fireDropThatExpires, makeTransfer, untilQuiet } from '../components/site/testHelpers';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
 import { takePublishedMark } from '../composables/publishedMark';
 import Overview from './Overview.vue';
@@ -564,13 +565,9 @@ describe('Overview', () => {
   });
 
   describe('dragging', () => {
-    /** Enough of DataTransfer for `resolveDroppedFile`. */
+    /** A DataTransfer with one file per entry, the way readDrop reads it. */
     function fakeDataTransfer(files: File[]): DataTransfer {
-      return {
-        types: files.length ? ['Files'] : [],
-        files,
-        items: files.map(() => ({ kind: 'file', webkitGetAsEntry: () => ({ isDirectory: false }) })),
-      } as unknown as DataTransfer;
+      return makeTransfer(Object.fromEntries(files.map((one) => [one.name, one])));
     }
 
     function dragEvent(type: string, dt: DataTransfer): Event {
@@ -604,6 +601,14 @@ describe('Overview', () => {
       };
     }
 
+    /** Vue sets a custom element's prop as a DOM property, unless the element is unknown. */
+    function droppedNotice(sheet: ReturnType<typeof mount> | ReturnType<ReturnType<typeof mount>['findComponent']>): string {
+      const banner = sheet.find('[data-testid="drag-done"]').element as unknown as {
+        supportingText: string;
+      };
+      return banner.supportingText;
+    }
+
     it('opens the sheet with the file when it is dropped anywhere on the page', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
       vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
@@ -616,11 +621,11 @@ describe('Overview', () => {
       wrapper.find('nldd-simple-section').element.dispatchEvent(
         dragEvent('drop', fakeDataTransfer([droppableFile()])),
       );
-      await flushPromises();
+      await untilQuiet();
 
       const sheet = wrapper.findComponent(PublishSheet);
       expect(sheet.props('open')).toBe(true);
-      expect(sheet.props('initialFile')).toBeInstanceOf(File);
+      expect(droppedNotice(sheet)).toContain('site.zip');
 
       wrapper.unmount();
     });
@@ -662,11 +667,11 @@ describe('Overview', () => {
       wrapper.find('nldd-simple-section').element.dispatchEvent(
         dragEvent('drop', fakeDataTransfer([droppableFile()])),
       );
-      await flushPromises();
+      await untilQuiet();
 
       const sheet = wrapper.findComponent(PublishSheet);
       expect(sheet.props('open')).toBe(true);
-      expect(sheet.props('initialFile')).toBeInstanceOf(File);
+      expect(droppedNotice(sheet)).toContain('site.zip');
 
       wrapper.unmount();
     });
@@ -747,7 +752,32 @@ describe('Overview', () => {
       wrapper.unmount();
     });
 
-    it('shows a dismissible error for a dropped file of an unsupported type', async () => {
+    it('opens the sheet with the packed result when a folder is dropped', async () => {
+      vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
+      vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
+
+      const wrapper = mount(Overview, {
+        global: { plugins: [makeRouter()], stubs: { teleport: true } },
+      });
+      await flushPromises();
+
+      fireDropThatExpires(wrapper.find('nldd-simple-section').element, {
+        public: {
+          'index.html': new File(['<h1>hoi</h1>'], 'index.html'),
+          css: { 'style.css': new File(['a{}'], 'style.css') },
+        },
+      });
+      await untilQuiet();
+
+      const sheet = wrapper.findComponent(PublishSheet);
+      expect(sheet.props('open')).toBe(true);
+      expect(droppedNotice(sheet)).toContain('public');
+      expect(droppedNotice(sheet)).toContain('2 bestanden');
+
+      wrapper.unmount();
+    });
+
+    it('opens the sheet with the refusal for a dropped file of an unsupported type', async () => {
       vi.mocked(plakApi.overview).mockResolvedValue(structuredClone(filledData));
       vi.mocked(plakApi.me).mockResolvedValue(meWithGroupRole('team-aurora', 'editor'));
 
@@ -760,18 +790,14 @@ describe('Overview', () => {
       wrapper
         .find('nldd-simple-section')
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
-      await flushPromises();
+      await untilQuiet();
 
-      const banner = wrapper.find('[data-testid="overview-drag-error"]');
-      expect(banner.exists()).toBe(true);
-      // Vue sets a custom element's prop as a DOM property, not an attribute.
-      expect((banner.element as unknown as { text: string }).text).toContain('Sleep één bestand');
-      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
-
-      banner.element.dispatchEvent(new CustomEvent('dismiss'));
-      await flushPromises();
-
-      expect(wrapper.find('[data-testid="overview-drag-error"]').exists()).toBe(false);
+      const sheet = wrapper.findComponent(PublishSheet);
+      expect(sheet.props('open')).toBe(true);
+      const banner = sheet.find('[data-testid="drag-error"]').element as unknown as {
+        supportingText: string;
+      };
+      expect(banner.supportingText).toContain('site.pdf');
 
       wrapper.unmount();
     });
@@ -790,7 +816,7 @@ describe('Overview', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="overview-drag-error"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
       expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
 
       wrapper.unmount();

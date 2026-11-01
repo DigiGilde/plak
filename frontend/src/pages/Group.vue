@@ -176,8 +176,7 @@ watch(newSite, () => {
 
 const {
   dropTargetActive,
-  droppedFile,
-  dropError,
+  droppedRead,
   onPageDragEnter,
   onPageDragOver,
   onPageDragLeave,
@@ -263,14 +262,6 @@ function onGroupChanged(group: Group): void {
       data-testid="group-drag-active"
     ></nldd-banner>
 
-    <nldd-banner
-      v-if="dropError"
-      variant="critical"
-      dismissible
-      :text="dropError"
-      data-testid="group-drag-error"
-      @dismiss="dropError = null"
-    ></nldd-banner>
 
     <nldd-inline-dialog
       v-if="loading"
@@ -353,7 +344,7 @@ function onGroupChanged(group: Group): void {
         :create-site="api.createSite"
         :set-access="api.setAccess"
         :publish="publish"
-        :initial-file="droppedFile"
+        :initial-drop="droppedRead"
         @created="onSiteCreated"
         @published="onPublished"
       />

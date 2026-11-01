@@ -10,8 +10,11 @@ import TabSites from '@/components/group/TabSites.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import {
   fireDetailEvent,
+  fireDropThatExpires,
+  makeTransfer,
   serverErrorFetch,
   untilIdle,
+  untilQuiet,
 } from '@/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
 import { _resetBreadcrumbs, breadcrumbsFor } from '@/composables/breadcrumbs';
@@ -313,13 +316,9 @@ describe('Group: put a site online', () => {
   });
 
   describe('dragging', () => {
-    /** Enough of DataTransfer for `resolveDroppedFile`. */
+    /** A DataTransfer with one file per entry, the way readDrop reads it. */
     function fakeDataTransfer(files: File[]): DataTransfer {
-      return {
-        types: files.length ? ['Files'] : [],
-        files,
-        items: files.map(() => ({ kind: 'file', webkitGetAsEntry: () => ({ isDirectory: false }) })),
-      } as unknown as DataTransfer;
+      return makeTransfer(Object.fromEntries(files.map((one) => [one.name, one])));
     }
 
     function dragEvent(type: string, dt: DataTransfer): Event {
@@ -338,11 +337,13 @@ describe('Group: put a site online', () => {
       wrapper.find('nldd-simple-section').element.dispatchEvent(
         dragEvent('drop', fakeDataTransfer([droppableFile()])),
       );
-      await untilIdle();
+      await untilQuiet();
 
       const sheet = wrapper.findComponent(PublishSheet);
       expect(sheet.props('open')).toBe(true);
-      expect(sheet.props('initialFile')).toBeInstanceOf(File);
+      expect(sheet.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+        'site.zip',
+      );
       // Only this group is ever offered here: no picker to preselect within.
       expect(sheet.props('groups')).toEqual([
         {
@@ -352,6 +353,40 @@ describe('Group: put a site online', () => {
           previousSlugs: [],
         },
       ]);
+    });
+
+    it('opens the sheet with the packed result when a folder is dropped', async () => {
+      const { wrapper } = await makeWrapper('/team-aurora');
+
+      fireDropThatExpires(wrapper.find('nldd-simple-section').element, {
+        public: {
+          'index.html': new File(['<h1>hoi</h1>'], 'index.html'),
+          css: { 'style.css': new File(['a{}'], 'style.css') },
+        },
+      });
+      await untilQuiet();
+
+      const sheet = wrapper.findComponent(PublishSheet);
+      expect(sheet.props('open')).toBe(true);
+      const notice = sheet.find('[data-testid="drag-done"]').attributes('supporting-text');
+      expect(notice).toContain('public');
+      expect(notice).toContain('2 bestanden');
+    });
+
+    it('opens the sheet with the packed result when loose contents are dropped', async () => {
+      const { wrapper } = await makeWrapper('/team-aurora');
+
+      fireDropThatExpires(wrapper.find('nldd-simple-section').element, {
+        'index.html': new File(['<h1>hoi</h1>'], 'index.html'),
+        css: { 'style.css': new File(['a{}'], 'style.css') },
+      });
+      await untilQuiet();
+
+      const sheet = wrapper.findComponent(PublishSheet);
+      expect(sheet.props('open')).toBe(true);
+      expect(sheet.find('[data-testid="drag-done"]').attributes('supporting-text')).toMatch(
+        /^2 bestanden ingepakt, /,
+      );
     });
 
     it('does nothing for someone without an editor or admin role', async () => {
@@ -414,24 +449,20 @@ describe('Group: put a site online', () => {
       expect(wrapper.find('[data-testid="group-drag-active"]').exists()).toBe(false);
     });
 
-    it('shows a dismissible error for a dropped file of an unsupported type', async () => {
+    it('opens the sheet with the refusal for a dropped file of an unsupported type', async () => {
       const { wrapper } = await makeWrapper('/team-aurora');
       const badFile = new File(['hoi'], 'site.pdf', { type: 'application/pdf' });
 
       wrapper
         .find('nldd-simple-section')
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([badFile])));
-      await untilIdle();
+      await untilQuiet();
 
-      const banner = wrapper.find('[data-testid="group-drag-error"]');
-      expect(banner.exists()).toBe(true);
-      expect(banner.attributes('text')).toContain('Sleep één bestand');
-      expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
-
-      banner.element.dispatchEvent(new CustomEvent('dismiss'));
-      await untilIdle();
-
-      expect(wrapper.find('[data-testid="group-drag-error"]').exists()).toBe(false);
+      const sheet = wrapper.findComponent(PublishSheet);
+      expect(sheet.props('open')).toBe(true);
+      expect(sheet.find('[data-testid="drag-error"]').attributes('supporting-text')).toContain(
+        'site.pdf',
+      );
     });
 
     it('ignores a drop that carries nothing file-shaped, such as dragged text', async () => {
@@ -442,7 +473,7 @@ describe('Group: put a site online', () => {
         .element.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
       await untilIdle();
 
-      expect(wrapper.find('[data-testid="group-drag-error"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
       expect(wrapper.findComponent(PublishSheet).props('open')).toBe(false);
     });
   });

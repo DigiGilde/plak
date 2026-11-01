@@ -1,7 +1,8 @@
-import { effectScope, ref } from 'vue';
+import { effectScope, nextTick, ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveDroppedFile, useDropState, useWindowDropGuard } from './fileDrop';
+import { makeTransfer } from '@/components/site/testHelpers';
+import { usePageDrop, useDropState, useWindowDropGuard } from './fileDrop';
 
 function fakeDataTransfer(types: string[]): DataTransfer {
   return { types } as unknown as DataTransfer;
@@ -16,82 +17,6 @@ function windowDragEvent(type: string, dt: DataTransfer): Event {
   Object.defineProperty(event, 'dataTransfer', { value: dt });
   return event;
 }
-
-describe('resolveDroppedFile', () => {
-  it('ignores a drop that carries no files at all', () => {
-    expect(resolveDroppedFile({ files: [] } as unknown as DataTransfer)).toEqual({
-      file: null,
-      error: null,
-    });
-    expect(resolveDroppedFile(null)).toEqual({ file: null, error: null });
-  });
-
-  it('rejects a dropped folder, mirroring the accept attribute', () => {
-    const file = new File(['<h1>hoi</h1>'], 'map', { type: '' });
-    const dt = {
-      files: [file],
-      items: [{ kind: 'file', webkitGetAsEntry: () => ({ isDirectory: true }) }],
-    } as unknown as DataTransfer;
-
-    const result = resolveDroppedFile(dt);
-
-    expect(result.file).toBeNull();
-    expect(result.error).toBeTruthy();
-  });
-
-  it('skips a non-file item (e.g. dragged text alongside the file) when checking for a folder', () => {
-    const file = new File(['hoi'], 'site.zip', { type: 'application/zip' });
-    const dt = {
-      files: [file],
-      items: [{ kind: 'string' }, { kind: 'file', webkitGetAsEntry: () => ({ isDirectory: false }) }],
-    } as unknown as DataTransfer;
-
-    const result = resolveDroppedFile(dt);
-
-    expect(result.file).toBe(file);
-    expect(result.error).toBeNull();
-  });
-
-  it('accepts a single file of an accepted type', () => {
-    const file = new File(['hoi'], 'site.zip', { type: 'application/zip' });
-    const dt = { files: [file] } as unknown as DataTransfer;
-
-    const result = resolveDroppedFile(dt);
-
-    expect(result.file).toBe(file);
-    expect(result.error).toBeNull();
-  });
-
-  it('accepts every extension the accept attribute lists', () => {
-    for (const name of ['site.tar.gz', 'site.tgz', 'site.html']) {
-      const file = new File(['hoi'], name);
-      const result = resolveDroppedFile({ files: [file] } as unknown as DataTransfer);
-
-      expect(result.file, name).toBe(file);
-    }
-  });
-
-  it('rejects more than one file, even of an accepted type', () => {
-    const dt = {
-      files: [new File(['a'], 'a.zip'), new File(['b'], 'b.zip')],
-    } as unknown as DataTransfer;
-
-    const result = resolveDroppedFile(dt);
-
-    expect(result.file).toBeNull();
-    expect(result.error).toBeTruthy();
-  });
-
-  it('rejects a file of an unsupported type', () => {
-    const file = new File(['hoi'], 'site.pdf', { type: 'application/pdf' });
-    const dt = { files: [file] } as unknown as DataTransfer;
-
-    const result = resolveDroppedFile(dt);
-
-    expect(result.file).toBeNull();
-    expect(result.error).toBeTruthy();
-  });
-});
 
 describe('useDropState', () => {
   it('ignores a drag that carries no files', () => {
@@ -228,6 +153,93 @@ describe('useWindowDropGuard', () => {
     window.dispatchEvent(afterEvent);
     expect(afterEvent.defaultPrevented).toBe(false);
 
+    scope.stop();
+  });
+});
+
+describe('usePageDrop', () => {
+  function pageDrop(enabledAtStart = true) {
+    const enabled = ref(enabledAtStart);
+    const open = ref(false);
+    const scope = effectScope();
+    const drop = scope.run(() => usePageDrop(enabled, open))!;
+    return { enabled, open, scope, drop };
+  }
+
+  function dropEvent(transfer: DataTransfer | null): DragEvent {
+    const event = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: transfer });
+    return event as DragEvent;
+  }
+
+  it('opens the sheet with the read of what was dropped', async () => {
+    const { open, scope, drop } = pageDrop();
+    const site = new File(['pk'], 'site.zip');
+    const event = dropEvent(makeTransfer({ 'site.zip': site }));
+
+    drop.onPageDrop(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(open.value).toBe(true);
+    await expect(drop.droppedRead.value).resolves.toEqual({ kind: 'file', file: site });
+    scope.stop();
+  });
+
+  it('opens the sheet for a refusal too: that is where it gets explained', async () => {
+    const { open, scope, drop } = pageDrop();
+
+    drop.onPageDrop(dropEvent(makeTransfer({ 'foto.png': new File(['x'], 'foto.png') })));
+
+    expect(open.value).toBe(true);
+    await expect(drop.droppedRead.value).resolves.toMatchObject({ kind: 'refusal' });
+    scope.stop();
+  });
+
+  it('calls webkitGetAsEntry during the event, not after it', () => {
+    const { scope, drop } = pageDrop();
+    const transfer = makeTransfer({ public: { 'index.html': new File(['x'], 'index.html') } });
+    const asked = vi.fn(() => null);
+    Object.defineProperty(transfer, 'items', { value: [{ webkitGetAsEntry: asked }] });
+
+    drop.onPageDrop(dropEvent(transfer));
+
+    expect(asked).toHaveBeenCalledOnce();
+    scope.stop();
+  });
+
+  it('leaves a drop without files alone, such as dragged text', () => {
+    const { open, scope, drop } = pageDrop();
+
+    drop.onPageDrop(dropEvent(makeTransfer({})));
+    drop.onPageDrop(dropEvent(null));
+
+    expect(open.value).toBe(false);
+    expect(drop.droppedRead.value).toBeNull();
+    scope.stop();
+  });
+
+  it('does nothing while publishing here is not allowed', () => {
+    const { open, scope, drop } = pageDrop(false);
+    const event = dropEvent(makeTransfer({ 'site.zip': new File(['pk'], 'site.zip') }));
+
+    drop.onPageDrop(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(open.value).toBe(false);
+    expect(drop.droppedRead.value).toBeNull();
+    scope.stop();
+  });
+
+  it('forgets the read when the sheet closes, so the button does not carry it along', async () => {
+    const { open, scope, drop } = pageDrop();
+    drop.onPageDrop(dropEvent(makeTransfer({ 'site.zip': new File(['pk'], 'site.zip') })));
+    await nextTick();
+    expect(drop.droppedRead.value).not.toBeNull();
+
+    open.value = false;
+    await nextTick();
+
+    expect(drop.droppedRead.value).toBeNull();
     scope.stop();
   });
 });

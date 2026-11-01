@@ -31,7 +31,10 @@ import { ApiError } from '@/api/client';
 import type { Access, AccessBase, Group, Me, Site } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
-import { resolveDroppedFile, useDropState } from '@/composables/fileDrop';
+import { type DropResult, readDrop } from '@/components/site/packing';
+import UploadBlock from '@/components/site/UploadBlock.vue';
+import { useUploadIntake } from '@/components/site/uploadIntake';
+import { useDropState } from '@/composables/fileDrop';
 import { mayCreateSiteIn } from '@/composables/roles';
 import { SLUG_MATCH, SLUG_PATTERN, SLUG_RE, slugify, slugifyTyped } from '@/composables/slug';
 import {
@@ -61,11 +64,11 @@ const props = defineProps<{
   /** Content origin from `/me`; carries the displayed address. */
   contentBase: string;
   /**
-   * A file already chosen before the sheet opened, e.g. dropped on the
-   * overview or group page. Applied once, on the transition to `open`, the
-   * same way a file chosen through the field is.
+   * The read of something dropped on the overview or group page before the
+   * sheet opened. Taken over once, on the transition to `open`, and from there
+   * it goes the way a drop on the sheet itself does.
    */
-  initialFile?: File | null;
+  initialDrop?: Promise<DropResult> | null;
   createGroup: (name: string, slug: string) => Promise<Group>;
   createSite: (groupSlug: string, title: string, slug: string) => Promise<Site>;
   setAccess: (groupSlug: string, siteSlug: string, access: Access) => Promise<Site>;
@@ -87,10 +90,13 @@ const emit = defineEmits<{
 const ACCESS_NEW_GROUP: Access = { base: 'site_team', keys: false, invitees: false };
 
 const sheetEl = ref<HTMLElement & { show: () => void; hide: () => void }>();
-const fileField = ref<HTMLElement>();
+const uploadBlock = ref<InstanceType<typeof UploadBlock>>();
+const fileField = computed(() => uploadBlock.value?.field);
 
 const file = ref<File | null>(null);
 const title = ref('');
+/** The title came from the file name, and nobody has typed in it since. */
+const titleFromFile = ref(false);
 const slug = ref('');
 const slugEdited = ref(false);
 const groupSlug = ref('');
@@ -105,7 +111,18 @@ const busy = ref(false);
 const error = ref<unknown>(null);
 
 const { isOver: dropTargetActive, onDragEnter, onDragOver, onDragLeave, reset: resetDropState } = useDropState();
-const dropError = ref<string | null>(null);
+const {
+  step: intakeStep,
+  progress: intakeProgress,
+  ready: intakeReady,
+  error: intakeError,
+  receive,
+  onFolderChoice,
+  noteChoice,
+} = useUploadIntake((received, named) => setFile(received, false, named), () => {
+  emptyFile();
+  forgetTitleFromFile();
+});
 
 const fileMissing = ref(false);
 const titleEmpty = ref(false);
@@ -193,14 +210,17 @@ function sameAccess(one: Access, other: Access): boolean {
 }
 
 /**
- * The title follows the file name, so the ordinary path costs no typing.
- * `index` is the exception: that is the name of the mechanism, not of the site,
- * so there the field stays empty and the flow does ask the question.
+ * The title follows the file name, so the ordinary path costs no typing. These
+ * are the exception: the name of the mechanism or of a build folder, not of the
+ * site, so there the field stays empty and the flow does ask the question.
  */
+const NOT_A_SITE_NAME = new Set(['index', 'public', 'dist', 'build', 'out', '_site']);
+
 function titleFromFileName(name: string): string {
   const bare = name.replace(/\.(tar\.gz|tgz|zip|html?)$/i, '');
+  if (NOT_A_SITE_NAME.has(bare.toLowerCase())) return '';
   const words = bare.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (words === '' || words.toLowerCase() === 'index') return '';
+  if (words === '') return '';
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -212,71 +232,49 @@ function titleFromFileName(name: string): string {
  */
 const fieldHoldsFile = ref(false);
 
-/** The field's native input, which lives in its shadow root. Reached
- * defensively: it is a private detail of the component, so everything that
- * depends on it falls back silently. */
-function fileInput(): HTMLInputElement | null {
-  const field = fileField.value;
-  return (
-    (field?.shadowRoot?.querySelector('input[type=file]') as HTMLInputElement | null) ??
-    (field?.querySelector('input[type=file]') as HTMLInputElement | null)
-  );
+function handOverToField(chosen: File): boolean {
+  return uploadBlock.value?.handOver(chosen) === true;
 }
 
-/**
- * Hands a dropped file to the field's own input, so the field shows the name
- * and its required rule is satisfied (without this the form refuses to submit
- * after a drop). A file input rejects a plain assignment but accepts a FileList
- * built with DataTransfer.
- *
- * The change event is composed on purpose: an uncomposed one would stay inside
- * the shadow root, where nldd-file-field listens for it.
- */
-/* v8 ignore start -- jsdom (`environment: 'jsdom'` in vitest.config) has no
- * native DataTransfer constructor, so `new DataTransfer()` below always
- * throws under test; every drag-and-drop test therefore builds its own
- * `fakeDataTransfer` stand-in (see PublishSheet.test.ts) instead of a real
- * one, and this success path of the hand-over can never run in a unit test. */
-function handOverToField(chosen: File): boolean {
-  const input = fileInput();
-  if (!input || typeof DataTransfer === 'undefined') return false;
-  try {
-    const data = new DataTransfer();
-    data.items.add(chosen);
-    input.files = data.files;
-    if (input.files?.length !== 1) return false;
-    input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-  } catch {
-    return false;
-  }
-  return true;
-}
-/* v8 ignore stop */
+let namelessArchive: File | null = null;
 
 /** Shared by the file field and by a drop, so both fill the same state the
  * same way. `fromField` marks the call that the field itself caused, which is
- * the one that must not hand the file back to it. */
-function setFile(chosen: File | null, fromField = false): void {
+ * the one that must not hand the file back to it. `named` is false for an
+ * archive whose name was made up, which says nothing about the site. */
+function setFile(chosen: File | null, fromField = false, named = true): void {
   file.value = chosen;
   if (!file.value) {
     fieldHoldsFile.value = false;
     return;
   }
   fileMissing.value = false;
-  dropError.value = null;
   if (fromField) fieldHoldsFile.value = true;
+  if (!fromField) namelessArchive = named ? null : file.value;
   void adoptIntoField(file.value, fromField);
-  if (title.value === '') {
+  // The field answers a hand-over with a change event of its own, carrying a
+  // File with the same name and size: that echo is not a name either.
+  const nameless =
+    namelessArchive?.name === file.value.name && namelessArchive.size === file.value.size;
+  if (!nameless && title.value === '') {
     title.value = titleFromFileName(file.value.name);
     onTitleInput();
+    titleFromFile.value = true;
   }
+}
+
+/** What the earlier file put in the title goes with it; what was typed stays. */
+function forgetTitleFromFile(): void {
+  if (!titleFromFile.value) return;
+  title.value = '';
+  onTitleInput();
 }
 
 /**
  * Gets the file into the field and the field out of the red.
  *
  * The retry after a render is for the file that arrives before the sheet has
- * drawn its field (`initialFile`). The wait before the mark comes off is for a
+ * drawn its field (`initialDrop`). The wait before the mark comes off is for a
  * different reason: nldd-validation-list hands its verdict to the control, and
  * it only learns the new value on the next render. Until then the control
  * counts as failing its required rule, and nldd-form marks it on the very
@@ -284,11 +282,8 @@ function setFile(chosen: File | null, fromField = false): void {
  */
 async function adoptIntoField(chosen: File, fromField: boolean): Promise<void> {
   if (!fromField) {
-    /* v8 ignore start -- handOverToField never succeeds under jsdom (see its
-     * own comment above), so this consequent can never run under test. */
     if (handOverToField(chosen)) {
       fieldHoldsFile.value = true;
-    /* v8 ignore stop */
     } else {
       await nextTick();
       if (file.value !== chosen) return;
@@ -312,7 +307,10 @@ async function adoptIntoField(chosen: File, fromField: boolean): Promise<void> {
 function onFileChoice(event: Event): void {
   const detail = (event as CustomEvent<{ files?: File[] }>).detail;
   const files = detail?.files ?? (event.target as HTMLInputElement | null)?.files;
-  setFile(files?.[0] ?? null, true);
+  const picked = files?.[0] ?? null;
+  noteChoice(picked);
+  if (picked) forgetTitleFromFile();
+  setFile(picked, true);
 }
 
 /**
@@ -346,24 +344,16 @@ function fileSize(bytes: number): string {
   return `${formatNumber(value, { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 
-/** Clears what the field and a drop both write, so one control undoes either.
- * nldd-file-field owns a FileList of its own and offers no public clear, so
- * the input it wraps is emptied instead and told about it; the component
- * follows that the way it follows a real choice. */
-function clearFile(): void {
-  const input = fileInput();
-  /* v8 ignore start -- same jsdom limitation as handOverToField: the native
-   * input this reaches for only ever exists after a real hand-over, which
-   * never happens under test (see handOverToField's comment). */
-  if (input) {
-    input.value = '';
-    input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
-    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  }
-  /* v8 ignore stop */
+/** Clears what the field and a drop both write, so one control undoes either. */
+function emptyFile(): void {
+  uploadBlock.value?.clearField();
   file.value = null;
   fieldHoldsFile.value = false;
-  dropError.value = null;
+  noteChoice(null);
+}
+
+function clearFile(): void {
+  emptyFile();
   fileField.value?.removeAttribute('invalid');
 }
 
@@ -372,15 +362,12 @@ function clearFile(): void {
  * the file field alone. */
 function onSheetDrop(event: DragEvent): void {
   event.preventDefault();
-  // Bound in the capture phase, for the same reason as useDropState's dragover.
-  if (event.dataTransfer?.types.includes('Files')) event.stopPropagation();
   resetDropState();
-  const { file: dropped, error: rejection } = resolveDroppedFile(event.dataTransfer);
-  if (rejection) {
-    dropError.value = rejection;
-    return;
-  }
-  if (dropped) setFile(dropped);
+  const transfer = event.dataTransfer;
+  if (!transfer?.types.includes('Files')) return;
+  // Bound in the capture phase, for the same reason as useDropState's dragover.
+  event.stopPropagation();
+  void receive(() => readDrop(transfer));
 }
 
 function onTitleInput(): void {
@@ -438,7 +425,6 @@ function resetForm(): void {
   slugServerError.value = null;
   groupServerError.value = null;
   error.value = null;
-  dropError.value = null;
   resetDropState();
   busy.value = false;
   createdGroup.value = null;
@@ -467,7 +453,7 @@ function rememberServerError(e: unknown, field: 'site' | 'group'): boolean {
 }
 
 async function putOnline(): Promise<void> {
-  if (busy.value) return;
+  if (busy.value || intakeStep.value !== '') return;
   error.value = null;
   slugServerError.value = null;
   groupServerError.value = null;
@@ -545,7 +531,8 @@ useSheetOpen(
   () => props.open,
   sheetEl,
   () => {
-    if (props.initialFile) setFile(props.initialFile);
+    const dropped = props.initialDrop;
+    if (dropped) void receive(() => dropped);
   },
 );
 </script>
@@ -599,15 +586,6 @@ useSheetOpen(
             data-testid="publish-drag-active"
           ></nldd-banner>
 
-          <nldd-banner
-            v-if="dropError"
-            variant="critical"
-            dismissible
-            :text="dropError"
-            data-testid="publish-drag-error"
-            @dismiss="dropError = null"
-          ></nldd-banner>
-
           <ErrorBanner v-if="error" :error="error" />
 
           <nldd-banner
@@ -620,38 +598,32 @@ useSheetOpen(
           ></nldd-banner>
 
           <nldd-form @submit.prevent="putOnline">
-            <nldd-form-field
-              :label="t('publish.sheet.file.label')"
-              :supporting-label="t('publish.sheet.file.hint')"
+            <UploadBlock
+              ref="uploadBlock"
+              :required="fieldRequired"
+              :invalid="fileMissing"
+              :file-name="file?.name ?? ''"
+              :active="dropTargetActive"
+              :step="intakeStep"
+              :progress="intakeProgress"
+              :ready="intakeReady"
+              :error="intakeError"
+              @choice="onFileChoice"
+              @folder="onFolderChoice"
             >
-              <nldd-file-field
-                ref="fileField"
-                name="file"
-                accept=".zip,.tar.gz,.tgz,.html"
-                :required="fieldRequired || undefined"
-                :invalid="fileMissing || undefined"
-                data-testid="publish-file"
-                @change="onFileChoice"
-              ></nldd-file-field>
               <!-- The fallback for a file the field could not be given: then
                    this is what says a file is chosen, and clears it again. -->
-              <nldd-token
-                v-if="chosenFile"
-                control="dismiss"
-                :dismiss-text="t('publish.sheet.file.clear')"
-                data-testid="publish-file-chosen"
-                @dismiss="clearFile"
-                >{{ chosenFile }}</nldd-token
-              >
-              <!-- nldd-validation-list reads `control.value` and nldd-file-field
-                   has none: without this value the required rule fails even with
-                   a file present. -->
-              <nldd-validation-list :value="file?.name ?? ''">
-                <nldd-validation-item id="publish-file-required" required>
-                  {{ t('publish.sheet.file.required') }}
-                </nldd-validation-item>
-              </nldd-validation-list>
-            </nldd-form-field>
+              <template #chosen>
+                <nldd-token
+                  v-if="chosenFile"
+                  control="dismiss"
+                  :dismiss-text="t('publish.sheet.file.clear')"
+                  data-testid="publish-file-chosen"
+                  @dismiss="clearFile"
+                  >{{ chosenFile }}</nldd-token
+                >
+              </template>
+            </UploadBlock>
 
             <nldd-form-field :label="t('publish.sheet.title.label')">
               <nldd-text-field
@@ -660,7 +632,7 @@ useSheetOpen(
                 required
                 :invalid="titleEmpty || undefined"
                 data-testid="publish-title"
-                @input="(e: CustomEvent) => { title = (e.detail?.value ?? (e.target as HTMLInputElement).value); titleEmpty = false; onTitleInput(); }"
+                @input="(e: CustomEvent) => { title = (e.detail?.value ?? (e.target as HTMLInputElement).value); titleEmpty = false; titleFromFile = false; onTitleInput(); }"
               ></nldd-text-field>
               <nldd-validation-list :value="title">
                 <nldd-validation-item id="publish-title-required" required>
@@ -848,7 +820,7 @@ useSheetOpen(
                 appearance="primary"
                 :text="t('publish.sheet.submit')"
                 type="submit"
-                :loading="busy || undefined"
+                :loading="busy || intakeStep !== '' || undefined"
                 data-testid="publish-submit"
               ></nldd-button>
             </nldd-form-actions>

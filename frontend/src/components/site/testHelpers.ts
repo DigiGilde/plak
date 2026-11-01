@@ -86,7 +86,8 @@ export function makeTransfer(tree: DropTree, options: { entries?: boolean } = {}
     options.entries === false
       ? entries.map(() => ({}))
       : entries.map((entry) => ({ webkitGetAsEntry: () => entry }));
-  return { items, files: files } as unknown as DataTransfer;
+  const types = entries.length > 0 ? ['Files'] : [];
+  return { types, items, files: files } as unknown as DataTransfer;
 }
 
 /** Fires a drag event carrying a `dataTransfer` of its own. */
@@ -95,6 +96,65 @@ export function fireDrop(element: Element, name: string, transfer?: DataTransfer
   Object.defineProperty(event, 'dataTransfer', { value: transfer ?? null });
   element.dispatchEvent(event);
   return event;
+}
+
+/**
+ * A drop the way a browser really delivers it: the items and files of a
+ * DataTransfer only answer during the event itself, so a read that starts any
+ * later finds nothing.
+ */
+export function fireDropThatExpires(element: Element, tree: DropTree): DataTransfer {
+  const transfer = makeTransfer(tree);
+  const { items, files } = transfer;
+  let live = true;
+  Object.defineProperty(transfer, 'items', { get: () => (live ? items : []) });
+  Object.defineProperty(transfer, 'files', { get: () => (live ? files : []) });
+  fireDrop(element, 'drop', transfer);
+  live = false;
+  return transfer;
+}
+
+/**
+ * Enough of the `DataTransfer` constructor for handing a file to a field, for
+ * `vi.stubGlobal`. Like a browser, it hands back a File of its own, with the same
+ * name and size: code that compares by identity is caught out here too.
+ */
+export class FakeDataTransfer {
+  private held: File[] = [];
+  items = { add: (file: File) => this.held.push(new File([file], file.name, { type: file.type })) };
+  get files(): File[] {
+    return this.held;
+  }
+}
+
+/**
+ * The inside of a real nldd-file-field, which jsdom never gets to render: an
+ * input in the shadow root that takes a FileList, and answers a change on it with
+ * a change event of its own on the field, synchronously.
+ */
+export function giveFieldAnInput(field: Element): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = 'file';
+  let held: File[] = [];
+  Object.defineProperty(input, 'files', {
+    get: () => held,
+    set: (files: File[]) => {
+      held = Array.from(files);
+    },
+  });
+  Object.defineProperty(input, 'value', {
+    set: () => {
+      held = [];
+    },
+  });
+  input.addEventListener('change', (event) => {
+    event.stopPropagation();
+    field.dispatchEvent(
+      new CustomEvent('change', { detail: { files: held }, bubbles: true, composed: true }),
+    );
+  });
+  field.attachShadow({ mode: 'open' }).append(input);
+  return input;
 }
 
 /** A problem+json server error as a fetch stub, for the error states. */

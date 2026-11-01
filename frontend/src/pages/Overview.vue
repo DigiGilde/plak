@@ -112,8 +112,7 @@ const canPublishHere = computed(
 
 const {
   dropTargetActive,
-  droppedFile,
-  dropError,
+  droppedRead,
   onPageDragEnter,
   onPageDragOver,
   onPageDragLeave,
@@ -135,14 +134,6 @@ const {
       data-testid="overview-drag-active"
     ></nldd-banner>
 
-    <nldd-banner
-      v-if="dropError"
-      variant="critical"
-      dismissible
-      :text="dropError"
-      data-testid="overview-drag-error"
-      @dismiss="dropError = null"
-    ></nldd-banner>
 
     <!-- Not in the end slot of nldd-title: that slot neither shrinks along nor
          lets the button drop, which breaks the title letter by letter at 320 px
@@ -258,7 +249,7 @@ const {
       :create-site="createSite"
       :set-access="setAccess"
       :publish="uploadToSite"
-      :initial-file="droppedFile"
+      :initial-drop="droppedRead"
       @group-created="onGroupCreated"
       @created="onSiteCreated"
       @published="onPublished"

@@ -4,7 +4,15 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import UploadZone from './UploadZone.vue';
-import { makeTransfer, untilQuiet, fireDetailEvent, fireDrop } from './testHelpers';
+import {
+  FakeDataTransfer,
+  giveFieldAnInput,
+  makeTransfer,
+  untilQuiet,
+  fireDetailEvent,
+  fireDrop,
+  fireDropThatExpires,
+} from './testHelpers';
 
 function archive(): File {
   return new File(['pk'], 'site.zip', { type: 'application/zip' });
@@ -174,6 +182,15 @@ describe('UploadZone: choosing a folder without dragging', () => {
     wrapper.unmount();
   });
 
+  it('keeps the submit in the zone, while the sheet keeps its own below it', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    expect(zone.querySelector('[data-testid="upload-publish"]')).not.toBeNull();
+    expect(zone.closest('[data-testid="upload-form"]')).not.toBeNull();
+
+    wrapper.unmount();
+  });
+
   it('puts the folder button and the publish button in one group, with room between them', async () => {
     const { wrapper } = await mountComponent();
 
@@ -223,6 +240,387 @@ describe('UploadZone: choosing a folder without dragging', () => {
     expect(wrapper.find('[data-testid="drag-error"]').attributes('supporting-text')).toBe(
       'In deze map staat niets dat gepubliceerd kan worden.',
     );
+
+    wrapper.unmount();
+  });
+});
+
+describe('UploadZone: publishing while something newer is on its way', () => {
+  function publishButton(wrapper: ReturnType<typeof mount>): HTMLElement & { loading?: boolean } {
+    return wrapper.find('[data-testid="upload-publish"]').element as HTMLElement & {
+      loading?: boolean;
+    };
+  }
+
+  function submit(wrapper: ReturnType<typeof mount>): Promise<void> {
+    return wrapper.find('[data-testid="upload-form"]').trigger('submit');
+  }
+
+  /** A drop of one file whose read stays open until the test finishes it. */
+  function dropStillBeingRead(zone: Element): (read: File) => void {
+    let finish!: (read: File) => void;
+    const transfer = {
+      types: ['Files'],
+      files: [],
+      items: [
+        {
+          webkitGetAsEntry: () => ({
+            name: 'nieuw.zip',
+            isFile: true,
+            isDirectory: false,
+            file: (resolve: (read: File) => void) => {
+              finish = resolve;
+            },
+          }),
+        },
+      ],
+    } as unknown as DataTransfer;
+    fireDrop(zone, 'drop', transfer);
+    return (read) => finish(read);
+  }
+
+  /** Holds the packing of a folder at its first file, until the test lets go. */
+  function holdPacking(): () => void {
+    const reads: (() => void)[] = [];
+    const original = FileReader.prototype.readAsArrayBuffer;
+    const spy = vi
+      .spyOn(FileReader.prototype, 'readAsArrayBuffer')
+      .mockImplementation(function (this: FileReader, blob: Blob) {
+        reads.push(() => original.call(this, blob));
+      });
+    return () => {
+      spy.mockRestore();
+      for (const read of reads) read();
+    };
+  }
+
+  it('does not publish the earlier file while a new drop is being read', async () => {
+    const { wrapper, field, zone } = await mountComponent();
+    fireDetailEvent(field, 'change', { files: [archive()] });
+    await flushPromises();
+
+    const finish = dropStillBeingRead(zone);
+    await flushPromises();
+    expect(wrapper.find('[data-testid="drag-progress"]').exists()).toBe(true);
+    expect(publishButton(wrapper).loading).toBe(true);
+
+    await submit(wrapper);
+
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    finish(file('nieuw.zip'));
+    await untilQuiet();
+
+    wrapper.unmount();
+  });
+
+  it('does not publish the earlier file while a new folder is being packed', async () => {
+    const { wrapper, field, zone } = await mountComponent();
+    fireDetailEvent(field, 'change', { files: [archive()] });
+    await flushPromises();
+    const release = holdPacking();
+
+    fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
+    await flushPromises();
+    expect((wrapper.find('[data-testid="drag-progress"]').element as HTMLElement & {
+      text?: string;
+    }).text).toBe('Map inpakken');
+    expect(publishButton(wrapper).loading).toBe(true);
+
+    await submit(wrapper);
+
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    release();
+    await untilQuiet();
+
+    wrapper.unmount();
+  });
+
+  it('publishes the new archive and not the earlier file once packing is done', async () => {
+    const { wrapper, field, zone } = await mountComponent();
+    fireDetailEvent(field, 'change', { files: [archive()] });
+    await flushPromises();
+    const release = holdPacking();
+    fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
+    await flushPromises();
+    await submit(wrapper);
+
+    release();
+    await untilQuiet();
+
+    expect(publishButton(wrapper).loading).toBeFalsy();
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    await submit(wrapper);
+
+    expect(wrapper.emitted('file')).toHaveLength(1);
+    expect((wrapper.emitted('file')![0]![0] as File).name).toBe('mijn-site.tar.gz');
+
+    wrapper.unmount();
+  });
+
+  it('publishes the newly read file once its read is done', async () => {
+    const { wrapper, field, zone } = await mountComponent();
+    fireDetailEvent(field, 'change', { files: [archive()] });
+    await flushPromises();
+    const finish = dropStillBeingRead(zone);
+    await flushPromises();
+
+    const newer = file('nieuw.zip');
+    finish(newer);
+    await untilQuiet();
+    await submit(wrapper);
+
+    expect(wrapper.emitted('file')).toEqual([[newer]]);
+
+    wrapper.unmount();
+  });
+
+  it('still shows the button as busy while the version itself is being sent', async () => {
+    const wrapper = mount(UploadZone, { props: { busy: true } });
+    await flushPromises();
+
+    expect(publishButton(wrapper).loading).toBe(true);
+
+    wrapper.unmount();
+  });
+});
+
+describe('UploadZone: a refused upload forgets the earlier choice', () => {
+  function chooseFolderOf(wrapper: ReturnType<typeof mount>, paths: string[]): Promise<void> {
+    return chooseFolder(wrapper, chosenFolder(paths));
+  }
+
+  /** A drop whose read fails: the browser cannot get at the file any more. */
+  function unreadable(): DataTransfer {
+    return {
+      types: ['Files'],
+      files: [],
+      items: [
+        {
+          webkitGetAsEntry: () => ({
+            name: 'weg.zip',
+            isFile: true,
+            isDirectory: false,
+            file: (_resolve: unknown, reject: (error: Error) => void) => reject(new Error('weg')),
+          }),
+        },
+      ],
+    } as unknown as DataTransfer;
+  }
+
+  const ROUTES: [string, (wrapper: ReturnType<typeof mount>, zone: Element) => unknown][] = [
+    [
+      'a dropped folder without a start page',
+      (_wrapper, zone) =>
+        fireDrop(zone, 'drop', makeTransfer({ map: { 'lees-mij.txt': file('lees-mij.txt') } })),
+    ],
+    [
+      'a dropped folder with a secret in it',
+      (_wrapper, zone) =>
+        fireDrop(
+          zone,
+          'drop',
+          makeTransfer({ map: { 'index.html': file('index.html'), '.env': file('.env') } }),
+        ),
+    ],
+    [
+      'a dropped file that is no site',
+      (_wrapper, zone) => fireDrop(zone, 'drop', makeTransfer({ 'stijl.css': file('stijl.css') })),
+    ],
+    [
+      'loose contents without a start page',
+      (_wrapper, zone) =>
+        fireDrop(
+          zone,
+          'drop',
+          makeTransfer({ 'a.txt': file('a.txt'), css: { 'stijl.css': file('stijl.css') } }),
+        ),
+    ],
+    ['a drop that cannot be read', (_wrapper, zone) => fireDrop(zone, 'drop', unreadable())],
+    [
+      'a chosen folder without a start page',
+      (wrapper) => chooseFolderOf(wrapper, ['map/lees-mij.txt']),
+    ],
+    ['an empty chosen folder', (wrapper) => chooseFolder(wrapper, [])],
+  ];
+
+  async function withEarlierFile() {
+    const mounted = await mountComponent();
+    fireDetailEvent(mounted.field, 'change', { files: [archive()] });
+    await flushPromises();
+    expect(mounted.wrapper.find('[data-testid="drag-done"]').exists()).toBe(true);
+    return mounted;
+  }
+
+  function expectNothingChosen(wrapper: ReturnType<typeof mount>, field: Element): void {
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+    expect((field as HTMLElement & { required?: boolean }).required).toBe(true);
+    const list = wrapper.find('nldd-validation-list').element as HTMLElement & { value?: string };
+    expect(list.value).toBe('');
+  }
+
+  it.each(ROUTES)('after %s, a submit sends nothing', async (_route, refuse) => {
+    const { wrapper, field, zone } = await withEarlierFile();
+
+    await refuse(wrapper, zone);
+    await untilQuiet();
+    expectNothingChosen(wrapper, field);
+
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('after a browser that cannot pack, a submit sends nothing', async () => {
+    vi.stubGlobal('CompressionStream', undefined);
+    const { wrapper, field, zone } = await withEarlierFile();
+
+    fireDrop(zone, 'drop', makeTransfer({ map: { 'index.html': file('index.html') } }));
+    await untilQuiet();
+    expectNothingChosen(wrapper, field);
+
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('after packing that fails, a submit sends nothing', async () => {
+    vi.stubGlobal(
+      'CompressionStream',
+      class {
+        constructor() {
+          throw new Error('geen geheugen');
+        }
+      },
+    );
+    const { wrapper, field, zone } = await withEarlierFile();
+
+    fireDrop(zone, 'drop', makeTransfer({ map: { 'index.html': file('index.html') } }));
+    await untilQuiet();
+    expectNothingChosen(wrapper, field);
+
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('forgets the earlier file as soon as a new read starts, not only when it is refused', async () => {
+    const { wrapper, zone } = await withEarlierFile();
+
+    fireDrop(zone, 'drop', makeTransfer({ map: { 'index.html': file('index.html') } }));
+
+    const list = wrapper.find('nldd-validation-list').element as HTMLElement & { value?: string };
+    await flushPromises();
+    expect(list.value).toBe('');
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+
+    await untilQuiet();
+    wrapper.unmount();
+  });
+
+  it('publishes a good choice after a refusal, and only that one', async () => {
+    const { wrapper, zone } = await withEarlierFile();
+    fireDrop(zone, 'drop', makeTransfer({ 'stijl.css': file('stijl.css') }));
+    await untilQuiet();
+
+    const good = new File(['pk'], 'goed.zip');
+    fireDrop(zone, 'drop', makeTransfer({ 'goed.zip': good }));
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    expect(wrapper.emitted('file')).toEqual([[good]]);
+
+    wrapper.unmount();
+  });
+
+  it('keeps the choice when what is dragged in is no upload at all, such as text', async () => {
+    const { wrapper, zone } = await withEarlierFile();
+
+    fireDrop(zone, 'drop', { types: ['text/plain'], items: [], files: [] } as unknown as DataTransfer);
+    await untilQuiet();
+
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    expect(wrapper.emitted('file')).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+});
+
+describe('UploadZone: the field shows what is chosen', () => {
+  async function withFieldInput() {
+    vi.stubGlobal('DataTransfer', FakeDataTransfer);
+    const mounted = await mountComponent();
+    return { ...mounted, input: giveFieldAnInput(mounted.field) };
+  }
+
+  it('holds the packed archive, and goes on describing it as the folder it was', async () => {
+    const { wrapper, zone, input } = await withFieldInput();
+
+    fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
+    await untilQuiet();
+
+    expect(input.files?.[0]?.name).toBe('mijn-site.tar.gz');
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'Map "mijn-site" ingepakt',
+    );
+
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    expect((wrapper.emitted('file')![0]![0] as File).name).toBe('mijn-site.tar.gz');
+
+    wrapper.unmount();
+  });
+
+  it('holds a chosen folder as an archive too', async () => {
+    const { wrapper, input } = await withFieldInput();
+
+    await chooseFolder(wrapper, chosenFolder(['mijn-site/index.html']));
+
+    expect(input.files?.[0]?.name).toBe('mijn-site.tar.gz');
+
+    wrapper.unmount();
+  });
+
+  it('is emptied by a refusal, so field, message and submit agree', async () => {
+    const { wrapper, zone, input } = await withFieldInput();
+    fireDrop(zone, 'drop', makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } }));
+    await untilQuiet();
+    expect(input.files).toHaveLength(1);
+
+    fireDrop(zone, 'drop', makeTransfer({ 'stijl.css': file('stijl.css') }));
+    await untilQuiet();
+
+    expect(input.files).toHaveLength(0);
+    expect(wrapper.find('[data-testid="drag-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').exists()).toBe(false);
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    expect(wrapper.emitted('file')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('survives emptying a field when the new read is good: the new file lands', async () => {
+    const { wrapper, zone, input } = await withFieldInput();
+    fireDrop(zone, 'drop', makeTransfer({ 'eerste.zip': file('eerste.zip') }));
+    await untilQuiet();
+
+    fireDrop(zone, 'drop', makeTransfer({ 'tweede.zip': file('tweede.zip') }));
+    await untilQuiet();
+
+    expect(input.files?.[0]?.name).toBe('tweede.zip');
+    await wrapper.find('[data-testid="upload-form"]').trigger('submit');
+    expect((wrapper.emitted('file')![0]![0] as File).name).toBe('tweede.zip');
 
     wrapper.unmount();
   });
@@ -308,6 +706,19 @@ describe('UploadZone: dragging', () => {
     expect(seenByField).not.toHaveBeenCalled();
     expect(over.defaultPrevented).toBe(true);
     expect(drop.defaultPrevented).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'mijn-site',
+    );
+
+    wrapper.unmount();
+  });
+
+  it('starts reading during the drop event, while the browser still answers', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    fireDropThatExpires(zone, { 'mijn-site': { 'index.html': file('index.html') } });
+    await untilQuiet();
+
     expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
       'mijn-site',
     );

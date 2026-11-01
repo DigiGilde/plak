@@ -16,10 +16,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.sheet.submit': 'Put online',
 
   // -- Publish sheet: the fields ----------------------------------------------
-  'publish.sheet.file.label': 'File',
-  'publish.sheet.file.hint': 'A .zip or .tar.gz of your folder, or a single HTML file.',
   'publish.sheet.file.clear': 'Remove the chosen file',
-  'publish.sheet.file.required': 'An archive (.zip, .tar.gz) or a single HTML file',
   'publish.sheet.title.label': 'Title',
   'publish.sheet.title.required': 'A title',
   'publish.sheet.group.label': 'Group',
@@ -46,8 +43,6 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'You add invitees to the list afterwards, on the Access tab of the site.',
 
   // -- Upload zone ------------------------------------------------------------
-  'publish.drop.oneFile': 'Drag one file: a .zip, .tar.gz, .tgz or a single HTML file.',
-  'publish.drop.noFolder': 'Do not drag a folder. {hint}',
   'publish.upload.field.label': 'File or folder',
   'publish.upload.field.hint': 'Drag it here, or choose it.',
   'publish.upload.field.required': 'An archive, a single HTML file or a folder',
@@ -80,17 +75,17 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.packing.folderEmpty': 'There is nothing in this folder that can be published.',
   'publish.packing.bundleEmpty': 'There is nothing in "{name}" that can be published.',
   'publish.packing.tooManyFiles':
-    '"{name}" has more than {count} files; that is more than one publication may hold.',
+    '"{name}" has more than {count} files. That is more than one publication may hold.',
   'publish.packing.tooDeep':
-    '"{path}" sits deeper than {depth} folders; make the folder structure shallower.',
+    '"{path}" sits deeper than {depth} folders. Make the folder structure shallower.',
   'publish.packing.pathTooLong':
-    'The path "{path}" is too long for an archive; shorten the folder or file names.',
+    'The path "{path}" is too long for an archive. Shorten the folder or file names.',
   'publish.packing.fileTooLarge':
-    '"{path}" is {size}; a single file may be {max} at most.',
+    '"{path}" is {size}. A single file may be {max} at most.',
   'publish.packing.totalTooLarge':
-    '"{name}" is {size} together; a publication may be {max} at most.',
+    '"{name}" is {size} together. A publication may be {max} at most.',
   'publish.packing.indexCase':
-    'The start page is called "{found}"; it has to be called "{index}", in lowercase.',
+    'The start page is called "{found}". It has to be called "{index}", in lowercase.',
   'publish.packing.indexInFolder':
     'There is no {index} in the root of "{name}", but there is one at "{path}". Drag the folder "{folder}" itself.',
   'publish.packing.indexMissing':
