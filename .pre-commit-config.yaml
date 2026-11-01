@@ -20,14 +20,14 @@ repos:
       - id: end-of-file-fixer
         exclude: ^(backend/src/plak/static/docs/|frontend/public/touch-icon\.png$)
       - id: check-yaml
-        exclude: ^e2e/compose\.e2e\.yml$
-      # e2e/compose.e2e.yml uses the Compose merge tag `!override`, which a
+        exclude: ^e2e/compose\.(e2e|preview)\.yml$
+      # The e2e compose overlays use the Compose merge tag `!override`, which a
       # safe load cannot construct; --unsafe keeps the syntax check on it.
       - id: check-yaml
         alias: check-yaml-compose
         name: check yaml (compose merge tags)
         args: [--unsafe]
-        files: ^e2e/compose\.e2e\.yml$
+        files: ^e2e/compose\.(e2e|preview)\.yml$
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict

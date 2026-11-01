@@ -1,0 +1,36 @@
+# Browser preview of the e2e stack, for a person instead of Playwright.
+# Add it after the e2e overlay (relative paths resolve from dev/):
+#
+#   podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml \
+#     -f e2e/compose.preview.yml up -d
+#
+# - The issuer must be the same URL for browser and app, and 8080 is
+#   usually taken by another dev stack, so the mock OIDC moves to its
+#   published port 18889 and is aliased as oidc.plak.localhost.
+# - Uses dev/mock-oidc-config.json: logs in as dev-beheerder without a
+#   form. The e2e suite needs its interactive config, so never run it
+#   against this variant.
+# - Serves a locally built frontend/dist (run `just build-spa` first).
+
+services:
+  mock-oidc:
+    environment:
+      SERVER_PORT: "18889"
+      JSON_CONFIG_PATH: /app/mock-oidc-config.json
+    ports: !override
+      - "127.0.0.1:18889:18889"
+    networks:
+      default:
+        aliases:
+          - oidc.plak.localhost
+
+  app:
+    environment:
+      PLAK_OIDC_ISSUER: http://oidc.plak.localhost:18889/default
+      PLAK_SPA_PATH: /spa
+    volumes:
+      - ../frontend/dist:/spa:ro
+
+  nginx:
+    networks: !override
+      default: {}

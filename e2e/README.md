@@ -38,6 +38,31 @@ the exception: the CLI resolves `beheer.plak.localhost` itself, which works
 as long as the resolver sends `*.localhost` to loopback (it does on macOS
 and on the usual Linux setups).
 
+## Browser preview
+
+To click through the e2e stack in a normal browser, add
+`compose.preview.yml`. It moves the mock OIDC to port 18889 (the issuer
+has to be the same URL for the browser and the app, and 8080 is usually
+taken by a dev stack), logs in as `dev-beheerder` without a form, and
+serves your local `frontend/dist`.
+
+```bash
+just build-spa
+podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml \
+  -f e2e/compose.preview.yml up -d --build
+```
+
+Open <http://beheer.plak.localhost:18888>. The dev secrets in
+`dev/.secrets/` must exist (`./dev/up.sh` or one `just e2e` run creates
+them). Tear down with:
+
+```bash
+podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml down -v --remove-orphans
+```
+
+Do not run `just e2e` against this variant: the suite needs the
+interactive login of `compose.e2e.yml`.
+
 ## Setup
 
 - `compose.e2e.yml`: an overlay on `dev/compose.yml` with its own ports,
