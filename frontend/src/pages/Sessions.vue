@@ -10,7 +10,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { cliSessions, revokeCliSession } from '@/api/plak';
+import { cliSessions, revokeCliSession } from '@/api/toon';
 import { errorText } from '@/api/client';
 import type { CliSession } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
@@ -20,7 +20,7 @@ import { setBreadcrumbs } from '@/composables/breadcrumbs';
 import { useLoader } from '@/composables/loader';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
-import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import { TOON_LOGIN_DOCS_URL } from '@/urls';
 import SectionHeading from '@/components/SectionHeading.vue';
 import { useConfirm } from '@/composables/confirm';
 
@@ -143,7 +143,7 @@ const {
         <nldd-rich-text>
           <p>
             {{ t('admin.sessions.empty.install.before')
-            }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="sessions-cli-install"
+            }}<nldd-link :href="TOON_LOGIN_DOCS_URL" target="_blank" data-testid="sessions-cli-install"
               >{{ t('admin.sessions.empty.install.link') }}</nldd-link
             >
           </p>

@@ -4,8 +4,8 @@
 #   podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml up -d --build
 #
 # Differences from dev:
-# - own host ports (18888/18889, overridable via PLAK_E2E_PORT and
-#   PLAK_E2E_OIDC_PORT), because 8080/8081 may be taken;
+# - own host ports (18888/18889, overridable via TOON_E2E_PORT and
+#   TOON_E2E_OIDC_PORT), because 8080/8081 may be taken;
 # - mock OIDC with interactiveLogin so the suite can log in as multiple
 #   identities (dev always logs in as dev-beheerder);
 # - the app runs the SPA and the backend source of the image, not the
@@ -36,21 +36,21 @@ services:
     volumes:
       - ../e2e/mock-oidc-config.e2e.json:/app/mock-oidc-config.e2e.json:ro
     ports: !override
-      - "127.0.0.1:${PLAK_E2E_OIDC_PORT:-18889}:8080"
+      - "127.0.0.1:${TOON_E2E_OIDC_PORT:-18889}:8080"
 
   app:
     depends_on:
       content-owner:
         condition: service_completed_successfully
     environment:
-      PLAK_BASE_URL: http://beheer.plak.localhost:${PLAK_E2E_PORT:-18888}
-      PLAK_CONTENT_BASE_URL: http://plak.localhost:${PLAK_E2E_PORT:-18888}
-      PLAK_RATELIMIT_LOGIN_MAX: "100"
-      PLAK_RATELIMIT_API_MAX: "600"
-      PLAK_SPA_PATH: /app/spa
+      TOON_BASE_URL: http://beheer.plak.localhost:${TOON_E2E_PORT:-18888}
+      TOON_CONTENT_BASE_URL: http://plak.localhost:${TOON_E2E_PORT:-18888}
+      TOON_RATELIMIT_LOGIN_MAX: "100"
+      TOON_RATELIMIT_API_MAX: "600"
+      TOON_SPA_PATH: /app/spa
     volumes: !override
       - content:/content
 
   nginx:
     ports: !override
-      - "127.0.0.1:${PLAK_E2E_PORT:-18888}:8080"
+      - "127.0.0.1:${TOON_E2E_PORT:-18888}:8080"

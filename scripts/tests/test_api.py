@@ -1,4 +1,4 @@
-"""The API contract: SemVer, oasdiff and the schema file (plak_release.api)."""
+"""The API contract: SemVer, oasdiff and the schema file (toon_release.api)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import pytest
 from release_support import MAIN, ROOT, SPEC, change, fake_oasdiff, spec_with
 
-from plak_release import api, errors
+from toon_release import api, errors
 
 
 class TestApiVersion:
@@ -36,7 +36,7 @@ class TestApiVersion:
         assert raised.value.problems == [
             "Breaking API change: POST /a: api path removed.",
             "A breaking change needs a new major: serve the API under /-/api/v2 and set API_VERSION in "
-            "backend/src/plak/main.py to '2.0.0' (docs/publishing.md).",
+            "backend/src/toon/main.py to '2.0.0' (docs/publishing.md).",
         ]
 
     def test_a_change_without_an_operation_names_its_section(self):
@@ -68,7 +68,7 @@ class TestApiVersion:
             api.set_api_version(text, "1.4.0")
 
     def test_the_real_api_version_line_can_be_edited(self):
-        text = (ROOT / "backend/src/plak/main.py").read_text(encoding="utf-8")
+        text = (ROOT / "backend/src/toon/main.py").read_text(encoding="utf-8")
         assert 'API_VERSION = "9.8.7"\n' in api.set_api_version(text, "9.8.7")
 
     def test_the_release_writes_the_schema_the_way_the_module_prints_it(self):
@@ -76,7 +76,7 @@ class TestApiVersion:
         API differs. The backend's printer cannot be imported here (it pulls
         in the app), so its one expression is held to the same text."""
         rendering = 'json.dumps(document, indent=2, ensure_ascii=False) + "\\n"'
-        printer = (ROOT / "backend" / "src" / "plak" / "api" / "openapi_file.py").read_text(encoding="utf-8")
+        printer = (ROOT / "backend" / "src" / "toon" / "api" / "openapi_file.py").read_text(encoding="utf-8")
         assert f"    return {rendering}\n" in printer
         spec = json.loads(spec_with(description="Plak publiceert één site."))
         assert api.render_spec(spec, "1.0.0") == json.dumps(spec, indent=2, ensure_ascii=False) + "\n"

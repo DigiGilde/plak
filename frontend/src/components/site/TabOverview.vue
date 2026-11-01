@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { accessLabel, accessSummary, formatTimestamp, siteUrl } from '@/format';
 import { useSiteGroup } from '@/composables/siteGroup';
 import { t } from '@/i18n';
@@ -60,7 +60,7 @@ async function publish(file: File): Promise<void> {
   uploadBusy.value = true;
   uploadError.value = null;
   try {
-    await plak.upload(props.group, props.site, file, file.name);
+    await toon.upload(props.group, props.site, file, file.name);
     notices.value?.notify(
       'success',
       t('site.overview.published.title'),

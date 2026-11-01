@@ -15,9 +15,9 @@ import pytest
 from helpers_ci import AUDIENCE, FORGEJO_HOST, FORGEJO_ISSUER, OMIT, MockCi
 from joserfc.jwk import RSAKey
 
-from plak.audit import vocabulary
-from plak.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer
-from plak.ci.tokens import (
+from toon.audit import vocabulary
+from toon.ci.providers import GITHUB_HOST, GITHUB_ISSUER, Issuer
+from toon.ci.tokens import (
     MAX_TOKEN_LENGTH,
     SITE_AUDIENCE_PATH,
     CiTokenError,
@@ -26,8 +26,8 @@ from plak.ci.tokens import (
     VerifiedCiToken,
     looks_like_jwt,
 )
-from plak.config import Settings
-from plak.models.ci import CiProvider
+from toon.config import Settings
+from toon.models.ci import CiProvider
 
 DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
 

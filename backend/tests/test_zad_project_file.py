@@ -34,7 +34,7 @@ from typing import Any
 import pytest
 import yaml
 
-from plak.config import normalise_operator_email
+from toon.config import normalise_operator_email
 
 PROJECT_FILE = Path(__file__).resolve().parents[2] / "deploy" / "plak-project.example.yaml"
 PROJECT: dict[str, Any] = yaml.safe_load(PROJECT_FILE.read_text(encoding="utf-8"))
@@ -118,7 +118,7 @@ def test_root_address_needs_domain_mode_nice_url_too() -> None:
     base-domain and root-component all four right, AND domain-mode:
     nice-url: the Operations Manager reads domain-mode literally and does not
     derive it from domain-format. Drop one of the five and there is silently
-    no root address, and then the PLAK_*_BASE_URLs point at a host that never
+    no root address, and then the TOON_*_BASE_URLs point at a host that never
     exists."""
     for deployment in PROJECT["deployments"]:
         assert deployment["domain-format"] in ROOT_ADDRESS_FORMATS
@@ -143,8 +143,10 @@ def test_the_10gi_volume_runs_with_the_default_site_quota() -> None:
     fits some nineteen sites at their maximum, so ZAD sets no quota of its own."""
     (storage,) = _service_config(PROJECT["components"][0]["services"], "persistent-storage")
     assert storage["size"] == "10Gi"
-    deployment = PROJECT["deployments"][0]
-    assert "PLAK_SITE_MAX_BYTES" not in deployment["components"][0]["env-vars"]
+    env = PROJECT["deployments"][0]["components"][0]["env-vars"]
+    assert "TOON_BASE_URL" in env, "the file no longer uses the names this test looks for"
+    assert "TOON_SITE_MAX_BYTES" not in env
+    assert "PLAK_SITE_MAX_BYTES" not in env
 
 
 def test_urls_come_up_with_the_composed_hosts() -> None:
@@ -156,8 +158,8 @@ def test_urls_come_up_with_the_composed_hosts() -> None:
     content_host_name = f"{deployment['subdomain']}.{deployment['base-domain']}"
 
     env = deployment["components"][0]["env-vars"]
-    assert env["PLAK_BASE_URL"] == f"https://{admin_host}"
-    assert env["PLAK_CONTENT_BASE_URL"] == f"https://{content_host_name}"
+    assert env["TOON_BASE_URL"] == f"https://{admin_host}"
+    assert env["TOON_CONTENT_BASE_URL"] == f"https://{content_host_name}"
 
     keycloak = _service_config(PROJECT["services"], "keycloak")
     assert f"https://{content_host_name}/-/oauth2/callback" in keycloak["additional_redirect_uris"]
@@ -167,8 +169,8 @@ def test_the_operator_is_named_with_an_address_the_app_accepts() -> None:
     """The app refuses to start on an address that is not plain, so the
     example must hold one it takes as it stands."""
     env = PROJECT["deployments"][0]["components"][0]["env-vars"]
-    assert env["PLAK_OPERATOR_NAME"].strip()
-    assert normalise_operator_email(env["PLAK_OPERATOR_EMAIL"]) == env["PLAK_OPERATOR_EMAIL"]
+    assert env["TOON_OPERATOR_NAME"].strip()
+    assert normalise_operator_email(env["TOON_OPERATOR_EMAIL"]) == env["TOON_OPERATOR_EMAIL"]
 
 
 def test_security_txt_lists_ncsc_for_this_central_government_installation() -> None:
@@ -176,7 +178,7 @@ def test_security_txt_lists_ncsc_for_this_central_government_installation() -> N
     is the central CVD reporting point. The setting is off by default, so
     without this line the NCSC-NL routes leave the live security.txt."""
     env = PROJECT["deployments"][0]["components"][0]["env-vars"]
-    assert env["PLAK_SECURITY_TXT_NCSC"] == "true"
+    assert env["TOON_SECURITY_TXT_NCSC"] == "true"
 
 
 @pytest.mark.skipif(

@@ -35,15 +35,15 @@ from test_admin_api import (  # noqa: F401 - fixtures are found by name
     login,
 )
 
-from plak.api import admin
-from plak.api.admin import CREATION_MAX_PER_WINDOW
-from plak.audit.pseudonymisation import pseudonymise
-from plak.constants import MAX_PREVIOUS_SLUGS, SLUG_REDIRECT_DAYS, AccessBase, Role
-from plak.models.audit import AuditLogEntry
-from plak.models.identity import Group, GroupMember
-from plak.models.publication import Site
-from plak.models.slugs import GroupSlug, SiteSlug
-from plak.slug_window import redirect_ends_at
+from toon.api import admin
+from toon.api.admin import CREATION_MAX_PER_WINDOW
+from toon.audit.pseudonymisation import pseudonymise
+from toon.constants import MAX_PREVIOUS_SLUGS, SLUG_REDIRECT_DAYS, AccessBase, Role
+from toon.models.audit import AuditLogEntry
+from toon.models.identity import Group, GroupMember
+from toon.models.publication import Site
+from toon.models.slugs import GroupSlug, SiteSlug
+from toon.slug_window import redirect_ends_at
 
 GROUP_ROUTE = "/-/api/v1/groups/{group_slug}/slug"
 SITE_ROUTE = "/-/api/v1/sites/{group_slug}/{site_slug}/slug"

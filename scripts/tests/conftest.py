@@ -52,7 +52,7 @@ def repo(tmp_path, monkeypatch) -> Repo:
             "plugin/.claude-plugin/plugin.json": PLUGIN,
             "plugin/skills/plak/SKILL.md": "skill\n",
             "publiccode.yml": PUBLICCODE,
-            "backend/src/plak/main.py": MAIN,
+            "backend/src/toon/main.py": MAIN,
             "backend/pyproject.toml": BACKEND_PYPROJECT,
             "backend/uv.lock": BACKEND_LOCK,
             "frontend/package.json": PACKAGE,
@@ -85,5 +85,5 @@ def pushed(branch) -> Repo:
     """The feature branch with a shipped change and no fragment, and an
     origin/beta to compare with."""
     branch.git("update-ref", "refs/remotes/origin/beta", "beta")
-    branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+    branch.commit({"backend/src/toon/main.py": "app = 2\n"})
     return branch

@@ -1,4 +1,4 @@
-"""The OpenAPI schema as the release commits it (plak.api.openapi_file).
+"""The OpenAPI schema as the release commits it (toon.api.openapi_file).
 
 The release writes it to backend/openapi.json and the API check compares a
 pull request with it, so it has to come out the same wherever it is built.
@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 import re
 
-from plak.api import openapi_file
-from plak.config import Settings
-from plak.main import API_VERSION, create_app
+from toon.api import openapi_file
+from toon.config import Settings
+from toon.main import API_VERSION, create_app
 
 
 def test_the_schema_does_not_depend_on_the_settings(tmp_path):

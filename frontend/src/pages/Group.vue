@@ -23,7 +23,7 @@
 import { computed, onMounted, ref, watch, watchEffect } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import * as api from '@/api/plak';
+import * as api from '@/api/toon';
 import type { Group, GroupDetail, GroupMember, Me, Member, Site } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import PublishSheet from '@/components/PublishSheet.vue';

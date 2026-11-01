@@ -13,7 +13,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 
 import { errorText } from '@/api/client';
-import * as api from '@/api/plak';
+import * as api from '@/api/toon';
 import type { Access, AccessBase, Group, PreviousSlug, Site } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
 import AddressSection from '@/components/AddressSection.vue';

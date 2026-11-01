@@ -24,25 +24,25 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from plak.api import admin
-from plak.api import cli as cli_api
-from plak.api.admin import CREATION_MAX_PER_WINDOW, CREATION_WINDOW_S, make_admin_router
-from plak.api.deploys import BearerOutsideDeploysMiddleware
-from plak.api.errors import register_error_handlers
-from plak.audit.log import AuditLog
-from plak.audit.pseudonymisation import pseudonymise
-from plak.auth.sessions import CSRF_COOKIE, CSRF_HEADER, SessionStore
-from plak.ci.providers import ProviderClient
-from plak.cli import service as cli
-from plak.config import Settings
-from plak.constants import AccessBase, Role
-from plak.db import make_session_factory
-from plak.ingest.store import ContentStore
-from plak.models.audit import AuditLogEntry
-from plak.models.ci import SiteRepository
-from plak.models.cli import CliSession
-from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
-from plak.models.publication import Site
+from toon.api import admin
+from toon.api import cli as cli_api
+from toon.api.admin import CREATION_MAX_PER_WINDOW, CREATION_WINDOW_S, make_admin_router
+from toon.api.deploys import BearerOutsideDeploysMiddleware
+from toon.api.errors import register_error_handlers
+from toon.audit.log import AuditLog
+from toon.audit.pseudonymisation import pseudonymise
+from toon.auth.sessions import CSRF_COOKIE, CSRF_HEADER, SessionStore
+from toon.ci.providers import ProviderClient
+from toon.cli import service as cli
+from toon.config import Settings
+from toon.constants import AccessBase, Role
+from toon.db import make_session_factory
+from toon.ingest.store import ContentStore
+from toon.models.audit import AuditLogEntry
+from toon.models.ci import SiteRepository
+from toon.models.cli import CliSession
+from toon.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
+from toon.models.publication import Site
 
 BASE = "/-/api/v1"
 PROBLEM = "application/problem+json"

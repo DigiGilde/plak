@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from plak.constants import (
+from toon.constants import (
     RESERVED_SEGMENTS,
     RESERVED_SLUGS,
     SLUG_RE,

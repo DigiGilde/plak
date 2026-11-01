@@ -15,12 +15,12 @@ import pytest
 from fastapi import FastAPI, Request
 from helpers_audit import install_audit_recorder
 
-from plak import messages
-from plak.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
-from plak.audit import vocabulary
-from plak.ingest.service import IngestError
-from plak.messages import Msg
-from plak.models.audit import ActorKind
+from toon import messages
+from toon.api.errors import PROBLEM_CONTENT_TYPE, ApiError, register_error_handlers
+from toon.audit import vocabulary
+from toon.ingest.service import IngestError
+from toon.messages import Msg
+from toon.models.audit import ActorKind
 
 pytestmark = pytest.mark.asyncio
 
@@ -54,7 +54,7 @@ async def test_ingest_error_becomes_a_422_with_are_own_code() -> None:
     assert response.json()["code"] == "ROLLBACK_TARGET_PREVIEW"
 
 
-# -- The language of an answer (plak/messages.py) ---------------------------
+# -- The language of an answer (toon/messages.py) ---------------------------
 
 
 async def test_a_refusal_is_english_when_the_client_asks_for_nothing() -> None:

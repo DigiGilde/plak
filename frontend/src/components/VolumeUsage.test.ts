@@ -4,12 +4,12 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/api/client';
-import * as plakApi from '@/api/plak';
+import * as toonApi from '@/api/toon';
 import type { Volume } from '@/api/types';
 
 import VolumeUsage from './VolumeUsage.vue';
 
-vi.mock('@/api/plak', () => ({ platformStorage: vi.fn() }));
+vi.mock('@/api/toon', () => ({ platformStorage: vi.fn() }));
 
 const MIB = 1024 * 1024;
 
@@ -29,7 +29,7 @@ function property(el: Element, name: string): string {
 }
 
 async function mountWith(data: Volume) {
-  vi.mocked(plakApi.platformStorage).mockResolvedValue(data);
+  vi.mocked(toonApi.platformStorage).mockResolvedValue(data);
   const wrapper = mount(VolumeUsage);
   await flushPromises();
   return wrapper;
@@ -41,11 +41,11 @@ function texts(wrapper: ReturnType<typeof mount>, selector: string): string[] {
 
 describe('VolumeUsage', () => {
   afterEach(() => {
-    vi.mocked(plakApi.platformStorage).mockReset();
+    vi.mocked(toonApi.platformStorage).mockReset();
   });
 
   it('shows an indicator while the volume is being measured', async () => {
-    vi.mocked(plakApi.platformStorage).mockReturnValue(new Promise(() => {}));
+    vi.mocked(toonApi.platformStorage).mockReturnValue(new Promise(() => {}));
     const wrapper = mount(VolumeUsage);
 
     expect(wrapper.find('nldd-activity-indicator').exists()).toBe(true);
@@ -89,7 +89,7 @@ describe('VolumeUsage', () => {
   });
 
   it('shows the refusal when the endpoint answers one', async () => {
-    vi.mocked(plakApi.platformStorage).mockRejectedValue(
+    vi.mocked(toonApi.platformStorage).mockRejectedValue(
       new ApiError({ type: 'about:blank', title: 'Geen toegang', status: 403 }),
     );
     const wrapper = mount(VolumeUsage);

@@ -8,7 +8,7 @@
  */
 import type { Router } from 'vue-router';
 
-const MARK = 'plakJustPublished';
+const MARK = 'toonJustPublished';
 
 /** To the result screen, as the publish flow that just put this site online. */
 export function goToDone(router: Router, group: string, site: string): Promise<unknown> {

@@ -1,11 +1,11 @@
-"""The fragments under changelog.d/ (plak_release.fragments)."""
+"""The fragments under changelog.d/ (toon_release.fragments)."""
 
 from __future__ import annotations
 
 import pytest
 from release_support import BOTH_LANGUAGES, ROOT
 
-from plak_release import fragments, git
+from toon_release import fragments, git
 
 
 class TestFragments:

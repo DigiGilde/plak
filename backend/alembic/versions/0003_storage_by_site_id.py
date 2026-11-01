@@ -38,7 +38,7 @@ down_revision = "0002_retention_and_repo_ids"
 branch_labels = None
 depends_on = None
 
-CONTENT_ROOT_VAR = "PLAK_CONTENT_ROOT"
+CONTENT_ROOT_VAR = "TOON_CONTENT_ROOT"
 OWN_DIRECTORIES = frozenset({"_tmp", "_reclaimed"})
 
 _logger = logging.getLogger("alembic.plak")
@@ -82,7 +82,8 @@ def _move(moves: list[tuple[object, str, str]]) -> Path | None:
     moves = [move for move in moves if move[1] != move[2]]
     if not moves:
         return None
-    value = os.environ.get(CONTENT_ROOT_VAR)
+    # Inline: a migration may not import application code, and both names are in use.
+    value = os.environ.get(CONTENT_ROOT_VAR, os.environ.get("PLAK_CONTENT_ROOT"))
     if not value:
         raise RuntimeError(f"{CONTENT_ROOT_VAR} is not set; the version directories cannot move along.")
     root = Path(value)

@@ -16,7 +16,7 @@
  *
  * `groups` is filtered down to `eligibleGroups` first: a group where the
  * user has no group role editor/admin never reaches the picker, since
- * creating a site there 403s (`create_site` in backend/src/plak/api/admin.py
+ * creating a site there 403s (`create_site` in backend/src/toon/api/admin.py
  * demands a group role, with no platform-admin bypass; the `/me` docstring
  * says as much: a platform admin manages people and groups, and needs a
  * visible group role of their own for content). `eligibleGroups` then decides

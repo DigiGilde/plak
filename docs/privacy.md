@@ -15,13 +15,13 @@ such rather than assumed.
 ## Data subjects
 
 - **Members**: people with a `members` row, created on first visit to the
-  admin host (`backend/src/plak/models/identity.py`, `Member`). Logging in
+  admin host (`backend/src/toon/models/identity.py`, `Member`). Logging in
   alone does not create one.
 - **Content viewers**: people who log in with SSO Rijk on the content host
   without being a member, for example to view an SSO-gated or invitee-gated
-  site (`backend/src/plak/models/audit.py`, `ContentViewer`).
+  site (`backend/src/toon/models/audit.py`, `ContentViewer`).
 - **Invitees**: people named on a site's invitee list by sub or email
-  address, whether or not they ever log in (`backend/src/plak/models/publication.py`,
+  address, whether or not they ever log in (`backend/src/toon/models/publication.py`,
   `Invitee`).
 - **Anonymous visitors**: people who view public or secret-link content
   without logging in; the audit log still records their (truncated/encrypted)
@@ -41,7 +41,7 @@ such rather than assumed.
 | `content_viewers` (`models/audit.py`) | `sso_subject`, `email` (nullable, may be unverified), `email_verified`, `last_seen_at` | makes a content-host SSO login traceable to a person for the audit log; a content-only viewer gets no `members` row | SSO Rijk OIDC claims, on every successful content-host login | 90 days from `last_seen_at`, purged by `audit/retention.py` (`docs/audit-log.md`, "Retention") |
 | `invitees` (`models/publication.py`) | `identifier` (email address or `sub`, lowercased), `added_by`, `added_at` | per-site invitee access list | admin input | until removed by an admin; no automatic expiry |
 | `access_keys` (`models/publication.py`) | `label`, `selector`, `verifier_hash` (SHA-256 of a random secret) | secret-link credential, not itself tied to a person | generated on creation | mandatory `expires_at`, 90 days default, 365 days maximum (BIO2 5.18.02, `docs/security.md`) |
-| `audit_log_entries` (`models/audit.py`) | `actor_pseudonym` (HMAC-SHA256 of the actor identifier under `PLAK_AUDIT_PEPPER`), `ip_truncated` (/24 IPv4, /48 IPv6), `ip_encrypted` (AES-256-GCM, reversible, under the separate `PLAK_AUDIT_IP_KEY`), `action`, `result`, `reason_code`, `refs` (for `group_name` and `site_title` also the previous name or title: free text that members choose, see below) | security and access audit trail | every login, access decision, admin action and CLI event | 90 days for pure viewing/login-success actions, 3 years for everything else, including every refusal, admin operation and publication (`docs/audit-log.md`, "Retention"; enforced in the database by `audit_log_retention()`, `backend/alembic/versions/0001_base.py`) |
+| `audit_log_entries` (`models/audit.py`) | `actor_pseudonym` (HMAC-SHA256 of the actor identifier under `TOON_AUDIT_PEPPER`), `ip_truncated` (/24 IPv4, /48 IPv6), `ip_encrypted` (AES-256-GCM, reversible, under the separate `TOON_AUDIT_IP_KEY`), `action`, `result`, `reason_code`, `refs` (for `group_name` and `site_title` also the previous name or title: free text that members choose, see below) | security and access audit trail | every login, access decision, admin action and CLI event | 90 days for pure viewing/login-success actions, 3 years for everything else, including every refusal, admin operation and publication (`docs/audit-log.md`, "Retention"; enforced in the database by `audit_log_retention()`, `backend/alembic/versions/0001_base.py`) |
 | Admin/content sessions (`auth/sessions.py`) | `sub`, `email`, `name`, refresh token (kept in process memory only, `repr=False`, never logged) | keeps someone logged in | OIDC login | in-memory only, not persisted to the database; expires after 12 hours (`MAX_SESSION_AGE`) or on logout; lost entirely on a restart (`docs/security.md`, "Sessions do not survive a restart") |
 | `cli_device_authorizations` (`models/cli.py`) | `device_hash`, `user_code_hash`, `client_name`, `ip_truncated`, `member_id` | `plak login` device pairing | CLI device flow (RFC 8628) | short-lived: expires after 10 minutes, deleted once exchanged, swept by the cleanup job |
 | `cli_sessions` / `cli_refresh_tokens` (`models/cli.py`) | `member_id`, `client_name`, token selector/hash pairs | CLI publishing sessions | approved by a member in an admin session | access token 1 hour; session up to 30 days after last refresh, 90 days absolute (`docs/security.md`, "CI id token"/"CLI device flow") |
@@ -49,7 +49,7 @@ such rather than assumed.
 
 `refs` on audit rows generally carries structural identifiers (group/site
 slugs, ids), not raw personal data; this was spot-checked for `invitee_add`/
-`invitee_remove` (`backend/src/plak/api/admin.py`) but was not audited
+`invitee_remove` (`backend/src/toon/api/admin.py`) but was not audited
 exhaustively across every action, so this is a strong indication, not a
 guarantee.
 
@@ -61,7 +61,7 @@ one, which stays on the group or site where it can be corrected at once. The
 row is an admin operation and so is kept for 3 years, and an audit row cannot
 be corrected, so a name corrected on the group or site stays readable in the
 log until its term ends. A name or title that a rename sets is at most 200
-characters (`TEXT_MAX_LENGTH` in `backend/src/plak/api/admin.py`). The create
+characters (`TEXT_MAX_LENGTH` in `backend/src/toon/api/admin.py`). The create
 routes accept longer ones: they have no maximum, because adding one would be a
 breaking change that needs a new API major. So the text a rename replaces can
 be longer than 200 characters, and a rename can write it into the log once.
@@ -94,12 +94,12 @@ Published content should stay on infrastructure within the EEA: never in
 GitHub.com repositories, and never baked into container images pushed to
 GHCR. Verified against Plak's own build and deploy design:
 
-- The container image (`containers/plak/Containerfile`) copies in only the
+- The container image (`containers/toon/Containerfile`) copies in only the
   backend source and the built admin SPA (`frontend/dist`); it contains no
   application content. Published content is never part of the image, so it
   never reaches GHCR.
 - On ZAD, published content lives on the `content` persistent volume
-  (`PLAK_CONTENT_ROOT`, `docs/deploying-on-zad.md` §4, "the content volume"),
+  (`TOON_CONTENT_ROOT`, `docs/deploying-on-zad.md` §4, "the content volume"),
   separate from the image and from the database.
 - Source code (this repository) is public on GitHub.com; that is
   intentional (open source, EUPL-1.2) and does not carry published content
@@ -166,7 +166,7 @@ as the code supports it:
   requires the reverse lookup an operator performs through
   `POST /platform/audit/actor-identity` and the IP reveal endpoint
   (`audit_ip_reveal`), both themselves audited acts subject to a daily rate
-  limit (`backend/src/plak/api/admin.py`, `docs/audit-log.md`). There is no
+  limit (`backend/src/toon/api/admin.py`, `docs/audit-log.md`). There is no
   self-service report a data subject can request through the product itself.
 - **A person's name in a group name or site title**: the admin of the group
   or site corrects the current value at once (`PUT /groups/{group}/name`,
@@ -195,7 +195,7 @@ Open items, to be completed by the controller before go-live:
   is the standard statement of the software: what Plak processes, why, for
   how long and who sees it, the data subject rights and the right to
   complain to the Autoriteit Persoonsgegevens. It names the operator and its
-  address from `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL`, and otherwise
+  address from `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`, and otherwise
   "the organisation that runs this installation". What only the controller
   can say, such as the legal basis, the FG and the hosting, the organisation
   that runs an installation adds itself. No FG has reviewed it.
@@ -212,7 +212,7 @@ to Plak's actual design.
 | R.3 | Leaked secret link | constant-time comparison, mandatory expiry (90/365 days), single code-page flow, key excluded from audit/access logs (`docs/security.md`, "Access to content") | none identified |
 | R.4 | Unauthorized access via a broken OIDC/session/authorization check | alg allowlist, `iss`/`at_hash` checks, CSRF, per-endpoint server-side authorization, neutral 404s (`docs/security.md`) | account separation on the shared database is not possible on ZAD today (`docs/security.md`, "DB account separation") |
 | R.5 | Personal data kept longer than necessary, in logs or in backups | audit log and `content_viewers` retention enforced by database trigger, not only application code (`docs/audit-log.md`) | database backup retention/deletion is undocumented and unverified, see "Retention and deletion" above |
-| R.6 | Re-identification of a person from a logged identifier or IP address | actor pseudonymisation (HMAC-SHA256, keyed pepper), IP truncation by default with reversible encryption gated behind an explicitly audited reveal action (`audit/pseudonymisation.py`, `audit/ip_crypto.py`) | the reveal key (`PLAK_AUDIT_IP_KEY`) and the pepper are operational secrets whose storage falls outside this repository. Both can be rotated (`docs/audit-log.md`, "Rotating the pepper and the IP key"), but a rotation protects only the rows written after it: older rows keep the old value, so a leaked value plus a copy of the database still re-identifies them |
+| R.6 | Re-identification of a person from a logged identifier or IP address | actor pseudonymisation (HMAC-SHA256, keyed pepper), IP truncation by default with reversible encryption gated behind an explicitly audited reveal action (`audit/pseudonymisation.py`, `audit/ip_crypto.py`) | the reveal key (`TOON_AUDIT_IP_KEY`) and the pepper are operational secrets whose storage falls outside this repository. Both can be rotated (`docs/audit-log.md`, "Rotating the pepper and the IP key"), but a rotation protects only the rows written after it: older rows keep the old value, so a leaked value plus a copy of the database still re-identifies them |
 | R.7 | Personal data in published content transferred outside the EEA | content never enters the container image or GHCR; content lives on the ZAD content volume (verified, see "Published content" above) | whether the ZAD platform/region itself guarantees EEA storage is unverified |
 | R.8 | Audit log tampering hides unlawful access or a data subject's history | append-only triggers, hash chain per shard, published chain head for external verification (`docs/audit-log.md`) | the schema owner (the one database account Plak has on ZAD) can disable the triggers, the `TRUNCATE` guard among them, and then empty the table; this is a documented, not a closed, gap (`docs/audit-log.md`, "Known gaps") |
 | R.9 | Member-chosen text in a log that cannot be corrected: the previous name of a group or title of a site stays readable in the audit log after it is corrected on the group or site, and it can be a person's name | only the previous text is logged, never the new one; a name or title that a rename sets is at most 200 characters (`TEXT_MAX_LENGTH`); like every admin operation the row expires after 3 years (`docs/audit-log.md`, "Retention") | an audit row cannot be changed or removed before its term ends. Residual risk: the create routes have no maximum (adding one needs a new API major), so an active member could create a group with a very long name and rename it, which writes that text once into a row kept 1096 days (3 years). That is bounded by the creation budget (20 per hour, new groups, sites and addresses together) and by the request body limit of whatever stands in front of Plak (the application sets none for JSON requests), and it is traceable to the member through the `group_create` and `group_name` rows (`site_create` and `site_title` for a site). Whether keeping the previous text is necessary and proportionate is for the DPIA (open action 1) |

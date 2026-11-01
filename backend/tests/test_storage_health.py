@@ -18,8 +18,8 @@ import httpx
 import pytest
 from helpers_oidc import MockIdP, make_settings
 
-from plak.auth.revalidation import RECHECK_BACKOFF, idp_fault
-from plak.ingest.storage_health import (
+from toon.auth.revalidation import RECHECK_BACKOFF, idp_fault
+from toon.ingest.storage_health import (
     LOG_WINDOW,
     MIB,
     StorageWatch,
@@ -28,11 +28,11 @@ from plak.ingest.storage_health import (
     storage_complaint,
     storage_watch,
 )
-from plak.ingest.store import ContentStore
-from plak.main import create_app
+from toon.ingest.store import ContentStore
+from toon.main import create_app
 
 NOW = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
-LOGGER = "plak.ingest.storage_health"
+LOGGER = "toon.ingest.storage_health"
 
 
 def _settings(**overrides):
@@ -61,7 +61,7 @@ def _database_up(monkeypatch):
     async def reachable(app) -> bool:
         return True
 
-    monkeypatch.setattr("plak.platform.health._database_reachable", reachable)
+    monkeypatch.setattr("toon.platform.health._database_reachable", reachable)
 
 
 def _fake_free(monkeypatch, free_mib: float) -> None:
@@ -252,19 +252,19 @@ class TestContentRootAtStartup:
         _fake_free(monkeypatch, 900)
         app = _productie(tmp_path)
         root = (tmp_path / "content").resolve()
-        with caplog.at_level(logging.ERROR, logger="plak.main"):
+        with caplog.at_level(logging.ERROR, logger="toon.main"):
             async with app.router.lifespan_context(app):
                 response = await _healthz(app, "beheer.plak.example")
         assert response.json() == {"status": "degraded", "checks": ["content_root"]}
         assert str(root) not in response.text
         assert f"{root} is not a mount point" in caplog.text
-        assert "PLAK_CONTENT_ROOT" in caplog.text
+        assert "TOON_CONTENT_ROOT" in caplog.text
 
     async def test_production_with_a_mount_is_fine(self, tmp_path: Path, monkeypatch, caplog) -> None:
         _fake_free(monkeypatch, 900)
-        monkeypatch.setattr("plak.main.content_root_complaint", lambda root: None)
+        monkeypatch.setattr("toon.main.content_root_complaint", lambda root: None)
         app = _productie(tmp_path)
-        with caplog.at_level(logging.ERROR, logger="plak.main"):
+        with caplog.at_level(logging.ERROR, logger="toon.main"):
             async with app.router.lifespan_context(app):
                 response = await _healthz(app, "beheer.plak.example")
         assert response.json() == {"status": "ok"}
@@ -275,7 +275,7 @@ class TestContentRootAtStartup:
     ) -> None:
         _fake_free(monkeypatch, 900)
         app = _app(tmp_path)
-        with caplog.at_level(logging.ERROR, logger="plak.main"):
+        with caplog.at_level(logging.ERROR, logger="toon.main"):
             async with app.router.lifespan_context(app):
                 response = await _healthz(app)
         assert response.json() == {"status": "ok"}

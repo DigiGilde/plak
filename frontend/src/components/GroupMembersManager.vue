@@ -397,6 +397,6 @@ async function onRemove(row: Row, siteRoles: 'keep' | 'remove'): Promise<void> {
    action 105, plus 2x8 px column gap and 2x12 px row padding). That is the
    number behind the shared cap in global.css. */
 .member-table {
-  max-width: var(--plak-table-max-width);
+  max-width: var(--toon-table-max-width);
 }
 </style>

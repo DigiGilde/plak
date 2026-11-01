@@ -65,7 +65,7 @@ PY
 
         cat > "${POSTGRES_ENV}" <<EOF
 POSTGRES_PASSWORD=${postgres_password}
-PLAK_DB_PASSWORD=${app_db_password}
+TOON_DB_PASSWORD=${app_db_password}
 EOF
 
         # Percent-encoded for the DSN below: a DSN's password component has to be
@@ -75,11 +75,11 @@ EOF
         app_db_password_urlenc="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${app_db_password}")"
 
         cat > "${APP_ENV}" <<EOF
-PLAK_DB_URL=postgresql+asyncpg://plak:${app_db_password_urlenc}@postgres:5432/plak
-PLAK_SESSION_SECRET=${session_secret}
-PLAK_AUDIT_PEPPER=${audit_pepper}
-PLAK_AUDIT_IP_KEY=${audit_ip_key}
-PLAK_OIDC_CLIENT_PRIVATE_JWK=${oidc_jwk}
+TOON_DB_URL=postgresql+asyncpg://plak:${app_db_password_urlenc}@postgres:5432/plak
+TOON_SESSION_SECRET=${session_secret}
+TOON_AUDIT_PEPPER=${audit_pepper}
+TOON_AUDIT_IP_KEY=${audit_ip_key}
+TOON_OIDC_CLIENT_PRIVATE_JWK=${oidc_jwk}
 EOF
 
         chmod 600 "${APP_ENV}" "${POSTGRES_ENV}"

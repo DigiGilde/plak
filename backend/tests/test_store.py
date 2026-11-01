@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from plak.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError, version_ref
+from toon.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError, version_ref
 
 SITE = uuid.uuid4()
 OLD = 1_000_000  # an mtime far in the past
@@ -454,7 +454,7 @@ class TestReclaim:
         assert not (root / older).exists()
 
     def test_holds_everything_when_more_would_go_than_stay(self, store: ContentStore, root: Path):
-        """What a wrong PLAK_DB_URL or a restored backup looks like: most of the
+        """What a wrong TOON_DB_URL or a restored backup looks like: most of the
         volume suddenly has no row."""
         kept = self._version(store, SITE)
         orphans = [self._version(store, SITE) for _ in range(2)]

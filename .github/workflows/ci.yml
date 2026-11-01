@@ -62,14 +62,14 @@ jobs:
         working-directory: backend
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
-          PLAK_TEST_PART: ${{ matrix.part }}
+          TOON_TEST_PART: ${{ matrix.part }}
           COVERAGE_FILE: .coverage.${{ matrix.part }}
         # -rs shows the reason for every skipped test, so a silently
         # skipped container test stays visible in the log. -n auto runs one
         # worker per CPU; each worker starts its own PostgreSQL container
         # (the container fixtures are session-scoped, and a session is a
         # worker), so no two workers ever share a database.
-        run: uv run python -m pytest -q -rs -n auto --cov=src/plak --cov-report= --cov-fail-under=0
+        run: uv run python -m pytest -q -rs -n auto --cov=src/toon --cov-report= --cov-fail-under=0
 
       # Also when the tests failed: coverage is judged on its own, in
       # `backend-coverage`, and a part without data fails it there.
@@ -142,7 +142,7 @@ jobs:
           uv run coverage combine
           uv run coverage report --skip-covered --show-missing
 
-  # The CI tooling under scripts/ (release.py with plak_release, rulesets.py,
+  # The CI tooling under scripts/ (release.py with toon_release, rulesets.py,
   # vulnerabilities.py) is a uv project of its own, with its tests next to
   # it. Its floor lives in scripts/pyproject.toml, 100% as everywhere.
   release-script:
@@ -277,7 +277,7 @@ jobs:
   # runner, so it costs wall clock only where it is the slowest job.
   #
   # The stack comes up through e2e/run.sh, the same script `just e2e`
-  # calls; PLAK_E2E_ENGINE points it at docker, because the runner has no
+  # calls; TOON_E2E_ENGINE points it at docker, because the runner has no
   # podman.
   #
   # `playwright install` can hang without failing, and a hung job holds up
@@ -320,7 +320,7 @@ jobs:
 
       - name: Run the e2e suite
         env:
-          PLAK_E2E_ENGINE: docker
+          TOON_E2E_ENGINE: docker
         run: ./e2e/run.sh
 
       # A trace and a screenshot per failed scenario; without them an e2e
@@ -420,7 +420,7 @@ jobs:
   #
   #   - the Containerfiles as configuration. Nothing else in the pipeline
   #     looks at them, and it costs seconds.
-  #   - the base images that actually ship. containers/plak/Containerfile
+  #   - the base images that actually ship. containers/toon/Containerfile
   #     is multi-stage: the node and uv stages build the SPA and the venv
   #     and then stay behind, so only the python runtime base ends up in
   #     the image. The nginx base is the dev stack's and does not deploy,
@@ -451,7 +451,7 @@ jobs:
           # The tag in front of the digest is for Dependabot; trivy gets
           # repo@digest only.
           runtime="$(grep -oE '^FROM docker\.io/library/python(:[^@ ]+)?@sha256:[0-9a-f]{64}' \
-            containers/plak/Containerfile | tail -1 | cut -d' ' -f2 | sed -E 's/:[^@/]+@/@/')"
+            containers/toon/Containerfile | tail -1 | cut -d' ' -f2 | sed -E 's/:[^@/]+@/@/')"
           nginx="$(grep -oE '^FROM docker\.io/nginxinc/nginx-unprivileged(:[^@ ]+)?@sha256:[0-9a-f]{64}' \
             containers/nginx-dev/Containerfile | tail -1 | cut -d' ' -f2 | sed -E 's/:[^@/]+@/@/')"
           if [ -z "$runtime" ] || [ -z "$nginx" ]; then
@@ -470,7 +470,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: "1"
 
-      # pip is skipped because containers/plak/Containerfile uninstalls it from
+      # pip is skipped because containers/toon/Containerfile uninstalls it from
       # the runtime stage; the scan of the built image in deploy.yml sees that.
       - name: Scan the runtime base image (trivy)
         uses: ./.github/actions/trivy

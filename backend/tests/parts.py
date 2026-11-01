@@ -1,13 +1,13 @@
 """The parts CI runs the backend suite in, side by side (.github/workflows/ci.yml).
 
-PLAK_TEST_PART picks one; without it everything runs, as locally. `rest` takes
+TOON_TEST_PART picks one; without it everything runs, as locally. `rest` takes
 every test file the other parts do not name, so a new file always runs
 somewhere and never silently drops out of CI.
 """
 
 from __future__ import annotations
 
-PART_VAR = "PLAK_TEST_PART"
+PART_VAR = "TOON_TEST_PART"
 REST = "rest"
 
 NAMED: dict[str, frozenset[str]] = {

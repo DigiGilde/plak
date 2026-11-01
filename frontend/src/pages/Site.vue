@@ -2,7 +2,7 @@
 import { computed, provide, ref, watch, watchEffect, type ComputedRef, type Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import type { GroupDetail, Me, Site } from '@/api/types';
 import { fetchCurrentMember } from '@/composables/currentMember';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
@@ -45,7 +45,7 @@ provide(SITE_GROUP, {
 /** Fetches group and session; throws when the site cannot be shown. */
 async function fetchData(): Promise<{ fetched: GroupDetail; siteId: string; contentBase: string }> {
   const [fetched, loggedIn] = await Promise.all([
-    plak.group(groupSlug.value),
+    toon.group(groupSlug.value),
     fetchCurrentMember(),
   ]);
   const found = fetched.sites.find((p) => p.slug === siteSlug.value);

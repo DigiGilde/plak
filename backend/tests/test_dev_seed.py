@@ -19,13 +19,13 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from plak.config import Settings
-from plak.constants import AccessBase, Role
-from plak.db import make_engine, make_session_factory
-from plak.ingest.store import ContentStore, version_ref
-from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
-from plak.models.publication import AccessKey, Invitee, Preview, Site, Version
-from plak.serving.resolution import locate
+from toon.config import Settings
+from toon.constants import AccessBase, Role
+from toon.db import make_engine, make_session_factory
+from toon.ingest.store import ContentStore, version_ref
+from toon.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
+from toon.models.publication import AccessKey, Invitee, Preview, Site, Version
+from toon.serving.resolution import locate
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "dev" / "seed.py"
 
@@ -34,7 +34,7 @@ SEED_PATH = Path(__file__).resolve().parents[2] / "dev" / "seed.py"
 def seed_module():
     """Loads dev/seed.py by path: it sits outside the installed package on
     purpose, because it is dev tooling and never ships in the image."""
-    spec = importlib.util.spec_from_file_location("plak_dev_seed", SEED_PATH)
+    spec = importlib.util.spec_from_file_location("toon_dev_seed", SEED_PATH)
     module = importlib.util.module_from_spec(spec)
     # Registering before exec: `from __future__ import annotations` leaves the
     # dataclass field types as strings, and dataclasses resolves them through

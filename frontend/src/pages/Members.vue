@@ -31,7 +31,7 @@ import {
   activatePlatformMember,
   deactivatePlatformMember,
   setPlatformRole,
-} from '../api/plak';
+} from '../api/toon';
 import type { Member, MemberStatus } from '../api/types';
 import RowActions, { type RowAction } from '../components/RowActions.vue';
 import VolumeUsage from '../components/VolumeUsage.vue';

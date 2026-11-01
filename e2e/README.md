@@ -20,13 +20,13 @@ That script (`e2e/run.sh`):
    needed);
 4. tears the stack down again, volumes included.
 
-Knobs: `PLAK_E2E_PORT`, `PLAK_E2E_OIDC_PORT`, `PLAK_E2E_KEEP_UP=1`
-(leave the stack up to debug it), `PLAK_E2E_ENGINE` (container engine,
+Knobs: `TOON_E2E_PORT`, `TOON_E2E_OIDC_PORT`, `TOON_E2E_KEEP_UP=1`
+(leave the stack up to debug it), `TOON_E2E_ENGINE` (container engine,
 podman by default). Extra arguments are passed through to Playwright:
 `just e2e --grep sleutel`.
 
 The job `e2e` in `.github/workflows/ci.yml` runs this same script on
-every pull request, with `PLAK_E2E_ENGINE=docker` because the GitHub
+every pull request, with `TOON_E2E_ENGINE=docker` because the GitHub
 runner has no podman. The app serves the SPA of the image, so nothing
 is built on the host first. It uploads `test-results/` when the suite
 fails: the config keeps a trace and a screenshot per failed scenario.
@@ -58,7 +58,7 @@ and on the usual Linux setups).
   again; yields the CLI token that the bearer deploys use.
 - `helpers/tar.ts`: builds the multi-file dist fixtures (html + css +
   subdirectory) in memory as `.tar.gz`.
-- `tests/plak.spec.ts`: the scenarios, built up serially.
+- `tests/toon.spec.ts`: the scenarios, built up serially.
 - `tests/cli.spec.ts`: the real CLI (`uv run --project cli plak ...`)
   against the same stack: publishing a preview and a live version,
   removing the preview and logging out. It points `PLAK_CONFIG_DIR` at

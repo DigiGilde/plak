@@ -14,7 +14,7 @@
  */
 import { computed, ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import type { Access, AccessBase, Invitee, Key } from '@/api/types';
 import { ACCESS_BASE_VALUES } from '@/api/types';
 import {
@@ -93,7 +93,7 @@ const extrasAreMoot = computed(() => access.value?.base === 'public');
 const siteGroup = useSiteGroup();
 
 const { loading, error } = useLoader(
-  () => Promise.all([plak.invitees(props.group, props.site), plak.keys(props.group, props.site)]),
+  () => Promise.all([toon.invitees(props.group, props.site), toon.keys(props.group, props.site)]),
   ([inviteeList, keyList]) => {
     const siteRow = siteGroup.site.value;
     access.value = siteRow.access;
@@ -119,7 +119,7 @@ async function save(next: Access, confirmation: string): Promise<void> {
   const previous = access.value;
   access.value = next;
   try {
-    const updated = await plak.setAccess(props.group, props.site, next);
+    const updated = await toon.setAccess(props.group, props.site, next);
     access.value = updated.access;
     notices.value?.notify('success', confirmation, accessSummary(updated.access));
     emit('changed');
@@ -168,7 +168,7 @@ async function chooseExternalSources(event: Event): Promise<void> {
   const previous = externalSources.value;
   externalSources.value = next;
   try {
-    const updated = await plak.setExternalSources(props.group, props.site, next);
+    const updated = await toon.setExternalSources(props.group, props.site, next);
     externalSources.value = updated.externalSources;
     notices.value?.notify(
       'success',
@@ -195,7 +195,7 @@ async function chooseSandbox(event: Event): Promise<void> {
   const previous = sandbox.value;
   sandbox.value = next;
   try {
-    const updated = await plak.setSandbox(props.group, props.site, next);
+    const updated = await toon.setSandbox(props.group, props.site, next);
     sandbox.value = updated.sandbox;
     notices.value?.notify(
       'success',
@@ -235,7 +235,7 @@ async function addInvitee(): Promise<void> {
   }
   inviteeEmail.value = '';
   try {
-    const invitee = await plak.addInvitee(props.group, props.site, identifier);
+    const invitee = await toon.addInvitee(props.group, props.site, identifier);
     // Matched on the address, not on object identity: the ref hands back a
     // reactive proxy of the provisional row, never the object itself.
     invitees.value = invitees.value.map((g) => (g.identifier === identifier ? invitee : g));
@@ -252,7 +252,7 @@ async function removeInvitee(invitee: Invitee): Promise<void> {
   const previous = invitees.value;
   invitees.value = invitees.value.filter((g) => g.identifier !== invitee.identifier);
   try {
-    await plak.removeInvitee(props.group, props.site, invitee.id);
+    await toon.removeInvitee(props.group, props.site, invitee.id);
   } catch (f) {
     invitees.value = previous;
     notices.value?.notify(
@@ -286,7 +286,7 @@ async function createKey(): Promise<void> {
   const days = Number(keyDays.value);
   const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   try {
-    const result = await plak.createKey(props.group, props.site, label === '' ? null : label, expiresAt);
+    const result = await toon.createKey(props.group, props.site, label === '' ? null : label, expiresAt);
     keys.value = [...keys.value, result.key];
     newKeyValue.value = result.value;
     keyLabel.value = '';
@@ -302,7 +302,7 @@ async function revokeKeyRow(key: Key): Promise<void> {
     s.selector === key.selector ? { ...s, status: 'revoked' } : s,
   );
   try {
-    await plak.revokeKey(props.group, props.site, key.selector);
+    await toon.revokeKey(props.group, props.site, key.selector);
   } catch (f) {
     keys.value = previous;
     notices.value?.notify(
@@ -706,6 +706,6 @@ function keyActions(key: Key): RowAction[] {
 <style scoped>
 /* Same cap as the member tables, see global.css. */
 .access-table {
-  max-width: var(--plak-table-max-width);
+  max-width: var(--toon-table-max-width);
 }
 </style>

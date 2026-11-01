@@ -5,7 +5,7 @@
  */
 import { computed, onMounted, ref } from 'vue';
 
-import { platformStorage } from '@/api/plak';
+import { platformStorage } from '@/api/toon';
 import type { Volume } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
 import { formatBytes } from '@/format';

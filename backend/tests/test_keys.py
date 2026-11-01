@@ -13,11 +13,11 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from plak.access import keys
-from plak.constants import AccessBase
-from plak.expiry import MAX_VALIDITY, ExpiryError
-from plak.models.identity import Group
-from plak.models.publication import AccessKey, KeyStatus, Site
+from toon.access import keys
+from toon.constants import AccessBase
+from toon.expiry import MAX_VALIDITY, ExpiryError
+from toon.models.identity import Group
+from toon.models.publication import AccessKey, KeyStatus, Site
 
 PLAINTEXT_RE = re.compile(r"^[A-Za-z0-9]{8}\.[A-Za-z0-9]{32}$")
 

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeMockBackend, MOCK_CONTENT_BASE, type MockBackend } from '../../tests/mock-api';
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import type { PreviousSlug, Site } from '@/api/types';
 import ConfirmModal from '@/components/ConfirmModal.vue';
 import {
@@ -1195,7 +1195,7 @@ describe('AddressSection (site): changing the address', () => {
 
   describe('changing back', () => {
     async function renamedBefore(): Promise<Wrapper> {
-      const before = await plak.setSiteSlug('team-aurora', 'website', 'handboek');
+      const before = await toon.setSiteSlug('team-aurora', 'website', 'handboek');
       return makeWrapper(siteProps({ site: 'handboek', previousSlugs: before.previousSlugs }));
     }
 
@@ -1924,7 +1924,7 @@ describe('AddressSection (group)', () => {
     });
 
     it('changes back to an old address of the group', async () => {
-      const before = await plak.setGroupSlug('team-aurora', 'aurora');
+      const before = await toon.setGroupSlug('team-aurora', 'aurora');
       const wrapper = await editing(groupProps({ group: 'aurora', previousSlugs: before.previousSlugs }));
 
       await wrapper.find('[data-testid="group-address-restore-team-aurora"]').trigger('click');

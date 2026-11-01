@@ -1,5 +1,5 @@
 """Tests for publishing the head of every audit chain and for checking the
-database against a head published earlier (plak/audit/checkpoint.py).
+database against a head published earlier (toon/audit/checkpoint.py).
 
 The interesting case is the one `chain.py` cannot see: an attacker who owns the
 schema, rewrites a row and recomputes the hashes. The chain then verifies, and
@@ -23,7 +23,7 @@ import pytest
 import pytest_asyncio
 from helpers_audit import id_in_chain, insert_chained_audit_row
 
-from plak.audit import chain, checkpoint, retention
+from toon.audit import chain, checkpoint, retention
 
 # asyncio_mode = "auto" (pyproject.toml) picks up the async tests by itself; this
 # file deliberately mixes sync and async tests, so no module-wide asyncio marker.
@@ -267,7 +267,72 @@ def test_a_line_that_is_not_a_checkpoint_is_refused() -> None:
             checkpoint.parse(line)
 
 
-@pytest.mark.parametrize("older", ["plak-audit-chain-checkpoint/1", "plak-audit-chain-checkpoint/2"])
+def _a_written_checkpoint() -> checkpoint.Checkpoint:
+    return checkpoint.Checkpoint(
+        taken_at=datetime.fromisoformat("2026-09-24T10:00:00+00:00"),
+        heads=(
+            checkpoint.Head(
+                shard=3, seq=7, hash_hex="ab" * 32, expires=datetime.fromisoformat("2029-09-24T10:00:00+00:00")
+            ),
+        ),
+    )
+
+
+def _under_format(line: str, name: object) -> str:
+    return json.dumps({**json.loads(line), "format": name})
+
+
+def test_a_new_line_carries_the_new_name() -> None:
+    assert json.loads(_a_written_checkpoint().as_json())["format"] == "toon-audit-chain-checkpoint/3"
+
+
+def test_a_line_from_before_the_rename_reads_back() -> None:
+    """Same layout under the old name, and the point of a published line is that
+    it stays usable after the app has moved on."""
+    written = _a_written_checkpoint()
+    old_line = _under_format(written.as_json(), "plak-audit-chain-checkpoint/3")
+    assert checkpoint.parse(f"INFO {checkpoint.MARKER} {old_line}") == written
+
+
+@pytest.mark.parametrize("name", ["toon-audit-chain-checkpoint", "plak-audit-chain-checkpoint"])
+@pytest.mark.parametrize("version", ["/1", "/2", "/4", "", "/3/"])
+def test_a_good_line_in_another_version_is_refused_under_either_name(name: str, version: str) -> None:
+    line = _under_format(_a_written_checkpoint().as_json(), name + version)
+    with pytest.raises(checkpoint.MalformedCheckpointError, match="unknown format"):
+        checkpoint.parse(line)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "other-audit-chain-checkpoint/3",
+        "audit-chain-checkpoint/3",
+        "TOON-AUDIT-CHAIN-CHECKPOINT/3",
+        "toon-audit-chain-checkpoint/3 ",
+    ],
+)
+def test_a_good_line_under_another_name_is_refused(name: str) -> None:
+    line = _under_format(_a_written_checkpoint().as_json(), name)
+    with pytest.raises(checkpoint.MalformedCheckpointError, match="unknown format"):
+        checkpoint.parse(line)
+
+
+@pytest.mark.parametrize("value", [None, 3, [checkpoint.FORMAT], {"name": checkpoint.FORMAT}])
+def test_a_format_that_is_no_string_is_refused(value: object) -> None:
+    line = _under_format(_a_written_checkpoint().as_json(), value)
+    with pytest.raises(checkpoint.MalformedCheckpointError, match="unknown format"):
+        checkpoint.parse(line)
+
+
+@pytest.mark.parametrize(
+    "older",
+    [
+        "plak-audit-chain-checkpoint/1",
+        "plak-audit-chain-checkpoint/2",
+        "toon-audit-chain-checkpoint/1",
+        "toon-audit-chain-checkpoint/2",
+    ],
+)
 def test_a_line_from_before_the_per_term_chains_is_refused(older: str) -> None:
     """Those formats numbered sixteen chains of mixed terms; holding one against
     the chains per term would compare positions that describe other rows."""
@@ -511,6 +576,7 @@ async def test_a_front_without_a_deadline_counts_as_removed(
 
 async def test_main_without_dsn_says_so(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     monkeypatch.delenv(checkpoint.DB_URL_VAR, raising=False)
+    monkeypatch.delenv("PLAK_DB_URL", raising=False)
     with caplog.at_level("ERROR"):
         assert checkpoint.main([]) == 1
     assert checkpoint.DB_URL_VAR in caplog.text
@@ -549,6 +615,21 @@ async def test_main_checks_the_database_against_a_published_line(
     with caplog.at_level("ERROR"):
         assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 1
     assert checkpoint.HASH_MISMATCH in caplog.text
+
+
+async def test_main_checks_the_database_against_a_line_from_before_the_rename(
+    migrated_dsn: str, connection: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture, tmp_path,
+) -> None:
+    await _insert(connection)
+    line = tmp_path / "old-name.log"
+    published = (await checkpoint.collect(migrated_dsn)).as_json()
+    line.write_text(f"INFO {checkpoint.MARKER} {_under_format(published, 'plak-audit-chain-checkpoint/3')}\n")
+    monkeypatch.setenv(checkpoint.DB_URL_VAR, migrated_dsn)
+
+    with caplog.at_level("INFO"):
+        assert await asyncio.to_thread(checkpoint.main, ["--against", str(line)]) == 0
+    assert "matches the checkpoint published at" in caplog.text
 
 
 async def test_main_reads_the_published_line_from_stdin(

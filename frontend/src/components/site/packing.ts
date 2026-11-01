@@ -15,7 +15,7 @@ import { formatNumber } from '@/format';
 import { type MessageKey, t } from '@/i18n';
 
 /**
- * Mirrors the ingest defaults (`backend/src/plak/config.py`:
+ * Mirrors the ingest defaults (`backend/src/toon/config.py`:
  * `ingest_max_files`, `ingest_max_depth`, `ingest_max_file`,
  * `ingest_max_total`). They appear in no API response, so this is a copy; if
  * the server is configured more strictly it refuses anyway, to the same effect.

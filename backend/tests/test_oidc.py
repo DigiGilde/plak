@@ -17,8 +17,8 @@ from joserfc import jws, jwt
 from joserfc.jwk import RSAKey, import_key
 from joserfc.jwt import JWTClaimsRegistry
 
-from plak.audit import vocabulary
-from plak.auth.oidc import (
+from toon.audit import vocabulary
+from toon.auth.oidc import (
     ALG_ALLOWLIST,
     BACKCHANNEL_LOGOUT_EVENT,
     CLIENT_ASSERTION_TYPE,
@@ -31,7 +31,7 @@ from plak.auth.oidc import (
     logout_token_prefilter,
     unverified_logout_token_jti,
 )
-from plak.config import ConfigurationError
+from toon.config import ConfigurationError
 
 
 @pytest.fixture
@@ -275,7 +275,7 @@ PRODUCTION_OVERRIDES = {
 
 
 class TestEmptyRequiredAcr:
-    """An empty PLAK_OIDC_REQUIRED_ACR: no acr check, no acr_values, but a
+    """An empty TOON_OIDC_REQUIRED_ACR: no acr check, no acr_values, but a
     startup message (a warning in production)."""
 
     @pytest.fixture
@@ -303,24 +303,24 @@ class TestEmptyRequiredAcr:
         assert q["acr_values"] == "urn:acr:hoog urn:acr:substantieel"
 
     def test_warning_in_production(self, idp, caplog):
-        with caplog.at_level(logging.INFO, logger="plak.auth.oidc"):
+        with caplog.at_level(logging.INFO, logger="toon.auth.oidc"):
             make_oidc_client(
                 make_settings(idp, oidc_required_acr="", **PRODUCTION_OVERRIDES), idp
             )
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
-        assert "PLAK_OIDC_REQUIRED_ACR is empty" in warnings[0].getMessage()
+        assert "TOON_OIDC_REQUIRED_ACR is empty" in warnings[0].getMessage()
 
     def test_info_in_dev(self, idp, caplog):
-        with caplog.at_level(logging.INFO, logger="plak.auth.oidc"):
+        with caplog.at_level(logging.INFO, logger="toon.auth.oidc"):
             make_oidc_client(make_settings(idp, oidc_required_acr=""), idp)
-        levels = [r.levelno for r in caplog.records if "PLAK_OIDC_REQUIRED_ACR" in r.getMessage()]
+        levels = [r.levelno for r in caplog.records if "TOON_OIDC_REQUIRED_ACR" in r.getMessage()]
         assert levels == [logging.INFO]
 
     def test_no_message_with_list(self, idp, caplog):
-        with caplog.at_level(logging.INFO, logger="plak.auth.oidc"):
+        with caplog.at_level(logging.INFO, logger="toon.auth.oidc"):
             make_oidc_client(make_settings(idp), idp)
-        assert not [r for r in caplog.records if "PLAK_OIDC_REQUIRED_ACR" in r.getMessage()]
+        assert not [r for r in caplog.records if "TOON_OIDC_REQUIRED_ACR" in r.getMessage()]
 
 
 class TestClientSecret:

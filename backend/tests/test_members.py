@@ -26,12 +26,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from plak.api.errors import register_error_handlers
-from plak.auth.members import REASON_DEACTIVATED, get_or_create_member, require_active_member
-from plak.auth.sessions import SessionStore
-from plak.db import make_session_factory
-from plak.models.identity import Member, MemberStatus, PlatformRole
-from plak.platform import pages
+from toon.api.errors import register_error_handlers
+from toon.auth.members import REASON_DEACTIVATED, get_or_create_member, require_active_member
+from toon.auth.sessions import SessionStore
+from toon.db import make_session_factory
+from toon.models.identity import Member, MemberStatus, PlatformRole
+from toon.platform import pages
 
 BOOTSTRAP_SUB = "bootstrap-beheerder-sub"
 
