@@ -114,7 +114,7 @@ describe('TabMembers', () => {
 
     expect(siteRows(wrapper)).toHaveLength(2);
     expect(wrapper.find('nldd-notification').attributes('supporting-text')).toBe(
-      'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
+      'Onbekend lid. Diegene moet eerst zelf inloggen op het beheer.',
     );
   });
 

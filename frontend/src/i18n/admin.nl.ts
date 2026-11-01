@@ -65,7 +65,7 @@ export const adminNl = {
   'admin.sessions.revoke.label': 'Sessie van {name} intrekken',
   'admin.sessions.confirm.title': 'Sessie van {name} intrekken?',
   'admin.sessions.confirm.text':
-    'Deze sessie verliest meteen toegang tot je account; opnieuw koppelen gaat met plak login.',
+    'Deze sessie verliest meteen toegang tot je account. Opnieuw koppelen gaat met plak login.',
   'admin.sessions.confirm.keep': 'Behoud sessie',
   'admin.sessions.confirm.confirm': 'Sessie intrekken',
   'admin.sessions.revokeFailed': 'Sessie van {name} niet ingetrokken',
@@ -99,7 +99,7 @@ export const adminNl = {
   'admin.siteMembers.suggestion.viaGroup': '{role} via de groep',
   'admin.siteMembers.form.heading': 'Iemand een rol op deze site geven',
   'admin.siteMembers.form.hint':
-    'Een siterol verbreedt alleen: wie via de groep al meer mag, houdt dat. Toegang weghalen doe je bij de groep. Iemand moet eerst zelf op het beheer ingelogd hebben; Plak maakt hier geen account aan.',
+    'Een siterol verbreedt alleen: wie via de groep al meer mag, houdt dat. Toegang weghalen doe je bij de groep. Iemand moet eerst zelf op het beheer ingelogd hebben. Plak maakt hier geen account aan.',
   'admin.siteMembers.form.identifier': 'Naam of e-mailadres',
   'admin.siteMembers.form.identifier.placeholder': 'Typ een naam of e-mailadres',
   'admin.siteMembers.form.identifier.help':

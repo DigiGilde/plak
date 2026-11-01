@@ -64,7 +64,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.sessions.revoke.label': 'Revoke the session of {name}',
   'admin.sessions.confirm.title': 'Revoke the session of {name}?',
   'admin.sessions.confirm.text':
-    'This session loses access to your account straight away; linking up again takes another plak login.',
+    'This session loses access to your account straight away. Linking up again takes another plak login.',
   'admin.sessions.confirm.keep': 'Keep the session',
   'admin.sessions.confirm.confirm': 'Revoke session',
   'admin.sessions.revokeFailed': 'The session of {name} was not revoked',
@@ -98,7 +98,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.suggestion.viaGroup': '{role} via the group',
   'admin.siteMembers.form.heading': 'Give someone a role on this site',
   'admin.siteMembers.form.hint':
-    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first; Plak does not create an account here.',
+    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first. Plak does not create an account here.',
   'admin.siteMembers.form.identifier': 'Name or email address',
   'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
   'admin.siteMembers.form.identifier.help':

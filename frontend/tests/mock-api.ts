@@ -1418,7 +1418,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
             return problem(
               404,
               'Onbekend lid',
-              'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
+              'Onbekend lid. Diegene moet eerst zelf inloggen op het beheer.',
             );
           }
           if (

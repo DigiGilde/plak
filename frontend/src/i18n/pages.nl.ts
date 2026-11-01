@@ -12,7 +12,7 @@ export const pagesNl = {
   'page.landing.withdrawn.intro':
     'Je bent ingelogd met je organisatieaccount, maar Plak laat je niet meer binnen.',
   'page.landing.withdrawn.body':
-    'Je account staat er nog, met alles wat eraan hangt; alleen de toegang is dicht. Weet je niet waarom, vraag het dan aan de platformbeheerder van je organisatie. Die kan je toegang ook teruggeven.',
+    'Je account staat er nog, met alles wat eraan hangt. Alleen de toegang is dicht. Weet je niet waarom, vraag het dan aan de platformbeheerder van je organisatie. Die kan je toegang ook teruggeven.',
   'page.landing.withdrawn.check': 'Controleer opnieuw',
   'page.landing.withdrawn.failed.title': 'Controle mislukt',
   'page.landing.withdrawn.failed.detail': 'Plak is even niet bereikbaar. Probeer het zo nog eens.',
@@ -49,7 +49,7 @@ export const pagesNl = {
     'Zet je HTML-bestand op Plak en je hebt een adres om te delen.',
   'page.about.features.update.term': 'Bijwerken zonder nieuw adres.',
   'page.about.features.update.body':
-    'Een nieuwe versie komt over de vorige heen; iedereen met de link ziet vanzelf de laatste. Oudere versies blijven bewaard.',
+    'Een nieuwe versie komt over de vorige heen. Iedereen met de link ziet vanzelf de laatste. Oudere versies blijven bewaard.',
   'page.about.features.audience.term': 'Zelf bepalen wie meekijkt.',
   'page.about.features.audience.body':
     'Van openbaar tot alleen genodigden, en alles ertussenin. Een geheime link kun je in één keer delen, of de link en de code los van elkaar sturen.',

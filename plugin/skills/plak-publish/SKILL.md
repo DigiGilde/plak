@@ -396,7 +396,7 @@ and `detail` names the directory you probably meant. The CLI prints those
 candidates, with the flag that resolves it:
 
 ```
-Error: No index.html in the root of the bundle; the nearest one sits at
+Error: No index.html in the root of the bundle. The nearest one sits at
 'mijn-site/index.html'. Publish the directory 'mijn-site' itself, or send
 along the base path field with the value 'mijn-site'
 Found index.html in the bundle:

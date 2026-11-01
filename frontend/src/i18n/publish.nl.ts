@@ -22,9 +22,9 @@ export const publishNl = {
   'publish.sheet.group.label': 'Groep',
   'publish.sheet.groupName.label': 'Naam van je groep',
   'publish.sheet.groupName.hintNone':
-    'Je hebt er nog geen; deze maak je nu aan en je bent er meteen lid van.',
+    'Je hebt er nog geen. Deze maak je nu aan en je bent er meteen lid van.',
   'publish.sheet.groupName.hintNoRole':
-    'Je hebt in geen van je groepen de rol editor of beheerder; maak een nieuwe groep aan om hier te publiceren.',
+    'Je hebt in geen van je groepen de rol editor of beheerder. Maak een nieuwe groep aan om hier te publiceren.',
   'publish.sheet.groupName.required': 'Een naam voor je groep',
   'publish.sheet.address.label': 'Adres',
   'publish.sheet.address.hint': 'Het laatste stuk van de URL.',
@@ -49,7 +49,7 @@ export const publishNl = {
   'publish.upload.field.dragHere': 'Sleep het bestand of de map hierheen',
   'publish.upload.field.dropHere': 'Zet het bestand of de map hier neer',
   'publish.upload.field.help':
-    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site; een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
+    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site. Een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
   'publish.upload.folder': 'Kies een map',
   'publish.upload.progress.reading': 'Map uitlezen',
   'publish.upload.progress.packing': 'Map inpakken',
@@ -115,9 +115,9 @@ export const publishNl = {
   'publish.deploy.repo.unlink': 'Ontkoppelen',
   'publish.deploy.repo.empty': 'Nog geen repository gekoppeld',
   'publish.deploy.repo.emptyAdmin':
-    'Koppel een repository; een push naar de live-branch publiceert daarna automatisch.',
+    'Koppel een repository. Een push naar de live-branch publiceert daarna automatisch.',
   'publish.deploy.repo.emptyReader':
-    'Vraag een beheerder van deze site om een repository te koppelen; daarna publiceert een push naar de live-branch automatisch.',
+    'Vraag een beheerder van deze site om een repository te koppelen. Daarna publiceert een push naar de live-branch automatisch.',
   'publish.deploy.repo.link': 'Repository koppelen',
   'publish.deploy.repo.linked': 'Repository gekoppeld',
   'publish.deploy.repo.linkedDetail': '{repo} mag nu publiceren naar deze site.',
@@ -137,7 +137,7 @@ export const publishNl = {
   'publish.deploy.form.branch': 'Live-branch',
   'publish.deploy.form.branchPlaceholder': 'bijv. main',
   'publish.deploy.form.branchHelp':
-    'Leeg: elke branch van deze repository mag live publiceren, zolang de run een push, een handmatige run (workflow_dispatch) of een schedule is, nooit een pull request. Vul een branch in (bijvoorbeeld "main") om alleen die branch live te laten publiceren; previews blijven dan mogelijk vanaf elke branch.',
+    'Leeg: elke branch van deze repository mag live publiceren, zolang de run een push, een handmatige run (workflow_dispatch) of een schedule is, nooit een pull request. Vul een branch in (bijvoorbeeld "main") om alleen die branch live te laten publiceren. Previews blijven dan mogelijk vanaf elke branch.',
   'publish.deploy.form.cancel': 'Annuleren',
   'publish.deploy.form.submit': 'Koppelen',
   'publish.deploy.form.recognized': 'Herkend: {label}, {repo}',
@@ -187,7 +187,7 @@ export const publishNl = {
   'publish.deploy.safety.noSecret':
     'Er komt geen geheim in de repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Plak controleert die handtekening.',
   'publish.deploy.safety.scoped':
-    'Dat token bewijst alleen welke repository de run start; Plak accepteert het hier omdat jij precies die repository aan deze site gekoppeld hebt.',
+    'Dat token bewijst alleen welke repository de run start. Plak accepteert het hier omdat jij precies die repository aan deze site gekoppeld hebt.',
   'publish.deploy.safety.liveRestricted':
     'Live publiceren kan alleen vanaf de ingestelde live-branch, en alleen via een push, een handmatige run of een schedule, nooit vanuit een pull request.',
   'publish.deploy.safety.previews':
@@ -203,7 +203,7 @@ export const publishNl = {
   'publish.deploy.cli.run':
     'Werk je uit een checkout, dan draait {run} hem zonder installatie.',
   'publish.deploy.cli.login':
-    '{login} opent je browser op {link} om de CLI-sessie te koppelen; daarna bewaart de CLI die sessie voor volgende {publish}-aanroepen.',
+    '{login} opent je browser op {link} om de CLI-sessie te koppelen. Daarna bewaart de CLI die sessie voor volgende {publish}-aanroepen.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Repository ontkoppelen?',
@@ -222,7 +222,7 @@ export const publishNl = {
   // -- Deploy tab: the address of the site has changed ---------------------------------
   'publish.deploy.moved.title': 'Het adres van deze site is gewijzigd.',
   'publish.deploy.moved.text':
-    'Workflows met {old} publiceren niet meer; gebruik {new} en het site-ID.',
+    'Workflows met {old} publiceren niet meer. Gebruik {new} en het site-ID.',
   'publish.deploy.moved.or': ' of ',
 
   // -- Access tab: the base ------------------------------------------------------
@@ -239,7 +239,7 @@ export const publishNl = {
     'Deze twee staan los van de keuze hierboven en los van elkaar. Ze laten er mensen bij, en nemen nooit iemand weg.',
   'publish.access.extras.moot': 'De uitzonderingen voegen nu niets toe',
   'publish.access.extras.mootDetail':
-    'De site is publiek, dus iedereen mag toch al kijken. Zet de basis hierboven strenger om deze uitzonderingen te laten gelden; wat je hier instelt blijft staan.',
+    'De site is publiek, dus iedereen mag toch al kijken. Zet de basis hierboven strenger om deze uitzonderingen te laten gelden. Wat je hier instelt blijft staan.',
 
   // -- Access tab: secret links ------------------------------------------------------
   'publish.access.keys.on': 'Geheime links staan aan',
@@ -256,7 +256,7 @@ export const publishNl = {
   'publish.access.keys.column.status': 'Status',
   'publish.access.keys.empty': 'Nog geen geheime links',
   'publish.access.keys.emptyDetail':
-    'Maak er hieronder een; de link is daarna eenmalig te kopiëren.',
+    'Maak er hieronder een. De link is daarna eenmalig te kopiëren.',
   'publish.access.keys.never': 'nooit',
   'publish.access.keys.active': 'Actief',
   'publish.access.keys.revoked': 'Ingetrokken',
@@ -270,7 +270,7 @@ export const publishNl = {
     'Het label is voor jezelf: het zegt met wie je de link deelde, zodat je weet wat je intrekt.',
   'publish.access.keys.form.label': 'Label',
   'publish.access.keys.form.labelHelp':
-    'Handig als je meerdere links uitdeelt; laat je het leeg, dan krijgt de link een naam met de datum.',
+    'Handig als je meerdere links uitdeelt. Laat je het leeg, dan krijgt de link een naam met de datum.',
   'publish.access.keys.form.expiry': 'Vervalt na',
   'publish.access.keys.form.days': '{days} dagen',
   'publish.access.keys.form.submit': 'Maak geheime link',
@@ -279,7 +279,7 @@ export const publishNl = {
   'publish.access.invitees.on': 'Genodigden staan aan',
   'publish.access.invitees.off': 'Genodigden staan uit',
   'publish.access.invitees.intro':
-    'Genodigden loggen in met SSO Rijk; hun geverifieerde e-mailadres moet op deze lijst staan. Plak stuurt zelf geen uitnodiging: de link deel je zelf.',
+    'Genodigden loggen in met SSO Rijk. Hun geverifieerde e-mailadres moet op deze lijst staan. Plak stuurt zelf geen uitnodiging: de link deel je zelf.',
   'publish.access.invitees.column.email': 'E-mailadres',
   'publish.access.invitees.column.added': 'Toegevoegd',
   'publish.access.invitees.empty': 'Nog geen genodigden',

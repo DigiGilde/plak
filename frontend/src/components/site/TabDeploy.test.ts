@@ -1814,7 +1814,7 @@ describe('TabDeploy: the address of the site has changed', () => {
     expect(notice.attributes('variant')).toBe('warning');
     expect(notice.attributes('text')).toBe('Het adres van deze site is gewijzigd.');
     expect(notice.find('nldd-rich-text').text()).toBe(
-      'Workflows met site: team-aurora/oude-naam publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+      'Workflows met site: team-aurora/oude-naam publiceren niet meer. Gebruik site: team-aurora/website en het site-ID.',
     );
     expect(notice.findAll('code').map((code) => code.text())).toEqual([
       'site: team-aurora/oude-naam',
@@ -1828,7 +1828,7 @@ describe('TabDeploy: the address of the site has changed', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
-      'Workflows met site: team-aurora/oude-naam of site: team-aurora/oudere-naam publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+      'Workflows met site: team-aurora/oude-naam of site: team-aurora/oudere-naam publiceren niet meer. Gebruik site: team-aurora/website en het site-ID.',
     );
   });
 
@@ -1840,7 +1840,7 @@ describe('TabDeploy: the address of the site has changed', () => {
       'Het adres van deze site is gewijzigd.',
     );
     expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
-      'Workflows met site: team-oud/website publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+      'Workflows met site: team-oud/website publiceren niet meer. Gebruik site: team-aurora/website en het site-ID.',
     );
   });
 
@@ -1888,7 +1888,7 @@ describe('TabDeploy: the address of the site has changed', () => {
     const notice = wrapper.find('[data-testid="deploy-moved"]');
     expect(notice.attributes('text')).toBe('The address of this site has changed.');
     expect(notice.find('nldd-rich-text').text()).toBe(
-      'Workflows with site: team-aurora/oude-naam or site: team-aurora/oudere-naam no longer publish; use site: team-aurora/website and the site ID.',
+      'Workflows with site: team-aurora/oude-naam or site: team-aurora/oudere-naam no longer publish. Use site: team-aurora/website and the site ID.',
     );
   });
 });

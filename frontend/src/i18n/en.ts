@@ -108,7 +108,7 @@ const shared = {
   'profile.account.role.member': 'Member',
   'profile.account.unknown': 'Unknown',
   'profile.account.hint':
-    'These details come from SSO Rijk; Plak cannot change them. If something is wrong, report it to your own organisation.',
+    'These details come from SSO Rijk. Plak cannot change them. If something is wrong, report it to your own organisation.',
   'profile.language.heading': 'Language of the admin',
   'profile.language.subtitle':
     'The choice lives on your account, so it holds on every device you sign in from.',
