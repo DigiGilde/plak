@@ -3990,9 +3990,9 @@ class TestIpRevealDecryptFailure:
     async def test_a_key_that_matches_neither_current_nor_previous_is_404(
         self, client, app, factory, data
     ):
-        """decrypt_ip raising IpDecryptError (the pepper rotated further than
-        the single previous key covers) is indistinguishable from no
-        encrypted IP at all to the caller."""
+        """decrypt_ip raising IpDecryptError (the key rotated further than
+        the previous keys still configured reach) is indistinguishable from
+        no encrypted IP at all to the caller."""
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         await client.post(
             f"{BASE}/groups/team/sites", json={"title": "X", "slug": "x"}, headers=headers

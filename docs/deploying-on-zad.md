@@ -156,9 +156,10 @@ anybody an administrator.
 | `PLAK_DB_URL` | alias on the DB service | `postgresql+asyncpg://...`; the app, alembic and the purge job all three use this one account |
 | `PLAK_CONTENT_ROOT` | env-vars | equal to the `mount-path` of the volume: `/content` |
 | `PLAK_SESSION_SECRET` | user-env-var | at least 32 bytes |
-| `PLAK_AUDIT_PEPPER` | user-env-var | at least 32 bytes, different from `PLAK_SESSION_SECRET`; rotating makes old audit pseudonyms incomparable |
-| `PLAK_AUDIT_IP_KEY` | user-env-var | base64 of 32 random bytes (`openssl rand -base64 32`), different from `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` and (if set) `PLAK_AUDIT_IP_KEY_PREVIOUS`; see below for rotating |
-| `PLAK_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional; only during a key rotation, see below |
+| `PLAK_AUDIT_PEPPER` | user-env-var | at least 32 bytes (`openssl rand -hex 32`), different from `PLAK_SESSION_SECRET` and from every previous pepper. See below for rotating |
+| `PLAK_AUDIT_PEPPER_PREVIOUS` | user-env-var | optional, only after a rotation: the peppers `PLAK_AUDIT_PEPPER` replaced, comma-separated, newest first. Each at least 32 bytes and different from `PLAK_AUDIT_PEPPER`, `PLAK_SESSION_SECRET`, the IP keys and the other entries. See below |
+| `PLAK_AUDIT_IP_KEY` | user-env-var | base64 of 32 random bytes (`openssl rand -base64 32`), different from `PLAK_SESSION_SECRET`, the peppers and every key in `PLAK_AUDIT_IP_KEY_PREVIOUS`. See below for rotating |
+| `PLAK_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional, only after a rotation: the keys `PLAK_AUDIT_IP_KEY` replaced, comma-separated, newest first, each in the format of the key itself. A single key works. See below |
 | `PLAK_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |
 | `PLAK_ENVIRONMENT` | env-vars | `productie` |
 | `PLAK_BASE_URL` | env-vars | `https://beheer.plak.<domein>` |
@@ -201,13 +202,27 @@ GitHub or Forgejo workflow requests its ID token with this value as
 those outbound connections linking does not work and CI deploys are refused
 with `CI_PROVIDER_UNREACHABLE`.
 
-Rotating `PLAK_AUDIT_IP_KEY`: set the new value as `PLAK_AUDIT_IP_KEY` and the
-old one as `PLAK_AUDIT_IP_KEY_PREVIOUS`, and deploy. New audit records are
-encrypted under the new key; older ones stay decryptable as long as the
-previous key is in `PLAK_AUDIT_IP_KEY_PREVIOUS`. Only remove that variable
-once nothing has to be revealed any more from the period before the rotation;
-after that those records become unreadable (`docs/security.md`), although
-they do stay in place until their own retention period is up.
+Rotating `PLAK_AUDIT_PEPPER` or `PLAK_AUDIT_IP_KEY`: put the current value at
+the front of `PLAK_AUDIT_PEPPER_PREVIOUS` or `PLAK_AUDIT_IP_KEY_PREVIOUS`, set
+the new value as the current one, and deploy. New audit records use the new
+value. Older ones stay traceable (pseudonyms) and revealable (IP addresses) as
+long as the value they were written under is in its list. Only remove an entry
+once every row written under it is purged, at most 1096 days after the
+rotation, provided the purge runs. After that those records can no longer be
+traced or revealed (`docs/security.md`), although they do stay in place until
+their own retention period is up.
+
+On ZAD, `zadctl env set` changes a variable that exists and `zadctl env add`
+creates a list the first time. Both go to the deployment layer, like the
+secrets themselves, and each call rolls out at once unless you pass
+`--no-rollout`. Pass it to both calls and roll the two out together with
+`zadctl deployment refresh productie`. Rolled out one at a time, the order
+bites either way. The list first fails, because the app refuses to start when
+a previous value equals the current one. The new value first leaves the older
+rows out of reach until the list follows.
+The steps, the check on the startup log, what rotation does not repair and
+what removing an entry too early costs are in `docs/audit-log.md` ("Rotating
+the pepper and the IP key").
 
 `PLAK_BASE_URL` and `PLAK_CONTENT_BASE_URL` are not cosmetic. The app derives
 the host separation from them (which path exists on which host), the HSTS
@@ -541,7 +556,8 @@ used is in the history of `deploy.yml`, before `aecdb30`.
 - **The three secrets are never shared.** A deployment that inherits
   `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` from
   production lets whatever code runs there mint session cookies production
-  accepts and decrypt production's audited IP addresses. Write its own at
+  accepts and decrypt production's audited IP addresses. The same holds for
+  `PLAK_AUDIT_PEPPER_PREVIOUS` and `PLAK_AUDIT_IP_KEY_PREVIOUS`. Write its own at
   the deployment layer (§5) before the first rollout:
   `:upsert-deployment?rollout=false` puts the deployment in the project file
   without a pod, and the values endpoint answers 404 until it is there.
@@ -662,9 +678,9 @@ Plak holds three things, and each one can be taken off ZAD:
 What ties them together is the environment contract of §5: the `PLAK_*`
 variables, the secrets (`PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER`,
 `PLAK_AUDIT_IP_KEY`, the OIDC client) and one OIDC provider with the two
-redirect URIs of §6. Carry the pepper and the IP key over unchanged, or the
-pseudonyms in the audit log stop matching and the encrypted IP addresses can
-no longer be read.
+redirect URIs of §6. Carry the pepper and the IP key over unchanged, with
+their `_PREVIOUS` lists if there are any, or the pseudonyms in the audit log
+stop matching and the encrypted IP addresses can no longer be read.
 
 Two properties to know when planning a move or a failure:
 

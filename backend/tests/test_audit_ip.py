@@ -9,6 +9,7 @@ and it counts toward the daily lookup limit like the actor lookups.
 
 from __future__ import annotations
 
+import base64
 import uuid
 
 from sqlalchemy import select
@@ -29,6 +30,8 @@ from plak.models.audit import ActorKind, AuditLogEntry
 
 AUDIT = f"{BASE}/platform/audit"
 REASON = "onderzoek naar een melding over misbruik"
+NEWEST_IP_KEY = base64.b64encode(b"n" * 32).decode()
+MIDDLE_IP_KEY = base64.b64encode(b"m" * 32).decode()
 
 
 def _reveal_url(entry_id) -> str:
@@ -185,6 +188,48 @@ async def test_the_previous_key_decrypts_a_row_from_before_rotation(client, app,
     response = await client.post(_reveal_url(entry.id), json={"reason": REASON}, headers=headers)
     assert response.status_code == 200
     assert response.json()["ip"] == "203.0.113.42"
+
+
+async def test_a_row_under_the_second_of_two_previous_keys_is_revealed(client, app, factory, data):
+    """Two rotations on, PLAK_AUDIT_IP_KEY_PREVIOUS lists both keys replaced,
+    newest first: a row from before the first rotation is still revealed."""
+    oldest_key = app.state.settings.audit_ip_key
+    await _write_with_ip(app, ip="203.0.113.42")
+    async with factory() as db:
+        entry = await db.scalar(select(AuditLogEntry).where(AuditLogEntry.action == "content_access"))
+
+    app.state.settings.audit_ip_key = NEWEST_IP_KEY
+    app.state.settings.audit_ip_key_previous = f"{MIDDLE_IP_KEY},{oldest_key}"
+    app.state.audit_log._ip_key = app.state.settings.audit_ip_key_bytes  # simulate a rotated deploy
+
+    headers = _as_admin(client, app)
+    response = await client.post(_reveal_url(entry.id), json={"reason": REASON}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["ip"] == "203.0.113.42"
+
+
+async def test_a_row_under_a_key_no_longer_listed_is_404_and_still_audited(client, app, factory, data):
+    """Previous keys are configured, but not the one this row names: once a key
+    leaves PLAK_AUDIT_IP_KEY_PREVIOUS, its rows keep their truncated network
+    and can no longer be revealed. The attempt is recorded all the same."""
+    await _write_with_ip(app, ip="203.0.113.42")
+    async with factory() as db:
+        entry = await db.scalar(select(AuditLogEntry).where(AuditLogEntry.action == "content_access"))
+
+    app.state.settings.audit_ip_key = NEWEST_IP_KEY
+    app.state.settings.audit_ip_key_previous = MIDDLE_IP_KEY
+    app.state.audit_log._ip_key = app.state.settings.audit_ip_key_bytes  # simulate a rotated deploy
+
+    headers = _as_admin(client, app)
+    response = await client.post(_reveal_url(entry.id), json={"reason": REASON}, headers=headers)
+    assert response.status_code == 404
+    assert response.json()["code"] == "AUDIT_IP_UNKNOWN"
+    assert "203.0.113.42" not in response.text
+
+    async with factory() as db:
+        row = await db.scalar(select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.AUDIT_IP_REVEAL))
+    assert row is not None
+    assert row.refs == {"entry": str(entry.id), "reason": REASON, "revealed": False}
 
 
 async def test_reveal_counts_toward_the_daily_lookup_limit(client, app, factory, data):

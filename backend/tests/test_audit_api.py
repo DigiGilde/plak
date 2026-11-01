@@ -26,7 +26,7 @@ from test_admin_api import (  # noqa: F401 - fixtures are found by name
 )
 
 from plak.audit import vocabulary
-from plak.audit.log import ANONYMOUS, Actor
+from plak.audit.log import ANONYMOUS, Actor, AuditLog
 from plak.audit.pseudonymisation import pseudonymise
 from plak.constants import AccessBase
 from plak.models.audit import ActorKind, AuditLogEntry, ContentViewer
@@ -38,6 +38,8 @@ AUDIT = f"{BASE}/platform/audit"
 REASON = "onderzoek naar een melding over misbruik"
 LOOKUP = f"{BASE}/platform/audit/actor-pseudonym"
 IDENTITY = f"{BASE}/platform/audit/actor-identity"
+NEW_PEPPER = "a-new-audit-pepper-of-at-least-32-bytes"
+MIDDLE_PEPPER = "an-intermediate-audit-pepper-of-at-least-32-bytes"
 
 
 async def _write(app, *, action: str, result: str = "allowed", sub: str | None = None, refs: dict | None = None):
@@ -47,6 +49,21 @@ async def _write(app, *, action: str, result: str = "allowed", sub: str | None =
 
 def _as_admin(client, app) -> dict[str, str]:
     return login(client, app, sub="admin-sub", email="admin@example.nl")
+
+
+def _rotate_pepper(app, *previous: str) -> None:
+    """The app after a deploy with NEW_PEPPER as PLAK_AUDIT_PEPPER and
+    `previous` as PLAK_AUDIT_PEPPER_PREVIOUS: rows from here on are written
+    under the new pepper, by an audit log built the way main.py builds it."""
+    settings = app.state.settings
+    settings.audit_pepper = NEW_PEPPER
+    settings.audit_pepper_previous = ",".join(previous)
+    app.state.audit_log = AuditLog(
+        app.state.session_factory,
+        settings.audit_pepper,
+        settings.audit_ip_key_bytes,
+        previous_peppers=settings.audit_peppers[1:],
+    )
 
 
 async def _link(factory, data) -> None:
@@ -82,6 +99,7 @@ class TestCiLookup:
         assert response.status_code == 200
         assert response.json() == {
             "actorPseudonym": pseudonymise(app.state.settings.audit_pepper, "github:https://github.com:1001"),
+            "previousPseudonyms": [],
             "resolvedAs": "ci",
         }
 
@@ -795,3 +813,161 @@ class TestAdminCheckBeforeBodyValidation:
         response = await client.post(f"{BASE}/platform/audit/entries/{entry_id}/ip", json={}, headers=headers)
         assert response.status_code == 403
         assert response.json()["code"] == "NOT_ADMIN"
+
+
+class TestPepperRotation:
+    """Audit rows are never pseudonymised again, so after a rotation the rows
+    from before it are reached through PLAK_AUDIT_PEPPER_PREVIOUS, in both
+    directions, and only for as long as the pepper stays listed there."""
+
+    async def test_without_a_rotation_the_lookup_has_no_previous_pseudonyms(self, client, app, factory, data):
+        headers = _as_admin(client, app)
+
+        response = await client.post(LOOKUP, json={"identifier": "a@example.nl", "reason": REASON}, headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["previousPseudonyms"] == []
+        async with factory() as db:
+            row = await db.scalar(
+                select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.AUDIT_ACTOR_LOOKUP)
+            )
+        assert set(row.refs) == {"pseudonym", "resolved_as", "reason"}
+
+    async def test_the_lookup_gives_the_pseudonym_under_each_previous_pepper_newest_first(
+        self, client, app, factory, data
+    ):
+        old_pepper = app.state.settings.audit_pepper
+        _rotate_pepper(app, MIDDLE_PEPPER, old_pepper)
+        headers = _as_admin(client, app)
+
+        response = await client.post(LOOKUP, json={"identifier": "a@example.nl", "reason": REASON}, headers=headers)
+
+        assert response.status_code == 200
+        previous = [pseudonymise(MIDDLE_PEPPER, "lid-a"), pseudonymise(old_pepper, "lid-a")]
+        assert response.json() == {
+            "actorPseudonym": pseudonymise(NEW_PEPPER, "lid-a"),
+            "previousPseudonyms": previous,
+            "resolvedAs": "member",
+        }
+        async with factory() as db:
+            row = await db.scalar(
+                select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.AUDIT_ACTOR_LOOKUP)
+            )
+        assert row.refs == {
+            "pseudonym": pseudonymise(NEW_PEPPER, "lid-a"),
+            "previous_pseudonyms": previous,
+            "resolved_as": "member",
+            "reason": REASON,
+        }
+
+    async def test_a_previous_pseudonym_finds_the_rows_from_before_the_rotation(self, client, app, data):
+        await _write(app, action="test_before_rotation", sub="lid-a")
+        old_pepper = app.state.settings.audit_pepper
+        _rotate_pepper(app, old_pepper)
+        await _write(app, action="test_after_rotation", sub="lid-a")
+        headers = _as_admin(client, app)
+
+        lookup = await client.post(LOOKUP, json={"identifier": "a@example.nl", "reason": REASON}, headers=headers)
+
+        async def actions(pseudonym: str) -> list[str]:
+            body = (await client.get(AUDIT, params={"actorPseudonym": pseudonym})).json()
+            return [row["action"] for row in body["entries"]]
+
+        assert await actions(lookup.json()["actorPseudonym"]) == ["test_after_rotation"]
+        assert await actions(lookup.json()["previousPseudonyms"][0]) == ["test_before_rotation"]
+
+    async def test_the_daily_lookup_limit_spans_the_rotation(self, client, app, factory, data):
+        """The admin gets a new pseudonym with the new pepper, not a fresh
+        daily budget: the lookup made just before the rotation still counts."""
+        app.state.settings.audit_lookup_daily_limit = 1
+        headers = _as_admin(client, app)
+        body_ = {"identifier": "a@example.nl", "reason": REASON}
+        assert (await client.post(LOOKUP, json=body_, headers=headers)).status_code == 200
+
+        _rotate_pepper(app, app.state.settings.audit_pepper)
+        over_limit = await client.post(LOOKUP, json=body_, headers=headers)
+
+        assert over_limit.status_code == 429
+        assert over_limit.json()["code"] == "LOOKUP_LIMIT_REACHED"
+        assert await _count(factory, AuditLogEntry, action=vocabulary.AUDIT_ACTOR_LOOKUP) == 1
+
+    async def test_an_unknown_email_is_not_hashed_under_a_previous_pepper_either(self, client, app, factory, data):
+        _rotate_pepper(app, app.state.settings.audit_pepper)
+        headers = _as_admin(client, app)
+
+        response = await client.post(
+            LOOKUP, json={"identifier": "niemand@example.nl", "reason": REASON}, headers=headers
+        )
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "IDENTIFIER_UNKNOWN"
+        async with factory() as db:
+            row = await db.scalar(
+                select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.AUDIT_ACTOR_LOOKUP)
+            )
+        assert row.refs == {"resolved_as": "unknown", "reason": REASON}
+
+    async def test_a_member_is_found_under_the_current_and_each_previous_pepper(self, client, app, data):
+        old_pepper = app.state.settings.audit_pepper
+        _rotate_pepper(app, MIDDLE_PEPPER, old_pepper)
+        headers = _as_admin(client, app)
+
+        for pepper in (NEW_PEPPER, MIDDLE_PEPPER, old_pepper):
+            pseudonym = pseudonymise(pepper, data.member_a.sso_subject)
+            response = await client.post(
+                IDENTITY, json={"actorPseudonym": pseudonym, "reason": REASON}, headers=headers
+            )
+            assert response.status_code == 200
+            assert response.json()["kind"] == "member"
+            assert response.json()["memberId"] == str(data.member_a.id)
+
+    async def test_a_content_viewer_is_found_under_a_previous_pepper(self, client, app, factory, data):
+        await _add_content_viewer(factory, sub="viewer-sub", email="kijker@example.nl")
+        old_pepper = app.state.settings.audit_pepper
+        _rotate_pepper(app, MIDDLE_PEPPER, old_pepper)
+        headers = _as_admin(client, app)
+        pseudonym = pseudonymise(old_pepper, "viewer-sub")
+
+        response = await client.post(IDENTITY, json={"actorPseudonym": pseudonym, "reason": REASON}, headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["kind"] == "content_viewer"
+        assert response.json()["email"] == "kijker@example.nl"
+
+    async def test_a_ci_repository_is_found_under_a_previous_pepper(self, client, app, factory, data):
+        await _link(factory, data)
+        old_pepper = app.state.settings.audit_pepper
+        _rotate_pepper(app, MIDDLE_PEPPER, old_pepper)
+        headers = _as_admin(client, app)
+        pseudonym = pseudonymise(old_pepper, "github:https://github.com:1001")
+
+        response = await client.post(IDENTITY, json={"actorPseudonym": pseudonym, "reason": REASON}, headers=headers)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["kind"] == "ci"
+        assert body["repository"] == "minbzk/website"
+        assert body["sites"] == ["team/site", "team/tweede"]
+
+    async def test_a_pseudonym_under_a_pepper_no_longer_listed_is_404(self, client, app, factory, data):
+        """A rotation is still in progress, but the pepper this pseudonym was
+        made with has left PLAK_AUDIT_PEPPER_PREVIOUS: it leads back to nobody."""
+        old_pepper = app.state.settings.audit_pepper
+        await _add_content_viewer(factory, sub="viewer-sub", email="kijker@example.nl")
+        await _link(factory, data)
+        _rotate_pepper(app, MIDDLE_PEPPER)
+        headers = _as_admin(client, app)
+
+        for subject in (data.member_a.sso_subject, "viewer-sub", "github:https://github.com:1001"):
+            pseudonym = pseudonymise(old_pepper, subject)
+            response = await client.post(
+                IDENTITY, json={"actorPseudonym": pseudonym, "reason": REASON}, headers=headers
+            )
+            assert response.status_code == 404
+            assert response.json()["code"] == "PSEUDONYM_UNKNOWN"
+
+        async with factory() as db:
+            rows = list(
+                await db.scalars(select(AuditLogEntry).where(AuditLogEntry.action == vocabulary.AUDIT_ACTOR_IDENTITY))
+            )
+        assert [row.refs["resolved_as"] for row in rows] == ["unknown"] * 3

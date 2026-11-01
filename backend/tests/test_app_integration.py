@@ -10,6 +10,7 @@ involved never touch it (lexical redirect, /-/login).
 
 from __future__ import annotations
 
+import base64
 import logging
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from fastapi import FastAPI
 from helpers_oidc import MockIdP, make_client_jwk, make_oidc_client, set_content_session_cookie
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from plak.audit.ip_crypto import _key_id
 from plak.audit.log import AuditLog
 from plak.auth.oidc import OidcClient
 from plak.auth.sessions import SessionStore
@@ -112,6 +114,66 @@ async def test_startup_log_of_the_idp_configuration_carries_no_client_secret(
 
     assert "OIDC configuration" in caplog.text
     assert "geheim-van-de-client" not in caplog.text
+
+
+_PREVIOUS_PEPPER = "a-previous-audit-pepper-of-at-least-32-bytes"
+_PREVIOUS_IP_KEYS = (base64.b64encode(b"m" * 32).decode(), base64.b64encode(b"n" * 32).decode())
+
+
+@pytest.mark.parametrize(
+    ("previous", "counts"),
+    [
+        ({"audit_pepper_previous": _PREVIOUS_PEPPER}, "1 previous pepper(s), 0 previous IP key(s)"),
+        ({"audit_ip_key_previous": _PREVIOUS_IP_KEYS[0]}, "0 previous pepper(s), 1 previous IP key(s)"),
+        (
+            {"audit_pepper_previous": _PREVIOUS_PEPPER, "audit_ip_key_previous": ",".join(_PREVIOUS_IP_KEYS)},
+            "1 previous pepper(s), 2 previous IP key(s)",
+        ),
+    ],
+    ids=["pepper", "ip-key", "both"],
+)
+async def test_startup_logs_a_secret_rotation_as_counts_only(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, previous: dict[str, str], counts: str
+) -> None:
+    """Either rotation alone is enough for the line. It says how many previous
+    secrets are configured, never which: no pepper, no key, no key id."""
+    settings = _make_settings(tmp_path, **previous)
+    app = create_app(settings)
+
+    with caplog.at_level(logging.WARNING, logger="plak.main"):
+        async with app.router.lifespan_context(app):
+            pass
+
+    lines = [row.getMessage() for row in caplog.records if row.name == "plak.main"]
+    assert [line for line in lines if "rotation" in line] == [f"Audit secret rotation in progress: {counts}"]
+    for pepper in settings.audit_peppers:
+        assert pepper not in caplog.text
+    for key in (settings.audit_ip_key_bytes, *settings.audit_ip_keys_previous_bytes):
+        assert base64.b64encode(key).decode() not in caplog.text
+        assert _key_id(key).hex() not in caplog.text
+
+
+async def test_startup_without_a_secret_rotation_logs_no_rotation(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    app = create_app(_make_settings(tmp_path))
+
+    with caplog.at_level(logging.INFO, logger="plak.main"):
+        async with app.router.lifespan_context(app):
+            pass
+
+    assert "OIDC configuration" in caplog.text
+    assert "rotation" not in caplog.text
+
+
+async def test_the_audit_log_is_given_the_previous_peppers(tmp_path: Path) -> None:
+    """So the daily lookup cap spans a pepper rotation; test_audit.py tests the
+    counting itself against the database."""
+    settings = _make_settings(tmp_path, audit_pepper_previous=f"{_PREVIOUS_PEPPER},{'c' * 32}")
+    app = create_app(settings)
+
+    async with app.router.lifespan_context(app):
+        assert app.state.audit_log._previous_peppers == (_PREVIOUS_PEPPER, "c" * 32)
 
 
 async def test_robots_txt_not_shadowed_by_the_content_catch_all(tmp_path: Path) -> None:

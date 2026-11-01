@@ -34,7 +34,7 @@ import shutil
 import time
 import unicodedata
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -1622,6 +1622,13 @@ class ActorPseudonymOut(ApiModel):
     actor_pseudonym: str = Field(
         description="Value to use as `actorPseudonym` filter on `GET /platform/audit`."
     )
+    previous_pseudonyms: list[str] = Field(
+        description=(
+            "Pseudonyms of the same identifier under the previous audit peppers, newest first, while a pepper "
+            "rotation is in progress. Rows written before the rotation carry one of these: use each as "
+            "`actorPseudonym` filter on `GET /platform/audit`. Empty when no previous pepper is configured."
+        )
+    )
     resolved_as: Literal["member", "content_viewer", "ci", "unknown"] = Field(
         description=(
             "What the identifier belonged to: `member` (translated to their SSO subject), `content_viewer` "
@@ -2503,22 +2510,29 @@ async def _find_member_or_409(db: AsyncSession, identifier: str) -> Member | Non
         raise ApiError(409, key) from error
 
 
-async def _match_member_by_pseudonym(db: AsyncSession, pepper: str, pseudonym: str) -> Member | None:
+def _pseudonymises_to(peppers: Sequence[str], subject: str, pseudonym: str) -> bool:
+    """Whether `subject` pseudonymises to `pseudonym` under any of `peppers`."""
+    return any(hmac.compare_digest(pseudonymise(pepper, subject), pseudonym) for pepper in peppers)
+
+
+async def _match_member_by_pseudonym(db: AsyncSession, peppers: Sequence[str], pseudonym: str) -> Member | None:
     """Linear scan for the reverse actor lookup: only id and sso_subject are
     pulled for the comparison, so the full row is fetched once, for the one
     id that actually matches."""
     rows = await db.execute(select(Member.id, Member.sso_subject))
     for member_id, sso_subject in rows:
-        if hmac.compare_digest(pseudonymise(pepper, sso_subject), pseudonym):
+        if _pseudonymises_to(peppers, sso_subject, pseudonym):
             return await db.get(Member, member_id)
     return None
 
 
-async def _match_content_viewer_by_pseudonym(db: AsyncSession, pepper: str, pseudonym: str) -> ContentViewer | None:
+async def _match_content_viewer_by_pseudonym(
+    db: AsyncSession, peppers: Sequence[str], pseudonym: str
+) -> ContentViewer | None:
     """Same shape as `_match_member_by_pseudonym`, for content viewers."""
     rows = await db.execute(select(ContentViewer.id, ContentViewer.sso_subject))
     for viewer_id, sso_subject in rows:
-        if hmac.compare_digest(pseudonymise(pepper, sso_subject), pseudonym):
+        if _pseudonymises_to(peppers, sso_subject, pseudonym):
             return await db.get(ContentViewer, viewer_id)
     return None
 
@@ -2534,7 +2548,7 @@ def _ci_subjects(repository: SiteRepository) -> tuple[str, str]:
 
 
 async def _match_ci_by_pseudonym(
-    db: AsyncSession, pepper: str, pseudonym: str
+    db: AsyncSession, peppers: Sequence[str], pseudonym: str
 ) -> tuple[SiteRepository, list[str]] | None:
     """Same shape as `_match_member_by_pseudonym`, over the linked
     repositories; returns the first match plus every site it is linked to."""
@@ -2549,7 +2563,7 @@ async def _match_ci_by_pseudonym(
         ).all()
     )
     for repository, _, _ in rows:
-        if any(hmac.compare_digest(pseudonymise(pepper, subject), pseudonym) for subject in _ci_subjects(repository)):
+        if any(_pseudonymises_to(peppers, subject, pseudonym) for subject in _ci_subjects(repository)):
             sites = [
                 f"{group_slug}/{site_slug}"
                 for other, group_slug, site_slug in rows
@@ -4897,8 +4911,10 @@ def make_admin_router() -> APIRouter:
             "use `POST /platform/audit/actor-identity` for the opposite direction.\n\n"
             "That this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up "
             "in the log lines of every proxy in between.\n\n"
-            "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper you only find "
-            "rows from after the rotation.\n\n"
+            "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper, rows from before "
+            "the rotation carry the pseudonym under the previous pepper: as long as that pepper is still in "
+            "`PLAK_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
+            "configured, you only find rows from after the rotation.\n\n"
             "An e-mail address that matches neither a member nor the verified address of a "
             "content viewer is not pseudonymised: that is a 404. An identifier that is not an e-mail address "
             "and belongs to nothing (for example a bare SSO subject) is pseudonymised as given, as "
@@ -4906,9 +4922,9 @@ def make_admin_router() -> APIRouter:
             "an SSO subject), the response is a 409: in that case search by the SSO subject.\n\n"
             "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of "
             f"{REASON_MIN_LENGTH} to {REASON_MAX_LENGTH} characters. The lookup itself is audited, with the "
-            "pseudonym, `resolved_as` and the reason, never the identifier. If that audit row fails, "
-            "no response is returned: see the `503`. Counts towards the daily limit on such lookups, even "
-            "on a 404."
+            "pseudonym and the previous pseudonyms, `resolved_as` and the reason, never the identifier. If that "
+            "audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such "
+            "lookups, even on a 404."
         ),
         responses=_errors(
             _ERROR_CSRF,
@@ -4965,14 +4981,16 @@ def make_admin_router() -> APIRouter:
             raise ApiError(404, "IDENTIFIER_UNKNOWN")
         else:
             resolved, subject = "unknown", identifier
-        pseudonym = pseudonymise(request.app.state.settings.audit_pepper, subject)
-        await _audit_strict_limited(
-            request,
-            member,
-            vocabulary.AUDIT_ACTOR_LOOKUP,
-            {"pseudonym": pseudonym, "resolved_as": resolved, "reason": body.reason},
+        pepper, *previous_peppers = request.app.state.settings.audit_peppers
+        pseudonym = pseudonymise(pepper, subject)
+        previous_pseudonyms = [pseudonymise(previous, subject) for previous in previous_peppers]
+        refs: dict[str, Any] = {"pseudonym": pseudonym, "resolved_as": resolved, "reason": body.reason}
+        if previous_pseudonyms:
+            refs["previous_pseudonyms"] = previous_pseudonyms
+        await _audit_strict_limited(request, member, vocabulary.AUDIT_ACTOR_LOOKUP, refs)
+        return ActorPseudonymOut(
+            actor_pseudonym=pseudonym, previous_pseudonyms=previous_pseudonyms, resolved_as=resolved
         )
-        return ActorPseudonymOut(actor_pseudonym=pseudonym, resolved_as=resolved)
 
     @router.post(
         "/platform/audit/actor-identity",
@@ -4982,12 +5000,13 @@ def make_admin_router() -> APIRouter:
         description=(
             "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from "
             "a log row, get back who is behind it. Every member, every content viewer and every linked "
-            "repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and compared with the "
-            "given pseudonym; nothing is kept to speed up this lookup, so expect a "
-            "full pass over all three.\n\n"
+            "repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and with each pepper in "
+            "`PLAK_AUDIT_PEPPER_PREVIOUS`, and compared with the given pseudonym; nothing is kept to speed up "
+            "this lookup, so expect a full pass over all three.\n\n"
             "If the lookup finds nothing, there is no member, content viewer or repository that pseudonymises "
             "to this pseudonym. Several causes are possible: the pepper has been rotated since that row was "
-            "written; the actor only ever visited content through the content-host SSO and that visit was "
+            "written and the previous pepper is no longer configured; the actor only ever visited content "
+            "through the content-host SSO and that visit was "
             "more than 90 days ago (`content_viewers` is then cleaned up, like the related "
             "`content_access` rows); or the repository has since been unlinked, or deleted along with its "
             "site or group (`ON DELETE CASCADE`).\n\n"
@@ -5009,8 +5028,9 @@ def make_admin_router() -> APIRouter:
             {
                 404: (
                     "No member, content viewer or linked repository pseudonymises to this value "
-                    "(`PSEUDONYM_UNKNOWN`): the pepper has been rotated, the content viewer was cleaned up after 90 "
-                    "days without a visit, or the repository was unlinked or deleted along with its site."
+                    "(`PSEUDONYM_UNKNOWN`): the pepper has been rotated and the previous one is no longer "
+                    "configured, the content viewer was cleaned up after 90 days without a visit, or the "
+                    "repository was unlinked or deleted along with its site."
                 )
             },
         ),
@@ -5019,12 +5039,12 @@ def make_admin_router() -> APIRouter:
         request: Request, body: ActorIdentityLookup, _csrf: Csrf, member: PlatformAdmin, db: Db
     ) -> ActorIdentityOut:
         pseudonym = _audit_pseudonym(body.actor_pseudonym)
-        pepper = request.app.state.settings.audit_pepper
+        peppers = request.app.state.settings.audit_peppers
 
         result: ActorIdentityOut | None = None
         resolved = "unknown"
 
-        matched_member = await _match_member_by_pseudonym(db, pepper, pseudonym)
+        matched_member = await _match_member_by_pseudonym(db, peppers, pseudonym)
         if matched_member is not None:
             resolved = "member"
             result = ActorIdentityOut(
@@ -5035,7 +5055,7 @@ def make_admin_router() -> APIRouter:
                 member_status=matched_member.status,
             )
         else:
-            matched_viewer = await _match_content_viewer_by_pseudonym(db, pepper, pseudonym)
+            matched_viewer = await _match_content_viewer_by_pseudonym(db, peppers, pseudonym)
             if matched_viewer is not None:
                 resolved = "content_viewer"
                 result = ActorIdentityOut(
@@ -5045,7 +5065,7 @@ def make_admin_router() -> APIRouter:
                     last_seen_at=iso_utc(matched_viewer.last_seen_at),
                 )
             else:
-                matched_ci = await _match_ci_by_pseudonym(db, pepper, pseudonym)
+                matched_ci = await _match_ci_by_pseudonym(db, peppers, pseudonym)
                 if matched_ci is not None:
                     repository, linked_sites = matched_ci
                     resolved = "ci"
@@ -5110,7 +5130,7 @@ def make_admin_router() -> APIRouter:
                     request.app.state.settings.audit_ip_key_bytes,
                     entry.id,
                     entry.ip_encrypted,
-                    previous_key=request.app.state.settings.audit_ip_key_previous_bytes,
+                    previous_keys=request.app.state.settings.audit_ip_keys_previous_bytes,
                 )
             except IpDecryptError:
                 # No key configured (current or previous) decrypts this row,

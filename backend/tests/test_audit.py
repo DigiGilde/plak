@@ -31,6 +31,7 @@ from plak.net import ClientAddress
 
 _PEPPER_A = "a" * 32
 _PEPPER_B = "b" * 32
+_PEPPER_C = "c" * 32
 _IP_KEY_A = b"k" * 32
 
 
@@ -313,6 +314,56 @@ async def test_write_strict_limited_is_atomic_under_concurrency(
 
     rows = await db_connection.fetch("SELECT id FROM audit_log_entries WHERE action = $1", action)
     assert len(rows) == 1
+
+
+def _after_rotation(audit_log: AuditLog, pepper: str, *previous_peppers: str) -> AuditLog:
+    """The log on the same database after a deploy with `pepper` as
+    PLAK_AUDIT_PEPPER and `previous_peppers` as PLAK_AUDIT_PEPPER_PREVIOUS."""
+    return AuditLog(audit_log._session_factory, pepper=pepper, ip_key=_IP_KEY_A, previous_peppers=previous_peppers)
+
+
+async def test_write_strict_limited_counts_the_rows_under_a_previous_pepper(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    """A pepper rotation gives the actor a new pseudonym, not a fresh daily
+    budget: its rows of the last 24 hours under the previous pepper count."""
+    action = f"test_actie_{uuid.uuid4().hex}"
+    actor = Actor(kind=ActorKind.MEMBER, identifier="sub-rotatie")
+    await audit_log.write_strict_limited(
+        action, actor, "allowed", refs=None, ip=None, limit=1, counted_actions=(action,)
+    )
+
+    rotated = _after_rotation(audit_log, _PEPPER_B, _PEPPER_A)
+    with pytest.raises(LookupLimitReachedError):
+        await rotated.write_strict_limited(
+            action, actor, "allowed", refs=None, ip=None, limit=1, counted_actions=(action,)
+        )
+
+    rows = await db_connection.fetch("SELECT actor_pseudonym FROM audit_log_entries WHERE action = $1", action)
+    assert [row["actor_pseudonym"] for row in rows] == [pseudonymise(_PEPPER_A, "sub-rotatie")]
+
+
+async def test_write_strict_limited_does_not_count_rows_under_a_pepper_no_longer_configured(
+    audit_log: AuditLog, db_connection: asyncpg.Connection
+) -> None:
+    """Two rotations on, the first pepper has left PLAK_AUDIT_PEPPER_PREVIOUS.
+    Its rows no longer lead back to the actor, so they no longer count
+    towards the cap either."""
+    action = f"test_actie_{uuid.uuid4().hex}"
+    actor = Actor(kind=ActorKind.MEMBER, identifier="sub-rotatie-2")
+    await audit_log.write_strict_limited(
+        action, actor, "allowed", refs=None, ip=None, limit=1, counted_actions=(action,)
+    )
+
+    rotated = _after_rotation(audit_log, _PEPPER_C, _PEPPER_B)
+    await rotated.write_strict_limited(
+        action, actor, "allowed", refs=None, ip=None, limit=1, counted_actions=(action,)
+    )
+
+    rows = await db_connection.fetch("SELECT actor_pseudonym FROM audit_log_entries WHERE action = $1", action)
+    assert sorted(row["actor_pseudonym"] for row in rows) == sorted(
+        [pseudonymise(_PEPPER_A, "sub-rotatie-2"), pseudonymise(_PEPPER_C, "sub-rotatie-2")]
+    )
 
 
 # --- Retention: the cleanup job ------------------------------------------------------

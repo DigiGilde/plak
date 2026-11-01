@@ -228,8 +228,10 @@ deployments:
         # The secrets are NOT here. Set them per deployment with
         # `zadctl env` (AGE-encrypted in this file as user-env-vars):
         #   PLAK_SESSION_SECRET   at least 32 bytes
-        #   PLAK_AUDIT_PEPPER    at least 32 bytes, never rotate without a plan
+        #   PLAK_AUDIT_PEPPER    at least 32 bytes, rotate as in docs/audit-log.md
         #   PLAK_AUDIT_IP_KEY    base64 of 32 random bytes, see docs/deploying-on-zad.md
+        # After a rotation, also the comma-separated lists of earlier values,
+        # newest first: PLAK_AUDIT_PEPPER_PREVIOUS and PLAK_AUDIT_IP_KEY_PREVIOUS.
         #
         # Do NOT set these component-wide: a second deployment would
         # inherit productie's. See docs/deploying-on-zad.md, "A second
