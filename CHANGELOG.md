@@ -66,7 +66,6 @@ Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.
   bigger reads.
 - The platform member list shows when someone was last active: the later of
   their last sign-in and their last use of a CLI session.
-- Error messages and interface texts use two short sentences instead of a semicolon.
 - Creating a new site takes what publishing a new version takes: a folder, the
   loose contents of a folder, an archive or a single HTML file, dragged or
   chosen with "Choose a folder", in the sheet and on the Overview and Group
@@ -94,10 +93,6 @@ Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.
   of a site says "Drag the file or folder here".
 - On a narrow screen, the tabs of a site or a group that do not fit go
   behind a "More tabs" button instead of scrolling sideways.
-- The button with the actions of a row shows three dots side by side, as
-  the menus of the design system do.
-- "Choose a folder" and "Publish version" under the upload zone no longer
-  touch each other.
 
 ### Deprecated
 
