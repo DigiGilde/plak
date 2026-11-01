@@ -1,1 +1,0 @@
-- Error messages and interface texts use two short sentences instead of a semicolon.

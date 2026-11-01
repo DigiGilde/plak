@@ -14,6 +14,153 @@ write a fragment and the rest of the model are in
 
 Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.md).
 
+## [2026.11.1]
+
+### Added
+
+- A group admin can change a group's address, and a site admin a site's
+  address. The old address redirects whoever may see the site through the
+  30th day, can be taken back until then, and is free for others after the
+  nightly cleanup.
+- A group admin can give a site an address that another site in the group
+  recently gave up, which ends that site's redirect at once.
+- The Deploy tab of a site names the old addresses its workflows may still
+  hold, after a change of the site's address or its group's.
+- The API for it: `PUT /groups/{group}/slug` and `PUT /sites/{group}/{site}/slug`,
+  `previousSlugs` on groups and sites, and `slugRedirectDays` on `/me`.
+- "Choose a folder" on a site's Overview tab picks a whole folder to publish
+  without dragging it.
+- `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL` name the organisation that
+  runs an installation and how to reach it, on the privacy and accessibility
+  pages and at `GET /-/api/v1/operator`.
+- `PLAK_STORE_COMPRESSED=false` keeps new deploys uncompressed and puts stored files back
+  uncompressed at start, so the app can be rolled back to a release from before compression.
+
+### Changed
+
+- Creating a group or site answers `SLUG_EXISTS` also for a slug that was
+  recently the address of another group or site.
+- The creation budget of 20 per hour counts changes of address as well.
+- The audit log filters on group and site also find a change of address by
+  its old slug, and a group's change by each of its sites.
+- The API knows only the current address of a group or site: an old one
+  answers 404, also to a workflow.
+- A repository link that still took workflows without the site id requires
+  it once its site or group gets another address.
+- `plak publish` streams the bundle from a temporary file instead of
+  holding it in memory three times.
+- The CLI reuses one connection per run, and retries once, after a
+  second, a token refresh that never reached the server, a preview
+  removal, and the CI token request. A publish is never retried.
+- The privacy and accessibility statements are the standard statements of
+  the software, for any installation: they name its operator and address,
+  the rights and where to complain, and no longer claim that an
+  organisation is stored.
+- Text files are stored compressed, so a version published from now on takes up less of the site's storage and quota.
+- Published sites load faster: HTML, CSS, JavaScript and other text files are sent compressed with brotli or gzip.
+- An empty group now shows a "Publish a site" button in its empty state, on the group page and on the overview, for members who may publish there.
+- The admin pages load with fewer database round trips, and an admin request
+  no longer writes to the database. A member's last login is now the moment
+  they signed in, not their latest request.
+- Large files on a published site and large deploys go through in fewer,
+  bigger reads.
+- The platform member list shows when someone was last active: the later of
+  their last sign-in and their last use of a CLI session.
+- Error messages and interface texts use two short sentences instead of a semicolon.
+- Creating a new site takes what publishing a new version takes: a folder, the
+  loose contents of a folder, an archive or a single HTML file, dragged or
+  chosen with "Choose a folder", in the sheet and on the Overview and Group
+  pages. A refused drop on those pages now opens the sheet and explains there.
+- A bundle with `_encoded` in the root of the site is refused, like `_preview` and `_version`.
+- The NCSC-NL routes in `security.txt` (preamble, `Policy` and `Contact`
+  lines) now appear only with `PLAK_SECURITY_TXT_NCSC=true`, so an
+  installation outside the central government no longer points reporters
+  at NCSC-NL.
+- `security.txt` takes its mail `Contact` from `PLAK_OPERATOR_EMAIL`, after
+  the GitHub advisory form, so security reports about an installation reach
+  the organisation that runs it. Without the setting the file has no mail
+  line of its own.
+- A page view on a published site costs one database query where it took
+  up to four, and redeeming a secret link checks the key once.
+- The admin runs on design system 0.13.2: the status bar at 200% text and
+  the form buttons (a row on wide screens, stacked on narrow ones) follow
+  the new defaults.
+- The admin is set in Inter instead of the system font, so text looks the
+  same on every computer.
+- A screen reader hears "other website" after a link to
+  a published site or another domain.
+- The file field is one button across its whole width, and shows a chosen
+  file with the icon of its format. While something is dragged, the field
+  of a site says "Drag the file or folder here".
+- On a narrow screen, the tabs of a site or a group that do not fit go
+  behind a "More tabs" button instead of scrolling sideways.
+- The button with the actions of a row shows three dots side by side, as
+  the menus of the design system do.
+- "Choose a folder" and "Publish version" under the upload zone no longer
+  touch each other.
+
+### Deprecated
+
+- `storageRef` on a version in the admin API is deprecated and goes away in API 2.
+
+### Fixed
+
+- After a navigation inside the admin, focus moves to the page heading (or
+  the tab content) and a screen reader hears the page title.
+- The browser tab title follows a language switch at once.
+- The approve and deny buttons of the CLI link page and the actions in the
+  platform members and versions menus are no longer disabled. A second
+  click while busy is ignored, and a blocked member action explains why.
+- Adding or changing a site role for a member without a verified e-mail
+  address answers with that member, not with another member without one.
+- Published sites keep answering while old versions are removed from disk,
+  for example when a preview is redeployed or a site is deleted.
+- Dragging the contents of a folder instead of the folder itself reports
+  "3 files packed" instead of a folder "site" that does not exist,
+  and a refusal speaks of "these files".
+- On "Platform administration", a member whose account carries no name is
+  listed by email address at the size of the rest of the row, instead of in
+  small supporting text.
+- A new group on the overview can be chosen in the publish sheet straight away, without a reload.
+- "Publish version" waits while a new folder is being read or packed, instead of
+  publishing the file that was chosen before it.
+- A refused upload leaves nothing chosen, so "Publish version" and "Put online" can no
+  longer publish the file that was chosen before it.
+- One failed read of who is logged in no longer makes every later page of
+  the admin fail until a reload.
+- The code page for a secret link shows its introduction in the normal text
+  colour instead of grey, announces a wrong code with "Error:"
+  before the message, and links the accessibility statement.
+- The site pages fetch the group once instead of once per tab, and a slow
+  answer no longer overwrites a newer one when you switch quickly.
+
+### Security
+
+- The audit pepper and the IP key can be rotated without losing the ability to
+  look up or decrypt older audit rows: `PLAK_AUDIT_PEPPER_PREVIOUS` and
+  `PLAK_AUDIT_IP_KEY_PREVIOUS` hold comma-separated lists of earlier values,
+  and `actor-pseudonym` returns the pseudonyms under earlier peppers as
+  `previousPseudonyms`.
+- Plak fetches the signing keys and the discovery document of the identity
+  provider again every hour, so a key the provider withdraws stops being
+  trusted without a restart.
+- A CI ID token that carries a `jti` (GitHub) is accepted once. A second use
+  within its lifetime is refused, and the audit log records it as
+  `CI_TOKEN_REPLAYED` instead of `CI_TOKEN_INVALID`.
+- A non-admin reaching the platform member routes is refused and audited
+  before a malformed request is looked at.
+- JSON and other non-HTML answers of the admin host carry `Referrer-Policy`
+  and `X-Frame-Options`.
+- Content of a site that is not public, and every view of an older version,
+  is no longer stored in the browser. A page of another site without
+  "Shield from other sites" could read it from the cache, past the access
+  check, also after the visitor had lost access. Restricted sites load
+  their files again on every page.
+- The container image declares its user as the numeric `1000:1000`, so a
+  Kubernetes `runAsNonRoot` check can verify it.
+- The publish action runs the CLI with `uv run --locked`, so it fails
+  instead of resolving dependencies the lockfile does not pin.
+
 ## [2026.10.31]
 
 ### Added
@@ -197,7 +344,8 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.31...HEAD
+[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.11.1...HEAD
+[2026.11.1]: https://github.com/DigiGilde/plak/compare/v2026.10.31...v2026.11.1
 [2026.10.31]: https://github.com/DigiGilde/plak/compare/v2026.10.7...v2026.10.31
 [2026.10.7]: https://github.com/DigiGilde/plak/compare/v2026.10.4...v2026.10.7
 [2026.10.4]: https://github.com/DigiGilde/plak/compare/v2026.9.30...v2026.10.4

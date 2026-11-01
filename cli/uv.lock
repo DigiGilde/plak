@@ -397,7 +397,7 @@ wheels = [
 
 [[package]]
 name = "plak"
-version = "2026.10.31"
+version = "2026.11.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

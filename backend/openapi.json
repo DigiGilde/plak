@@ -3,13 +3,13 @@
   "info": {
     "title": "Plak API",
     "summary": "Publish and share static sites, with previews per pull request.",
-    "description": "\nPlak publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n    for that site, and only while the repository of that workflow is linked to it\n    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n    the admin URL itself, until another repository is linked or a site admin requires the site id;\n  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, the site id the workflow names, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\n",
+    "description": "\nPlak publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n    for that site, and only while the repository of that workflow is linked to it\n    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n    the admin URL itself, until another repository is linked or a site admin requires the site id;\n  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, the site id the workflow names, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\nAddresses are slugs and can change; the API knows only the current one, an old slug answers 404.\n",
     "contact": {
       "name": "Plak",
       "url": "https://github.com/DigiGilde/plak/issues",
       "email": "digigilde@rijksoverheid.nl"
     },
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   "servers": [
     {
@@ -693,6 +693,65 @@
         ]
       }
     },
+    "/-/api/v1/operator": {
+      "get": {
+        "tags": [
+          "Installation"
+        ],
+        "summary": "Who runs this installation",
+        "description": "The organisation that runs this installation of Plak and the e-mail address at which people reach it about privacy, accessibility and other questions, as set in `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back as `null`.\n\n**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and sets no cookie.",
+        "operationId": "operator_contact___api_v1_operator_get",
+        "responses": {
+          "200": {
+            "description": "The name and e-mail address of the organisation, each `null` if not configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host (`ORIGIN_REFUSED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. Too many requests from this address (`TOO_MANY_REQUESTS`). Try again later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests. Try again later.",
+                  "code": "TOO_MANY_REQUESTS"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/-/api/v1/me": {
       "get": {
         "tags": [
@@ -949,7 +1008,7 @@
           "Groups"
         ],
         "summary": "Create a group",
-        "description": "Creates a group and makes the creator group admin (`admin`) right away, so they can put sites in it. The new group starts with base `site_team` and no exceptions, unless `defaultAccess` asks for something else; that can be changed afterwards. Because the creator becomes group admin, choosing the default access right away is no more than they may do afterwards anyway.\n\n**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a reserved action: anyone who wants to publish something must be able to make a place for it themselves. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups and sites combined per 60 minutes, across the admin interface and the CLI together.",
+        "description": "Creates a group and makes the creator group admin (`admin`) right away, so they can put sites in it. The new group starts with base `site_team` and no exceptions, unless `defaultAccess` asks for something else; that can be changed afterwards. Because the creator becomes group admin, choosing the default access right away is no more than they may do afterwards anyway.\n\n**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a reserved action: anyone who wants to publish something must be able to make a place for it themselves. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
         "operationId": "create_group___api_v1_groups_post",
         "requestBody": {
           "content": {
@@ -1007,7 +1066,7 @@
             }
           },
           "409": {
-            "description": "Conflict. A group with this slug already exists (`SLUG_EXISTS`).",
+            "description": "Conflict. Another group has this slug, now or as an old slug that is not free again yet (`SLUG_EXISTS`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1041,7 +1100,7 @@
             }
           },
           "429": {
-            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already created 20 groups and sites combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already made 20 new groups, sites and addresses combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1436,6 +1495,157 @@
         ]
       }
     },
+    "/-/api/v1/groups/{group_slug}/slug": {
+      "put": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Change the address of a group",
+        "description": "Sets the slug of the group, the first path segment of every URL of its sites: every site, preview and secret link of the group gets a new address at once. The old slug stays reserved for this group, and its old addresses redirect to the new ones through day 30 after the change (until midnight, Amsterdam time), for visitors who may see the site. After that they answer 404, and the old slug is free for another group once the nightly cleanup has run. Until then this group can change back to it. `previousSlugs` lists the old slugs that still redirect.\n\nPublishing under the old address stops at once: the API knows only the current slug, and from this change on the repository link of every site in the group requires the site id. Sending the slug the group already has changes nothing and writes no audit row. If the response gets lost, the old path answers 404: read the group at the new slug, or send the request again with the new slug in the path, which then changes nothing.\n\n**Who can call this:** group role `admin`, with a valid CSRF header. A platform administrator without a group role is not allowed. Each change counts towards the limit of 20 new groups, sites and addresses combined per 60 minutes, and at most 5 old slugs of a group redirect at the same time.",
+        "operationId": "set_group_slug___api_v1_groups__group_slug__slug_put",
+        "parameters": [
+          {
+            "name": "group_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Slug"
+            },
+            "description": "Slug of the group; the first path segment of every site URL."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupSlugBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The group at its new address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not authenticated",
+                  "status": 401,
+                  "detail": "There is no active session.",
+                  "code": "NO_SESSION"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`). The member's role in this group is insufficient for this action (`INSUFFICIENT_ROLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Unknown group (`UNKNOWN_GROUP`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not found",
+                  "status": 404,
+                  "detail": "This does not exist, or you may not see it.",
+                  "code": "UNKNOWN_GROUP"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. Another group has this slug, now or as an old slug that is not free again yet (`SLUG_EXISTS`); or this group already has 5 old slugs that still redirect, and the new slug is none of them (`TOO_MANY_PREVIOUS_SLUGS`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "This clashes with the current state.",
+                  "code": "SLUG_EXISTS"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable input. The slug is invalid or reserved (`SLUG_INVALID`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unprocessable input",
+                  "status": 422,
+                  "detail": "The input is not right.",
+                  "code": "SLUG_INVALID"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already made 20 new groups, sites and addresses combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests. Try again later.",
+                  "code": "TOO_MANY_CREATIONS"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/-/api/v1/groups/{group_slug}/default-access": {
       "put": {
         "tags": [
@@ -1574,7 +1784,7 @@
           "Sites"
         ],
         "summary": "Create a site",
-        "description": "Creates a site within a group. The site gets the default access of the group, or whatever `access` asks for instead, and is served at `/{groupSlug}/{siteSlug}/` on the content origin, as soon as something has been deployed to it.\n\n**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes `admin` of the site they create, and may therefore choose the access right away: that is no more than they may do afterwards anyway. A platform administrator without a group role is not allowed. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups and sites combined per 60 minutes, across the admin interface and the CLI together.",
+        "description": "Creates a site within a group. The site gets the default access of the group, or whatever `access` asks for instead, and is served at `/{groupSlug}/{siteSlug}/` on the content origin, as soon as something has been deployed to it.\n\n**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes `admin` of the site they create, and may therefore choose the access right away: that is no more than they may do afterwards anyway. A platform administrator without a group role is not allowed. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
         "operationId": "create_site___api_v1_groups__group_slug__sites_post",
         "parameters": [
           {
@@ -1661,7 +1871,7 @@
             }
           },
           "409": {
-            "description": "Conflict. A site with this slug already exists in this group (`SLUG_EXISTS`).",
+            "description": "Conflict. Another site in this group has this slug, now or as an old slug that is not free again yet (`SLUG_EXISTS`).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1695,7 +1905,7 @@
             }
           },
           "429": {
-            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already created 20 groups and sites combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already made 20 new groups, sites and addresses combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1978,6 +2188,167 @@
                   "title": "Too many requests",
                   "status": 429,
                   "detail": "Too many requests. Try again later."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/-/api/v1/sites/{group_slug}/{site_slug}/slug": {
+      "put": {
+        "tags": [
+          "Sites"
+        ],
+        "summary": "Change the address of a site",
+        "description": "Sets the slug of the site, the second path segment of its URL: the site, its previews and its secret links get a new address at once. The old slug stays reserved for this site, and its old addresses redirect to the new ones through day 30 after the change (until midnight, Amsterdam time), for visitors who may see the site. After that they answer 404, and the old slug is free for another site in the group once the nightly cleanup has run. Until then this site can change back to it. `previousSlugs` lists the old slugs that still redirect.\n\nPublishing under the old address stops at once: the API knows only the current slug, and from this change on the repository link of the site requires the site id. Sending the slug the site already has changes nothing and writes no audit row. If the response gets lost, the old path answers 404: read the site at the new slug, or send the request again with the new slug in the path, which then changes nothing.\n\nWith `release` set, an admin of the group can take a slug that another site in the group gave up and that is still reserved for it. The reservation ends, and that site's old address stops redirecting at once. The audit log records the release in a row of its own. `release` never takes the current slug of another site, and where no other site holds the slug it makes no difference.\n\n**Who can call this:** effective site role `admin` together with a role in the group of the site, `reader` or higher, with a valid CSRF header. An admin of the site alone, without a role in its group, can change its title but not its address. Releasing a slug of another site needs the group role `admin`. Each change counts towards the limit of 20 new groups, sites and addresses combined per 60 minutes, and at most 5 old slugs of a site redirect at the same time.",
+        "operationId": "set_site_slug___api_v1_sites__group_slug___site_slug__slug_put",
+        "parameters": [
+          {
+            "name": "group_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Group Slug"
+            },
+            "description": "Slug of the group; the first path segment of every site URL."
+          },
+          {
+            "name": "site_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Site Slug"
+            },
+            "description": "Slug of the site within that group."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteSlugBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The site at its new address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not authenticated",
+                  "status": 401,
+                  "detail": "There is no active session.",
+                  "code": "NO_SESSION"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden. The request comes from an origin other than the admin host, or the member is not (or no longer) active (`ORIGIN_REFUSED`, `MEMBER_NOT_ACTIVE`). The `X-CSRF-Token` header is missing or does not match the CSRF cookie (`CSRF_INVALID`). The member's role on this site is insufficient for this action (`INSUFFICIENT_ROLE`). Changing the address also needs a role in the group of the site, which an admin of the site alone does not have (`INSUFFICIENT_ROLE`). Setting `release` needs the group role `admin` (`INSUFFICIENT_ROLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Forbidden",
+                  "status": 403,
+                  "detail": "You have no access here.",
+                  "code": "ORIGIN_REFUSED"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. Unknown group (`UNKNOWN_GROUP`) or unknown site (`UNKNOWN_SITE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Not found",
+                  "status": 404,
+                  "detail": "This does not exist, or you may not see it.",
+                  "code": "UNKNOWN_GROUP"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. Another site in this group has this slug, now or as an old slug that is not free again yet and that `release` did not release (`SLUG_EXISTS`); or this site already has 5 old slugs that still redirect, and the new slug is none of them (`TOO_MANY_PREVIOUS_SLUGS`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Conflict",
+                  "status": 409,
+                  "detail": "This clashes with the current state.",
+                  "code": "SLUG_EXISTS"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable input. The slug is invalid (`SLUG_INVALID`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Unprocessable input",
+                  "status": 422,
+                  "detail": "The input is not right.",
+                  "code": "SLUG_INVALID"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests. The rate limit budget for this session is used up; try again later. This member has already made 20 new groups, sites and addresses combined in the past hour (`TOO_MANY_CREATIONS`); the `Retry-After` header says after how many seconds it is allowed again.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "Too many requests",
+                  "status": 429,
+                  "detail": "Too many requests. Try again later.",
+                  "code": "TOO_MANY_CREATIONS"
                 }
               }
             }
@@ -5978,13 +6349,13 @@
                   "type": "null"
                 }
               ],
-              "description": "Slug of the group the row is about.",
+              "description": "Slug of the group the row is about. Also matches the `previous_group` of a change of address, so that change is found from the old slug as well as the new one.",
               "examples": [
                 "aurora"
               ],
               "title": "Group"
             },
-            "description": "Slug of the group the row is about."
+            "description": "Slug of the group the row is about. Also matches the `previous_group` of a change of address, so that change is found from the old slug as well as the new one."
           },
           {
             "name": "site",
@@ -5999,13 +6370,13 @@
                   "type": "null"
                 }
               ],
-              "description": "Slug of the site the row is about.",
+              "description": "Slug of the site the row is about. Also matches the `previous_site` of a change of address, and the `sites` of a row about a whole group: the sites that moved with its new address or went with it.",
               "examples": [
                 "docs"
               ],
               "title": "Site"
             },
-            "description": "Slug of the site the row is about."
+            "description": "Slug of the site the row is about. Also matches the `previous_site` of a change of address, and the `sites` of a row about a whole group: the sites that moved with its new address or went with it."
           },
           {
             "name": "actorPseudonym",
@@ -6135,7 +6506,7 @@
           "Audit log"
         ],
         "summary": "Look up the pseudonym of an actor",
-        "description": "Translates an identifier into the pseudonym under which it appears in the audit log, so you can filter on `actorPseudonym`. So you must already know who you are looking for: the log does not give away a list of names. If you only know the pseudonym from a log row, use `POST /platform/audit/actor-identity` for the opposite direction.\n\nThat this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up in the log lines of every proxy in between.\n\nThe pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper you only find rows from after the rotation.\n\nAn e-mail address that matches neither a member nor the verified address of a content viewer is not pseudonymised: that is a 404. An identifier that is not an e-mail address and belongs to nothing (for example a bare SSO subject) is pseudonymised as given, as `unknown`. If an e-mail address belongs to more than one subject (only possible via e-mail, never via an SSO subject), the response is a 409: in that case search by the SSO subject.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of 10 to 500 characters. The lookup itself is audited, with the pseudonym, `resolved_as` and the reason, never the identifier. If that audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such lookups, even on a 404.",
+        "description": "Translates an identifier into the pseudonym under which it appears in the audit log, so you can filter on `actorPseudonym`. So you must already know who you are looking for: the log does not give away a list of names. If you only know the pseudonym from a log row, use `POST /platform/audit/actor-identity` for the opposite direction.\n\nThat this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up in the log lines of every proxy in between.\n\nThe pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper, rows from before the rotation carry the pseudonym under the previous pepper: as long as that pepper is still in `PLAK_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer configured, you only find rows from after the rotation.\n\nAn e-mail address that matches neither a member nor the verified address of a content viewer is not pseudonymised: that is a 404. An identifier that is not an e-mail address and belongs to nothing (for example a bare SSO subject) is pseudonymised as given, as `unknown`. If an e-mail address belongs to more than one subject (only possible via e-mail, never via an SSO subject), the response is a 409: in that case search by the SSO subject.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of 10 to 500 characters. The lookup itself is audited, with the pseudonym and the previous pseudonyms, `resolved_as` and the reason, never the identifier. If that audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such lookups, even on a 404.",
         "operationId": "audit_actor_pseudonym___api_v1_platform_audit_actor_pseudonym_post",
         "requestBody": {
           "content": {
@@ -6273,7 +6644,7 @@
           "Audit log"
         ],
         "summary": "Look up the actor behind a pseudonym",
-        "description": "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from a log row, get back who is behind it. Every member, every content viewer and every linked repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and compared with the given pseudonym; nothing is kept to speed up this lookup, so expect a full pass over all three.\n\nIf the lookup finds nothing, there is no member, content viewer or repository that pseudonymises to this pseudonym. Several causes are possible: the pepper has been rotated since that row was written; the actor only ever visited content through the content-host SSO and that visit was more than 90 days ago (`content_viewers` is then cleaned up, like the related `content_access` rows); or the repository has since been unlinked, or deleted along with its site or group (`ON DELETE CASCADE`).\n\nThat this is a POST and not a query parameter is deliberate, as with the other side of this lookup.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of 10 to 500 characters. The lookup itself is audited, with the given pseudonym, `resolved_as` and the reason, never the identifier found. If writing that audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such lookups, even on a 404.",
+        "description": "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from a log row, get back who is behind it. Every member, every content viewer and every linked repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and with each pepper in `PLAK_AUDIT_PEPPER_PREVIOUS`, and compared with the given pseudonym; nothing is kept to speed up this lookup, so expect a full pass over all three.\n\nIf the lookup finds nothing, there is no member, content viewer or repository that pseudonymises to this pseudonym. Several causes are possible: the pepper has been rotated since that row was written and the previous pepper is no longer configured; the actor only ever visited content through the content-host SSO and that visit was more than 90 days ago (`content_viewers` is then cleaned up, like the related `content_access` rows); or the repository has since been unlinked, or deleted along with its site or group (`ON DELETE CASCADE`).\n\nThat this is a POST and not a query parameter is deliberate, as with the other side of this lookup.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of 10 to 500 characters. The lookup itself is audited, with the given pseudonym, `resolved_as` and the reason, never the identifier found. If writing that audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such lookups, even on a 404.",
         "operationId": "audit_actor_identity___api_v1_platform_audit_actor_identity_post",
         "requestBody": {
           "content": {
@@ -6331,7 +6702,7 @@
             }
           },
           "404": {
-            "description": "Not found. No member, content viewer or linked repository pseudonymises to this value (`PSEUDONYM_UNKNOWN`): the pepper has been rotated, the content viewer was cleaned up after 90 days without a visit, or the repository was unlinked or deleted along with its site.",
+            "description": "Not found. No member, content viewer or linked repository pseudonymises to this value (`PSEUDONYM_UNKNOWN`): the pepper has been rotated and the previous one is no longer configured, the content viewer was cleaned up after 90 days without a visit, or the repository was unlinked or deleted along with its site.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8357,6 +8728,14 @@
             "title": "Actorpseudonym",
             "description": "Value to use as `actorPseudonym` filter on `GET /platform/audit`."
           },
+          "previousPseudonyms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Previouspseudonyms",
+            "description": "Pseudonyms of the same identifier under the previous audit peppers, newest first, while a pepper rotation is in progress. Rows written before the rotation carry one of these: use each as `actorPseudonym` filter on `GET /platform/audit`. Empty when no previous pepper is configured."
+          },
           "resolvedAs": {
             "type": "string",
             "enum": [
@@ -8372,6 +8751,7 @@
         "type": "object",
         "required": [
           "actorPseudonym",
+          "previousPseudonyms",
           "resolvedAs"
         ],
         "title": "ActorPseudonymOut",
@@ -9099,13 +9479,22 @@
           "defaultAccess": {
             "$ref": "#/components/schemas/AccessOut",
             "description": "Access that a new site in this group starts with. Existing sites are not affected."
+          },
+          "previousSlugs": {
+            "items": {
+              "$ref": "#/components/schemas/PreviousSlugOut"
+            },
+            "type": "array",
+            "title": "Previousslugs",
+            "description": "Old slugs of the group whose addresses still redirect to the current ones, newest first; empty when there are none. Each stays reserved for this group, which can change back to it until its redirect has ended."
           }
         },
         "type": "object",
         "required": [
           "slug",
           "name",
-          "defaultAccess"
+          "defaultAccess",
+          "previousSlugs"
         ],
         "title": "GroupOut",
         "description": "A group: owner of sites and the unit of membership."
@@ -9186,6 +9575,29 @@
         ],
         "title": "GroupSiteRole",
         "description": "A role of its own on one site, always a site in the group you are looking at."
+      },
+      "GroupSlugBody": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "New slug of the group: lowercase letters, digits and hyphens, at most 63 characters, and not one of the names the platform reserves (`.well-known`, `cli-link`, `favicon.ico`, `robots.txt`). Not the current slug of another group either, nor one that another group gave up and that is not free again yet.",
+            "examples": [
+              "aurora"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug"
+        ],
+        "title": "GroupSlugBody",
+        "description": "The new slug of a group.",
+        "examples": [
+          {
+            "slug": "aurora"
+          }
+        ]
       },
       "IdentifierBody": {
         "properties": {
@@ -9631,6 +10043,22 @@
             "examples": [
               "2026-09-12T09:30:00Z"
             ]
+          },
+          "lastActiveAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "date-time",
+            "title": "Lastactiveat",
+            "description": "When the member was last active: the later of the last sign-in and the last use of a CLI session that still exists, or `null` if there was neither yet.",
+            "examples": [
+              "2026-09-12T09:30:00Z"
+            ]
           }
         },
         "type": "object",
@@ -9801,6 +10229,22 @@
               "2026-09-12T09:30:00Z"
             ]
           },
+          "lastActiveAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "date-time",
+            "title": "Lastactiveat",
+            "description": "When the member was last active: the later of the last sign-in and the last use of a CLI session that still exists, or `null` if there was neither yet.",
+            "examples": [
+              "2026-09-12T09:30:00Z"
+            ]
+          },
           "contentBaseUrl": {
             "type": "string",
             "title": "Contentbaseurl",
@@ -9860,6 +10304,14 @@
             "examples": [
               "en"
             ]
+          },
+          "slugRedirectDays": {
+            "type": "integer",
+            "title": "Slugredirectdays",
+            "description": "Through how many days after a change of address the old addresses of a group or site still redirect, until midnight, Amsterdam time. The SPA takes the number from here, so its texts say what the server does.",
+            "examples": [
+              30
+            ]
           }
         },
         "type": "object",
@@ -9871,7 +10323,8 @@
           "platformRole",
           "status",
           "createdAt",
-          "contentBaseUrl"
+          "contentBaseUrl",
+          "slugRedirectDays"
         ],
         "title": "MyProfile",
         "description": "The signed-in member, extended with what the SPA needs to build links."
@@ -9918,6 +10371,57 @@
         ],
         "title": "MySiteRole",
         "description": "A site on which the signed-in member has a direct site role."
+      },
+      "OperatorOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Name of the organisation that runs this installation, as people should read it (`PLAK_OPERATOR_NAME`), or `null` if it is not configured.",
+            "examples": [
+              "Digi Gilde"
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "E-mail address at which people reach that organisation about privacy, accessibility and other questions (`PLAK_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address without a display name, fit for a `mailto:` link.",
+            "examples": [
+              "digigilde@rijksoverheid.nl"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "title": "OperatorOut",
+        "description": "Who runs this installation of Plak, and how to reach them.",
+        "examples": [
+          {
+            "name": "Digi Gilde",
+            "email": "digigilde@rijksoverheid.nl"
+          },
+          {
+            "name": null,
+            "email": null
+          }
+        ]
       },
       "Overview": {
         "properties": {
@@ -10094,6 +10598,34 @@
         ],
         "title": "PreviewOut",
         "description": "A preview: a temporary copy of a site alongside the live version."
+      },
+      "PreviousSlugOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "The old slug.",
+            "examples": [
+              "oud-team"
+            ]
+          },
+          "redirectsUntil": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Redirectsuntil",
+            "description": "When the redirect ends: midnight, Amsterdam time, at the end of day 30 after the change. From then on the old addresses answer 404; the slug is free again for others only once the nightly cleanup after that has run.",
+            "examples": [
+              "2026-09-12T09:30:00Z"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "redirectsUntil"
+        ],
+        "title": "PreviousSlugOut",
+        "description": "An old slug whose addresses still redirect to the current ones."
       },
       "Role": {
         "type": "string",
@@ -10351,6 +10883,14 @@
               "docs"
             ]
           },
+          "previousSlugs": {
+            "items": {
+              "$ref": "#/components/schemas/PreviousSlugOut"
+            },
+            "type": "array",
+            "title": "Previousslugs",
+            "description": "Old slugs of the site whose addresses still redirect to the current ones, newest first; empty when there are none. Each stays reserved for this site, which can change back to it until its redirect has ended. A change of the group's slug is not in here but in the `previousSlugs` of the group."
+          },
           "title": {
             "type": "string",
             "title": "Title",
@@ -10441,6 +10981,7 @@
           "id",
           "groupSlug",
           "slug",
+          "previousSlugs",
           "title",
           "access",
           "externalSources",
@@ -10724,6 +11265,35 @@
           }
         ]
       },
+      "SiteSlugBody": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "New slug of the site: lowercase letters, digits and hyphens, at most 63 characters. Not the current slug of another site in the group, nor one that another site in the group gave up and that is not free again yet, unless `release` releases it.",
+            "examples": [
+              "docs"
+            ]
+          },
+          "release": {
+            "type": "boolean",
+            "title": "Release",
+            "description": "When true, a slug that another site in the group gave up and that is still reserved for it is released and taken. That site's old address stops redirecting at once. Needs the group role `admin`.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug"
+        ],
+        "title": "SiteSlugBody",
+        "description": "The new slug of a site within its group.",
+        "examples": [
+          {
+            "slug": "docs"
+          }
+        ]
+      },
       "SiteStorageOut": {
         "properties": {
           "usedBytes": {
@@ -10957,7 +11527,8 @@
           "storageRef": {
             "type": "string",
             "title": "Storageref",
-            "description": "Internal reference to the unpacked file tree on disk."
+            "description": "Internal reference to the unpacked file tree on disk. Deprecated, and gone in API 2.",
+            "deprecated": true
           },
           "origin": {
             "type": "string",
@@ -11287,6 +11858,10 @@
     {
       "name": "Audit log",
       "description": "Reading the audit log: who did what, when, and with what outcome. Platform administrators only."
+    },
+    {
+      "name": "Installation",
+      "description": "The organisation that runs this installation of Plak, and how to reach it."
     }
   ]
 }
