@@ -126,7 +126,7 @@ NL: Final[dict[str, str]] = {
         "Je kunt jezelf niet de beheerdersrol afnemen. Laat een andere platformbeheerder dat doen."
     ),
     "BOOTSTRAP_MEMBER": (
-        "Dit is het bootstrap-account uit PLAK_BOOTSTRAP_ADMIN_SUB. Het wordt bij elke login "
+        "Dit is het bootstrap-account uit TOON_BOOTSTRAP_ADMIN_SUB. Het wordt bij elke login "
         "hersteld, dus wijzig die instelling in plaats van dit lid."
     ),
     "LAST_PLATFORM_ADMIN": "Dit is de laatste actieve platformbeheerder. Wijs eerst iemand anders aan.",
@@ -164,7 +164,7 @@ NL: Final[dict[str, str]] = {
         "Het aantal bewaarde vorige versies moet een geheel getal van 0 of meer zijn."
     ),
     "LIVE_VERSIONS_KEPT_TOO_LARGE": "Dit getal is te groot om op te slaan. Kies een kleiner aantal.",
-    "HOST_NOT_ALLOWED": "Deze Forgejo-instantie staat niet in PLAK_CI_FORGEJO_HOSTS.",
+    "HOST_NOT_ALLOWED": "Deze Forgejo-instantie staat niet in TOON_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "Bij GitHub hoort geen andere host.",
     "CI_PROVIDER_RATE_LIMITED": "{host} laat even geen opzoekingen meer toe. Probeer het later opnieuw.",
     "CI_PROVIDER_UNREACHABLE.lookup": "{host} is niet bereikbaar. Probeer het later opnieuw.",
@@ -191,7 +191,7 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
         "De audience van het CI-token moet precies de beheer-URL van Plak zijn "
-        "(PLAK_BASE_URL is niet ingesteld)."
+        "(TOON_BASE_URL is niet ingesteld)."
     ),
     "CI_AUDIENCE_MISMATCH.site": (
         "De repository van dit ID-token is niet gekoppeld aan de site waar het site-ID bij hoort."
@@ -427,7 +427,7 @@ EN: Final[dict[str, str]] = {
         "administrator do that."
     ),
     "BOOTSTRAP_MEMBER": (
-        "This is the bootstrap account from PLAK_BOOTSTRAP_ADMIN_SUB. It is restored on every "
+        "This is the bootstrap account from TOON_BOOTSTRAP_ADMIN_SUB. It is restored on every "
         "sign-in, so change that setting instead of this member."
     ),
     "LAST_PLATFORM_ADMIN": "This is the last active platform administrator. Appoint someone else first.",
@@ -470,7 +470,7 @@ EN: Final[dict[str, str]] = {
         "The number of previous versions kept must be a whole number of 0 or more."
     ),
     "LIVE_VERSIONS_KEPT_TOO_LARGE": "This number is too large to store. Choose a smaller one.",
-    "HOST_NOT_ALLOWED": "This Forgejo instance is not in PLAK_CI_FORGEJO_HOSTS.",
+    "HOST_NOT_ALLOWED": "This Forgejo instance is not in TOON_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "GitHub does not come with another host.",
     "CI_PROVIDER_RATE_LIMITED": "{host} is not accepting lookups right now. Try again later.",
     "CI_PROVIDER_UNREACHABLE.lookup": "{host} is unreachable. Try again later.",
@@ -497,7 +497,7 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
         "The audience of the CI token has to be exactly the beheer URL of Plak "
-        "(PLAK_BASE_URL is not set)."
+        "(TOON_BASE_URL is not set)."
     ),
     "CI_AUDIENCE_MISMATCH.site": "This ID token's repository is not linked to the site its site id names.",
     "CI_REPOSITORY_NOT_TRUSTED": (

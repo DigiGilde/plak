@@ -173,7 +173,7 @@ async def test_a_failed_audit_write_gives_503_and_no_ip(client, app, factory, da
 
 
 async def test_the_previous_key_decrypts_a_row_from_before_rotation(client, app, factory, data):
-    """The key-rotation shape: PLAK_AUDIT_IP_KEY_PREVIOUS holds the old key,
+    """The key-rotation shape: TOON_AUDIT_IP_KEY_PREVIOUS holds the old key,
     so a row written under it stays revealable after the rotation."""
     old_key = app.state.settings.audit_ip_key
     await _write_with_ip(app, ip="203.0.113.42")
@@ -191,7 +191,7 @@ async def test_the_previous_key_decrypts_a_row_from_before_rotation(client, app,
 
 
 async def test_a_row_under_the_second_of_two_previous_keys_is_revealed(client, app, factory, data):
-    """Two rotations on, PLAK_AUDIT_IP_KEY_PREVIOUS lists both keys replaced,
+    """Two rotations on, TOON_AUDIT_IP_KEY_PREVIOUS lists both keys replaced,
     newest first: a row from before the first rotation is still revealed."""
     oldest_key = app.state.settings.audit_ip_key
     await _write_with_ip(app, ip="203.0.113.42")
@@ -210,7 +210,7 @@ async def test_a_row_under_the_second_of_two_previous_keys_is_revealed(client, a
 
 async def test_a_row_under_a_key_no_longer_listed_is_404_and_still_audited(client, app, factory, data):
     """Previous keys are configured, but not the one this row names: once a key
-    leaves PLAK_AUDIT_IP_KEY_PREVIOUS, its rows keep their truncated network
+    leaves TOON_AUDIT_IP_KEY_PREVIOUS, its rows keep their truncated network
     and can no longer be revealed. The attempt is recorded all the same."""
     await _write_with_ip(app, ip="203.0.113.42")
     async with factory() as db:

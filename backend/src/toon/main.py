@@ -5,7 +5,7 @@ rate limit: SPA assets are unlimited), host separation (outside rate
 limit and SPA, but inside the security headers so its neutral 404 carries the
 same header set as the router's neutral 404), security headers, TrustedHost,
 API-Version. Three of those know the content host, and they all derive it from
-the same PLAK_CONTENT_BASE_URL: the SPA answers on the admin host only, the
+the same TOON_CONTENT_BASE_URL: the SPA answers on the admin host only, the
 host separation decides which world a path belongs to, and the security headers
 put the admin regime on the admin host alone. The app serves content, SPA and
 platform routes itself and enforces the origin separation itself; any proxy in
@@ -151,9 +151,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 previous_peppers,
                 previous_ip_keys,
             )
+        # Names only: never a value.
+        old_variables = settings.old_variables_in_use()
+        if old_variables:
+            _logger.warning(
+                "Environment variables with the old PLAK_ prefix are still in use: %s. "
+                "See docs/deploying-on-zad.md.",
+                ", ".join(old_variables),
+            )
+        left_behind = settings.old_audit_variables_left_behind()
+        if left_behind:
+            _logger.warning(
+                "%s hold a value that is neither current nor previous, so audit rows written "
+                "under it are out of reach. Do not remove them before this is solved. "
+                "See docs/deploying-on-zad.md.",
+                ", ".join(left_behind),
+            )
         if not spa_available(settings.spa_path):
             _logger.warning(
-                "Admin SPA not found in %s (PLAK_SPA_PATH): the admin host answers 503 "
+                "Admin SPA not found in %s (TOON_SPA_PATH): the admin host answers 503 "
                 "until the built frontend is there",
                 settings.spa_path,
             )
@@ -168,7 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             root_complaint = content_root_complaint(content_store.root)
             storage_watch(app).content_root_message = root_complaint
             if root_complaint:
-                _logger.error("%s Check PLAK_CONTENT_ROOT and the volume mount.", root_complaint)
+                _logger.error("%s Check TOON_CONTENT_ROOT and the volume mount.", root_complaint)
 
         app.state.engine = engine
         app.state.settings = settings

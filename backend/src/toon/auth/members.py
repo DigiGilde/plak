@@ -38,7 +38,7 @@ async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub
 
     Anyone who can complete SSO Rijk login may use Plak, so a first admin
     visit needs no approval: the member is created active straight away. The
-    bootstrap sub (PLAK_BOOTSTRAP_ADMIN_SUB) becomes admin besides, also when
+    bootstrap sub (TOON_BOOTSTRAP_ADMIN_SUB) becomes admin besides, also when
     the record already existed before the bootstrap was configured
     (idempotent promotion).
     """

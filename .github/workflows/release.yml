@@ -5,7 +5,7 @@
 # newest CHANGELOG section. Merging it is the release. `decide` sees that
 # the newest section has no tag yet, finds the commit that added it and
 # checks that this commit carries the version everywhere and leaves no
-# fragment behind. `tag` then gets a token of the digigilde-plak-release
+# fragment behind. `tag` then gets a token of the digigilde-toon-release
 # App, the only actor the ruleset lets create a release tag, and pushes
 # the annotated tag vX on that commit: a push that, unlike one with
 # GITHUB_TOKEN, starts deploy.yml for the tag. Production and the GitHub

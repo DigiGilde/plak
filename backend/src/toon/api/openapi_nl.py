@@ -37,7 +37,7 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n"
         "  and on linking a repository. The token is one of two kinds:\n"
         "  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n"
-        "    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n"
+        "    URL of Plak (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n"
         "    for that site, and only while the repository of that workflow is linked to it\n"
         "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n"
         "    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n"
@@ -95,7 +95,7 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` en `GET /cli/whoami`, en, alleen met een CLI-token, op het aanmaken van een groep\n"
         "  of site en het koppelen van een repository. Het token is een van twee soorten:\n"
         "  * een **CI-ID-token** (JWT) van GitHub Actions of Forgejo Actions, met als audience precies de\n"
-        "    beheer-URL van Plak (`PLAK_BASE_URL`) gevolgd door `/-/sites/` en het `id` van één site. Het geldt\n"
+        "    beheer-URL van Plak (`TOON_BASE_URL`) gevolgd door `/-/sites/` en het `id` van één site. Het geldt\n"
         "    alleen voor die site, en alleen zolang de repository van die workflow eraan gekoppeld is\n"
         "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); er is geen geheim om te bewaren. Een koppeling\n"
         "    van vóór het site-ID, van een repository die alleen aan die site gekoppeld was, accepteert ook een\n"
@@ -241,9 +241,9 @@ NL: Final[dict[str, str]] = {
         "that directory away.\n"
         "\n"
         "**Limits** (configurable; these are the defaults): the request body is at most 100 MB "
-        "(`PLAK_INGEST_MAX_BODY`), a single unpacked file 50 MB (`PLAK_INGEST_MAX_FILE`), the entire unpacked site 200 "
-        "MB (`PLAK_INGEST_MAX_TOTAL`), with at most 1000 entries (`PLAK_INGEST_MAX_FILES`) and 10 levels of directory "
-        "depth (`PLAK_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not "
+        "(`TOON_INGEST_MAX_BODY`), a single unpacked file 50 MB (`TOON_INGEST_MAX_FILE`), the entire unpacked site 200 "
+        "MB (`TOON_INGEST_MAX_TOTAL`), with at most 1000 entries (`TOON_INGEST_MAX_FILES`) and 10 levels of directory "
+        "depth (`TOON_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not "
         "count. The archive as a whole may contain at most fifty times as many entries, and for a `.tar.gz` the "
         "unpacked size of all members counts, including the unpublished ones: a tar has no index, so getting to the "
         "next header means decompressing everything in between. The limits are enforced during unpacking and the "
@@ -294,9 +294,9 @@ NL: Final[dict[str, str]] = {
         "heeft.\n"
         "\n"
         "**Limieten** (instelbaar; dit zijn de standaardwaarden): het verzoeklichaam is hoogstens 100 MB "
-        "(`PLAK_INGEST_MAX_BODY`), een los uitgepakt bestand 50 MB (`PLAK_INGEST_MAX_FILE`), de hele uitgepakte site "
-        "200 MB (`PLAK_INGEST_MAX_TOTAL`), met hoogstens 1000 entries (`PLAK_INGEST_MAX_FILES`) en 10 niveaus "
-        "mapdiepte (`PLAK_INGEST_MAX_DEPTH`). Die gelden op wat gepubliceerd wordt: wat buiten het `basePath` valt "
+        "(`TOON_INGEST_MAX_BODY`), een los uitgepakt bestand 50 MB (`TOON_INGEST_MAX_FILE`), de hele uitgepakte site "
+        "200 MB (`TOON_INGEST_MAX_TOTAL`), met hoogstens 1000 entries (`TOON_INGEST_MAX_FILES`) en 10 niveaus "
+        "mapdiepte (`TOON_INGEST_MAX_DEPTH`). Die gelden op wat gepubliceerd wordt: wat buiten het `basePath` valt "
         "telt niet mee. Het archief als geheel mag hoogstens vijftig keer zoveel entries bevatten, en bij een "
         "`.tar.gz` telt de uitgepakte omvang van alle leden mee, ook de niet-gepubliceerde: een tar heeft geen index, "
         "dus bij de volgende header komen betekent alles ertussen decomprimeren. De limieten worden tijdens het "
@@ -646,7 +646,7 @@ NL: Final[dict[str, str]] = {
     "Who runs this installation": "Wie deze installatie draait",
     (
         "The organisation that runs this installation of Plak and the e-mail address at which people reach it about "
-        "privacy, accessibility and other questions, as set in `PLAK_OPERATOR_NAME` and `PLAK_OPERATOR_EMAIL`. The "
+        "privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`. The "
         "public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back "
         "as `null`.\n"
         "\n"
@@ -654,8 +654,8 @@ NL: Final[dict[str, str]] = {
         "cookie."
     ): (
         "De organisatie die deze installatie van Plak draait en het e-mailadres waarop mensen haar bereiken over "
-        "privacy, toegankelijkheid en andere vragen, zoals ingesteld in `PLAK_OPERATOR_NAME` en "
-        "`PLAK_OPERATOR_EMAIL`. De openbare privacy- en toegankelijkheidspagina's van het beheer tonen ze. Een "
+        "privacy, toegankelijkheid en andere vragen, zoals ingesteld in `TOON_OPERATOR_NAME` en "
+        "`TOON_OPERATOR_EMAIL`. De openbare privacy- en toegankelijkheidspagina's van het beheer tonen ze. Een "
         "instelling die leeg is, komt terug als `null`.\n"
         "\n"
         "**Mag:** iedereen, zonder authenticatie. Er is geen sessie en geen CSRF-header voor nodig, en er wordt geen "
@@ -1452,7 +1452,7 @@ NL: Final[dict[str, str]] = {
     "Require the site id of a workflow": "Het site-ID van een workflow verplicht maken",
     (
         "For a link made before the site id existed: from now on the linked repository may publish to this site only "
-        "with a CI ID token whose audience names the site id, `{PLAK_BASE_URL}/-/sites/{siteId}`. A workflow does that "
+        "with a CI ID token whose audience names the site id, `{TOON_BASE_URL}/-/sites/{siteId}`. A workflow does that "
         "with `site-id` (action) or `--site-id` (CLI); a workflow without it is refused with 403 "
         "`CI_SITE_ID_REQUIRED`. A link made since then, or that got another repository since, requires it already.\n"
         "\n"
@@ -1463,7 +1463,7 @@ NL: Final[dict[str, str]] = {
         "**Who can call this:** effective site role `admin`, with a valid CSRF header."
     ): (
         "Voor een koppeling van vóór het site-ID: vanaf nu mag de gekoppelde repository alleen nog naar deze site "
-        "publiceren met een CI-ID-token waarvan de audience het site-ID noemt, `{PLAK_BASE_URL}/-/sites/{siteId}`. "
+        "publiceren met een CI-ID-token waarvan de audience het site-ID noemt, `{TOON_BASE_URL}/-/sites/{siteId}`. "
         "Een workflow doet dat met `site-id` (action) of `--site-id` (CLI); een workflow zonder wordt geweigerd met "
         "403 `CI_SITE_ID_REQUIRED`. Een koppeling die sindsdien is gemaakt, of die sindsdien een andere repository "
         "kreeg, vraagt het al.\n"
@@ -1975,9 +1975,9 @@ NL: Final[dict[str, str]] = {
         "That this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up in the log "
         "lines of every proxy in between.\n"
         "\n"
-        "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper, rows from before the rotation "
+        "The pseudonym depends on `TOON_AUDIT_PEPPER`. After a rotation of that pepper, rows from before the rotation "
         "carry the pseudonym under the previous pepper: as long as that pepper is still in "
-        "`PLAK_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
+        "`TOON_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
         "configured, you only find rows from after the rotation.\n"
         "\n"
         "An e-mail address that matches neither a member nor the verified address of a content viewer is not "
@@ -1999,8 +1999,8 @@ NL: Final[dict[str, str]] = {
         "Dat dit een POST is en geen queryparameter, is met opzet: een e-mailadres in een URL belandt in de logregels "
         "van elke proxy ertussen.\n"
         "\n"
-        "Het pseudoniem hangt aan `PLAK_AUDIT_PEPPER`. Na een rotatie van die pepper dragen regels van vóór de rotatie "
-        "het pseudoniem onder de vorige pepper: zolang die pepper nog in `PLAK_AUDIT_PEPPER_PREVIOUS` staat, geeft "
+        "Het pseudoniem hangt aan `TOON_AUDIT_PEPPER`. Na een rotatie van die pepper dragen regels van vóór de rotatie "
+        "het pseudoniem onder de vorige pepper: zolang die pepper nog in `TOON_AUDIT_PEPPER_PREVIOUS` staat, geeft "
         "`previousPseudonyms` het. Staat de vorige pepper er niet meer in, dan vind je alleen nog regels van ná de "
         "rotatie.\n"
         "\n"
@@ -2043,7 +2043,7 @@ NL: Final[dict[str, str]] = {
     (
         "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from a log row, get back "
         "who is behind it. Every member, every content viewer and every linked repository is pseudonymised again with "
-        "the current `PLAK_AUDIT_PEPPER` and with each pepper in `PLAK_AUDIT_PEPPER_PREVIOUS`, and compared with the "
+        "the current `TOON_AUDIT_PEPPER` and with each pepper in `TOON_AUDIT_PEPPER_PREVIOUS`, and compared with the "
         "given pseudonym; nothing is kept to speed up this lookup, so expect a full pass over all three.\n"
         "\n"
         "If the lookup finds nothing, there is no member, content viewer or repository that pseudonymises to this "
@@ -2062,7 +2062,7 @@ NL: Final[dict[str, str]] = {
     ): (
         "De omgekeerde richting van `POST /platform/audit/actor-pseudonym`: geef een pseudoniem uit een logregel, "
         "krijg terug wie erachter zit. Elk lid, elke content-viewer en elke gekoppelde repository wordt met de actuele "
-        "`PLAK_AUDIT_PEPPER` en met elke pepper in `PLAK_AUDIT_PEPPER_PREVIOUS` opnieuw gepseudonimiseerd en "
+        "`TOON_AUDIT_PEPPER` en met elke pepper in `TOON_AUDIT_PEPPER_PREVIOUS` opnieuw gepseudonimiseerd en "
         "vergeleken met het opgegeven pseudoniem; er wordt niets bijgehouden om deze zoekslag te versnellen, dus reken "
         "op een volledige doorloop van alle drie.\n"
         "\n"
@@ -2104,7 +2104,7 @@ NL: Final[dict[str, str]] = {
     "Reveal the full IP address of an audit row": "Volledig IP-adres van een auditregel achterhalen",
     (
         "`GET /platform/audit` only shows the truncated network per row (`ipTruncated`); this endpoint decrypts the "
-        "full address stored encrypted next to it (`PLAK_AUDIT_IP_KEY`, a different key from the audit pepper). "
+        "full address stored encrypted next to it (`TOON_AUDIT_IP_KEY`, a different key from the audit pepper). "
         "Intended as a last resort, when the truncated network is not enough, for example in an incident "
         "investigation.\n"
         "\n"
@@ -2114,7 +2114,7 @@ NL: Final[dict[str, str]] = {
         "on a 404."
     ): (
         "`GET /platform/audit` toont per regel alleen het afgeknotte netwerk (`ipTruncated`); dit endpoint ontsleutelt "
-        "het volledige adres dat er versleuteld naast staat (`PLAK_AUDIT_IP_KEY`, een andere sleutel dan de "
+        "het volledige adres dat er versleuteld naast staat (`TOON_AUDIT_IP_KEY`, een andere sleutel dan de "
         "auditpepper). Bedoeld voor het uiterste geval waarin het netwerk niet volstaat, bijvoorbeeld bij een "
         "incidentonderzoek.\n"
         "\n"
@@ -2877,13 +2877,13 @@ NL: Final[dict[str, str]] = {
     (
         "The interface language a member picked for themselves.\n"
         "\n"
-        "The values are the ones plak.i18n supports; test_identity.py keeps the two\n"
+        "The values are the ones toon.i18n supports; test_identity.py keeps the two\n"
         "in sync. \"Follow my browser\" is not a value here but the absence of one,\n"
         "see Member.language."
     ): (
         "De interfacetaal die een lid voor zichzelf koos.\n"
         "\n"
-        "De waarden zijn die welke plak.i18n ondersteunt; test_identity.py houdt de twee\n"
+        "De waarden zijn die welke toon.i18n ondersteunt; test_identity.py houdt de twee\n"
         "gelijk. \"Volg mijn browser\" is hier geen waarde maar het ontbreken ervan,\n"
         "zie Member.language."
     ),
@@ -2904,11 +2904,11 @@ NL: Final[dict[str, str]] = {
         "`active` (mag de API gebruiken) of `deactivated` (wordt geweigerd). Alleen `active` komt langs de API."
     ),
     (
-        "Whether this is the account from `PLAK_BOOTSTRAP_ADMIN_SUB`. That account is restored to administrator and "
+        "Whether this is the account from `TOON_BOOTSTRAP_ADMIN_SUB`. That account is restored to administrator and "
         "active at every sign-in, so its status and platform role cannot be changed. The SPA uses this to not offer "
         "those actions."
     ): (
-        "Of dit het account uit `PLAK_BOOTSTRAP_ADMIN_SUB` is. Dat account wordt bij elke login hersteld naar "
+        "Of dit het account uit `TOON_BOOTSTRAP_ADMIN_SUB` is. Dat account wordt bij elke login hersteld naar "
         "beheerder-en-actief, dus status en platformrol zijn er niet te wijzigen. De SPA gebruikt dit om die "
         "handelingen niet aan te bieden."
     ),
@@ -2974,17 +2974,17 @@ NL: Final[dict[str, str]] = {
         "staan erin: op elke andere site van een groep geldt gewoon de groepsrol uit `groupRoles`."
     ),
     (
-        "The Forgejo instances whose CI ID tokens Plak accepts (`PLAK_CI_FORGEJO_HOSTS`), as base URL. GitHub is "
+        "The Forgejo instances whose CI ID tokens Plak accepts (`TOON_CI_FORGEJO_HOSTS`), as base URL. GitHub is "
         "always accepted and is not listed here."
     ): (
-        "De Forgejo-instanties waarvan Plak CI-ID-tokens accepteert (`PLAK_CI_FORGEJO_HOSTS`), als basis-URL. GitHub "
+        "De Forgejo-instanties waarvan Plak CI-ID-tokens accepteert (`TOON_CI_FORGEJO_HOSTS`), als basis-URL. GitHub "
         "wordt altijd geaccepteerd en staat hier niet in."
     ),
     (
-        "The audience a CI workflow must request for its ID token: exactly `PLAK_BASE_URL`. That is also the value for "
+        "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That is also the value for "
         "the `host` input of the plak action."
     ): (
-        "De audience die een CI-workflow voor zijn ID-token moet aanvragen: precies `PLAK_BASE_URL`. Dat is ook de "
+        "De audience die een CI-workflow voor zijn ID-token moet aanvragen: precies `TOON_BASE_URL`. Dat is ook de "
         "waarde voor de invoer `host` van de plak-action."
     ),
     (
@@ -3023,19 +3023,19 @@ NL: Final[dict[str, str]] = {
         "Een site waarop het ingelogde lid een eigen siterol heeft."
     ),
     (
-        "Name of the organisation that runs this installation, as people should read it (`PLAK_OPERATOR_NAME`), or "
+        "Name of the organisation that runs this installation, as people should read it (`TOON_OPERATOR_NAME`), or "
         "`null` if it is not configured."
     ): (
         "Naam van de organisatie die deze installatie draait, zoals mensen die moeten lezen "
-        "(`PLAK_OPERATOR_NAME`), of `null` als die niet is ingesteld."
+        "(`TOON_OPERATOR_NAME`), of `null` als die niet is ingesteld."
     ),
     (
         "E-mail address at which people reach that organisation about privacy, accessibility and other questions "
-        "(`PLAK_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address without a display name, "
+        "(`TOON_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address without a display name, "
         "fit for a `mailto:` link."
     ): (
         "E-mailadres waarop mensen die organisatie bereiken over privacy, toegankelijkheid en andere vragen "
-        "(`PLAK_OPERATOR_EMAIL`), of `null` als dat niet is ingesteld. Altijd een kaal adres zonder weergavenaam, "
+        "(`TOON_OPERATOR_EMAIL`), of `null` als dat niet is ingesteld. Altijd een kaal adres zonder weergavenaam, "
         "geschikt voor een `mailto:`-link."
     ),
     "Who runs this installation of Plak, and how to reach them.": (
@@ -3433,17 +3433,17 @@ NL: Final[dict[str, str]] = {
     "Bytes in use on the volume.": "Bytes in gebruik op het volume.",
     "Bytes still free on the volume.": "Bytes die nog vrij zijn op het volume.",
     (
-        "Free space the volume must keep (`PLAK_STORAGE_MIN_FREE_BYTES`); below that a deploy is refused. `0` means "
+        "Free space the volume must keep (`TOON_STORAGE_MIN_FREE_BYTES`); below that a deploy is refused. `0` means "
         "that check is off."
     ): (
-        "Vrije ruimte die het volume moet houden (`PLAK_STORAGE_MIN_FREE_BYTES`); daaronder wordt een deploy "
+        "Vrije ruimte die het volume moet houden (`TOON_STORAGE_MIN_FREE_BYTES`); daaronder wordt een deploy "
         "geweigerd. `0` betekent dat die controle uit staat."
     ),
     (
-        "Largest unpacked size of one deploy (`PLAK_INGEST_MAX_TOTAL`). If free space on the volume is less than "
+        "Largest unpacked size of one deploy (`TOON_INGEST_MAX_TOTAL`). If free space on the volume is less than "
         "`reserveBytes` plus this number, a deploy of maximum size is no longer possible."
     ): (
-        "Grootste uitgepakte omvang van één deploy (`PLAK_INGEST_MAX_TOTAL`). Is het vrije volume kleiner dan "
+        "Grootste uitgepakte omvang van één deploy (`TOON_INGEST_MAX_TOTAL`). Is het vrije volume kleiner dan "
         "`reserveBytes` plus dit getal, dan kan een deploy van maximale omvang niet meer."
     ),
     "How full the content volume is.": "Hoe vol het contentvolume is.",

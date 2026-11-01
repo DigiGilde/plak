@@ -1,6 +1,6 @@
 """Removes audit rows that have outlived their retention (BIO2 8.15.04).
 
-Runs outside the app, on the same PLAK_DB_URL account. Which rows have expired
+Runs outside the app, on the same TOON_DB_URL account. Which rows have expired
 is known only to the database (audit_log_chain_retention() in 0001_base); this
 file carries no term of its own, so the two cannot drift apart. The BEFORE
 DELETE trigger, not this account, decides what may go.
@@ -14,16 +14,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from toon.audit import vocabulary
+from toon.config import server_variable
 from toon.db import make_session_factory
 from toon.models.audit import ActorKind, AuditLogEntry
 
-DB_URL_VAR = "PLAK_DB_URL"
+DB_URL_VAR = "TOON_DB_URL"
 BATCH_DEFAULT = 10_000
 
 _logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ async def purge(dsn: str, *, batch: int = BATCH_DEFAULT) -> int:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    dsn = os.environ.get(DB_URL_VAR)
+    dsn = server_variable(DB_URL_VAR)
     if not dsn:
         _logger.error("%s is not set; the purge does not know which database to talk to.", DB_URL_VAR)
         return 1

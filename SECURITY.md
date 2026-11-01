@@ -27,7 +27,7 @@ and agree a date with you if it will take longer.
 Both hosts serve a `security.txt` conforming to RFC 9116 under
 `/.well-known/security.txt`, with the same document, so that the
 retrieval URL is always covered by a `Canonical` line. The file is
-rendered per request (`backend/src/plak/platform/security_txt.py`);
+rendered per request (`backend/src/toon/platform/security_txt.py`);
 `Expires` lies 90 days ahead, counted from the start of the current UTC
 day, so that it never expires without anyone doing anything.
 
@@ -38,14 +38,14 @@ Five things to know:
   public on 2026-09-27 with private vulnerability reporting switched on;
   before that they would have answered a 404, which is worse than one
   route fewer.
-- The second `Contact` is `mailto:` the address in `PLAK_OPERATOR_EMAIL`,
+- The second `Contact` is `mailto:` the address in `TOON_OPERATOR_EMAIL`,
   the organisation that runs the installation. On the Digi Gilde's own
   installation that is `digigilde@rijksoverheid.nl`, the same address as
   in `publiccode.yml`. Without the setting there is no mail line of the
   operator, and the advisory form keeps the required `Contact` present.
 - The CVD routes of NCSC-NL, the central reporting point for the Dutch
   central government, are listed only when the installation enables
-  them with `PLAK_SECURITY_TXT_NCSC=true`. They then add two `Policy`
+  them with `TOON_SECURITY_TXT_NCSC=true`. They then add two `Policy`
   lines after this file and three `Contact` lines after the operator's
   address, under a preamble that names NCSC-NL. The Digi Gilde's own
   installation enables them.

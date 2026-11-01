@@ -728,7 +728,7 @@ class MemberOut(ApiModel):
     is_bootstrap: bool = Field(
         default=False,
         description=(
-            "Whether this is the account from `PLAK_BOOTSTRAP_ADMIN_SUB`. That account is restored to "
+            "Whether this is the account from `TOON_BOOTSTRAP_ADMIN_SUB`. That account is restored to "
             "administrator and active at every sign-in, so its status and platform role cannot be changed. The "
             "SPA uses this to not offer those actions."
         ),
@@ -761,14 +761,14 @@ class VolumeOut(ApiModel):
     free_bytes: int = Field(description="Bytes still free on the volume.", examples=[536870912])
     reserve_bytes: int = Field(
         description=(
-            "Free space the volume must keep (`PLAK_STORAGE_MIN_FREE_BYTES`); below that a "
+            "Free space the volume must keep (`TOON_STORAGE_MIN_FREE_BYTES`); below that a "
             "deploy is refused. `0` means that check is off."
         ),
         examples=[104857600],
     )
     max_deploy_bytes: int = Field(
         description=(
-            "Largest unpacked size of one deploy (`PLAK_INGEST_MAX_TOTAL`). If free space on the volume is less "
+            "Largest unpacked size of one deploy (`TOON_INGEST_MAX_TOTAL`). If free space on the volume is less "
             "than `reserveBytes` plus this number, a deploy of maximum size is no longer possible."
         ),
         examples=[209715200],
@@ -828,7 +828,7 @@ class MyProfile(MemberOut):
     ci_forgejo_hosts: list[str] = Field(
         default_factory=list,
         description=(
-            "The Forgejo instances whose CI ID tokens Plak accepts (`PLAK_CI_FORGEJO_HOSTS`), as "
+            "The Forgejo instances whose CI ID tokens Plak accepts (`TOON_CI_FORGEJO_HOSTS`), as "
             "base URL. GitHub is always accepted and is not listed here."
         ),
         examples=[["https://code.overheid.nl"]],
@@ -836,7 +836,7 @@ class MyProfile(MemberOut):
     ci_audience: str = Field(
         default="",
         description=(
-            "The audience a CI workflow must request for its ID token: exactly `PLAK_BASE_URL`. That "
+            "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That "
             "is also the value for the `host` input of the plak action."
         ),
         examples=["https://beheer.plak.example"],
@@ -2646,7 +2646,7 @@ async def _resolve_lookup_identifier(db: AsyncSession, identifier: str) -> tuple
 
 
 # Actions that a de-anonymisation counts against the daily lookup limit
-# (PLAK_AUDIT_LOOKUP_DAILY_LIMIT): reading the audit log itself does not.
+# (TOON_AUDIT_LOOKUP_DAILY_LIMIT): reading the audit log itself does not.
 _LOOKUP_ACTIONS = (vocabulary.AUDIT_ACTOR_LOOKUP, vocabulary.AUDIT_ACTOR_IDENTITY, vocabulary.AUDIT_IP_REVEAL)
 
 
@@ -2772,13 +2772,13 @@ def _ingest_service(request: Request) -> IngestService:
 
 def _content_base(request: Request) -> str:
     """Origin the SPA builds content URLs on (public URL, secret and preview
-    links). PLAK_CONTENT_BASE_URL is required everywhere, so there is one host
+    links). TOON_CONTENT_BASE_URL is required everywhere, so there is one host
     to name here and no fallback to guess at."""
     return request.app.state.settings.content_base_url.rstrip("/")
 
 
 def _ci_audience(request: Request) -> str:
-    """What a CI workflow asks its ID token for; PLAK_BASE_URL exactly, or the
+    """What a CI workflow asks its ID token for; TOON_BASE_URL exactly, or the
     request origin in dev, where CI tokens are refused anyway."""
     base_url = request.app.state.settings.base_url
     return base_url or str(request.base_url).rstrip("/")
@@ -4251,7 +4251,7 @@ def make_admin_router() -> APIRouter:
         response_description="The linked repository, with its new setting.",
         description=(
             "For a link made before the site id existed: from now on the linked repository may publish to this "
-            "site only with a CI ID token whose audience names the site id, `{PLAK_BASE_URL}/-/sites/{siteId}`. "
+            "site only with a CI ID token whose audience names the site id, `{TOON_BASE_URL}/-/sites/{siteId}`. "
             "A workflow does that with `site-id` (action) or `--site-id` (CLI); a workflow without it is "
             "refused with 403 `CI_SITE_ID_REQUIRED`. A link made since then, or that got another repository "
             "since, requires it already.\n\n"
@@ -4911,9 +4911,9 @@ def make_admin_router() -> APIRouter:
             "use `POST /platform/audit/actor-identity` for the opposite direction.\n\n"
             "That this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up "
             "in the log lines of every proxy in between.\n\n"
-            "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper, rows from before "
+            "The pseudonym depends on `TOON_AUDIT_PEPPER`. After a rotation of that pepper, rows from before "
             "the rotation carry the pseudonym under the previous pepper: as long as that pepper is still in "
-            "`PLAK_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
+            "`TOON_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
             "configured, you only find rows from after the rotation.\n\n"
             "An e-mail address that matches neither a member nor the verified address of a "
             "content viewer is not pseudonymised: that is a 404. An identifier that is not an e-mail address "
@@ -5000,8 +5000,8 @@ def make_admin_router() -> APIRouter:
         description=(
             "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from "
             "a log row, get back who is behind it. Every member, every content viewer and every linked "
-            "repository is pseudonymised again with the current `PLAK_AUDIT_PEPPER` and with each pepper in "
-            "`PLAK_AUDIT_PEPPER_PREVIOUS`, and compared with the given pseudonym; nothing is kept to speed up "
+            "repository is pseudonymised again with the current `TOON_AUDIT_PEPPER` and with each pepper in "
+            "`TOON_AUDIT_PEPPER_PREVIOUS`, and compared with the given pseudonym; nothing is kept to speed up "
             "this lookup, so expect a full pass over all three.\n\n"
             "If the lookup finds nothing, there is no member, content viewer or repository that pseudonymises "
             "to this pseudonym. Several causes are possible: the pepper has been rotated since that row was "
@@ -5096,7 +5096,7 @@ def make_admin_router() -> APIRouter:
         response_description="The full IP address for this audit row.",
         description=(
             "`GET /platform/audit` only shows the truncated network per row (`ipTruncated`); this "
-            "endpoint decrypts the full address stored encrypted next to it (`PLAK_AUDIT_IP_KEY`, "
+            "endpoint decrypts the full address stored encrypted next to it (`TOON_AUDIT_IP_KEY`, "
             "a different key from the audit pepper). Intended as a last resort, when the truncated network "
             "is not enough, for example in an incident investigation.\n\n"
             "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of "

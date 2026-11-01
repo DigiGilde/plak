@@ -32,7 +32,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,9 +40,10 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from toon.config import server_variable
 from toon.db import make_session_factory
 
-DB_URL_VAR = "PLAK_DB_URL"
+DB_URL_VAR = "TOON_DB_URL"
 
 # Grep handle. The rest of the line is one JSON object, so a log search finds
 # the runs and a machine reads them without a parser of its own.
@@ -51,7 +51,9 @@ MARKER = "audit-chain-checkpoint"
 # /3 is the chain layout with one set of chains per retention period. A /1 or /2
 # line numbered its chains differently, so it is refused rather than held
 # against chains it never described.
-FORMAT = "plak-audit-chain-checkpoint/3"
+FORMAT = "toon-audit-chain-checkpoint/3"
+# The old name is the same layout, and lines carrying it are kept outside the app.
+READABLE_FORMATS = (FORMAT, "plak-audit-chain-checkpoint/3")
 
 HASH_MISMATCH = "hash_mismatch"
 CHAIN_SHORTENED = "chain_shortened"
@@ -244,7 +246,7 @@ def parse(line: str) -> Checkpoint:
         raise MalformedCheckpointError("no JSON object found in the line")
     try:
         payload = json.loads(line[start:])
-        if payload.get("format") != FORMAT:
+        if payload.get("format") not in READABLE_FORMATS:
             raise MalformedCheckpointError(f"unknown format: {payload.get('format')!r}")
         heads = tuple(
             Head(
@@ -345,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     arguments = parser.parse_args(argv)
 
-    dsn = os.environ.get(DB_URL_VAR)
+    dsn = server_variable(DB_URL_VAR)
     if not dsn:
         _logger.error("Cannot publish: %s is not set", DB_URL_VAR)
         return 1

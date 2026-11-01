@@ -297,7 +297,7 @@ class TestDeployContract:
     def test_example_call_and_limits_stand_in_the_hint(self, schema) -> None:
         hint = self._deploy(schema)["description"]
         assert "curl" in hint
-        assert "PLAK_INGEST_MAX_BODY" in hint
+        assert "TOON_INGEST_MAX_BODY" in hint
 
     def test_response_is_version_id_url_and_access(self, schema) -> None:
         response = self._deploy(schema)["responses"]["201"]["content"]["application/json"]["schema"]

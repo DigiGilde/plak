@@ -452,4 +452,4 @@ class TestFullApp:
         assert response.status_code == 503
         # Without a built SPA the app itself keeps answering.
         assert app_path.status_code == 401
-        assert any("PLAK_SPA_PATH" in row.getMessage() for row in caplog.records)
+        assert any("TOON_SPA_PATH" in row.getMessage() for row in caplog.records)

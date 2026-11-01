@@ -49,7 +49,7 @@ export interface Member {
   name: string;
   platformRole: PlatformRole;
   status: MemberStatus;
-  /** The PLAK_BOOTSTRAP_ADMIN_SUB account: its status and role cannot be changed. */
+  /** The TOON_BOOTSTRAP_ADMIN_SUB account: its status and role cannot be changed. */
   isBootstrap?: boolean;
   createdAt: Timestamp;
   lastLoginAt: Timestamp | null;
@@ -366,9 +366,9 @@ export interface Volume {
 
 /** Response of `GET /operator`: who runs this installation, for everyone to read. */
 export interface Operator {
-  /** `PLAK_OPERATOR_NAME`; null when the installation names none. */
+  /** `TOON_OPERATOR_NAME`; null when the installation names none. */
   name: string | null;
-  /** `PLAK_OPERATOR_EMAIL`; null when the installation names none. */
+  /** `TOON_OPERATOR_EMAIL`; null when the installation names none. */
   email: string | null;
 }
 

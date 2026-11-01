@@ -130,7 +130,7 @@ class TestOnTheContentHost:
         assert "set-cookie" not in response.headers
 
     async def test_the_host_header_does_not_choose_the_target(self, tmp_path: Path) -> None:
-        """The admin origin comes from PLAK_BASE_URL. A request that names
+        """The admin origin comes from TOON_BASE_URL. A request that names
         another admin host in its own headers still goes to the configured one."""
         app = create_app(_settings(tmp_path))
         async with app.router.lifespan_context(app), _client(app, CONTENT) as content:
@@ -189,7 +189,7 @@ class TestElsewhere:
         assert "location" not in response.headers
 
     async def test_without_an_admin_origin_the_root_stays_the_neutral_404(self, tmp_path: Path) -> None:
-        # Without PLAK_BASE_URL there is no address to send anyone to, and the
+        # Without TOON_BASE_URL there is no address to send anyone to, and the
         # Host header here is the content host.
         app = create_app(_settings(tmp_path, base_url=None))
         async with app.router.lifespan_context(app), _client(app, CONTENT) as content:

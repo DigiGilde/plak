@@ -7,7 +7,7 @@
 # versions and the API schema move to the release, and the fragments go.
 # It hands that on as a patch. `open` applies the patch to a clean
 # checkout, checks that it is the release and nothing else, and only then
-# gets a token of the digigilde-plak-release App. It commits
+# gets a token of the digigilde-toon-release App. It commits
 # `Release vX`, pushes it as the branch release/vX and opens the pull
 # request "Release vX" into beta. Merging that pull request is the
 # release (release.yml). A pull request opened with GITHUB_TOKEN would

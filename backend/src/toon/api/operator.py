@@ -2,7 +2,7 @@
 
 Public, for the privacy and accessibility pages of the admin SPA that anyone
 may read: no session, no CSRF header and no cookie. The values come from
-PLAK_OPERATOR_NAME and PLAK_OPERATOR_EMAIL (config.py), which validates the
+TOON_OPERATOR_NAME and TOON_OPERATOR_EMAIL (config.py), which validates the
 address at startup.
 """
 
@@ -35,14 +35,14 @@ class OperatorOut(ApiModel):
     name: str | None = Field(
         description=(
             "Name of the organisation that runs this installation, as people should read it "
-            "(`PLAK_OPERATOR_NAME`), or `null` if it is not configured."
+            "(`TOON_OPERATOR_NAME`), or `null` if it is not configured."
         ),
         examples=["Digi Gilde"],
     )
     email: str | None = Field(
         description=(
             "E-mail address at which people reach that organisation about privacy, accessibility and other "
-            "questions (`PLAK_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address "
+            "questions (`TOON_OPERATOR_EMAIL`), or `null` if it is not configured. Always a plain address "
             "without a display name, fit for a `mailto:` link."
         ),
         examples=["digigilde@rijksoverheid.nl"],
@@ -57,8 +57,8 @@ class OperatorOut(ApiModel):
     response_description="The name and e-mail address of the organisation, each `null` if not configured.",
     description=(
         "The organisation that runs this installation of Plak and the e-mail address at which people reach "
-        "it about privacy, accessibility and other questions, as set in `PLAK_OPERATOR_NAME` and "
-        "`PLAK_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. "
+        "it about privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and "
+        "`TOON_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. "
         "A setting that is empty comes back as `null`.\n\n"
         "**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and "
         "sets no cookie."

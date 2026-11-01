@@ -45,7 +45,7 @@ class AuditLogEntry(IDMixin, Base):
     reason_code: Mapped[str | None] = mapped_column(String, nullable=True)
     refs: Mapped[dict | None] = mapped_column(postgresql.JSONB, nullable=True)
     ip_truncated: Mapped[str | None] = mapped_column(String, nullable=True)
-    # AES-256-GCM (audit/ip_crypto.py) under PLAK_AUDIT_IP_KEY, its own key
+    # AES-256-GCM (audit/ip_crypto.py) under TOON_AUDIT_IP_KEY, its own key
     # separate from the pepper: reveal is a deliberate, audited act
     # (audit_ip_reveal), never a byproduct of reading ip_truncated.
     ip_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

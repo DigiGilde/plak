@@ -318,7 +318,7 @@ async def test_write_strict_limited_is_atomic_under_concurrency(
 
 def _after_rotation(audit_log: AuditLog, pepper: str, *previous_peppers: str) -> AuditLog:
     """The log on the same database after a deploy with `pepper` as
-    PLAK_AUDIT_PEPPER and `previous_peppers` as PLAK_AUDIT_PEPPER_PREVIOUS."""
+    TOON_AUDIT_PEPPER and `previous_peppers` as TOON_AUDIT_PEPPER_PREVIOUS."""
     return AuditLog(audit_log._session_factory, pepper=pepper, ip_key=_IP_KEY_A, previous_peppers=previous_peppers)
 
 
@@ -346,7 +346,7 @@ async def test_write_strict_limited_counts_the_rows_under_a_previous_pepper(
 async def test_write_strict_limited_does_not_count_rows_under_a_pepper_no_longer_configured(
     audit_log: AuditLog, db_connection: asyncpg.Connection
 ) -> None:
-    """Two rotations on, the first pepper has left PLAK_AUDIT_PEPPER_PREVIOUS.
+    """Two rotations on, the first pepper has left TOON_AUDIT_PEPPER_PREVIOUS.
     Its rows no longer lead back to the actor, so they no longer count
     towards the cap either."""
     action = f"test_actie_{uuid.uuid4().hex}"
@@ -482,6 +482,7 @@ def test_the_job_refuses_to_run_without_a_dsn(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.delenv(retention.DB_URL_VAR, raising=False)
+    monkeypatch.delenv("PLAK_DB_URL", raising=False)
 
     assert retention.main() == 1
     assert retention.DB_URL_VAR in caplog.text

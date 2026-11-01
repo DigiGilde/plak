@@ -1,14 +1,20 @@
-"""Configuration through environment variables (12-factor), prefix PLAK_.
+"""Configuration through environment variables (12-factor), prefix TOON_.
+
+A setting reads `TOON_<NAME>` when that variable is present in the environment,
+else the old `PLAK_<NAME>`, else its default. Present includes empty, so an
+empty `TOON_<NAME>` wins over a `PLAK_<NAME>` with a value. What reads a variable
+without Settings follows the same rule through `server_variable`, and at startup
+main.py logs the old names still in use (`Settings.old_variables_in_use`).
 
 Fail-fast: missing or invalid required values produce a clear error
 message naming the variable involved, instead of passing on the bare pydantic
 ValidationError.
 
 OIDC on ZAD: the ZAD Keycloak service injects `OIDC_DISCOVERY_URL`,
-`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` (without the PLAK_ prefix) into the
-container. Those serve as the source for `PLAK_OIDC_ISSUER`,
-`PLAK_OIDC_CLIENT_ID` and `PLAK_OIDC_CLIENT_SECRET` as long as the PLAK_
-variable itself is not set.
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` (without a prefix) into the
+container. Those serve as the source for `TOON_OIDC_ISSUER`,
+`TOON_OIDC_CLIENT_ID` and `TOON_OIDC_CLIENT_SECRET` as long as the setting
+itself is not set under either prefix.
 """
 
 from __future__ import annotations
@@ -16,14 +22,18 @@ from __future__ import annotations
 import base64
 import binascii
 import ipaddress
+import os
 import unicodedata
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import Field, ValidationError, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
 
 from toon.audit.ip_crypto import _key_id
+
+ENV_PREFIX = "TOON_"
+OLD_ENV_PREFIX = "PLAK_"
 
 MIN_SECRET_BYTES = 32
 AUDIT_IP_KEY_BYTES = 32
@@ -42,12 +52,19 @@ class ConfigurationError(RuntimeError):
     """Raised on missing or invalid configuration."""
 
 
+def server_variable(name: str) -> str | None:
+    """The rule of Settings, for what reads one variable without loading them
+    all: `name`, a `TOON_` name, when it is present in the environment, else
+    its `PLAK_` name, else None."""
+    return os.environ.get(name, os.environ.get(OLD_ENV_PREFIX + name.removeprefix(ENV_PREFIX)))
+
+
 def issuer_from_discovery_url(discovery_url: str) -> str:
     """OIDC Discovery 1.0 §4: discovery URL = issuer + /.well-known/openid-configuration."""
     if not discovery_url.endswith(OIDC_DISCOVERY_SUFFIX):
         raise ValueError(
             "OIDC_DISCOVERY_URL does not end in /.well-known/openid-configuration; "
-            "set PLAK_OIDC_ISSUER explicitly"
+            "set TOON_OIDC_ISSUER explicitly"
         )
     return discovery_url[: -len(OIDC_DISCOVERY_SUFFIX)]
 
@@ -97,7 +114,7 @@ def normalise_operator_email(value: str) -> str:
         )
     ):
         raise ValueError(
-            f"PLAK_OPERATOR_EMAIL: {address!r} is not a plain e-mail address such as name@example.org"
+            f"TOON_OPERATOR_EMAIL: {address!r} is not a plain e-mail address such as name@example.org"
         )
     return address
 
@@ -116,8 +133,17 @@ def _decode_audit_ip_key(field_name: str, value: str) -> str:
     return value
 
 
+def _decoded_old_ip_key(value: str) -> bytes:
+    """The key in a value that settings did not read, so it was never validated.
+    Empty when the value holds no key, as no row can be written under that."""
+    try:
+        return base64.b64decode(_decode_audit_ip_key("the old audit IP key", value))
+    except ValueError:
+        return b""
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="PLAK_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, extra="ignore")
 
     db_url: str
     content_root: Path
@@ -140,14 +166,14 @@ class Settings(BaseSettings):
     # at the IdP keeps their Plak session.
     idp_recheck_seconds: int = Field(default=900, ge=0)
     # Injected by the ZAD Keycloak service; a validation_alias falls outside
-    # env_prefix, so these are read without PLAK_.
+    # env_prefix, so these are read without TOON_.
     zad_oidc_discovery_url: str = Field(default="", validation_alias="OIDC_DISCOVERY_URL")
     zad_oidc_client_id: str = Field(default="", validation_alias="OIDC_CLIENT_ID")
     zad_oidc_client_secret: str = Field(default="", validation_alias="OIDC_CLIENT_SECRET")
     bootstrap_admin_sub: str = ""
     session_secret: str
     audit_pepper: str
-    # Only set while rotating PLAK_AUDIT_PEPPER: the peppers it replaced,
+    # Only set while rotating TOON_AUDIT_PEPPER: the peppers it replaced,
     # newest first, comma-separated. Audit rows are never pseudonymised again,
     # so a row written under a previous pepper is only found while that pepper
     # is listed here. Every entry is stripped: a pepper that contains a comma
@@ -157,16 +183,16 @@ class Settings(BaseSettings):
     # separate key from audit_pepper on purpose, so revealing a full IP and
     # pseudonymising an actor are two different secrets to compromise.
     audit_ip_key: str
-    # Only set while rotating PLAK_AUDIT_IP_KEY: the keys it replaced, newest
+    # Only set while rotating TOON_AUDIT_IP_KEY: the keys it replaced, newest
     # first, comma-separated, kept around long enough to still decrypt rows
     # written under them. Remove a key once nothing left needs revealing from
     # before its rotation.
     audit_ip_key_previous: str = ""
     audit_lookup_daily_limit: int = Field(default=25, ge=1, le=1000)
-    # Fails closed: a deployment that forgets to set PLAK_ENVIRONMENT refuses
+    # Fails closed: a deployment that forgets to set TOON_ENVIRONMENT refuses
     # to start (see _production_requirements below) instead of silently
     # skipping every production validator (trusted proxies, OIDC issuer
-    # requirements, base url, https). dev/compose.yml sets PLAK_ENVIRONMENT=
+    # requirements, base url, https). dev/compose.yml sets TOON_ENVIRONMENT=
     # dev explicitly for local development.
     environment: str = "productie"
     base_url: str | None = None
@@ -251,11 +277,23 @@ class Settings(BaseSettings):
     ratelimit_code_window_s: int = Field(default=900)
     ratelimit_code_global_max: int = Field(default=500)
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        old_env_settings = EnvSettingsSource(settings_cls, env_prefix=OLD_ENV_PREFIX)
+        return init_settings, env_settings, old_env_settings, dotenv_settings, file_secret_settings
+
     @field_validator("ci_forgejo_hosts")
     @classmethod
     def _ci_forgejo_hosts_valid(cls, value: str) -> str:
         hosts = [
-            normalise_https_base_url(entry, "PLAK_CI_FORGEJO_HOSTS") for entry in value.split(",") if entry.strip()
+            normalise_https_base_url(entry, "TOON_CI_FORGEJO_HOSTS") for entry in value.split(",") if entry.strip()
         ]
         return ",".join(dict.fromkeys(hosts))
 
@@ -278,14 +316,14 @@ class Settings(BaseSettings):
     @classmethod
     def _min_32_bytes(cls, value: str, info) -> str:
         if len(value.encode("utf-8")) < MIN_SECRET_BYTES:
-            field_name = f"PLAK_{info.field_name.upper()}"
+            field_name = f"TOON_{info.field_name.upper()}"
             raise ValueError(f"{field_name} must be at least {MIN_SECRET_BYTES} bytes long")
         return value
 
     @field_validator("audit_ip_key")
     @classmethod
     def _audit_ip_key_valid(cls, value: str) -> str:
-        return _decode_audit_ip_key("PLAK_AUDIT_IP_KEY", value)
+        return _decode_audit_ip_key("TOON_AUDIT_IP_KEY", value)
 
     @field_validator("audit_pepper_previous")
     @classmethod
@@ -293,41 +331,41 @@ class Settings(BaseSettings):
         peppers = _comma_separated(value)
         if any(len(pepper.encode("utf-8")) < MIN_SECRET_BYTES for pepper in peppers):
             raise ValueError(
-                f"every entry of PLAK_AUDIT_PEPPER_PREVIOUS must be at least {MIN_SECRET_BYTES} bytes long"
+                f"every entry of TOON_AUDIT_PEPPER_PREVIOUS must be at least {MIN_SECRET_BYTES} bytes long"
             )
         if len(set(peppers)) < len(peppers):
-            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS lists the same pepper twice")
+            raise ValueError("TOON_AUDIT_PEPPER_PREVIOUS lists the same pepper twice")
         return ",".join(peppers)
 
     @field_validator("audit_ip_key_previous")
     @classmethod
     def _audit_ip_key_previous_valid(cls, value: str) -> str:
         keys = [
-            _decode_audit_ip_key("every entry of PLAK_AUDIT_IP_KEY_PREVIOUS", entry)
+            _decode_audit_ip_key("every entry of TOON_AUDIT_IP_KEY_PREVIOUS", entry)
             for entry in _comma_separated(value)
         ]
         # Compared decoded: base64 ignores the unused bits of its last
         # character, so two spellings can carry the same key.
         if len({base64.b64decode(key) for key in keys}) < len(keys):
-            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS lists the same key twice")
+            raise ValueError("TOON_AUDIT_IP_KEY_PREVIOUS lists the same key twice")
         return ",".join(keys)
 
     @model_validator(mode="after")
     def _audit_pepper_distinct(self) -> Settings:
         if self.audit_pepper == self.session_secret:
-            raise ValueError("PLAK_AUDIT_PEPPER must differ from PLAK_SESSION_SECRET")
+            raise ValueError("TOON_AUDIT_PEPPER must differ from TOON_SESSION_SECRET")
         return self
 
     @model_validator(mode="after")
     def _audit_pepper_previous_distinct(self) -> Settings:
         previous = set(self.audit_peppers[1:])
         if self.audit_pepper in previous:
-            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_PEPPER")
+            raise ValueError("TOON_AUDIT_PEPPER_PREVIOUS must differ from TOON_AUDIT_PEPPER")
         if self.session_secret in previous:
-            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_SESSION_SECRET")
+            raise ValueError("TOON_AUDIT_PEPPER_PREVIOUS must differ from TOON_SESSION_SECRET")
         if previous & {self.audit_ip_key, *_comma_separated(self.audit_ip_key_previous)}:
             raise ValueError(
-                "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS"
+                "TOON_AUDIT_PEPPER_PREVIOUS must differ from TOON_AUDIT_IP_KEY and TOON_AUDIT_IP_KEY_PREVIOUS"
             )
         return self
 
@@ -336,27 +374,27 @@ class Settings(BaseSettings):
         other_secrets = (self.session_secret, self.audit_pepper)
         if self.audit_ip_key in other_secrets:
             raise ValueError(
-                "PLAK_AUDIT_IP_KEY must differ from PLAK_SESSION_SECRET and PLAK_AUDIT_PEPPER"
+                "TOON_AUDIT_IP_KEY must differ from TOON_SESSION_SECRET and TOON_AUDIT_PEPPER"
             )
         if self.audit_ip_key_bytes in self.audit_ip_keys_previous_bytes:
-            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY")
+            raise ValueError("TOON_AUDIT_IP_KEY_PREVIOUS must differ from TOON_AUDIT_IP_KEY")
         if set(_comma_separated(self.audit_ip_key_previous)) & set(other_secrets):
             raise ValueError(
-                "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and "
-                "PLAK_AUDIT_PEPPER"
+                "TOON_AUDIT_IP_KEY_PREVIOUS must differ from TOON_SESSION_SECRET and "
+                "TOON_AUDIT_PEPPER"
             )
         # A row names its key by key id alone (audit/ip_crypto.py).
         keys = (self.audit_ip_key_bytes, *self.audit_ip_keys_previous_bytes)
         if len({_key_id(key) for key in keys}) < len(keys):
             raise ValueError(
-                "PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS hold two keys with the same key id; "
-                "generate a new PLAK_AUDIT_IP_KEY"
+                "TOON_AUDIT_IP_KEY and TOON_AUDIT_IP_KEY_PREVIOUS hold two keys with the same key id; "
+                "generate a new TOON_AUDIT_IP_KEY"
             )
         return self
 
     @property
     def audit_peppers(self) -> tuple[str, ...]:
-        """PLAK_AUDIT_PEPPER first, then the previous peppers in their configured order."""
+        """TOON_AUDIT_PEPPER first, then the previous peppers in their configured order."""
         return (self.audit_pepper, *_comma_separated(self.audit_pepper_previous))
 
     @property
@@ -366,6 +404,44 @@ class Settings(BaseSettings):
     @property
     def audit_ip_keys_previous_bytes(self) -> tuple[bytes, ...]:
         return tuple(base64.b64decode(key) for key in _comma_separated(self.audit_ip_key_previous))
+
+    def old_variables_in_use(self) -> list[str]:
+        """The `PLAK_` names settings are still read from, sorted: those whose
+        `TOON_` name is absent. Names in upper case, because pydantic-settings
+        matches a variable whatever its case."""
+        present = {name.upper() for name in os.environ}
+        settings = [
+            name.upper() for name, field in type(self).model_fields.items() if field.validation_alias is None
+        ]
+        return sorted(
+            OLD_ENV_PREFIX + name
+            for name in settings
+            if OLD_ENV_PREFIX + name in present and ENV_PREFIX + name not in present
+        )
+
+    def old_audit_variables_left_behind(self) -> list[str]:
+        """The `PLAK_` audit variables holding a value the settings do not have,
+        neither current nor previous, sorted. A `TOON_` name shadowing them with
+        another or an empty value leaves the rows written under that value out of
+        reach, and removing the variable makes it permanent if no copy exists.
+        Names in upper case, for the reason in `old_variables_in_use`."""
+        old = {name.upper(): value for name, value in os.environ.items()}
+        old_peppers = {
+            "PLAK_AUDIT_PEPPER": {old.get("PLAK_AUDIT_PEPPER", "")},
+            "PLAK_AUDIT_PEPPER_PREVIOUS": set(_comma_separated(old.get("PLAK_AUDIT_PEPPER_PREVIOUS", ""))),
+        }
+        old_ip_keys = {
+            "PLAK_AUDIT_IP_KEY": {_decoded_old_ip_key(old.get("PLAK_AUDIT_IP_KEY", ""))},
+            "PLAK_AUDIT_IP_KEY_PREVIOUS": {
+                _decoded_old_ip_key(entry) for entry in _comma_separated(old.get("PLAK_AUDIT_IP_KEY_PREVIOUS", ""))
+            },
+        }
+        peppers = {"", *self.audit_peppers}
+        ip_keys = {b"", self.audit_ip_key_bytes, *self.audit_ip_keys_previous_bytes}
+        return sorted(
+            [name for name, values in old_peppers.items() if values - peppers]
+            + [name for name, values in old_ip_keys.items() if values - ip_keys]
+        )
 
     @field_validator("base_url")
     @classmethod
@@ -377,7 +453,7 @@ class Settings(BaseSettings):
             return None
         parts = urlsplit(value.strip())
         if parts.scheme not in ("http", "https") or not parts.hostname:
-            raise ValueError(f"PLAK_BASE_URL: {value.strip()!r} is not an http(s) URL with a hostname")
+            raise ValueError(f"TOON_BASE_URL: {value.strip()!r} is not an http(s) URL with a hostname")
         return value
 
     @field_validator("content_base_url")
@@ -385,7 +461,7 @@ class Settings(BaseSettings):
     def _content_base_url_with_host(cls, value: str) -> str:
         if not urlsplit(value).hostname:
             raise ValueError(
-                "PLAK_CONTENT_BASE_URL must be an absolute URL with a hostname, "
+                "TOON_CONTENT_BASE_URL must be an absolute URL with a hostname, "
                 "for example https://plak.example.org"
             )
         return value
@@ -400,7 +476,7 @@ class Settings(BaseSettings):
     @classmethod
     def _environment_valid(cls, value: str) -> str:
         if value not in ("dev", "productie"):
-            raise ValueError("PLAK_ENVIRONMENT must be 'dev' or 'productie'")
+            raise ValueError("TOON_ENVIRONMENT must be 'dev' or 'productie'")
         return value
 
     @field_validator("oidc_client_auth")
@@ -408,7 +484,7 @@ class Settings(BaseSettings):
     def _client_auth_valid(cls, value: str) -> str:
         if value not in OIDC_CLIENT_AUTH_METHODS:
             raise ValueError(
-                "PLAK_OIDC_CLIENT_AUTH must be one of "
+                "TOON_OIDC_CLIENT_AUTH must be one of "
                 + ", ".join(OIDC_CLIENT_AUTH_METHODS)
             )
         return value
@@ -428,12 +504,12 @@ class Settings(BaseSettings):
 
         if not self.oidc_issuer:
             raise ValueError(
-                "PLAK_OIDC_ISSUER is required (on ZAD, OIDC_DISCOVERY_URL "
+                "TOON_OIDC_ISSUER is required (on ZAD, OIDC_DISCOVERY_URL "
                 "of the Keycloak service suffices)"
             )
         if not self.oidc_client_id:
             raise ValueError(
-                "PLAK_OIDC_CLIENT_ID is required (on ZAD, OIDC_CLIENT_ID "
+                "TOON_OIDC_CLIENT_ID is required (on ZAD, OIDC_CLIENT_ID "
                 "of the Keycloak service suffices)"
             )
 
@@ -441,24 +517,24 @@ class Settings(BaseSettings):
         if used_secret:
             if not self.oidc_client_secret:
                 raise ValueError(
-                    f"PLAK_OIDC_CLIENT_SECRET is required with PLAK_OIDC_CLIENT_AUTH={method_} "
+                    f"TOON_OIDC_CLIENT_SECRET is required with TOON_OIDC_CLIENT_AUTH={method_} "
                     "(on ZAD, OIDC_CLIENT_SECRET of the Keycloak service suffices)"
                 )
             if self.oidc_client_private_jwk:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is not used with "
-                    f"PLAK_OIDC_CLIENT_AUTH={method_}; remove the key or choose "
+                    "TOON_OIDC_CLIENT_PRIVATE_JWK is not used with "
+                    f"TOON_OIDC_CLIENT_AUTH={method_}; remove the key or choose "
                     "private_key_jwt"
                 )
         else:
             if not self.oidc_client_private_jwk:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is required with "
-                    "PLAK_OIDC_CLIENT_AUTH=private_key_jwt"
+                    "TOON_OIDC_CLIENT_PRIVATE_JWK is required with "
+                    "TOON_OIDC_CLIENT_AUTH=private_key_jwt"
                 )
             if self.oidc_client_secret:
                 raise ValueError(
-                    "PLAK_OIDC_CLIENT_SECRET is not used with PLAK_OIDC_CLIENT_AUTH="
+                    "TOON_OIDC_CLIENT_SECRET is not used with TOON_OIDC_CLIENT_AUTH="
                     "private_key_jwt; remove the secret or choose client_secret_post "
                     "or client_secret_basic"
                 )
@@ -469,30 +545,30 @@ class Settings(BaseSettings):
         if self.environment == "productie":
             if self.behind_proxy is None:
                 raise ValueError(
-                    "PLAK_BEHIND_PROXY is required when "
-                    "PLAK_ENVIRONMENT=productie; 'false' means: no proxy in front"
+                    "TOON_BEHIND_PROXY is required when "
+                    "TOON_ENVIRONMENT=productie; 'false' means: no proxy in front"
                 )
             if not self.oidc_iss_required:
                 raise ValueError(
-                    "PLAK_OIDC_ISS_REQUIRED must be 'true' when "
-                    "PLAK_ENVIRONMENT=productie"
+                    "TOON_OIDC_ISS_REQUIRED must be 'true' when "
+                    "TOON_ENVIRONMENT=productie"
                 )
             if not self.base_url:
                 raise ValueError(
-                    "PLAK_BASE_URL is required when PLAK_ENVIRONMENT=productie"
+                    "TOON_BASE_URL is required when TOON_ENVIRONMENT=productie"
                 )
             # The issuer is already filled in by _oidc_source_and_secrets above,
-            # whether it came from PLAK_OIDC_ISSUER or from OIDC_DISCOVERY_URL.
+            # whether it came from TOON_OIDC_ISSUER or from OIDC_DISCOVERY_URL.
             issuer = urlsplit(self.oidc_issuer)
             if issuer.scheme != "https":
                 raise ValueError(
-                    "PLAK_OIDC_ISSUER must be an https URL when "
-                    "PLAK_ENVIRONMENT=productie; http is only for the dev mock"
+                    "TOON_OIDC_ISSUER must be an https URL when "
+                    "TOON_ENVIRONMENT=productie; http is only for the dev mock"
                 )
             if not issuer.hostname or is_loopback_host(issuer.hostname):
                 raise ValueError(
-                    "PLAK_OIDC_ISSUER must have a real hostname when "
-                    "PLAK_ENVIRONMENT=productie; loopback and .localhost are only for "
+                    "TOON_OIDC_ISSUER must have a real hostname when "
+                    "TOON_ENVIRONMENT=productie; loopback and .localhost are only for "
                     "the dev mock"
                 )
         return self
@@ -500,8 +576,8 @@ class Settings(BaseSettings):
 
 def _field_name_from_location(location: tuple) -> str:
     if location:
-        return f"PLAK_{str(location[0]).upper()}"
-    return "PLAK_<unknown>"
+        return f"TOON_{str(location[0]).upper()}"
+    return "TOON_<unknown>"
 
 
 def load_settings() -> Settings:

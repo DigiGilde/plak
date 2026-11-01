@@ -275,7 +275,7 @@ PRODUCTION_OVERRIDES = {
 
 
 class TestEmptyRequiredAcr:
-    """An empty PLAK_OIDC_REQUIRED_ACR: no acr check, no acr_values, but a
+    """An empty TOON_OIDC_REQUIRED_ACR: no acr check, no acr_values, but a
     startup message (a warning in production)."""
 
     @pytest.fixture
@@ -309,18 +309,18 @@ class TestEmptyRequiredAcr:
             )
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
-        assert "PLAK_OIDC_REQUIRED_ACR is empty" in warnings[0].getMessage()
+        assert "TOON_OIDC_REQUIRED_ACR is empty" in warnings[0].getMessage()
 
     def test_info_in_dev(self, idp, caplog):
         with caplog.at_level(logging.INFO, logger="toon.auth.oidc"):
             make_oidc_client(make_settings(idp, oidc_required_acr=""), idp)
-        levels = [r.levelno for r in caplog.records if "PLAK_OIDC_REQUIRED_ACR" in r.getMessage()]
+        levels = [r.levelno for r in caplog.records if "TOON_OIDC_REQUIRED_ACR" in r.getMessage()]
         assert levels == [logging.INFO]
 
     def test_no_message_with_list(self, idp, caplog):
         with caplog.at_level(logging.INFO, logger="toon.auth.oidc"):
             make_oidc_client(make_settings(idp), idp)
-        assert not [r for r in caplog.records if "PLAK_OIDC_REQUIRED_ACR" in r.getMessage()]
+        assert not [r for r in caplog.records if "TOON_OIDC_REQUIRED_ACR" in r.getMessage()]
 
 
 class TestClientSecret:

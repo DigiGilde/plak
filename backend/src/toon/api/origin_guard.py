@@ -1,7 +1,7 @@
 """Origin guarding for the admin API.
 
 The admin API only accepts requests from its own admin origin: an Origin
-header that is present must be exactly the admin origin (PLAK_BASE_URL); if
+header that is present must be exactly the admin origin (TOON_BASE_URL); if
 Origin is absent, Sec-Fetch-Site may at most be `same-origin` or `none`.
 `same-site` is refused on purpose: the content origin is a sibling host of
 the admin origin and counts as same-site to browsers. CORS headers are never

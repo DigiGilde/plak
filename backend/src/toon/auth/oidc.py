@@ -1,5 +1,5 @@
 """OIDC client: authorization code + PKCE, client authentication per
-PLAK_OIDC_CLIENT_AUTH.
+TOON_OIDC_CLIENT_AUTH.
 
 Client authentication: `private_key_jwt` (RFC 7523, the default) or, for the
 ZAD Keycloak that only creates client-secret clients, `client_secret_post` or
@@ -268,7 +268,7 @@ class OidcClient:
         )
         if not self.required_acr:
             message = (
-                "PLAK_OIDC_REQUIRED_ACR is empty: the acr claim of the ID token is not "
+                "TOON_OIDC_REQUIRED_ACR is empty: the acr claim of the ID token is not "
                 "checked and no acr_values is sent; the "
                 "authentication level then depends entirely on the OP (%s)"
             )
@@ -287,12 +287,12 @@ class OidcClient:
                 self._private_key = import_key(self._private_jwk)
             except (ValueError, JoseError) as error:
                 raise ConfigurationError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is not a valid private JWK"
+                    "TOON_OIDC_CLIENT_PRIVATE_JWK is not a valid private JWK"
                 ) from error
             self._assertion_alg = {"RSA": "RS256", "EC": "ES256"}.get(self._private_jwk.get("kty"))
             if self._assertion_alg is None:
                 raise ConfigurationError(
-                    "PLAK_OIDC_CLIENT_PRIVATE_JWK must be an RSA or EC key"
+                    "TOON_OIDC_CLIENT_PRIVATE_JWK must be an RSA or EC key"
                 )
 
     async def metadata(self) -> dict[str, Any]:
@@ -391,7 +391,7 @@ class OidcClient:
         private_jwk = self._private_jwk
         if private_jwk is None:
             raise OidcError(
-                "client_assertion requires PLAK_OIDC_CLIENT_AUTH=private_key_jwt",
+                "client_assertion requires TOON_OIDC_CLIENT_AUTH=private_key_jwt",
                 reason=vocabulary.LOGIN_IDP_UNREACHABLE,
             )
         now_ = int(time.time())

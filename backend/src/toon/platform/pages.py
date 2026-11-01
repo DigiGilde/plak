@@ -158,7 +158,7 @@ def _redirect_uri(request: Request, profile: _LoginProfile) -> str:
 # content host cannot carry it, because it shares its origin with every
 # published site and so runs no platform script at all.
 #
-# The target is the configured admin origin (PLAK_BASE_URL), never the Host
+# The target is the configured admin origin (TOON_BASE_URL), never the Host
 # header: that one belongs to the content host here, and is client-controlled
 # besides.
 

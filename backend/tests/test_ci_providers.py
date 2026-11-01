@@ -1,5 +1,5 @@
 """Tests for ci/providers.py (fetch_json, ProviderClient, valid_name,
-known_issuers, host_label) and the PLAK_CI_FORGEJO_HOSTS config validation."""
+known_issuers, host_label) and the TOON_CI_FORGEJO_HOSTS config validation."""
 
 from __future__ import annotations
 

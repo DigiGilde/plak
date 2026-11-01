@@ -230,7 +230,7 @@ site id, the fixed id the workflow names beside the site (below).
 In the admin: **site detail, tab
 Deploy** ("Publiceren vanuit GitHub of Forgejo"), button "Repository
 koppelen". Fill in the provider (GitHub or Forgejo, with for Forgejo the host
-from `PLAK_CI_FORGEJO_HOSTS`), `eigenaar/repo` (owner/repo) and optionally
+from `TOON_CI_FORGEJO_HOSTS`), `eigenaar/repo` (owner/repo) and optionally
 a live branch. Plak looks the repository up at the provider and stores its
 numeric ids;
 those stay the same across a rename, and the name follows it: the next
@@ -389,7 +389,7 @@ those alone, teardown included, and sets its output `skipped` to `true`;
 `RijksICTGilde/zad-actions` does, so a workflow that uses both skips the
 same pull requests.
 
-The input `host` is the admin origin of the instance (`PLAK_BASE_URL`, e.g.
+The input `host` is the admin origin of the instance (`TOON_BASE_URL`, e.g.
 `https://beheer.plak.example.org`), without an `/admin` suffix, and at the
 same time the start of the `aud` claim of the ID token: the action asks for
 `<host>/-/sites/<site-id>` itself, or for `<host>` alone without
@@ -690,7 +690,7 @@ interface description for your own tooling.
 Addressing is on slugs (group, site, ref), never on UUIDs.
 Addresses are slugs and can change; the API knows only the current one, an
 old slug answers 404 (§3, "After an address change"). The
-endpoints live on the admin origin (`PLAK_BASE_URL`); on the content host
+endpoints live on the admin origin (`TOON_BASE_URL`); on the content host
 `/admin` does not exist. `${PLAK_TOKEN}` below is one of two things: a
 CI ID token (§3), or a CLI token from `plak login` (§6). Outside these two
 endpoints and the CLI session endpoints, Plak accepts a Bearer token
@@ -899,7 +899,7 @@ refused with a `413` and the code `SITE_QUOTA_EXCEEDED`, naming what the site
 uses now and what this version would add. Every night Plak removes the live
 versions older than the current one and the ones before it that the site
 keeps: five by default (the platform administrator sets that default with
-`PLAK_LIVE_VERSIONS_KEPT`), or the site's own number, which a site admin sets
+`TOON_LIVE_VERSIONS_KEPT`), or the site's own number, which a site admin sets
 on the site's Versions tab.
 So the room usually comes back on its own the next day. Removing previews you no longer
 need frees it at once; your platform administrator can also raise the
@@ -919,7 +919,7 @@ stable reason code (e.g. `TOKEN_INVALID`, `CI_REPOSITORY_NOT_TRUSTED`,
 
 | Status | Meaning |
 |---|---|
-| 401 | No CLI token, or an invalid, expired or revoked one (`TOKEN_INVALID`), or a CI token that does not check out: unknown issuer (`CI_ISSUER_UNKNOWN`), not a valid JWT, wrong algorithm or invalid claims (`CI_TOKEN_INVALID`), or an `aud` that is neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/<site-id>`, or that names a site the repository is not linked to, at any address (`CI_AUDIENCE_MISMATCH`) |
+| 401 | No CLI token, or an invalid, expired or revoked one (`TOKEN_INVALID`), or a CI token that does not check out: unknown issuer (`CI_ISSUER_UNKNOWN`), not a valid JWT, wrong algorithm or invalid claims (`CI_TOKEN_INVALID`), or an `aud` that is neither exactly `TOON_BASE_URL` nor exactly `TOON_BASE_URL/-/sites/<site-id>`, or that names a site the repository is not linked to, at any address (`CI_AUDIENCE_MISMATCH`) |
 | 403 | The repository of the CI token is not (or no longer) linked to this site (`CI_REPOSITORY_NOT_TRUSTED`), the CI token names no site id while the link of this site requires one (`CI_SITE_ID_REQUIRED`), or a live deploy from an event other than `push`, `workflow_dispatch` or `schedule`, or outside the configured live branch (`CI_BRANCH_NOT_ALLOWED`) |
 | 404 | Unknown group or site, an old address after a change of address included: the API follows no old slug (teardown of an unknown preview ref simply gives `204`); a CI token bound to a site gets the 409 or the 401 instead |
 | 409 | The CI token names a site that is not at this address, and its repository is linked to that site (`SITE_MOVED`): `detail` names that site's current address, so fix `site:`. Elsewhere in the admin API: a conflict such as `SLUG_EXISTS`, which also covers a slug that was recently the address of another group or site |

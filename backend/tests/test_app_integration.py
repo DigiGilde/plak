@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from pathlib import Path
 
 import httpx
@@ -174,6 +175,147 @@ async def test_the_audit_log_is_given_the_previous_peppers(tmp_path: Path) -> No
 
     async with app.router.lifespan_context(app):
         assert app.state.audit_log._previous_peppers == (_PREVIOUS_PEPPER, "c" * 32)
+
+
+_OLD_PEPPER = "  an old audit pepper, with a comma, of at least 32 bytes  "
+_OLD_IP_KEY = base64.b64encode(b"o" * 32).decode()
+_OLD_SESSION_SECRET = "an-old-session-secret-of-at-least-32-bytes"
+_OLD_DATABASE_PASSWORD = "an-old-database-password"
+_OLD_OPERATOR_NAME = "The Old Operator Name"
+
+
+def _without_server_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in list(os.environ):
+        if name.upper().startswith(("TOON_", "PLAK_")):
+            monkeypatch.delenv(name)
+
+
+async def test_an_app_on_only_the_old_names_starts_and_warns_by_name_only(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """From the environment alone, as the container starts it. One WARNING, the
+    names sorted and every setting in it, and not one value: not of a secret and
+    not of anything else read through the fallback."""
+    _without_server_variables(monkeypatch)
+    private_jwk = make_client_jwk()
+    for name, value in {
+        "PLAK_DB_URL": f"postgresql+asyncpg://unused:{_OLD_DATABASE_PASSWORD}@localhost:5432/unused",
+        "PLAK_CONTENT_ROOT": str(tmp_path / "content"),
+        "PLAK_OIDC_ISSUER": "https://idp.example",
+        "PLAK_OIDC_CLIENT_ID": "a-client",
+        "PLAK_OIDC_CLIENT_PRIVATE_JWK": private_jwk,
+        "PLAK_OIDC_REQUIRED_ACR": "urn:acr:high",
+        "PLAK_SESSION_SECRET": _OLD_SESSION_SECRET,
+        "PLAK_AUDIT_PEPPER": _OLD_PEPPER,
+        "PLAK_AUDIT_IP_KEY": _OLD_IP_KEY,
+        "PLAK_CONTENT_BASE_URL": BASE_URL,
+        "PLAK_ENVIRONMENT": "dev",
+        "PLAK_OPERATOR_NAME": _OLD_OPERATOR_NAME,
+    }.items():
+        monkeypatch.setenv(name, value)
+    app = create_app()
+
+    with caplog.at_level(logging.INFO, logger="toon.main"):
+        async with app.router.lifespan_context(app):
+            assert app.state.audit_log._pepper == _OLD_PEPPER
+            assert app.state.audit_log._previous_peppers == ()
+
+    warnings = [
+        row.getMessage()
+        for row in caplog.records
+        if row.name == "toon.main" and row.levelno == logging.WARNING and "PLAK_" in row.getMessage()
+    ]
+    assert warnings == [
+        "Environment variables with the old PLAK_ prefix are still in use: PLAK_AUDIT_IP_KEY, PLAK_AUDIT_PEPPER, "
+        "PLAK_CONTENT_BASE_URL, PLAK_CONTENT_ROOT, PLAK_DB_URL, PLAK_ENVIRONMENT, PLAK_OIDC_CLIENT_ID, "
+        "PLAK_OIDC_CLIENT_PRIVATE_JWK, PLAK_OIDC_ISSUER, PLAK_OIDC_REQUIRED_ACR, PLAK_OPERATOR_NAME, "
+        "PLAK_SESSION_SECRET. See docs/deploying-on-zad.md."
+    ]
+    for secret in (_OLD_PEPPER, _OLD_IP_KEY, _OLD_SESSION_SECRET, _OLD_DATABASE_PASSWORD, private_jwk):
+        assert secret not in caplog.text
+    assert _OLD_OPERATOR_NAME not in caplog.text
+    assert _key_id(b"o" * 32).hex() not in caplog.text
+    assert "rotation" not in caplog.text
+
+
+async def test_startup_without_old_variables_in_use_does_not_warn(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PLAK_ variable that is shadowed or that is no server setting asks
+    nothing of anyone, and a warning on it would teach people to ignore it. A
+    shadowed audit secret is not read, so it is no rotation either. This is the
+    state halfway through a correct move: the same values under both names."""
+    _without_server_variables(monkeypatch)
+    settings = _make_settings(tmp_path)
+    monkeypatch.setenv("PLAK_HOST", "https://admin.example.org")
+    monkeypatch.setenv("TOON_OPERATOR_NAME", "The New Operator Name")
+    monkeypatch.setenv("PLAK_OPERATOR_NAME", _OLD_OPERATOR_NAME)
+    monkeypatch.setenv("TOON_AUDIT_PEPPER", settings.audit_pepper)
+    monkeypatch.setenv("PLAK_AUDIT_PEPPER", settings.audit_pepper)
+    monkeypatch.setenv("TOON_AUDIT_IP_KEY", settings.audit_ip_key)
+    monkeypatch.setenv("PLAK_AUDIT_IP_KEY", settings.audit_ip_key)
+    app = create_app(settings)
+
+    with caplog.at_level(logging.INFO, logger="toon.main"):
+        async with app.router.lifespan_context(app):
+            assert app.state.audit_log._previous_peppers == ()
+
+    assert "OIDC configuration" in caplog.text
+    assert "PLAK_" not in caplog.text
+    assert "rotation" not in caplog.text
+
+
+async def test_startup_names_old_audit_secrets_the_new_ones_leave_behind(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A typo during the move, or fresh values without the old ones as previous.
+    This is the last moment anyone can tell, while both values are still there.
+    One WARNING with the names, and not one value or key id."""
+    _without_server_variables(monkeypatch)
+    settings = _make_settings(tmp_path)
+    monkeypatch.setenv("TOON_AUDIT_PEPPER", settings.audit_pepper)
+    monkeypatch.setenv("PLAK_AUDIT_PEPPER", _OLD_PEPPER)
+    monkeypatch.setenv("TOON_AUDIT_IP_KEY", settings.audit_ip_key)
+    monkeypatch.setenv("PLAK_AUDIT_IP_KEY", _OLD_IP_KEY)
+    app = create_app(settings)
+
+    with caplog.at_level(logging.INFO, logger="toon.main"):
+        async with app.router.lifespan_context(app):
+            pass
+
+    assert [
+        row.getMessage()
+        for row in caplog.records
+        if row.name == "toon.main" and row.levelno == logging.WARNING and "PLAK_" in row.getMessage()
+    ] == [
+        "PLAK_AUDIT_IP_KEY, PLAK_AUDIT_PEPPER hold a value that is neither current nor previous, so audit rows "
+        "written under it are out of reach. Do not remove them before this is solved. See docs/deploying-on-zad.md."
+    ]
+    for secret in (_OLD_PEPPER, _OLD_IP_KEY, settings.audit_pepper, settings.audit_ip_key):
+        assert secret not in caplog.text
+    assert _key_id(b"o" * 32).hex() not in caplog.text
+    assert "rotation" not in caplog.text
+
+
+async def test_startup_says_nothing_of_old_audit_secrets_a_rotation_lists(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The old values are reachable as previous values, so this is a rotation
+    done right: its own line, and no complaint."""
+    _without_server_variables(monkeypatch)
+    settings = _make_settings(tmp_path, audit_pepper_previous=_PREVIOUS_PEPPER, audit_ip_key_previous=_OLD_IP_KEY)
+    monkeypatch.setenv("TOON_AUDIT_PEPPER", settings.audit_pepper)
+    monkeypatch.setenv("PLAK_AUDIT_PEPPER", _PREVIOUS_PEPPER)
+    monkeypatch.setenv("TOON_AUDIT_IP_KEY", settings.audit_ip_key)
+    monkeypatch.setenv("PLAK_AUDIT_IP_KEY", _OLD_IP_KEY)
+    app = create_app(settings)
+
+    with caplog.at_level(logging.INFO, logger="toon.main"):
+        async with app.router.lifespan_context(app):
+            pass
+
+    assert "Audit secret rotation in progress: 1 previous pepper(s), 1 previous IP key(s)" in caplog.text
+    assert "PLAK_" not in caplog.text
 
 
 async def test_robots_txt_not_shadowed_by_the_content_catch_all(tmp_path: Path) -> None:

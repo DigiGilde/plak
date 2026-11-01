@@ -1,7 +1,7 @@
 """The CI providers Plak trusts, and the outbound HTTP it does on their behalf.
 
 Every URL fetched here is built from configuration (GitHub's fixed hosts and
-PLAK_CI_FORGEJO_HOSTS), never from a token or a request: that is the whole
+TOON_CI_FORGEJO_HOSTS), never from a token or a request: that is the whole
 SSRF defence, together with https only, no redirects, a timeout and a cap on
 the response size.
 """

@@ -19,8 +19,8 @@
 #   2. the subdomain `plak` on that domain.
 #
 # WHAT DIFFERS PER ENVIRONMENT:
-#   - `subdomain` and `base-domain`, and thereby PLAK_BASE_URL,
-#     PLAK_CONTENT_BASE_URL and the second OIDC redirect URI;
+#   - `subdomain` and `base-domain`, and thereby TOON_BASE_URL,
+#     TOON_CONTENT_BASE_URL and the second OIDC redirect URI;
 #   - the image (CI sets that per deploy, this file does not need it);
 #   - the secrets (user-env-vars, set per deployment with `zadctl env`).
 
@@ -71,7 +71,7 @@ services:
 # yourself gives status `requested`; a platform admin sets it to `approved`.
 # As long as that has not happened the deployment falls back to the format
 # component-deployment-project on the cluster address and no host below
-# matches what PLAK_BASE_URL/PLAK_CONTENT_BASE_URL say. The platform manages
+# matches what TOON_BASE_URL/TOON_CONTENT_BASE_URL say. The platform manages
 # this block itself: a write action via the portal or the API leaves it as
 # is, even if the caller does not send it along.
 domains:
@@ -135,7 +135,7 @@ components:
       # DATABASE_SERVER_HOST/-PORT/-USER, DATABASE_PASSWORD and DATABASE_DB.
       # Plak wants one DSN. Note: the password is filled in literally, not
       # percent-encoded.
-      PLAK_DB_URL: "postgresql+asyncpg://${DATABASE_SERVER_USER}:${DATABASE_PASSWORD}@${DATABASE_SERVER_HOST}:${DATABASE_SERVER_PORT}/${DATABASE_DB}"
+      TOON_DB_URL: "postgresql+asyncpg://${DATABASE_SERVER_USER}:${DATABASE_PASSWORD}@${DATABASE_SERVER_HOST}:${DATABASE_SERVER_PORT}/${DATABASE_DB}"
 
 deployments:
   - name: productie
@@ -182,56 +182,56 @@ deployments:
         # CI overwrites this on every deploy (upsert-deployment).
         image: "ghcr.io/digigilde/plak:latest"
         env-vars:
-          PLAK_ENVIRONMENT: "productie"
-          PLAK_CONTENT_ROOT: "/content"
+          TOON_ENVIRONMENT: "productie"
+          TOON_CONTENT_ROOT: "/content"
           # Must match the two hosts above exactly: the app derives host
           # separation, the HSTS decision and every shareable URL from
-          # them. PLAK_BASE_URL (the beheer component's own ingress host)
+          # them. TOON_BASE_URL (the beheer component's own ingress host)
           # could be filled by the platform via a `${PUBLIC_HOST}` user-env-
           # var instead (docs/PUBLIC_HOST_SUBSTITUTION.md in the ZAD
           # platform's own repository, not this one), but
-          # PLAK_CONTENT_BASE_URL cannot: PUBLIC_HOST always resolves to the
+          # TOON_CONTENT_BASE_URL cannot: PUBLIC_HOST always resolves to the
           # component's own primary ingress hostname, never to the separate
           # root ingress that `root-component` adds, so the content origin
           # stays hand-typed per environment either way. Both are kept
           # literal here for symmetry.
-          PLAK_BASE_URL: "https://beheer.plak.rijks.app"
-          PLAK_CONTENT_BASE_URL: "https://plak.rijks.app"
-          PLAK_OIDC_ISS_REQUIRED: "true"
+          TOON_BASE_URL: "https://beheer.plak.rijks.app"
+          TOON_CONTENT_BASE_URL: "https://plak.rijks.app"
+          TOON_OIDC_ISS_REQUIRED: "true"
           # The ZAD Keycloak provides a client-secret client;
           # private_key_jwt cannot be set up via self-service.
-          # PLAK_OIDC_ISSUER, PLAK_OIDC_CLIENT_ID and
-          # PLAK_OIDC_CLIENT_SECRET come from the service's OIDC_*
+          # TOON_OIDC_ISSUER, TOON_OIDC_CLIENT_ID and
+          # TOON_OIDC_CLIENT_SECRET come from the service's OIDC_*
           # variables.
-          PLAK_OIDC_CLIENT_AUTH: "client_secret_post"
+          TOON_OIDC_CLIENT_AUTH: "client_secret_post"
           # Empty: the ZAD Keycloak only advertises acr "0" and "1", so any
           # eIDAS LoA requirement would lock everyone out. The app logs at
           # startup that there is no acr check.
-          PLAK_OIDC_REQUIRED_ACR: ""
+          TOON_OIDC_REQUIRED_ACR: ""
           # The HAProxy router stands in front of the pod and adds an
           # X-Forwarded-For line of its own behind the client's, so Plak reads
           # the last entry. Position rather than recognition, because the
           # router pods sit on the cluster pod network and that range is not
           # on offer.
-          PLAK_BEHIND_PROXY: "true"
+          TOON_BEHIND_PROXY: "true"
           # The `sub` from the ZAD Keycloak of the first platform admin;
           # they thereby get in without a member record. Different per
           # environment.
-          PLAK_BOOTSTRAP_ADMIN_SUB: "vul-in"
+          TOON_BOOTSTRAP_ADMIN_SUB: "vul-in"
           # Who runs this installation and how to reach them, shown on the
           # public privacy and accessibility pages. The address is also the
           # mail Contact in security.txt.
-          PLAK_OPERATOR_NAME: "Digi Gilde"
-          PLAK_OPERATOR_EMAIL: "digigilde@rijksoverheid.nl"
+          TOON_OPERATOR_NAME: "Digi Gilde"
+          TOON_OPERATOR_EMAIL: "digigilde@rijksoverheid.nl"
           # A Rijksoverheid installation: security.txt lists NCSC-NL's CVD routes.
-          PLAK_SECURITY_TXT_NCSC: "true"
+          TOON_SECURITY_TXT_NCSC: "true"
         # The secrets are NOT here. Set them per deployment with
         # `zadctl env` (AGE-encrypted in this file as user-env-vars):
-        #   PLAK_SESSION_SECRET   at least 32 bytes
-        #   PLAK_AUDIT_PEPPER    at least 32 bytes, rotate as in docs/audit-log.md
-        #   PLAK_AUDIT_IP_KEY    base64 of 32 random bytes, see docs/deploying-on-zad.md
+        #   TOON_SESSION_SECRET   at least 32 bytes
+        #   TOON_AUDIT_PEPPER    at least 32 bytes, rotate as in docs/audit-log.md
+        #   TOON_AUDIT_IP_KEY    base64 of 32 random bytes, see docs/deploying-on-zad.md
         # After a rotation, also the comma-separated lists of earlier values,
-        # newest first: PLAK_AUDIT_PEPPER_PREVIOUS and PLAK_AUDIT_IP_KEY_PREVIOUS.
+        # newest first: TOON_AUDIT_PEPPER_PREVIOUS and TOON_AUDIT_IP_KEY_PREVIOUS.
         #
         # Do NOT set these component-wide: a second deployment would
         # inherit productie's. See docs/deploying-on-zad.md, "A second

@@ -34,7 +34,7 @@ SEED_PATH = Path(__file__).resolve().parents[2] / "dev" / "seed.py"
 def seed_module():
     """Loads dev/seed.py by path: it sits outside the installed package on
     purpose, because it is dev tooling and never ships in the image."""
-    spec = importlib.util.spec_from_file_location("plak_dev_seed", SEED_PATH)
+    spec = importlib.util.spec_from_file_location("toon_dev_seed", SEED_PATH)
     module = importlib.util.module_from_spec(spec)
     # Registering before exec: `from __future__ import annotations` leaves the
     # dataclass field types as strings, and dataclasses resolves them through

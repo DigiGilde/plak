@@ -617,6 +617,7 @@ async def test_breaks_come_in_chain_order(migrated_dsn: str, connection: asyncpg
 
 async def test_main_without_dsn_says_so(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     monkeypatch.delenv(chain.DB_URL_VAR, raising=False)
+    monkeypatch.delenv("PLAK_DB_URL", raising=False)
     with caplog.at_level("ERROR"):
         assert chain.main() == 1
     assert chain.DB_URL_VAR in caplog.text
