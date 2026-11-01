@@ -1975,8 +1975,10 @@ NL: Final[dict[str, str]] = {
         "That this is a POST and not a query parameter is deliberate: an e-mail address in a URL ends up in the log "
         "lines of every proxy in between.\n"
         "\n"
-        "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper you only find rows from after "
-        "the rotation.\n"
+        "The pseudonym depends on `PLAK_AUDIT_PEPPER`. After a rotation of that pepper, rows from before the rotation "
+        "carry the pseudonym under the previous pepper: as long as that pepper is still in "
+        "`PLAK_AUDIT_PEPPER_PREVIOUS`, `previousPseudonyms` gives it. Once the previous pepper is no longer "
+        "configured, you only find rows from after the rotation.\n"
         "\n"
         "An e-mail address that matches neither a member nor the verified address of a content viewer is not "
         "pseudonymised: that is a 404. An identifier that is not an e-mail address and belongs to nothing (for example "
@@ -1985,9 +1987,9 @@ NL: Final[dict[str, str]] = {
         "the SSO subject.\n"
         "\n"
         "**Who can call this:** only a platform administrator, with a valid CSRF header and a `reason` of 10 to 500 "
-        "characters. The lookup itself is audited, with the pseudonym, `resolved_as` and the reason, never the "
-        "identifier. If that audit row fails, no response is returned: see the `503`. Counts towards the daily limit "
-        "on such lookups, even on a 404."
+        "characters. The lookup itself is audited, with the pseudonym and the previous pseudonyms, `resolved_as` and "
+        "the reason, never the identifier. If that audit row fails, no response is returned: see the `503`. Counts "
+        "towards the daily limit on such lookups, even on a 404."
     ): (
         "Vertaalt een identifier naar het pseudoniem waaronder hij in het auditlog staat, zodat je op `actorPseudonym` "
         "kunt filteren. Wie je zoekt moet je dus al bij naam kennen: het log geeft geen namenlijst prijs. Ken je juist "
@@ -1997,8 +1999,10 @@ NL: Final[dict[str, str]] = {
         "Dat dit een POST is en geen queryparameter, is met opzet: een e-mailadres in een URL belandt in de logregels "
         "van elke proxy ertussen.\n"
         "\n"
-        "Het pseudoniem hangt aan `PLAK_AUDIT_PEPPER`. Na een rotatie van die pepper vind je alleen nog regels van ná "
-        "de rotatie.\n"
+        "Het pseudoniem hangt aan `PLAK_AUDIT_PEPPER`. Na een rotatie van die pepper dragen regels van vóór de rotatie "
+        "het pseudoniem onder de vorige pepper: zolang die pepper nog in `PLAK_AUDIT_PEPPER_PREVIOUS` staat, geeft "
+        "`previousPseudonyms` het. Staat de vorige pepper er niet meer in, dan vind je alleen nog regels van ná de "
+        "rotatie.\n"
         "\n"
         "Een e-mailadres dat bij geen lid en geen geverifieerd e-mailadres van een content-viewer hoort, wordt niet "
         "gepseudonimiseerd: dat is een 404. Een niet-e-mailadres dat nergens bij hoort (bijvoorbeeld een los "
@@ -2007,9 +2011,9 @@ NL: Final[dict[str, str]] = {
         "het SSO-subject.\n"
         "\n"
         "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header en een `reason` van 10 tot 500 tekens. Het "
-        "opzoeken zelf wordt geaudit, met het pseudoniem, `resolved_as` en de reden, nooit de identifier. Lukt die "
-        "auditrij niet, dan komt er geen antwoord: zie de `503`. Telt mee voor de dagelijkse limiet op zulke "
-        "opzoekingen, ook bij een 404."
+        "opzoeken zelf wordt geaudit, met het pseudoniem en de vorige pseudoniemen, `resolved_as` en de reden, nooit "
+        "de identifier. Lukt die auditrij niet, dan komt er geen antwoord: zie de `503`. Telt mee voor de dagelijkse "
+        "limiet op zulke opzoekingen, ook bij een 404."
     ),
     "The audit pseudonym that belongs to this identifier.": "Het auditpseudoniem dat bij deze identifier hoort.",
     (
@@ -2039,12 +2043,13 @@ NL: Final[dict[str, str]] = {
     (
         "The opposite direction of `POST /platform/audit/actor-pseudonym`: give a pseudonym from a log row, get back "
         "who is behind it. Every member, every content viewer and every linked repository is pseudonymised again with "
-        "the current `PLAK_AUDIT_PEPPER` and compared with the given pseudonym; nothing is kept to speed up this "
-        "lookup, so expect a full pass over all three.\n"
+        "the current `PLAK_AUDIT_PEPPER` and with each pepper in `PLAK_AUDIT_PEPPER_PREVIOUS`, and compared with the "
+        "given pseudonym; nothing is kept to speed up this lookup, so expect a full pass over all three.\n"
         "\n"
         "If the lookup finds nothing, there is no member, content viewer or repository that pseudonymises to this "
-        "pseudonym. Several causes are possible: the pepper has been rotated since that row was written; the actor "
-        "only ever visited content through the content-host SSO and that visit was more than 90 days ago "
+        "pseudonym. Several causes are possible: the pepper has been rotated since that row was written and the "
+        "previous pepper is no longer configured; the actor only ever visited content through the content-host SSO "
+        "and that visit was more than 90 days ago "
         "(`content_viewers` is then cleaned up, like the related `content_access` rows); or the repository has since "
         "been unlinked, or deleted along with its site or group (`ON DELETE CASCADE`).\n"
         "\n"
@@ -2057,12 +2062,14 @@ NL: Final[dict[str, str]] = {
     ): (
         "De omgekeerde richting van `POST /platform/audit/actor-pseudonym`: geef een pseudoniem uit een logregel, "
         "krijg terug wie erachter zit. Elk lid, elke content-viewer en elke gekoppelde repository wordt met de actuele "
-        "`PLAK_AUDIT_PEPPER` opnieuw gepseudonimiseerd en vergeleken met het opgegeven pseudoniem; er wordt niets "
-        "bijgehouden om deze zoekslag te versnellen, dus reken op een volledige doorloop van alle drie.\n"
+        "`PLAK_AUDIT_PEPPER` en met elke pepper in `PLAK_AUDIT_PEPPER_PREVIOUS` opnieuw gepseudonimiseerd en "
+        "vergeleken met het opgegeven pseudoniem; er wordt niets bijgehouden om deze zoekslag te versnellen, dus reken "
+        "op een volledige doorloop van alle drie.\n"
         "\n"
         "Levert de zoekslag niets op, dan is er geen lid, content-viewer of repository dat tot dit pseudoniem "
         "pseudonimiseert. Meerdere oorzaken komen daarvoor in aanmerking: de pepper is geroteerd sinds die regel "
-        "geschreven werd; de actor bezocht alleen ooit content via de content-host-SSO en dat bezoek ligt al langer "
+        "geschreven werd en de vorige pepper is niet meer ingesteld; de actor bezocht alleen ooit content via de "
+        "content-host-SSO en dat bezoek ligt al langer "
         "dan 90 dagen terug (`content_viewers` wordt dan net als de bijbehorende `content_access`-regels opgeruimd); "
         "of de repository is inmiddels ontkoppeld, of met haar site of groep verwijderd (`ON DELETE CASCADE`).\n"
         "\n"
@@ -2078,12 +2085,12 @@ NL: Final[dict[str, str]] = {
     ),
     (
         "Not found. No member, content viewer or linked repository pseudonymises to this value (`PSEUDONYM_UNKNOWN`): "
-        "the pepper has been rotated, the content viewer was cleaned up after 90 days without a visit, or the "
-        "repository was unlinked or deleted along with its site."
+        "the pepper has been rotated and the previous one is no longer configured, the content viewer was cleaned up "
+        "after 90 days without a visit, or the repository was unlinked or deleted along with its site."
     ): (
         "Niet gevonden. Geen lid, content-viewer of gekoppelde repository pseudonimiseert tot deze waarde "
-        "(`PSEUDONYM_UNKNOWN`): de pepper is geroteerd, de content-viewer is opgeruimd na 90 dagen zonder bezoek, of "
-        "de repository is ontkoppeld of met haar site verwijderd."
+        "(`PSEUDONYM_UNKNOWN`): de pepper is geroteerd en de vorige is niet meer ingesteld, de content-viewer is "
+        "opgeruimd na 90 dagen zonder bezoek, of de repository is ontkoppeld of met haar site verwijderd."
     ),
     (
         "Unprocessable input. `reason` is missing, is shorter than 10 or longer than 500 characters (after stripping "
@@ -2475,6 +2482,15 @@ NL: Final[dict[str, str]] = {
     ),
     "Value to use as `actorPseudonym` filter on `GET /platform/audit`.": (
         "Waarde om als `actorPseudonym` mee te filteren op `GET /platform/audit`."
+    ),
+    (
+        "Pseudonyms of the same identifier under the previous audit peppers, newest first, while a pepper rotation is "
+        "in progress. Rows written before the rotation carry one of these: use each as `actorPseudonym` filter on "
+        "`GET /platform/audit`. Empty when no previous pepper is configured."
+    ): (
+        "Pseudoniemen van dezelfde identifier onder de vorige auditpeppers, nieuwste eerst, zolang een rotatie van de "
+        "pepper loopt. Regels van vóór de rotatie dragen er een van: gebruik elk ervan om als `actorPseudonym` mee te "
+        "filteren op `GET /platform/audit`. Leeg als er geen vorige pepper is ingesteld."
     ),
     (
         "What the identifier belonged to: `member` (translated to their SSO subject), `content_viewer` (an SSO viewer "

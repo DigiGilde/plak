@@ -141,6 +141,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.oidc_issuer,
             settings.oidc_client_id,
         )
+        # A warning, because nothing shows INFO for this logger under uvicorn.
+        # Counts only: never a pepper, a key or a key id.
+        previous_peppers = len(settings.audit_peppers) - 1
+        previous_ip_keys = len(settings.audit_ip_keys_previous_bytes)
+        if previous_peppers or previous_ip_keys:
+            _logger.warning(
+                "Audit secret rotation in progress: %d previous pepper(s), %d previous IP key(s)",
+                previous_peppers,
+                previous_ip_keys,
+            )
         if not spa_available(settings.spa_path):
             _logger.warning(
                 "Admin SPA not found in %s (PLAK_SPA_PATH): the admin host answers 503 "
@@ -165,7 +175,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = session_factory
         app.state.session_store = SessionStore()
         app.state.content_store = content_store
-        app.state.audit_log = AuditLog(session_factory, settings.audit_pepper, settings.audit_ip_key_bytes)
+        app.state.audit_log = AuditLog(
+            session_factory,
+            settings.audit_pepper,
+            settings.audit_ip_key_bytes,
+            previous_peppers=settings.audit_peppers[1:],
+        )
         # Counts code attempts per selector, next to the per-IP counting the
         # rate-limit middleware does (serving/code_page.py).
         app.state.code_attempts = InMemoryCounter()

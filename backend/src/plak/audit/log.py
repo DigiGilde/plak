@@ -56,11 +56,11 @@ _ADVISORY_LOCK = text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))")
 _COUNT_RECENT_LOOKUPS = text(
     """
     SELECT count(*) FROM audit_log_entries
-    WHERE actor_pseudonym = :pseudonym
+    WHERE actor_pseudonym IN :pseudonyms
       AND action IN :actions
       AND occurred_at >= now() - interval '24 hours'
     """
-).bindparams(bindparam("actions", expanding=True))
+).bindparams(bindparam("pseudonyms", expanding=True), bindparam("actions", expanding=True))
 
 
 @dataclass(frozen=True)
@@ -84,10 +84,18 @@ class AuditLog:
     """Helper the app instantiates once (e.g. in app.state) and that the serving
     and API layers call to write audit records."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], pepper: str, ip_key: bytes) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        pepper: str,
+        ip_key: bytes,
+        *,
+        previous_peppers: Sequence[str] = (),
+    ) -> None:
         self._session_factory = session_factory
         self._pepper = pepper
         self._ip_key = ip_key
+        self._previous_peppers = tuple(previous_peppers)
 
     async def write(
         self,
@@ -160,11 +168,19 @@ class AuditLog:
         split across two requests, both could read "under the cap" before
         either commits.
 
+        The count also takes in the actor's rows under each previous pepper,
+        so a pepper rotation hands out a new pseudonym but no fresh daily
+        budget. The new row and the lock stay on the current pseudonym.
+
         `actor.identifier` is required (the cap is per actor).
         """
         if actor.identifier is None:
             raise ValueError("write_strict_limited requires an actor with an identifier")
         actor_pseudonym = pseudonymise(self._pepper, actor.identifier)
+        counted_pseudonyms = [
+            actor_pseudonym,
+            *(pseudonymise(pepper, actor.identifier) for pepper in self._previous_peppers),
+        ]
         ip_truncated = truncate_ip(ip) if ip else None
         refs = _with_ip_provenance(refs, ip)
         entry_id = uuid.uuid4()
@@ -174,7 +190,7 @@ class AuditLog:
             count = (
                 await session.execute(
                     _COUNT_RECENT_LOOKUPS,
-                    {"pseudonym": actor_pseudonym, "actions": list(counted_actions)},
+                    {"pseudonyms": counted_pseudonyms, "actions": list(counted_actions)},
                 )
             ).scalar()
             if count is not None and count >= limit:

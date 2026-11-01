@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from collections.abc import Sequence
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -37,8 +38,8 @@ class IpDecryptError(ValueError):
 
 def _key_id(key: bytes) -> bytes:
     """Public, non-secret fingerprint of a key: identifies which of the
-    current/previous key a row was encrypted under, without needing to try
-    both against every row."""
+    configured keys a row was encrypted under, without needing to try each
+    of them against every row."""
     return hashlib.sha256(key).digest()[:_KEY_ID_LEN]
 
 
@@ -52,11 +53,11 @@ def encrypt_ip(key: bytes, entry_id: uuid.UUID, ip: str) -> bytes:
     return _VERSION + _key_id(key) + nonce + ciphertext
 
 
-def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_key: bytes | None = None) -> str:
+def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_keys: Sequence[bytes] = ()) -> str:
     """Decrypts `blob`, the `ip_encrypted` value of the row identified by
-    `entry_id` (the AAD binds the two together). Tries `key` first, then
-    `previous_key` when its key id matches - the usual case right after a
-    key rotation, for rows encrypted before it."""
+    `entry_id` (the AAD binds the two together), with the one key among `key`
+    and `previous_keys` whose key id the blob carries. A row encrypted before
+    a key rotation names one of the previous keys."""
     if len(blob) < _HEADER_LEN or blob[:1] != _VERSION:
         raise IpDecryptError("unknown version of the encrypted IP address")
     blob_key_id = blob[len(_VERSION) : len(_VERSION) + _KEY_ID_LEN]
@@ -64,8 +65,8 @@ def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_key: by
     ciphertext = blob[_HEADER_LEN:]
     aad = _aad(entry_id)
 
-    for candidate in (key, previous_key):
-        if candidate is None or _key_id(candidate) != blob_key_id:
+    for candidate in (key, *previous_keys):
+        if _key_id(candidate) != blob_key_id:
             continue
         try:
             return AESGCM(candidate).decrypt(nonce, ciphertext, aad).decode("utf-8")

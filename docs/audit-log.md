@@ -16,13 +16,13 @@ in step.
 | Field | Contents |
 |---|---|
 | `actor_kind` | `member`, `ci`, `system` or `anonymous` |
-| `actor_pseudonym` | HMAC-SHA256 with `PLAK_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:eigenaar/repo` in lower case); never stored in readable form |
+| `actor_pseudonym` | HMAC-SHA256 with `PLAK_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:eigenaar/repo` in lower case); never stored in readable form, and not recomputed when the pepper is rotated (see "Rotating the pepper and the IP key") |
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
 | `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string; an exception is free text that members write: `group_name` and `site_title` keep the previous name or title as `previous_name` and `previous_title` (see "Admin"), and an audit lookup keeps its justification as `reason` |
 | `ip_truncated` | IPv4 truncated to /24, IPv6 to /48; an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) counts as IPv4 |
-| `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
+| `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`) or, for a row from before a rotation, under the key that was current then (see "Rotating the pepper and the IP key"); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
 
 Alongside `audit_log_entries`, Plak keeps `content_viewers`: sso_subject,
@@ -325,7 +325,7 @@ is a language, not personal data beyond the account it already hangs on.
 | Action | Result | When |
 |---|---|---|
 | `audit_read` | `allowed` | a page from the audit log was requested. `refs` carries the filters |
-| `audit_actor_lookup` | `allowed` | someone looked up the pseudonym of a person or a repository. `refs.pseudonym` carries the resulting pseudonym (absent on a 404 or a 409), `refs.resolved_as` `member`, `content_viewer`, `ci`, `unknown` or `ambiguous` (and then `refs.matches` carries the number of hits), `refs.reason` the justification, never what was looked up |
+| `audit_actor_lookup` | `allowed` | someone looked up the pseudonym of a person or a repository. `refs.pseudonym` carries the resulting pseudonym (absent on a 404 or a 409), `refs.previous_pseudonyms` the pseudonyms of the same identifier under each previous pepper, newest first (a list of strings, present only when it is not empty), `refs.resolved_as` `member`, `content_viewer`, `ci`, `unknown` or `ambiguous` (and then `refs.matches` carries the number of hits), `refs.reason` the justification, never what was looked up |
 | `audit_actor_identity` | `allowed` | someone looked up the actor behind a pseudonym. `refs.pseudonym` carries the pseudonym looked up, `refs.resolved_as` `member`, `content_viewer`, `ci` or `unknown`, `refs.reason` the justification, never the identifier found |
 | `audit_ip_reveal` | `allowed` | someone tried to decrypt the full IP address on an audit row. `refs.entry` carries the id of that row, `refs.reason` the justification, `refs.revealed` whether it succeeded, never the IP address itself |
 | `audit_purge` | `allowed` | the purge deleted rows, from `audit_log_entries` and from `content_viewers`. `refs` carries the count per table |
@@ -677,14 +677,16 @@ authorization.
 
 Actors stay pseudonymous in the response. Whoever looks for someone first
 computes their pseudonym with `POST /-/api/v1/platform/audit/actor-pseudonym`
-and filters on it; so you have to know already who you are looking for. The
-other way round is possible too: given a pseudonym from a log row, `POST
+and filters on it; so you have to know already who you are looking for. After
+a rotation of the pepper the answer holds one pseudonym per pepper
+("Rotating the pepper and the IP key"). The other way round is possible too:
+given a pseudonym from a log row, `POST
 /-/api/v1/platform/audit/actor-identity` returns the member, the content
 viewer or the linked repository behind it, by pseudonymising every member,
-every content viewer and every linked repository again and comparing; there
-is no reversible table standing by. Both are a POST with a body, so that an
-email address does not end up in a query string and thereby not in a proxy
-log.
+every content viewer and every linked repository again, under the current
+pepper and under each previous one, and comparing; there is no reversible
+table standing by. Both are a POST with a body, so that an email address does
+not end up in a query string and thereby not in a proxy log.
 
 `actor-pseudonym` searches first on the exact SSO subject (unique per member
 and per content viewer, so never ambiguous); only if that gives no hit does
@@ -713,12 +715,13 @@ occurs in the log.
 If `actor-identity` yields nothing (404 `PSEUDONYM_UNKNOWN`), then there is
 no member, content viewer or linked repository that pseudonymises to that
 pseudonym. Several causes: the pepper has been rotated since that row was
-written; the actor only ever visited content via the content-host SSO and
-that visit is more than 90 days ago, so its `content_viewers` row has been
-purged; or the repository has since been unlinked, or deleted along with its
-site or group (`ON DELETE CASCADE`). A repository that has never been linked
-cannot be traced by `actor-identity` by definition: only linked repositories
-are pseudonymised again and compared.
+written and the pepper it was made under is no longer in
+`PLAK_AUDIT_PEPPER_PREVIOUS`; the actor only ever visited content via the
+content-host SSO and that visit is more than 90 days ago, so its
+`content_viewers` row has been purged; or the repository has since been
+unlinked, or deleted along with its site or group (`ON DELETE CASCADE`). A
+repository that has never been linked cannot be traced by `actor-identity` by
+definition: only linked repositories are pseudonymised again and compared.
 
 Both endpoints, and the IP reveal below, require a `reason`: 10 to 500
 characters, mandatory in the body and to be found unchanged in `refs.reason`
@@ -748,12 +751,125 @@ behaviour that the rest of the audit log has.
 The full IP address on a single row comes separately: `POST
 /-/api/v1/platform/audit/entries/{id}/ip`, with the same `reason`
 requirement and the same daily limit, decrypts `ip_encrypted` under
-`PLAK_AUDIT_IP_KEY`. `GET /platform/audit` itself shows only `ip_truncated`;
+`PLAK_AUDIT_IP_KEY`, or under the previous key whose id the stored value
+carries. `GET /platform/audit` itself shows only `ip_truncated`;
 the full address is therefore always a separate, audited step. The
 encryption is bound to the row itself (the row id is in the AAD), so pasting
-a copied ciphertext onto another row does not decrypt there. On a key
-rotation (`docs/security.md`) older rows stay readable as long as
-`PLAK_AUDIT_IP_KEY_PREVIOUS` carries the previous key.
+a copied ciphertext onto another row does not decrypt there. After a key
+rotation ("Rotating the pepper and the IP key" below) older rows stay
+readable as long as `PLAK_AUDIT_IP_KEY_PREVIOUS` carries the key they were
+encrypted under.
+
+## Rotating the pepper and the IP key
+
+`PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` can be replaced without losing the
+ability to look up or decrypt older rows. Rows are immutable
+(`audit_log_no_update` refuses every `UPDATE`), so an older row is never
+pseudonymised or encrypted again. It keeps the value it was written under, and
+that value stays configured, as a previous one, until every row written under
+it has been purged.
+
+**When to rotate.** After a leak or a suspected leak of either value, or to
+replace one on a schedule of your own. The pepper and the IP key rotate
+independently, so rotate the one that leaked.
+
+**What rotation does not do.** It limits the damage from the moment of
+rotation and repairs nothing. Rows written before it stay under the old pepper
+and the old IP key. They are immutable, and the chain hash of a row covers its
+`actor_pseudonym` and its `ip_encrypted` ("The integrity chain"). Rewriting
+them would change every later hash and make every published chain head
+("Publishing the chain head") mismatch, so a rewrite is indistinguishable from
+tampering, by design.
+
+Whoever holds the old value and a copy of the database, or of a backup, can
+therefore still decrypt the older IP addresses and recompute the older
+pseudonyms. That is easiest for CI actors, whose identifiers
+(`provider:host:repository-id`) are public. Treat a leaked pepper or IP key as
+a possible personal data breach, and assess it as one. Older rows only
+disappear through the retention purge, and production does not run that yet
+([#211](https://github.com/DigiGilde/plak/issues/211)).
+
+**Procedure.** For the pepper, the IP key or both:
+
+1. Generate the new value: `openssl rand -hex 32` for the pepper,
+   `openssl rand -base64 32` for the IP key.
+2. Store it in a password vault. Note the date of the rotation with the old
+   value there: the term under "Removing a previous value" below runs from it.
+3. Put the value that is current now at the front of the matching list,
+   `PLAK_AUDIT_PEPPER_PREVIOUS` or `PLAK_AUDIT_IP_KEY_PREVIOUS`. A list is
+   comma-separated and newest first, so the entries already there move one
+   place back.
+4. Set the new value as `PLAK_AUDIT_PEPPER` or `PLAK_AUDIT_IP_KEY`.
+5. Restart the app (on ZAD: `docs/deploying-on-zad.md`, §5).
+6. Check the log of that start. When any previous pepper or IP key is
+   configured, the app logs one WARNING line with the number of each, and never a
+   value or a fingerprint:
+   `Audit secret rotation in progress: 1 previous pepper(s), 0 previous IP key(s)`.
+   The number for the value you rotated goes up by one. If it did not, the old
+   value did not make it into its list.
+
+After the pepper has been rotated twice, the settings look like this (the
+placeholders stand for the values):
+
+```
+PLAK_AUDIT_PEPPER=<third pepper>
+PLAK_AUDIT_PEPPER_PREVIOUS=<second pepper>,<first pepper>
+```
+
+The app does not start when a list breaks a rule. A previous pepper is at
+least 32 bytes and differs from `PLAK_AUDIT_PEPPER`, `PLAK_SESSION_SECRET`,
+every IP key and the other previous peppers. A previous IP key is the base64
+of 32 bytes and differs from `PLAK_AUDIT_IP_KEY`, `PLAK_SESSION_SECRET`, every
+pepper and the other previous keys. No two configured IP keys may share a key
+id, the 8-byte fingerprint stored in front of every encrypted value. A single
+key in `PLAK_AUDIT_IP_KEY_PREVIOUS`, as before the variable became a list,
+keeps working.
+
+In both lists a comma separates the entries, whitespace around an entry is
+dropped and an empty entry is ignored. A pepper in the list can therefore
+neither contain a comma nor start or end with whitespace, and that includes
+the current pepper on the day it moves into the list. A pepper from
+`openssl rand -hex 32` has neither.
+
+**After the rotation.** New rows use the new pepper and the new key. From the
+restart on, the same person appears under a new pseudonym, and a new
+`ip_encrypted` is encrypted under the new key. Older rows are untouched, and
+the lookups keep reaching them:
+
+- `POST /-/api/v1/platform/audit/actor-pseudonym` returns `actorPseudonym`, the
+  pseudonym under the current pepper, and next to it `previousPseudonyms`: the
+  pseudonyms of the same identifier under each previous pepper, newest first,
+  empty without a rotation. A row from before the rotation carries one of
+  them, and nothing on the row says which. Filter `GET /platform/audit` once
+  per pseudonym and read the results together. The `audit_actor_lookup` row
+  keeps the list as `refs.previous_pseudonyms`, a list of strings that is
+  absent when it would be empty.
+- `POST /-/api/v1/platform/audit/actor-identity` finds the actor behind a
+  pseudonym made under the current pepper or under any previous one.
+- `POST /-/api/v1/platform/audit/entries/{id}/ip` decrypts a row under the
+  current key or under a previous one, whichever the key id in the stored
+  value names.
+- The daily limit on these lookups counts an administrator's rows under the
+  current pepper and under every previous one, so a rotation does not reset
+  it.
+
+**Removing a previous value.** Keep it until every row written under it is
+gone. The longest retention period is 1096 days ("Retention"), so a previous
+value can go 1096 days after the rotation, once the purge
+(`python -m plak.audit.retention`, `just purge-audit-log`) has run after that
+day. That holds only if the purge runs, and production does not run it yet
+([#211](https://github.com/DigiGilde/plak/issues/211)). Until it does, no row
+is deleted and every previous value stays needed.
+
+Removing a value earlier has a price. Pseudonyms made under a removed pepper
+can no longer be traced to a person: `actor-identity` answers 404
+`PSEUDONYM_UNKNOWN`, and `actor-pseudonym` no longer returns that pepper's
+pseudonym, so those rows cannot be found by person. IP addresses encrypted
+under a removed key can no longer be revealed: the answer is 404
+`AUDIT_IP_UNKNOWN`, the same as for a row without an IP address. The rows
+themselves, `ip_truncated` included, stay until their retention period is up.
+Losing a value has the same effect, so keep the vault entry until the removal
+date has passed.
 
 ## Logboek Dataverwerkingen
 
@@ -814,9 +930,13 @@ What is not there yet, and why:
   The 429 from `LOOKUP_LIMIT_REACHED` and from `TOO_MANY_CREATIONS` does go
   through `ApiError` and therefore does reach the log, as
   `admin_access`/`refused`.
-- If `PLAK_AUDIT_IP_KEY` is lost or rotated without setting
+- If `PLAK_AUDIT_IP_KEY` is lost, or rotated without putting the old key in
   `PLAK_AUDIT_IP_KEY_PREVIOUS`, older `ip_encrypted` values become
-  unreadable (docs/security.md); they do stay in place until their row
-  itself is purged.
+  unreadable. They do stay in place until their row itself is purged.
+- The same goes for the pepper. If `PLAK_AUDIT_PEPPER` is lost, or rotated
+  without putting the old pepper in `PLAK_AUDIT_PEPPER_PREVIOUS`, older
+  pseudonyms can no longer be traced to a person, and a person can no longer
+  be searched for in the older rows. The rows stay in place. "Rotating the
+  pepper and the IP key" says how to avoid both gaps.
 - The session store is in process memory: a restart throws all sessions
   away, and revocation works only as long as one replica is running.

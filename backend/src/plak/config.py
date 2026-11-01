@@ -23,6 +23,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from plak.audit.ip_crypto import _key_id
+
 MIN_SECRET_BYTES = 32
 AUDIT_IP_KEY_BYTES = 32
 
@@ -100,6 +102,10 @@ def normalise_operator_email(value: str) -> str:
     return address
 
 
+def _comma_separated(value: str) -> list[str]:
+    return [entry.strip() for entry in value.split(",") if entry.strip()]
+
+
 def _decode_audit_ip_key(field_name: str, value: str) -> str:
     try:
         decoded = base64.b64decode(value, validate=True)
@@ -141,14 +147,21 @@ class Settings(BaseSettings):
     bootstrap_admin_sub: str = ""
     session_secret: str
     audit_pepper: str
+    # Only set while rotating PLAK_AUDIT_PEPPER: the peppers it replaced,
+    # newest first, comma-separated. Audit rows are never pseudonymised again,
+    # so a row written under a previous pepper is only found while that pepper
+    # is listed here. Every entry is stripped: a pepper that contains a comma
+    # or starts or ends with whitespace cannot be listed.
+    audit_pepper_previous: str = ""
     # Base64 of 32 random bytes (AES-256-GCM key, audit/ip_crypto.py): a
     # separate key from audit_pepper on purpose, so revealing a full IP and
     # pseudonymising an actor are two different secrets to compromise.
     audit_ip_key: str
-    # Only set while rotating PLAK_AUDIT_IP_KEY: the key it replaced, kept
-    # around long enough to still decrypt rows written under it. Remove it
-    # once nothing left needs revealing from before the rotation.
-    audit_ip_key_previous: str | None = None
+    # Only set while rotating PLAK_AUDIT_IP_KEY: the keys it replaced, newest
+    # first, comma-separated, kept around long enough to still decrypt rows
+    # written under them. Remove a key once nothing left needs revealing from
+    # before its rotation.
+    audit_ip_key_previous: str = ""
     audit_lookup_daily_limit: int = Field(default=25, ge=1, le=1000)
     # Fails closed: a deployment that forgets to set PLAK_ENVIRONMENT refuses
     # to start (see _production_requirements below) instead of silently
@@ -274,17 +287,48 @@ class Settings(BaseSettings):
     def _audit_ip_key_valid(cls, value: str) -> str:
         return _decode_audit_ip_key("PLAK_AUDIT_IP_KEY", value)
 
+    @field_validator("audit_pepper_previous")
+    @classmethod
+    def _audit_pepper_previous_valid(cls, value: str) -> str:
+        peppers = _comma_separated(value)
+        if any(len(pepper.encode("utf-8")) < MIN_SECRET_BYTES for pepper in peppers):
+            raise ValueError(
+                f"every entry of PLAK_AUDIT_PEPPER_PREVIOUS must be at least {MIN_SECRET_BYTES} bytes long"
+            )
+        if len(set(peppers)) < len(peppers):
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS lists the same pepper twice")
+        return ",".join(peppers)
+
     @field_validator("audit_ip_key_previous")
     @classmethod
-    def _audit_ip_key_previous_valid(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        return _decode_audit_ip_key("PLAK_AUDIT_IP_KEY_PREVIOUS", value)
+    def _audit_ip_key_previous_valid(cls, value: str) -> str:
+        keys = [
+            _decode_audit_ip_key("every entry of PLAK_AUDIT_IP_KEY_PREVIOUS", entry)
+            for entry in _comma_separated(value)
+        ]
+        # Compared decoded: base64 ignores the unused bits of its last
+        # character, so two spellings can carry the same key.
+        if len({base64.b64decode(key) for key in keys}) < len(keys):
+            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS lists the same key twice")
+        return ",".join(keys)
 
     @model_validator(mode="after")
     def _audit_pepper_distinct(self) -> Settings:
         if self.audit_pepper == self.session_secret:
             raise ValueError("PLAK_AUDIT_PEPPER must differ from PLAK_SESSION_SECRET")
+        return self
+
+    @model_validator(mode="after")
+    def _audit_pepper_previous_distinct(self) -> Settings:
+        previous = set(self.audit_peppers[1:])
+        if self.audit_pepper in previous:
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_PEPPER")
+        if self.session_secret in previous:
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_SESSION_SECRET")
+        if previous & {self.audit_ip_key, *_comma_separated(self.audit_ip_key_previous)}:
+            raise ValueError(
+                "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS"
+            )
         return self
 
     @model_validator(mode="after")
@@ -294,23 +338,34 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PLAK_AUDIT_IP_KEY must differ from PLAK_SESSION_SECRET and PLAK_AUDIT_PEPPER"
             )
-        if self.audit_ip_key_previous is not None:
-            if self.audit_ip_key_previous == self.audit_ip_key:
-                raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY")
-            if self.audit_ip_key_previous in other_secrets:
-                raise ValueError(
-                    "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and "
-                    "PLAK_AUDIT_PEPPER"
-                )
+        if self.audit_ip_key_bytes in self.audit_ip_keys_previous_bytes:
+            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY")
+        if set(_comma_separated(self.audit_ip_key_previous)) & set(other_secrets):
+            raise ValueError(
+                "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and "
+                "PLAK_AUDIT_PEPPER"
+            )
+        # A row names its key by key id alone (audit/ip_crypto.py).
+        keys = (self.audit_ip_key_bytes, *self.audit_ip_keys_previous_bytes)
+        if len({_key_id(key) for key in keys}) < len(keys):
+            raise ValueError(
+                "PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS hold two keys with the same key id; "
+                "generate a new PLAK_AUDIT_IP_KEY"
+            )
         return self
+
+    @property
+    def audit_peppers(self) -> tuple[str, ...]:
+        """PLAK_AUDIT_PEPPER first, then the previous peppers in their configured order."""
+        return (self.audit_pepper, *_comma_separated(self.audit_pepper_previous))
 
     @property
     def audit_ip_key_bytes(self) -> bytes:
         return base64.b64decode(self.audit_ip_key)
 
     @property
-    def audit_ip_key_previous_bytes(self) -> bytes | None:
-        return base64.b64decode(self.audit_ip_key_previous) if self.audit_ip_key_previous else None
+    def audit_ip_keys_previous_bytes(self) -> tuple[bytes, ...]:
+        return tuple(base64.b64decode(key) for key in _comma_separated(self.audit_ip_key_previous))
 
     @field_validator("base_url")
     @classmethod

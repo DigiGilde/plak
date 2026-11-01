@@ -152,15 +152,16 @@ def test_audit_pepper_equal_to_session_secret_refused(monkeypatch):
 def test_audit_ip_key_previous_absent_by_default(monkeypatch):
     _set_required_env(monkeypatch)
     settings = load_settings()
-    assert settings.audit_ip_key_previous is None
-    assert settings.audit_ip_key_previous_bytes is None
+    assert settings.audit_ip_key_previous == ""
+    assert settings.audit_ip_keys_previous_bytes == ()
 
 
 def test_audit_ip_key_previous_decoded(monkeypatch):
+    """One key, the only form before the list, still reads: as a list of one."""
     raw = b"p" * 32
     _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=base64.b64encode(raw).decode())
     settings = load_settings()
-    assert settings.audit_ip_key_previous_bytes == raw
+    assert settings.audit_ip_keys_previous_bytes == (raw,)
 
 
 def test_non_base64_audit_ip_key_previous_refused(monkeypatch):
@@ -184,6 +185,179 @@ def test_audit_ip_key_previous_equal_to_audit_pepper_refused(monkeypatch):
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
     assert "PLAK_AUDIT_IP_KEY_PREVIOUS" in str(excinfo.value)
+
+
+_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+
+def _ip_key(fill: str) -> str:
+    return base64.b64encode(fill.encode() * 32).decode()
+
+
+def _respelled(key: str) -> str:
+    """The same 32-byte key with another last character: base64 ignores the
+    two unused bits that character carries."""
+    last = _BASE64_ALPHABET.index(key[-2])
+    respelled = key[:-2] + _BASE64_ALPHABET[last ^ 1] + key[-1]
+    assert respelled != key
+    assert base64.b64decode(respelled, validate=True) == base64.b64decode(key)
+    return respelled
+
+
+def test_audit_ip_key_previous_is_a_list_newest_first(monkeypatch):
+    """Kept in the configured order; whitespace around an entry and empty
+    entries are what a hand-edited list picks up, not part of a key."""
+    newer, older = b"n" * 32, b"o" * 32
+    encoded_newer, encoded_older = base64.b64encode(newer).decode(), base64.b64encode(older).decode()
+    _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=f" {encoded_newer} ,,\t{encoded_older}, ")
+    settings = load_settings()
+    assert settings.audit_ip_keys_previous_bytes == (newer, older)
+    assert settings.audit_ip_key_previous == f"{encoded_newer},{encoded_older}"
+
+
+@pytest.mark.parametrize("variable", ["PLAK_AUDIT_PEPPER_PREVIOUS", "PLAK_AUDIT_IP_KEY_PREVIOUS"])
+@pytest.mark.parametrize("value", ["", " ", " , ,\t"])
+def test_a_previous_list_of_only_separators_is_no_rotation(monkeypatch, variable, value):
+    _set_required_env(monkeypatch, **{variable: value})
+    settings = load_settings()
+    assert settings.audit_peppers == ("y" * 32,)
+    assert settings.audit_ip_keys_previous_bytes == ()
+
+
+@pytest.mark.parametrize("bad", ["niet-base64!!!", base64.b64encode(b"te-kort").decode()])
+def test_a_bad_later_entry_of_audit_ip_key_previous_refused(monkeypatch, bad):
+    """Every entry is checked, not only the first."""
+    _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=f"{_ip_key('p')},{bad}")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "every entry of PLAK_AUDIT_IP_KEY_PREVIOUS must be" in str(excinfo.value)
+    assert "base64" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("respelled", [False, True], ids=["same-text", "other-spelling"])
+def test_audit_ip_key_previous_listing_one_key_twice_refused(monkeypatch, respelled):
+    key = _ip_key("p")
+    again = _respelled(key) if respelled else key
+    _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=f"{key},{_ip_key('o')},{again}")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_IP_KEY_PREVIOUS lists the same key twice" in str(excinfo.value)
+    assert key not in _full_traceback(excinfo.value)
+
+
+@pytest.mark.parametrize("respelled", [False, True], ids=["same-text", "other-spelling"])
+def test_audit_ip_key_previous_holding_the_current_key_further_on_refused(monkeypatch, respelled):
+    current = _ip_key("z")
+    listed = _respelled(current) if respelled else current
+    _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY=current, PLAK_AUDIT_IP_KEY_PREVIOUS=f"{_ip_key('p')},{listed}")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY" in str(excinfo.value)
+
+
+def test_audit_ip_key_previous_equal_to_session_secret_refused(monkeypatch):
+    shared = _ip_key("s")
+    _set_required_env(
+        monkeypatch, PLAK_SESSION_SECRET=shared, PLAK_AUDIT_IP_KEY_PREVIOUS=f"{_ip_key('p')},{shared}"
+    )
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and PLAK_AUDIT_PEPPER" in str(
+        excinfo.value
+    )
+    assert shared not in _full_traceback(excinfo.value)
+
+
+def test_two_audit_ip_keys_with_one_key_id_refused(monkeypatch):
+    """A row names its key by the key id alone, so two keys behind one id would
+    leave the rows of one of them unreadable. A real collision of 8 bytes of
+    SHA-256 cannot be made for a test: a key id that is the same for every key
+    stands in for it."""
+    monkeypatch.setattr("plak.config._key_id", lambda key: b"\x00" * 8)
+    _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=_ip_key("p"))
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    message = str(excinfo.value)
+    assert "PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS hold two keys with the same key id" in message
+
+
+def test_audit_pepper_previous_absent_by_default(monkeypatch):
+    _set_required_env(monkeypatch)
+    settings = load_settings()
+    assert settings.audit_pepper_previous == ""
+    assert settings.audit_peppers == ("y" * 32,)
+
+
+def test_audit_peppers_are_the_current_one_then_the_previous_ones_in_order(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=f" {'b' * 32} ,, \t{'a' * 32},")
+    settings = load_settings()
+    assert settings.audit_peppers == ("y" * 32, "b" * 32, "a" * 32)
+    assert settings.audit_pepper_previous == f"{'b' * 32},{'a' * 32}"
+
+
+def test_the_current_audit_pepper_is_still_taken_verbatim(monkeypatch):
+    """Only the previous peppers are a list. The current one reads exactly as
+    it always did, commas and outer whitespace included: reading it any other
+    way would change every pseudonym it ever made."""
+    pepper = "  een pepper, met een komma en spaties eromheen  "
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER=pepper)
+    settings = load_settings()
+    assert settings.audit_pepper == pepper
+    assert settings.audit_peppers == (pepper,)
+
+
+@pytest.mark.parametrize("value", ["a" * 32, "é" * 16])
+def test_audit_pepper_previous_counts_bytes_not_characters(monkeypatch, value):
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=value)
+    assert load_settings().audit_peppers == ("y" * 32, value)
+
+
+@pytest.mark.parametrize("value", ["te-kort-geheim", "a" * 31, "é" * 15, f"{'a' * 32},te-kort-geheim"])
+def test_too_short_audit_pepper_previous_refused(monkeypatch, value):
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=value)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "every entry of PLAK_AUDIT_PEPPER_PREVIOUS must be at least 32 bytes long" in str(excinfo.value)
+    assert "te-kort-geheim" not in _full_traceback(excinfo.value)
+
+
+@pytest.mark.parametrize("value", ["y" * 32, f"{'a' * 32},{'y' * 32}", f"  {'y' * 32}\t"])
+def test_audit_pepper_previous_holding_the_current_pepper_refused(monkeypatch, value):
+    """The likely slip in a rotation: the old pepper copied into the new
+    variable without replacing the current one."""
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=value)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_PEPPER" in str(excinfo.value)
+
+
+def test_audit_pepper_previous_equal_to_session_secret_refused(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=f"{'a' * 32},{'x' * 32}")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_SESSION_SECRET" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("ip_key_variable", ["PLAK_AUDIT_IP_KEY", "PLAK_AUDIT_IP_KEY_PREVIOUS"])
+def test_audit_pepper_previous_equal_to_an_audit_ip_key_refused(monkeypatch, ip_key_variable):
+    """One leaked value must not both undo the pseudonymisation and reveal full
+    IP addresses, in whichever list of the two it was left behind."""
+    shared = _ip_key("q")
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=shared, **{ip_key_variable: shared})
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS" in str(
+        excinfo.value
+    )
+    assert shared not in _full_traceback(excinfo.value)
+
+
+def test_audit_pepper_previous_listing_one_pepper_twice_refused(monkeypatch):
+    _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS=f"{'a' * 32},{'b' * 32}, {'a' * 32}")
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert "PLAK_AUDIT_PEPPER_PREVIOUS lists the same pepper twice" in str(excinfo.value)
+    assert "a" * 32 not in _full_traceback(excinfo.value)
 
 
 def _full_traceback(error: BaseException) -> str:
