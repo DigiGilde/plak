@@ -13,7 +13,7 @@
  * a group in its menu. The menu in the toolbar carries navigation and account
  * only.
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { createGroup, overview, createSite, setAccess, upload } from '../api/plak';
@@ -79,6 +79,18 @@ function publish(): void {
   siteSheetOpen.value = true;
 }
 
+/** The group whose empty-state button opened the sheet; cleared on close. */
+const sheetGroup = ref<string | null>(null);
+
+function publishIn(groupSlug: string): void {
+  sheetGroup.value = groupSlug;
+  siteSheetOpen.value = true;
+}
+
+watch(siteSheetOpen, (open) => {
+  if (!open) sheetGroup.value = null;
+});
+
 function uploadToSite(groupSlug: string, siteSlug: string, file: File): Promise<void> {
   return upload(groupSlug, siteSlug, file, file.name).then(() => undefined);
 }
@@ -87,9 +99,15 @@ function onSiteCreated(site: Site): void {
   data.value?.groups.find((row) => row.group.slug === site.groupSlug)?.sites.push(site);
 }
 
-function onGroupCreated(group: Group): void {
+async function onGroupCreated(group: Group): Promise<void> {
   data.value?.groups.push({ group, sites: [] });
   state.value = 'filled';
+  // The roles in `me` are what let the member publish in the new group.
+  try {
+    me.value = (await fetchCurrentMember(true)) as Me | null;
+  } catch {
+    // The old roles stay: the group is listed, without a button until a reload.
+  }
 }
 
 function onPublished(site: Site): void {
@@ -190,6 +208,7 @@ const {
         appearance="primary"
         :text="t('group.action.publishSite')"
         start-icon="plus"
+        class="empty-state-action"
         data-testid="overview-empty-publish"
         @click="publish()"
       ></nldd-button>
@@ -230,7 +249,18 @@ const {
             slot="empty"
             icon="rectangle-stack"
             :text="t('group.overview.table.empty')"
-          ></nldd-inline-dialog>
+          >
+            <nldd-button
+              v-if="mayCreateSiteIn(me, overviewGroup.group.slug) && overviewGroup.sites.length === 0"
+              slot="actions"
+              appearance="primary"
+              :text="t('group.action.publishSite')"
+              start-icon="plus"
+              class="empty-state-action"
+              data-testid="overview-group-empty-publish"
+              @click="publishIn(overviewGroup.group.slug)"
+            ></nldd-button>
+          </nldd-inline-dialog>
           <SiteRow
             v-for="site in overviewGroup.sites"
             :key="site.slug"
@@ -250,6 +280,7 @@ const {
       :set-access="setAccess"
       :publish="uploadToSite"
       :initial-drop="droppedRead"
+      :initial-group="sheetGroup"
       @group-created="onGroupCreated"
       @created="onSiteCreated"
       @published="onPublished"

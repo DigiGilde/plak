@@ -18,7 +18,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.overview.errorFallback': 'Unknown error',
   'group.overview.empty': 'Nothing is online here yet.',
   'group.overview.empty.supportingText':
-    'Pick a file or an archive from your folder, give it a title, and put it online. You create a group in the same step.',
+    'Pick a folder, an archive or a single HTML file, give it a title and put it online. You create a group in the same step.',
   'group.overview.table.label': 'Sites in {group}',
   'group.overview.table.empty': 'No sites in this group yet.',
 
@@ -67,8 +67,8 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
     'The sites of this group. Open a site to publish, to arrange access or to look at the versions.',
   'group.sites.table.label': 'Sites in this group',
   'group.sites.table.empty': 'No sites in this group yet',
-  'group.sites.table.empty.supportingText':
-    "Choose 'Publish a site' to put the first one in it.",
+  'group.sites.table.empty.readOnly':
+    'Only an editor or administrator of the group can add a site here.',
 
   // -- Group page: members tab ---------------------------------------------
   'group.members.heading': 'Members',

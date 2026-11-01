@@ -857,3 +857,212 @@ describe('Overview', () => {
     });
   });
 });
+
+describe('Overview: publish button in an empty group', () => {
+  const access = { base: 'public' as const, keys: false, invitees: false };
+  const groupRow = (slug: string, sites: OverviewData['groups'][number]['sites'] = []) => ({
+    group: { slug, name: slug, defaultAccess: access, previousSlugs: [] },
+    sites,
+  });
+  const meWith = (roles: { groupSlug: string; role: 'editor' | 'reader' }[]) => ({
+    id: 'lid-1',
+    ssoSubject: 'sub-1',
+    email: 'lid@example.org',
+    name: 'Lid',
+    platformRole: 'member' as const,
+    status: 'active' as const,
+    createdAt: '2026-01-01T00:00:00Z',
+    lastLoginAt: null,
+    lastActiveAt: null,
+    contentBaseUrl: 'https://sites.plak.test',
+    groupRoles: roles,
+    siteRoles: [],
+    ciForgejoHosts: [],
+    ciAudience: 'https://plak.test',
+    language: null,
+    slugRedirectDays: 30,
+  });
+
+  let wrapper: ReturnType<typeof mount> | null = null;
+
+  async function open(data: OverviewData, me: ReturnType<typeof meWith> | 'fails') {
+    vi.mocked(plakApi.overview).mockResolvedValue(data);
+    if (me === 'fails') vi.mocked(plakApi.me).mockRejectedValue(new Error('geen sessie'));
+    else vi.mocked(plakApi.me).mockResolvedValue(me);
+    wrapper = mount(Overview, { global: { plugins: [makeRouter()], stubs: { teleport: true } } });
+    await flushPromises();
+    return wrapper;
+  }
+
+  const buttons = () => wrapper!.findAll('[data-testid="overview-group-empty-publish"]');
+  const sheet = () => wrapper!.findComponent(PublishSheet);
+  const chosen = () => (wrapper!.find('nldd-dropdown select').element as HTMLSelectElement).value;
+
+  afterEach(() => {
+    wrapper?.unmount();
+    wrapper = null;
+    vi.mocked(plakApi.overview).mockReset();
+    vi.mocked(plakApi.me).mockReset();
+    _resetCurrentMemberCache();
+  });
+
+  it('is a primary button in the actions slot of the empty state', async () => {
+    await open({ groups: [groupRow('leeg')] }, meWith([{ groupSlug: 'leeg', role: 'editor' }]));
+
+    const button = buttons()[0]!;
+    const props = button.element as HTMLElement & { appearance?: string; startIcon?: string; text?: string };
+    expect(button.attributes('slot')).toBe('actions');
+    expect(props.appearance).toBe('primary');
+    expect(props.startIcon).toBe('plus');
+    expect(props.text).toBe('Zet een site online');
+  });
+
+  it('is absent for a group the member may only read', async () => {
+    await open({ groups: [groupRow('leeg')] }, meWith([{ groupSlug: 'leeg', role: 'reader' }]));
+
+    expect(buttons()).toHaveLength(0);
+    expect(wrapper!.find('nldd-inline-dialog[slot="empty"]').attributes('supporting-text')).toBeUndefined();
+  });
+
+  it('is absent when the session could not be fetched', async () => {
+    await open({ groups: [groupRow('leeg')] }, 'fails');
+
+    expect(buttons()).toHaveLength(0);
+  });
+
+  it('is absent on a group with sites', async () => {
+    await open(
+      { groups: [{ ...structuredClone(filledData).groups[0]! }] },
+      meWith([{ groupSlug: 'team-aurora', role: 'editor' }]),
+    );
+
+    expect(buttons()).toHaveLength(0);
+  });
+
+  it('opens the sheet with its own group chosen, one button per empty group', async () => {
+    await open(
+      { groups: [groupRow('een'), groupRow('twee')] },
+      meWith([
+        { groupSlug: 'een', role: 'editor' },
+        { groupSlug: 'twee', role: 'editor' },
+      ]),
+    );
+    expect(buttons()).toHaveLength(2);
+
+    await buttons()[1]!.trigger('click');
+    await flushPromises();
+    expect(sheet().props('open')).toBe(true);
+    expect(sheet().props('initialGroup')).toBe('twee');
+    expect(chosen()).toBe('twee');
+
+    await sheet().vm.$emit('update:open', false);
+    await flushPromises();
+    await buttons()[0]!.trigger('click');
+    await flushPromises();
+    expect(sheet().props('initialGroup')).toBe('een');
+    expect(chosen()).toBe('een');
+  });
+
+  it('is not remembered: the header button afterwards starts without that group', async () => {
+    await open(
+      { groups: [groupRow('een'), groupRow('twee')] },
+      meWith([
+        { groupSlug: 'een', role: 'editor' },
+        { groupSlug: 'twee', role: 'editor' },
+      ]),
+    );
+
+    await buttons()[1]!.trigger('click');
+    await flushPromises();
+    await sheet().vm.$emit('update:open', false);
+    await flushPromises();
+    expect(sheet().props('initialGroup')).toBeNull();
+
+    wrapper!.find('[data-testid="overview-publish"]').element.dispatchEvent(new CustomEvent('action-click'));
+    await flushPromises();
+
+    expect(sheet().props('open')).toBe(true);
+    expect(sheet().props('initialGroup')).toBeNull();
+    expect(chosen()).toBe('een');
+  });
+  describe('after a group is created', () => {
+    const fresh = { slug: 'nieuw', name: 'Nieuw', defaultAccess: access, previousSlugs: [] };
+
+    it('shows the button and offers the group in the sheet without a reload', async () => {
+      await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
+      expect(buttons()).toHaveLength(1);
+      vi.mocked(plakApi.me).mockResolvedValue(
+        meWith([
+          { groupSlug: 'een', role: 'editor' },
+          { groupSlug: 'nieuw', role: 'editor' },
+        ]),
+      );
+
+      wrapper!.findComponent(NewGroupSheet).vm.$emit('created', fresh);
+      await flushPromises();
+
+      expect(buttons()).toHaveLength(2);
+      await buttons()[1]!.trigger('click');
+      await flushPromises();
+      const options = [...wrapper!.findAll('nldd-dropdown select option')].map((o) => o.attributes('value'));
+      expect(options).toEqual(['een', 'nieuw']);
+      expect(chosen()).toBe('nieuw');
+    });
+
+    it('has neither button nor choice with the old roles, which is what a reload fixed', async () => {
+      await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
+      vi.mocked(plakApi.me).mockResolvedValue(meWith([{ groupSlug: 'een', role: 'editor' }]));
+
+      wrapper!.findComponent(NewGroupSheet).vm.$emit('created', fresh);
+      await flushPromises();
+
+      expect(sheet().props('groups').map((g: Group) => g.slug)).toEqual(['een', 'nieuw']);
+      expect(buttons()).toHaveLength(1);
+    });
+
+    it('keeps the page working when the refetch fails, without a button for the new group', async () => {
+      await open({ groups: [groupRow('een')] }, meWith([{ groupSlug: 'een', role: 'editor' }]));
+      vi.mocked(plakApi.me).mockRejectedValue(new Error('geen sessie'));
+
+      wrapper!.findComponent(NewGroupSheet).vm.$emit('created', fresh);
+      await flushPromises();
+
+      expect(wrapper!.text()).toContain('Nieuw');
+      expect(buttons()).toHaveLength(1);
+    });
+
+    it('finishes a publish that creates the first group while the roles are refetched', async () => {
+      let release!: (me: ReturnType<typeof meWith>) => void;
+      await open({ groups: [] }, meWith([]));
+      vi.mocked(plakApi.me).mockImplementation(
+        () => new Promise((resolve) => (release = resolve as typeof release)),
+      );
+      vi.mocked(plakApi.createGroup).mockResolvedValue(fresh);
+      const site: Site = {
+        id: 'x', groupSlug: 'nieuw', slug: 'handboek', title: 'Handboek', access,
+        externalSources: false, sandbox: true, liveVersionsKept: null, liveVersionId: null,
+        createdBy: 'dev', hasLiveVersion: false, lastPublishedAt: null, previewCount: 0, previousSlugs: [],
+      };
+      vi.mocked(plakApi.createSite).mockImplementation(async () => {
+        // The refetched roles arrive in the middle of the submit.
+        release(meWith([{ groupSlug: 'nieuw', role: 'editor' }]));
+        await flushPromises();
+        return site;
+      });
+      vi.mocked(plakApi.setAccess).mockImplementation(async (_g, _s, a) => ({ ...site, access: a }));
+      vi.mocked(plakApi.upload).mockResolvedValue({ versionId: 'v1' });
+      const root = wrapper!.find('nldd-sheet[accessible-label="Zet een site online"]').element as HTMLElement;
+      const field = (name: string) => [...root.querySelectorAll('nldd-text-field')].find((el) => (el as never as { name: string }).name === name)!;
+      field('group-name').dispatchEvent(new CustomEvent('input', { detail: { value: 'Nieuw' } }));
+      root.querySelector('nldd-file-field')!.dispatchEvent(
+        new CustomEvent('change', { detail: { files: [new File(['<h1>x</h1>'], 'handboek.zip')] } }),
+      );
+      root.querySelector('nldd-form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flushPromises();
+
+      await flushPromises();
+      expect(plakApi.createSite).toHaveBeenCalledWith('nieuw', 'Handboek', 'handboek');
+      expect(plakApi.upload).toHaveBeenCalledWith('nieuw', 'handboek', expect.any(File), 'handboek.zip');
+    });
+  });
+});

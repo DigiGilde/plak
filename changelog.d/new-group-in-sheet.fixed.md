@@ -1,0 +1,1 @@
+- A new group on the overview can be chosen in the publish sheet straight away, without a reload.

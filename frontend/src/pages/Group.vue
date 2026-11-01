@@ -322,6 +322,7 @@ function onGroupChanged(group: Group): void {
             :previous-slugs="detail.group.previousSlugs"
             :content-base="contentBase"
             :redirect-days="redirectDays"
+            :can-publish="canPublish"
             :can-delete="canDeleteGroup"
             :can-rename="canRenameGroup"
             :can-change-address="canChangeAddress"
@@ -331,6 +332,7 @@ function onGroupChanged(group: Group): void {
             @group-changed="onGroupChanged"
             @renamed="onGroupRenamed"
             @removed="afterRemoval"
+            @publish="sheetOpen = true"
           />
         </router-view>
       </div>

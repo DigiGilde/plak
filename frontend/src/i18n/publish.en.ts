@@ -7,7 +7,7 @@ import type { publishNl } from './publish.nl';
 
 export const publishEn: Record<keyof typeof publishNl, string> = {
   // -- Publish sheet: the flow from file to published site --------------------
-  'publish.sheet.heading': 'Put a site online',
+  'publish.sheet.heading': 'Publish a site',
   'publish.sheet.close': 'Close',
   'publish.sheet.drop': 'Let go to upload',
   'publish.sheet.halfway.title': 'The site already exists',

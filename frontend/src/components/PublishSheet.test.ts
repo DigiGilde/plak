@@ -439,6 +439,73 @@ describe('PublishSheet (the group)', () => {
   });
 });
 
+describe('PublishSheet (a group chosen on opening)', () => {
+  function chosen(wrapper: Wrapper): string {
+    return (wrapper.find('nldd-dropdown select').element as HTMLSelectElement).value;
+  }
+
+  it('has the group chosen that the opening button sits on', async () => {
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM], open: false, initialGroup: 'team' } as never);
+
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(chosen(wrapper)).toBe('team');
+  });
+
+  it('ignores a group the member may not publish in', async () => {
+    const { wrapper } = mountComponent({
+      groups: [AURORA, TEAM],
+      open: false,
+      initialGroup: 'onbekend',
+    } as never);
+
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(chosen(wrapper)).toBe('team-aurora');
+  });
+
+  it('starts the next opening without that group', async () => {
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM], open: false, initialGroup: 'team' } as never);
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+    await wrapper.setProps({ open: false });
+
+    await wrapper.setProps({ initialGroup: null });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(chosen(wrapper)).toBe('team-aurora');
+  });
+
+  it('starts with no group when the pinned one is gone and none is left', async () => {
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM], open: false, initialGroup: 'team' } as never);
+    await wrapper.setProps({ open: true });
+    await wrapper.setProps({ open: false });
+
+    await wrapper.setProps({ groups: [], initialGroup: null });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(wrapper.find('nldd-dropdown').exists()).toBe(false);
+    expect(wrapper.find('nldd-text-field[name="group-name"]').exists()).toBe(true);
+  });
+
+  it('keeps the member\'s own choice across openings when no group was pinned', async () => {
+    const { wrapper } = mountComponent({ groups: [AURORA, TEAM], open: false });
+    await wrapper.setProps({ open: true });
+    const select = wrapper.find('nldd-dropdown select');
+    (select.element as HTMLSelectElement).value = 'team';
+    await select.trigger('change');
+    await wrapper.setProps({ open: false });
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(chosen(wrapper)).toBe('team');
+  });
+});
+
 describe('PublishSheet (the group, filtered by role)', () => {
   const READERS: Group = { slug: 'lezers', name: 'Lezers', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] };
 

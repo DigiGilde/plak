@@ -1,0 +1,1 @@
+- An empty group now shows a "Publish a site" button in its empty state, on the group page and on the overview, for members who may publish there.
