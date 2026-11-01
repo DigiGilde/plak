@@ -248,7 +248,7 @@ describe('Groups', () => {
     // up out of reach.
     const button = wrapper.find('[data-testid="groups-create"]');
     expect(wrapper.find('.page-header [data-testid="groups-create"]').exists()).toBe(true);
-    expect(property(button.element, 'variant')).toBe('primary');
+    expect(property(button.element, 'appearance')).toBe('primary');
 
     await button.trigger('click');
     expect(wrapper.findComponent(NewGroupSheet).props('open')).toBe(true);

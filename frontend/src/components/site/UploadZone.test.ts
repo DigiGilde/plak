@@ -174,6 +174,17 @@ describe('UploadZone: choosing a folder without dragging', () => {
     wrapper.unmount();
   });
 
+  it('puts the folder button and the publish button in one group, with room between them', async () => {
+    const { wrapper } = await mountComponent();
+
+    // nldd-form-actions sets no gap of its own: loose buttons touch.
+    const group = wrapper.find('nldd-form-actions > nldd-button-group');
+    expect(group.find('[data-testid="upload-folder"]').exists()).toBe(true);
+    expect(group.find('[data-testid="upload-publish"]').exists()).toBe(true);
+
+    wrapper.unmount();
+  });
+
   it('packs the chosen folder like a dropped one', async () => {
     const { wrapper } = await mountComponent();
 
@@ -273,6 +284,37 @@ describe('UploadZone: dragging', () => {
     wrapper.unmount();
   });
 
+  // nldd-file-field takes a drop on itself and refuses a folder or more than
+  // one file, while the zone packs exactly those; one drop must get one answer.
+  it('marks the field as one that takes a folder too', async () => {
+    const { wrapper, field } = await mountComponent();
+
+    expect(field.hasAttribute('data-takes-folders')).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  it('takes a drop on the field itself before the field sees it', async () => {
+    const { wrapper, field } = await mountComponent();
+    const seenByField = vi.fn();
+    field.addEventListener('dragover', seenByField);
+    field.addEventListener('drop', seenByField);
+    const transfer = makeTransfer({ 'mijn-site': { 'index.html': file('index.html') } });
+
+    const over = fireDrop(field, 'dragover', transfer);
+    const drop = fireDrop(field, 'drop', transfer);
+    await untilQuiet();
+
+    expect(seenByField).not.toHaveBeenCalled();
+    expect(over.defaultPrevented).toBe(true);
+    expect(drop.defaultPrevented).toBe(true);
+    expect(wrapper.find('[data-testid="drag-done"]').attributes('supporting-text')).toContain(
+      'mijn-site',
+    );
+
+    wrapper.unmount();
+  });
+
   it('packs a dragged folder into an archive the API can handle', async () => {
     const { wrapper, zone } = await mountComponent();
 
@@ -297,6 +339,47 @@ describe('UploadZone: dragging', () => {
     const sent = wrapper.emitted('file')?.[0]?.[0] as File;
     expect(sent.name).toBe('mijn-site.tar.gz');
     expect(sent.size).toBeGreaterThan(0);
+
+    wrapper.unmount();
+  });
+
+  // Dragging the contents of Hugo's public/ instead of the folder itself:
+  // there is no folder then, so no folder name to report either.
+  it('reports loose files and folders by count, not under a folder name', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    fireDrop(
+      zone,
+      'drop',
+      makeTransfer({
+        'index.html': file('index.html', '<h1>hoi</h1>'),
+        css: { 'stijl.css': file('stijl.css') },
+        posts: { hallo: { 'index.html': file('index.html') } },
+      }),
+    );
+    await untilQuiet();
+
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
+    expect(notice).toMatch(/^3 bestanden ingepakt, /);
+    expect(notice).not.toContain('Map');
+
+    wrapper.unmount();
+  });
+
+  it('uses the singular wording when the loose selection holds one file', async () => {
+    const { wrapper, zone } = await mountComponent();
+
+    // Two entries, so a selection rather than a folder, with one file left
+    // once the metadata is gone.
+    fireDrop(
+      zone,
+      'drop',
+      makeTransfer({ docs: { 'index.html': file('index.html') }, '.DS_Store': file('.DS_Store') }),
+    );
+    await untilQuiet();
+
+    const notice = wrapper.find('[data-testid="drag-done"]').attributes('supporting-text');
+    expect(notice).toMatch(/^1 bestand ingepakt, /);
 
     wrapper.unmount();
   });

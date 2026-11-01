@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { _setLocaleForTest } from '../src/i18n';
-import { wordsPerElement } from '../src/i18n/designSystem';
+import { folderFieldWords, wordsPerElement } from '../src/i18n/designSystem';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(HERE, '../src');
@@ -38,12 +38,48 @@ const PACKAGE = resolve(HERE, '../node_modules/@nldd/design-system/dist/componen
  * reason. Everything else has to be answered.
  */
 const UNREACHED: Record<string, string> = {
-  'components.button.opens-in-new-tab-label': 'no nldd-button here is a link to a new tab',
-  'components.icon-button.opens-in-new-tab-label':
-    'no nldd-icon-button here is a link to a new tab',
-  'components.list-item.opens-in-new-tab-label': 'no nldd-list-item here is a link',
+  'components.button.link-hint-download-lowercase-label': 'no nldd-button here downloads a file',
+  'components.icon-button.link-hint-new-tab-lowercase-label': 'no nldd-icon-button here is a link',
+  'components.icon-button.link-hint-external-lowercase-label': 'no nldd-icon-button here is a link',
+  'components.icon-button.link-hint-external-new-tab-lowercase-label':
+    'no nldd-icon-button here is a link',
+  'components.icon-button.link-hint-download-lowercase-label': 'no nldd-icon-button here is a link',
+  'components.link.link-hint-download-lowercase-label': 'no nldd-link here downloads a file',
+  'components.list-item.link-hint-new-tab-lowercase-label':
+    'every nldd-list-item link here opens a page of this app in this tab',
+  'components.list-item.link-hint-external-lowercase-label':
+    'every nldd-list-item link here opens a page of this app in this tab',
+  'components.list-item.link-hint-external-new-tab-lowercase-label':
+    'every nldd-list-item link here opens a page of this app in this tab',
+  'components.list-item.link-hint-download-lowercase-label':
+    'every nldd-list-item link here opens a page of this app in this tab',
+  'components.list-item-segment.link-hint-new-tab-lowercase-label':
+    'no nldd-list-item-segment here',
+  'components.list-item-segment.link-hint-external-lowercase-label':
+    'no nldd-list-item-segment here',
+  'components.list-item-segment.link-hint-external-new-tab-lowercase-label':
+    'no nldd-list-item-segment here',
+  'components.list-item-segment.link-hint-download-lowercase-label':
+    'no nldd-list-item-segment here',
+  'components.code-viewer.diff-summary-text': 'no code viewer here shows a diff',
+  'components.code-viewer.line-singular-lowercase': 'no code viewer here shows a diff',
+  'components.code-viewer.line-plural-lowercase': 'no code viewer here shows a diff',
+  'components.code-viewer.added-line-label': 'no code viewer here shows a diff',
+  'components.code-viewer.removed-line-label': 'no code viewer here shows a diff',
   'components.file-field.to-choose-files-action': 'no file field here takes more than one file',
   'components.file-field.file-count-text': 'no file field here takes more than one file',
+  'components.file-field.drop-hint-multiple-lowercase-text':
+    'no file field here takes more than one file',
+  'components.file-field.drag-here-multiple-text': 'no file field here takes more than one file',
+  'components.file-field.drop-here-multiple-text': 'no file field here takes more than one file',
+  'components.file-field.files-type-error-text': 'no file field here takes more than one file',
+  'components.file-field.folder-multiple-error-text':
+    'no file field here takes more than one file',
+  'components.file-field.accepted-types-text': 'no file field here is variant="area"',
+  'components.file-field.image-lowercase': 'no file field here accepts a family such as image/*',
+  'components.file-field.video-lowercase': 'no file field here accepts a family such as image/*',
+  'components.file-field.audio-file-lowercase':
+    'no file field here accepts a family such as image/*',
   'components.menu.empty-text':
     'every menu here sets empty-text or is never empty, the toolbar overflow menu included',
   'components.menu.back-action': 'no nldd-menu-item here has a submenu',
@@ -64,7 +100,11 @@ const UNREACHED: Record<string, string> = {
   'components.token.dismiss-action': 'the one token here sets dismiss-text',
   'components.token.open-menu-action': 'no token here has a menu',
   'components.token.open-token-menu-action': 'no token here has a menu',
-  'components.toolbar.opens-in-new-tab-label':
+  'components.toolbar.link-hint-new-tab-lowercase-label':
+    'the toolbar title links to the overview in this tab',
+  'components.toolbar.link-hint-external-lowercase-label':
+    'the toolbar title links to the overview in this tab',
+  'components.toolbar.link-hint-external-new-tab-lowercase-label':
     'the toolbar title links to the overview in this tab',
 };
 
@@ -160,6 +200,15 @@ describe('the words the design system says by itself', () => {
       ...answered().map(([, key]) => key),
       ...Object.keys(UNREACHED),
     ].filter((key) => !keys.has(key));
+    expect(stale).toEqual([]);
+  });
+
+  // Its own words on purpose, so only the keys are held against the package:
+  // a key the field renamed would leave the folder hint silently unsaid.
+  it('hangs the folder hint on keys the file field still has', () => {
+    const stale = Object.keys(folderFieldWords()).filter(
+      (key) => keys.get(key)?.tags.has('nldd-file-field') !== true,
+    );
     expect(stale).toEqual([]);
   });
 

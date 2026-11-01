@@ -158,14 +158,14 @@ useSheetOpen(() => props.open, sheetEl);
             <nldd-form-actions>
               <nldd-button-group>
                 <nldd-button
-                  variant="secondary"
+                  appearance="secondary"
                   :text="t('group.new.cancel')"
                   type="button"
                   @click="onCancel"
                 ></nldd-button>
                 <nldd-button
                   :text="t('group.action.newGroup')"
-                  variant="primary"
+                  appearance="primary"
                   type="submit"
                 ></nldd-button>
               </nldd-button-group>

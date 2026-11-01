@@ -299,7 +299,7 @@ async function setLive(version: Version): Promise<void> {
       <nldd-list
         v-if="!loading && storage && canEditRetention"
         type="form"
-        variant="box-tinted"
+        appearance="box-tinted"
         dividers="never"
         data-testid="retention-box"
       >
@@ -307,7 +307,7 @@ async function setLive(version: Version): Promise<void> {
           <nldd-cell width="full">
             <nldd-list
               type="radiogroup"
-              variant="simple"
+              appearance="simple"
               dividers="never"
               :accessible-label="t('site.versions.keep.label')"
               data-testid="retention-choice"
@@ -396,7 +396,7 @@ async function setLive(version: Version): Promise<void> {
         then dims the skeleton behind it.
       -->
       <nldd-activity-indicator v-if="loading" :text="t('site.versions.loading')">
-        <nldd-list type="form" variant="box-tinted" aria-hidden="true" data-testid="versions-skeleton">
+        <nldd-list type="form" appearance="box-tinted" aria-hidden="true" data-testid="versions-skeleton">
           <nldd-list-item v-for="row in 3" :key="row" size="md">
             <nldd-cell width="fit-content">
               <span class="skeleton__bar skeleton__bar--marker"></span>
@@ -426,7 +426,7 @@ async function setLive(version: Version): Promise<void> {
       <nldd-list
         v-else
         type="form"
-        variant="box-tinted"
+        appearance="box-tinted"
         :accessible-label="t('site.versions.listLabel')"
         data-testid="versions-list"
       >

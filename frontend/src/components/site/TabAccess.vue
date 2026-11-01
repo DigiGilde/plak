@@ -348,7 +348,7 @@ function keyActions(key: Key): RowAction[] {
           <SectionHeading id="heading-base" :text="t('publish.access.base.heading')" />
           <nldd-list
             type="radiogroup"
-            variant="box-base"
+            appearance="box-base"
             :accessible-label="t('publish.access.base.heading')"
             data-testid="access-base"
           >
@@ -438,7 +438,7 @@ function keyActions(key: Key): RowAction[] {
             <SecretLink :value="newKeyValue" :site-url="siteAddress" prefix="new-key" />
             <nldd-button
               slot="actions"
-              variant="secondary"
+              appearance="secondary"
               start-icon="open-new-page"
               :text="t('publish.access.keys.open')"
               :href="newKeyLink"
@@ -570,7 +570,7 @@ function keyActions(key: Key): RowAction[] {
                   </nldd-form-field>
                   <nldd-form-actions>
                     <nldd-button
-                      variant="primary"
+                      appearance="primary"
                       type="submit"
                       :text="t('publish.access.keys.form.submit')"
                       data-testid="key-create"
@@ -663,7 +663,7 @@ function keyActions(key: Key): RowAction[] {
                   </nldd-form-field>
                   <nldd-form-actions>
                     <nldd-button
-                      variant="primary"
+                      appearance="primary"
                       type="submit"
                       :text="t('publish.access.invitees.form.submit')"
                       data-testid="invitee-add"

@@ -159,6 +159,26 @@ describe('Platform management (filled)', () => {
     expect(rowWith('Wim Weg')!.html()).not.toContain('nldd-tag');
   });
 
+  it('puts the email address under the name of a member', async () => {
+    await mountComponent();
+
+    const cell = rowWith('Ada Vermeer')!.find('nldd-text-cell');
+    expect(cell.attributes('text')).toBe('Ada Vermeer');
+    expect(cell.attributes('supporting-text')).toContain('@');
+  });
+
+  it('shows the address as the member itself when the account carries no name', async () => {
+    // Without a name claim from the IdP the address stood alone in the
+    // supporting text, smaller than every other cell of the row.
+    const ada = backend.data.members.find((l) => l.id === 'lid-3')!;
+    ada.name = '';
+    await mountComponent();
+
+    const cell = rowWith(ada.email)!.find('nldd-text-cell');
+    expect(cell.attributes('text')).toBe(ada.email);
+    expect(cell.attributes('supporting-text')).toBeUndefined();
+  });
+
   it('names the action after what happens to the person, not after the database column', async () => {
     await mountComponent();
 

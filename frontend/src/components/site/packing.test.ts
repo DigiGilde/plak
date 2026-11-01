@@ -102,7 +102,7 @@ describe('packing: reading a drop', () => {
     expect(result.reason).toContain('.zip');
   });
 
-  it('bundles multiple dropped entries under one name', async () => {
+  it('bundles multiple dropped entries without a folder name to give them', async () => {
     const result = await readDrop(
       makeTransfer({
         'index.html': file('index.html'),
@@ -112,7 +112,7 @@ describe('packing: reading a drop', () => {
 
     expect(result.kind).toBe('bundle');
     if (result.kind !== 'bundle') return;
-    expect(result.name).toBe('site');
+    expect(result.name).toBeNull();
     expect(result.files.map((item) => item.path).sort()).toEqual([
       'assets/stijl.css',
       'index.html',
@@ -160,15 +160,15 @@ describe('packing: reading a drop', () => {
       ),
     );
 
-    expect(result).toMatchObject({ kind: 'bundle', name: 'site' });
+    expect(result).toMatchObject({ kind: 'bundle', name: null });
   });
 
-  it('names the bundle after the only file present', async () => {
+  it('does not name a bundle after the only loose file present, which is no folder', async () => {
     const result = await readDrop(
       makeTransfer({ 'stijl.css': file('stijl.css') }, { entries: false }),
     );
 
-    expect(result).toMatchObject({ kind: 'bundle', name: 'stijl.css' });
+    expect(result).toMatchObject({ kind: 'bundle', name: null });
   });
 
   it('refuses a drop without usable content', async () => {
@@ -300,6 +300,43 @@ describe('packing: checks before sending', () => {
   });
 });
 
+describe('packing: checks on loose files, which have no folder name', () => {
+  it('says nothing was dropped when nothing is left', () => {
+    expect(checkBundle(null, [])).toBe('Er is niets neergezet dat gepubliceerd kan worden.');
+  });
+
+  it('refuses too many files without quoting a folder', () => {
+    const files = Array.from({ length: 1001 }, (_, i) => large(`b-${i}.html`, 1));
+
+    expect(checkBundle(null, files)).toBe(
+      'Dit zijn meer dan 1.000 bestanden. Zoveel mag een publicatie niet bevatten.',
+    );
+  });
+
+  it('refuses a selection that is too large in total', () => {
+    const files = [
+      large('index.html', 1),
+      ...['a', 'b', 'c', 'd', 'e'].map((name) => large(`${name}.bin`, 41 * 1024 * 1024)),
+    ];
+
+    expect(checkBundle(null, files)).toMatch(/^Deze bestanden zijn samen 205 MB\. /);
+  });
+
+  it('names the folder among the files where the homepage does live', () => {
+    const files = [large('lees-mij.txt', 1), large('public/index.html', 1)];
+
+    expect(checkBundle(null, files)).toBe(
+      'Er staat geen index.html tussen deze bestanden, wel op "public/index.html". Sleep de map "public" zelf.',
+    );
+  });
+
+  it('says plainly when there is no homepage among the files', () => {
+    expect(checkBundle(null, [large('stijl.css', 1), large('logo.svg', 1)])).toBe(
+      'Er staat geen index.html tussen deze bestanden. Zonder startpagina kan niemand de site openen.',
+    );
+  });
+});
+
 describe('packing: packing', () => {
   it('reports honestly whether the browser can pack', () => {
     expect(canPack()).toBe(true);
@@ -410,6 +447,12 @@ describe('packing: packing', () => {
     expect([bytes[0], bytes[1], bytes[2]]).toEqual([31, 139, 8]);
   });
 
+  it('names the archive of loose files "site"', async () => {
+    const archive = await pack(null, [{ path: 'index.html', file: file('index.html') }]);
+
+    expect(archive.name).toBe('site.tar.gz');
+  });
+
   it('falls back to a usable name when nothing is left of the folder name', async () => {
     const archive = await pack('...', [{ path: 'index.html', file: file('index.html') }]);
 
@@ -491,7 +534,7 @@ describe('a folder from the file picker', () => {
     const outcome = readChosenFolder([new File(['x'], 'index.html')]);
     expect(outcome.kind).toBe('bundle');
     if (outcome.kind !== 'bundle') return;
-    expect(outcome.name).toBe('site');
+    expect(outcome.name).toBeNull();
     expect(outcome.files.map((b) => b.path)).toEqual(['index.html']);
   });
 });

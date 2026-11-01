@@ -86,6 +86,9 @@ export function useDropState() {
     // Required for `drop` to fire at all; also doubles as the browser's own
     // "open this file" prevention while over the target itself.
     event.preventDefault();
+    // Bound in the capture phase: an nldd-file-field inside the target judges
+    // a file drag by its own rules, and must not get it as well.
+    event.stopPropagation();
   }
 
   function onDragLeave(event: DragEvent): void {

@@ -61,7 +61,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
         {{ t('site.secretLink.withCode.hint') }}
       </nldd-text>
       <nldd-button
-        variant="primary"
+        appearance="primary"
         start-icon="copy"
         :text="t('site.secretLink.copyLink')"
         :accessible-label="t('site.secretLink.copyLink.label')"
@@ -94,7 +94,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
       </nldd-text>
       <nldd-button-group orientation="horizontal">
         <nldd-button
-          variant="secondary"
+          appearance="secondary"
           start-icon="copy"
           :text="t('site.secretLink.copyLinkWithoutCode')"
           type="button"
@@ -108,7 +108,7 @@ async function copy(text: string, copied: string, fallback: string): Promise<voi
           "
         ></nldd-button>
         <nldd-button
-          variant="secondary"
+          appearance="secondary"
           start-icon="copy"
           :text="t('site.secretLink.copyCode')"
           type="button"

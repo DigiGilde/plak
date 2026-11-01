@@ -12,7 +12,7 @@
  * cannot work before a single byte goes over the wire.
  */
 import { formatNumber } from '@/format';
-import { t } from '@/i18n';
+import { type MessageKey, t } from '@/i18n';
 
 /**
  * Mirrors the ingest defaults (`backend/src/plak/config.py`:
@@ -40,8 +40,11 @@ export interface BundleFile {
 export type DropResult =
   /** A single file the API already handles; forward it unchanged. */
   | { kind: 'file'; file: File }
-  /** A folder or several files; has to be packed first. */
-  | { kind: 'bundle'; name: string; files: BundleFile[] }
+  /**
+   * A folder or several files; has to be packed first. `name` is the folder's,
+   * or null for loose files and folders, which share no folder to be named after.
+   */
+  | { kind: 'bundle'; name: string | null; files: BundleFile[] }
   /** Nothing can be made of this; `reason` is meant for the user. */
   | { kind: 'refusal'; reason: string };
 
@@ -163,7 +166,7 @@ function fromLooseFiles(loose: File[]): DropResult {
   }
   return {
     kind: 'bundle',
-    name: usable.length === 1 ? usable[0]!.name : 'site',
+    name: null,
     files: usable.map((file) => ({ path: file.name, file })),
   };
 }
@@ -189,7 +192,7 @@ export async function readDrop(transfer: DataTransfer): Promise<DropResult> {
   }
 
   const files: BundleFile[] = [];
-  let name = 'site';
+  let name: string | null = null;
   if (entries.length === 1) {
     const folder = entries[0] as FileSystemDirectoryEntry;
     await readContents(folder, '', files);
@@ -213,7 +216,7 @@ export async function readDrop(transfer: DataTransfer): Promise<DropResult> {
  */
 export function readChosenFolder(chosen: File[]): DropResult {
   const files: BundleFile[] = [];
-  let name = 'site';
+  let name: string | null = null;
   for (const file of chosen) {
     const parts = (file.webkitRelativePath || file.name).split('/');
     if (parts.length > 1) name = parts[0]!;
@@ -277,12 +280,17 @@ function peeled(paths: string[]): string[] {
  * follows the cost: first what makes the archive impossible, only then what
  * makes the site unusable.
  */
-export function checkBundle(name: string, files: BundleFile[]): string | null {
+export function checkBundle(name: string | null, files: BundleFile[]): string | null {
+  // Loose files have no folder name to quote, so they get sentences of their own.
+  const say = (folder: MessageKey, loose: MessageKey, params: Record<string, string>): string =>
+    name === null ? t(loose, params) : t(folder, { ...params, name });
   if (files.length === 0) {
-    return t('publish.packing.bundleEmpty', { name });
+    return say('publish.packing.bundleEmpty', 'publish.packing.nothing', {});
   }
   if (files.length > LIMITS.files) {
-    return t('publish.packing.tooManyFiles', { name, count: count(LIMITS.files) });
+    return say('publish.packing.tooManyFiles', 'publish.packing.looseTooManyFiles', {
+      count: count(LIMITS.files),
+    });
   }
   const tooDeep = files.find((item) => item.path.split('/').length > LIMITS.depth);
   if (tooDeep) {
@@ -302,7 +310,10 @@ export function checkBundle(name: string, files: BundleFile[]): string | null {
   }
   const total = files.reduce((sum, item) => sum + item.file.size, 0);
   if (total > LIMITS.total) {
-    return t('publish.packing.totalTooLarge', { name, size: mb(total), max: mb(LIMITS.total) });
+    return say('publish.packing.totalTooLarge', 'publish.packing.looseTotalTooLarge', {
+      size: mb(total),
+      max: mb(LIMITS.total),
+    });
   }
 
   const paths = peeled(files.map((item) => item.path));
@@ -316,14 +327,15 @@ export function checkBundle(name: string, files: BundleFile[]): string | null {
     .sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))[0];
   if (candidate) {
     const folder = candidate.slice(0, candidate.lastIndexOf('/'));
-    return t('publish.packing.indexInFolder', {
+    return say('publish.packing.indexInFolder', 'publish.packing.looseIndexInFolder', {
       index: INDEX,
-      name,
       path: candidate,
       folder,
     });
   }
-  return t('publish.packing.indexMissing', { index: INDEX, name });
+  return say('publish.packing.indexMissing', 'publish.packing.looseIndexMissing', {
+    index: INDEX,
+  });
 }
 
 // -- Packing -------------------------------------------------------------------
@@ -478,12 +490,12 @@ export async function makeTar(
 
 /** Packs the bundle into one `.tar.gz` the deploy API can handle. */
 export async function pack(
-  name: string,
+  name: string | null,
   files: BundleFile[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<File> {
   const tar = await tarParts(files, onProgress);
-  return new File([await gzip(tar)], `${archiveName(name)}.tar.gz`, {
+  return new File([await gzip(tar)], `${archiveName(name ?? '')}.tar.gz`, {
     type: 'application/gzip',
   });
 }

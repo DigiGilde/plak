@@ -117,7 +117,7 @@ async function publish(file: File): Promise<void> {
 
                 <nldd-button-group orientation="horizontal">
                   <nldd-button
-                    variant="primary"
+                    appearance="primary"
                     :text="t('site.overview.copyAddress')"
                     start-icon="copy"
                     type="button"
@@ -125,7 +125,7 @@ async function publish(file: File): Promise<void> {
                     @click="copyAddress"
                   ></nldd-button>
                   <nldd-button
-                    variant="secondary"
+                    appearance="secondary"
                     :text="t('site.overview.openSite')"
                     start-icon="open-new-page"
                     :href="liveUrl"

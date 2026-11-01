@@ -489,7 +489,7 @@ async function onRemove(row: Row): Promise<void> {
     <nldd-button
       v-if="notice.retry"
       slot="actions"
-      variant="secondary"
+      appearance="secondary"
       size="sm"
       :text="t('admin.retry')"
       @click="reopen(notice)"

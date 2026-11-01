@@ -1089,6 +1089,37 @@ describe('PublishSheet (dragging)', () => {
     expect(wrapper.find('[data-testid="publish-drag-active"]').exists()).toBe(false);
   });
 
+  // nldd-file-field takes a drop on itself by its own rules; one drop must get
+  // one answer, the sheet's.
+  it('takes a file dropped on the file field before the field sees it', async () => {
+    const { wrapper } = mountComponent();
+    const field = wrapper.find('nldd-file-field').element;
+    const seenByField = vi.fn();
+    field.addEventListener('dragover', seenByField);
+    field.addEventListener('drop', seenByField);
+
+    field.dispatchEvent(dragEvent('dragover', fakeDataTransfer([file('mijn-site.zip')])));
+    field.dispatchEvent(dragEvent('drop', fakeDataTransfer([file('mijn-site.zip')])));
+    await flushPromises();
+
+    expect(seenByField).not.toHaveBeenCalled();
+    expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
+  });
+
+  it('lets a drag without files through to the field under it', async () => {
+    const { wrapper } = mountComponent();
+    const title = wrapper.find('nldd-text-field[name="title"]').element;
+    const seenByTitle = vi.fn();
+    title.addEventListener('drop', seenByTitle);
+
+    title.dispatchEvent(dragEvent('drop', fakeDataTransfer([])));
+    const bare = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(bare, 'dataTransfer', { value: null });
+    title.dispatchEvent(bare);
+
+    expect(seenByTitle).toHaveBeenCalledTimes(2);
+  });
+
   it('shows the size in kB, then MB, once it steps past the next unit', async () => {
     const { wrapper } = mountComponent();
 

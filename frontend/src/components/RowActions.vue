@@ -63,10 +63,9 @@ const props = defineProps<{
   <nldd-icon-button
     v-if="props.actions.length > 0 || props.choice"
     size="sm"
-    variant="neutral-transparent"
-    icon="ellipsis"
+    appearance="neutral-transparent"
+    icon="more"
     popup-type="menu"
-    class="row-actions"
     :accessible-label="t('admin.rowActions.label', { label: props.label })"
     :data-testid="`actions-${props.label}`"
   >
@@ -100,14 +99,3 @@ const props = defineProps<{
     </nldd-menu>
   </nldd-icon-button>
 </template>
-
-<style scoped>
-/* The icon set has only a horizontal ellipsis, and horizontal reads as "this
-   row continues" while vertical reads as "this row has a menu". Rotating the
-   button rather than the icon, because the icon lives in the shadow root; the
-   button is square, so its focus ring and hover come out identical either
-   way. */
-.row-actions {
-  transform: rotate(90deg);
-}
-</style>

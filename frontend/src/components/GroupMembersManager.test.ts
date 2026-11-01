@@ -342,8 +342,8 @@ describe('GroupMembersManager (confirming a removal)', () => {
       'Behoud het lidmaatschap',
       'Uit de groep halen',
     ]);
-    expect(buttons[0]!.attributes('variant')).toBe('primary');
-    expect(buttons[1]!.attributes('variant')).toBe('destructive');
+    expect(buttons[0]!.attributes('appearance')).toBe('primary');
+    expect(buttons[1]!.attributes('appearance')).toBe('destructive');
   });
 
   it('marks the removal busy while the API has not answered', async () => {
@@ -680,7 +680,7 @@ describe('GroupMembersManager (adding)', () => {
 
     const buttons = wrapper.find('nldd-form-actions').findAll('nldd-button');
     expect(buttons).toHaveLength(1);
-    expect(buttons[0]!.attributes('variant')).toBe('primary');
+    expect(buttons[0]!.attributes('appearance')).toBe('primary');
     expect(wrapper.html()).not.toContain('Annuleren');
   });
 

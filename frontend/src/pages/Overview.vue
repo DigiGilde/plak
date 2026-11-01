@@ -156,7 +156,7 @@ const {
            it is one click away from the top. -->
       <nldd-split-button
         v-if="state !== 'loading' && state !== 'error'"
-        variant="primary"
+        appearance="primary"
         :text="t('group.action.publishSite')"
         icon="plus"
         data-testid="overview-publish"
@@ -196,7 +196,7 @@ const {
     >
       <nldd-button
         slot="actions"
-        variant="primary"
+        appearance="primary"
         :text="t('group.action.publishSite')"
         start-icon="plus"
         data-testid="overview-empty-publish"

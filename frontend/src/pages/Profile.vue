@@ -116,7 +116,7 @@ onMounted(() => {
       <section aria-labelledby="heading-account">
         <nldd-container layout="stack" gap="8">
           <SectionHeading id="heading-account" :text="t('profile.account.heading')" :intro="t('profile.account.hint')" />
-          <nldd-list variant="box-tinted" :accessible-label="t('profile.account.heading')">
+          <nldd-list appearance="box-tinted" :accessible-label="t('profile.account.heading')">
             <nldd-list-item size="md" data-testid="profile-name">
               <nldd-text-cell
                 :text="`**${t('profile.account.name')}**`"
@@ -144,7 +144,7 @@ onMounted(() => {
           <SectionHeading id="heading-language" :text="t('profile.language.heading')" :intro="t('profile.language.subtitle')" />
           <nldd-list
             type="radiogroup"
-            variant="box-base"
+            appearance="box-base"
             :accessible-label="t('profile.language.heading')"
             data-testid="language-choice"
           >
@@ -188,7 +188,7 @@ onMounted(() => {
             </p>
           </nldd-rich-text>
           <nldd-button
-            variant="secondary"
+            appearance="secondary"
             start-icon="link"
             :text="t('profile.sessions.link')"
             href="/-/sessions"

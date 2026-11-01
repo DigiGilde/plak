@@ -9,10 +9,8 @@ import TabMembers from '@/components/group/TabMembers.vue';
 import TabSites from '@/components/group/TabSites.vue';
 import PublishSheet from '@/components/PublishSheet.vue';
 import {
-  fakeTabBarLayout,
   fireDetailEvent,
   serverErrorFetch,
-  stubFrames,
   untilIdle,
 } from '@/components/site/testHelpers';
 import { _resetCurrentMemberCache } from '@/composables/currentMember';
@@ -193,6 +191,22 @@ describe('Group: layout', () => {
 });
 
 describe('Group: tab navigation', () => {
+  it('opens a tab chosen from the "Meer tabs" menu within the app', async () => {
+    const { wrapper, router } = await makeWrapper('/team-aurora');
+    // The bar renders the tabs that do not fit as menu items with their href;
+    // jsdom lays nothing out, so put one where the bar's click handler sees it.
+    const item = document.createElement('nldd-menu-item');
+    item.setAttribute('href', '/team-aurora/-/members');
+    wrapper.find('[data-testid="group-tabs"]').element.append(item);
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    item.dispatchEvent(click);
+    await untilIdle();
+
+    expect(click.defaultPrevented).toBe(true);
+    expect(router.currentRoute.value.name).toBe('group-members');
+  });
+
   it('navigates per tab to the corresponding subpath', async () => {
     const { wrapper, router } = await makeWrapper('/team-aurora');
 
@@ -256,48 +270,6 @@ describe('Group: tab navigation', () => {
 
     expect(wrapper.find('[data-testid="group-tabs"]').element).toBe(bar);
     expect(wrapper.find('h1').element).toBe(title);
-  });
-});
-
-describe('Group: tab bar', () => {
-  // Three tabs of 100 in a bar that shows 150.
-  const LAYOUT = { barWidth: 150, tabWidth: 100 };
-
-  function scroller(wrapper: ReturnType<typeof mount>): HTMLElement {
-    return wrapper.find('.tabs-scroll').element as HTMLElement;
-  }
-
-  it('lets the bar scroll in a wrapper of its own instead of squeezing its labels', async () => {
-    const { wrapper } = await makeWrapper('/team-aurora');
-
-    const bar = wrapper.find('[data-testid="group-tabs"]');
-    expect(bar.element.parentElement?.classList.contains('tabs-scroll')).toBe(true);
-    expect(wrapper.findAll('.tabs-scroll')).toHaveLength(1);
-  });
-
-  it('brings the current tab into view when the page opens on it', async () => {
-    const frames = stubFrames();
-    const { wrapper } = await makeWrapper('/team-aurora/-/settings');
-    fakeTabBarLayout(scroller(wrapper), LAYOUT);
-
-    frames.run();
-
-    // The third tab ends at 300 and the bar shows 150.
-    expect(scroller(wrapper).scrollLeft).toBe(150);
-  });
-
-  it('follows the route to the next tab', async () => {
-    const frames = stubFrames();
-    const { wrapper, router } = await makeWrapper('/team-aurora/-/settings');
-    fakeTabBarLayout(scroller(wrapper), LAYOUT);
-    frames.run();
-
-    await router.push('/team-aurora/-/members');
-    await untilIdle();
-    frames.run();
-
-    // The second tab spans 100 to 200, behind the 150 to 300 the bar showed.
-    expect(scroller(wrapper).scrollLeft).toBe(100);
   });
 });
 

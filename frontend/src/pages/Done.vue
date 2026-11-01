@@ -195,7 +195,7 @@ function keyErrorText(): string {
 
             <nldd-button-group orientation="horizontal">
               <nldd-button
-                variant="primary"
+                appearance="primary"
                 :text="t('page.done.copy.button')"
                 start-icon="copy"
                 type="button"
@@ -203,7 +203,7 @@ function keyErrorText(): string {
                 @click="copy(address)"
               ></nldd-button>
               <nldd-button
-                variant="secondary"
+                appearance="secondary"
                 :text="t('page.done.open')"
                 start-icon="open-new-page"
                 :href="address.url"
@@ -238,7 +238,7 @@ function keyErrorText(): string {
         >
           <nldd-button
             slot="actions"
-            variant="primary"
+            appearance="primary"
             :text="t('page.done.noVersion.action')"
             :href="sitePath"
           ></nldd-button>
@@ -277,7 +277,7 @@ function keyErrorText(): string {
           >
             <nldd-button
               slot="actions"
-              variant="secondary"
+              appearance="secondary"
               :text="t('page.done.key.failed.action')"
               :href="`${sitePath}/access`"
               data-testid="done-key-to-access"

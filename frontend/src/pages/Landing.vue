@@ -47,7 +47,7 @@ async function checkAgain(): Promise<void> {
     </nldd-rich-text>
     <nldd-spacer size="24"></nldd-spacer>
     <nldd-button
-      variant="primary"
+      appearance="primary"
       :text="t('page.landing.withdrawn.check')"
       :loading="busy || undefined"
       data-testid="check-again"
@@ -73,7 +73,7 @@ async function checkAgain(): Promise<void> {
     <nldd-spacer size="24"></nldd-spacer>
     <nldd-button
       href="/-/login"
-      variant="primary"
+      appearance="primary"
       :text="t('page.landing.login')"
     ></nldd-button>
     <nldd-spacer size="24"></nldd-spacer>

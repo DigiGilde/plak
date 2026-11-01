@@ -105,20 +105,34 @@ describe('useDropState', () => {
     const state = useDropState();
     const event = dragEvent(fakeDataTransfer(['Files']));
     const preventDefault = (event.preventDefault = vi.fn());
+    event.stopPropagation = vi.fn();
 
     state.onDragOver(event);
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a file drag from reaching a file field inside the target', () => {
+    const state = useDropState();
+    const event = dragEvent(fakeDataTransfer(['Files']));
+    event.preventDefault = vi.fn();
+    const stopPropagation = (event.stopPropagation = vi.fn());
+
+    state.onDragOver(event);
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+  });
+
   it('does not intercept dragover for a drag without files', () => {
     const state = useDropState();
     const event = dragEvent(fakeDataTransfer([]));
     const preventDefault = (event.preventDefault = vi.fn());
+    const stopPropagation = (event.stopPropagation = vi.fn());
 
     state.onDragOver(event);
 
     expect(preventDefault).not.toHaveBeenCalled();
+    expect(stopPropagation).not.toHaveBeenCalled();
   });
 
   it('ignores an event without a dataTransfer at all', () => {

@@ -3,7 +3,6 @@
  * events the way the nldd components fire them in the browser.
  */
 import { flushPromises } from '@vue/test-utils';
-import { vi } from 'vitest';
 import { computed, ref } from 'vue';
 
 import * as plak from '@/api/plak';
@@ -121,40 +120,6 @@ export function problemFetch(status: number, body: Record<string, unknown>): typ
         headers: { 'content-type': 'application/problem+json' },
       }),
     );
-}
-
-/**
- * Takes over `requestAnimationFrame`: a frame comes when `run` says so, not
- * after sixteen milliseconds of real time.
- */
-export function stubFrames(): { run: () => void } {
-  const queue: FrameRequestCallback[] = [];
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => queue.push(callback));
-  return {
-    run: () => {
-      for (const callback of queue.splice(0)) callback(0);
-    },
-  };
-}
-
-/**
- * A tab bar without a browser, as jsdom has no layout: the tabs side by side,
- * each `tabWidth` wide, in a scroll box that shows `barWidth` of them. Where a
- * tab sits on screen follows the scroll position of the box.
- */
-export function fakeTabBarLayout(
-  scroller: HTMLElement,
-  { barWidth, tabWidth }: { barWidth: number; tabWidth: number },
-): void {
-  const rect = (left: number, width: number): DOMRect =>
-    ({ left, right: left + width, width, x: left, top: 0, bottom: 0, y: 0, height: 0 }) as DOMRect;
-  Object.defineProperty(scroller, 'clientWidth', { value: barWidth, configurable: true });
-  vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => rect(0, barWidth));
-  scroller.querySelectorAll('nldd-tab-bar-item').forEach((tab, index) => {
-    vi.spyOn(tab, 'getBoundingClientRect').mockImplementation(() =>
-      rect(index * tabWidth - scroller.scrollLeft, tabWidth),
-    );
-  });
 }
 
 /**

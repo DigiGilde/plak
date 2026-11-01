@@ -166,7 +166,7 @@ async function remove(preview: Preview): Promise<void> {
       <nldd-list
         v-else
         type="form"
-        variant="box-base"
+        appearance="box-base"
         :accessible-label="t('site.previews.listLabel')"
       >
         <nldd-list-item

@@ -67,7 +67,7 @@ function onGroupCreated(group: Group): void {
     <PageHeader :text="t('group.groups.heading')">
       <nldd-button
         v-if="!loading && !error"
-        variant="primary"
+        appearance="primary"
         :text="t('group.action.newGroup')"
         start-icon="plus"
         data-testid="groups-create"
@@ -86,7 +86,7 @@ function onGroupCreated(group: Group): void {
     <ErrorBanner v-else-if="error" :error="error" />
 
     <nldd-container v-else layout="stack" gap="16">
-      <nldd-list variant="box-tinted" :accessible-label="t('group.groups.list.label')">
+      <nldd-list appearance="box-tinted" :accessible-label="t('group.groups.list.label')">
         <nldd-inline-dialog
           slot="empty"
           icon="folder-on-folder"

@@ -120,7 +120,7 @@ const {
           </nldd-form-field>
 
           <nldd-form-actions>
-            <nldd-button variant="primary" :text="labels.submit" type="submit"></nldd-button>
+            <nldd-button appearance="primary" :text="labels.submit" type="submit"></nldd-button>
           </nldd-form-actions>
         </nldd-form-section>
       </nldd-form>

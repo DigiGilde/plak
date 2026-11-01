@@ -372,6 +372,8 @@ function clearFile(): void {
  * the file field alone. */
 function onSheetDrop(event: DragEvent): void {
   event.preventDefault();
+  // Bound in the capture phase, for the same reason as useDropState's dragover.
+  if (event.dataTransfer?.types.includes('Files')) event.stopPropagation();
   resetDropState();
   const { file: dropped, error: rejection } = resolveDroppedFile(event.dataTransfer);
   if (rejection) {
@@ -565,9 +567,9 @@ useSheetOpen(
       :class="{ 'publish-sheet--dragover': dropTargetActive }"
       @close="onClose"
       @dragenter="onDragEnter"
-      @dragover="onDragOver"
+      @dragover.capture="onDragOver"
       @dragleave="onDragLeave"
-      @drop="onSheetDrop"
+      @drop.capture="onSheetDrop"
     >
       <!-- nldd-page, not the container alone: the sheet is `overflow: hidden`
            with `--context-scroll-mode: nested`, so whatever it slots has to
@@ -581,7 +583,7 @@ useSheetOpen(
                  button (NLDD guideline: give the way out physical distance). -->
             <nldd-button
               slot="end"
-              variant="neutral-transparent"
+              appearance="neutral-transparent"
               size="sm"
               :text="t('publish.sheet.close')"
               type="button"
@@ -760,7 +762,7 @@ useSheetOpen(
             <nldd-form-field :label="t('publish.sheet.visibility.label')">
               <nldd-list
                 type="radiogroup"
-                variant="box-base"
+                appearance="box-base"
                 :accessible-label="t('publish.sheet.visibility.label')"
                 data-testid="publish-visibility"
               >
@@ -843,7 +845,7 @@ useSheetOpen(
 
             <nldd-form-actions>
               <nldd-button
-                variant="primary"
+                appearance="primary"
                 :text="t('publish.sheet.submit')"
                 type="submit"
                 :loading="busy || undefined"

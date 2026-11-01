@@ -40,6 +40,13 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
     'nldd-breadcrumbs': {
       'components.breadcrumbs.accessible-label': t('designSystem.breadcrumbs.label'),
     },
+    'nldd-button': {
+      'components.button.link-hint-new-tab-lowercase-label': t('designSystem.linkHint.newTab'),
+      'components.button.link-hint-external-lowercase-label': t('designSystem.linkHint.external'),
+      'components.button.link-hint-external-new-tab-lowercase-label': t(
+        'designSystem.linkHint.externalNewTab',
+      ),
+    },
     'nldd-code-viewer': {
       'components.code-viewer.region-label': t('designSystem.codeViewer.region'),
       'components.code-viewer.copy-action': t('designSystem.codeViewer.copy'),
@@ -52,12 +59,27 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
     },
     'nldd-file-field': {
       'components.file-field.to-choose-file-action': t('designSystem.fileField.choose'),
-      'components.file-field.no-file-chosen-text': t('designSystem.fileField.none'),
+      'components.file-field.to-change-action': t('designSystem.fileField.change'),
+      'components.file-field.file-chosen-text': t('designSystem.fileField.chosen'),
       'components.file-field.clear-action': t('designSystem.fileField.clear'),
       'components.file-field.required-error-text': t('designSystem.fileField.required'),
+      'components.file-field.drop-hint-lowercase-text': t('designSystem.fileField.dropHint'),
+      'components.file-field.drag-here-text': t('designSystem.fileField.dragHere'),
+      'components.file-field.drop-here-text': t('designSystem.fileField.dropHere'),
+      'components.file-field.replace-drag-text': t('designSystem.fileField.replaceDrag'),
+      'components.file-field.replace-drop-text': t('designSystem.fileField.replaceDrop'),
+      'components.file-field.file-type-error-text': t('designSystem.fileField.typeError'),
+      'components.file-field.wrong-file-type-error-text': t('designSystem.fileField.wrongType'),
+      'components.file-field.list-lowercase-text': t('designSystem.fileField.typeList'),
+      'components.file-field.too-many-files-error-text': t('designSystem.fileField.tooMany'),
+      'components.file-field.folder-error-text': t('designSystem.fileField.folder'),
     },
     'nldd-link': {
-      'components.link.opens-in-new-tab-label': t('designSystem.link.newTab'),
+      'components.link.link-hint-new-tab-lowercase-label': t('designSystem.linkHint.newTab'),
+      'components.link.link-hint-external-lowercase-label': t('designSystem.linkHint.external'),
+      'components.link.link-hint-external-new-tab-lowercase-label': t(
+        'designSystem.linkHint.externalNewTab',
+      ),
     },
     'nldd-list': {
       'components.list.arrow-navigation-description-text': t('designSystem.list.arrowKeys'),
@@ -72,7 +94,7 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
       'components.page-footer.legal-bar-accessible-label': t('designSystem.pageFooter.legalLinks'),
     },
     'nldd-progress-bar': {
-      'components.progress-bar.completed-suffix-text': t(
+      'components.progress-bar.completed-suffix-lowercase-text': t(
         'designSystem.progressBar.completedSuffix',
       ),
       'components.progress-bar.total-prefix-text': t('designSystem.progressBar.totalPrefix'),
@@ -86,10 +108,37 @@ export function wordsPerElement(): Record<string, Record<string, string>> {
     'nldd-split-button': {
       'components.split-button.menu-action': t('designSystem.splitButton.menu'),
     },
+    'nldd-tab-bar': {
+      'components.tab-bar.overflow-action': t('designSystem.tabBar.overflow'),
+    },
     'nldd-toolbar': {
       'components.toolbar.overflow-action': t('designSystem.toolbar.overflow'),
     },
   };
+}
+
+/** Marks a file field that also takes a whole folder, dragged or chosen. */
+export const TAKES_FOLDERS = 'data-takes-folders';
+
+/**
+ * On a field marked {@link TAKES_FOLDERS}, the words that replace the package's
+ * while something is dragged: those speak of one file, and a folder is just as
+ * welcome there. Not the package's Dutch, so they live with the upload texts.
+ */
+export function folderFieldWords(): Record<string, string> {
+  return {
+    'components.file-field.drag-here-text': t('publish.upload.field.dragHere'),
+    'components.file-field.drop-here-text': t('publish.upload.field.dropHere'),
+  };
+}
+
+interface Words {
+  perElement: Record<string, Record<string, string>>;
+  folderField: Record<string, string>;
+}
+
+function allWords(): Words {
+  return { perElement: wordsPerElement(), folderField: folderFieldWords() };
 }
 
 /** The elements worth looking for, as one selector. */
@@ -97,13 +146,16 @@ const TRANSLATED_ELEMENTS = Object.keys(wordsPerElement());
 
 const SELECTOR = TRANSLATED_ELEMENTS.join(',');
 
-function dress(element: Element, words: Record<string, Record<string, string>>): void {
-  const mine = words[element.localName];
+function dress(element: Element, words: Words): void {
+  let mine = words.perElement[element.localName];
   if (mine === undefined) return;
+  if (element.localName === 'nldd-file-field' && element.hasAttribute(TAKES_FOLDERS)) {
+    mine = { ...mine, ...words.folderField };
+  }
   (element as Element & { translations: Record<string, string> }).translations = mine;
 }
 
-function dressAll(root: ParentNode, words: Record<string, Record<string, string>>): void {
+function dressAll(root: ParentNode, words: Words): void {
   for (const element of root.querySelectorAll(SELECTOR)) dress(element, words);
 }
 
@@ -113,7 +165,7 @@ function dressAll(root: ParentNode, words: Record<string, Record<string, string>
  * the page does.
  */
 export function useDesignSystemText(root: ParentNode = document): () => void {
-  let words = wordsPerElement();
+  let words = allWords();
   dressAll(root, words);
 
   const observer = new MutationObserver((records) => {
@@ -128,7 +180,7 @@ export function useDesignSystemText(root: ParentNode = document): () => void {
   observer.observe(root, { childList: true, subtree: true });
 
   const stopWatching = watch(currentLocale, () => {
-    words = wordsPerElement();
+    words = allWords();
     dressAll(root, words);
   });
 

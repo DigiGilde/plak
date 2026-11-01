@@ -1175,7 +1175,7 @@ describe('TabDeploy: requiring the site id', () => {
     expect(wrapper.find('[data-testid="site-id-requirement"] code').text()).toBe('site-id');
     const button = wrapper.find('[data-testid="site-id-require"]');
     expect(button.attributes('text')).toBe('Alleen met site-ID publiceren');
-    expect(button.attributes('variant')).toBe('secondary');
+    expect(button.attributes('appearance')).toBe('secondary');
     expect(button.attributes('disabled')).toBeUndefined();
   });
 
