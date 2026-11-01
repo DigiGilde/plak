@@ -37,7 +37,7 @@ export const groupNl = {
   'group.groups.loading': 'Groepen worden geladen...',
   'group.groups.list.label': 'Groepen',
   'group.groups.empty': 'Je zit nog in geen enkele groep.',
-  'group.groups.empty.supportingText': 'Maak er een aan; daarna zet je er sites in.',
+  'group.groups.empty.supportingText': 'Maak er een aan. Daarna zet je er sites in.',
   'group.groups.sites.none': 'Nog geen sites',
   'group.groups.sites.one': '1 site',
   'group.groups.sites.many': '{count} sites',
@@ -108,7 +108,7 @@ export const groupNl = {
   'group.members.retry': 'Opnieuw proberen',
   'group.members.add.legend': 'Lid toevoegen',
   'group.members.add.supportingText':
-    'Iemand moet eerst zelf op het beheer ingelogd hebben; Plak maakt hier geen account aan.',
+    'Iemand moet eerst zelf op het beheer ingelogd hebben. Plak maakt hier geen account aan.',
   'group.members.add.identifier.label': 'Naam of e-mailadres',
   'group.members.add.identifier.placeholder': 'Typ een naam of e-mailadres',
   'group.members.add.identifier.help':

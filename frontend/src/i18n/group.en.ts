@@ -36,7 +36,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.groups.loading': 'Loading the groups...',
   'group.groups.list.label': 'Groups',
   'group.groups.empty': 'You are not in any group yet.',
-  'group.groups.empty.supportingText': 'Create one; after that you put sites in it.',
+  'group.groups.empty.supportingText': 'Create one. After that you put sites in it.',
   'group.groups.sites.none': 'No sites yet',
   'group.groups.sites.one': '1 site',
   'group.groups.sites.many': '{count} sites',
@@ -108,7 +108,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.retry': 'Try again',
   'group.members.add.legend': 'Add a member',
   'group.members.add.supportingText':
-    'Someone has to sign in to the admin themselves first; Plak creates no account here.',
+    'Someone has to sign in to the admin themselves first. Plak creates no account here.',
   'group.members.add.identifier.label': 'Name or email address',
   'group.members.add.identifier.placeholder': 'Type a name or email address',
   'group.members.add.identifier.help':

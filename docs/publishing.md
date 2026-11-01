@@ -831,7 +831,7 @@ found, shortest first and at most five:
   "type": "about:blank",
   "title": "Onverwerkbare invoer",
   "status": 422,
-  "detail": "geen index.html in de wortel van de bundel; de dichtstbijzijnde staat op 'dist/index.html'. Publiceer de map 'dist' zelf, of stuur het veld basispad mee met de waarde 'dist'",
+  "detail": "geen index.html in de wortel van de bundel. De dichtstbijzijnde staat op 'dist/index.html'. Publiceer de map 'dist' zelf, of stuur het veld basispad mee met de waarde 'dist'",
   "code": "NO_INDEX",
   "indexCandidates": ["dist/index.html"]
 }

@@ -4962,7 +4962,7 @@ _NOT_FOUND = {"status": 422, "code": "REPOSITORY_NOT_FOUND", "detail": "Reposito
 _RATE_LIMITED = {
     "status": 503,
     "code": "CI_PROVIDER_RATE_LIMITED",
-    "detail": "github.com is not accepting lookups right now; try again later.",
+    "detail": "github.com is not accepting lookups right now. Try again later.",
 }
 
 
@@ -5079,7 +5079,7 @@ def test_site_link_shows_the_way_around_the_anonymous_rate_limit(
 
     assert code == 1
     assert capsys.readouterr().err.splitlines() == [
-        "Error: github.com is not accepting lookups right now; try again later.",
+        "Error: github.com is not accepting lookups right now. Try again later.",
         hint,
     ]
 

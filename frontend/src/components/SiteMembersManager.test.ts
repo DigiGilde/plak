@@ -652,7 +652,7 @@ describe('SiteMembersManager (error)', () => {
         type: 'about:blank',
         title: 'Onbekend lid',
         status: 404,
-        detail: 'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
+        detail: 'Onbekend lid. Diegene moet eerst zelf inloggen op het beheer.',
       }),
     );
     const wrapper = mountComponent({ add });
@@ -667,7 +667,7 @@ describe('SiteMembersManager (error)', () => {
       'onbekend@voorbeeld.nl een rol op deze site geven is niet gelukt',
     );
     expect(notice.attributes('supporting-text')).toBe(
-      'Onbekend lid; diegene moet eerst zelf inloggen op het beheer.',
+      'Onbekend lid. Diegene moet eerst zelf inloggen op het beheer.',
     );
     expect(wrapper.emitted('added')).toBeUndefined();
   });

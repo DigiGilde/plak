@@ -11,7 +11,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.landing.withdrawn.intro':
     'You are signed in with your organisation account, but Plak no longer lets you in.',
   'page.landing.withdrawn.body':
-    'Your account is still there, with everything attached to it; only your access is closed. If you do not know why, ask the platform administrator of your organisation. They can give your access back as well.',
+    'Your account is still there, with everything attached to it. Only your access is closed. If you do not know why, ask the platform administrator of your organisation. They can give your access back as well.',
   'page.landing.withdrawn.check': 'Check again',
   'page.landing.withdrawn.failed.title': 'Check failed',
   'page.landing.withdrawn.failed.detail':
@@ -49,7 +49,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'Put your HTML file on Plak and you have an address to share.',
   'page.about.features.update.term': 'Update without a new address.',
   'page.about.features.update.body':
-    'A new version goes over the previous one; everyone with the link sees the latest one automatically. Older versions are kept.',
+    'A new version goes over the previous one. Everyone with the link sees the latest one automatically. Older versions are kept.',
   'page.about.features.audience.term': 'Decide who gets to look.',
   'page.about.features.audience.body':
     'From public to invited people only, and everything in between. You can share a secret link in one go, or send the link and the code separately.',

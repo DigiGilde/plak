@@ -69,7 +69,7 @@ NL: Final[dict[str, str]] = {
     "NO_SESSION": "Geen geldige sessie.",
     "NO_SESSION.not_logged_in": "Niet ingelogd.",
     "SESSION_NOT_FRESH": (
-        "Log opnieuw in om een apparaat te koppelen; je sessie is ouder dan een kwartier."
+        "Log opnieuw in om een apparaat te koppelen. Je sessie is ouder dan een kwartier."
     ),
     "MEMBER_DEACTIVATED": "Je toegang is ingetrokken door een platformbeheerder.",
     "MEMBER_NOT_ACTIVE": "Geen actief lid.",
@@ -91,7 +91,7 @@ NL: Final[dict[str, str]] = {
     "UNKNOWN_SITE": "Onbekende site.",
     "UNKNOWN_SITE.deploy": "Onbekende groep of site.",
     "UNKNOWN_MEMBER": "Onbekend lid.",
-    "UNKNOWN_MEMBER.must_sign_in": "Onbekend lid; diegene moet eerst zelf inloggen op het beheer.",
+    "UNKNOWN_MEMBER.must_sign_in": "Onbekend lid. Diegene moet eerst zelf inloggen op het beheer.",
     "UNKNOWN_INVITEE": "Onbekende genodigde.",
     "UNKNOWN_KEY": "Onbekende sleutel.",
     "UNKNOWN_PREVIEW": "Onbekende preview.",
@@ -137,15 +137,15 @@ NL: Final[dict[str, str]] = {
     "AUDIT_IP_UNKNOWN": "Geen auditregel met dit id en een versleuteld IP-adres.",
     "LOOKUP_LIMIT_REACHED": "De dagelijkse limiet voor herleidingen is bereikt.",
     "SEARCH_TOO_SHORT": "Zoek op minstens {minimum} tekens.",
-    "CURSOR_INVALID": "De cursor is onleesbaar; vraag de eerste pagina opnieuw op.",
+    "CURSOR_INVALID": "De cursor is onleesbaar. Vraag de eerste pagina opnieuw op.",
     "ACTOR_PSEUDONYM_INVALID": "Een auditpseudoniem is {length} hexadecimale tekens.",
     "PSEUDONYM_UNKNOWN": "Geen lid, content-viewer of gekoppelde repository gevonden voor dit pseudoniem.",
     "IDENTIFIER_UNKNOWN": "Geen lid of content-viewer met dit e-mailadres.",
-    "IDENTIFIER_AMBIGUOUS.email": "Meerdere personen met dit e-mailadres; gebruik het SSO-subject.",
-    "IDENTIFIER_AMBIGUOUS.member_email": "Meerdere leden met dit e-mailadres; gebruik het SSO-subject.",
-    "IDENTIFIER_AMBIGUOUS.member_name": "Meerdere leden met deze naam; gebruik het e-mailadres.",
+    "IDENTIFIER_AMBIGUOUS.email": "Meerdere personen met dit e-mailadres. Gebruik het SSO-subject.",
+    "IDENTIFIER_AMBIGUOUS.member_email": "Meerdere leden met dit e-mailadres. Gebruik het SSO-subject.",
+    "IDENTIFIER_AMBIGUOUS.member_name": "Meerdere leden met deze naam. Gebruik het e-mailadres.",
     "IDENTIFIER_AMBIGUOUS.repository": (
-        "Deze repository is op meer dan één provider gekoppeld; noem de host erbij."
+        "Deze repository is op meer dan één provider gekoppeld. Noem de host erbij."
     ),
     # -- Repositories and CI --------------------------------------------------
     "REPOSITORY_NOT_SET": "Aan deze site is geen repository gekoppeld.",
@@ -166,13 +166,13 @@ NL: Final[dict[str, str]] = {
     "LIVE_VERSIONS_KEPT_TOO_LARGE": "Dit getal is te groot om op te slaan. Kies een kleiner aantal.",
     "HOST_NOT_ALLOWED": "Deze Forgejo-instantie staat niet in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "Bij GitHub hoort geen andere host.",
-    "CI_PROVIDER_RATE_LIMITED": "{host} laat even geen opzoekingen meer toe; probeer het later opnieuw.",
-    "CI_PROVIDER_UNREACHABLE.lookup": "{host} is niet bereikbaar; probeer het later opnieuw.",
+    "CI_PROVIDER_RATE_LIMITED": "{host} laat even geen opzoekingen meer toe. Probeer het later opnieuw.",
+    "CI_PROVIDER_UNREACHABLE.lookup": "{host} is niet bereikbaar. Probeer het later opnieuw.",
     "CI_PROVIDER_UNREACHABLE.keys": (
-        "De sleutels van de CI-provider zijn niet op te halen; probeer het later opnieuw."
+        "De sleutels van de CI-provider zijn niet op te halen. Probeer het later opnieuw."
     ),
     "CI_PROVIDER_UNREACHABLE.repository": (
-        "Forgejo is niet bereikbaar om de repository te controleren; probeer het later opnieuw."
+        "Forgejo is niet bereikbaar om de repository te controleren. Probeer het later opnieuw."
     ),
     "CI_TOKEN_INVALID.not_a_jwt": "Het CI-token is geen geldig JWT.",
     "CI_TOKEN_INVALID.algorithm": "Het CI-token moet met RS256 ondertekend zijn.",
@@ -180,7 +180,7 @@ NL: Final[dict[str, str]] = {
     "CI_TOKEN_INVALID.unknown_key": "Het CI-token is ondertekend met een onbekende sleutel.",
     "CI_TOKEN_INVALID.expired": "Het CI-token is ongeldig of verlopen.",
     "CI_TOKEN_INVALID.no_lifetime": "Het CI-token mist exp of iat.",
-    "CI_TOKEN_INVALID.replayed": "Dit CI-token is al gebruikt; vraag voor elke aanroep een nieuw token aan.",
+    "CI_TOKEN_INVALID.replayed": "Dit CI-token is al gebruikt. Vraag voor elke aanroep een nieuw token aan.",
     "CI_ISSUER_UNKNOWN": (
         "Het CI-token komt niet van GitHub of van een geconfigureerde Forgejo-instantie."
     ),
@@ -201,10 +201,10 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_BRANCH_NOT_ALLOWED.event": (
         "Live publiceren mag alleen vanuit een push, een handmatige run (workflow_dispatch) of een "
-        "schedule; publiceer vanuit dit event als preview."
+        "schedule. Publiceer vanuit dit event als preview."
     ),
     "CI_BRANCH_NOT_ALLOWED.branch": (
-        "Alleen de branch {branch} mag live publiceren; publiceer vanaf deze ref als preview."
+        "Alleen de branch {branch} mag live publiceren. Publiceer vanaf deze ref als preview."
     ),
     "CI_SITE_ID_REQUIRED": (
         "Deze site accepteert alleen een workflow die haar site-ID noemt. Zet `site-id` (action) of "
@@ -222,24 +222,24 @@ NL: Final[dict[str, str]] = {
     "EXPIRY_IN_PAST": "De vervaldatum ligt in het verleden.",
     "EXPIRY_TOO_FAR": "De vervaldatum mag hoogstens {days} dagen vooruit liggen.",
     # -- CLI login ------------------------------------------------------------
-    "TOO_MANY_ATTEMPTS": "Te veel pogingen; wacht een paar minuten.",
-    "TOO_MANY_CREATIONS": "Hoogstens {limit} nieuwe groepen, sites en adressen per uur; probeer het later opnieuw.",
+    "TOO_MANY_ATTEMPTS": "Te veel pogingen. Wacht een paar minuten.",
+    "TOO_MANY_CREATIONS": "Hoogstens {limit} nieuwe groepen, sites en adressen per uur. Probeer het later opnieuw.",
     "TOO_MANY_REQUESTS": "Te veel verzoeken. Probeer het over enkele ogenblikken opnieuw.",
-    "TOO_MANY_REQUESTS.cli_login": "Te veel inlogpogingen vanaf dit adres; probeer het later opnieuw.",
+    "TOO_MANY_REQUESTS.cli_login": "Te veel inlogpogingen vanaf dit adres. Probeer het later opnieuw.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` ontbreekt.",
     "INVALID_GRANT.device_code_unknown": "Onbekende of al gebruikte apparaatcode.",
     "INVALID_GRANT.refresh_token_missing": "`refreshToken` ontbreekt.",
     "INVALID_GRANT.refresh_token_unknown": "Onbekend of ingetrokken verversingstoken.",
     "INVALID_GRANT.refresh_token_rotated": (
-        "Dit verversingstoken is zojuist al ververst; gebruik het nieuwe."
+        "Dit verversingstoken is zojuist al ververst. Gebruik het nieuwe."
     ),
     "INVALID_GRANT.refresh_token_reused": (
-        "Dit verversingstoken is al gebruikt; de CLI-sessie is ingetrokken."
+        "Dit verversingstoken is al gebruikt. De CLI-sessie is ingetrokken."
     ),
-    "INVALID_GRANT.session_expired": "De CLI-sessie is verlopen; log opnieuw in met plak login.",
+    "INVALID_GRANT.session_expired": "De CLI-sessie is verlopen. Log opnieuw in met plak login.",
     "INVALID_GRANT.member_not_active": "Het lid achter deze CLI-sessie is niet (meer) actief.",
-    "EXPIRED_TOKEN.device_code": "De apparaatcode is verlopen; start het inloggen opnieuw.",
-    "SLOW_DOWN": "Vraag hoogstens eens per {interval} seconden; wacht langer.",
+    "EXPIRED_TOKEN.device_code": "De apparaatcode is verlopen. Start het inloggen opnieuw.",
+    "SLOW_DOWN": "Vraag hoogstens eens per {interval} seconden. Wacht langer.",
     "AUTHORIZATION_PENDING": "Nog niet goedgekeurd in het beheer.",
     "ACCESS_DENIED": "Het koppelen is geweigerd.",
     "ACCESS_DENIED.approver_not_active": "Het lid dat dit goedkeurde is niet (meer) actief.",
@@ -278,7 +278,7 @@ NL: Final[dict[str, str]] = {
         "'{secret}' uit de bundel."
     ),
     "RESERVED_SEGMENT": (
-        "'{segment}' ligt {where} en is een gereserveerd segment; hernoem de map of het bestand, "
+        "'{segment}' ligt {where} en is een gereserveerd segment. Hernoem de map of het bestand, "
         "of publiceer een andere map"
     ),
     "RESERVED_SEGMENT.base_path": "'{segment}' is een gereserveerd segment",
@@ -288,20 +288,20 @@ NL: Final[dict[str, str]] = {
     # -- Bundles: limits and archives -----------------------------------------
     "TOO_MANY_FILES": "Bundel bevat meer dan {limit} bestanden of mappen.",
     "TOO_MANY_FILES.archive_entries": (
-        "Archief bevat meer dan {limit} entries; ook wat buiten de hoofdmap van de site valt telt "
+        "Archief bevat meer dan {limit} entries. Ook wat buiten de hoofdmap van de site valt telt "
         "daarvoor mee."
     ),
     "FILE_TOO_LARGE": "Bestand '{path}' is uitgepakt groter dan {max_file} bytes.",
     "TOTAL_TOO_LARGE": "Bundel is uitgepakt groter dan {max_total} bytes.",
     "TOTAL_TOO_LARGE.archive": "Archief is uitgepakt groter dan {max_total} bytes.",
     "SITE_QUOTA_EXCEEDED": (
-        "Deze site gebruikt al {used} van {max_bytes} bytes; daar passen de {added} bytes van "
+        "Deze site gebruikt al {used} van {max_bytes} bytes. Daar passen de {added} bytes van "
         "deze versie niet meer bij. Oude live-versies boven het bewaarde aantal worden 's nachts "
         "opgeruimd. Verwijder anders previews die je niet meer nodig hebt, of vraag de "
         "platformbeheerder om meer ruimte."
     ),
     "STORAGE_UNAVAILABLE": (
-        "Er is nu te weinig vrije ruimte om te publiceren. Probeer het later opnieuw; de "
+        "Er is nu te weinig vrije ruimte om te publiceren. Probeer het later opnieuw. De "
         "platformbeheerder is hiervan op de hoogte."
     ),
     "VOLUME_UNMEASURABLE": "De vulling van het contentvolume kan niet worden gemeten.",
@@ -315,42 +315,42 @@ NL: Final[dict[str, str]] = {
     "INVALID_ARCHIVE.html": "Html-bestand onleesbaar: {error}",
     "UNKNOWN_FORMAT": "Alleen .html, .zip, .tar.gz of .tgz wordt geaccepteerd.",
     "EMPTY_ARCHIVE": (
-        "Bundel bevat geen publiceerbare bestanden; alleen OS-metadata "
+        "Bundel bevat geen publiceerbare bestanden. Alleen OS-metadata "
         "({junk_dir}, {junk_prefix}*, .DS_Store) telt niet mee."
     ),
     # -- Bundles: the root of the site ---------------------------------------
     "BASE_PATH_INVALID": "Basispad is ongeldig: {cause}",
     "BASE_PATH_UNKNOWN": "Basispad '{base_path}' is geen map in de bundel",
     "BASE_PATH_UNKNOWN.case_variant": (
-        "Basispad '{base_path}' is geen map in de bundel; de bundel bevat wel '{variant}', en "
+        "Basispad '{base_path}' is geen map in de bundel. De bundel bevat wel '{variant}', en "
         "hoofdletters tellen mee"
     ),
     "BASE_PATH_UNKNOWN.peeled": (
-        "Basispad '{base_path}' is geen map in de bundel; de omhullende map '{peeled}' is al "
+        "Basispad '{base_path}' is geen map in de bundel. De omhullende map '{peeled}' is al "
         "afgepeld, dus een pad daarbinnen volstaat"
     ),
     "BASE_PATH_UNKNOWN.file": "Basispad '{base_path}' wijst naar een bestand, niet naar een map",
     "BASE_PATH_UNKNOWN.html_file": (
-        "Een los html-bestand bevat geen mappen; laat basispad ('{base_path}') weg"
+        "Een los html-bestand bevat geen mappen. Laat basispad ('{base_path}') weg"
     ),
     "BASE_PATH_WITHOUT_INDEX.empty": "Basispad '{base_path}' bevat geen bestanden",
     "BASE_PATH_WITHOUT_INDEX.empty_with_suggestion": (
-        "Basispad '{base_path}' bevat geen bestanden; {suggestion}"
+        "Basispad '{base_path}' bevat geen bestanden. {suggestion}"
     ),
     "BASE_PATH_WITHOUT_INDEX.no_index": "Basispad '{base_path}' bevat geen {index}",
     "BASE_PATH_WITHOUT_INDEX.no_index_with_suggestion": (
-        "Basispad '{base_path}' bevat geen {index}; {suggestion}"
+        "Basispad '{base_path}' bevat geen {index}. {suggestion}"
     ),
-    "suggestion.in_root": "de {index} staat in de hoofdmap van de bundel; laat het veld basispad weg",
-    "suggestion.nearest": "de dichtstbijzijnde staat op '{path}'",
-    "NO_INDEX": "De bundel bevat nergens een {index}; de hoofdmap van de bundel heeft er een nodig",
+    "suggestion.in_root": "De {index} staat in de hoofdmap van de bundel. Laat het veld basispad weg",
+    "suggestion.nearest": "De dichtstbijzijnde staat op '{path}'",
+    "NO_INDEX": "De bundel bevat nergens een {index}. De hoofdmap van de bundel heeft er een nodig",
     "NO_INDEX.case_variant": (
-        "De bundel bevat nergens een {index}; de hoofdmap van de bundel heeft er een nodig. Let op: "
-        "'{variant}' telt niet mee, want de server is hoofdlettergevoelig; hernoem het bestand "
+        "De bundel bevat nergens een {index}. De hoofdmap van de bundel heeft er een nodig. Let op: "
+        "'{variant}' telt niet mee, want de server is hoofdlettergevoelig. Hernoem het bestand "
         "naar '{index}'"
     ),
     "NO_INDEX.nearest": (
-        "Geen {index} in de hoofdmap van de bundel; de dichtstbijzijnde staat op '{shortest}'. "
+        "Geen {index} in de hoofdmap van de bundel. De dichtstbijzijnde staat op '{shortest}'. "
         "Publiceer de map '{directory}' zelf, of stuur het veld basispad mee met de waarde "
         "'{directory}'"
     ),
@@ -361,7 +361,7 @@ NL: Final[dict[str, str]] = {
     "example.409": "Dit botst met de huidige stand.",
     "example.413": "Het verzoek is groter dan toegestaan.",
     "example.422": "De invoer klopt niet.",
-    "example.429": "Te veel verzoeken; probeer het later opnieuw.",
+    "example.429": "Te veel verzoeken. Probeer het later opnieuw.",
     "example.other": "Er ging iets mis.",
 }
 
@@ -370,7 +370,7 @@ EN: Final[dict[str, str]] = {
     "NO_SESSION": "There is no valid session.",
     "NO_SESSION.not_logged_in": "Not signed in.",
     "SESSION_NOT_FRESH": (
-        "Sign in again to link a device; your session is more than fifteen minutes old."
+        "Sign in again to link a device. Your session is more than fifteen minutes old."
     ),
     "MEMBER_DEACTIVATED": "Your access has been withdrawn by a platform administrator.",
     "MEMBER_NOT_ACTIVE": "Not an active member.",
@@ -392,7 +392,7 @@ EN: Final[dict[str, str]] = {
     "UNKNOWN_SITE": "Unknown site.",
     "UNKNOWN_SITE.deploy": "Unknown group or site.",
     "UNKNOWN_MEMBER": "Unknown member.",
-    "UNKNOWN_MEMBER.must_sign_in": "Unknown member; they have to sign in to beheer themselves first.",
+    "UNKNOWN_MEMBER.must_sign_in": "Unknown member. They have to sign in to beheer themselves first.",
     "UNKNOWN_INVITEE": "Unknown invitee.",
     "UNKNOWN_KEY": "Unknown key.",
     "UNKNOWN_PREVIEW": "Unknown preview.",
@@ -438,19 +438,19 @@ EN: Final[dict[str, str]] = {
     "AUDIT_IP_UNKNOWN": "No audit record with this id and an encrypted IP address.",
     "LOOKUP_LIMIT_REACHED": "The daily limit for identity lookups has been reached.",
     "SEARCH_TOO_SHORT": "Search with at least {minimum} characters.",
-    "CURSOR_INVALID": "The cursor is unreadable; ask for the first page again.",
+    "CURSOR_INVALID": "The cursor is unreadable. Ask for the first page again.",
     "ACTOR_PSEUDONYM_INVALID": "An audit pseudonym is {length} hexadecimal characters.",
     "PSEUDONYM_UNKNOWN": "No member, content viewer or linked repository found for this pseudonym.",
     "IDENTIFIER_UNKNOWN": "No member or content viewer with this e-mail address.",
-    "IDENTIFIER_AMBIGUOUS.email": "More than one person with this e-mail address; use the SSO subject.",
+    "IDENTIFIER_AMBIGUOUS.email": "More than one person with this e-mail address. Use the SSO subject.",
     "IDENTIFIER_AMBIGUOUS.member_email": (
-        "More than one member with this e-mail address; use the SSO subject."
+        "More than one member with this e-mail address. Use the SSO subject."
     ),
     "IDENTIFIER_AMBIGUOUS.member_name": (
-        "More than one member with this name; use the e-mail address."
+        "More than one member with this name. Use the e-mail address."
     ),
     "IDENTIFIER_AMBIGUOUS.repository": (
-        "This repository is linked on more than one provider; name the host as well."
+        "This repository is linked on more than one provider. Name the host as well."
     ),
     # -- Repositories and CI --------------------------------------------------
     "REPOSITORY_NOT_SET": "No repository is linked to this site.",
@@ -472,13 +472,13 @@ EN: Final[dict[str, str]] = {
     "LIVE_VERSIONS_KEPT_TOO_LARGE": "This number is too large to store. Choose a smaller one.",
     "HOST_NOT_ALLOWED": "This Forgejo instance is not in PLAK_CI_FORGEJO_HOSTS.",
     "HOST_NOT_ALLOWED.github": "GitHub does not come with another host.",
-    "CI_PROVIDER_RATE_LIMITED": "{host} is not accepting lookups right now; try again later.",
-    "CI_PROVIDER_UNREACHABLE.lookup": "{host} is unreachable; try again later.",
+    "CI_PROVIDER_RATE_LIMITED": "{host} is not accepting lookups right now. Try again later.",
+    "CI_PROVIDER_UNREACHABLE.lookup": "{host} is unreachable. Try again later.",
     "CI_PROVIDER_UNREACHABLE.keys": (
-        "The keys of the CI provider cannot be fetched; try again later."
+        "The keys of the CI provider cannot be fetched. Try again later."
     ),
     "CI_PROVIDER_UNREACHABLE.repository": (
-        "Forgejo is unreachable to check the repository; try again later."
+        "Forgejo is unreachable to check the repository. Try again later."
     ),
     "CI_TOKEN_INVALID.not_a_jwt": "The CI token is not a valid JWT.",
     "CI_TOKEN_INVALID.algorithm": "The CI token has to be signed with RS256.",
@@ -486,7 +486,7 @@ EN: Final[dict[str, str]] = {
     "CI_TOKEN_INVALID.unknown_key": "The CI token is signed with an unknown key.",
     "CI_TOKEN_INVALID.expired": "The CI token is invalid or expired.",
     "CI_TOKEN_INVALID.no_lifetime": "The CI token is missing exp or iat.",
-    "CI_TOKEN_INVALID.replayed": "This CI token has been used already; request a new token for every call.",
+    "CI_TOKEN_INVALID.replayed": "This CI token has been used already. Request a new token for every call.",
     "CI_ISSUER_UNKNOWN": (
         "The CI token does not come from GitHub or from a configured Forgejo instance."
     ),
@@ -505,10 +505,10 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_BRANCH_NOT_ALLOWED.event": (
         "Publishing live is allowed from a push, a manual run (workflow_dispatch) or a schedule "
-        "only; publish from this event as a preview."
+        "only. Publish from this event as a preview."
     ),
     "CI_BRANCH_NOT_ALLOWED.branch": (
-        "Only the branch {branch} may publish live; publish from this ref as a preview."
+        "Only the branch {branch} may publish live. Publish from this ref as a preview."
     ),
     "CI_SITE_ID_REQUIRED": (
         "This site only accepts a workflow that names its site id. Add `site-id` (action) or "
@@ -526,24 +526,24 @@ EN: Final[dict[str, str]] = {
     "EXPIRY_IN_PAST": "The expiry date is in the past.",
     "EXPIRY_TOO_FAR": "The expiry date may be at most {days} days ahead.",
     # -- CLI login ------------------------------------------------------------
-    "TOO_MANY_ATTEMPTS": "Too many attempts; wait a few minutes.",
-    "TOO_MANY_CREATIONS": "At most {limit} new groups, sites and addresses per hour; try again later.",
+    "TOO_MANY_ATTEMPTS": "Too many attempts. Wait a few minutes.",
+    "TOO_MANY_CREATIONS": "At most {limit} new groups, sites and addresses per hour. Try again later.",
     "TOO_MANY_REQUESTS": "Too many requests. Try again in a few moments.",
-    "TOO_MANY_REQUESTS.cli_login": "Too many sign-in attempts from this address; try again later.",
+    "TOO_MANY_REQUESTS.cli_login": "Too many sign-in attempts from this address. Try again later.",
     "INVALID_GRANT.device_code_missing": "`deviceCode` is missing.",
     "INVALID_GRANT.device_code_unknown": "Unknown or already used device code.",
     "INVALID_GRANT.refresh_token_missing": "`refreshToken` is missing.",
     "INVALID_GRANT.refresh_token_unknown": "Unknown or revoked refresh token.",
     "INVALID_GRANT.refresh_token_rotated": (
-        "This refresh token has just been refreshed; use the new one."
+        "This refresh token has just been refreshed. Use the new one."
     ),
     "INVALID_GRANT.refresh_token_reused": (
-        "This refresh token has been used before; the CLI session has been revoked."
+        "This refresh token has been used before. The CLI session has been revoked."
     ),
-    "INVALID_GRANT.session_expired": "The CLI session has expired; sign in again with plak login.",
+    "INVALID_GRANT.session_expired": "The CLI session has expired. Sign in again with plak login.",
     "INVALID_GRANT.member_not_active": "The member behind this CLI session is no longer active.",
-    "EXPIRED_TOKEN.device_code": "The device code has expired; start signing in again.",
-    "SLOW_DOWN": "Ask at most once every {interval} seconds; wait longer.",
+    "EXPIRED_TOKEN.device_code": "The device code has expired. Start signing in again.",
+    "SLOW_DOWN": "Ask at most once every {interval} seconds. Wait longer.",
     "AUTHORIZATION_PENDING": "Not approved in beheer yet.",
     "ACCESS_DENIED": "Linking was refused.",
     "ACCESS_DENIED.approver_not_active": "The member who approved this is no longer active.",
@@ -582,7 +582,7 @@ EN: Final[dict[str, str]] = {
         "'{secret}' out of the bundle."
     ),
     "RESERVED_SEGMENT": (
-        "'{segment}' sits {where} and is a reserved segment; rename the directory or the file, "
+        "'{segment}' sits {where} and is a reserved segment. Rename the directory or the file, "
         "or publish another directory"
     ),
     "RESERVED_SEGMENT.base_path": "'{segment}' is a reserved segment",
@@ -592,7 +592,7 @@ EN: Final[dict[str, str]] = {
     # -- Bundles: limits and archives -----------------------------------------
     "TOO_MANY_FILES": "The bundle holds more than {limit} files or directories.",
     "TOO_MANY_FILES.archive_entries": (
-        "The archive holds more than {limit} entries; whatever falls outside the root of the site "
+        "The archive holds more than {limit} entries. Whatever falls outside the root of the site "
         "counts towards that too."
     ),
     "FILE_TOO_LARGE": "File '{path}' is larger than {max_file} bytes unpacked.",
@@ -605,7 +605,7 @@ EN: Final[dict[str, str]] = {
         "administrator for more room."
     ),
     "STORAGE_UNAVAILABLE": (
-        "There is too little free space to publish right now. Try again later; the platform "
+        "There is too little free space to publish right now. Try again later. The platform "
         "administrator has been notified."
     ),
     "VOLUME_UNMEASURABLE": "The fill level of the content volume cannot be measured.",
@@ -619,42 +619,42 @@ EN: Final[dict[str, str]] = {
     "INVALID_ARCHIVE.html": "Html file unreadable: {error}",
     "UNKNOWN_FORMAT": "Only .html, .zip, .tar.gz or .tgz is accepted.",
     "EMPTY_ARCHIVE": (
-        "The bundle holds no publishable files; OS metadata alone "
+        "The bundle holds no publishable files. OS metadata alone "
         "({junk_dir}, {junk_prefix}*, .DS_Store) does not count."
     ),
     # -- Bundles: the root of the site ---------------------------------------
     "BASE_PATH_INVALID": "The base path is invalid: {cause}",
     "BASE_PATH_UNKNOWN": "Base path '{base_path}' is not a directory in the bundle",
     "BASE_PATH_UNKNOWN.case_variant": (
-        "Base path '{base_path}' is not a directory in the bundle; the bundle does hold "
+        "Base path '{base_path}' is not a directory in the bundle. The bundle does hold "
         "'{variant}', and capitals count"
     ),
     "BASE_PATH_UNKNOWN.peeled": (
-        "Base path '{base_path}' is not a directory in the bundle; the enclosing directory "
+        "Base path '{base_path}' is not a directory in the bundle. The enclosing directory "
         "'{peeled}' has been peeled off already, so a path inside it is enough"
     ),
     "BASE_PATH_UNKNOWN.file": "Base path '{base_path}' points at a file, not at a directory",
     "BASE_PATH_UNKNOWN.html_file": (
-        "A single html file holds no directories; leave the base path ('{base_path}') out"
+        "A single html file holds no directories. Leave the base path ('{base_path}') out"
     ),
     "BASE_PATH_WITHOUT_INDEX.empty": "Base path '{base_path}' holds no files",
     "BASE_PATH_WITHOUT_INDEX.empty_with_suggestion": (
-        "Base path '{base_path}' holds no files; {suggestion}"
+        "Base path '{base_path}' holds no files. {suggestion}"
     ),
     "BASE_PATH_WITHOUT_INDEX.no_index": "Base path '{base_path}' holds no {index}",
     "BASE_PATH_WITHOUT_INDEX.no_index_with_suggestion": (
-        "Base path '{base_path}' holds no {index}; {suggestion}"
+        "Base path '{base_path}' holds no {index}. {suggestion}"
     ),
-    "suggestion.in_root": "the {index} sits in the root of the bundle; leave the base path field out",
-    "suggestion.nearest": "the nearest one sits at '{path}'",
-    "NO_INDEX": "The bundle holds no {index} anywhere; the root of the bundle needs one",
+    "suggestion.in_root": "The {index} sits in the root of the bundle. Leave the base path field out",
+    "suggestion.nearest": "The nearest one sits at '{path}'",
+    "NO_INDEX": "The bundle holds no {index} anywhere. The root of the bundle needs one",
     "NO_INDEX.case_variant": (
-        "The bundle holds no {index} anywhere; the root of the bundle needs one. Mind you: "
-        "'{variant}' does not count, because the server is case sensitive; rename the file to "
+        "The bundle holds no {index} anywhere. The root of the bundle needs one. Mind you: "
+        "'{variant}' does not count, because the server is case sensitive. Rename the file to "
         "'{index}'"
     ),
     "NO_INDEX.nearest": (
-        "No {index} in the root of the bundle; the nearest one sits at '{shortest}'. Publish the "
+        "No {index} in the root of the bundle. The nearest one sits at '{shortest}'. Publish the "
         "directory '{directory}' itself, or send along the base path field with the value "
         "'{directory}'"
     ),
@@ -665,7 +665,7 @@ EN: Final[dict[str, str]] = {
     "example.409": "This clashes with the current state.",
     "example.413": "The request is larger than allowed.",
     "example.422": "The input is not right.",
-    "example.429": "Too many requests; try again later.",
+    "example.429": "Too many requests. Try again later.",
     "example.other": "Something went wrong.",
 }
 

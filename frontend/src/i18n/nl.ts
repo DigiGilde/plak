@@ -132,7 +132,7 @@ const shared = {
   'profile.account.role.member': 'Lid',
   'profile.account.unknown': 'Onbekend',
   'profile.account.hint':
-    'Deze gegevens komen van SSO Rijk; Plak kan ze niet wijzigen. Klopt er iets niet, meld dat dan bij je eigen organisatie.',
+    'Deze gegevens komen van SSO Rijk. Plak kan ze niet wijzigen. Klopt er iets niet, meld dat dan bij je eigen organisatie.',
   'profile.language.heading': 'Taal van het beheer',
   'profile.language.subtitle':
     'De keuze staat op je account, dus hij geldt op elk apparaat waarop je inlogt.',

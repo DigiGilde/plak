@@ -605,7 +605,7 @@ describe('Site: changing the address', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
-      'Workflows met site: team-aurora/website publiceren niet meer; gebruik site: team-aurora/handboek en het site-ID.',
+      'Workflows met site: team-aurora/website publiceren niet meer. Gebruik site: team-aurora/handboek en het site-ID.',
     );
   });
 
@@ -629,7 +629,7 @@ describe('Site: changing the address', () => {
     const { wrapper } = await makeWrapper('/team-aurora/website/deploy');
 
     expect(wrapper.find('[data-testid="deploy-moved"] nldd-rich-text').text()).toBe(
-      'Workflows met site: team-oud/website publiceren niet meer; gebruik site: team-aurora/website en het site-ID.',
+      'Workflows met site: team-oud/website publiceren niet meer. Gebruik site: team-aurora/website en het site-ID.',
     );
   });
 

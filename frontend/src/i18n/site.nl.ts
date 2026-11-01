@@ -43,7 +43,7 @@ export const siteNl = {
   'site.previews.heading': 'Previews',
   'site.previews.listLabel': 'Previews',
   'site.previews.intro':
-    'Elke preview leeft op een eigen ref (bv. pr-42) en vervalt 30 dagen na de laatste deploy. De toegang volgt de site, tenzij je hieronder een eigen toegang instelt; dat is dan de hele toegang, basis en uitzonderingen samen.',
+    'Elke preview leeft op een eigen ref (bv. pr-42) en vervalt 30 dagen na de laatste deploy. De toegang volgt de site, tenzij je hieronder een eigen toegang instelt. Dat is dan de hele toegang, basis en uitzonderingen samen.',
   'site.previews.empty': 'Geen previews',
   'site.previews.empty.hint':
     'Publiceer een preview met een preview-ref via het tabblad Deploy of de CI-action.',
@@ -67,7 +67,7 @@ export const siteNl = {
   'site.versions.heading': 'Versies',
   'site.versions.listLabel': 'Live-versies',
   'site.versions.intro':
-    'De live-historie van deze site. Bekijk een oude versie voordat je hem terugzet; die weergave is alleen toegankelijk voor wie een rol heeft op deze site of op haar groep.',
+    'De live-historie van deze site. Bekijk een oude versie voordat je hem terugzet. Die weergave is alleen toegankelijk voor wie een rol heeft op deze site of op haar groep.',
   'site.versions.storage.quota': 'Deze site gebruikt {used} van {max}.',
   'site.versions.storage.noQuota': 'Deze site gebruikt {used}.',
   'site.versions.retention.many':

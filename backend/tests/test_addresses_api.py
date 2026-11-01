@@ -231,7 +231,7 @@ class TestTheRulesBothShare:
         assert refused.status_code == 429
         assert refused.json()["code"] == "TOO_MANY_CREATIONS"
         assert refused.json()["detail"] == (
-            f"At most {CREATION_MAX_PER_WINDOW} new groups, sites and addresses per hour; try again later."
+            f"At most {CREATION_MAX_PER_WINDOW} new groups, sites and addresses per hour. Try again later."
         )
         assert "Retry-After" in refused.headers
         assert await subject.current(factory) == "heen"

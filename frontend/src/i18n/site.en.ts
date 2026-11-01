@@ -42,7 +42,7 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.previews.heading': 'Previews',
   'site.previews.listLabel': 'Previews',
   'site.previews.intro':
-    'Every preview lives on a ref of its own (for example pr-42) and expires 30 days after the last deploy. Access follows the site, unless you set access of its own below; that is then the whole access, base and exceptions together.',
+    'Every preview lives on a ref of its own (for example pr-42) and expires 30 days after the last deploy. Access follows the site, unless you set access of its own below. That is then the whole access, base and exceptions together.',
   'site.previews.empty': 'No previews',
   'site.previews.empty.hint':
     'Publish a preview with a preview ref through the Deploy tab or the CI action.',
@@ -66,7 +66,7 @@ export const siteEn: Record<keyof typeof siteNl, string> = {
   'site.versions.heading': 'Versions',
   'site.versions.listLabel': 'Live versions',
   'site.versions.intro':
-    'The live history of this site. View an older version before you put it back; that view is only open to whoever has a role on this site or on its group.',
+    'The live history of this site. View an older version before you put it back. That view is only open to whoever has a role on this site or on its group.',
   'site.versions.storage.quota': 'This site uses {used} of {max}.',
   'site.versions.storage.noQuota': 'This site uses {used}.',
   'site.versions.retention.many':

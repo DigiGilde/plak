@@ -682,7 +682,7 @@ class TestBasePath:
             unpack("site.zip", make_zip(entries), base_path="dist")
         assert reason_of(error) == "BASE_PATH_WITHOUT_INDEX"
         assert error.value.index_candidates == ("index.html",)
-        assert "leave the base path field out" in str(error.value)
+        assert "Leave the base path field out" in str(error.value)
 
     @pytest.mark.parametrize(
         "base_path", ["../geheim", "/etc", "dist/../../kwaad", "", ".", "a\x00b", "_preview", "_encoded"]

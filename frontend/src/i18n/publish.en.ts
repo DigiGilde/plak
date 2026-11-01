@@ -22,9 +22,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.sheet.group.label': 'Group',
   'publish.sheet.groupName.label': 'Name of your group',
   'publish.sheet.groupName.hintNone':
-    'You do not have one yet; you create it now and are a member of it right away.',
+    'You do not have one yet. You create it now and are a member of it right away.',
   'publish.sheet.groupName.hintNoRole':
-    'You are neither editor nor admin in any of your groups; create a new group to publish here.',
+    'You are neither editor nor admin in any of your groups. Create a new group to publish here.',
   'publish.sheet.groupName.required': 'A name for your group',
   'publish.sheet.address.label': 'Address',
   'publish.sheet.address.hint': 'The last part of the URL.',
@@ -49,7 +49,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.upload.field.dragHere': 'Drag the file or folder here',
   'publish.upload.field.dropHere': 'Drop the file or folder here',
   'publish.upload.field.help':
-    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site; a folder is packed by Plak in your browser, without the metadata of your operating system.',
+    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site. A folder is packed by Plak in your browser, without the metadata of your operating system.',
   'publish.upload.folder': 'Choose a folder',
   'publish.upload.progress.reading': 'Reading folder',
   'publish.upload.progress.packing': 'Packing folder',
@@ -115,9 +115,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.repo.unlink': 'Unlink',
   'publish.deploy.repo.empty': 'No repository linked yet',
   'publish.deploy.repo.emptyAdmin':
-    'Link a repository; a push to the live branch then publishes automatically.',
+    'Link a repository. A push to the live branch then publishes automatically.',
   'publish.deploy.repo.emptyReader':
-    'Ask an admin of this site to link a repository; after that a push to the live branch publishes automatically.',
+    'Ask an admin of this site to link a repository. After that a push to the live branch publishes automatically.',
   'publish.deploy.repo.link': 'Link repository',
   'publish.deploy.repo.linked': 'Repository linked',
   'publish.deploy.repo.linkedDetail': '{repo} may now publish to this site.',
@@ -137,7 +137,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.form.branch': 'Live branch',
   'publish.deploy.form.branchPlaceholder': 'e.g. main',
   'publish.deploy.form.branchHelp':
-    'Empty: every branch of this repository may publish live, as long as the run is a push, a manual run (workflow_dispatch) or a schedule, never a pull request. Fill in a branch (for example "main") to let only that branch publish live; previews then stay possible from every branch.',
+    'Empty: every branch of this repository may publish live, as long as the run is a push, a manual run (workflow_dispatch) or a schedule, never a pull request. Fill in a branch (for example "main") to let only that branch publish live. Previews then stay possible from every branch.',
   'publish.deploy.form.cancel': 'Cancel',
   'publish.deploy.form.submit': 'Link',
   'publish.deploy.form.recognized': 'Recognised: {label}, {repo}',
@@ -187,7 +187,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.safety.noSecret':
     'No secret is stored in the repository: the forge (GitHub or Forgejo) itself signs a short-lived token for exactly this workflow run, and Plak checks that signature.',
   'publish.deploy.safety.scoped':
-    'That token only proves which repository the run started from; Plak accepts it here because you linked exactly that repository to this site.',
+    'That token only proves which repository the run started from. Plak accepts it here because you linked exactly that repository to this site.',
   'publish.deploy.safety.liveRestricted':
     'Publishing live only works from the live branch you set, and only from a push, a manual run or a schedule, never from a pull request.',
   'publish.deploy.safety.previews':
@@ -203,7 +203,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.cli.run':
     'If you work from a checkout, {run} runs it without installing.',
   'publish.deploy.cli.login':
-    '{login} opens your browser at {link} to link the CLI session; after that the cli keeps that session for later {publish} calls.',
+    '{login} opens your browser at {link} to link the CLI session. After that the cli keeps that session for later {publish} calls.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Unlink repository?',
@@ -222,7 +222,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   // -- Deploy tab: the address of the site has changed ---------------------------------
   'publish.deploy.moved.title': 'The address of this site has changed.',
   'publish.deploy.moved.text':
-    'Workflows with {old} no longer publish; use {new} and the site ID.',
+    'Workflows with {old} no longer publish. Use {new} and the site ID.',
   'publish.deploy.moved.or': ' or ',
 
   // -- Access tab: the base ------------------------------------------------------
@@ -239,7 +239,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'These two stand apart from the choice above and from each other. They let people in, and never take anyone away.',
   'publish.access.extras.moot': 'The exceptions add nothing right now',
   'publish.access.extras.mootDetail':
-    'The site is public, so everyone may look anyway. Make the base above stricter to let these exceptions count; what you set here stays.',
+    'The site is public, so everyone may look anyway. Make the base above stricter to let these exceptions count. What you set here stays.',
 
   // -- Access tab: secret links ------------------------------------------------------
   'publish.access.keys.on': 'Secret links are on',
@@ -256,7 +256,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.access.keys.column.status': 'Status',
   'publish.access.keys.empty': 'No secret links yet',
   'publish.access.keys.emptyDetail':
-    'Make one below; the link can then be copied once.',
+    'Make one below. The link can then be copied once.',
   'publish.access.keys.never': 'never',
   'publish.access.keys.active': 'Active',
   'publish.access.keys.revoked': 'Revoked',
@@ -270,7 +270,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
     'The label is for yourself: it says who you shared the link with, so you know what you are revoking.',
   'publish.access.keys.form.label': 'Label',
   'publish.access.keys.form.labelHelp':
-    'Handy when you hand out several links; leave it empty and the link gets a name with the date.',
+    'Handy when you hand out several links. Leave it empty and the link gets a name with the date.',
   'publish.access.keys.form.expiry': 'Expires after',
   'publish.access.keys.form.days': '{days} days',
   'publish.access.keys.form.submit': 'Create secret link',
@@ -279,7 +279,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.access.invitees.on': 'Invitees are on',
   'publish.access.invitees.off': 'Invitees are off',
   'publish.access.invitees.intro':
-    'Invitees log in with SSO Rijk; their verified email address has to be on this list. Plak sends no invitation itself: you share the link yourself.',
+    'Invitees log in with SSO Rijk. Their verified email address has to be on this list. Plak sends no invitation itself: you share the link yourself.',
   'publish.access.invitees.column.email': 'Email address',
   'publish.access.invitees.column.added': 'Added',
   'publish.access.invitees.empty': 'No invitees yet',
