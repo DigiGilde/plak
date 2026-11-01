@@ -35,8 +35,8 @@ for a release that has an entry.
   gate".
 - **One sharp sentence.** No preamble, no rationale (that belongs in the
   commit), no pull request number.
-- **English**, like everything around the interface. Quote a Dutch
-  interface label literally where you name one.
+- **English**, like everything around the interface. Where you name an
+  interface label, quote the English one from `frontend/src/i18n/*.en.ts`.
 - No em dash or en dash.
 
 ## The kind
