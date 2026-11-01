@@ -28,7 +28,7 @@ class MemberStatus(enum.StrEnum):
 class MemberLanguage(enum.StrEnum):
     """The interface language a member picked for themselves.
 
-    The values are the ones plak.i18n supports; test_identity.py keeps the two
+    The values are the ones toon.i18n supports; test_identity.py keeps the two
     in sync. "Follow my browser" is not a value here but the absence of one,
     see Member.language.
     """

@@ -1187,7 +1187,7 @@ def _opening(tag: str, **env: str) -> dict[str, str]:
     the button's mode unless told otherwise."""
     return {
         "GH_TOKEN": "app-token",
-        "APP_SLUG": "digigilde-plak-release",
+        "APP_SLUG": "digigilde-toon-release",
         "GITHUB_REPOSITORY": "DigiGilde/plak",
         "GITHUB_SHA": "0123abc",
         "TAG": tag,
@@ -1298,7 +1298,7 @@ class TestTheReleaseWorkflow:
             work,
             PATH=path,
             GH_TOKEN="token",
-            APP_SLUG="digigilde-plak-release",
+            APP_SLUG="digigilde-toon-release",
             TAG="v2026.10.1",
             COMMIT=released,
         )
@@ -1308,8 +1308,8 @@ class TestTheReleaseWorkflow:
         assert _git(origin, "rev-parse", "v2026.10.1^{commit}") == released
         tagged = _git(origin, "for-each-ref", "--format=%(contents:subject)|%(taggername)|%(taggeremail)", "refs/tags")
         assert tagged == (
-            "Plak v2026.10.1|digigilde-plak-release[bot]|"
-            "<123456+digigilde-plak-release[bot]@users.noreply.github.com>"
+            "Plak v2026.10.1|digigilde-toon-release[bot]|"
+            "<123456+digigilde-toon-release[bot]@users.noreply.github.com>"
         )
         assert _git(origin, "rev-parse", "beta") == beta
         assert _git(origin, "for-each-ref", "--format=%(refname)") == "refs/heads/beta\nrefs/tags/v2026.10.1"
@@ -1332,7 +1332,7 @@ class TestTheReleaseWorkflow:
             work,
             PATH=path,
             GH_TOKEN="token",
-            APP_SLUG="digigilde-plak-release",
+            APP_SLUG="digigilde-toon-release",
             TAG="v2026.10.1",
             COMMIT=_git(work, "rev-parse", "HEAD"),
         )
@@ -1544,8 +1544,8 @@ class TestThePrepareReleaseWorkflow:
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert _git(origin, "log", "-1", "--format=%s|%an|%ae|%P", "release/v2026.10.1") == (
-            "Release v2026.10.1|digigilde-plak-release[bot]|"
-            f"123456+digigilde-plak-release[bot]@users.noreply.github.com|{beta}"
+            "Release v2026.10.1|digigilde-toon-release[bot]|"
+            f"123456+digigilde-toon-release[bot]@users.noreply.github.com|{beta}"
         )
         assert _git(origin, "show", "release/v2026.10.1:CHANGELOG.md") == "released"
         assert _git(origin, "rev-parse", "beta") == beta

@@ -258,7 +258,7 @@ class TestContentRootAtStartup:
         assert response.json() == {"status": "degraded", "checks": ["content_root"]}
         assert str(root) not in response.text
         assert f"{root} is not a mount point" in caplog.text
-        assert "PLAK_CONTENT_ROOT" in caplog.text
+        assert "TOON_CONTENT_ROOT" in caplog.text
 
     async def test_production_with_a_mount_is_fine(self, tmp_path: Path, monkeypatch, caplog) -> None:
         _fake_free(monkeypatch, 900)

@@ -202,7 +202,7 @@ def code_page_html(
     POST lands on `/-/code` and no longer knows which address the visitor came
     for.
 
-    `admin_origin` (PLAK_BASE_URL, never the Host header) is where the footer
+    `admin_origin` (TOON_BASE_URL, never the Host header) is where the footer
     links the accessibility statement; without one there is no footer."""
     say = partial(i18n.t, locale)
     # The prefix says it is an error without the colour and the border.

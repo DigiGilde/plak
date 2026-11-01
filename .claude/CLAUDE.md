@@ -42,7 +42,7 @@ uncovered and unmarked fails CI.
 ## Language
 
 The interface speaks Dutch and English: the admin SPA, the pages the
-server renders itself (`backend/src/plak/i18n.py`), the problem+json
+server renders itself (`backend/src/toon/i18n.py`), the problem+json
 messages and the API docs, each described below. The output of the shell
 scripts in `dev/` is still Dutch only.
 
@@ -63,7 +63,7 @@ follows their own choice on their account (`members.language`, set on
 component is a bug, and `frontend/tests/dutch-literals.test.ts` says so.
 
 The `title` and `detail` of a problem+json answer have both languages
-too: they live in the catalogue in `backend/src/plak/messages.py` and
+too: they live in the catalogue in `backend/src/toon/messages.py` and
 the API renders the language the request asks for in `Accept-Language`.
 English is what a client that asks for nothing gets; the admin SPA
 sends the language it is showing, so a refusal arrives in the language

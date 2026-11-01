@@ -250,7 +250,7 @@ class TestContent:
 
 class TestNcscSwitch:
     """NCSC-NL is the central CVD reporting point for the Dutch central
-    government only. PLAK_SECURITY_TXT_NCSC decides whether the file says so,
+    government only. TOON_SECURITY_TXT_NCSC decides whether the file says so,
     and it is off unless an installation turns it on."""
 
     def test_off_and_without_an_operator_address_the_file_opens_with_its_first_field(

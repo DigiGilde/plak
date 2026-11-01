@@ -439,7 +439,7 @@ async def test_cleanup_job_runs_inside_the_lifespan(app: FastAPI) -> None:
 async def test_content_host_allowed_alongside_admin_host(
     tmp_path: Path, migrated_dsn: str
 ) -> None:
-    """Two origins share the app (spec §4a/§11): with PLAK_CONTENT_BASE_URL
+    """Two origins share the app (spec §4a/§11): with TOON_CONTENT_BASE_URL
     configured TrustedHostMiddleware lets the content host through as well;
     without it the app rejects all content traffic that nginx forwards over
     that second origin."""

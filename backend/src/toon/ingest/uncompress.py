@@ -2,7 +2,7 @@
 
 The way back from design.md §5.4a: an image from before it looks for each file
 at its own path and knows nothing of `_encoded/`. The container's entrypoint
-runs this before the server, and it acts only with PLAK_STORE_COMPRESSED off,
+runs this before the server, and it acts only with TOON_STORE_COMPRESSED off,
 so rolling back is: switch that off, let the pod start once, find the log line
 that says everything is back, then roll the image back
 (docs/deploying-on-zad.md §7).

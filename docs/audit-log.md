@@ -7,7 +7,7 @@ undone afterwards; an environment with rows then carries two vocabularies.
 A new term goes here first, only then into the code.
 
 The code reads these names from one place,
-`backend/src/plak/audit/vocabulary.py`;
+`backend/src/toon/audit/vocabulary.py`;
 `backend/tests/test_audit_vocabulary.py` keeps that file and this document
 in step.
 
@@ -16,13 +16,13 @@ in step.
 | Field | Contents |
 |---|---|
 | `actor_kind` | `member`, `ci`, `system` or `anonymous` |
-| `actor_pseudonym` | HMAC-SHA256 with `PLAK_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:eigenaar/repo` in lower case); never stored in readable form, and not recomputed when the pepper is rotated (see "Rotating the pepper and the IP key") |
+| `actor_pseudonym` | HMAC-SHA256 with `TOON_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:eigenaar/repo` in lower case); never stored in readable form, and not recomputed when the pepper is rotated (see "Rotating the pepper and the IP key") |
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
 | `refs` | what it is about: group, site, path, route template, the fetch metadata of a content request (`fetch_dest`, `fetch_site`, `referer_present`), for a secret link the selector, and `ip_unvouched` when the address next to it could not be vouched for (see "When the IP address is a claim"). Never an email address, the secret part of a link, a token or a query string; an exception is free text that members write: `group_name` and `site_title` keep the previous name or title as `previous_name` and `previous_title` (see "Admin"), and an audit lookup keeps its justification as `reason` |
 | `ip_truncated` | IPv4 truncated to /24, IPv6 to /48; an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) counts as IPv4 |
-| `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `PLAK_AUDIT_IP_KEY` (a different key from `PLAK_AUDIT_PEPPER`) or, for a row from before a rotation, under the key that was current then (see "Rotating the pepper and the IP key"); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
+| `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `TOON_AUDIT_IP_KEY` (a different key from `TOON_AUDIT_PEPPER`) or, for a row from before a rotation, under the key that was current then (see "Rotating the pepper and the IP key"); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
 
 Alongside `audit_log_entries`, Plak keeps `content_viewers`: sso_subject,
@@ -160,7 +160,7 @@ their site needs browser storage.
 `site_live_versions_kept` is about the number of previous live versions the
 nightly cleanup keeps for this site (set on the site's Versions tab):
 `refs.live_versions_kept` is the new number, `0` for keeping all, or `null`
-when the site went back to the platform default `PLAK_LIVE_VERSIONS_KEPT`.
+when the site went back to the platform default `TOON_LIVE_VERSIONS_KEPT`.
 
 `group_name` and `site_title` are about the display name of a group and the
 display title of a site (set on the Settings tab of each). `refs` carries
@@ -256,7 +256,7 @@ claims from the token (`ci/trust.py`, `AUDIT_CLAIMS`, each truncated at 200
 characters): `provider`, and where present `repository`, `ref`, `sha`,
 `run_id`, `workflow`, `event_name`. Beside them `refs.site_bound`: `true`
 when the token's audience named the site id
-(`PLAK_BASE_URL/-/sites/{site id}`), `false` when it was `PLAK_BASE_URL`
+(`TOON_BASE_URL/-/sites/{site id}`), `false` when it was `TOON_BASE_URL`
 itself, so the move to tokens bound to one site can be followed.
 `refs.site_id` is the id of the site the address in the request leads to,
 when it leads to one, and with a bound token `refs.bound_site_id` is the id
@@ -287,7 +287,7 @@ without a valid `repository` claim changes nothing.
 
 | Action | Result | When |
 |---|---|---|
-| `version_cleanup` | `allowed` | the nightly cleanup job (`previews/cleanup_job.py`) removed old live versions of a site, rows and files: those beyond the current live version and the newest others the site keeps (its own number, else `PLAK_LIVE_VERSIONS_KEPT`). One row per site per run. Actor is `system`; `refs` carries group, site, `versions` (the ids removed) and `kept` (the number that applied to the site at the time) |
+| `version_cleanup` | `allowed` | the nightly cleanup job (`previews/cleanup_job.py`) removed old live versions of a site, rows and files: those beyond the current live version and the newest others the site keeps (its own number, else `TOON_LIVE_VERSIONS_KEPT`). One row per site per run. Actor is `system`; `refs` carries group, site, `versions` (the ids removed) and `kept` (the number that applied to the site at the time) |
 
 A removed live version is one somebody could have rolled back to, so its
 removal gets a row. What the same job removes besides (expired previews,
@@ -363,14 +363,14 @@ configured provider), `CI_TOKEN_INVALID` (not a valid JWT, wrong algorithm,
 signature or claims are wrong), `CI_TOKEN_REPLAYED` (a token with a `jti`
 that was already used once; the response still carries the code
 `CI_TOKEN_INVALID`), `CI_AUDIENCE_MISMATCH` (the `aud` is
-neither exactly `PLAK_BASE_URL` nor exactly `PLAK_BASE_URL/-/sites/{site id}`,
+neither exactly `TOON_BASE_URL` nor exactly `TOON_BASE_URL/-/sites/{site id}`,
 or it names a site that does not exist or that the token's repository is
 not linked to, whatever the requested address),
 `SITE_MOVED` (the `aud` names a site other than the one at the requested
 address, or there is no site at that address, and the token's repository is
 linked to the site it names: the workflow's `site:` is old or mistyped, and
 the answer names the current address of that site),
-`CI_SITE_ID_REQUIRED` (the `aud` is `PLAK_BASE_URL` itself, while the link
+`CI_SITE_ID_REQUIRED` (the `aud` is `TOON_BASE_URL` itself, while the link
 of the site requires a token bound to it: every link made since migration
 0004, every older link of a repository that was linked to several sites
 then, and any other older one once a site admin required it or another
@@ -407,8 +407,8 @@ is written, by the chain it lands in (see "The integrity chain" below): the
 trigger and the purge ask the chain, not the row, so moving an action to the
 other period later applies to new rows only.
 
-Purging is done with `python -m plak.audit.retention` (`just
-purge-audit-log`), on `PLAK_DB_URL`. `content_viewers` follows the same
+Purging is done with `python -m toon.audit.retention` (`just
+purge-audit-log`), on `TOON_DB_URL`. `content_viewers` follows the same
 fixed period of 90 days (by `last_seen_at`), without the per-(action,
 result) function that `audit_log_entries` has.
 
@@ -497,8 +497,8 @@ position 1 would hand out positions a published checkpoint already holds a
 different hash for. The head table holds no personal data, only positions and
 hashes, so it outlives the rows without stretching any retention period.
 
-**Checking it.** `python -m plak.audit.chain` (`just verify-audit-log`) walks
-every chain and reports the first break in each, on the same `PLAK_DB_URL`.
+**Checking it.** `python -m toon.audit.chain` (`just verify-audit-log`) walks
+every chain and reports the first break in each, on the same `TOON_DB_URL`.
 It recomputes the hashes with the very same SQL function the trigger uses, so
 the check cannot drift away from the write.
 
@@ -570,7 +570,7 @@ and is what the next section does.
 
 ## Publishing the chain head
 
-`python -m plak.audit.checkpoint` (`just publish-audit-head`) writes one line
+`python -m toon.audit.checkpoint` (`just publish-audit-head`) writes one line
 to the application log with, per chain, the last position and its hash, plus
 the oldest position still present and its hash, and for both the moment their
 retention period runs out. The hash at the last position covers every row
@@ -588,7 +588,7 @@ on the two disagree, and anyone who kept the older line can say so.
 The line looks like this, on one line:
 
 ```
-INFO audit-chain-checkpoint {"format":"plak-audit-chain-checkpoint/3","taken_at":"2026-09-24T03:00:01.284915+00:00","entries_total":41027,"digest":"9f2c...","shards":[{"shard":0,"first":1904,"first_hash":"c70d...","first_expires":"2026-09-24T02:58:40.102311+00:00","seq":2571,"hash":"4ab1...","expires":"2026-12-23T02:59:57.881020+00:00"}, ...]}
+INFO audit-chain-checkpoint {"format":"toon-audit-chain-checkpoint/3","taken_at":"2026-09-24T03:00:01.284915+00:00","entries_total":41027,"digest":"9f2c...","shards":[{"shard":0,"first":1904,"first_hash":"c70d...","first_expires":"2026-09-24T02:58:40.102311+00:00","seq":2571,"hash":"4ab1...","expires":"2026-12-23T02:59:57.881020+00:00"}, ...]}
 ```
 
 `audit-chain-checkpoint` is the grep handle and everything after it is one JSON
@@ -597,7 +597,7 @@ that reads it. What is in it and why:
 
 | Field | Why it is there |
 |---|---|
-| `format` | the line is meant to be compared with one from a year ago, so it says which version wrote it. `/3` is the layout with sixteen chains per retention period; a `/1` or `/2` line numbered its chains differently and is refused |
+| `format` | the line is meant to be compared with one from a year ago, so it says which version wrote it. `/3` is the layout with sixteen chains per retention period; a `/1` or `/2` line numbered its chains differently and is refused. A line published before the rename says `plak-audit-chain-checkpoint/3` for the same layout, and it still verifies |
 | `taken_at` | the database's own clock, the same one that stamps `occurred_at`; without it two lines cannot be put in order |
 | `shards` | per chain the last position (`seq`) and its hash, and the oldest position still present (`first`) and its hash, each with the moment its retention period runs out (`expires`, `first_expires`). This is the evidence: a hash is what a rewrite changes, the last position what a truncation lowers, the first position where the purge has got to, and a deadline whether a row that is gone was allowed to go. A chain whose rows have all aged out has a last position and no first one |
 | `entries_total` | the sum of the positions, so the number of rows ever written. It may never go down, and it is the one number a reader can compare at a glance |
@@ -614,7 +614,7 @@ window between two published heads smaller, which is the only thing frequency
 buys. The line is a few hundred bytes.
 
 **Checking a line against the database.** `just verify-audit-head <bestand>`
-(`python -m plak.audit.checkpoint --against -` reads standard input) takes a
+(`python -m toon.audit.checkpoint --against -` reads standard input) takes a
 line as it stands in the log, timestamp and marker and all, and holds every
 published head against the database:
 
@@ -641,7 +641,7 @@ row to a sink the runtime account cannot reach remains the heavier answer.
 
 ## When the IP address is a claim
 
-`PLAK_BEHIND_PROXY` says whether a proxy stands in front of the pod. With one,
+`TOON_BEHIND_PROXY` says whether a proxy stands in front of the pod. With one,
 the derivation (`net.py`) reads the last `X-Forwarded-For` entry: the one that
 proxy wrote about the connection it accepted. Everything to the left of it is
 the client's to invent, and is never read. Without one, the socket decides and
@@ -716,7 +716,7 @@ If `actor-identity` yields nothing (404 `PSEUDONYM_UNKNOWN`), then there is
 no member, content viewer or linked repository that pseudonymises to that
 pseudonym. Several causes: the pepper has been rotated since that row was
 written and the pepper it was made under is no longer in
-`PLAK_AUDIT_PEPPER_PREVIOUS`; the actor only ever visited content via the
+`TOON_AUDIT_PEPPER_PREVIOUS`; the actor only ever visited content via the
 content-host SSO and that visit is more than 90 days ago, so its
 `content_viewers` row has been purged; or the repository has since been
 unlinked, or deleted along with its site or group (`ON DELETE CASCADE`). A
@@ -730,7 +730,7 @@ who reads the audit log. Name a case or ticket number therefore, not an
 email address or other personal data: a `reason` with an `@` in it, or with
 a control or formatting character (such as a tab, a line break or an rtl
 override), gets 422. Per platform administrator there is moreover a
-daily limit (`PLAK_AUDIT_LOOKUP_DAILY_LIMIT`, 25 by default) on the total
+daily limit (`TOON_AUDIT_LOOKUP_DAILY_LIMIT`, 25 by default) on the total
 of `audit_actor_lookup`, `audit_actor_identity` and `audit_ip_reveal`
 together, counted from the audit log itself over the last 24 hours on that
 administrator's pseudonym: not from a counter in memory, which would not
@@ -751,18 +751,18 @@ behaviour that the rest of the audit log has.
 The full IP address on a single row comes separately: `POST
 /-/api/v1/platform/audit/entries/{id}/ip`, with the same `reason`
 requirement and the same daily limit, decrypts `ip_encrypted` under
-`PLAK_AUDIT_IP_KEY`, or under the previous key whose id the stored value
+`TOON_AUDIT_IP_KEY`, or under the previous key whose id the stored value
 carries. `GET /platform/audit` itself shows only `ip_truncated`;
 the full address is therefore always a separate, audited step. The
 encryption is bound to the row itself (the row id is in the AAD), so pasting
 a copied ciphertext onto another row does not decrypt there. After a key
 rotation ("Rotating the pepper and the IP key" below) older rows stay
-readable as long as `PLAK_AUDIT_IP_KEY_PREVIOUS` carries the key they were
+readable as long as `TOON_AUDIT_IP_KEY_PREVIOUS` carries the key they were
 encrypted under.
 
 ## Rotating the pepper and the IP key
 
-`PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` can be replaced without losing the
+`TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` can be replaced without losing the
 ability to look up or decrypt older rows. Rows are immutable
 (`audit_log_no_update` refuses every `UPDATE`), so an older row is never
 pseudonymised or encrypted again. It keeps the value it was written under, and
@@ -789,17 +789,20 @@ a possible personal data breach, and assess it as one. Older rows only
 disappear through the retention purge, and production does not run that yet
 ([#211](https://github.com/DigiGilde/plak/issues/211)).
 
-**Procedure.** For the pepper, the IP key or both:
+**Procedure.** For the pepper, the IP key or both. A deployment that still runs
+on the `PLAK_` names reads `PLAK_` for `TOON_` below, or moves first
+(`docs/deploying-on-zad.md`, "Moving an existing deployment to the `TOON_`
+names"): a `TOON_` list replaces the `PLAK_` one, and the two are not merged.
 
 1. Generate the new value: `openssl rand -hex 32` for the pepper,
    `openssl rand -base64 32` for the IP key.
 2. Store it in a password vault. Note the date of the rotation with the old
    value there: the term under "Removing a previous value" below runs from it.
 3. Put the value that is current now at the front of the matching list,
-   `PLAK_AUDIT_PEPPER_PREVIOUS` or `PLAK_AUDIT_IP_KEY_PREVIOUS`. A list is
+   `TOON_AUDIT_PEPPER_PREVIOUS` or `TOON_AUDIT_IP_KEY_PREVIOUS`. A list is
    comma-separated and newest first, so the entries already there move one
    place back.
-4. Set the new value as `PLAK_AUDIT_PEPPER` or `PLAK_AUDIT_IP_KEY`.
+4. Set the new value as `TOON_AUDIT_PEPPER` or `TOON_AUDIT_IP_KEY`.
 5. Restart the app (on ZAD: `docs/deploying-on-zad.md`, §5).
 6. Check the log of that start. When any previous pepper or IP key is
    configured, the app logs one WARNING line with the number of each, and never a
@@ -812,17 +815,17 @@ After the pepper has been rotated twice, the settings look like this (the
 placeholders stand for the values):
 
 ```
-PLAK_AUDIT_PEPPER=<third pepper>
-PLAK_AUDIT_PEPPER_PREVIOUS=<second pepper>,<first pepper>
+TOON_AUDIT_PEPPER=<third pepper>
+TOON_AUDIT_PEPPER_PREVIOUS=<second pepper>,<first pepper>
 ```
 
 The app does not start when a list breaks a rule. A previous pepper is at
-least 32 bytes and differs from `PLAK_AUDIT_PEPPER`, `PLAK_SESSION_SECRET`,
+least 32 bytes and differs from `TOON_AUDIT_PEPPER`, `TOON_SESSION_SECRET`,
 every IP key and the other previous peppers. A previous IP key is the base64
-of 32 bytes and differs from `PLAK_AUDIT_IP_KEY`, `PLAK_SESSION_SECRET`, every
+of 32 bytes and differs from `TOON_AUDIT_IP_KEY`, `TOON_SESSION_SECRET`, every
 pepper and the other previous keys. No two configured IP keys may share a key
 id, the 8-byte fingerprint stored in front of every encrypted value. A single
-key in `PLAK_AUDIT_IP_KEY_PREVIOUS`, as before the variable became a list,
+key in `TOON_AUDIT_IP_KEY_PREVIOUS`, as before the variable became a list,
 keeps working.
 
 In both lists a comma separates the entries, whitespace around an entry is
@@ -856,7 +859,7 @@ the lookups keep reaching them:
 **Removing a previous value.** Keep it until every row written under it is
 gone. The longest retention period is 1096 days ("Retention"), so a previous
 value can go 1096 days after the rotation, once the purge
-(`python -m plak.audit.retention`, `just purge-audit-log`) has run after that
+(`python -m toon.audit.retention`, `just purge-audit-log`) has run after that
 day. That holds only if the purge runs, and production does not run it yet
 ([#211](https://github.com/DigiGilde/plak/issues/211)). Until it does, no row
 is deleted and every previous value stays needed.
@@ -930,11 +933,11 @@ What is not there yet, and why:
   The 429 from `LOOKUP_LIMIT_REACHED` and from `TOO_MANY_CREATIONS` does go
   through `ApiError` and therefore does reach the log, as
   `admin_access`/`refused`.
-- If `PLAK_AUDIT_IP_KEY` is lost, or rotated without putting the old key in
-  `PLAK_AUDIT_IP_KEY_PREVIOUS`, older `ip_encrypted` values become
+- If `TOON_AUDIT_IP_KEY` is lost, or rotated without putting the old key in
+  `TOON_AUDIT_IP_KEY_PREVIOUS`, older `ip_encrypted` values become
   unreadable. They do stay in place until their row itself is purged.
-- The same goes for the pepper. If `PLAK_AUDIT_PEPPER` is lost, or rotated
-  without putting the old pepper in `PLAK_AUDIT_PEPPER_PREVIOUS`, older
+- The same goes for the pepper. If `TOON_AUDIT_PEPPER` is lost, or rotated
+  without putting the old pepper in `TOON_AUDIT_PEPPER_PREVIOUS`, older
   pseudonyms can no longer be traced to a person, and a person can no longer
   be searched for in the older rows. The rows stay in place. "Rotating the
   pepper and the IP key" says how to avoid both gaps.

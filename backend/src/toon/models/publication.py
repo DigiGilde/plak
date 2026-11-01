@@ -71,7 +71,7 @@ class Site(IDMixin, Base):
         nullable=True,
     )
     # Previous live versions the nightly cleanup keeps besides the current
-    # one; NULL follows PLAK_LIVE_VERSIONS_KEPT, 0 keeps them all.
+    # one; NULL follows TOON_LIVE_VERSIONS_KEPT, 0 keeps them all.
     live_versions_kept: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         postgresql.UUID(as_uuid=True), ForeignKey("members.id", ondelete="SET NULL"), nullable=True

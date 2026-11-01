@@ -1,6 +1,6 @@
 """Client IP determination behind one proxy.
 
-One derivation point for both rate limiting and audit. PLAK_BEHIND_PROXY says
+One derivation point for both rate limiting and audit. TOON_BEHIND_PROXY says
 whether a proxy stands in front of the pod. With one, the last X-Forwarded-For
 entry is the one that proxy wrote about the peer it accepted, and everything
 to the left of it is the client's to invent. Without one, the socket decides

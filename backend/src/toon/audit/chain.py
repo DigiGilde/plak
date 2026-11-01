@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,9 +41,10 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from toon.config import server_variable
 from toon.db import make_session_factory
 
-DB_URL_VAR = "PLAK_DB_URL"
+DB_URL_VAR = "TOON_DB_URL"
 
 _logger = logging.getLogger(__name__)
 
@@ -221,7 +221,7 @@ async def verify(dsn: str) -> list[ChainBreak]:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    dsn = os.environ.get(DB_URL_VAR)
+    dsn = server_variable(DB_URL_VAR)
     if not dsn:
         _logger.error("%s is not set; the check does not know which database to talk to.", DB_URL_VAR)
         return 1

@@ -2,7 +2,7 @@
 
 `ip_truncated` on audit_log_entries is what the log shows by default; this is
 the encrypted full address next to it, under its own key
-(`PLAK_AUDIT_IP_KEY`, separate from the audit pepper) so revealing it is a
+(`TOON_AUDIT_IP_KEY`, separate from the audit pepper) so revealing it is a
 deliberate, audited act (`audit_ip_reveal`) and not a byproduct of reading
 the pseudonym or the truncated network.
 
@@ -25,11 +25,12 @@ from collections.abc import Sequence
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-_VERSION = b"\x02"
+_VERSION = b"\x03"
 _KEY_ID_LEN = 8
 _NONCE_LEN = 12
 _HEADER_LEN = len(_VERSION) + _KEY_ID_LEN + _NONCE_LEN
-_AAD_PREFIX = b"plak-audit-ip-v1"
+# Rows are immutable, so \x02 must stay readable until the last such row is purged.
+_AAD_PREFIXES = {_VERSION: b"toon-audit-ip-v1", b"\x02": b"plak-audit-ip-v1"}
 
 
 class IpDecryptError(ValueError):
@@ -43,13 +44,13 @@ def _key_id(key: bytes) -> bytes:
     return hashlib.sha256(key).digest()[:_KEY_ID_LEN]
 
 
-def _aad(entry_id: uuid.UUID) -> bytes:
-    return _AAD_PREFIX + entry_id.bytes
+def _aad(version: bytes, entry_id: uuid.UUID) -> bytes:
+    return _AAD_PREFIXES[version] + entry_id.bytes
 
 
 def encrypt_ip(key: bytes, entry_id: uuid.UUID, ip: str) -> bytes:
     nonce = os.urandom(_NONCE_LEN)
-    ciphertext = AESGCM(key).encrypt(nonce, ip.encode("utf-8"), _aad(entry_id))
+    ciphertext = AESGCM(key).encrypt(nonce, ip.encode("utf-8"), _aad(_VERSION, entry_id))
     return _VERSION + _key_id(key) + nonce + ciphertext
 
 
@@ -58,12 +59,13 @@ def decrypt_ip(key: bytes, entry_id: uuid.UUID, blob: bytes, *, previous_keys: S
     `entry_id` (the AAD binds the two together), with the one key among `key`
     and `previous_keys` whose key id the blob carries. A row encrypted before
     a key rotation names one of the previous keys."""
-    if len(blob) < _HEADER_LEN or blob[:1] != _VERSION:
+    version = blob[:1]
+    if len(blob) < _HEADER_LEN or version not in _AAD_PREFIXES:
         raise IpDecryptError("unknown version of the encrypted IP address")
     blob_key_id = blob[len(_VERSION) : len(_VERSION) + _KEY_ID_LEN]
     nonce = blob[len(_VERSION) + _KEY_ID_LEN : _HEADER_LEN]
     ciphertext = blob[_HEADER_LEN:]
-    aad = _aad(entry_id)
+    aad = _aad(version, entry_id)
 
     for candidate in (key, *previous_keys):
         if _key_id(candidate) != blob_key_id:

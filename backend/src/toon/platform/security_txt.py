@@ -35,7 +35,7 @@ EXPIRES_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 # The NCSC-NL lines (PREAMBLE_NCSC, POLICY_NCSC, CONTACT_NCSC) hold only for an
 # installation inside the Dutch central government, so they appear only when
-# PLAK_SECURITY_TXT_NCSC is on.
+# TOON_SECURITY_TXT_NCSC is on.
 PREAMBLE_NCSC = (
     "# NCSC-NL blijft het centrale CVD-meldpunt voor kwetsbaarheden en incidenten",
     "# voor de Rijksoverheid.",
@@ -44,7 +44,7 @@ PREAMBLE_NCSC = (
     "# incidents for the Dutch central government.",
 )
 
-# Only when PLAK_OPERATOR_EMAIL is set: without it there is no address of the
+# Only when TOON_OPERATOR_EMAIL is set: without it there is no address of the
 # operator below, and the sentence would point at NCSC-NL's or at none.
 PREAMBLE_OPERATOR_EMAIL = (
     "# Het e-mailadres hieronder is de directe lijn naar de organisatie die deze",
@@ -66,7 +66,7 @@ POLICY_NCSC = (
 # the reporter beyond an account. It exists only because the repository is
 # public with private vulnerability reporting on; while it was private that
 # URL answered a 404. See docs/security.md, "Now the repo is on GitHub".
-# The operator's address (PLAK_OPERATOR_EMAIL) goes between this and
+# The operator's address (TOON_OPERATOR_EMAIL) goes between this and
 # CONTACT_NCSC.
 CONTACT = ("Contact: https://github.com/DigiGilde/plak/security/advisories/new",)
 

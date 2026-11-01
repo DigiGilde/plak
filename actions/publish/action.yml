@@ -7,7 +7,7 @@ author: 'Plak'
 inputs:
   host:
     description: >-
-      Admin origin of the Plak instance (the PLAK_BASE_URL), for example
+      Admin origin of the Plak instance (the TOON_BASE_URL), for example
       https://beheer.plak.example.nl, without an /admin suffix. The deploy
       API exists only on this host; the content host answers with a 404.
       Empty means PLAK_HOST from the environment, else the DigiGilde

@@ -1,4 +1,4 @@
-"""Admin SPA: the built Vue app (Vite base `/`) from PLAK_SPA_PATH, served by
+"""Admin SPA: the built Vue app (Vite base `/`) from TOON_SPA_PATH, served by
 the app itself on the root of the admin host.
 
 Pure ASGI middleware, outside the rate limit (SPA assets are unlimited) and
@@ -80,7 +80,7 @@ INDEX = "index.html"
 
 MESSAGE_SPA_MISSING = (
     "De beheeromgeving is niet beschikbaar: de gebouwde SPA ontbreekt. "
-    "Bouw de frontend (npm run build) of wijs PLAK_SPA_PATH naar de dist-map.\n"
+    "Bouw de frontend (npm run build) of wijs TOON_SPA_PATH naar de dist-map.\n"
 )
 
 

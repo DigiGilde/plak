@@ -7,7 +7,7 @@ the code is the subject and the older paper is gone.
 
 Each rule names where it lives (module) and what holds it there (test). Paths
 are relative to the repository root; backend modules are under
-`backend/src/plak/`, backend tests under `backend/tests/`.
+`backend/src/toon/`, backend tests under `backend/tests/`.
 
 The numbering is fixed by the references in the code and cannot be renumbered
 without breaking them. Behaviour requirement *N* under serving is section 5.*N*;
@@ -225,10 +225,10 @@ Published content may contain arbitrary JavaScript (§5.7 allows
 call the admin API with the session cookie the browser sends along, so admin
 and content stand on separate origins:
 
-- **admin host** (`beheer.<domain>`, `PLAK_BASE_URL`): the SPA, `/-/api/v1`,
+- **admin host** (`beheer.<domain>`, `TOON_BASE_URL`): the SPA, `/-/api/v1`,
   login, callback, logout, back-channel logout. Carries the admin session
   cookie (`__Host-plak-session`, SameSite=Strict) and the CSRF cookie.
-- **content host** (`<domain>`, `PLAK_CONTENT_BASE_URL`): published sites,
+- **content host** (`<domain>`, `TOON_CONTENT_BASE_URL`): published sites,
   previews and version views, a redirect to the admin host on `/`, and of the platform
   namespace exactly four paths: content login, its callback, content logout and
   `/-/code`. Restricted content gets a content session (SameSite=Lax) without
@@ -352,7 +352,7 @@ in the same second, so a date cannot tell them apart. Range on a copy covers
 its compressed bytes. `_encoded` is refused in the root of a bundle, and the
 store never serves a path under it, so a site's own files and these never
 meet. Versions published before this keep their files as they were.
-`PLAK_STORE_COMPRESSED=false` keeps new deploys as published, and the
+`TOON_STORE_COMPRESSED=false` keeps new deploys as published, and the
 container's entrypoint then puts every file kept compressed only back at its
 own path (`ingest/uncompress.py`): the way back to an image from before this.
 Code:
@@ -641,7 +641,7 @@ checks that complain, in the order `database`, `storage`, `content_root`,
 `storage` appears once the free space drops below `storage_min_free_bytes` plus
 `ingest_max_total`, the point where a deploy of the maximum size would be
 refused (never with the reserve switched off). `content_root` is decided once
-at startup and only when `PLAK_ENVIRONMENT=productie`: the content root shares
+at startup and only when `TOON_ENVIRONMENT=productie`: the content root shares
 its device with its parent, so it is not a mount point and what is published
 there is lost when the container restarts. `idp_revalidation` is the complaint
 of §7.7. The detail lives elsewhere: the low-space condition writes an ERROR
@@ -829,7 +829,7 @@ Guarded by: `test_keys.py`, `test_code_page.py`, `test_serving.py`,
 A login only to look creates no member record: the decision uses session claims
 only. A record comes into being on a first admin visit, and it is created
 **active** straight away, because anyone who can complete the SSO login may use
-Plak. `PLAK_BOOTSTRAP_ADMIN_SUB` additionally makes that member a platform
+Plak. `TOON_BOOTSTRAP_ADMIN_SUB` additionally makes that member a platform
 administrator, idempotently. A member set to `deactivated` loses admin access
 and the `site_team` route; the other ways in do not depend on member status.
 
@@ -929,7 +929,7 @@ only, with signature, `iss`, `aud`/`azp`, a recent `iat`, the logout event
 claim, `sid` or `sub`, the absence of a `nonce` and a `jti` replay cache.
 
 Because a Plak session outlives the IdP's own, a session is re-validated against
-the IdP on the first request after `PLAK_IDP_RECHECK_SECONDS` (default 900, `0`
+the IdP on the first request after `TOON_IDP_RECHECK_SECONDS` (default 900, `0`
 turns it off) with `grant_type=refresh_token`. Success keeps the session and
 rotates the stored refresh token; the `sub` of a new id token must match. A hard
 refusal (`invalid_grant`) drops the session and the request continues as not
@@ -1013,8 +1013,8 @@ ID token its forge mints (`Authorization: Bearer <JWT>` from GitHub or Forgejo
 Actions). The token is accepted when its `iss` is one of the configured issuers,
 the signing key comes from that issuer's own discovery document and JWKS over
 https, the algorithm is RS256, `exp` and `iat` are present within 60 seconds of
-leeway, and `aud` is exactly one value: `PLAK_BASE_URL`, or
-`PLAK_BASE_URL/-/sites/{site id}` with the id in its canonical lowercase
+leeway, and `aud` is exactly one value: `TOON_BASE_URL`, or
+`TOON_BASE_URL/-/sites/{site id}` with the id in its canonical lowercase
 form, which binds the token to that one site. Every URL fetched on a provider's
 behalf is built from configuration, never from a token or a request, which is
 the SSRF defence, together with https only, no redirects, a timeout and a size
@@ -1096,7 +1096,7 @@ the directory; a process that stops in between leaves a directory nobody
 points at. The same job moves a site or version directory that has no row and
 is older than 24 hours into `_reclaimed/`, where it no longer counts towards
 the site's quota, and removes it from there after 7 days. Two brakes keep a
-database that does not belong to the volume (a wrong `PLAK_DB_URL`, a restored
+database that does not belong to the volume (a wrong `TOON_DB_URL`, a restored
 backup) from emptying it: a site whose version rows match none of its
 directories keeps all of them, and nothing moves when more versions would go
 than stay. Both log an ERROR naming the directories. A site without any
@@ -1140,7 +1140,7 @@ Code: `api/deploys.py`, `api/cli.py`, `api/admin.py`, `api/errors.py`,
 ## 9. The admin interface
 
 A Vue 3 SPA (runtime-only build, Vite base `/`), served by the application
-itself from `PLAK_SPA_PATH` on the root of the admin host, as pure ASGI
+itself from `TOON_SPA_PATH` on the root of the admin host, as pure ASGI
 middleware outside the rate limit and inside the host separation. On the content
 host it steps aside entirely.
 
@@ -1186,7 +1186,7 @@ and denial is the default when the session cannot be resolved. Interface
 language is Dutch; the wire carries the English enum values.
 
 Code: `platform/spa.py`, `security_headers.py`, `api/docs.py`,
-`frontend/src/router.ts`, `frontend/src/format.ts`, `frontend/src/api/plak.ts`.
+`frontend/src/router.ts`, `frontend/src/format.ts`, `frontend/src/api/toon.ts`.
 Guarded by: `test_spa.py`, `test_security_headers.py`,
 `frontend/tests/build-output.test.ts`, `frontend/tests/router-guard.test.ts`,
 `frontend/src/format.test.ts`.
@@ -1204,7 +1204,7 @@ and SPA assets sit outside the middleware entirely.
 The login class covers the login paths of both flows, from the same constants
 the routes are registered with, so moving a route cannot silently change its
 class. Behind the ZAD router, trusted-proxy configuration
-(`PLAK_BEHIND_PROXY`, X-Forwarded-For) is a required deployment setting.
+(`TOON_BEHIND_PROXY`, X-Forwarded-For) is a required deployment setting.
 
 Code: `ratelimit.py`, `net.py`, `constants.py`. Guarded by: `test_ratelimit.py`,
 `test_app_integration.py`.
@@ -1274,7 +1274,7 @@ Rules that live in the database rather than only in the application:
   deletes an old slug once its redirect has ended (§8), or an old site slug
   when a group admin releases it for another site (§4). The downgrade drops
   both tables and with them every reservation at once.
-- `sites.live_versions_kept` is NULL (follow `PLAK_LIVE_VERSIONS_KEPT`) or a
+- `sites.live_versions_kept` is NULL (follow `TOON_LIVE_VERSIONS_KEPT`) or a
   number of at least 0 (`ck_sites_live_versions_kept`).
 - Access lives on the site; the group carries a default for new sites and a
   preview may override. A deploy never changes access policy.

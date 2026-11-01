@@ -3,7 +3,7 @@
 Cleans up: expired previews (row, version row and file tree), orphaned
 preview versions (target=preview without a matching preview row, left behind
 by an interrupted upsert/teardown), live versions older than the ones a
-site keeps (its own number, else PLAK_LIVE_VERSIONS_KEPT; row and file tree),
+site keeps (its own number, else TOON_LIVE_VERSIONS_KEPT; row and file tree),
 stale `_tmp` directories in the ContentStore, version and site directories that
 lost their row (set aside in `_reclaimed` first, removed a week later),
 expired CLI device authorizations and CLI sessions, and the old slugs of
@@ -269,7 +269,7 @@ async def delete_expired(
     """Runs the full sweep once; callable straight from tests.
 
     `live_versions_kept` is the number for sites without their own, as
-    PLAK_LIVE_VERSIONS_KEPT is; 0 keeps every live version of those sites."""
+    TOON_LIVE_VERSIONS_KEPT is; 0 keeps every live version of those sites."""
     expired = await _cleanup_expired_previews(factory, store, now)
     orphans = await _cleanup_orphan_preview_versions(factory, store)
     old_live = await _cleanup_old_live_versions(factory, store, live_versions_kept)

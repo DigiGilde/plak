@@ -1,6 +1,6 @@
 """Alembic environment for Plak.
 
-Migrations run under PLAK_DB_URL, the one database account Plak has. ZAD's
+Migrations run under TOON_DB_URL, the one database account Plak has. ZAD's
 shared PostgreSQL service hands out exactly one user, so app, migrations and
 the retention job share it. The append-only guarantee of the audit log rests
 on the triggers in 0001_base alone.
@@ -9,7 +9,6 @@ on the triggers in 0001_base alone.
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -23,6 +22,7 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from toon.config import server_variable  # noqa: E402
 from toon.models import Base  # noqa: E402
 
 config = context.config
@@ -32,11 +32,11 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-DB_URL_VAR = "PLAK_DB_URL"
+DB_URL_VAR = "TOON_DB_URL"
 
 
 def _migration_url() -> str:
-    url = os.environ.get(DB_URL_VAR)
+    url = server_variable(DB_URL_VAR)
     if not url:
         raise RuntimeError(f"{DB_URL_VAR} is niet gezet; migraties kunnen niet draaien.")
     return url

@@ -2,7 +2,7 @@
 
 The browser receives only a signed reference to a server-side session record;
 claims never stand on their own in the cookie. Signing is HMAC-SHA256 with
-PLAK_SESSION_SECRET (itsdangerous style, without the extra dependency). The
+TOON_SESSION_SECRET (itsdangerous style, without the extra dependency). The
 store is in-memory: Plak runs with replicas:1, sessions
 deliberately do not survive a restart.
 
@@ -329,7 +329,7 @@ def sign(secret: str, value: str) -> str:
     return f"{value}.{short}"
 
 
-# Session cookies and the key cookie share PLAK_SESSION_SECRET; a bare id
+# Session cookies and the key cookie share TOON_SESSION_SECRET; a bare id
 # would let a signature valid for one cookie be replayed as another (both are
 # UUID strings). The prefix ties a signature to this one purpose.
 _KEY_COOKIE_PURPOSE = "key:"

@@ -52,8 +52,8 @@ def _as_admin(client, app) -> dict[str, str]:
 
 
 def _rotate_pepper(app, *previous: str) -> None:
-    """The app after a deploy with NEW_PEPPER as PLAK_AUDIT_PEPPER and
-    `previous` as PLAK_AUDIT_PEPPER_PREVIOUS: rows from here on are written
+    """The app after a deploy with NEW_PEPPER as TOON_AUDIT_PEPPER and
+    `previous` as TOON_AUDIT_PEPPER_PREVIOUS: rows from here on are written
     under the new pepper, by an audit log built the way main.py builds it."""
     settings = app.state.settings
     settings.audit_pepper = NEW_PEPPER
@@ -817,7 +817,7 @@ class TestAdminCheckBeforeBodyValidation:
 
 class TestPepperRotation:
     """Audit rows are never pseudonymised again, so after a rotation the rows
-    from before it are reached through PLAK_AUDIT_PEPPER_PREVIOUS, in both
+    from before it are reached through TOON_AUDIT_PEPPER_PREVIOUS, in both
     directions, and only for as long as the pepper stays listed there."""
 
     async def test_without_a_rotation_the_lookup_has_no_previous_pseudonyms(self, client, app, factory, data):
@@ -951,7 +951,7 @@ class TestPepperRotation:
 
     async def test_a_pseudonym_under_a_pepper_no_longer_listed_is_404(self, client, app, factory, data):
         """A rotation is still in progress, but the pepper this pseudonym was
-        made with has left PLAK_AUDIT_PEPPER_PREVIOUS: it leads back to nobody."""
+        made with has left TOON_AUDIT_PEPPER_PREVIOUS: it leads back to nobody."""
         old_pepper = app.state.settings.audit_pepper
         await _add_content_viewer(factory, sub="viewer-sub", email="kijker@example.nl")
         await _link(factory, data)

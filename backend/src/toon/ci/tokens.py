@@ -12,7 +12,7 @@ What decides whether a token is accepted, in order:
   is looked at;
 - `exp` and `iat` are required, `exp`/`nbf`/`iat` get 60 seconds of leeway;
 - `aud` is exactly one value, and exactly one of two forms (no
-  normalisation): PLAK_BASE_URL as configured, or PLAK_BASE_URL followed by
+  normalisation): TOON_BASE_URL as configured, or TOON_BASE_URL followed by
   `/-/sites/` and a site id in its canonical form (lowercase, with hyphens).
   The second binds the token to that one site (`bound_site_id`).
 - a token with a `jti` is accepted once: a second use within its lifetime is
@@ -67,7 +67,7 @@ KID_REFRESH_COOLDOWN_S = 60
 # provider outage must not turn every deploy attempt into outbound requests.
 FETCH_FAILURE_TTL_S = 30
 MAX_TOKEN_LENGTH = 16 * 1024
-# Between PLAK_BASE_URL and the site id in the audience of a bound token.
+# Between TOON_BASE_URL and the site id in the audience of a bound token.
 SITE_AUDIENCE_PATH = "/-/sites/"
 
 _SEGMENT_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -126,7 +126,7 @@ class VerifiedCiToken:
     issuer: Issuer
     claims: Mapping[str, Any]
     # The one site a bound audience names; None when the audience is
-    # PLAK_BASE_URL itself.
+    # TOON_BASE_URL itself.
     bound_site_id: uuid.UUID | None = None
 
     def claim(self, name: str) -> str | None:
@@ -246,7 +246,7 @@ class CiTokenVerifier:
         return claims
 
     def _check_claims(self, issuer: Issuer, claims: Mapping[str, Any]) -> uuid.UUID | None:
-        """Returns the site a bound audience names, or None for PLAK_BASE_URL."""
+        """Returns the site a bound audience names, or None for TOON_BASE_URL."""
         if claims.get("iss") != issuer.issuer:  # pragma: no cover - defensive: selected from these same bytes
             raise CiTokenError(f"{vocabulary.CI_ISSUER_UNKNOWN}.mismatch")
         for name in ("exp", "iat"):

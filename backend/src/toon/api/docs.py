@@ -76,7 +76,7 @@ There are two ways to identify yourself, and every endpoint accepts exactly one 
   `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site
   and on linking a repository. The token is one of two kinds:
   * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin
-    URL of Plak (`PLAK_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only
+    URL of Plak (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only
     for that site, and only while the repository of that workflow is linked to it
     (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before
     the site id existed, of a repository linked to that one site, also takes a token whose audience is

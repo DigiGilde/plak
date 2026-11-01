@@ -27,7 +27,7 @@ changelog.
   `security` fragment and prepare a release.
 
 All of it lives in `scripts/release.py`, a thin entry over the package
-`scripts/plak_release/`, tested in `scripts/tests/` with one test file
+`scripts/toon_release/`, tested in `scripts/tests/` with one test file
 per module. `prepare-release.yml` makes the
 release pull request, `release.yml` tags it once merged, and
 `deploy.yml` publishes the GitHub Release for the tag and then takes it
@@ -82,7 +82,7 @@ which component gets a new version. The list is `SHIPPED_PATHS` in
   `backend/alembic/`, `backend/alembic.ini`
 - `frontend/src/`, `frontend/package.json`, `frontend/package-lock.json`,
   `frontend/index.html`, `frontend/vite.config.ts`, `frontend/public/`
-- `containers/plak/`
+- `containers/toon/`
 - `cli/plak_cli/`, `cli/pyproject.toml`, `cli/uv.lock`
 - `plugin/`, except `plugin/evals/`
 - `actions/publish/`
@@ -219,11 +219,11 @@ release; the CLI and the plugin only when they changed since the
 previous tag:
 
 - **The image**: `[project] version` in `backend/pyproject.toml` and the
-  version of the editable package `plak-api` in `backend/uv.lock`;
+  version of the editable package `toon-api` in `backend/uv.lock`;
   `version` in `frontend/package.json` and both places it appears in
   `frontend/package-lock.json`. Every tag builds a new image, so these
   follow every release. What the footer shows still comes from the tag
-  itself, through `PLAK_VERSION` at build time.
+  itself, through `TOON_VERSION` at build time.
 - **The CLI**: `[project] version` in `cli/pyproject.toml` and the
   version of the editable package `plak` in `cli/uv.lock`, when anything
   under `cli/plak_cli/`, `cli/pyproject.toml` or `cli/uv.lock` changed,
@@ -236,7 +236,7 @@ previous tag:
 - **`publiccode.yml`**: `softwareVersion` and `releaseDate`, on every
   release.
 - **The API**: `backend/openapi.json` and `API_VERSION` in
-  `backend/src/plak/main.py`, on every release; see below.
+  `backend/src/toon/main.py`, on every release; see below.
 
 The first release sets all of them. The CalVer versions are valid PEP 440
 and sort above the `0.x` versions before them, so an installed CLI or
@@ -256,10 +256,10 @@ The CLI reads only its major (`docs/publishing.md`).
   it alone, so there is nothing to keep up to date by hand.
 - **The major moves by hand, together with the path.** A breaking change
   means `/-/api/v2` and `API_VERSION = "2.0.0"` in
-  `backend/src/plak/main.py`, in the same pull request.
+  `backend/src/toon/main.py`, in the same pull request.
   `test_openapi_file.py` holds the two to each other.
 - **Minor and patch are set by the release.** It prints the schema with
-  `python -m plak.api.openapi_file` and compares it, with
+  `python -m toon.api.openapi_file` and compares it, with
   [oasdiff](https://github.com/oasdiff/oasdiff), with
   `backend/openapi.json` at the previous tag:
 
@@ -333,7 +333,7 @@ push to `beta`, and only for `beta`.
    `backend/openapi.json` is the one file it cannot recompute, since
    that needs the backend. A workflow, code, another version or a
    dependency slipped into a lockfile stops the release here. Only then
-   does it get a token of the `digigilde-plak-release` App and commit as
+   does it get a token of the `digigilde-toon-release` App and commit as
    the App (`Release vX`). It takes nothing but the tag and "changed"
    from `prepare`: which pull request a refresh touches it looks up
    itself (`release.py release-pr` on `gh pr list --json`, with the
@@ -480,7 +480,7 @@ organisation.
 
 1. **Create the App** under *Settings, Developer settings, GitHub Apps,
    New GitHub App* of the organisation:
-   - name `digigilde-plak-release`, homepage
+   - name `digigilde-toon-release`, homepage
      `https://github.com/DigiGilde/plak`;
    - *Webhook*: untick *Active*;
    - *Repository permissions*: *Contents: Read and write* and
@@ -507,7 +507,7 @@ organisation.
 
    ```bash
    gh variable set RELEASE_APP_CLIENT_ID --env release --repo DigiGilde/plak --body '<client id>'
-   gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo DigiGilde/plak < digigilde-plak-release.private-key.pem
+   gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo DigiGilde/plak < digigilde-toon-release.private-key.pem
    ```
 
    Then move the `.pem` to the Trash; GitHub keeps no copy, and a new key

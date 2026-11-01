@@ -262,7 +262,7 @@ class ContentStore:
         a backup an operator put there is not ours.
 
         Two brakes against a database that does not belong to this volume (a
-        wrong PLAK_DB_URL, a restored backup): a site whose version rows match
+        wrong TOON_DB_URL, a restored backup): a site whose version rows match
         none of its directories keeps all of them, and nothing moves at all
         when more versions would go than stay. A site without any version row
         (a first publish that stopped halfway, every version deleted) has

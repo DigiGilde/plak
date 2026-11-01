@@ -5,6 +5,8 @@ group never ends up without an admin."""
 from __future__ import annotations
 
 import asyncio
+import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -14,6 +16,7 @@ from datetime import timedelta
 import asyncpg
 import pytest
 from helpers_audit import insert_aged_audit_row
+from sqlalchemy.exc import NoSuchModuleError
 
 from toon import i18n
 from toon.audit import vocabulary
@@ -281,7 +284,7 @@ async def test_a_chain_head_only_moves_one_position_on(db_connection: asyncpg.Co
         """
         CREATE FUNCTION test_move_the_head() RETURNS trigger AS $$
         BEGIN
-            UPDATE audit_log_chain_heads SET chain_seq = chain_seq + current_setting('plak_test.step')::bigint;
+            UPDATE audit_log_chain_heads SET chain_seq = chain_seq + current_setting('toon_test.step')::bigint;
             RETURN NULL;
         END;
         $$ LANGUAGE plpgsql
@@ -292,7 +295,7 @@ async def test_a_chain_head_only_moves_one_position_on(db_connection: asyncpg.Co
         "FOR EACH ROW EXECUTE FUNCTION test_move_the_head()"
     )
     for step in ("5", "0", "-1"):
-        await db_connection.execute("SELECT set_config('plak_test.step', $1, true)", step)
+        await db_connection.execute("SELECT set_config('toon_test.step', $1, true)", step)
 
         assert _ONE_ON in await _refusal(
             db_connection,
@@ -495,7 +498,7 @@ async def test_external_sources_defaults_to_on(db_connection: asyncpg.Connection
 
 
 async def test_live_versions_kept_defaults_to_following_the_platform(db_connection: asyncpg.Connection) -> None:
-    """NULL is the value a site gets for free: it follows PLAK_LIVE_VERSIONS_KEPT
+    """NULL is the value a site gets for free: it follows TOON_LIVE_VERSIONS_KEPT
     until a site admin sets a number of its own."""
     group_id = await _make_group(db_connection)
     site_id = await _make_site(db_connection, group_id)
@@ -522,11 +525,11 @@ def _alembic(dsn: str, action: str, revision: str) -> None:
     cfg.set_main_option("script_location", str(root))
     cfg.set_main_option("version_locations", str(root / "versions"))
     cfg.set_main_option("path_separator", "os")
-    os.environ["PLAK_DB_URL"] = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+    os.environ["TOON_DB_URL"] = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
     try:
         getattr(command, action)(cfg, revision)
     finally:
-        os.environ.pop("PLAK_DB_URL", None)
+        os.environ.pop("TOON_DB_URL", None)
 
 
 async def test_the_site_retention_migration_goes_down_and_up_again(postgres_container) -> None:
@@ -1069,7 +1072,7 @@ async def test_the_storage_migration_moves_every_version_to_its_site_id_and_back
     # Not a group Plak knows: perhaps an operator's, so it stays.
     (root / "backup").mkdir()
     (root / "_tmp").mkdir()
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
@@ -1107,7 +1110,7 @@ async def test_the_storage_migration_moves_every_group_and_every_target(
     versions = live + previews
     group_slugs = {version["old"].split("/")[0] for version in versions}
     assert len(group_slugs) == 2
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
@@ -1130,7 +1133,7 @@ async def test_the_storage_migration_stops_at_a_target_that_holds_files(
     taken = root / version["new"]
     taken.mkdir(parents=True)
     (taken / "index.html").write_text("someone else's")
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     with pytest.raises(OSError):
         await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
@@ -1148,7 +1151,7 @@ async def test_the_storage_migration_takes_over_an_empty_target(
     root = tmp_path / "content"
     (version,) = await _slug_layout_versions(own_database, root, sites=1, per_site=1)
     (root / version["new"]).mkdir(parents=True)
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
@@ -1166,7 +1169,7 @@ async def test_the_storage_migration_finishes_a_run_that_stopped_halfway(
     moved, waiting = await _slug_layout_versions(own_database, root, sites=1, per_site=2)
     (root / moved["new"]).parent.mkdir(parents=True)
     (root / moved["old"]).rename(root / moved["new"])
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
@@ -1182,7 +1185,7 @@ async def test_the_storage_migration_rewrites_a_row_whose_directory_is_missing(
     present, missing = await _slug_layout_versions(own_database, root, sites=1, per_site=2)
     (root / missing["old"] / "index.html").unlink()
     (root / missing["old"]).rmdir()
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(root))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))
 
     await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
@@ -1198,7 +1201,7 @@ async def test_the_storage_migration_refuses_a_volume_without_any_version(
     versions = await _slug_layout_versions(own_database, tmp_path / "content", sites=1, per_site=2)
     empty = tmp_path / "leeg"
     empty.mkdir()
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(empty))
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(empty))
 
     with pytest.raises(RuntimeError, match="is the content volume mounted"):
         await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
@@ -1211,12 +1214,102 @@ async def test_the_storage_migration_needs_the_content_root_when_there_is_someth
     own_database: str, tmp_path: pathlib.Path, monkeypatch
 ) -> None:
     versions = await _slug_layout_versions(own_database, tmp_path / "content", sites=1, per_site=1)
+    monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
     monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
 
-    with pytest.raises(RuntimeError, match="PLAK_CONTENT_ROOT"):
+    with pytest.raises(RuntimeError, match="TOON_CONTENT_ROOT"):
         await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
 
     assert await _storage_refs(own_database) == {version["id"]: version["old"] for version in versions}
+
+
+def _storage_migration():
+    """Loaded by path: alembic never imports a migration as a module of a package."""
+    path = pathlib.Path(__file__).resolve().parents[1] / "alembic" / "versions" / f"{_STORAGE_MOVE}.py"
+    spec = importlib.util.spec_from_file_location("toon_storage_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# Moving something that is not on the volume stops at the check that names the
+# root it looked under, before it touches the database: that says which variable
+# the root came from, without a database.
+_A_MOVE = [(uuid.uuid4(), "group/site/version", "site/version")]
+
+
+async def test_the_storage_migration_prefers_the_new_name_of_the_content_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TOON_CONTENT_ROOT", str(tmp_path / "new"))
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(tmp_path / "old"))
+
+    with pytest.raises(RuntimeError, match=f"No version directory found under {tmp_path / 'new'}"):
+        _storage_migration()._move(_A_MOVE)
+
+
+async def test_the_storage_migration_reads_the_old_name_of_the_content_root_alone(tmp_path, monkeypatch) -> None:
+    """A deployment that has not moved yet has only this one when it reaches 0003."""
+    monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
+    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(tmp_path / "old"))
+
+    with pytest.raises(RuntimeError, match=f"No version directory found under {tmp_path / 'old'}"):
+        _storage_migration()._move(_A_MOVE)
+
+
+async def test_the_storage_migration_names_the_new_variable_without_a_content_root(monkeypatch) -> None:
+    monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
+    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
+
+    with pytest.raises(RuntimeError, match="TOON_CONTENT_ROOT is not set"):
+        _storage_migration()._move(_A_MOVE)
+
+
+async def test_the_storage_migration_needs_no_content_root_when_nothing_moves(monkeypatch) -> None:
+    monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
+    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
+
+    assert _storage_migration()._move([(uuid.uuid4(), "site/version", "site/version")]) is None
+
+
+def _offline_upgrade() -> str:
+    """alembic/env.py without a database: the first migration, as SQL."""
+    from alembic.config import Config
+
+    from alembic import command
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "alembic"
+    output = io.StringIO()
+    cfg = Config(output_buffer=output)
+    cfg.set_main_option("script_location", str(root))
+    cfg.set_main_option("version_locations", str(root / "versions"))
+    cfg.set_main_option("path_separator", "os")
+    command.upgrade(cfg, "0001_base", sql=True)
+    return output.getvalue()
+
+
+_A_DSN = "postgresql+asyncpg://user:password@db.invalid/app"
+
+
+async def test_the_migrations_read_the_old_database_url_alone(monkeypatch) -> None:
+    monkeypatch.delenv("TOON_DB_URL", raising=False)
+    monkeypatch.setenv("PLAK_DB_URL", _A_DSN)
+
+    assert "CREATE TABLE" in _offline_upgrade()
+
+
+async def test_the_migrations_prefer_the_new_database_url(monkeypatch) -> None:
+    monkeypatch.setenv("TOON_DB_URL", "nosuchdialect://only-the-new-name-says-this")
+    monkeypatch.setenv("PLAK_DB_URL", _A_DSN)
+
+    with pytest.raises(NoSuchModuleError, match="nosuchdialect"):
+        _offline_upgrade()
+
+
+async def test_the_migrations_refuse_under_neither_database_url(monkeypatch) -> None:
+    monkeypatch.delenv("TOON_DB_URL", raising=False)
+    monkeypatch.delenv("PLAK_DB_URL", raising=False)
+
+    with pytest.raises(RuntimeError, match="TOON_DB_URL"):
+        _offline_upgrade()
 
 
 async def test_dropping_storage_ref_goes_down_and_up_again(postgres_container) -> None:

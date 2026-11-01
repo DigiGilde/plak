@@ -24,7 +24,7 @@ from alembic.config import Config
 from alembic import command
 
 ALEMBIC_DIR = Path(__file__).resolve().parents[1] / "alembic"
-DB_URL_VAR = "PLAK_DB_URL"
+DB_URL_VAR = "TOON_DB_URL"
 DEV_COMPOSE = Path(__file__).resolve().parents[2] / "dev" / "compose.yml"
 
 

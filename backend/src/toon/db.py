@@ -1,4 +1,4 @@
-"""Async database engine and session factory built from PLAK_DB_URL."""
+"""Async database engine and session factory built from TOON_DB_URL."""
 
 from __future__ import annotations
 

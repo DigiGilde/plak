@@ -86,7 +86,7 @@ Three things to know:
   block of the project. If it says `requested`, the deployment falls back
   **silently** to `component-deployment-project` on the cluster address. There
   is no error message: the app runs, but on a different host than
-  `PLAK_BASE_URL` and `PLAK_CONTENT_BASE_URL` say, and then the host
+  `TOON_BASE_URL` and `TOON_CONTENT_BASE_URL` say, and then the host
   separation refuses everything.
 
 Request the subdomain through the portal or the API; a platform administrator
@@ -107,9 +107,9 @@ What is in it and why:
 |---|---|
 | `services: publish-on-web, postgresql-database, persistent-storage, keycloak` | the four services Plak needs |
 | component `beheer`, inbound 8080 | the app; one container, port 8080 as in the Containerfile |
-| `persistent-storage` `content` on `/content` | the content volume, `PLAK_CONTENT_ROOT` |
+| `persistent-storage` `content` on `/content` | the content volume, `TOON_CONTENT_ROOT` |
 | `probe: scheme: tcp` | `/-/healthz` exists on the admin host only and the probe arrives with the pod IP as Host; an HTTP probe would always fail |
-| `aliases` for `PLAK_DB_URL` | the DB service delivers separate variables, Plak wants a DSN |
+| `aliases` for `TOON_DB_URL` | the DB service delivers separate variables, Plak wants a DSN |
 | `backup: enabled: true` | content sits on a PVC, not in the database |
 
 Changes go in through the portal, `zadctl` or the API; the project file itself
@@ -129,9 +129,9 @@ delivered as a Secret through `envFrom` in the pod:
 
 ```bash
 zadctl env add -c beheer --deployment productie \
-  PLAK_SESSION_SECRET=... \
-  PLAK_AUDIT_PEPPER=... \
-  PLAK_AUDIT_IP_KEY=...
+  TOON_SESSION_SECRET=... \
+  TOON_AUDIT_PEPPER=... \
+  TOON_AUDIT_IP_KEY=...
 ```
 
 `zadctl env` writes user-env-vars, and those have two levels of their own.
@@ -142,68 +142,75 @@ over the component-wide value. That choice determines what a second
 deployment inherits, because a clone does not copy the deployment block of
 the component along with it (§8, "A second deployment").
 
-What Plak needs. `PLAK_DB_URL`, `PLAK_CONTENT_ROOT`, `PLAK_SESSION_SECRET`,
-`PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` have no default value and are
+The settings are `TOON_<NAME>` variables. The old `PLAK_<NAME>` names still
+work, each as a fallback when its `TOON_` name is not set, and at startup the
+app logs a warning that names every `PLAK_` variable still in use. A `TOON_`
+name set to an empty value counts as set, and wins over its `PLAK_` name. An
+existing deployment moves over as described under "Moving an existing deployment
+to the `TOON_` names" below.
+
+What Plak needs. `TOON_DB_URL`, `TOON_CONTENT_ROOT`, `TOON_SESSION_SECRET`,
+`TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` have no default value and are
 always there; the bottom four become mandatory as soon as
-`PLAK_ENVIRONMENT=productie`. If one is missing the app does not start and the
-error message names the variable. `PLAK_BOOTSTRAP_ADMIN_SUB` may technically
+`TOON_ENVIRONMENT=productie`. If one is missing the app does not start and the
+error message names the variable. `TOON_BOOTSTRAP_ADMIN_SUB` may technically
 stay empty, but then nobody is a platform administrator: every first visit
 immediately becomes an active but ordinary member, and there is nobody to make
 anybody an administrator.
 
 | Variable | Source | Notes |
 |---|---|---|
-| `PLAK_DB_URL` | alias on the DB service | `postgresql+asyncpg://...`; the app, alembic and the purge job all three use this one account |
-| `PLAK_CONTENT_ROOT` | env-vars | equal to the `mount-path` of the volume: `/content` |
-| `PLAK_SESSION_SECRET` | user-env-var | at least 32 bytes |
-| `PLAK_AUDIT_PEPPER` | user-env-var | at least 32 bytes (`openssl rand -hex 32`), different from `PLAK_SESSION_SECRET` and from every previous pepper. See below for rotating |
-| `PLAK_AUDIT_PEPPER_PREVIOUS` | user-env-var | optional, only after a rotation: the peppers `PLAK_AUDIT_PEPPER` replaced, comma-separated, newest first. Each at least 32 bytes and different from `PLAK_AUDIT_PEPPER`, `PLAK_SESSION_SECRET`, the IP keys and the other entries. See below |
-| `PLAK_AUDIT_IP_KEY` | user-env-var | base64 of 32 random bytes (`openssl rand -base64 32`), different from `PLAK_SESSION_SECRET`, the peppers and every key in `PLAK_AUDIT_IP_KEY_PREVIOUS`. See below for rotating |
-| `PLAK_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional, only after a rotation: the keys `PLAK_AUDIT_IP_KEY` replaced, comma-separated, newest first, each in the format of the key itself. A single key works. See below |
-| `PLAK_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |
-| `PLAK_ENVIRONMENT` | env-vars | `productie` |
-| `PLAK_BASE_URL` | env-vars | `https://beheer.plak.<domein>` |
-| `PLAK_CONTENT_BASE_URL` | env-vars | `https://plak.<domein>` |
-| `PLAK_BEHIND_PROXY` | env-vars | `true`: the HAProxy router stands in front of the pod |
-| `PLAK_OIDC_ISS_REQUIRED` | env-vars | `true` |
-| `PLAK_IDP_RECHECK_SECONDS` | env-vars | optional, default `900`; how often at most a session is checked again at Keycloak, `0` turns it off |
-| `PLAK_OIDC_RP_LOGOUT` | env-vars | `false` until `{PLAK_CONTENT_BASE_URL}/-/logout?from=beheer` is registered as post-logout redirect at the IdP |
-| `PLAK_AUDIT_LOOKUP_DAILY_LIMIT` | env-vars | optional, default 25, 1-1000; daily limit per platform administrator on resolving a pseudonym or IP address |
-| `PLAK_CI_FORGEJO_HOSTS` | env-vars | optional, comma-separated list of https base URLs, default `https://code.overheid.nl`; every Forgejo instance whose OIDC ID token from Actions is accepted for CI publishing |
-| `PLAK_OPERATOR_NAME` | env-vars | optional, empty by default: the organisation that runs this installation, as people should read it (`Digi Gilde`). The public privacy and accessibility pages and `GET /-/api/v1/operator` show it |
-| `PLAK_OPERATOR_EMAIL` | env-vars | optional, empty by default: where people reach that organisation about privacy, accessibility and questions (`digigilde@rijksoverheid.nl`). It is also the mail `Contact` in `security.txt`, after the GitHub advisory form, so security reports about this installation reach the operator. A plain address without a display name, or the app does not start |
-| `PLAK_SECURITY_TXT_NCSC` | env-vars | optional, default `false`. `true` lists the CVD routes of NCSC-NL in `security.txt`, the central reporting point for the Dutch central government. The Digi Gilde's installation sets `true`. Leave it off for an installation outside the central government |
-| `PLAK_STORE_COMPRESSED` | env-vars | optional, default `true`; a deploy keeps its text files compressed only (design.md §5.4a). `false` keeps new deploys as published and puts back, at every start, what earlier ones compressed: the step before rolling back to an image from before compression (§7) |
-| `PLAK_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
-| `PLAK_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
-| `PLAK_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
-| `PLAK_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy. ZAD runs with the default: the 10Gi volume leaves room for some nineteen sites at their maximum (§9) |
-| `PLAK_LIVE_VERSIONS_KEPT` | env-vars | optional, default `5`, `0` keeps everything; previous live versions the nightly cleanup keeps besides the current live one, for every site without a number of its own |
-| `PLAK_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
+| `TOON_DB_URL` | alias on the DB service | `postgresql+asyncpg://...`; the app, alembic and the purge job all three use this one account |
+| `TOON_CONTENT_ROOT` | env-vars | equal to the `mount-path` of the volume: `/content` |
+| `TOON_SESSION_SECRET` | user-env-var | at least 32 bytes |
+| `TOON_AUDIT_PEPPER` | user-env-var | at least 32 bytes (`openssl rand -hex 32`), different from `TOON_SESSION_SECRET` and from every previous pepper. See below for rotating |
+| `TOON_AUDIT_PEPPER_PREVIOUS` | user-env-var | optional, only after a rotation: the peppers `TOON_AUDIT_PEPPER` replaced, comma-separated, newest first. Each at least 32 bytes and different from `TOON_AUDIT_PEPPER`, `TOON_SESSION_SECRET`, the IP keys and the other entries. See below |
+| `TOON_AUDIT_IP_KEY` | user-env-var | base64 of 32 random bytes (`openssl rand -base64 32`), different from `TOON_SESSION_SECRET`, the peppers and every key in `TOON_AUDIT_IP_KEY_PREVIOUS`. See below for rotating |
+| `TOON_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional, only after a rotation: the keys `TOON_AUDIT_IP_KEY` replaced, comma-separated, newest first, each in the format of the key itself. A single key works. See below |
+| `TOON_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |
+| `TOON_ENVIRONMENT` | env-vars | `productie` |
+| `TOON_BASE_URL` | env-vars | `https://beheer.plak.<domein>` |
+| `TOON_CONTENT_BASE_URL` | env-vars | `https://plak.<domein>` |
+| `TOON_BEHIND_PROXY` | env-vars | `true`: the HAProxy router stands in front of the pod |
+| `TOON_OIDC_ISS_REQUIRED` | env-vars | `true` |
+| `TOON_IDP_RECHECK_SECONDS` | env-vars | optional, default `900`; how often at most a session is checked again at Keycloak, `0` turns it off |
+| `TOON_OIDC_RP_LOGOUT` | env-vars | `false` until `{TOON_CONTENT_BASE_URL}/-/logout?from=beheer` is registered as post-logout redirect at the IdP |
+| `TOON_AUDIT_LOOKUP_DAILY_LIMIT` | env-vars | optional, default 25, 1-1000; daily limit per platform administrator on resolving a pseudonym or IP address |
+| `TOON_CI_FORGEJO_HOSTS` | env-vars | optional, comma-separated list of https base URLs, default `https://code.overheid.nl`; every Forgejo instance whose OIDC ID token from Actions is accepted for CI publishing |
+| `TOON_OPERATOR_NAME` | env-vars | optional, empty by default: the organisation that runs this installation, as people should read it (`Digi Gilde`). The public privacy and accessibility pages and `GET /-/api/v1/operator` show it |
+| `TOON_OPERATOR_EMAIL` | env-vars | optional, empty by default: where people reach that organisation about privacy, accessibility and questions (`digigilde@rijksoverheid.nl`). It is also the mail `Contact` in `security.txt`, after the GitHub advisory form, so security reports about this installation reach the operator. A plain address without a display name, or the app does not start |
+| `TOON_SECURITY_TXT_NCSC` | env-vars | optional, default `false`. `true` lists the CVD routes of NCSC-NL in `security.txt`, the central reporting point for the Dutch central government. The Digi Gilde's installation sets `true`. Leave it off for an installation outside the central government |
+| `TOON_STORE_COMPRESSED` | env-vars | optional, default `true`; a deploy keeps its text files compressed only (design.md §5.4a). `false` keeps new deploys as published and puts back, at every start, what earlier ones compressed: the step before rolling back to an image from before compression (§7) |
+| `TOON_INGEST_MAX_BODY` | env-vars | optional, bytes, default `104857600` (100 MiB); the largest upload |
+| `TOON_INGEST_MAX_FILE` | env-vars | optional, bytes, default `52428800` (50 MiB); the largest single unpacked file |
+| `TOON_INGEST_MAX_TOTAL` | env-vars | optional, bytes, default `209715200` (200 MiB); the largest unpacked site per deploy |
+| `TOON_SITE_MAX_BYTES` | env-vars | optional, bytes, default `524288000` (500 MiB), `0` turns it off; what all versions of one site together may occupy. ZAD runs with the default: the 10Gi volume leaves room for some nineteen sites at their maximum (§9) |
+| `TOON_LIVE_VERSIONS_KEPT` | env-vars | optional, default `5`, `0` keeps everything; previous live versions the nightly cleanup keeps besides the current live one, for every site without a number of its own |
+| `TOON_STORAGE_MIN_FREE_BYTES` | env-vars | optional, bytes, default `104857600` (100 MiB), `0` turns it off; free space a deploy never takes the volume below |
 
 The last six defaults fit the 10Gi content volume (§9). While a deploy runs,
 its upload and what it unpacks sit on the volume side by side, so one deploy
-needs at most `PLAK_INGEST_MAX_BODY` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB)
+needs at most `TOON_INGEST_MAX_BODY` plus `TOON_INGEST_MAX_TOTAL` (300 MiB)
 on top of the stored versions. Plak measures the actual deploy, not that
 maximum: it checks the declared upload size before reading the body and keeps
 checking while it writes, refusing with `503` `STORAGE_UNAVAILABLE` rather than
-letting the volume drop below `PLAK_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
+letting the volume drop below `TOON_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
 one full-size deploy (400 MiB with the defaults) well below the volume size, or
 a large deploy can only ever be refused.
 
-Besides the host separation, `PLAK_BASE_URL` is also the exact CI audience: a
+Besides the host separation, `TOON_BASE_URL` is also the exact CI audience: a
 GitHub or Forgejo workflow requests its ID token with this value as
 `audience`, and Plak refuses a token whose `aud` is not literally equal to it
 (`ci/tokens.py`, no normalisation of a trailing `/`). Without
-`PLAK_BASE_URL` CI tokens are refused anyway. The pod needs outbound https to
+`TOON_BASE_URL` CI tokens are refused anyway. The pod needs outbound https to
 `token.actions.githubusercontent.com` (JWKS for GitHub tokens),
 `api.github.com` (looking up repositories when linking) and every host in
-`PLAK_CI_FORGEJO_HOSTS` (JWKS and repository lookup for Forgejo); without
+`TOON_CI_FORGEJO_HOSTS` (JWKS and repository lookup for Forgejo); without
 those outbound connections linking does not work and CI deploys are refused
 with `CI_PROVIDER_UNREACHABLE`.
 
-Rotating `PLAK_AUDIT_PEPPER` or `PLAK_AUDIT_IP_KEY`: put the current value at
-the front of `PLAK_AUDIT_PEPPER_PREVIOUS` or `PLAK_AUDIT_IP_KEY_PREVIOUS`, set
+Rotating `TOON_AUDIT_PEPPER` or `TOON_AUDIT_IP_KEY`: put the current value at
+the front of `TOON_AUDIT_PEPPER_PREVIOUS` or `TOON_AUDIT_IP_KEY_PREVIOUS`, set
 the new value as the current one, and deploy. New audit records use the new
 value. Older ones stay traceable (pseudonyms) and revealable (IP addresses) as
 long as the value they were written under is in its list. Only remove an entry
@@ -220,36 +227,74 @@ secrets themselves, and each call rolls out at once unless you pass
 bites either way. The list first fails, because the app refuses to start when
 a previous value equals the current one. The new value first leaves the older
 rows out of reach until the list follows.
+A deployment that has not moved to the `TOON_` names yet rotates under its
+`PLAK_` names, or moves first: a `TOON_` list replaces the `PLAK_` one, and
+`zadctl env set` fails on a name that layer does not have yet.
 The steps, the check on the startup log, what rotation does not repair and
 what removing an entry too early costs are in `docs/audit-log.md` ("Rotating
 the pepper and the IP key").
 
-`PLAK_BASE_URL` and `PLAK_CONTENT_BASE_URL` are not cosmetic. The app derives
+`TOON_BASE_URL` and `TOON_CONTENT_BASE_URL` are not cosmetic. The app derives
 the host separation from them (which path exists on which host), the HSTS
 decision, and every shareable URL the SPA shows. If they differ from what the
 ingress serves, everybody gets a neutral 404.
 
+### Moving an existing deployment to the `TOON_` names
+
+A deployment that still has `PLAK_` variables keeps running, and the warning at
+startup names the ones the app still reads. Move over one kind of variable at a
+time:
+
+- **Non-secret variables.** Set each one again under its `TOON_` name with the
+  same value, the alias for the database URL included, and let the app restart.
+  Then remove the `PLAK_` ones.
+- **The session secret.** Give `TOON_SESSION_SECRET` a new value, and remove
+  `PLAK_SESSION_SECRET` once the app has restarted on it. Everyone signs in
+  again, as after every restart, and visitors with a secret-link cookie open
+  their link again, because the cookie is signed with this secret
+  (`docs/security.md`).
+- **The OIDC secrets.** `PLAK_OIDC_CLIENT_SECRET` and
+  `PLAK_OIDC_CLIENT_PRIVATE_JWK`, if you set them yourself, move the same way
+  with the same value.
+- **The `_PREVIOUS` lists.** After a rotation they move whole. A `TOON_` list
+  replaces the `PLAK_` one, and the two are not merged.
+- **The two audit secrets.** Set `TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` to
+  exactly the values of their `PLAK_` names, and keep them in a password vault.
+  `zadctl` does not return a value, but the ZAD portal can show it. After the
+  restart, read the startup log first: a warning that says a `PLAK_` audit
+  variable holds a value that is neither current nor previous means the two
+  names differ. Then check that `actor-identity` still finds an older row and
+  that an older IP address can still be revealed, and only then remove the
+  `PLAK_` names. A different value here is a rotation, and then the old value
+  has to go into the matching `_PREVIOUS` list (`docs/audit-log.md`, "Rotating
+  the pepper and the IP key"). Without that, older rows are out of reach.
+
+Removing the `PLAK_` names also ends the way back past this release: an older
+image reads only those names, and without them its entrypoint stops with
+`database unreachable after 30 attempts`, whatever the database is doing. Put
+them back before you switch to such an image (§7).
+
 ### OIDC
 
 The `keycloak` service injects `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID` and
-`OIDC_CLIENT_SECRET` (without the `PLAK_` prefix). Plak reads those as the
-source for `PLAK_OIDC_ISSUER`, `PLAK_OIDC_CLIENT_ID` and
-`PLAK_OIDC_CLIENT_SECRET`, so you do not have to set those three yourself.
+`OIDC_CLIENT_SECRET` (without the `TOON_` prefix). Plak reads those as the
+source for `TOON_OIDC_ISSUER`, `TOON_OIDC_CLIENT_ID` and
+`TOON_OIDC_CLIENT_SECRET`, so you do not have to set those three yourself.
 What you do have to set:
 
-- `PLAK_OIDC_CLIENT_AUTH=client_secret_post`. The ZAD Keycloak creates a
+- `TOON_OIDC_CLIENT_AUTH=client_secret_post`. The ZAD Keycloak creates a
   client-secret client; `private_key_jwt` cannot be set through self-service
   (see §10).
-- `PLAK_OIDC_REQUIRED_ACR=` (empty). The ZAD Keycloak advertises only the acr
+- `TOON_OIDC_REQUIRED_ACR=` (empty). The ZAD Keycloak advertises only the acr
   values `0` and `1`, so an eIDAS LoA requirement shuts everybody out. At
   startup the app logs explicitly that there is no acr check.
 
 ### Revalidation at the IdP
 
-With `PLAK_IDP_RECHECK_SECONDS` (default 900) Plak redeems the refresh token
+With `TOON_IDP_RECHECK_SECONDS` (default 900) Plak redeems the refresh token
 of the session at the token endpoint of Keycloak on the first request after
 that interval, with the same client authentication as the login
-(`PLAK_OIDC_CLIENT_AUTH`). If Keycloak refuses with `invalid_grant`, the
+(`TOON_OIDC_CLIENT_AUTH`). If Keycloak refuses with `invalid_grant`, the
 session has been ended there (blocked, deleted, logged out) and the Plak
 session lapses immediately. For that the pod needs outbound https to the
 Keycloak service, which already applied for the login anyway.
@@ -293,14 +338,14 @@ names only the checks that complain, never a message or a number:
 | `{"status": "fail", "checks": ["database"]}` | 503 | the database does not answer within two seconds (`SELECT 1`); degraded checks may be listed next to `database` |
 
 `storage` appears as soon as the free space drops below
-`PLAK_STORAGE_MIN_FREE_BYTES` plus `PLAK_INGEST_MAX_TOTAL` (300 MiB with the
+`TOON_STORAGE_MIN_FREE_BYTES` plus `TOON_INGEST_MAX_TOTAL` (300 MiB with the
 defaults): the point where a deploy of the maximum size would be refused. With
-`PLAK_STORAGE_MIN_FREE_BYTES=0` the check is off and the check never appears.
+`TOON_STORAGE_MIN_FREE_BYTES=0` the check is off and the check never appears.
 
 `content_root` is decided once, at startup, and only with
-`PLAK_ENVIRONMENT=productie`: the content root is on the same device as its
+`TOON_ENVIRONMENT=productie`: the content root is on the same device as its
 parent, so no volume is mounted there. Plak creates the directory itself, so a
-wrong `PLAK_CONTENT_ROOT` would otherwise write into the container's own layer
+wrong `TOON_CONTENT_ROOT` would otherwise write into the container's own layer
 and lose everything at the next restart. This is a warning, the pod starts
 anyway, and only a restart with the right mount clears it.
 
@@ -326,7 +371,7 @@ nothing and writes an ERROR line instead (`Left ... directories without a
 row in place, the database and the content volume disagree: ...`): a site
 whose version rows match none of its directories, or more versions without a
 row than with one. That is the line to alarm on after restoring a database
-backup or changing `PLAK_DB_URL`.
+backup or changing `TOON_DB_URL`.
 
 A platform administrator sees the whole volume in the admin SPA, on
 "Platformbeheer" (`/-/platform`), below the member list: size, used, free and
@@ -393,7 +438,7 @@ Settings):
 
 Without this configuration the rest works fine: the endpoint then only exists
 and is never called, and the periodic revalidation stays the boundary (at
-most `PLAK_IDP_RECHECK_SECONDS`, see `docs/security.md`).
+most `TOON_IDP_RECHECK_SECONDS`, see `docs/security.md`).
 
 Test it: log in, sign the session out from Users -> Sessions in the Keycloak
 console, and refresh. You should land on the login page at once rather than
@@ -426,7 +471,7 @@ task, and `zadctl` has no `job` command. There are three real routes:
 Route 1 is the most honest for the first rollout (you see the output), route 2
 is the route as soon as there are regular migrations. Pick one and write it
 down. A migration that moves version directories (`0003_storage_by_site_id`)
-needs the content volume and `PLAK_CONTENT_ROOT`, which only the app's own pod
+needs the content volume and `TOON_CONTENT_ROOT`, which only the app's own pod
 has: it refuses to run without them, so take route 2 for it. Should it stop
 halfway, let the pod start again rather than rolling back. Once `0003` has
 run there is no previous image to roll back to: the entrypoint runs
@@ -448,25 +493,32 @@ before `0004` and leaves the column in place, which the older code ignores.
 An image from before compression (design.md §5.4a) cannot serve a file that a
 newer one keeps compressed only: it looks at the file's own path, finds
 nothing and answers 404. Before rolling back past it, set
-`PLAK_STORE_COMPRESSED=false` and let the pod start once with the current
+`TOON_STORE_COMPRESSED=false` and let the pod start once with the current
 image. Its entrypoint puts every such file back at its own path, and new
 deploys stay as published from then on. Wait for the log line `Put N files
 back at their own path; no version keeps a file compressed only.` before
 switching the image. An ERROR instead says why not: not enough room above
-`PLAK_STORAGE_MIN_FREE_BYTES` (the files take their full size again), or the
+`TOON_STORAGE_MIN_FREE_BYTES` (the files take their full size again), or the
 files whose copy is damaged. Rolling back before that line breaks every site
 deployed since compression.
 
+An image from before the `TOON_` names reads only the `PLAK_` variables, so
+keep those set for as long as you may want to roll back past it. It also
+cannot read what newer images wrote. An IP address encrypted under version
+`0x03` cannot be revealed (404 `AUDIT_IP_UNKNOWN`), and `--against` refuses a
+chain head in the `toon-audit-chain-checkpoint/3` format. Both work again after
+rolling forward, and nothing is lost.
+
 Plak runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the
-purge job therefore all three use `PLAK_DB_URL`. Local runs the same way, so
+purge job therefore all three use `TOON_DB_URL`. Local runs the same way, so
 that dev and production give the same picture.
 
 The retention period of the audit log stays in place, because the triggers
 from `0001_base` enforce it (`docs/audit-log.md`). What is missing is the layer
 underneath: that one account is also the owner of the table and can turn off
 the triggers, rewrite the functions or `TRUNCATE` the table. Schedule the
-purging as a scheduled task that runs `python -m plak.audit.retention`, daily
+purging as a scheduled task that runs `python -m toon.audit.retention`, daily
 for instance.
 
 Whoever wants the separation back needs the separate service
@@ -486,7 +538,7 @@ Production follows release tags only. A push to `beta` builds, scans and
 attests its image and deploys nowhere. A tag
 `vYYYY.M.D` (or `vYYYY.M.D.N` for a second release that day) rolls out to
 `productie` as the image tagged `YYYY.M.D`, its only tag, with that version
-baked in as `PLAK_VERSION`. The release workflow sets the tag
+baked in as `TOON_VERSION`. The release workflow sets the tag
 (`docs/releasing.md`); the tag rulesets let nobody else.
 
 Before rolling out, the `production` job refuses the tag, and goes red, when it
@@ -525,9 +577,9 @@ costs an approval:
   deployment is nothing; one per pull request is not a thing to build on.
 
 And a clone carries no deployment-level variables at all, only the
-component-wide ones, so `PLAK_CONTENT_BASE_URL` and `PLAK_BASE_URL` were
+component-wide ones, so `TOON_CONTENT_BASE_URL` and `TOON_BASE_URL` were
 missing and the pod refused to start:
-`ConfigurationError: PLAK_CONTENT_BASE_URL: Field required`.
+`ConfigurationError: TOON_CONTENT_BASE_URL: Field required`.
 
 One thing to know when judging this yourself: a sleeping preview reports
 `Healthy` and answers 200. That is `zad-waker`, the sleep-mode page the
@@ -549,21 +601,21 @@ used is in the history of `deploy.yml`, before `aecdb30`.
   `base-domain`, `domain-format`, `issuer` and `backup`; the new deployment
   gets only the `{reference, image}` pairs from the API call. Everything
   under `deployments[].components[]` falls away, and without
-  `PLAK_CONTENT_ROOT`, `PLAK_SESSION_SECRET` and `PLAK_AUDIT_PEPPER` the pod
+  `TOON_CONTENT_ROOT`, `TOON_SESSION_SECRET` and `TOON_AUDIT_PEPPER` the pod
   does not start. What may be the same everywhere goes component-wide
-  (`zadctl env add -c beheer`, without `--deployment`); `PLAK_BASE_URL` and
-  `PLAK_CONTENT_BASE_URL` differ per deployment.
+  (`zadctl env add -c beheer`, without `--deployment`); `TOON_BASE_URL` and
+  `TOON_CONTENT_BASE_URL` differ per deployment.
 - **The three secrets are never shared.** A deployment that inherits
-  `PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER` and `PLAK_AUDIT_IP_KEY` from
+  `TOON_SESSION_SECRET`, `TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` from
   production lets whatever code runs there mint session cookies production
   accepts and decrypt production's audited IP addresses. The same holds for
-  `PLAK_AUDIT_PEPPER_PREVIOUS` and `PLAK_AUDIT_IP_KEY_PREVIOUS`. Write its own at
+  `TOON_AUDIT_PEPPER_PREVIOUS` and `TOON_AUDIT_IP_KEY_PREVIOUS`. Write its own at
   the deployment layer (§5) before the first rollout:
   `:upsert-deployment?rollout=false` puts the deployment in the project file
   without a pod, and the values endpoint answers 404 until it is there.
 - **The database is per deployment.** The platform composes
   `{project}_{deployment}` and provisions a user and password for each
-  (`opi/utils/naming.py` in `RijksICTGilde/RIG-Cluster`), and `PLAK_DB_URL`
+  (`opi/utils/naming.py` in `RijksICTGilde/RIG-Cluster`), and `TOON_DB_URL`
   is an alias over those per-deployment variables (§4). Still a question for
   the platform team: whether the shared database server keeps one
   deployment's account out of another's database at the PostgreSQL level.
@@ -582,19 +634,19 @@ fixed hard at 1, and as soon as a component has a persistent volume the
 platform switches the rollout strategy to `Recreate` itself (so a short
 interruption on every deploy).
 
-Of those 10240 MiB, the reserve (`PLAK_STORAGE_MIN_FREE_BYTES`, 100 MiB) and one
+Of those 10240 MiB, the reserve (`TOON_STORAGE_MIN_FREE_BYTES`, 100 MiB) and one
 deploy of the maximum size in flight (200 MiB unpacked) are never available to
 stored versions, so roughly 9.7 GiB is left for all sites together, previews
 included (about 9.6 GiB while the upload of such a deploy sits next to what it
 unpacks). At the default site quota that is some nineteen sites at their
 maximum.
 
-What one site can hold is bounded twice. `PLAK_SITE_MAX_BYTES` (500 MiB by
+What one site can hold is bounded twice. `TOON_SITE_MAX_BYTES` (500 MiB by
 default, also on ZAD) caps all its versions together, as stored: text files
 count compressed (design.md §5.4a). Every night at 03:00 UTC the
 cleanup job removes the live versions beyond the current one and the ones
 before it that the site keeps, row and files, with a `version_cleanup` row in
-the audit log. That number is `PLAK_LIVE_VERSIONS_KEPT` (5) for every site,
+the audit log. That number is `TOON_LIVE_VERSIONS_KEPT` (5) for every site,
 unless a site admin set one of its own on the site's Versions tab (`0` keeps
 everything for that site). The current live version always stays,
 also after a rollback to an older one. Previews are not counted in that
@@ -604,7 +656,7 @@ previews, where without the cleanup it would reach the quota after some 38
 deploys and then be refused until someone intervened. Size the volume for the
 number of sites times that settled size, plus the floor and one full deploy
 (§5), and keep an eye on sites with a larger number of their own. Setting
-`PLAK_LIVE_VERSIONS_KEPT=0` keeps every live version of the sites without
+`TOON_LIVE_VERSIONS_KEPT=0` keeps every live version of the sites without
 their own number, and then the quota is their only bound.
 
 The candidate sites are 1 to 13 MB now, but every kept version and every
@@ -650,7 +702,7 @@ is not there:
    2026-09-30 against `plak.rijks.app`: a plain request was recorded under the
    real address, one carrying `X-Forwarded-For: 203.0.113.99` under that
    invented one, because the derivation read the header with `headers.get`,
-   which returns the first line only. `PLAK_BEHIND_PROXY` replaced the
+   which returns the first line only. `TOON_BEHIND_PROXY` replaced the
    CIDR list: which entry to read is known, the router's range is not and
    cannot be had, because the router pods sit on the cluster pod network.
 5. **What does the router log at the edge, and can a tenant request that?**
@@ -666,18 +718,18 @@ is not there:
 
 Plak holds three things, and each one can be taken off ZAD:
 
-- **The image.** An OCI image, built from `containers/plak/Containerfile` and
+- **The image.** An OCI image, built from `containers/toon/Containerfile` and
   published to GHCR, attested and with an SBOM (`docs/security.md`, "Supply
   chain"). Any container platform can run it: nothing in it is specific to ZAD.
 - **The database.** A PostgreSQL 16 database, `pg_dump` and `pg_restore` move
   it. The app runs the migrations itself at start (§7), so an empty database
   gets the current schema.
-- **The content.** The files on the content volume (`PLAK_CONTENT_ROOT`), a
+- **The content.** The files on the content volume (`TOON_CONTENT_ROOT`), a
   plain directory tree: copy it, keeping the layout, to the new volume.
 
-What ties them together is the environment contract of §5: the `PLAK_*`
-variables, the secrets (`PLAK_SESSION_SECRET`, `PLAK_AUDIT_PEPPER`,
-`PLAK_AUDIT_IP_KEY`, the OIDC client) and one OIDC provider with the two
+What ties them together is the environment contract of §5: the `TOON_*`
+variables, the secrets (`TOON_SESSION_SECRET`, `TOON_AUDIT_PEPPER`,
+`TOON_AUDIT_IP_KEY`, the OIDC client) and one OIDC provider with the two
 redirect URIs of §6. Carry the pepper and the IP key over unchanged, with
 their `_PREVIOUS` lists if there are any, or the pseudonyms in the audit log
 stop matching and the encrypted IP addresses can no longer be read.
