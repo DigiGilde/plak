@@ -7,7 +7,7 @@
  */
 import { nextTick, ref, watch } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { errorText } from '@/api/client';
 import type { Me, Site } from '@/api/types';
 import AddressSection from '@/components/AddressSection.vue';
@@ -51,7 +51,7 @@ const TITLE_REFUSALS = new Map<string, MessageKey>([
 const title = useAutosavedText({
   saved: savedTitle,
   target: () => ({ group: props.group, site: props.site }),
-  save: async ({ group, site }, text) => (await plak.setSiteTitle(group, site, text)).title,
+  save: async ({ group, site }, text) => (await toon.setSiteTitle(group, site, text)).title,
   // The cap of the API (TEXT_MAX_LENGTH in api/admin.py).
   maxLength: 200,
   required: 'site.settings.title.required',
@@ -147,7 +147,7 @@ function onRenamed(updated: Site): void {
 
 async function deleteSite(): Promise<void> {
   try {
-    await plak.deleteSite(props.group, props.site);
+    await toon.deleteSite(props.group, props.site);
     emit('removed');
   } catch (f) {
     notices.value?.notify(

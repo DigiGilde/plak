@@ -27,7 +27,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 SCRIPTS = ROOT / "scripts"
 ACTIONS = ROOT / ".github" / "actions"
 LOCAL_TRIVY = "./.github/actions/trivy"
-RELEASE_COMMANDS = SCRIPTS / "plak_release" / "commands.py"
+RELEASE_COMMANDS = SCRIPTS / "toon_release" / "commands.py"
 # The parts the backend suite runs in; read from the backend's file so the
 # matrix here is held to the same list, without importing from backend/.
 PARTS_FILE = ROOT / "backend" / "tests" / "parts.py"
@@ -400,7 +400,7 @@ class TestTheScans:
         skipping = {s["name"]: s["with"]["skip-dirs"] for s in steps if "skip-dirs" in s.get("with", {})}
 
         assert skipping == {"Scan the runtime base image (trivy)": "usr/local/lib/python3.*/site-packages/pip"}
-        runtime = (ROOT / "containers" / "plak" / "Containerfile").read_text().split(" AS runtime", 1)[1]
+        runtime = (ROOT / "containers" / "toon" / "Containerfile").read_text().split(" AS runtime", 1)[1]
         assert "RUN python -m pip uninstall --yes --quiet pip" in runtime
 
     def test_every_third_party_action_is_pinned_to_a_sha(self) -> None:
@@ -812,7 +812,7 @@ class TestTheReleaseGuards:
         scripts.mkdir(exist_ok=True)
         shutil.copy(SCRIPTS / "release.py", scripts / "release.py")
         caches = shutil.ignore_patterns("__pycache__")
-        shutil.copytree(SCRIPTS / "plak_release", scripts / "plak_release", ignore=caches, dirs_exist_ok=True)
+        shutil.copytree(SCRIPTS / "toon_release", scripts / "toon_release", ignore=caches, dirs_exist_ok=True)
         (work / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
         for name in ("cli/pyproject.toml", "plugin/.claude-plugin/plugin.json"):
             (work / name).parent.mkdir(parents=True, exist_ok=True)
@@ -843,7 +843,7 @@ class TestTheReleaseGuards:
 
 class TestTheReleaseImage:
     """A release tag gets its version as its only image tag and as
-    PLAK_VERSION in the image; any other push builds the commit tag."""
+    TOON_VERSION in the image; any other push builds the commit tag."""
 
     @pytest.fixture
     def build(self, deploy) -> dict:
@@ -851,7 +851,7 @@ class TestTheReleaseImage:
 
     def test_only_a_tag_push_sets_a_version(self, build) -> None:
         """The step is skipped on every other event, so its outputs are empty
-        and the build gets no build-arg (PLAK_VERSION stays `dev`) and only
+        and the build gets no build-arg (TOON_VERSION stays `dev`) and only
         the commit tag."""
         release = _step(build, "Determine the release version")
         assert release["if"] == (
@@ -865,7 +865,7 @@ class TestTheReleaseImage:
 
     def test_everything_after_the_push_follows_the_one_image_it_pushed(self, build, deploy) -> None:
         """The release commit is a push to beta as well as a tag. Both builds
-        once pushed the commit tag, the beta one without PLAK_VERSION, and
+        once pushed the commit tag, the beta one without TOON_VERSION, and
         production rolled out whichever finished last: v2026.10.4 and
         v2026.10.7 ran as `dev`, not as the image their release named. A
         release now pushes its version tag alone, and the scans, the SBOM,
@@ -895,7 +895,7 @@ class TestTheReleaseImage:
         )
         assert result.returncode == 0, result.stdout
         assert output.read_text().splitlines() == [
-            "build-args=PLAK_VERSION=2026.10.1",
+            "build-args=TOON_VERSION=2026.10.1",
             "image=ghcr.io/digigilde/plak:2026.10.1",
         ]
 
@@ -1113,7 +1113,7 @@ class TestTheApiContractCheck:
         order = [names.index(n) for n in ("Install oasdiff", "Print the API schema", "Check the API contract")]
         assert order == sorted(order)
         assert printing["working-directory"] == "backend"
-        assert printing["run"] == 'uv run python -m plak.api.openapi_file > "$RUNNER_TEMP/openapi.json"'
+        assert printing["run"] == 'uv run python -m toon.api.openapi_file > "$RUNNER_TEMP/openapi.json"'
         assert 'api-check --spec "$RUNNER_TEMP/openapi.json" --oasdiff "$OASDIFF"' in checking["run"]
         assert checking["env"]["OASDIFF"] == "${{ steps.oasdiff.outputs.path }}"
         assert steps[names.index("Install oasdiff")]["id"] == "oasdiff"

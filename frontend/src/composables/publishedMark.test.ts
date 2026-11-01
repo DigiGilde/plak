@@ -45,10 +45,10 @@ describe('publishedMark', () => {
     await router.push('/');
     await goToDone(router, 'team-aurora', 'website');
 
-    expect(window.history.state.plakJustPublished).toBe(true);
+    expect(window.history.state.toonJustPublished).toBe(true);
     expect(takePublishedMark(router)).toBe(true);
     expect(window.location.pathname).toBe('/team-aurora/website/done');
-    expect(window.history.state.plakJustPublished).toBe(false);
+    expect(window.history.state.toonJustPublished).toBe(false);
 
     // A reload builds a new router on the same history entry.
     const reloaded = makeRouter(createWebHistory());

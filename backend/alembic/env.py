@@ -23,7 +23,7 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from plak.models import Base  # noqa: E402
+from toon.models import Base  # noqa: E402
 
 config = context.config
 

@@ -34,7 +34,7 @@ from typing import Any
 import pytest
 import yaml
 
-from plak.config import normalise_operator_email
+from toon.config import normalise_operator_email
 
 PROJECT_FILE = Path(__file__).resolve().parents[2] / "deploy" / "plak-project.example.yaml"
 PROJECT: dict[str, Any] = yaml.safe_load(PROJECT_FILE.read_text(encoding="utf-8"))

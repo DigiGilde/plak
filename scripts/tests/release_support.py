@@ -10,7 +10,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from plak_release import changelog, commands, git, notes, versions
+from toon_release import changelog, commands, git, notes, versions
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "release.py"
@@ -51,17 +51,17 @@ PLUGIN = (
     '  "author": {\n    "name": "Plak team"\n  },\n  "keywords": ["plak"]\n}\n'
 )
 PUBLICCODE = 'name: Plak\n\nsoftwareVersion: "0.0.0"\nreleaseDate: "2026-07-18"\n\nlegal:\n  license: EUPL-1.2\n'
-BACKEND_PYPROJECT = '[project]\nname = "plak-api"\nversion = "0.1.0"\n\n[build-system]\nrequires = ["hatchling"]\n'
+BACKEND_PYPROJECT = '[project]\nname = "toon-api"\nversion = "0.1.0"\n\n[build-system]\nrequires = ["hatchling"]\n'
 BACKEND_LOCK = (
     "version = 1\n\n"
-    '[[package]]\nname = "plak-api"\nversion = "0.1.0"\nsource = { editable = "." }\n\n'
+    '[[package]]\nname = "toon-api"\nversion = "0.1.0"\nsource = { editable = "." }\n\n'
     '[[package]]\nname = "plak"\nversion = "9.9.9"\nsource = { editable = "." }\n'
 )
 MAIN = 'import x\n\nAPI_VERSION = "1.0.0"\n\napp = 1\n'
 
 
 def spec_with(version: str = "1.0.0", paths: tuple[str, ...] = ("/a",), description: str = "") -> str:
-    """An API schema as plak.api.openapi_file prints it, kept small."""
+    """An API schema as toon.api.openapi_file prints it, kept small."""
     info = {"title": "Plak API", "version": version, "description": description}
     return json.dumps({"openapi": "3.1.0", "info": info, "paths": {path: {} for path in paths}}, indent=2) + "\n"
 
@@ -73,10 +73,10 @@ def NO_CHANGES(base: str, head: str) -> list:  # noqa: N802 - reads as the const
     return []
 
 
-PACKAGE = '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "private": true\n}\n'
+PACKAGE = '{\n  "name": "toon-frontend",\n  "version": "0.1.0",\n  "private": true\n}\n'
 PACKAGE_LOCK = (
-    '{\n  "name": "plak-frontend",\n  "version": "0.1.0",\n  "lockfileVersion": 3,\n  "packages": {\n'
-    '    "": {\n      "name": "plak-frontend",\n      "version": "0.1.0",\n'
+    '{\n  "name": "toon-frontend",\n  "version": "0.1.0",\n  "lockfileVersion": 3,\n  "packages": {\n'
+    '    "": {\n      "name": "toon-frontend",\n      "version": "0.1.0",\n'
     '      "dependencies": {\n        "vue": "^3.5.0"\n      }\n    },\n'
     '    "node_modules/vue": {\n      "version": "3.5.13"\n    }\n  }\n}\n'
 )
@@ -156,7 +156,7 @@ def _image_versions(repo: Repo) -> set[str]:
     package_lock = json.loads(repo.read("frontend/package-lock.json"))
     return {
         versions.pyproject_version(repo.read("backend/pyproject.toml"), "backend/pyproject.toml"),
-        lock.split('name = "plak-api"\nversion = "')[1].split('"')[0],
+        lock.split('name = "toon-api"\nversion = "')[1].split('"')[0],
         json.loads(repo.read("frontend/package.json"))["version"],
         package_lock["version"],
         package_lock["packages"][""]["version"],

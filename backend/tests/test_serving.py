@@ -29,23 +29,23 @@ from helpers_oidc import set_content_session_cookie, set_session_cookie
 from sqlalchemy import delete, event, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from plak.access import gate, keys
-from plak.access.decision import allow
-from plak.audit.log import AuditLog
-from plak.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
-from plak.config import Settings
-from plak.constants import ENCODED_SEGMENT, HEAD_SCOPE_KEY, AccessBase, AccessPolicy, Role
-from plak.head_requests import ContentHeadMiddleware
-from plak.ingest import precompress
-from plak.ingest.store import ContentStore, version_ref
-from plak.models.audit import AuditLogEntry
-from plak.models.identity import Group, GroupMember, Member, MemberStatus
-from plak.models.publication import Preview, Site, Version, VersionTarget
-from plak.models.slugs import GroupSlug, SiteSlug
-from plak.serving import addresses
-from plak.serving.response import PLATFORM_CSP, _ContentFileResponse, _GunzipResponse
-from plak.serving.router import router as serving_router
-from plak.slug_window import redirect_ends_at
+from toon.access import gate, keys
+from toon.access.decision import allow
+from toon.audit.log import AuditLog
+from toon.auth.sessions import CONTENT_SESSION_COOKIE, KEY_COOKIE, SessionStore, check_signature, sign, sign_key_cookie
+from toon.config import Settings
+from toon.constants import ENCODED_SEGMENT, HEAD_SCOPE_KEY, AccessBase, AccessPolicy, Role
+from toon.head_requests import ContentHeadMiddleware
+from toon.ingest import precompress
+from toon.ingest.store import ContentStore, version_ref
+from toon.models.audit import AuditLogEntry
+from toon.models.identity import Group, GroupMember, Member, MemberStatus
+from toon.models.publication import Preview, Site, Version, VersionTarget
+from toon.models.slugs import GroupSlug, SiteSlug
+from toon.serving import addresses
+from toon.serving.response import PLATFORM_CSP, _ContentFileResponse, _GunzipResponse
+from toon.serving.router import router as serving_router
+from toon.slug_window import redirect_ends_at
 
 BASE_URL = "https://plak.example"
 

@@ -1,10 +1,10 @@
-"""The What's new notes (plak_release.notes)."""
+"""The What's new notes (toon_release.notes)."""
 
 from __future__ import annotations
 
 import pytest
 
-from plak_release.notes import NOTES_DIR, note_problems
+from toon_release.notes import NOTES_DIR, note_problems
 
 
 class TestNotes:

@@ -1,4 +1,4 @@
-"""Tests for client IP derivation in front of a proxy (`plak.net`).
+"""Tests for client IP derivation in front of a proxy (`toon.net`).
 
 The rate limiter exercises the same code through the middleware
 (`test_ratelimit.py`); here the derivation itself is under test, including the
@@ -17,8 +17,8 @@ from __future__ import annotations
 import pytest
 from starlette.requests import Request
 
-from plak.audit.pseudonymisation import truncate_ip
-from plak.net import UNKNOWN, client_ip, client_ip_from_request, rate_limit_key
+from toon.audit.pseudonymisation import truncate_ip
+from toon.net import UNKNOWN, client_ip, client_ip_from_request, rate_limit_key
 
 
 def _request(peer: str | None, *xff_lines: str) -> Request:

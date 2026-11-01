@@ -7,7 +7,7 @@ default:
 # Run the backend locally with uvicorn (reload on, no access log: it would
 # log secret links with ?key= in plain text)
 dev:
-    cd backend && uv run uvicorn plak.main:create_app --factory --reload --no-access-log
+    cd backend && uv run uvicorn toon.main:create_app --factory --reload --no-access-log
 
 # Fill the running dev stack with sample content: wipes groups and members and seeds them again (dev/seed.py)
 seed:
@@ -30,7 +30,7 @@ coverage:
     #!/usr/bin/env bash
     set -euo pipefail
     export DOCKER_HOST="$("{{justfile_directory()}}/dev/podman-socket.sh")"
-    cd backend && uv run python -m pytest -n 4 --cov=src/plak --cov-report=term-missing:skip-covered
+    cd backend && uv run python -m pytest -n 4 --cov=src/toon --cov-report=term-missing:skip-covered
     # The CI tooling under scripts/ is a uv project of its own; its floor is in scripts/pyproject.toml.
     cd "{{justfile_directory()}}/scripts" && uv run coverage run -m pytest -q && uv run coverage report
     cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
@@ -43,21 +43,21 @@ lint:
     # backend/pyproject.toml; --project only picks the pinned ruff.
     uv run --project backend ruff check cli/plak_cli cli/tests
 
-# Purge expired audit entries; needs PLAK_DB_URL
+# Purge expired audit entries; needs TOON_DB_URL
 purge-audit-log:
-    cd backend && uv run python -m plak.audit.retention
+    cd backend && uv run python -m toon.audit.retention
 
-# Verify the integrity chain of the audit log; needs PLAK_DB_URL
+# Verify the integrity chain of the audit log; needs TOON_DB_URL
 verify-audit-log:
-    cd backend && uv run python -m plak.audit.chain
+    cd backend && uv run python -m toon.audit.chain
 
-# Publish the head of each audit chain as a log line; needs PLAK_DB_URL
+# Publish the head of each audit chain as a log line; needs TOON_DB_URL
 publish-audit-head:
-    cd backend && uv run python -m plak.audit.checkpoint
+    cd backend && uv run python -m toon.audit.checkpoint
 
 # Check the database against a previously published head line (- for stdin)
 verify-audit-head bestand:
-    cd backend && uv run python -m plak.audit.checkpoint --against {{bestand}}
+    cd backend && uv run python -m toon.audit.checkpoint --against {{bestand}}
 
 # Scan the dependencies like the CI job `vulnerabilities` does
 scan:
@@ -65,8 +65,8 @@ scan:
     # Same ignore list as the CI (.trivyignore.yaml). The image scan is not
     # part of this: that runs with trivy on the built image, in deploy.yml.
     set -euo pipefail
-    requirements="$(mktemp -t plak-requirements)"
-    report="$(mktemp -t plak-npm-audit)"
+    requirements="$(mktemp -t toon-requirements)"
+    report="$(mktemp -t toon-npm-audit)"
     trap 'trash "$requirements" "$report" 2>/dev/null || true' EXIT
     flags=()
     while IFS= read -r id; do
@@ -96,8 +96,8 @@ build-spa:
 refresh-swagger-ui:
     #!/usr/bin/env bash
     set -euo pipefail
-    version=$(grep -o 'SWAGGER_UI_VERSION = "[^"]*"' backend/src/plak/api/docs.py | cut -d'"' -f2)
-    target=backend/src/plak/static/docs
+    version=$(grep -o 'SWAGGER_UI_VERSION = "[^"]*"' backend/src/toon/api/docs.py | cut -d'"' -f2)
+    target=backend/src/toon/static/docs
     for file in swagger-ui-bundle.js swagger-ui.css; do
       curl -sfL --max-time 60 -o "$target/$file" \
         "https://cdn.jsdelivr.net/npm/swagger-ui-dist@$version/$file"
@@ -119,9 +119,9 @@ release:
     git fetch origin beta --tags
     echo "To origin/beta (detached); back to your branch with: git switch -"
     git switch --detach origin/beta
-    spec="$(mktemp -t plak-openapi)"
+    spec="$(mktemp -t toon-openapi)"
     trap 'trash "$spec" 2>/dev/null || true' EXIT
-    uv run --project backend python -m plak.api.openapi_file > "$spec"
+    uv run --project backend python -m toon.api.openapi_file > "$spec"
     output="$(uv run --script scripts/release.py prepare --spec "$spec" --oasdiff scripts/oasdiff.sh)"
     printf '%s\n' "$output"
     first="${output%%$'\n'*}"

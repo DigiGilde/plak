@@ -84,7 +84,7 @@ jobs:
       #
       # A release builds and pushes only its version tag, and everything
       # after the push follows that tag. The release commit is also a push to
-      # beta, whose build pushes the commit tag without PLAK_VERSION; sharing
+      # beta, whose build pushes the commit tag without TOON_VERSION; sharing
       # that tag, the last build to finish decided what production ran.
       - name: Determine the release version
         id: release
@@ -98,7 +98,7 @@ jobs:
             exit 1
           fi
           version="${TAG#v}"
-          echo "build-args=PLAK_VERSION=${version}" >> "$GITHUB_OUTPUT"
+          echo "build-args=TOON_VERSION=${version}" >> "$GITHUB_OUTPUT"
           echo "image=${NAME}:${version}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to the registry
@@ -115,13 +115,13 @@ jobs:
 
       # Build context is the repo root: the image bundles the built admin
       # SPA from frontend/ alongside the backend (see
-      # containers/plak/Containerfile).
+      # containers/toon/Containerfile).
       - name: Build and push the image
         id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: containers/plak/Containerfile
+          file: containers/toon/Containerfile
           push: true
           tags: ${{ steps.release.outputs.image || steps.tag.outputs.image }}
           build-args: ${{ steps.release.outputs.build-args }}

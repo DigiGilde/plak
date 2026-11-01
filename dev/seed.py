@@ -1,8 +1,8 @@
 """Fills the dev database and the content volume with example content.
 
 Run it with `just seed`, which pipes this file into the running app
-container: that container already has the plak package installed, the
-PLAK_* environment and the content volume mounted on PLAK_CONTENT_ROOT.
+container: that container already has the toon package installed, the
+TOON_* environment and the content volume mounted on TOON_CONTENT_ROOT.
 
 The seed is destructive and repeatable. It first drops every group and every
 member (cascading to sites, versions, previews, invitees, access keys, linked
@@ -34,13 +34,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from plak.access import keys as access_keys
-from plak.config import Settings, load_settings
-from plak.constants import AccessBase, Role
-from plak.db import make_engine, make_session_factory
-from plak.ingest.service import Deployer, IngestService
-from plak.ingest.store import ContentStore, version_ref
-from plak.models.identity import (
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from toon.access import keys as access_keys
+from toon.config import Settings, load_settings
+from toon.constants import AccessBase, Role
+from toon.db import make_engine, make_session_factory
+from toon.ingest.service import Deployer, IngestService
+from toon.ingest.store import ContentStore, version_ref
+from toon.models.identity import (
     Group,
     GroupMember,
     Member,
@@ -48,14 +50,12 @@ from plak.models.identity import (
     PlatformRole,
     SiteMember,
 )
-from plak.models.publication import Invitee, Preview, Site, Version
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from toon.models.publication import Invitee, Preview, Site, Version
 
 # The sub the mock OIDC server hands out for every dev login
 # (dev/mock-oidc-config.json), and the sub dev/compose.yml bootstraps into a
 # platform admin. Used as a fallback only: the configured value wins, so a
-# changed PLAK_BOOTSTRAP_ADMIN_SUB still lands on the seeded member.
+# changed TOON_BOOTSTRAP_ADMIN_SUB still lands on the seeded member.
 DEFAULT_ADMIN_SUB = "dev-beheerder"
 ADMIN_EMAIL = "beheerder@plak.local"
 
@@ -270,7 +270,7 @@ async def seed(settings: Settings) -> SeedResult:
     """Wipes and refills the dev database plus the content volume."""
     if settings.environment != "dev":
         raise RuntimeError(
-            "seed weigert te draaien buiten PLAK_ENVIRONMENT=dev: hij wist alle groepen en leden"
+            "seed weigert te draaien buiten TOON_ENVIRONMENT=dev: hij wist alle groepen en leden"
         )
 
     engine = make_engine(settings)

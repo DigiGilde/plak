@@ -22,9 +22,9 @@ import pytest_asyncio
 from fastapi import FastAPI
 from helpers_oidc import make_client_jwk
 
-from plak.config import Settings
-from plak.main import create_app
-from plak.platform.security_txt import (
+from toon.config import Settings
+from toon.main import create_app
+from toon.platform.security_txt import (
     PATH_SECURITY_TXT,
     PREAMBLE_NCSC,
     PREAMBLE_OPERATOR_EMAIL,
@@ -32,7 +32,7 @@ from plak.platform.security_txt import (
     expires_at,
     security_txt,
 )
-from plak.serving.response import NEUTRAL_404_BODY
+from toon.serving.response import NEUTRAL_404_BODY
 
 ADMIN = "https://beheer.plak.example"
 CONTENT = "https://plak.example"

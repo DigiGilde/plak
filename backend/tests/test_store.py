@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from plak.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError, version_ref
+from toon.ingest.store import SPOOL_SUFFIX, ContentStore, StoreError, version_ref
 
 SITE = uuid.uuid4()
 OLD = 1_000_000  # an mtime far in the past

@@ -20,9 +20,9 @@ from fastapi import FastAPI
 from joserfc import jwt
 from joserfc.jwk import OctKey, RSAKey
 
-from plak.api.errors import register_error_handlers
-from plak.auth.oidc import OidcClient
-from plak.auth.sessions import (
+from toon.api.errors import register_error_handlers
+from toon.auth.oidc import OidcClient
+from toon.auth.sessions import (
     CONTENT_ANCHOR_COOKIE,
     CONTENT_ANCHOR_PATH,
     CONTENT_SESSION_COOKIE,
@@ -31,9 +31,9 @@ from plak.auth.sessions import (
     SessionStore,
     sign,
 )
-from plak.config import Settings
-from plak.main import SessionRecheckMiddleware
-from plak.platform import backchannel, pages
+from toon.config import Settings
+from toon.main import SessionRecheckMiddleware
+from toon.platform import backchannel, pages
 
 APP_BASE_URL = "https://plak.example"
 # The content host of the same app: /-/login and /-/oauth2/callback have one

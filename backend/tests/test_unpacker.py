@@ -17,8 +17,8 @@ from typing import IO, ClassVar
 
 import pytest
 
-from plak.config import Settings
-from plak.ingest.unpacker import (
+from toon.config import Settings
+from toon.ingest.unpacker import (
     BundleError,
     Limits,
     _safe_segments,
@@ -26,7 +26,7 @@ from plak.ingest.unpacker import (
     _write_entry,
     is_archive_junk,
 )
-from plak.ingest.unpacker import (
+from toon.ingest.unpacker import (
     unpack as unpack_archive,
 )
 

@@ -23,14 +23,14 @@ body {
    same right edge; capping the content alone would have left the brand at the
    old 1280, drifting away from the h1. */
 :root {
-  --plak-work-width: 60rem;
-  --semantics-page-sections-body-max-width: var(--plak-work-width);
-  --plak-reading-width: 45rem;
+  --toon-work-width: 60rem;
+  --semantics-page-sections-body-max-width: var(--toon-work-width);
+  --toon-reading-width: 45rem;
 
   /* Left over: GroepsledenBeheer.vue and TokensBeheer.vue still cap their
      table separately. That is now the same size as the work width, so those
      two rules (and this variable) can go. */
-  --plak-table-max-width: var(--plak-work-width);
+  --toon-table-max-width: var(--toon-work-width);
 }
 
 /* Page header: title on the left, primary action on the right, and the action
@@ -56,7 +56,7 @@ body {
    section's own `width`, because that centres the body and pulls the h1 off
    the x of the wordmark. */
 .reading-width > * {
-  max-width: var(--plak-reading-width);
+  max-width: var(--toon-reading-width);
 }
 
 /* No grey text: subtitles, supporting text and cell text read in the content

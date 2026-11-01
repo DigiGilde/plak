@@ -12,7 +12,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { approveDeviceAuthorization, denyDeviceAuthorization, lookupDeviceAuthorization } from '@/api/plak';
+import { approveDeviceAuthorization, denyDeviceAuthorization, lookupDeviceAuthorization } from '@/api/toon';
 import { ApiError } from '@/api/client';
 import type { DeviceAuthorization } from '@/api/types';
 import ErrorBanner from '@/components/ErrorBanner.vue';
@@ -20,7 +20,7 @@ import Landing from './Landing.vue';
 import { fetchSession, type Session } from '@/composables/currentMember';
 import { formatTimestamp } from '@/format';
 import { t } from '@/i18n';
-import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import { TOON_LOGIN_DOCS_URL } from '@/urls';
 import SectionHeading from '@/components/SectionHeading.vue';
 
 /**
@@ -211,7 +211,7 @@ function clientLine(authorization: DeviceAuthorization): string {
         <p>{{ t('page.cliPair.codeEntry.intro') }}</p>
         <p>
           {{ t('page.cliPair.codeEntry.install.before')
-          }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="code-cli-install"
+          }}<nldd-link :href="TOON_LOGIN_DOCS_URL" target="_blank" data-testid="code-cli-install"
             >{{ t('page.cliPair.codeEntry.install.link') }}</nldd-link
           >
         </p>

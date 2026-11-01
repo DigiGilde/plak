@@ -19,13 +19,13 @@ import pytest_asyncio
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from plak.config import Settings
-from plak.constants import AccessBase, Role
-from plak.db import make_engine, make_session_factory
-from plak.ingest.store import ContentStore, version_ref
-from plak.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
-from plak.models.publication import AccessKey, Invitee, Preview, Site, Version
-from plak.serving.resolution import locate
+from toon.config import Settings
+from toon.constants import AccessBase, Role
+from toon.db import make_engine, make_session_factory
+from toon.ingest.store import ContentStore, version_ref
+from toon.models.identity import Group, GroupMember, Member, MemberStatus, PlatformRole, SiteMember
+from toon.models.publication import AccessKey, Invitee, Preview, Site, Version
+from toon.serving.resolution import locate
 
 SEED_PATH = Path(__file__).resolve().parents[2] / "dev" / "seed.py"
 

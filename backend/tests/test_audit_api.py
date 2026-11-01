@@ -25,14 +25,14 @@ from test_admin_api import (  # noqa: F401 - fixtures are found by name
     login,
 )
 
-from plak.audit import vocabulary
-from plak.audit.log import ANONYMOUS, Actor, AuditLog
-from plak.audit.pseudonymisation import pseudonymise
-from plak.constants import AccessBase
-from plak.models.audit import ActorKind, AuditLogEntry, ContentViewer
-from plak.models.ci import CiProvider, SiteRepository
-from plak.models.identity import Member, MemberStatus, PlatformRole
-from plak.models.publication import Site
+from toon.audit import vocabulary
+from toon.audit.log import ANONYMOUS, Actor, AuditLog
+from toon.audit.pseudonymisation import pseudonymise
+from toon.constants import AccessBase
+from toon.models.audit import ActorKind, AuditLogEntry, ContentViewer
+from toon.models.ci import CiProvider, SiteRepository
+from toon.models.identity import Member, MemberStatus, PlatformRole
+from toon.models.publication import Site
 
 AUDIT = f"{BASE}/platform/audit"
 REASON = "onderzoek naar een melding over misbruik"

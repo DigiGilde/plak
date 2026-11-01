@@ -1,9 +1,9 @@
-# The CI tooling: release.py with its package plak_release, rulesets.py and
+# The CI tooling: release.py with its package toon_release, rulesets.py and
 # vulnerabilities.py. The scripts run on the standard library (plus pyyaml
 # for vulnerabilities.py, which its PEP 723 header names); this project
 # exists for their tests, which need pytest and friends.
 [project]
-name = "plak-scripts"
+name = "toon-scripts"
 version = "0"
 requires-python = ">=3.12"
 dependencies = []

@@ -1,4 +1,4 @@
-"""The subcommands of scripts/release.py (plak_release.commands): decide,
+"""The subcommands of scripts/release.py (toon_release.commands): decide,
 prepare, verify-staged, notes, check, api-check and the Claude Code hook.
 
 The git side runs against real repositories in tmp_path, so what is pinned
@@ -44,7 +44,7 @@ from release_support import (
     spec_with,
 )
 
-from plak_release import changelog, commands, errors, versions
+from toon_release import changelog, commands, errors, versions
 
 
 class TestReleaseProblems:
@@ -63,7 +63,7 @@ class TestReleaseProblems:
     @pytest.mark.parametrize(
         ("files", "path"),
         [
-            ({"backend/pyproject.toml": '[project]\nname = "plak-api"\n'}, "backend/pyproject.toml"),
+            ({"backend/pyproject.toml": '[project]\nname = "toon-api"\n'}, "backend/pyproject.toml"),
             ({"backend/pyproject.toml": BACKEND_PYPROJECT}, "backend/pyproject.toml"),
             ({"frontend/package.json": "{"}, "frontend/package.json"),
             ({"frontend/package.json": "[]\n"}, "frontend/package.json"),
@@ -117,7 +117,7 @@ class TestDecide:
         assert commands.decide(released.handle) == ("none", "", "")
 
     def test_a_change_without_a_release_releases_nothing(self, released):
-        released.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
+        released.commit({"backend/src/toon/main.py": "app = 2\n", **FRAGMENT})
         assert commands.decide(released.handle) == ("none", "", "")
 
     def test_an_untagged_newest_section_is_tagged_at_the_commit_that_added_it(self, released):
@@ -250,7 +250,7 @@ class TestPrepare:
         assert _image_versions(repo) == {"2026.10.1"}
 
     def test_a_backend_change_leaves_the_cli_and_plugin_versions(self, released):
-        released.commit({**FRAGMENT, "backend/src/plak/app.py": "app = 2\n"})
+        released.commit({**FRAGMENT, "backend/src/toon/app.py": "app = 2\n"})
         _, touched = commands.prepare(released.handle, DAY, SPEC, NO_CHANGES)
 
         assert _versions(released) == ("2026.9.1", "2026.9.1")
@@ -353,7 +353,7 @@ class TestPrepare:
     def test_a_shipped_change_without_an_entry_is_refused_and_writes_nothing(self, released):
         """Without entries there are no release notes, so nothing is made up
         from commit subjects either."""
-        released.commit({"backend/src/plak/main.py": "app = 2\n"}, "Update urllib3 to 2.8.0")
+        released.commit({"backend/src/toon/main.py": "app = 2\n"}, "Update urllib3 to 2.8.0")
         with pytest.raises(errors.ReleaseError) as refused:
             commands.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert refused.value.problems == [
@@ -568,7 +568,7 @@ class TestPrepareTheApi:
         repo.commit(FRAGMENT)
         commands.prepare(repo.handle, DAY, SPEC, unused)
         assert json.loads(repo.read("backend/openapi.json"))["info"]["version"] == "1.0.0"
-        assert repo.read("backend/src/plak/main.py") == MAIN
+        assert repo.read("backend/src/toon/main.py") == MAIN
 
     def test_a_hand_made_tag_without_a_schema_counts_as_the_first(self, repo):
         repo.commit({"CHANGELOG.md": changelog_text("## [2026.9.1]\n\n- x")})
@@ -593,7 +593,7 @@ class TestPrepareTheApi:
             **json.loads(head),
             "info": {**json.loads(head)["info"], "version": "1.1.0"},
         }
-        assert 'API_VERSION = "1.1.0"' in released.read("backend/src/plak/main.py")
+        assert 'API_VERSION = "1.1.0"' in released.read("backend/src/toon/main.py")
 
     def test_a_breaking_change_stops_the_release_before_it_writes(self, released):
         released.commit(FRAGMENT)
@@ -666,7 +666,7 @@ class TestVerifyStaged:
         assert commands.verify_staged(prepared.handle, TAG) == [f"{path} is missing from the release."]
 
     def test_the_cli_and_plugin_files_are_only_written_when_they_changed(self, released):
-        released.commit({**FRAGMENT, "backend/src/plak/app.py": "app = 2\n"})
+        released.commit({**FRAGMENT, "backend/src/toon/app.py": "app = 2\n"})
         commands.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert "cli/pyproject.toml" not in commands._staged_modes(released.handle)
         assert commands.verify_staged(released.handle, TAG) == []
@@ -709,16 +709,16 @@ class TestVerifyStaged:
         ("path", "text", "problem"),
         [
             (".github/workflows/x.yml", "on: push\n", ".github/workflows/x.yml is not a file a release writes."),
-            ("backend/src/plak/app.py", "import os\n", "backend/src/plak/app.py is not a file a release writes."),
+            ("backend/src/toon/app.py", "import os\n", "backend/src/toon/app.py is not a file a release writes."),
             (
                 "backend/uv.lock",
                 BACKEND_LOCK.replace("version = 1\n", 'version = 1\n\n[[package]]\nname = "evil"\n'),
                 "backend/uv.lock is not what the release writes for v2026.10.1.",
             ),
             (
-                "backend/src/plak/main.py",
+                "backend/src/toon/main.py",
                 MAIN.replace("app = 1", "app = __import__('os')"),
-                "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
+                "backend/src/toon/main.py is not what the release writes for v2026.10.1.",
             ),
             ("CHANGELOG.md", changelog_text("## [2026.10.1]\n\n- Something else."), "CHANGELOG.md is not"),
             (
@@ -737,9 +737,9 @@ class TestVerifyStaged:
                 "backend/pyproject.toml is not what the release writes for v2026.10.1.",
             ),
             (
-                "backend/src/plak/main.py",
+                "backend/src/toon/main.py",
                 MAIN.replace("1.0.0", "1.2.0"),
-                "backend/src/plak/main.py is not what the release writes for v2026.10.1.",
+                "backend/src/toon/main.py is not what the release writes for v2026.10.1.",
             ),
             (
                 f"{NOTES}2026.10.1.nl.md",
@@ -807,9 +807,9 @@ class TestVerifyStaged:
     def test_the_schema_has_to_declare_the_version_api_version_gets(self, prepared):
         """API_VERSION follows the staged schema; one without that line
         staged has to match what the code has."""
-        prepared.git("reset", "-q", "--", "backend/src/plak/main.py")
+        prepared.git("reset", "-q", "--", "backend/src/toon/main.py")
         assert commands.verify_staged(prepared.handle, TAG) == [
-            "backend/src/plak/main.py is not what the release writes for v2026.10.1."
+            "backend/src/toon/main.py is not what the release writes for v2026.10.1."
         ]
 
     def test_a_schema_without_a_semver_version_is_refused(self, prepared):
@@ -832,7 +832,7 @@ class TestVerifyStaged:
         """The schema unstaged, API_VERSION still raised: refused."""
         prepared.git("reset", "-q", "--", "backend/openapi.json")
         assert commands.verify_staged(prepared.handle, TAG) == [
-            "backend/src/plak/main.py is not what the release writes for v2026.10.1."
+            "backend/src/toon/main.py is not what the release writes for v2026.10.1."
         ]
 
     def test_a_file_prepare_could_not_have_written_is_refused(self, released):
@@ -904,7 +904,7 @@ class TestApiCheck:
         result = commands.api_check(released.handle, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
         assert result.errors == []
         assert result.comment == (
-            "<!-- plak-api-check -->\n**API:** changes against the contract of v2026.9.1.\n\n"
+            "<!-- toon-api-check -->\n**API:** changes against the contract of v2026.9.1.\n\n"
             "- `GET /b`: endpoint added\n\nThe next release makes it API 1.1.0.\n"
         )
 
@@ -940,7 +940,7 @@ class TestApiCheck:
     def test_a_change_behind_the_release_is_the_next_releases(self, release_pr):
         """An API pull request in the queue after the release, or checked
         between its merge and its tag: not this release's schema to ship."""
-        release_pr.commit({"backend/src/plak/app.py": "route = '/c'\n"})
+        release_pr.commit({"backend/src/toon/app.py": "route = '/c'\n"})
         spec = spec_with("1.1.0", paths=("/a", "/b", "/c"))
         result = commands.api_check(release_pr.handle, spec, lambda b, h: [change(1), change(1, path="/c")])
         assert result.errors == []
@@ -959,7 +959,7 @@ class TestApiCheck:
 
     @pytest.mark.parametrize("main", [MAIN, "app = 1\n"], ids=["old-version", "no-line"])
     def test_a_release_whose_code_does_not_carry_the_api_version_fails(self, release_pr, main):
-        release_pr.commit({"backend/src/plak/main.py": main})
+        release_pr.commit({"backend/src/toon/main.py": main})
         result = commands.api_check(release_pr.handle, spec_with("1.0.0", paths=("/a", "/b")), lambda b, h: [change(1)])
         assert result.errors == [commands.STALE_SCHEMA]
 
@@ -980,7 +980,7 @@ class TestApiCheck:
         out = capsys.readouterr().out
         assert "::error title=API contract::Breaking API change: GET /a: api path removed." in out
         assert summary.read_text(encoding="utf-8").startswith("## API contract\n\n- Breaking API change")
-        assert comment.read_text(encoding="utf-8").startswith("<!-- plak-api-check -->\n")
+        assert comment.read_text(encoding="utf-8").startswith("<!-- toon-api-check -->\n")
 
     def test_main_passes_an_unchanged_contract_and_empties_the_comment(self, released, tmp_path, capsys):
         (tmp_path / "head.json").write_text(SPEC, encoding="utf-8")
@@ -999,11 +999,11 @@ class TestApiCheck:
 
 class TestCheck:
     def test_a_shipped_change_with_a_fragment_is_in_order(self, branch):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n", **FRAGMENT})
         assert commands.check(branch.handle, "beta") == commands.CheckResult()
 
     def test_a_shipped_change_without_a_fragment_warns(self, branch):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n"})
         result = commands.check(branch.handle, "beta")
         assert result.errors == []
         assert result.warning == commands.WARNING
@@ -1014,7 +1014,7 @@ class TestCheck:
         released.commit(FRAGMENT)
         released.git("switch", "-q", "-c", "feature")
         released.git("rm", "-q", "changelog.d/something-new.added.md")
-        released.commit({"backend/src/plak/main.py": "app = 2\n"})
+        released.commit({"backend/src/toon/main.py": "app = 2\n"})
         assert commands.check(released.handle, "beta").warning == commands.WARNING
 
     @pytest.mark.parametrize(
@@ -1022,12 +1022,12 @@ class TestCheck:
         ["Bump a dependency.\n\nNo changelog entry: tooling only", "No changelog entry:  refactor, no effect"],
     )
     def test_the_description_can_say_why_there_is_no_entry(self, branch, body):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n"})
         assert commands.check(branch.handle, "beta", body).warning is None
 
     @pytest.mark.parametrize("body", ["No changelog entry:", "No changelog entry:   ", "See: No changelog entry: x"])
     def test_an_opt_out_without_a_reason_or_mid_line_does_not_count(self, branch, body):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n"})
         assert commands.check(branch.handle, "beta", body).warning == commands.WARNING
 
     def test_a_change_outside_the_shipped_paths_does_not_warn(self, branch):
@@ -1038,7 +1038,7 @@ class TestCheck:
         """A shipped change that landed on beta after the branch started is
         beta's, and does not ask this branch for an entry."""
         branch.git("switch", "-q", "beta")
-        branch.commit({"backend/src/plak/main.py": "app = 2\n", **FRAGMENT})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n", **FRAGMENT})
         branch.git("switch", "-q", "feature")
         branch.commit({"README.md": "better\n"})
         assert commands.check(branch.handle, "beta").warning is None
@@ -1049,7 +1049,7 @@ class TestCheck:
         repo.git("init", "-q", "-b", "beta")
         repo.commit({"README.md": "x\n"})
         repo.git("switch", "-q", "-c", "feature")
-        repo.commit({"CHANGELOG.md": changelog_text(), "backend/src/plak/main.py": "app = 1\n", **FRAGMENT})
+        repo.commit({"CHANGELOG.md": changelog_text(), "backend/src/toon/main.py": "app = 1\n", **FRAGMENT})
         assert commands.check(repo.handle, "beta") == commands.CheckResult()
 
     @pytest.mark.parametrize(
@@ -1062,7 +1062,7 @@ class TestCheck:
         ids=["name", "content", "unpaired-note"],
     )
     def test_a_malformed_fragment_fails(self, branch, files, reason):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n", **files})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n", **files})
         [error] = commands.check(branch.handle, "beta").errors
         assert reason in error
 
@@ -1191,7 +1191,7 @@ class TestCheck:
         [
             {"frontend/src/App.vue": "x\n", **NOTE_FRAGMENTS},
             {"frontend/src/App.test.ts": "x\n"},
-            {"backend/src/plak/main.py": "app = 2\n"},
+            {"backend/src/toon/main.py": "app = 2\n"},
             {NOTES + "2026.9.1.nl.md": "a\n", NOTES + "2026.9.1.en.md": "b\n"},
         ],
         ids=["with-note", "test-only", "backend", "notes-only"],
@@ -1231,7 +1231,7 @@ class TestCheckCommand:
         assert "- **Hint:** " in summary.read_text()
 
     def test_the_description_file_clears_the_warning_and_empties_the_comment(self, branch, tmp_path, capsys):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n"})
         body, comment = tmp_path / "body.md", tmp_path / "comment.md"
         body.write_text("Chore.\n\nNo changelog entry: lockfile refresh\n")
         comment.write_text("stale")
@@ -1311,7 +1311,7 @@ class TestHook:
         assert commands.hook(stdin) is None
 
     def test_without_origin_beta_it_passes_and_says_why(self, branch, capsys):
-        branch.commit({"backend/src/plak/main.py": "app = 2\n"})
+        branch.commit({"backend/src/toon/main.py": "app = 2\n"})
         assert commands.hook(_event(branch, "gh pr create --fill")) is None
         assert capsys.readouterr().err.startswith("changelog hook: skipped, git merge-base origin/beta HEAD")
 

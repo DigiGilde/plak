@@ -22,21 +22,21 @@ from helpers_oidc import set_content_session_cookie
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from plak.access import keys
-from plak.audit.log import AuditLog
-from plak.auth.sessions import KEY_COOKIE, SessionStore, check_signature
-from plak.config import Settings
-from plak.constants import PATH_CONTENT_CODE, AccessBase
-from plak.ingest.store import ContentStore
-from plak.models.audit import AuditLogEntry
-from plak.models.identity import Group, Member, MemberStatus
-from plak.models.publication import AccessKey, KeyStatus, Preview, Site, Version, VersionTarget
-from plak.models.slugs import SiteSlug
-from plak.ratelimit import InMemoryCounter
-from plak.serving.code_page import code_page_html
-from plak.serving.code_page import router as code_router
-from plak.serving.response import NEUTRAL_404_BODY
-from plak.serving.router import router as serving_router
+from toon.access import keys
+from toon.audit.log import AuditLog
+from toon.auth.sessions import KEY_COOKIE, SessionStore, check_signature
+from toon.config import Settings
+from toon.constants import PATH_CONTENT_CODE, AccessBase
+from toon.ingest.store import ContentStore
+from toon.models.audit import AuditLogEntry
+from toon.models.identity import Group, Member, MemberStatus
+from toon.models.publication import AccessKey, KeyStatus, Preview, Site, Version, VersionTarget
+from toon.models.slugs import SiteSlug
+from toon.ratelimit import InMemoryCounter
+from toon.serving.code_page import code_page_html
+from toon.serving.code_page import router as code_router
+from toon.serving.response import NEUTRAL_404_BODY
+from toon.serving.router import router as serving_router
 
 BASE_URL = "https://plak.example"
 ADMIN_URL = "https://beheer.plak.example"

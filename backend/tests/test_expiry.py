@@ -1,4 +1,4 @@
-"""plak/expiry.py: every issued access right gets an end date (BIO2 5.18.02)."""
+"""toon/expiry.py: every issued access right gets an end date (BIO2 5.18.02)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from plak.expiry import CLOCK_SKEW, DEFAULT_VALIDITY, MAX_VALIDITY, ExpiryError, resolve
+from toon.expiry import CLOCK_SKEW, DEFAULT_VALIDITY, MAX_VALIDITY, ExpiryError, resolve
 
 
 def test_no_date_takes_the_default() -> None:

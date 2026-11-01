@@ -27,10 +27,10 @@ from helpers_oidc import (
     start_login,
 )
 
-import plak.auth.sessions as sessions_mod
-from plak import i18n
-from plak.audit import vocabulary
-from plak.auth.sessions import (
+import toon.auth.sessions as sessions_mod
+from toon import i18n
+from toon.audit import vocabulary
+from toon.auth.sessions import (
     CONTENT_ANCHOR_COOKIE,
     CONTENT_LOGIN_COOKIE,
     CONTENT_SESSION_COOKIE,
@@ -56,9 +56,9 @@ from plak.auth.sessions import (
     valid_return_to,
     visitor_from_request,
 )
-from plak.constants import PATH_CONTENT_LOGIN, PATH_CONTENT_OAUTH2_PREFIX
-from plak.models.audit import ActorKind
-from plak.platform import pages
+from toon.constants import PATH_CONTENT_LOGIN, PATH_CONTENT_OAUTH2_PREFIX
+from toon.models.audit import ActorKind
+from toon.platform import pages
 
 CONTENT_CALLBACK = PATH_CONTENT_OAUTH2_PREFIX + "callback"
 

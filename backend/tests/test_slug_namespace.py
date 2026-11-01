@@ -22,12 +22,12 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from plak.constants import AccessBase
-from plak.db import make_session_factory, violated_constraint
-from plak.models.ci import CiProvider, SiteRepository
-from plak.models.identity import Group
-from plak.models.publication import Site
-from plak.models.slugs import GroupSlug, SiteSlug
+from toon.constants import AccessBase
+from toon.db import make_session_factory, violated_constraint
+from toon.models.ci import CiProvider, SiteRepository
+from toon.models.identity import Group
+from toon.models.publication import Site
+from toon.models.slugs import GroupSlug, SiteSlug
 
 
 @pytest_asyncio.fixture

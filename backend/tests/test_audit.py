@@ -17,14 +17,14 @@ import pytest_asyncio
 from helpers_audit import AuditRecorder, insert_aged_audit_row
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from plak.audit import retention, vocabulary
-from plak.audit.ip_crypto import decrypt_ip
-from plak.audit.log import ANONYMOUS, SYSTEM, Actor, AuditLog, LookupLimitReachedError
-from plak.audit.pseudonymisation import pseudonymise, truncate_ip
-from plak.audit.retention import purge
-from plak.db import make_session_factory
-from plak.models.audit import ActorKind
-from plak.net import ClientAddress
+from toon.audit import retention, vocabulary
+from toon.audit.ip_crypto import decrypt_ip
+from toon.audit.log import ANONYMOUS, SYSTEM, Actor, AuditLog, LookupLimitReachedError
+from toon.audit.pseudonymisation import pseudonymise, truncate_ip
+from toon.audit.retention import purge
+from toon.db import make_session_factory
+from toon.models.audit import ActorKind
+from toon.net import ClientAddress
 
 # asyncio_mode = "auto" (pyproject.toml) picks up async def tests by itself; this
 # file deliberately mixes sync and async tests, so no module-wide asyncio marker.

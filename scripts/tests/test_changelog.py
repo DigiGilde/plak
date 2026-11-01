@@ -1,4 +1,4 @@
-"""CHANGELOG.md: sections, CalVer tags and link references (plak_release.changelog)."""
+"""CHANGELOG.md: sections, CalVer tags and link references (toon_release.changelog)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 from packaging.version import Version
 from release_support import DAY, ENTRY, ROOT, TAG, changelog_text, release
 
-from plak_release import changelog, errors
+from toon_release import changelog, errors
 
 
 class TestTags:

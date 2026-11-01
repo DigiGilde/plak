@@ -35,10 +35,10 @@ from test_access_gate import (
 )
 from test_serving import BASE_URL, _header_list, _make_app, make_settings
 
-from plak.access.decision import DecisionKind
-from plak.auth.sessions import KEY_COOKIE, sign_key_cookie
-from plak.constants import AccessBase, AccessPolicy
-from plak.ingest.store import ContentStore
+from toon.access.decision import DecisionKind
+from toon.auth.sessions import KEY_COOKIE, sign_key_cookie
+from toon.constants import AccessBase, AccessPolicy
+from toon.ingest.store import ContentStore
 
 SELECTOR = "selector"
 KEY_VALUES = [*(name for name in VISITOR_NAMES if name.startswith("key_query")), SELECTOR]

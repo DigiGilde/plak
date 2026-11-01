@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import * as plak from '@/api/plak';
+import * as toon from '@/api/toon';
 import { ApiError } from '@/api/client';
 import type { Me, SiteStorage, Version } from '@/api/types';
 import { contentUrl, formatTimestamp } from '@/format';
@@ -42,8 +42,8 @@ const { loading, error, reload } = useLoader(
     // The usage line is an extra: when it cannot be loaded it is left out
     // and the list carries on.
     const [list, usage, member] = await Promise.allSettled([
-      plak.versions(props.group, props.site),
-      plak.siteStorage(props.group, props.site),
+      toon.versions(props.group, props.site),
+      toon.siteStorage(props.group, props.site),
       fetchCurrentMember(),
     ]);
     if (list.status === 'rejected') throw list.reason;
@@ -118,7 +118,7 @@ async function saveRetention(
   from: 'choice' | 'field',
 ): Promise<void> {
   try {
-    const updated = await plak.setLiveVersionsKept(props.group, props.site, next);
+    const updated = await toon.setLiveVersionsKept(props.group, props.site, next);
     const own = updated.liveVersionsKept;
     storage.value = {
       ...current,
@@ -255,7 +255,7 @@ async function setLive(version: Version): Promise<void> {
   if (busyWith.value !== null) return;
   busyWith.value = version.id;
   try {
-    await plak.setVersionLive(props.group, props.site, version.id);
+    await toon.setVersionLive(props.group, props.site, version.id);
     notices.value?.notify(
       'success',
       t('site.versions.setLive.done'),

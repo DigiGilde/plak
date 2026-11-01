@@ -26,11 +26,11 @@ from helpers_oidc import (
     set_session_cookie,
 )
 
-from plak.audit import vocabulary
-from plak.auth.oidc import RefreshRejectedError
-from plak.auth.revalidation import RECHECK_BACKOFF, idp_fault, revalidation_status
-from plak.auth.sessions import SessionStore
-from plak.models.audit import ActorKind
+from toon.audit import vocabulary
+from toon.auth.oidc import RefreshRejectedError
+from toon.auth.revalidation import RECHECK_BACKOFF, idp_fault, revalidation_status
+from toon.auth.sessions import SessionStore
+from toon.models.audit import ActorKind
 
 pytestmark = pytest.mark.asyncio
 
@@ -557,13 +557,13 @@ class TestBrokenCoupling:
 async def test_healthz_names_the_idp_check_and_nothing_more(tmp_path, monkeypatch) -> None:
     import httpx
 
-    from plak.auth.revalidation import idp_fault
-    from plak.main import create_app
+    from toon.auth.revalidation import idp_fault
+    from toon.main import create_app
 
     async def reachable(app) -> bool:
         return True
 
-    monkeypatch.setattr("plak.platform.health._database_reachable", reachable)
+    monkeypatch.setattr("toon.platform.health._database_reachable", reachable)
     idp = MockIdP()
     app = create_app(make_settings(idp, content_root=tmp_path, storage_min_free_bytes=0))
 

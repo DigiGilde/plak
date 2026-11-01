@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from plak.config import ConfigurationError, load_settings
+from toon.config import ConfigurationError, load_settings
 
 ZAD_OIDC_VARIABLES = ("OIDC_DISCOVERY_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET")
 
@@ -273,7 +273,7 @@ def test_two_audit_ip_keys_with_one_key_id_refused(monkeypatch):
     leave the rows of one of them unreadable. A real collision of 8 bytes of
     SHA-256 cannot be made for a test: a key id that is the same for every key
     stands in for it."""
-    monkeypatch.setattr("plak.config._key_id", lambda key: b"\x00" * 8)
+    monkeypatch.setattr("toon.config._key_id", lambda key: b"\x00" * 8)
     _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY_PREVIOUS=_ip_key("p"))
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()

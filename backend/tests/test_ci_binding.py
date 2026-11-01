@@ -30,12 +30,12 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from test_deploy_api import BASE_URL, _bearer, _cli_login, _make_app, _make_settings, _upload
 
-from plak.constants import AccessBase, Role
-from plak.models.audit import AuditLogEntry
-from plak.models.ci import CiProvider, SiteRepository
-from plak.models.identity import Group, GroupMember, Member, MemberStatus
-from plak.models.publication import Preview, Site, Version, VersionTarget
-from plak.models.slugs import SiteSlug
+from toon.constants import AccessBase, Role
+from toon.models.audit import AuditLogEntry
+from toon.models.ci import CiProvider, SiteRepository
+from toon.models.identity import Group, GroupMember, Member, MemberStatus
+from toon.models.publication import Preview, Site, Version, VersionTarget
+from toon.models.slugs import SiteSlug
 
 # The token's repository, R, and another one, R2, both on GitHub.
 REPOSITORY = {"owner": "minbzk", "repo": "website", "repository_id": 1001, "owner_id": 2002}

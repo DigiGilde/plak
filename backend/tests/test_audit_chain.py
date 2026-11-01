@@ -1,5 +1,5 @@
 """Tests for the integrity chain over audit_log_entries: the BEFORE INSERT
-trigger from 0001_base and the verifier in plak/audit/chain.py.
+trigger from 0001_base and the verifier in toon/audit/chain.py.
 
 Every test here commits, because `verify` opens a connection of its own and
 would not see an uncommitted row. The autouse `_clean_db` fixture empties the
@@ -19,9 +19,9 @@ import pytest_asyncio
 from helpers_audit import id_in_chain, insert_aged_audit_row, insert_chained_audit_row
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from plak.audit import chain, checkpoint, retention
-from plak.audit.log import SYSTEM, AuditLog
-from plak.db import make_session_factory
+from toon.audit import chain, checkpoint, retention
+from toon.audit.log import SYSTEM, AuditLog
+from toon.db import make_session_factory
 
 pytestmark = pytest.mark.asyncio
 

@@ -16,7 +16,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { ApiError } from '@/api/client';
-import { setMyLanguage } from '@/api/plak';
+import { setMyLanguage } from '@/api/toon';
 import type { MemberLanguage } from '@/api/types';
 import Notices from '@/components/site/Notices.vue';
 import { setBreadcrumbs } from '@/composables/breadcrumbs';
@@ -28,7 +28,7 @@ import {
   t,
   type LanguageChoice,
 } from '@/i18n';
-import { PLAK_LOGIN_DOCS_URL } from '@/urls';
+import { TOON_LOGIN_DOCS_URL } from '@/urls';
 import SectionHeading from '@/components/SectionHeading.vue';
 
 const route = useRoute();
@@ -182,7 +182,7 @@ onMounted(() => {
           <nldd-rich-text>
             <p>
               {{ t('profile.sessions.install.before')
-              }}<nldd-link :href="PLAK_LOGIN_DOCS_URL" target="_blank" data-testid="profile-cli-install"
+              }}<nldd-link :href="TOON_LOGIN_DOCS_URL" target="_blank" data-testid="profile-cli-install"
                 >{{ t('profile.sessions.install.link') }}</nldd-link
               >
             </p>

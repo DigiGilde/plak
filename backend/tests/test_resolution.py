@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from plak.ingest import precompress
-from plak.ingest.store import ContentStore
-from plak.serving import resolution
+from toon.ingest import precompress
+from toon.ingest.store import ContentStore
+from toon.serving import resolution
 
 
 class TestNormaliseRest:

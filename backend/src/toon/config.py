@@ -1,0 +1,523 @@
+"""Configuration through environment variables (12-factor), prefix PLAK_.
+
+Fail-fast: missing or invalid required values produce a clear error
+message naming the variable involved, instead of passing on the bare pydantic
+ValidationError.
+
+OIDC on ZAD: the ZAD Keycloak service injects `OIDC_DISCOVERY_URL`,
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` (without the PLAK_ prefix) into the
+container. Those serve as the source for `PLAK_OIDC_ISSUER`,
+`PLAK_OIDC_CLIENT_ID` and `PLAK_OIDC_CLIENT_SECRET` as long as the PLAK_
+variable itself is not set.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import ipaddress
+import unicodedata
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from toon.audit.ip_crypto import _key_id
+
+MIN_SECRET_BYTES = 32
+AUDIT_IP_KEY_BYTES = 32
+
+OIDC_CLIENT_AUTH_METHODS = ("private_key_jwt", "client_secret_post", "client_secret_basic")
+OIDC_DISCOVERY_SUFFIX = "/.well-known/openid-configuration"
+
+OPERATOR_EMAIL_MAX_LENGTH = 254
+# Besides whitespace and control or format characters: what would end the
+# address inside the mailto: link the SPA builds from it, or add a second
+# recipient or a header to that link.
+_OPERATOR_EMAIL_FORBIDDEN = frozenset('<>"(),;:[]\\?&#%')
+
+
+class ConfigurationError(RuntimeError):
+    """Raised on missing or invalid configuration."""
+
+
+def issuer_from_discovery_url(discovery_url: str) -> str:
+    """OIDC Discovery 1.0 §4: discovery URL = issuer + /.well-known/openid-configuration."""
+    if not discovery_url.endswith(OIDC_DISCOVERY_SUFFIX):
+        raise ValueError(
+            "OIDC_DISCOVERY_URL does not end in /.well-known/openid-configuration; "
+            "set PLAK_OIDC_ISSUER explicitly"
+        )
+    return discovery_url[: -len(OIDC_DISCOVERY_SUFFIX)]
+
+
+def normalise_https_base_url(value: str, field_name: str) -> str:
+    """`https://host[:port]`, lowercase and without trailing slash; anything
+    with a path, query, fragment or credentials is refused."""
+    parts = urlsplit(value.strip())
+    try:
+        port = parts.port
+    except ValueError as error:
+        raise ValueError(f"{field_name}: invalid port in {value.strip()!r}") from error
+    if parts.scheme != "https" or not parts.hostname:
+        raise ValueError(f"{field_name}: {value.strip()!r} is not an https URL with a hostname")
+    if parts.path not in ("", "/") or parts.query or parts.fragment or parts.username or parts.password:
+        raise ValueError(f"{field_name}: {value.strip()!r} may only contain scheme and host")
+    host = parts.hostname
+    return f"https://{host}" if port in (None, 443) else f"https://{host}:{port}"
+
+
+def is_loopback_host(host: str) -> bool:
+    """`localhost`, any name under `.localhost` (RFC 6761 section 6.3) and the
+    loopback IP ranges (127.0.0.0/8, ::1)."""
+    host = host.strip("[]").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def normalise_operator_email(value: str) -> str:
+    """A plain address `local@domain` without surrounding whitespace. Empty
+    (not configured) stays empty."""
+    address = value.strip()
+    if not address:
+        return ""
+    local, _, domain = address.partition("@")
+    if (
+        len(address) > OPERATOR_EMAIL_MAX_LENGTH
+        or not local
+        or not domain
+        or "@" in domain
+        or any(
+            char in _OPERATOR_EMAIL_FORBIDDEN or unicodedata.category(char)[0] in ("C", "Z") for char in address
+        )
+    ):
+        raise ValueError(
+            f"PLAK_OPERATOR_EMAIL: {address!r} is not a plain e-mail address such as name@example.org"
+        )
+    return address
+
+
+def _comma_separated(value: str) -> list[str]:
+    return [entry.strip() for entry in value.split(",") if entry.strip()]
+
+
+def _decode_audit_ip_key(field_name: str, value: str) -> str:
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ValueError(f"{field_name} must be base64-encoded") from error
+    if len(decoded) != AUDIT_IP_KEY_BYTES:
+        raise ValueError(f"{field_name} must be the base64 encoding of {AUDIT_IP_KEY_BYTES} bytes")
+    return value
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PLAK_", extra="ignore")
+
+    db_url: str
+    content_root: Path
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_auth: str = "private_key_jwt"
+    oidc_client_private_jwk: str = ""
+    oidc_client_secret: str = ""
+    # Comma-separated list of accepted acr values; empty = no acr check (the
+    # OidcClient logs that at startup, as a warning in production).
+    oidc_required_acr: str = ""
+    oidc_iss_required: bool = False
+    # RP-initiated logout (OIDC RP-Initiated Logout 1.0). Off unless set: the
+    # OP refuses a post_logout_redirect_uri that is not registered with it, and
+    # the visitor then lands on an error page of the IdP.
+    oidc_rp_logout: bool = False
+    # Periodic re-validation of a browser session against the IdP
+    # (auth/revalidation.py): at most one check per session per this many
+    # seconds, 0 turns it off. It bounds how long someone blocked or removed
+    # at the IdP keeps their Plak session.
+    idp_recheck_seconds: int = Field(default=900, ge=0)
+    # Injected by the ZAD Keycloak service; a validation_alias falls outside
+    # env_prefix, so these are read without PLAK_.
+    zad_oidc_discovery_url: str = Field(default="", validation_alias="OIDC_DISCOVERY_URL")
+    zad_oidc_client_id: str = Field(default="", validation_alias="OIDC_CLIENT_ID")
+    zad_oidc_client_secret: str = Field(default="", validation_alias="OIDC_CLIENT_SECRET")
+    bootstrap_admin_sub: str = ""
+    session_secret: str
+    audit_pepper: str
+    # Only set while rotating PLAK_AUDIT_PEPPER: the peppers it replaced,
+    # newest first, comma-separated. Audit rows are never pseudonymised again,
+    # so a row written under a previous pepper is only found while that pepper
+    # is listed here. Every entry is stripped: a pepper that contains a comma
+    # or starts or ends with whitespace cannot be listed.
+    audit_pepper_previous: str = ""
+    # Base64 of 32 random bytes (AES-256-GCM key, audit/ip_crypto.py): a
+    # separate key from audit_pepper on purpose, so revealing a full IP and
+    # pseudonymising an actor are two different secrets to compromise.
+    audit_ip_key: str
+    # Only set while rotating PLAK_AUDIT_IP_KEY: the keys it replaced, newest
+    # first, comma-separated, kept around long enough to still decrypt rows
+    # written under them. Remove a key once nothing left needs revealing from
+    # before its rotation.
+    audit_ip_key_previous: str = ""
+    audit_lookup_daily_limit: int = Field(default=25, ge=1, le=1000)
+    # Fails closed: a deployment that forgets to set PLAK_ENVIRONMENT refuses
+    # to start (see _production_requirements below) instead of silently
+    # skipping every production validator (trusted proxies, OIDC issuer
+    # requirements, base url, https). dev/compose.yml sets PLAK_ENVIRONMENT=
+    # dev explicitly for local development.
+    environment: str = "productie"
+    base_url: str | None = None
+    # Two origins, always: the admin host and the content host are
+    # separate origins, and the app derives the content host from this URL.
+    # There is no single-host fallback: the SPA sits on the root of the admin
+    # host, so one origin would put the interface and uploaded content
+    # together. Dev compose, the ZAD deployment and production all set it. So:
+    # required, everywhere.
+    content_base_url: str
+    # Whether a proxy stands in front of the pod, and thereby whether the last
+    # X-Forwarded-For entry is the client address or the socket is (net.py).
+    # None means nobody said; production refuses that, because either answer
+    # can be the wrong one and neither fails loudly: without a proxy the header
+    # is the client's to write, and behind one the socket is the proxy.
+    behind_proxy: bool | None = None
+    # Built admin SPA (Vite base /); by default relative to the
+    # working directory of `just dev` (backend/). The app image sets this to
+    # /app/spa.
+    spa_path: Path = Path("../frontend/dist")
+    # Per-bundle limits, sized for static sites on a small (1 GiB) content
+    # volume. containers/nginx-dev/nginx.conf and the frontend's packing.ts
+    # mirror them; the nginx body limit stays a little above ingest_max_body so
+    # an oversized upload gets the app's 413 rather than nginx's.
+    ingest_max_body: int = Field(default=100 * 1024 * 1024)
+    ingest_max_file: int = Field(default=50 * 1024 * 1024)
+    ingest_max_total: int = Field(default=200 * 1024 * 1024)
+    ingest_max_files: int = Field(default=1000)
+    ingest_max_depth: int = Field(default=10)
+    # What every version of one site together may occupy on the content
+    # volume; 0 turns the quota off. The per-bundle limits above bound one
+    # deploy, this one bounds the history they leave behind: without it a
+    # single site fills the volume by publishing often enough between two
+    # nightly cleanups, or at all when a site keeps every live version.
+    site_max_bytes: int = Field(default=500 * 1024 * 1024)
+    # Previous live versions the nightly cleanup keeps besides the current live
+    # one, for every site without a number of its own (sites.live_versions_kept);
+    # older live versions go, row and files. 0 keeps every live version.
+    live_versions_kept: int = Field(default=5, ge=0)
+    # Free space the content volume must keep. A deploy is refused with a 503
+    # before spooling when its declared size would cross it, and stopped (its
+    # spool and work directory cleaned up) as soon as spooling or unpacking
+    # would, rather than running the volume dry, which would take the serving
+    # of every other site down with it. 0 turns the check off.
+    storage_min_free_bytes: int = Field(default=100 * 1024 * 1024)
+    # Whether a deploy keeps its text files compressed only (design.md §5.4a).
+    # Off, new deploys stay as published and the container puts back at start
+    # what earlier ones compressed (ingest/uncompress.py): the step before
+    # rolling back to an image that cannot read `_encoded/`.
+    store_compressed: bool = True
+
+    # Forgejo instances whose Actions ID tokens are accepted for CI deploys,
+    # comma-separated base URLs (https only). GitHub is always accepted.
+    # Only these issuers are ever contacted: the token names its issuer, but
+    # that claim only selects from this list.
+    ci_forgejo_hosts: str = "https://code.overheid.nl"
+
+    # The organisation that runs this installation, as people should read its
+    # name, and the address where they reach it about privacy, accessibility
+    # and questions. The public privacy and accessibility pages show both
+    # (GET /-/api/v1/operator), and security.txt names the address as a
+    # Contact. Empty means not configured.
+    operator_name: str = ""
+    operator_email: str = ""
+    # Lists NCSC-NL's CVD routes in security.txt (preamble, Policy, Contact).
+    # Only true for an installation inside the Dutch central government.
+    security_txt_ncsc: bool = False
+
+    ratelimit_login_max: int = Field(default=10)
+    ratelimit_login_window_s: int = Field(default=60)
+    ratelimit_login_global_max: int = Field(default=1000)
+    ratelimit_api_max: int = Field(default=60)
+    ratelimit_api_window_s: int = Field(default=60)
+    ratelimit_api_global_max: int = Field(default=5000)
+    ratelimit_content_max: int = Field(default=600)
+    ratelimit_content_window_s: int = Field(default=60)
+    ratelimit_content_global_max: int = Field(default=20000)
+    # Handing in the code of a secret link (serving/code_page.py): ten
+    # attempts per quarter of an hour, per client IP here and per selector in
+    # the route itself.
+    ratelimit_code_max: int = Field(default=10)
+    ratelimit_code_window_s: int = Field(default=900)
+    ratelimit_code_global_max: int = Field(default=500)
+
+    @field_validator("ci_forgejo_hosts")
+    @classmethod
+    def _ci_forgejo_hosts_valid(cls, value: str) -> str:
+        hosts = [
+            normalise_https_base_url(entry, "PLAK_CI_FORGEJO_HOSTS") for entry in value.split(",") if entry.strip()
+        ]
+        return ",".join(dict.fromkeys(hosts))
+
+    @field_validator("operator_name")
+    @classmethod
+    def _operator_name_stripped(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("operator_email")
+    @classmethod
+    def _operator_email_valid(cls, value: str) -> str:
+        return normalise_operator_email(value)
+
+    @property
+    def forgejo_hosts(self) -> tuple[str, ...]:
+        """The configured Forgejo base URLs, normalised (lowercase, no trailing slash)."""
+        return tuple(host for host in self.ci_forgejo_hosts.split(",") if host)
+
+    @field_validator("session_secret", "audit_pepper")
+    @classmethod
+    def _min_32_bytes(cls, value: str, info) -> str:
+        if len(value.encode("utf-8")) < MIN_SECRET_BYTES:
+            field_name = f"PLAK_{info.field_name.upper()}"
+            raise ValueError(f"{field_name} must be at least {MIN_SECRET_BYTES} bytes long")
+        return value
+
+    @field_validator("audit_ip_key")
+    @classmethod
+    def _audit_ip_key_valid(cls, value: str) -> str:
+        return _decode_audit_ip_key("PLAK_AUDIT_IP_KEY", value)
+
+    @field_validator("audit_pepper_previous")
+    @classmethod
+    def _audit_pepper_previous_valid(cls, value: str) -> str:
+        peppers = _comma_separated(value)
+        if any(len(pepper.encode("utf-8")) < MIN_SECRET_BYTES for pepper in peppers):
+            raise ValueError(
+                f"every entry of PLAK_AUDIT_PEPPER_PREVIOUS must be at least {MIN_SECRET_BYTES} bytes long"
+            )
+        if len(set(peppers)) < len(peppers):
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS lists the same pepper twice")
+        return ",".join(peppers)
+
+    @field_validator("audit_ip_key_previous")
+    @classmethod
+    def _audit_ip_key_previous_valid(cls, value: str) -> str:
+        keys = [
+            _decode_audit_ip_key("every entry of PLAK_AUDIT_IP_KEY_PREVIOUS", entry)
+            for entry in _comma_separated(value)
+        ]
+        # Compared decoded: base64 ignores the unused bits of its last
+        # character, so two spellings can carry the same key.
+        if len({base64.b64decode(key) for key in keys}) < len(keys):
+            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS lists the same key twice")
+        return ",".join(keys)
+
+    @model_validator(mode="after")
+    def _audit_pepper_distinct(self) -> Settings:
+        if self.audit_pepper == self.session_secret:
+            raise ValueError("PLAK_AUDIT_PEPPER must differ from PLAK_SESSION_SECRET")
+        return self
+
+    @model_validator(mode="after")
+    def _audit_pepper_previous_distinct(self) -> Settings:
+        previous = set(self.audit_peppers[1:])
+        if self.audit_pepper in previous:
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_PEPPER")
+        if self.session_secret in previous:
+            raise ValueError("PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_SESSION_SECRET")
+        if previous & {self.audit_ip_key, *_comma_separated(self.audit_ip_key_previous)}:
+            raise ValueError(
+                "PLAK_AUDIT_PEPPER_PREVIOUS must differ from PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _audit_ip_key_distinct(self) -> Settings:
+        other_secrets = (self.session_secret, self.audit_pepper)
+        if self.audit_ip_key in other_secrets:
+            raise ValueError(
+                "PLAK_AUDIT_IP_KEY must differ from PLAK_SESSION_SECRET and PLAK_AUDIT_PEPPER"
+            )
+        if self.audit_ip_key_bytes in self.audit_ip_keys_previous_bytes:
+            raise ValueError("PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_AUDIT_IP_KEY")
+        if set(_comma_separated(self.audit_ip_key_previous)) & set(other_secrets):
+            raise ValueError(
+                "PLAK_AUDIT_IP_KEY_PREVIOUS must differ from PLAK_SESSION_SECRET and "
+                "PLAK_AUDIT_PEPPER"
+            )
+        # A row names its key by key id alone (audit/ip_crypto.py).
+        keys = (self.audit_ip_key_bytes, *self.audit_ip_keys_previous_bytes)
+        if len({_key_id(key) for key in keys}) < len(keys):
+            raise ValueError(
+                "PLAK_AUDIT_IP_KEY and PLAK_AUDIT_IP_KEY_PREVIOUS hold two keys with the same key id; "
+                "generate a new PLAK_AUDIT_IP_KEY"
+            )
+        return self
+
+    @property
+    def audit_peppers(self) -> tuple[str, ...]:
+        """PLAK_AUDIT_PEPPER first, then the previous peppers in their configured order."""
+        return (self.audit_pepper, *_comma_separated(self.audit_pepper_previous))
+
+    @property
+    def audit_ip_key_bytes(self) -> bytes:
+        return base64.b64decode(self.audit_ip_key)
+
+    @property
+    def audit_ip_keys_previous_bytes(self) -> tuple[bytes, ...]:
+        return tuple(base64.b64decode(key) for key in _comma_separated(self.audit_ip_key_previous))
+
+    @field_validator("base_url")
+    @classmethod
+    def _base_url_valid(cls, value: str | None) -> str | None:
+        """Same condition origin_guard.normalise_origin needs to turn this
+        into an origin (http(s) scheme, a hostname); a value it cannot use
+        must not pass validation silently and fall into the dev fallback."""
+        if value is None:
+            return None
+        parts = urlsplit(value.strip())
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ValueError(f"PLAK_BASE_URL: {value.strip()!r} is not an http(s) URL with a hostname")
+        return value
+
+    @field_validator("content_base_url")
+    @classmethod
+    def _content_base_url_with_host(cls, value: str) -> str:
+        if not urlsplit(value).hostname:
+            raise ValueError(
+                "PLAK_CONTENT_BASE_URL must be an absolute URL with a hostname, "
+                "for example https://plak.example.org"
+            )
+        return value
+
+    @property
+    def content_host(self) -> str:
+        """Hostname of the content origin, lowercase. The validator above
+        guarantees the URL carries one."""
+        return urlsplit(self.content_base_url).hostname or ""
+
+    @field_validator("environment")
+    @classmethod
+    def _environment_valid(cls, value: str) -> str:
+        if value not in ("dev", "productie"):
+            raise ValueError("PLAK_ENVIRONMENT must be 'dev' or 'productie'")
+        return value
+
+    @field_validator("oidc_client_auth")
+    @classmethod
+    def _client_auth_valid(cls, value: str) -> str:
+        if value not in OIDC_CLIENT_AUTH_METHODS:
+            raise ValueError(
+                "PLAK_OIDC_CLIENT_AUTH must be one of "
+                + ", ".join(OIDC_CLIENT_AUTH_METHODS)
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _oidc_source_and_secrets(self) -> Settings:
+        used_secret = self.oidc_client_auth != "private_key_jwt"
+
+        if not self.oidc_issuer and self.zad_oidc_discovery_url:
+            self.oidc_issuer = issuer_from_discovery_url(self.zad_oidc_discovery_url)
+        if not self.oidc_client_id and self.zad_oidc_client_id:
+            self.oidc_client_id = self.zad_oidc_client_id
+        # The ZAD secret belongs to a client_secret method only; under
+        # private_key_jwt it stays unused instead of raising an error.
+        if used_secret and not self.oidc_client_secret and self.zad_oidc_client_secret:
+            self.oidc_client_secret = self.zad_oidc_client_secret
+
+        if not self.oidc_issuer:
+            raise ValueError(
+                "PLAK_OIDC_ISSUER is required (on ZAD, OIDC_DISCOVERY_URL "
+                "of the Keycloak service suffices)"
+            )
+        if not self.oidc_client_id:
+            raise ValueError(
+                "PLAK_OIDC_CLIENT_ID is required (on ZAD, OIDC_CLIENT_ID "
+                "of the Keycloak service suffices)"
+            )
+
+        method_ = self.oidc_client_auth
+        if used_secret:
+            if not self.oidc_client_secret:
+                raise ValueError(
+                    f"PLAK_OIDC_CLIENT_SECRET is required with PLAK_OIDC_CLIENT_AUTH={method_} "
+                    "(on ZAD, OIDC_CLIENT_SECRET of the Keycloak service suffices)"
+                )
+            if self.oidc_client_private_jwk:
+                raise ValueError(
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is not used with "
+                    f"PLAK_OIDC_CLIENT_AUTH={method_}; remove the key or choose "
+                    "private_key_jwt"
+                )
+        else:
+            if not self.oidc_client_private_jwk:
+                raise ValueError(
+                    "PLAK_OIDC_CLIENT_PRIVATE_JWK is required with "
+                    "PLAK_OIDC_CLIENT_AUTH=private_key_jwt"
+                )
+            if self.oidc_client_secret:
+                raise ValueError(
+                    "PLAK_OIDC_CLIENT_SECRET is not used with PLAK_OIDC_CLIENT_AUTH="
+                    "private_key_jwt; remove the secret or choose client_secret_post "
+                    "or client_secret_basic"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _production_requirements(self) -> Settings:
+        if self.environment == "productie":
+            if self.behind_proxy is None:
+                raise ValueError(
+                    "PLAK_BEHIND_PROXY is required when "
+                    "PLAK_ENVIRONMENT=productie; 'false' means: no proxy in front"
+                )
+            if not self.oidc_iss_required:
+                raise ValueError(
+                    "PLAK_OIDC_ISS_REQUIRED must be 'true' when "
+                    "PLAK_ENVIRONMENT=productie"
+                )
+            if not self.base_url:
+                raise ValueError(
+                    "PLAK_BASE_URL is required when PLAK_ENVIRONMENT=productie"
+                )
+            # The issuer is already filled in by _oidc_source_and_secrets above,
+            # whether it came from PLAK_OIDC_ISSUER or from OIDC_DISCOVERY_URL.
+            issuer = urlsplit(self.oidc_issuer)
+            if issuer.scheme != "https":
+                raise ValueError(
+                    "PLAK_OIDC_ISSUER must be an https URL when "
+                    "PLAK_ENVIRONMENT=productie; http is only for the dev mock"
+                )
+            if not issuer.hostname or is_loopback_host(issuer.hostname):
+                raise ValueError(
+                    "PLAK_OIDC_ISSUER must have a real hostname when "
+                    "PLAK_ENVIRONMENT=productie; loopback and .localhost are only for "
+                    "the dev mock"
+                )
+        return self
+
+
+def _field_name_from_location(location: tuple) -> str:
+    if location:
+        return f"PLAK_{str(location[0]).upper()}"
+    return "PLAK_<unknown>"
+
+
+def load_settings() -> Settings:
+    """Loads the settings, or fails with a clear message."""
+    try:
+        return Settings()
+    except ValidationError as error:
+        messages = []
+        for fields_error in error.errors():
+            field_name = _field_name_from_location(fields_error.get("loc", ()))
+            description_ = fields_error.get("msg", "invalid value")
+            messages.append(f"{field_name}: {description_}")
+        # Never render str(error) or chain the ValidationError (from None):
+        # pydantic shows input_value in there and that can be a secret
+        # (session_secret, audit_pepper, oidc_client_secret).
+        details = "; ".join(messages) if messages else (
+            f"{error.error_count()} validation error(s) without a field location"
+        )
+        raise ConfigurationError(f"Configuration error in environment variables: {details}") from None
