@@ -1210,7 +1210,9 @@ Toon was called Plak. The old hosts `beheer.plak.rijks.app` and
 so links keep working. A visitor who came in through a secret link opens the
 full link once more, because the cookie it set belongs to the old host.
 Publishing does not follow a redirect:
-a CLI from before the rename stops with `Error: HTTP 302`. Everyone signs
+a CLI from before the rename stops with `Error: Plak is now called Toon.
+Nothing was published. Point this client at https://beheer.toon.rijks.app.`
+Everyone signs
 in to the admin again once, and a CLI session from before the rename no longer
 works, so each machine runs `toon login` once. `<tag>` below is the first release tag under
 the name Toon, or a later one.

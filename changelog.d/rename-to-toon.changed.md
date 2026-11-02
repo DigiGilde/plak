@@ -7,7 +7,7 @@
   session from before the rename no longer works. "Linked CLI sessions" lists it
   until it expires, at most 30 days later.
 - The CLI is the `toon` command instead of `plak`, and `toon --version` prints
-  `toon-cli` and the version. An old CLI stops with `Error: HTTP 302`.
+  `toon-cli` and the version. An old CLI stops with an error that names the new host.
 - The action is `DigiGilde/toon/actions/publish`, and a workflow changes its
   `uses:` line and its `host`.
 - The action and the CLI translate the two old DigiGilde hosts to the new ones
