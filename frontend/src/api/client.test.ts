@@ -66,7 +66,7 @@ describe('Accept-Language', () => {
 describe('CSRF header', () => {
   afterEach(() => {
     // __Host- cookies require an explicit Secure (and Path=/, no Domain).
-    document.cookie = '__Host-plak-csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure';
+    document.cookie = '__Host-toon-csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure';
   });
 
   it('sends no CSRF header when there is no cookie to double-submit', async () => {

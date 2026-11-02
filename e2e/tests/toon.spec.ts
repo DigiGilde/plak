@@ -41,7 +41,7 @@ const distV1 = makeTarGz({
   'index.html':
     '<!doctype html><html lang="nl"><head><meta charset="utf-8">' +
     '<title>E2E</title><link rel="stylesheet" href="stijl.css"></head>' +
-    '<body><h1>Plak E2E versie 1</h1>' +
+    '<body><h1>Toon E2E versie 1</h1>' +
     '<a href="onderdeel/pagina.html">onderdeel</a></body></html>',
   'stijl.css': 'h1 { color: rebeccapurple; }',
   'onderdeel/pagina.html':
@@ -53,7 +53,7 @@ const distV2 = makeTarGz({
   'index.html':
     '<!doctype html><html lang="nl"><head><meta charset="utf-8">' +
     '<title>E2E</title><link rel="stylesheet" href="stijl.css"></head>' +
-    '<body><h1>Plak E2E versie 2</h1>' +
+    '<body><h1>Toon E2E versie 2</h1>' +
     '<a href="onderdeel/pagina.html">onderdeel</a></body></html>',
   'stijl.css': 'h1 { color: seagreen; }',
   'onderdeel/pagina.html':
@@ -64,7 +64,7 @@ const distV2 = makeTarGz({
 const distPreview = makeTarGz({
   'index.html':
     '<!doctype html><html lang="nl"><head><meta charset="utf-8">' +
-    '<title>Preview</title></head><body><h1>Plak E2E preview pr-42</h1></body></html>',
+    '<title>Preview</title></head><body><h1>Toon E2E preview pr-42</h1></body></html>',
 });
 
 let adminContext: BrowserContext;
@@ -82,7 +82,7 @@ let versionId1: string;
 let versionId2: string;
 let cliToken: string;
 
-test.describe.serial('Plak E2E (spec 13)', () => {
+test.describe.serial('Toon E2E (spec 13)', () => {
   test.beforeAll(async ({ browser }) => {
     adminContext = await browser.newContext(CONTEXT_OPTIONS);
     secondMemberContext = await browser.newContext(CONTEXT_OPTIONS);
@@ -143,7 +143,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     // The admin session cookie is a __Host cookie on the admin host and
     // does not exist on the content host (origin separation).
     const adminCookies = await adminContext.cookies(ADMIN_URL);
-    expect(adminCookies.some((cookie) => cookie.name === '__Host-plak-session')).toBe(true);
+    expect(adminCookies.some((cookie) => cookie.name === '__Host-toon-session')).toBe(true);
     const contentCookies = await adminContext.cookies(CONTENT_URL);
     expect(contentCookies).toHaveLength(0);
 
@@ -234,7 +234,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     const anonymous = await adminContext.browser()!.newContext(CONTEXT_OPTIONS);
     const page = await anonymous.newPage();
     await page.goto(`${CONTENT_URL}${SITE_PATH}/`);
-    await expect(page.locator('h1')).toHaveText('Plak E2E versie 1');
+    await expect(page.locator('h1')).toHaveText('Toon E2E versie 1');
     await anonymous.close();
 
     const style = await contentApi.get(`${SITE_PATH}/stijl.css`);
@@ -255,7 +255,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     const wrongOrigin = await adminApi.get(`${SITE_PATH}/`);
     const adminBody = await body(wrongOrigin);
     expect(adminBody).toContain('<div id="app">');
-    expect(adminBody).not.toContain('Plak E2E versie 1');
+    expect(adminBody).not.toContain('Toon E2E versie 1');
     const apiOnContent = await contentApi.get(`${API}/overview`);
     expect(apiOnContent.status()).toBe(404);
     expect(await body(apiOnContent)).toBe(NEUTRAL_404);
@@ -267,7 +267,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     versionId2 = (upload.json as { versionId: string }).versionId;
 
     const live = await contentApi.get(`${SITE_PATH}/`);
-    expect(await body(live)).toContain('Plak E2E versie 2');
+    expect(await body(live)).toContain('Toon E2E versie 2');
 
     const versions = await adminFetch(adminPage, 'GET', `${API}/sites/${GROUP}/${SITE}/versions`);
     expect(versions.status).toBe(200);
@@ -299,10 +299,10 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     await visitWithLogin(contentPage, `${CONTENT_URL}${SITE_PATH}/`, SECOND_MEMBER_SUB, {
       email: SECOND_MEMBER_EMAIL,
     });
-    await expect(contentPage.locator('h1')).toHaveText('Plak E2E versie 2');
+    await expect(contentPage.locator('h1')).toHaveText('Toon E2E versie 2');
 
     await contentPage.goto(`${CONTENT_URL}${SITE_PATH}/_version/${versionId1}/`);
-    await expect(contentPage.locator('h1')).toHaveText('Plak E2E versie 1');
+    await expect(contentPage.locator('h1')).toHaveText('Toon E2E versie 1');
     await contentPage.close();
   });
 
@@ -312,11 +312,11 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     });
     expect(access.status).toBe(200);
 
-    // `plak login`: device authorization, approval in the real SPA at
+    // `toon login`: device authorization, approval in the real SPA at
     // /cli-link, and the token exchange, all Node-side plus the
     // already-logged-in admin page, the way a human and the CLI do it together.
     cliToken = await cliLoginToken(adminApi, adminPage, ADMIN_URL, ADMIN_SUB, { email: ADMIN_EMAIL });
-    expect(cliToken).toMatch(/^plakcli_/);
+    expect(cliToken).toMatch(/^tooncli_/);
 
     // Bearer deploy without an Origin header: the CI path of the publiceer action
     // (a CLI token is accepted the same way).
@@ -331,7 +331,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
 
     const preview = await contentApi.get(`${SITE_PATH}/_preview/pr-42/`);
     expect(preview.status()).toBe(200);
-    expect(await body(preview)).toContain('Plak E2E preview pr-42');
+    expect(await body(preview)).toContain('Toon E2E preview pr-42');
     expect(preview.headers()['x-robots-tag']).toContain('noindex');
 
     // Teardown is idempotent (spec 8): 204 twice, then the neutral 404.
@@ -378,14 +378,14 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     });
     expect(withKey.status()).toBe(302);
     expect(withKey.headers()['location']).toBe(`${SITE_PATH}/?x=1`);
-    expect(withKey.headers()['set-cookie']).toContain('__Secure-plak-key=');
+    expect(withKey.headers()['set-cookie']).toContain('__Secure-toon-key=');
 
     // With the key in an anonymous browser: content visible on the clean URL,
     // and the __Secure cookie carries the follow-up navigation without ?key.
     const anonymous = await adminContext.browser()!.newContext(CONTEXT_OPTIONS);
     const page = await anonymous.newPage();
     await page.goto(`${CONTENT_URL}${SITE_PATH}/?key=${encodeURIComponent(value)}`);
-    await expect(page.locator('h1')).toHaveText('Plak E2E versie 2');
+    await expect(page.locator('h1')).toHaveText('Toon E2E versie 2');
     expect(page.url()).toBe(`${CONTENT_URL}${SITE_PATH}/`);
     await page.goto(`${CONTENT_URL}${SITE_PATH}/onderdeel/pagina.html`);
     await expect(page.locator('h1')).toHaveText('Subpagina versie 2');
@@ -433,10 +433,10 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     // URL under the site; on the root of the host there is nothing that
     // grants anything.
     const siteCookies = await inviteeContext.cookies(`${CONTENT_URL}${SITE_PATH}/`);
-    expect(siteCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(true);
+    expect(siteCookies.some((cookie) => cookie.name === '__Secure-toon-content')).toBe(true);
     const contentCookies = await inviteeContext.cookies(CONTENT_URL);
-    expect(contentCookies.some((cookie) => cookie.name === '__Secure-plak-content')).toBe(false);
-    expect(contentCookies.some((cookie) => cookie.name === '__Host-plak-session')).toBe(false);
+    expect(contentCookies.some((cookie) => cookie.name === '__Secure-toon-content')).toBe(false);
+    expect(contentCookies.some((cookie) => cookie.name === '__Host-toon-session')).toBe(false);
     // From inside the page the call does not even leave the browser: the
     // sandbox gives the document an opaque origin, so connect-src 'self'
     // no longer matches its own host (serving/response.py). From outside
@@ -452,7 +452,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     const apiFromNode = await contentApi.get('/-/api/v1/me');
     expect(apiFromNode.status()).toBe(404);
     const adminCookies = await inviteeContext.cookies(ADMIN_URL);
-    expect(adminCookies.filter((cookie) => cookie.name === '__Host-plak-session')).toHaveLength(0);
+    expect(adminCookies.filter((cookie) => cookie.name === '__Host-toon-session')).toHaveLength(0);
     await page.close();
 
     // And in the browser itself: on the admin origin the invitee is
@@ -514,7 +514,7 @@ test.describe.serial('Plak E2E (spec 13)', () => {
     const anonymous = await adminContext.browser()!.newContext(CONTEXT_OPTIONS);
     const page = await anonymous.newPage();
     await page.goto(`${CONTENT_URL}${SITE_PATH}/?key=${encodeURIComponent(value)}`);
-    await expect(page.locator('h1')).toHaveText('Plak E2E versie 2');
+    await expect(page.locator('h1')).toHaveText('Toon E2E versie 2');
     expect(page.url()).toBe(`${CONTENT_URL}/${GROUP}/${moved}/`);
     await anonymous.close();
 

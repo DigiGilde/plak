@@ -3,7 +3,7 @@ type: llm
 ---
 
 The user wants to publish a Vite-built Vue app whose index.html loads the whole
-app through `<script type="module" crossorigin src=...>`. On Plak every site is
+app through `<script type="module" crossorigin src=...>`. On Toon every site is
 shielded from the other sites by default, and a shielded page cannot load a
 module script from its own site, so this app would show a blank page.
 

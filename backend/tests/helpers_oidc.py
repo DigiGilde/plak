@@ -35,10 +35,10 @@ from toon.config import Settings
 from toon.main import SessionRecheckMiddleware
 from toon.platform import backchannel, pages
 
-APP_BASE_URL = "https://plak.example"
+APP_BASE_URL = "https://toon.example"
 # The content host of the same app: /-/login and /-/oauth2/callback have one
 # spelling on both hosts, so only the Host header tells the two flows apart.
-CONTENT_BASE_URL = "https://content.plak.example"
+CONTENT_BASE_URL = "https://content.toon.example"
 
 # Sentinel to leave a claim out of the token.
 OMIT = object()
@@ -56,7 +56,7 @@ def make_client_jwk() -> str:
 
 
 class MockIdP:
-    def __init__(self, issuer: str = "https://idp.example", client_id: str = "plak-client") -> None:
+    def __init__(self, issuer: str = "https://idp.example", client_id: str = "toon-client") -> None:
         self.issuer = issuer
         self.client_id = client_id
         self.private_key = RSAKey.generate_key(2048)
@@ -236,9 +236,9 @@ def make_settings(idp: MockIdP, **overrides) -> Settings:
     """private_key_jwt by default; with oidc_client_auth=client_secret_* a
     client secret takes the place of the JWK."""
     default = {
-        "db_url": "postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        "db_url": "postgresql+asyncpg://toon:toon@localhost:5432/toon",
         # Dummy: no test in this module touches the content store.
-        "content_root": "/onbestaand/plak-content",
+        "content_root": "/onbestaand/toon-content",
         "oidc_issuer": idp.issuer,
         "oidc_client_id": idp.client_id,
         "oidc_client_private_jwk": make_client_jwk(),
@@ -308,7 +308,7 @@ def set_session_cookie(
         sub=sub, email=email, email_verified=email_verified, acr=acr, refresh_token=refresh_token, sid=sid
     )
     token = sign(app.state.settings.session_secret, session.id)
-    client.cookies.set(SESSION_COOKIE, token, domain="plak.example", path="/")
+    client.cookies.set(SESSION_COOKIE, token, domain="toon.example", path="/")
     return session
 
 
@@ -340,10 +340,10 @@ def set_content_session_cookie(
         sid=sid,
     )
     token = sign(app.state.settings.session_secret, session.id)
-    client.cookies.set(CONTENT_ANCHOR_COOKIE, token, domain="plak.example", path=CONTENT_ANCHOR_PATH)
+    client.cookies.set(CONTENT_ANCHOR_COOKIE, token, domain="toon.example", path=CONTENT_ANCHOR_PATH)
     for prefix in sites:
         store.note_content_site(session.id, prefix)
-        client.cookies.set(CONTENT_SESSION_COOKIE, token, domain="plak.example", path=prefix)
+        client.cookies.set(CONTENT_SESSION_COOKIE, token, domain="toon.example", path=prefix)
     return store.get_session(session.id) or session
 
 

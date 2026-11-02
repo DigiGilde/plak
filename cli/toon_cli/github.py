@@ -1,14 +1,14 @@
-"""Reports a Plak deploy back to GitHub for the publish action: a deployment
+"""Reports a Toon deploy back to GitHub for the publish action: a deployment
 in an environment, and a comment on the pull request with the link.
 
-Not a `plak` subcommand: actions/publish runs it as `python -m
-plak_cli.github`, with the runner's GITHUB_* variables in the environment.
+Not a `toon` subcommand: actions/publish runs it as `python -m
+toon_cli.github`, with the runner's GITHUB_* variables in the environment.
 
 Usage:
-    python -m plak_cli.github publish --site <group/site> --url <url> \
+    python -m toon_cli.github publish --site <group/site> --url <url> \
         --version-id <id> [--access <access>] [--preview-ref <ref>] \
         [--environment <name>] [--comment]
-    python -m plak_cli.github teardown --site <group/site> --preview-ref <ref> \
+    python -m toon_cli.github teardown --site <group/site> --preview-ref <ref> \
         [--environment <name>] [--comment]
 """
 
@@ -21,7 +21,7 @@ import sys
 
 import httpx
 
-from plak_cli import ACCESS_BASE_WHO, VERSION
+from toon_cli import ACCESS_BASE_WHO, VERSION
 
 PER_PAGE = 100
 
@@ -59,14 +59,18 @@ class GitHub:
             page += 1
 
 
-def _task(site: str, preview_ref: str | None) -> str:
+def _tasks(site: str, preview_ref: str | None) -> tuple[str, str]:
     # The task tells this site's previews apart within one environment, so
-    # one pull request never touches another's deployment.
-    return f"deploy:plak/{site}/{preview_ref}" if preview_ref else f"deploy:plak/{site}"
+    # one pull request never touches another's deployment. The second is the
+    # task from before the rename, or a deployment made then stays active.
+    target = f"{site}/{preview_ref}" if preview_ref else site
+    return f"deploy:toon/{target}", f"deploy:plak/{target}"
 
 
-def _marker(site: str, preview_ref: str) -> str:
-    return f"<!-- plak-preview {site} {preview_ref} -->"
+def _markers(site: str, preview_ref: str) -> tuple[str, str]:
+    # The second is the marker from before the rename, or a pull request that
+    # was open then gets a second comment.
+    return f"<!-- toon-preview {site} {preview_ref} -->", f"<!-- plak-preview {site} {preview_ref} -->"
 
 
 def _event() -> dict:
@@ -87,29 +91,30 @@ def _run_url() -> str:
     return f"{env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/actions/runs/{env['GITHUB_RUN_ID']}"
 
 
-def _deactivate(github: GitHub, environment: str, task: str, keep: int | None) -> None:
-    """Marks this preview's earlier deployments inactive, skipping keep and
-    those already inactive."""
-    for deployment in github.pages("/deployments", {"environment": environment, "task": task}):
-        if deployment["id"] == keep:
-            continue
-        statuses = github.request(
-            "GET", f"/deployments/{deployment['id']}/statuses", params={"per_page": 1}
-        ).json()
-        if statuses and statuses[0]["state"] == "inactive":
-            continue
-        github.request("POST", f"/deployments/{deployment['id']}/statuses", json={"state": "inactive"})
+def _deactivate(github: GitHub, environment: str, tasks: tuple[str, str], keep: int | None) -> None:
+    """Marks this preview's earlier deployments inactive, under either task,
+    skipping keep and those already inactive."""
+    for task in tasks:
+        for deployment in github.pages("/deployments", {"environment": environment, "task": task}):
+            if deployment["id"] == keep:
+                continue
+            statuses = github.request(
+                "GET", f"/deployments/{deployment['id']}/statuses", params={"per_page": 1}
+            ).json()
+            if statuses and statuses[0]["state"] == "inactive":
+                continue
+            github.request("POST", f"/deployments/{deployment['id']}/statuses", json={"state": "inactive"})
 
 
 def create_deployment(
     github: GitHub, event: dict, environment: str, site: str, preview_ref: str | None, url: str
 ) -> None:
-    task = _task(site, preview_ref)
+    tasks = _tasks(site, preview_ref)
     body: dict = {
         "ref": _head_sha(event),
-        "task": task,
+        "task": tasks[0],
         "environment": environment,
-        "description": f"Plak {site}",
+        "description": f"Toon {site}",
         # Without these two GitHub merges the default branch into ref and
         # refuses the deployment while any commit status is not green.
         "auto_merge": False,
@@ -127,19 +132,19 @@ def create_deployment(
         status["auto_inactive"] = False
     github.request("POST", f"/deployments/{deployment['id']}/statuses", json=status)
     if preview_ref:
-        _deactivate(github, environment, task, keep=deployment["id"])
+        _deactivate(github, environment, tasks, keep=deployment["id"])
 
 
-def _find_comment(github: GitHub, number: int, marker: str) -> dict | None:
+def _find_comment(github: GitHub, number: int, markers: tuple[str, str]) -> dict | None:
     for comment in github.pages(f"/issues/{number}/comments", {}):
-        if (comment.get("body") or "").startswith(marker):
+        if (comment.get("body") or "").startswith(markers):
             return comment
     return None
 
 
-def upsert_comment(github: GitHub, number: int, marker: str, text: str, *, create: bool) -> None:
-    body = f"{marker}\n{text}"
-    comment = _find_comment(github, number, marker)
+def upsert_comment(github: GitHub, number: int, markers: tuple[str, str], text: str, *, create: bool) -> None:
+    body = f"{markers[0]}\n{text}"
+    comment = _find_comment(github, number, markers)
     if comment is not None:
         github.request("PATCH", f"/issues/comments/{comment['id']}", json={"body": body})
     elif create:
@@ -147,7 +152,7 @@ def upsert_comment(github: GitHub, number: int, marker: str, text: str, *, creat
 
 
 def _access(value: str) -> tuple[str, bool, bool]:
-    """The access line plak publish writes: `site_team,invitees`, say."""
+    """The access line toon publish writes: `site_team,invitees`, say."""
     base, *extras = value.split(",")
     if base not in ACCESS_BASE_WHO or len(set(extras)) != len(extras) or not set(extras) <= {"keys", "invitees"}:
         raise argparse.ArgumentTypeError(f"not an access: {value!r}")
@@ -167,12 +172,12 @@ def _access_line(access: tuple[str, bool, bool]) -> str:
         signed_in.append("invitees")
     if not signed_in:
         return "Open to anyone with a secret link." if keys else "Open to nobody yet."
-    line = f"Open to {' and '.join(signed_in)}, after signing in on Plak"
+    line = f"Open to {' and '.join(signed_in)}, after signing in on Toon"
     return f"{line}, and to anyone with a secret link." if keys else f"{line}."
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m plak_cli.github")
+    parser = argparse.ArgumentParser(prog="python -m toon_cli.github")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("publish", "teardown"):
         command = sub.add_parser(name)
@@ -202,7 +207,7 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": f"plak-cli/{VERSION}",
+            "User-Agent": f"toon-cli/{VERSION}",
         },
         timeout=30.0,
         transport=transport,
@@ -220,19 +225,19 @@ def run(argv: list[str], transport: httpx.BaseTransport | None = None) -> int:
                 upsert_comment(
                     github,
                     number,
-                    _marker(args.site, preview_ref or "live"),
+                    _markers(args.site, preview_ref or "live"),
                     f"**{what}:** {args.url}\n\n{access}"
-                    f"Commit {_head_sha(event)[:7]}, Plak version `{args.version_id}`.",
+                    f"Commit {_head_sha(event)[:7]}, Toon version `{args.version_id}`.",
                     create=True,
                 )
         else:
             if args.environment:
-                _deactivate(github, args.environment, _task(args.site, preview_ref), keep=None)
+                _deactivate(github, args.environment, _tasks(args.site, preview_ref), keep=None)
             if args.comment and number is not None:
                 upsert_comment(
                     github,
                     number,
-                    _marker(args.site, preview_ref),
+                    _markers(args.site, preview_ref),
                     "**Preview:** removed.",
                     create=False,
                 )

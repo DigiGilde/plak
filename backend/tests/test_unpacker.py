@@ -1029,7 +1029,7 @@ class TestZipEntryCount:
     def test_an_ordinary_comment_leaves_the_bundle_alone(self, unpack: UnpackFn):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as archive:
-            archive.comment = b"gemaakt met plak" * 10
+            archive.comment = b"gemaakt met toon" * 10
             archive.writestr("index.html", b"<h1>hoi</h1>")
         assert unpack("site.zip", buf.getvalue()) == {"index.html": b"<h1>hoi</h1>"}
 
@@ -1167,13 +1167,13 @@ def test_limits_from_settings(tmp_path):
         db_url="postgresql+asyncpg://x/y",
         content_root=tmp_path,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak",
+        oidc_client_id="toon",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr",
         session_secret="s" * 32,
         audit_pepper="p" * 32,
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-        content_base_url="https://plak.example",
+        content_base_url="https://toon.example",
         environment="dev",
         ingest_max_file=1,
         ingest_max_total=2,
@@ -1332,7 +1332,7 @@ class TestSecretsAreRefused:
 
     def test_env_in_the_bundle_becomes_refused(self, unpack: UnpackFn):
         with pytest.raises(BundleError) as error:
-            unpack("site.zip", make_zip({"index.html": b"<h1>hoi</h1>", ".env": b"PLAK_TOKEN=geheim"}))
+            unpack("site.zip", make_zip({"index.html": b"<h1>hoi</h1>", ".env": b"TOON_TOKEN=geheim"}))
         assert reason_of(error) == "SECRET_FILE"
         # The message has to say what you do instead.
         assert "dist" in str(error.value)
@@ -1370,7 +1370,7 @@ class TestSecretsAreRefused:
             make_zip(
                 {
                     "project/dist/index.html": b"<h1>hoi</h1>",
-                    "project/.env": b"PLAK_TOKEN=geheim",
+                    "project/.env": b"TOON_TOKEN=geheim",
                     "project/.git/config": b"x",
                 }
             ),

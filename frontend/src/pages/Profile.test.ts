@@ -96,7 +96,7 @@ describe('Profile: who you are', () => {
 
     const link = wrapper.find('[data-testid="profile-cli-install"]');
     expect(link.attributes('href')).toBe(
-      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+      'https://github.com/DigiGilde/toon/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-toon-login',
     );
     expect(link.attributes('target')).toBe('_blank');
   });

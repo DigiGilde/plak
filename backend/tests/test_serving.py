@@ -47,7 +47,7 @@ from toon.serving.response import PLATFORM_CSP, _ContentFileResponse, _GunzipRes
 from toon.serving.router import router as serving_router
 from toon.slug_window import redirect_ends_at
 
-BASE_URL = "https://plak.example"
+BASE_URL = "https://toon.example"
 
 FULL_CSP = (
     "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "
@@ -84,7 +84,7 @@ def make_settings(content_root: Path) -> Settings:
         db_url="postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
@@ -125,7 +125,7 @@ def _make_app(settings: Settings, factory, store: ContentStore) -> FastAPI:
     app.state.audit_log = AuditLog(factory, settings.audit_pepper, settings.audit_ip_key_bytes)
     app.include_router(serving_router)
     # As in main.py: on the content host HEAD reaches the routes as GET.
-    app.add_middleware(ContentHeadMiddleware, content_host="plak.example")
+    app.add_middleware(ContentHeadMiddleware, content_host="toon.example")
     return app
 
 
@@ -347,9 +347,9 @@ async def _raw_request(
         "raw_path": raw_path.encode("ascii"),
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"host", b"plak.example"), *extra_headers],
+        "headers": [(b"host", b"toon.example"), *extra_headers],
         "client": ("203.0.113.5", 4711),
-        "server": ("plak.example", 443),
+        "server": ("toon.example", 443),
     }
     messages: list[dict] = []
 
@@ -891,7 +891,7 @@ class TestKey:
         assert "set-cookie" in response.headers
 
     async def test_cookie_only_gives_afterwards_access(self, client, environment):
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/")
         assert response.status_code == 200
         assert response.content == SECRET_INDEX
@@ -903,21 +903,21 @@ class TestKey:
     ):
         # Access already came in on the cookie; a garbage ?key= alongside it
         # must not crash and must not trigger a fresh Set-Cookie.
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/?key=onbruikbaar.waarde")
         assert response.status_code == 200
         assert response.content == SECRET_INDEX
         assert "set-cookie" not in response.headers
 
     async def test_bare_key_id_as_cookie_is_neutral_404(self, client, environment):
-        """The key id alone is no credential: only a cookie Plak signed itself counts."""
-        client.cookies.set(KEY_COOKIE, str(environment.world.key_id), domain="plak.example", path="/")
+        """The key id alone is no credential: only a cookie Toon signed itself counts."""
+        client.cookies.set(KEY_COOKIE, str(environment.world.key_id), domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/")
         assert response.status_code == 404
 
     async def test_tampered_key_cookie_is_neutral_404(self, client, environment):
         tampered = _signed_key_cookie(environment)[:-2] + "xx"
-        client.cookies.set(KEY_COOKIE, tampered, domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, tampered, domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/")
         assert response.status_code == 404
 
@@ -927,7 +927,7 @@ class TestKey:
         a key cookie: the purpose prefix, not just the signature, decides."""
         secret = environment.app.state.settings.session_secret
         unprefixed = sign(secret, str(environment.world.key_id))
-        client.cookies.set(KEY_COOKIE, unprefixed, domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, unprefixed, domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/")
         assert response.status_code == 404
 
@@ -959,7 +959,7 @@ class TestKey:
         assert response.status_code == 404
 
     async def test_asset_under_key_also_private(self, client, environment):
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/")
         response = await client.get("/aurora/geheim/map/")
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
@@ -1749,7 +1749,7 @@ class TestFirstVisitToPreviewOrVersion:
         assert "location" not in response.headers
 
     async def test_a_refused_key_cookie_keeps_the_neutral_404(self, client, environment):
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/")
         response = await client.get("/aurora/site/_preview/pr-besloten/", headers=self.NAVIGATION)
         assert response.status_code == 404
         assert "location" not in response.headers
@@ -3075,7 +3075,7 @@ class TestOldAddress:
         self, client, environment
     ):
         await _rename_site(environment, "geheim", "verborgen")
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/aurora/geheim/")
 
         response = await client.get("/aurora/geheim/", headers=self.NAVIGATION)
 
@@ -3090,7 +3090,7 @@ class TestOldAddress:
 
     async def test_a_page_of_the_new_address_loads_an_old_path_without_a_new_cookie(self, client, environment):
         await _rename_site(environment, "geheim", "verborgen")
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/aurora/geheim/")
 
         response = await client.get(
             "/aurora/geheim/stijl.css", headers={**self.IMAGE, "Referer": f"{BASE_URL}/aurora/verborgen/"}
@@ -3102,7 +3102,7 @@ class TestOldAddress:
 
     async def test_an_allowed_request_from_another_sites_page_is_still_refused(self, client, environment):
         await _rename_site(environment, "geheim", "verborgen")
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/geheim/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/aurora/geheim/")
         unknown = await client.get("/aurora/bestaat-niet/")
 
         response = await client.get(
@@ -3188,7 +3188,7 @@ class TestOldAddress:
 
     async def test_the_redirect_writes_no_audit_row_and_the_look_at_the_new_address_does(self, client, environment):
         await _rename_site(environment, "geheim", "verborgen")
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/")
 
         redirect = await client.get("/aurora/geheim/")
         assert redirect.status_code == 301
@@ -3275,7 +3275,7 @@ class TestOldAddress:
         unknown = await client.get("/aurora/bestaat-niet/")
 
         anonymous = await client.get("/aurora/site/")
-        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="plak.example", path="/aurora/site/")
+        client.cookies.set(KEY_COOKIE, _signed_key_cookie(environment), domain="toon.example", path="/aurora/site/")
         with_the_key = await client.get("/aurora/site/")
 
         assert anonymous.status_code == 404

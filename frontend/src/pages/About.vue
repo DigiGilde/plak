@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// What Plak is, for someone who lands here from the footer.
+// What Toon is, for someone who lands here from the footer.
 import PlatformPage from './PlatformPage.vue';
 import { t } from '@/i18n';
 </script>

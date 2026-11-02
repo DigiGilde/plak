@@ -5,7 +5,7 @@ in one message; whoever has the message is in. This is the other way of
 sharing the same link: `?key=selector` goes through one channel and the
 verifier (the code) through another. The selector alone shows this page, the
 code opens the same door, and the visitor ends up with the same
-`__Secure-plak-key` cookie as a full link would have set.
+`__Secure-toon-key` cookie as a full link would have set.
 
 The page says as little as it can: no site title, no group name, nothing but
 that a code is needed. It only ever appears for a selector that belongs to a

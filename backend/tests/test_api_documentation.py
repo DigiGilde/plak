@@ -56,18 +56,18 @@ WITHOUT_BODY = {"204", "304"}
 @pytest.fixture(scope="module")
 def app(tmp_path_factory) -> FastAPI:
     settings = Settings(
-        db_url="postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        db_url="postgresql+asyncpg://toon:toon@localhost:5432/toon",
         content_root=tmp_path_factory.mktemp("content"),
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
         audit_pepper="audit-pepper-van-minstens-32-bytes!!",
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-        content_base_url="https://plak.example",
+        content_base_url="https://toon.example",
         environment="dev",
-        base_url="https://beheer.plak.example",
+        base_url="https://beheer.toon.example",
     )
     return create_app(settings)
 
@@ -239,7 +239,7 @@ class TestErrorContract:
 
         assert "HTTPValidationError" not in json.dumps(schema)
 
-    # The two halves of `plak login` a CLI reaches before it has any credential,
+    # The two halves of `toon login` a CLI reaches before it has any credential,
     # the logout, which answers 204 for any token so it is no oracle, and who
     # runs the installation, which the public privacy page shows.
     ANONYMOUS = frozenset(
@@ -324,7 +324,7 @@ class TestLocalisedSchema:
 class TestApiDescription:
     def test_info_is_filled_in(self, schema) -> None:
         info = schema["info"]
-        assert info["title"] == "Plak API"
+        assert info["title"] == "Toon API"
         assert info["description"].strip()
         assert info["contact"]["email"]
         assert info["version"].count(".") == 2

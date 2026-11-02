@@ -1,17 +1,17 @@
 {
-  "name": "plak",
-  "description": "The Plak plugin: skills for publishing a static site to a Plak instance.",
+  "name": "toon",
+  "description": "The Toon plugin: skills for publishing a static site to a Toon instance.",
   "owner": {
-    "name": "Plak team",
+    "name": "Toon team",
     "email": "digigilde@rijksoverheid.nl"
   },
   "plugins": [
     {
-      "name": "plak",
+      "name": "toon",
       "source": "./plugin",
-      "description": "Publish a static site to a Plak instance: a preview by default, live only when the user asks for it.",
+      "description": "Publish a static site to a Toon instance: a preview by default, live only when the user asks for it.",
       "author": {
-        "name": "Plak team"
+        "name": "Toon team"
       }
     }
   ]

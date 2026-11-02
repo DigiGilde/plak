@@ -1,4 +1,4 @@
-# Plak: instructions for Claude
+# Toon: instructions for Claude
 
 An addition to the global instructions. What is written here applies in
 this repo.
@@ -84,8 +84,8 @@ their English contents. Where a doc quotes a Dutch label, route or
 message, the Dutch is quoted literally, with a short English gloss only
 where the meaning is not obvious.
 
-`plugin/skills/plak-publish` is English: it is distributed to people
-outside this repository, as the `plak` plugin. Two things stay Dutch in
+`plugin/skills/toon-publish` is English: it is distributed to people
+outside this repository, as the `toon` plugin. Two things stay Dutch in
 it: the user phrasings it has to recognise or speak back ("werk mijn
 site bij", "zet dit online"), and the eval prompts in `plugin/evals/`,
 which are the words a Dutch user types. Where it quotes CLI output, the
@@ -103,6 +103,11 @@ interface. That now holds for the text it relays too: the CLI sends no
 `Accept-Language`, so the `detail` it prints comes back in English.
 
 No em dashes or en dashes, not in code and not in docs.
+
+The product is always Toon, with a capital. The command is always `toon`,
+in code formatting where the medium has it. The Dutch verb never reads
+like the product name: write "laten zien", or "tonen" at the end of the
+clause ("Opties tonen").
 
 ## Changelog
 

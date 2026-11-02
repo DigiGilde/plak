@@ -4,19 +4,24 @@ The backend is the authority. The admin SPA and the CLI keep a copy of the
 slug rule, the upload limits and the accepted archive extensions so they can
 refuse early; nothing else says that a copy still matches. The frontend and
 the CLI sources are read as text: the CLI is not installed in this venv, and
-the frontend is TypeScript.
+the frontend is TypeScript. The admin SPA and the API docs page also read the
+CSRF cookie by its name, and a mismatch there refuses every mutation in the
+browser.
 """
 
 import re
 from pathlib import Path
 
+from toon.auth.sessions import CSRF_COOKIE
 from toon.config import Settings
 from toon.constants import SLUG_RE
 
 ROOT = Path(__file__).resolve().parents[2]
 SLUG_TS = ROOT / "frontend" / "src" / "composables" / "slug.ts"
 PACKING_TS = ROOT / "frontend" / "src" / "components" / "site" / "packing.ts"
-CLI = ROOT / "cli" / "plak_cli" / "__init__.py"
+CLIENT_TS = ROOT / "frontend" / "src" / "api" / "client.ts"
+DOCS_INIT = ROOT / "backend" / "src" / "toon" / "static" / "docs" / "docs-init.js"
+CLI = ROOT / "cli" / "toon_cli" / "__init__.py"
 UNPACKER = ROOT / "backend" / "src" / "toon" / "ingest" / "unpacker.py"
 
 LIMIT_SETTINGS = {
@@ -65,6 +70,14 @@ def test_the_upload_limits_of_the_frontend_are_the_ones_of_the_backend():
     assert set(limits) == set(LIMIT_SETTINGS)
     for key, setting in LIMIT_SETTINGS.items():
         assert limits[key] == Settings.model_fields[setting].default, key
+
+
+def test_the_csrf_cookie_of_the_frontend_is_the_one_of_the_backend():
+    assert _capture(r"^const CSRF_COOKIE = '([^']+)';", CLIENT_TS) == CSRF_COOKIE
+
+
+def test_the_csrf_cookie_of_the_docs_page_is_the_one_of_the_backend():
+    assert _capture(r"^\s*var CSRF_COOKIE = '([^']+)';", DOCS_INIT) == CSRF_COOKIE
 
 
 def test_the_archive_extensions_of_the_cli_are_the_ones_of_the_backend():

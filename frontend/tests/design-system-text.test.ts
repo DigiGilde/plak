@@ -14,7 +14,8 @@
  *   2. Does every key we answer still exist, on an element of its own
  *      component that this app really uses?
  *   3. Is our Dutch still the package's Dutch, word for word, so the Dutch
- *      interface says what it always said?
+ *      interface says what it always said? REWORDED is where a word is
+ *      excused, with the package's own beside it.
  *
  * The English half is covered elsewhere: `src/i18n/index.test.ts` keeps the
  * two catalogues equally complete, so a key without an English string cannot
@@ -106,6 +107,15 @@ const UNREACHED: Record<string, string> = {
     'the toolbar title links to the overview in this tab',
   'components.toolbar.link-hint-external-new-tab-lowercase-label':
     'the toolbar title links to the overview in this tab',
+};
+
+/**
+ * Keys whose Dutch is ours on purpose, with the package's own Dutch beside it:
+ * "Toon opties" reads as the name of the product here. The package's word is
+ * held too, so a default it rewrites is looked at again.
+ */
+const REWORDED: Record<string, string> = {
+  'components.combo-box.open-menu-action': 'Toon opties',
 };
 
 function filesUnder(directory: string, keep: (name: string) => boolean): string[] {
@@ -226,10 +236,23 @@ describe('the words the design system says by itself', () => {
     expect(both).toEqual([]);
   });
 
-  it('says the same Dutch the package says', () => {
+  it('says the same Dutch the package says, but for what it rewords on purpose', () => {
     const changed = answered()
-      .filter(([, key, dutch]) => dutch !== keys.get(key)?.dutch)
+      .filter(([, key, dutch]) => REWORDED[key] === undefined && dutch !== keys.get(key)?.dutch)
       .map(([, key, dutch]) => `${key}: "${dutch}" against "${keys.get(key)?.dutch}"`);
     expect(changed).toEqual([]);
+  });
+
+  it('rewords a word only while the package still says what we moved away from', () => {
+    const spoken = new Map(answered().map(([, key, dutch]) => [key, dutch]));
+    const stale = Object.entries(REWORDED)
+      .filter(
+        ([key, original]) =>
+          keys.get(key)?.dutch !== original ||
+          spoken.get(key) === undefined ||
+          spoken.get(key) === original,
+      )
+      .map(([key]) => key);
+    expect(stale).toEqual([]);
   });
 });

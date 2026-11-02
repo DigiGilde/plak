@@ -36,7 +36,7 @@ REASON_NO_SESSION = "NO_SESSION"
 async def get_or_create_member(db: AsyncSession, session: Session, bootstrap_sub: str) -> Member:
     """Looks up the member for the session sub, or creates it active.
 
-    Anyone who can complete SSO Rijk login may use Plak, so a first admin
+    Anyone who can complete SSO Rijk login may use Toon, so a first admin
     visit needs no approval: the member is created active straight away. The
     bootstrap sub (TOON_BOOTSTRAP_ADMIN_SUB) becomes admin besides, also when
     the record already existed before the bootstrap was configured

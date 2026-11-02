@@ -83,7 +83,7 @@ describe('useRouteAnnouncer', () => {
   it('moves focus to the heading of the new page and announces its title', async () => {
     const router = makeRouter();
     await mountShell(router);
-    document.title = 'Groepen - Plak';
+    document.title = 'Groepen - Toon';
 
     await router.push('/groups');
     await flushPromises();
@@ -91,7 +91,7 @@ describe('useRouteAnnouncer', () => {
     expect(document.activeElement).toBe(document.querySelector('h1'));
     expect(document.activeElement!.textContent).toBe('Groepen');
     expect(document.activeElement!.getAttribute('tabindex')).toBe('-1');
-    expect(status()).toBe('Groepen - Plak');
+    expect(status()).toBe('Groepen - Toon');
   });
 
   it('leaves the first load alone', async () => {
@@ -120,7 +120,7 @@ describe('useRouteAnnouncer', () => {
   it('waits for a heading that only appears once the page has loaded', async () => {
     const router = makeRouter();
     await mountShell(router);
-    document.title = 'Traag - Plak';
+    document.title = 'Traag - Toon';
 
     await router.push('/slow');
     await flushPromises();
@@ -131,7 +131,7 @@ describe('useRouteAnnouncer', () => {
     await flushPromises();
 
     expect(document.activeElement).toBe(document.querySelector('h1'));
-    expect(status()).toBe('Traag - Plak');
+    expect(status()).toBe('Traag - Toon');
   });
 
   it('stops waiting for a heading when the visitor navigates on', async () => {
@@ -151,14 +151,14 @@ describe('useRouteAnnouncer', () => {
   it('moves focus to the tab panel, not the heading, when only the tab changes', async () => {
     const router = makeRouter();
     await mountShell(router, '/team/website');
-    document.title = 'Een site - Versies - Plak';
+    document.title = 'Een site - Versies - Toon';
 
     await router.push('/team/website/versions');
     await flushPromises();
 
     const panel = document.querySelector('[data-tab-panel]');
     expect(document.activeElement).toBe(panel);
-    expect(status()).toBe('Een site - Versies - Plak');
+    expect(status()).toBe('Een site - Versies - Toon');
   });
 
   it('treats another site as another page: focus goes to the heading', async () => {

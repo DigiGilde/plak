@@ -479,7 +479,7 @@ class TestLogout:
 
 class TestContentLogout:
     async def test_the_content_leg_ends_that_session_and_returns_to_admin(self, idp):
-        app = make_app(make_settings(idp, base_url="https://beheer.plak.example"), idp)
+        app = make_app(make_settings(idp, base_url="https://beheer.toon.example"), idp)
         async with make_content_test_client(app) as content_client:
             await _complete_content_login(content_client, idp)
             session_id = check_signature(
@@ -489,7 +489,7 @@ class TestContentLogout:
             response = await content_client.get("/-/logout?from=beheer")
 
         assert response.status_code == 303
-        assert response.headers["location"] == "https://beheer.plak.example/"
+        assert response.headers["location"] == "https://beheer.toon.example/"
         assert app.state.session_store.get_session(session_id) is None
         assert CONTENT_ANCHOR_COOKIE + "=" in " ".join(response.headers.get_list("set-cookie"))
 
@@ -695,6 +695,31 @@ class TestSession:
         assert content_session_from_request(request) is None
         assert content_anchor_session_from_request(request) is None
 
+    async def test_the_old_cookie_names_open_no_session(self, app):
+        """A browser can still hold the cookies from before the rename to Toon,
+        signed with the same secret. Only the name keeps them out."""
+        store = app.state.session_store
+        secret = app.state.settings.session_secret
+        admin = sign(secret, store.create_session(sub="s", email=None, email_verified=False, acr="acr").id)
+        content = sign(
+            secret,
+            store.create_session(sub="s", email=None, email_verified=False, acr="acr", kind=SessionKind.CONTENT).id,
+        )
+
+        under_the_current_names = _request_with_cookies(
+            app, f"{SESSION_COOKIE}={admin}; {CONTENT_SESSION_COOKIE}={content}; {CONTENT_ANCHOR_COOKIE}={content}"
+        )
+        assert session_from_request(under_the_current_names) is not None
+        assert content_session_from_request(under_the_current_names) is not None
+        assert content_anchor_session_from_request(under_the_current_names) is not None
+
+        under_the_old_names = _request_with_cookies(
+            app, f"__Host-plak-session={admin}; __Secure-plak-content={content}; __Secure-plak-content-anchor={content}"
+        )
+        assert session_from_request(under_the_old_names) is None
+        assert content_session_from_request(under_the_old_names) is None
+        assert content_anchor_session_from_request(under_the_old_names) is None
+
 
 class TestRobots:
     async def test_robots_txt_shuts_out_the_whole_admin_host(self, client):
@@ -709,17 +734,17 @@ class TestRobots:
 class TestRedirectUri:
     async def test_falls_back_to_request_when_base_url_missing(self, client, idp):
         q = await start_login(client, idp)
-        assert q["redirect_uri"] == "https://plak.example/-/oauth2/callback"
+        assert q["redirect_uri"] == "https://toon.example/-/oauth2/callback"
 
     async def test_used_base_url_instead_of_the_host_header(self, idp):
-        settings = make_settings(idp, base_url="https://prod.plak.nl")
+        settings = make_settings(idp, base_url="https://prod.toon.nl")
         app = make_app(settings, idp)
         async with make_test_client(app) as client:
             q = await start_login(client, idp)
-        assert q["redirect_uri"] == "https://prod.plak.nl/-/oauth2/callback"
+        assert q["redirect_uri"] == "https://prod.toon.nl/-/oauth2/callback"
 
     async def test_content_login_used_content_base_url(self, idp):
-        settings = make_settings(idp, base_url="https://beheer.plak.nl")
+        settings = make_settings(idp, base_url="https://beheer.toon.nl")
         app = make_app(settings, idp)
         async with make_content_test_client(app) as content_client:
             q = await start_login(content_client, idp, path_login=PATH_CONTENT_LOGIN)
@@ -830,7 +855,7 @@ class TestContentLogin:
             client.cookies.set(
                 CONTENT_SESSION_COOKIE,
                 sign(app.state.settings.session_secret, session.id),
-                domain="plak.example",
+                domain="toon.example",
                 path="/",
             )
             cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
@@ -854,7 +879,7 @@ class TestContentLogin:
             client.cookies.set(
                 SESSION_COOKIE,
                 sign(app.state.settings.session_secret, session.id),
-                domain="plak.example",
+                domain="toon.example",
                 path="/",
             )
             cookie_header = "; ".join(f"{name}={value}" for name, value in client.cookies.items())
@@ -874,7 +899,7 @@ class TestContentLogin:
         q = await start_login(client, idp)
         login_token = client.cookies.get(LOGIN_COOKIE)
         # The same attempt, offered as the content login cookie on the content callback.
-        content_client.cookies.set(CONTENT_LOGIN_COOKIE, login_token, domain="content.plak.example", path="/")
+        content_client.cookies.set(CONTENT_LOGIN_COOKIE, login_token, domain="content.toon.example", path="/")
         response = await content_client.get(
             CONTENT_CALLBACK, params={"code": "code-123", "state": q["state"], "iss": idp.issuer}
         )
@@ -885,13 +910,37 @@ class TestContentLogin:
     async def test_content_attempt_cannot_on_admin_callback_are_redeemed(self, client, content_client, idp):
         q = await start_login(content_client, idp, path_login=PATH_CONTENT_LOGIN)
         login_token = content_client.cookies.get(CONTENT_LOGIN_COOKIE)
-        client.cookies.set(LOGIN_COOKIE, login_token, domain="plak.example", path="/")
+        client.cookies.set(LOGIN_COOKIE, login_token, domain="toon.example", path="/")
         response = await client.get(
             "/-/oauth2/callback", params={"code": "code-123", "state": q["state"], "iss": idp.issuer}
         )
         assert response.status_code == 400
         assert idp.token_requests == []
         assert client.cookies.get(SESSION_COOKIE) is None
+
+    async def test_an_attempt_under_its_old_cookie_name_cannot_be_redeemed(self, client, idp):
+        q = await start_login(client, idp)
+        login_token = client.cookies.get(LOGIN_COOKIE)
+        client.cookies.delete(LOGIN_COOKIE)
+        client.cookies.set("__Host-plak-login", login_token, domain="toon.example", path="/")
+        response = await client.get(
+            "/-/oauth2/callback", params={"code": "code-123", "state": q["state"], "iss": idp.issuer}
+        )
+        assert response.status_code == 400
+        assert idp.token_requests == []
+        assert client.cookies.get(SESSION_COOKIE) is None
+
+    async def test_a_content_attempt_under_its_old_cookie_name_cannot_be_redeemed(self, content_client, idp):
+        q = await start_login(content_client, idp, path_login=PATH_CONTENT_LOGIN)
+        login_token = content_client.cookies.get(CONTENT_LOGIN_COOKIE)
+        content_client.cookies.delete(CONTENT_LOGIN_COOKIE)
+        content_client.cookies.set("__Host-plak-content-login", login_token, domain="content.toon.example", path="/")
+        response = await content_client.get(
+            CONTENT_CALLBACK, params={"code": "code-123", "state": q["state"], "iss": idp.issuer}
+        )
+        assert response.status_code == 400
+        assert idp.token_requests == []
+        assert content_client.cookies.get(CONTENT_SESSION_COOKIE) is None
 
     async def test_content_session_rotates_on_new_login(self, content_client, app, idp):
         secret = app.state.settings.session_secret
@@ -1010,7 +1059,7 @@ class TestContentCookiePerSite:
         await content_client.get("/-/logout")
 
         content_client.cookies.set(
-            CONTENT_SESSION_COOKIE, token, domain="content.plak.example", path="/fin/rapport/"
+            CONTENT_SESSION_COOKIE, token, domain="content.toon.example", path="/fin/rapport/"
         )
         cookie_header = f"{CONTENT_SESSION_COOKIE}={token}"
         assert content_session_from_request(_request_with_cookies(app, cookie_header)) is None
@@ -1248,6 +1297,13 @@ class TestVisitorFromRequest:
         visitor = visitor_from_request(_request_with_cookies(app, f"{KEY_COOKIE}={token}"))
         assert visitor.key_cookie == "sleutel-1"
 
+    async def test_a_key_cookie_under_its_old_name_reports_no_key(self, app):
+        """No key at all rather than a refused one: from before the rename to
+        Toon, the gate sees a visitor without a link."""
+        token = sign_key_cookie(app.state.settings.session_secret, "sleutel-1")
+        visitor = visitor_from_request(_request_with_cookies(app, f"__Secure-plak-key={token}"))
+        assert visitor.key_cookie is None
+
     async def test_a_forged_key_cookie_is_reported_invalid_not_absent(self, app):
         """"" (KEY_INVALID) and None (no key at all) are different refusals for
         the gate; a tampered signature must not be read as "no key"."""
@@ -1283,6 +1339,13 @@ class TestCsrfValid:
     async def test_missing_cookie_is_refused(self, app):
         session = self._session()
         request = _request_with_headers(app, {CSRF_HEADER: session.csrf_token})
+        assert csrf_valid(request, session) is False
+
+    async def test_a_cookie_under_its_old_name_is_refused(self, app):
+        session = self._session()
+        request = _request_with_headers(
+            app, {CSRF_HEADER: session.csrf_token}, cookie_header=f"__Host-plak-csrf={session.csrf_token}"
+        )
         assert csrf_valid(request, session) is False
 
     async def test_header_and_cookie_disagreeing_is_refused(self, app):

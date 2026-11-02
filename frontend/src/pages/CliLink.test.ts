@@ -245,7 +245,7 @@ describe('CliLink: entering a code', () => {
 
     const link = wrapper.find('[data-testid="code-cli-install"]');
     expect(link.attributes('href')).toBe(
-      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+      'https://github.com/DigiGilde/toon/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-toon-login',
     );
     expect(link.attributes('target')).toBe('_blank');
   });
@@ -346,7 +346,7 @@ describe('CliLink: looking up the code via the url', () => {
     expect(lookups()).toBe(1);
 
     expect(wrapper.find('[data-testid="code-display"]').text()).toBe('ABCD-EFGH');
-    expect(wrapper.find('[data-testid="code-program"]').text()).toContain('plak-cli');
+    expect(wrapper.find('[data-testid="code-program"]').text()).toContain('toon-cli');
     expect(wrapper.find('[data-testid="code-network"]').text()).toContain('203.0.113.0/24');
     expect(wrapper.find('[data-testid="code-warning"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="code-other-network"]').exists()).toBe(false);
@@ -404,7 +404,7 @@ describe('CliLink: looking up the code via the url', () => {
     const heading = warning.attributes('text')!;
     const supporting = warning.attributes('supporting-text')!;
     expect(supporting).not.toContain(heading);
-    expect(supporting).not.toContain('plak login');
+    expect(supporting).not.toContain('toon login');
   });
 
   it('shows "Onbekend programma" without clientName', async () => {
@@ -423,7 +423,7 @@ describe('CliLink: looking up the code via the url', () => {
 
     expect(wrapper.find('[data-testid="code-linked"]').exists()).toBe(true);
     expect(backend.data.deviceAuthorizations[0]!.status).toBe('approved');
-    expect(backend.data.cliSessions.some((s) => s.clientName === 'plak-cli')).toBe(true);
+    expect(backend.data.cliSessions.some((s) => s.clientName === 'toon-cli')).toBe(true);
   });
 
   it('ignores the other button while an answer is on its way', async () => {

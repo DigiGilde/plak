@@ -1,6 +1,6 @@
 import { currentLocale, t } from '../i18n';
 
-const CSRF_COOKIE = '__Host-plak-csrf';
+const CSRF_COOKIE = '__Host-toon-csrf';
 const CSRF_HEADER = 'X-CSRF-Token';
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

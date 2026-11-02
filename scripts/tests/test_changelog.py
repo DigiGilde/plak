@@ -78,7 +78,7 @@ class TestChangelogLinks:
     """Keep a Changelog headings are links: `## [2026.10.1]` needs a
     `[2026.10.1]: <url>` at the bottom, or it shows its brackets."""
 
-    BASE = "https://github.com/DigiGilde/plak"
+    BASE = "https://github.com/DigiGilde/toon"
 
     def test_each_version_compares_with_the_one_before_and_the_first_is_its_tag(self):
         assert changelog.changelog_links(["2026.10.4.1", "2026.10.4", "2026.9.30"]) == [
@@ -156,7 +156,7 @@ class TestChangelogStructure:
         "text",
         [
             "# Changelog\n\nNothing yet.\n",
-            "# Changelog\n\n## [2026.9.1]\n\n- x\n\n[2026.9.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.1\n",
+            "# Changelog\n\n## [2026.9.1]\n\n- x\n\n[2026.9.1]: https://github.com/DigiGilde/toon/releases/tag/v2026.9.1\n",
             "# Changelog\n\n## [2026.9.1]\n\n- x\n\n## [Unreleased]\n\n" + POINTER + "\n",
         ],
         ids=["no-sections", "missing", "not-first"],
@@ -245,7 +245,7 @@ class TestReleaseText:
         text = changelog.release_text(changelog_text("## [2026.9.1]\n\n- Old."), "2026.10.1", ENTRY)
         assert text == changelog_text(f"## [2026.10.1]\n\n{ENTRY}\n\n## [2026.9.1]\n\n- Old.")
         assert changelog.changelog_problems(text) == []
-        assert "[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.1...HEAD" in text
+        assert "[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.10.1...HEAD" in text
 
     def test_the_first_version_follows_unreleased_with_a_blank_line(self):
         text = changelog.release_text(changelog_text(), "2026.10.1", ENTRY)
@@ -257,6 +257,6 @@ class TestReleaseText:
         follow the versions. The check refuses such a changelog anyway."""
         assert changelog.release_text("", "2026.10.1", "- x") == (
             "## [2026.10.1]\n\n- x\n\n"
-            "[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.1...HEAD\n"
-            "[2026.10.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.10.1\n"
+            "[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.10.1...HEAD\n"
+            "[2026.10.1]: https://github.com/DigiGilde/toon/releases/tag/v2026.10.1\n"
         )

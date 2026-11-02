@@ -56,7 +56,7 @@ from toon.models.cli import CliSession
 from toon.models.identity import Group, GroupMember, Member, MemberStatus
 from toon.models.publication import Preview, Site, Version, VersionTarget
 
-BASE_URL = "https://plak.example"
+BASE_URL = "https://toon.example"
 DEPLOY_PATH = "/-/api/v1/sites/team-aurora/website/deploys"
 
 
@@ -65,14 +65,14 @@ def _make_settings(tmp_path: Path, dsn: str, **overrides: object) -> Settings:
         "db_url": dsn,
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak",
+        "oidc_client_id": "toon",
         "oidc_client_private_jwk": "{}",
         "oidc_required_acr": "urn:acr:hoog",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         "environment": "dev",
-        "content_base_url": "https://plak.example",
+        "content_base_url": "https://toon.example",
         "base_url": AUDIENCE,
     }
     base.update(overrides)
@@ -148,7 +148,7 @@ class Environment:
 async def _cli_login(factory: async_sessionmaker[AsyncSession], member: Member) -> str:
     """Runs the device flow for `member` and returns the CLI access token."""
     async with factory() as db:
-        created = await cli.create_device_authorization(db, client_name="plak-cli test", ip_truncated=None)
+        created = await cli.create_device_authorization(db, client_name="toon-cli test", ip_truncated=None)
     async with factory() as db:
         member_row = await db.get(Member, member.id)
         await cli.decide(db, created.user_code, member_row, approve=True)
@@ -263,7 +263,7 @@ def _bearer(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-BOUNDARY = "plak-testgrens"
+BOUNDARY = "toon-testgrens"
 MULTIPART_HEADERS = {"Content-Type": f"multipart/form-data; boundary={BOUNDARY}"}
 
 
@@ -324,7 +324,7 @@ async def test_live_deploy_with_ci_token(environment: Environment) -> None:
 
     assert resp.status_code == 201
     version_id = uuid.UUID(resp.json()["versionId"])
-    assert resp.json()["url"] == "https://plak.example/team-aurora/website/"
+    assert resp.json()["url"] == "https://toon.example/team-aurora/website/"
 
     async with environment.session_factory() as db:
         version = await db.scalar(select(Version).where(Version.id == version_id))
@@ -675,9 +675,14 @@ async def test_ci_token_without_expiry_401(environment: Environment) -> None:
     assert _assert_problem(resp, 401)["code"] == "CI_TOKEN_INVALID"
 
 
-async def test_unknown_bearer_format_401(environment: Environment) -> None:
+@pytest.mark.parametrize(
+    "token",
+    ["toon_abcdefgh_" + "0" * 32, f"plakcli_{'a' * 16}_{'b' * 64}"],
+    ids=["unknown_format", "cli_token_under_its_old_prefix"],
+)
+async def test_unknown_bearer_format_401(environment: Environment, token: str) -> None:
     async with environment.client() as client:
-        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer("plak_abcdefgh_" + "0" * 32))
+        resp = await client.post(DEPLOY_PATH, files=_upload(), headers=_bearer(token))
     content = _assert_problem(resp, 401)
     assert content["code"] == "TOKEN_INVALID"
     assert resp.headers["www-authenticate"].startswith("Bearer")
@@ -892,7 +897,7 @@ async def test_preview_deploy_with_ci_token_from_a_pull_request(environment: Env
 
     assert resp.status_code == 201
     version_id = uuid.UUID(resp.json()["versionId"])
-    assert resp.json()["url"] == "https://plak.example/team-aurora/website/_preview/pr-42/"
+    assert resp.json()["url"] == "https://toon.example/team-aurora/website/_preview/pr-42/"
 
     async with environment.session_factory() as db:
         preview = await db.scalar(
@@ -1173,7 +1178,7 @@ async def test_bearer_outside_deploys_middleware_passes_non_http_scopes_through(
     async def send(_message) -> None:
         pass
 
-    scope = {"type": "lifespan", "headers": [(b"authorization", b"Bearer plakcli_abc")]}
+    scope = {"type": "lifespan", "headers": [(b"authorization", b"Bearer tooncli_abc")]}
     await middleware(scope, receive, send)
 
     assert calls == [scope]

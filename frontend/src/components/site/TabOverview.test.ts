@@ -39,7 +39,7 @@ describe('TabOverview: states', () => {
     expect(wrapper.text()).toContain('Status');
     // On the content host, not on the admin origin the SPA itself runs on.
     const url = wrapper.find('[data-testid="public-url"]');
-    expect(url.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
+    expect(url.attributes('href')).toBe('https://sites.toon.test/team-aurora/website/');
     expect(url.attributes('href')).not.toContain(window.location.origin);
     expect(wrapper.html()).toContain('Laatste deploy:');
 
@@ -65,7 +65,7 @@ describe('TabOverview: states', () => {
 
     expect(wrapper.find('[data-testid="copy-address"]').attributes('text')).toBe('Kopieer adres');
     const openButtons = wrapper.find('[data-testid="open-site"]');
-    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
+    expect(openButtons.attributes('href')).toBe('https://sites.toon.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
     // The address sits in a block of its own, not as a line among the rest.
     expect(wrapper.findAll('nldd-box').length).toBe(1);
@@ -110,7 +110,7 @@ describe('TabOverview: states', () => {
     await wrapper.find('[data-testid="copy-address"]').trigger('click');
     await untilIdle();
 
-    expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
+    expect(write).toHaveBeenCalledWith('https://sites.toon.test/team-aurora/website/');
     const notice = wrapper.find('[data-testid="copy-notice"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line in the page, so no remount swallows the confirmation.

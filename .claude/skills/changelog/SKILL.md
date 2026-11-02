@@ -1,11 +1,11 @@
 ---
 name: changelog
-description: Use when writing a changelog fragment in the Plak repository (changelog.d/<slug>.<kind>.md or a What's new note), before opening a pull request that changes backend, frontend, CLI, plugin, container or action code, when the changelog check warns or fails on a pull request, or when the PreToolUse hook denies `gh pr create` for a missing fragment. Covers the fragment file, which kind to pick, the "No changelog entry:" opt-out and the bilingual What's new note fragments.
+description: Use when writing a changelog fragment in the Toon repository (changelog.d/<slug>.<kind>.md or a What's new note), before opening a pull request that changes backend, frontend, CLI, plugin, container or action code, when the changelog check warns or fails on a pull request, or when the PreToolUse hook denies `gh pr create` for a missing fragment. Covers the fragment file, which kind to pick, the "No changelog entry:" opt-out and the bilingual What's new note fragments.
 ---
 
 # Writing a changelog fragment
 
-Plak releases itself from `CHANGELOG.md` (the full model is in
+Toon releases itself from `CHANGELOG.md` (the full model is in
 `docs/releasing.md`). Every pull request that changes what ships adds a
 fragment file under `changelog.d/` in the same pull request. Nobody
 edits `CHANGELOG.md` for a change, and nobody writes version numbers or
@@ -97,7 +97,7 @@ Rules:
 - A note does not need an entry of the same slug, and an entry does not
   need a note. Note fragments alone never make a release.
 
-The CI check prints a hint when `frontend/src/` or `cli/plak_cli/`
+The CI check prints a hint when `frontend/src/` or `cli/toon_cli/`
 changed without a note fragment. It is a question, not an error: add a
 note if the answer is yes.
 

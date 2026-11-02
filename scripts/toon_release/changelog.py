@@ -28,7 +28,7 @@ LINK_REFERENCE = re.compile(r"^\[[^\]]+\]: \S+$")
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
 
-REPOSITORY = "DigiGilde/plak"
+REPOSITORY = "DigiGilde/toon"
 
 
 @dataclass(frozen=True)

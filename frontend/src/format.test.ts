@@ -135,26 +135,26 @@ describe('formatBytes', () => {
 
 describe('contentUrl and siteUrl', () => {
   it('builds content paths on the given content origin', () => {
-    expect(contentUrl('https://sites.plak.test', '/team-aurora/website/_preview/pr-42/')).toBe(
-      'https://sites.plak.test/team-aurora/website/_preview/pr-42/',
+    expect(contentUrl('https://sites.toon.test', '/team-aurora/website/_preview/pr-42/')).toBe(
+      'https://sites.toon.test/team-aurora/website/_preview/pr-42/',
     );
-    expect(siteUrl('https://sites.plak.test', 'team-aurora', 'website')).toBe(
-      'https://sites.plak.test/team-aurora/website/',
+    expect(siteUrl('https://sites.toon.test', 'team-aurora', 'website')).toBe(
+      'https://sites.toon.test/team-aurora/website/',
     );
   });
 
   it('is insensitive to a trailing slash on the base or a leading slash on the path', () => {
-    expect(contentUrl('https://sites.plak.test/', '/team-aurora/website/')).toBe(
-      'https://sites.plak.test/team-aurora/website/',
+    expect(contentUrl('https://sites.toon.test/', '/team-aurora/website/')).toBe(
+      'https://sites.toon.test/team-aurora/website/',
     );
-    expect(contentUrl('https://sites.plak.test', 'team-aurora/website/')).toBe(
-      'https://sites.plak.test/team-aurora/website/',
+    expect(contentUrl('https://sites.toon.test', 'team-aurora/website/')).toBe(
+      'https://sites.toon.test/team-aurora/website/',
     );
   });
 
   it('never builds on the origin of the admin SPA itself', () => {
-    // jsdom runs on https://plak.test/; the content host is a different origin.
-    expect(siteUrl('https://sites.plak.test', 'team-aurora', 'website')).not.toContain(
+    // jsdom runs on https://toon.test/; the content host is a different origin.
+    expect(siteUrl('https://sites.toon.test', 'team-aurora', 'website')).not.toContain(
       window.location.origin,
     );
   });

@@ -82,19 +82,19 @@ describe('router: document title', () => {
   it('sets the title from the route meta on a page that has one', async () => {
     await router.push('/-/privacy');
 
-    expect(document.title).toBe('Privacy - Plak');
+    expect(document.title).toBe('Privacy - Toon');
   });
 
   it('falls back to the site slug for a route without a titleKey', async () => {
     await router.push('/team-aurora/website');
 
-    expect(document.title).toBe('website - Plak');
+    expect(document.title).toBe('website - Toon');
   });
 
   it('falls back to the group slug for a group route without a titleKey', async () => {
     await router.push('/team-aurora');
 
-    expect(document.title).toBe('team-aurora - Plak');
+    expect(document.title).toBe('team-aurora - Toon');
   });
 });
 

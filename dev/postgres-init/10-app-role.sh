@@ -10,7 +10,7 @@
 # it after this script.
 set -euo pipefail
 
-app_user="${TOON_DB_USER:-plak}"
+app_user="${TOON_DB_USER:-toon}"
 : "${TOON_DB_PASSWORD:?TOON_DB_PASSWORD ontbreekt in de postgres-omgeving}"
 
 # The values go in as psql variables and come out quoted by psql itself

@@ -28,7 +28,7 @@ SHIPPED_PATHS = (
     "frontend/vite.config.ts",
     "frontend/public/",
     "containers/toon/",
-    "cli/plak_cli/",
+    "cli/toon_cli/",
     "cli/pyproject.toml",
     "cli/uv.lock",
     "plugin/",
@@ -38,7 +38,7 @@ NOT_SHIPPED = ("plugin/evals/",)
 
 CLI_PYPROJECT = "cli/pyproject.toml"
 CLI_LOCK = "cli/uv.lock"
-CLI_PATHS = ("cli/plak_cli/", CLI_PYPROJECT, CLI_LOCK)
+CLI_PATHS = ("cli/toon_cli/", CLI_PYPROJECT, CLI_LOCK)
 PLUGIN_MANIFEST = "plugin/.claude-plugin/plugin.json"
 PLUGIN_PATHS = ("plugin/",)
 PUBLICCODE = "publiccode.yml"
@@ -70,7 +70,7 @@ RELEASE_PATHS = frozenset(
 ALWAYS_WRITTEN = (CHANGELOG, PUBLICCODE, BACKEND_PYPROJECT, BACKEND_LOCK, FRONTEND_PACKAGE, FRONTEND_LOCK)
 
 
-MEMBER_FACING = ("frontend/src/", "cli/plak_cli/")
+MEMBER_FACING = ("frontend/src/", "cli/toon_cli/")
 
 
 # The version lines a release writes itself. Left out when comparing a file
@@ -85,7 +85,7 @@ def _lock_version(name: str) -> re.Pattern[str]:
     )
 
 
-LOCK_VERSION = _lock_version("plak")
+LOCK_VERSION = _lock_version("toon")
 JSON_VERSION = re.compile(r'^(  "version": ")[^"\n]*(",?)$', re.MULTILINE)
 # The root package of package-lock.json, under "packages": { "": { ... } }.
 NPM_ROOT_VERSION = re.compile(r'^(    "": \{\n(?:      [^\n]*\n)*?      "version": ")[^"\n]*(",?)$', re.MULTILINE)
@@ -140,7 +140,7 @@ def pyproject_version(text: str, path: str = CLI_PYPROJECT) -> str:
     return match.group(0).split('"')[1]
 
 
-def set_lock_version(text: str, version: str, name: str = "plak", path: str = CLI_LOCK) -> str:
+def set_lock_version(text: str, version: str, name: str = "toon", path: str = CLI_LOCK) -> str:
     edited, count = _lock_version(name).subn(rf"\g<1>{version}\g<2>", text)
     if count != 1:
         raise ReleaseError(f"{path}: expected one editable package '{name}', found {count}.")

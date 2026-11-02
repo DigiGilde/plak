@@ -1,4 +1,4 @@
-# Plak on ZAD: example project file.
+# Toon on ZAD: example project file.
 #
 # ZAD does not accept Kubernetes manifests. A project is this declarative
 # YAML file; the Operations Manager generates Deployment, Service, Ingress,
@@ -16,7 +16,7 @@
 # back to the cluster address and neither public hostname appears at all, see
 # the project-level `domains` block below):
 #   1. the domain rijks.app for this project;
-#   2. the subdomain `plak` on that domain.
+#   2. the subdomain `toon` on that domain.
 #
 # WHAT DIFFERS PER ENVIRONMENT:
 #   - `subdomain` and `base-domain`, and thereby TOON_BASE_URL,
@@ -24,8 +24,10 @@
 #   - the image (CI sets that per deploy, this file does not need it);
 #   - the secrets (user-env-vars, set per deployment with `zadctl env`).
 
+# `name` and the deployment's `namespace` stay `plak`: they are ZAD's own
+# names for the existing project, not the product name.
 name: plak
-display-name: "Plak"
+display-name: "Toon"
 description: "Statische sites publiceren en delen, met previews per pull request"
 
 # The Operations Manager's own latest schema version is currently 2.2
@@ -55,7 +57,7 @@ services:
   - keycloak:
       config:
         # sso-only: the project realm brokers to the rig-platform realm and
-        # that to SSO Rijk (SAML). Plak has no local accounts.
+        # that to SSO Rijk (SAML). Toon has no local accounts.
         template: sso-only
         # The deployment client automatically gets https://{host}/* for every
         # ingress host of the deployment, but the root web address is not
@@ -63,7 +65,7 @@ services:
         # not add the root host to that list. The callback on the content
         # origin thus needs to be added here by hand, per environment.
         additional_redirect_uris:
-          - "https://plak.rijks.app/-/oauth2/callback"
+          - "https://toon.rijks.app/-/oauth2/callback"
 
 # Domain/subdomain approval. This is a project-level property in the schema
 # (project_v2.json's `domains`), not nested under a service; opi/connectors/
@@ -84,14 +86,14 @@ domains:
   allowed-subdomains:
     - domain: rijks.app
       subdomains:
-        - name: plak
+        - name: toon
           status: requested
 
 components:
   # The component name is the first label of the hostname
   # ({component}.{subdomain}.{domain}), so this one component is called
-  # `beheer` and not `app`: it serves beheer.plak.rijks.app. It is also
-  # the component that serves plak.rijks.app via `root-component` on the
+  # `beheer` and not `app`: it serves beheer.toon.rijks.app. It is also
+  # the component that serves toon.rijks.app via `root-component` on the
   # deployment. One component is enough because the app itself does content,
   # SPA and host separation (ADR: no nginx sidecar; ZAD knows exactly one
   # container per component).
@@ -111,7 +113,7 @@ components:
       - postgresql-database
       - persistent-storage:
           config:
-            # 10Gi was granted to Plak; the portal and the API offer at most
+            # 10Gi was granted to Toon; the portal and the API offer at most
             # 1Gi, so do not change this service there (docs/deploying-on-zad.md
             # §9). How full it gets shows in /-/healthz, in the log and
             # in the platform admin view (docs/deploying-on-zad.md §5).
@@ -133,7 +135,7 @@ components:
       # postgresql-database is now one shared user (the read/write vs.
       # read-only role split was removed from the project); it provides
       # DATABASE_SERVER_HOST/-PORT/-USER, DATABASE_PASSWORD and DATABASE_DB.
-      # Plak wants one DSN. Note: the password is filled in literally, not
+      # Toon wants one DSN. Note: the password is filled in literally, not
       # percent-encoded.
       TOON_DB_URL: "postgresql+asyncpg://${DATABASE_SERVER_USER}:${DATABASE_PASSWORD}@${DATABASE_SERVER_HOST}:${DATABASE_SERVER_PORT}/${DATABASE_DB}"
 
@@ -149,7 +151,7 @@ deployments:
     # the others the same way.
     #
     # `domain-format: component.subdomain` gives {component}.{subdomain}.
-    # {domain}, i.e. beheer.plak.rijks.app. `domain-mode: nice-url` still
+    # {domain}, i.e. beheer.toon.rijks.app. `domain-mode: nice-url` still
     # exists in the schema (project_v2.json, optional) and is not derived
     # from `domain-format`: opi/manager/project_manager.py reads
     # `deployment.get("domain-mode")` literally, and both the root ingress
@@ -159,11 +161,11 @@ deployments:
     # second hostname is never created even with an approved domain.
     domain-format: component.subdomain
     domain-mode: nice-url
-    subdomain: plak
+    subdomain: toon
     base-domain: rijks.app
     issuer: letsencrypt
     # Lets the same component also serve the address without the first
-    # label: beheer.plak.rijks.app (beheer) and plak.rijks.app (content).
+    # label: beheer.toon.rijks.app (beheer) and toon.rijks.app (content).
     root-component: beheer
     backup:
       # The scheduling happens here; `backup.enabled` at the bottom only
@@ -180,7 +182,7 @@ deployments:
     components:
       - reference: beheer
         # CI overwrites this on every deploy (upsert-deployment).
-        image: "ghcr.io/digigilde/plak:latest"
+        image: "ghcr.io/digigilde/toon:latest"
         env-vars:
           TOON_ENVIRONMENT: "productie"
           TOON_CONTENT_ROOT: "/content"
@@ -195,8 +197,8 @@ deployments:
           # root ingress that `root-component` adds, so the content origin
           # stays hand-typed per environment either way. Both are kept
           # literal here for symmetry.
-          TOON_BASE_URL: "https://beheer.plak.rijks.app"
-          TOON_CONTENT_BASE_URL: "https://plak.rijks.app"
+          TOON_BASE_URL: "https://beheer.toon.rijks.app"
+          TOON_CONTENT_BASE_URL: "https://toon.rijks.app"
           TOON_OIDC_ISS_REQUIRED: "true"
           # The ZAD Keycloak provides a client-secret client;
           # private_key_jwt cannot be set up via self-service.
@@ -209,7 +211,7 @@ deployments:
           # startup that there is no acr check.
           TOON_OIDC_REQUIRED_ACR: ""
           # The HAProxy router stands in front of the pod and adds an
-          # X-Forwarded-For line of its own behind the client's, so Plak reads
+          # X-Forwarded-For line of its own behind the client's, so Toon reads
           # the last entry. Position rather than recognition, because the
           # router pods sit on the cluster pod network and that range is not
           # on offer.

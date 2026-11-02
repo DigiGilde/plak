@@ -41,12 +41,12 @@ from toon.platform.spa import (
 )
 from toon.serving.response import NEUTRAL_404_BODY
 
-ADMIN_URL = "https://beheer.plak.example"
-CONTENT_URL = "https://plak.example"
-CONTENT_HOST = "plak.example"
+ADMIN_URL = "https://beheer.toon.example"
+CONTENT_URL = "https://toon.example"
+CONTENT_HOST = "toon.example"
 
 INDEX_HTML = b"<!doctype html><div id=app></div>"
-APP_JS = b"console.log('plak')"
+APP_JS = b"console.log('toon')"
 SECRET = b"buiten de spa-map"
 
 EXPECTED_SPA_HEADERS = {
@@ -110,9 +110,9 @@ def _raw_scope(raw_path: str, method: str = "GET") -> Scope:
         "raw_path": raw_path.encode("ascii"),
         "query_string": b"",
         "root_path": "",
-        "headers": [(b"host", b"beheer.plak.example")],
+        "headers": [(b"host", b"beheer.toon.example")],
         "client": ("203.0.113.5", 4711),
-        "server": ("beheer.plak.example", 443),
+        "server": ("beheer.toon.example", 443),
     }
 
 
@@ -398,7 +398,7 @@ def _settings(tmp_path: Path, spa_path: Path) -> Settings:
         db_url="postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         content_root=tmp_path / "content",
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk=make_client_jwk(),
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",

@@ -1,4 +1,4 @@
-"""Shape checks on `deploy/plak-project.example.yaml`, the ZAD project file.
+"""Shape checks on `deploy/toon-project.example.yaml`, the ZAD project file.
 
 The ZAD schema (`opi/schemas/project_v2.json`, RijksICTGilde/RIG-Cluster) does
 not live in this repo, so what is pinned here is a reading of that schema as
@@ -36,7 +36,7 @@ import yaml
 
 from toon.config import normalise_operator_email
 
-PROJECT_FILE = Path(__file__).resolve().parents[2] / "deploy" / "plak-project.example.yaml"
+PROJECT_FILE = Path(__file__).resolve().parents[2] / "deploy" / "toon-project.example.yaml"
 PROJECT: dict[str, Any] = yaml.safe_load(PROJECT_FILE.read_text(encoding="utf-8"))
 
 #: A checkout of RijksICTGilde/RIG-Cluster next to this repo, if there is one.
@@ -114,7 +114,7 @@ def test_url_fields_sit_directly_on_the_deployment() -> None:
 
 
 def test_root_address_needs_domain_mode_nice_url_too() -> None:
-    """The root address (plak.<domain>) needs domain-format, subdomain,
+    """The root address (toon.<domain>) needs domain-format, subdomain,
     base-domain and root-component all four right, AND domain-mode:
     nice-url: the Operations Manager reads domain-mode literally and does not
     derive it from domain-format. Drop one of the five and there is silently

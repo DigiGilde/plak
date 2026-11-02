@@ -31,7 +31,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     // https, otherwise jsdom refuses the __Host- cookie (needs a secure context)
-    environmentOptions: { jsdom: { url: 'https://plak.test/' } },
+    environmentOptions: { jsdom: { url: 'https://toon.test/' } },
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],

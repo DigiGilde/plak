@@ -1,6 +1,6 @@
 /**
  * No script navigation to the login route. A login counts as fresh enough to
- * approve `plak login` when it was started from the admin origin, and the
+ * approve `toon login` when it was started from the admin origin, and the
  * backend can only see that as `Sec-Fetch-Site: same-origin`: a script on a
  * admin page that sends the browser to `/-/login` by itself looks exactly
  * like a member who clicked. A link from elsewhere that lands on such a page

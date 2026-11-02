@@ -1,7 +1,7 @@
 /**
  * Environment constants for the E2E suite.
  *
- * The stack runs as a separate compose site (plak-e2e) on its own ports,
+ * The stack runs as a separate compose site (toon-e2e) on its own ports,
  * so the dev stack (port 8080) and parallel test runs stay untouched.
  * Two origins behind the same dumb nginx (spec 4a): the admin host and the
  * content host differ only in their Host header; nginx passes it through and
@@ -14,8 +14,8 @@ export const PROXY_PORT = process.env.TOON_E2E_PROXY_PORT ?? '18890';
 
 // The hostname itself stays Dutch: the SPA sits on the root of this host and
 // everything the app owns sits under /-/ (dictionary).
-export const ADMIN_HOST = `beheer.plak.localhost:${PORT}`;
-export const CONTENT_HOST = `plak.localhost:${PORT}`;
+export const ADMIN_HOST = `beheer.toon.localhost:${PORT}`;
+export const CONTENT_HOST = `toon.localhost:${PORT}`;
 export const ADMIN_URL = `http://${ADMIN_HOST}`;
 export const CONTENT_URL = `http://${CONTENT_HOST}`;
 
@@ -25,11 +25,11 @@ export const CONTENT_URL = `http://${CONTENT_HOST}`;
 export const MOCK_OIDC_INTERNAL = 'http://mock-oidc:8080';
 export const MOCK_OIDC_PUBLIC = `http://127.0.0.1:${OIDC_PORT}`;
 
-// dev/compose.yml sets the issuer to http://oidc.plak.localhost:8080/default:
+// dev/compose.yml sets the issuer to http://oidc.toon.localhost:8080/default:
 // a network alias on the e2e nginx, which proxies to the e2e mock. The browser
 // has to make that hostname (with dev port 8080 in the issuer URL) come out on
 // the e2e nginx, not on a dev stack that happens to be running on 8080.
-export const MOCK_OIDC_ALIAS_HOSTNAME = 'oidc.plak.localhost';
+export const MOCK_OIDC_ALIAS_HOSTNAME = 'oidc.toon.localhost';
 
 // Byte-identical to serving/response.py:NEUTRAL_404_BODY; the app's own host
 // separation returns exactly this on the wrong origin (anti-enumeration).
@@ -46,8 +46,8 @@ export const CONTEXT_OPTIONS = {
 } as const;
 
 export const ADMIN_SUB = 'dev-beheerder';
-export const ADMIN_EMAIL = 'beheerder@plak.local';
+export const ADMIN_EMAIL = 'beheerder@toon.local';
 export const SECOND_MEMBER_SUB = 'tweede-lid';
-export const SECOND_MEMBER_EMAIL = 'tweede-lid@plak.local';
+export const SECOND_MEMBER_EMAIL = 'tweede-lid@toon.local';
 export const INVITEE_SUB = 'genodigde';
-export const INVITEE_EMAIL = 'genodigde@plak.local';
+export const INVITEE_EMAIL = 'genodigde@toon.local';

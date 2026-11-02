@@ -22,7 +22,7 @@ NL: Final[dict[str, str]] = {
     ),
     (
         "\n"
-        "Plak publishes static sites per group and site, with a preview for every pull request.\n"
+        "Toon publishes static sites per group and site, with a preview for every pull request.\n"
         "This API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n"
         "\n"
         "## Authentication\n"
@@ -37,12 +37,12 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n"
         "  and on linking a repository. The token is one of two kinds:\n"
         "  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n"
-        "    URL of Plak (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n"
+        "    URL of Toon (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n"
         "    for that site, and only while the repository of that workflow is linked to it\n"
         "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n"
         "    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n"
         "    the admin URL itself, until another repository is linked or a site admin requires the site id;\n"
-        "  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n"
+        "  * a **CLI token** `tooncli_...` from `toon login` (see the CLI login endpoints). It acts as the member who\n"
         "    signed in, with exactly their roles.\n"
         "\n"
         "  A Bearer header on any other endpoint yields 401, even when the token is valid.\n"
@@ -80,7 +80,7 @@ NL: Final[dict[str, str]] = {
         "Addresses are slugs and can change; the API knows only the current one, an old slug answers 404.\n"
     ): (
         "\n"
-        "Plak publiceert statische sites per groep en site, met previews per pull request.\n"
+        "Toon publiceert statische sites per groep en site, met previews per pull request.\n"
         "Deze API bedient twee soorten clients: de beheer-SPA op de beheer-host en de CI die deploys uitvoert.\n"
         "\n"
         "## Authenticatie\n"
@@ -95,13 +95,13 @@ NL: Final[dict[str, str]] = {
         "  `DELETE /cli/session` en `GET /cli/whoami`, en, alleen met een CLI-token, op het aanmaken van een groep\n"
         "  of site en het koppelen van een repository. Het token is een van twee soorten:\n"
         "  * een **CI-ID-token** (JWT) van GitHub Actions of Forgejo Actions, met als audience precies de\n"
-        "    beheer-URL van Plak (`TOON_BASE_URL`) gevolgd door `/-/sites/` en het `id` van één site. Het geldt\n"
+        "    beheer-URL van Toon (`TOON_BASE_URL`) gevolgd door `/-/sites/` en het `id` van één site. Het geldt\n"
         "    alleen voor die site, en alleen zolang de repository van die workflow eraan gekoppeld is\n"
         "    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); er is geen geheim om te bewaren. Een koppeling\n"
         "    van vóór het site-ID, van een repository die alleen aan die site gekoppeld was, accepteert ook een\n"
         "    token met de beheer-URL zelf als audience, tot er een andere repository gekoppeld wordt of een\n"
         "    sitebeheerder het site-ID verplicht maakt;\n"
-        "  * een **CLI-token** `plakcli_...` uit `plak login` (zie de CLI-login-endpoints). Dat handelt als het lid\n"
+        "  * een **CLI-token** `tooncli_...` uit `toon login` (zie de CLI-login-endpoints). Dat handelt als het lid\n"
         "    dat inlogde, met precies diens rollen.\n"
         "\n"
         "  Een Bearer-header op elk ander endpoint levert 401, ook als het token geldig is.\n"
@@ -187,10 +187,10 @@ NL: Final[dict[str, str]] = {
     ),
     "CLI login": "CLI-login",
     (
-        "Signing in with the CLI (`plak login`) through the device flow: a code in the terminal, approval in the admin "
+        "Signing in with the CLI (`toon login`) through the device flow: a code in the terminal, approval in the admin "
         "interface, and then tokens the CLI refreshes by itself."
     ): (
-        "Inloggen met de CLI (`plak login`) via de device-flow: een code in de terminal, goedkeuren in het beheer, en "
+        "Inloggen met de CLI (`toon login`) via de device-flow: een code in de terminal, goedkeuren in het beheer, en "
         "daarna tokens die de CLI zelf ververst."
     ),
     "Platform administration": "Platformbeheer",
@@ -202,8 +202,8 @@ NL: Final[dict[str, str]] = {
         "Het auditlog teruglezen: wie deed wat, wanneer en met welke uitkomst. Alleen voor platformbeheerders."
     ),
     "Installation": "Installatie",
-    "The organisation that runs this installation of Plak, and how to reach it.": (
-        "De organisatie die deze installatie van Plak draait, en hoe je die bereikt."
+    "The organisation that runs this installation of Toon, and how to reach it.": (
+        "De organisatie die deze installatie van Toon draait, en hoe je die bereikt."
     ),
     "Publish a bundle, live or as a preview": "Een bundel publiceren, live of als preview",
     (
@@ -212,13 +212,13 @@ NL: Final[dict[str, str]] = {
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n"
         "\n"
         "**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions "
-        "(`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Plak's "
+        "(`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Toon's "
         "admin URL followed by `/-/sites/` and the `id` of this site, or, while the link still accepts it, exactly "
         "the admin URL itself; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and "
         "from the live branch if one is set; a preview may come from any branch. A token bound to another site is "
         "never used here: its own repository gets 409 `SITE_MOVED` with the address of that site. (2) A CLI token "
-        "from `plak login` (`Authorization: "
-        "Bearer plakcli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session "
+        "from `toon login` (`Authorization: "
+        "Bearer tooncli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session "
         "plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this "
         "site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a "
         "group or site and the linking of a repository, the only ones that accept a Bearer token; elsewhere that "
@@ -235,7 +235,7 @@ NL: Final[dict[str, str]] = {
         "works. After that there must be an `index.html` in the root directory; otherwise the response is 422 "
         "`NO_INDEX`, with the index paths found in `indexCandidates`. If the site is in a directory next to other "
         "things (a zipped project directory), send that directory as the `basePath` field: this confirms one of the "
-        "suggestions. Plak never picks one of several candidates itself, because it would silently leave out files you "
+        "suggestions. Toon never picks one of several candidates itself, because it would silently leave out files you "
         "thought you were publishing. The `basePath` is relative to the root directory after unwrapping, but a path "
         "that includes the unwrapped prefix works too, and a fixed value keeps working if unwrapping has already taken "
         "that directory away.\n"
@@ -249,14 +249,14 @@ NL: Final[dict[str, str]] = {
         "next header means decompressing everything in between. The limits are enforced during unpacking and the "
         "headers are checked against the same limits beforehand, so a zip or tar bomb does not get past either.\n"
         "\n"
-        "**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n"
+        "**Example** (`$TOON_TOKEN` is a CI ID token or a CLI token):\n"
         "\n"
         "```\n"
         "curl --fail --silent --show-error \\\n"
-        "  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n"
+        "  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n"
         "  --form file=@dist.zip \\\n"
         "  --form preview=pr-42 \\\n"
-        "  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n"
+        "  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n"
         "```\n"
         "\n"
         "Response: `201` with `{\"versionId\": \"...\"}`. Omit `--form preview=...` for a live deploy."
@@ -266,13 +266,13 @@ NL: Final[dict[str, str]] = {
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/` te staan.\n"
         "\n"
         "**Mag:** drie manieren. (1) Een CI-ID-token van GitHub of Forgejo Actions (`Authorization: Bearer <JWT>`) uit "
-        "de repository die aan deze site gekoppeld is, met als audience precies de beheer-URL van Plak gevolgd door "
+        "de repository die aan deze site gekoppeld is, met als audience precies de beheer-URL van Toon gevolgd door "
         "`/-/sites/` en het `id` van deze site, of, zolang de koppeling dat nog accepteert, precies de beheer-URL "
         "zelf; een live-deploy moet dan uit een `push`, `workflow_dispatch` of `schedule` komen, en van de "
         "live-branch als die is ingesteld; een preview mag vanaf elke branch. Een token voor een andere site wordt "
         "hier nooit gebruikt: de eigen repository van dat token krijgt 409 `SITE_MOVED` met het adres van die "
-        "site. (2) Een CLI-token uit `plak login` (`Authorization: Bearer "
-        "plakcli_...`): dat handelt als het lid dat inlogde, met precies diens rollen. (3) Een beheersessie plus "
+        "site. (2) Een CLI-token uit `toon login` (`Authorization: Bearer "
+        "tooncli_...`): dat handelt als het lid dat inlogde, met precies diens rollen. (3) Een beheersessie plus "
         "CSRF-header. Bij (2) en (3) moet het lid actief zijn en op deze site minstens de rol `editor` hebben. Dit "
         "endpoint en de preview-teardown zijn samen met de CLI-sessie-endpoints, het aanmaken van een groep of site en "
         "het koppelen van een repository de enige die een Bearer-token accepteren; elders levert die header 401.\n"
@@ -287,8 +287,8 @@ NL: Final[dict[str, str]] = {
         "de AppleDouble-bestanden die met `._` beginnen. Een zip die je met rechtsklik in de Finder maakt werkt "
         "daardoor gewoon. Daarna moet er een `index.html` in de hoofdmap staan; zo niet, dan volgt 422 `NO_INDEX` met "
         "de gevonden index-paden in `indexCandidates`. Staat de site in een map naast andere dingen (een gezipte "
-        "projectmap), stuur die map dan als veld `basePath` mee: dat is de bevestiging van het voorstel. Plak kiest "
-        "nooit zelf een van meerdere kandidaten, want dan zou het stilzwijgend bestanden weglaten die je dacht te "
+        "projectmap), stuur die map dan als veld `basePath` mee: dat is de bevestiging van het voorstel. Toon kiest "
+        "nooit zelf een van meerdere kandidaten, want dan vallen er stilzwijgend bestanden weg die je dacht te "
         "publiceren. Het `basePath` staat relatief aan de hoofdmap ná het afpellen, maar de spelling mét het afgepelde "
         "voorvoegsel werkt net zo goed, en een vaste waarde blijft werken als het afpellen die map al weggenomen "
         "heeft.\n"
@@ -303,14 +303,14 @@ NL: Final[dict[str, str]] = {
         "uitpakken bewaakt en de headers worden vooraf al tegen dezelfde grenzen gehouden, dus ook een zip- of tar-bom "
         "komt er niet langs.\n"
         "\n"
-        "**Voorbeeld** (`$PLAK_TOKEN` is een CI-ID-token of een CLI-token):\n"
+        "**Voorbeeld** (`$TOON_TOKEN` is een CI-ID-token of een CLI-token):\n"
         "\n"
         "```\n"
         "curl --fail --silent --show-error \\\n"
-        "  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n"
+        "  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n"
         "  --form file=@dist.zip \\\n"
         "  --form preview=pr-42 \\\n"
-        "  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n"
+        "  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n"
         "```\n"
         "\n"
         "Antwoord: `201` met `{\"versionId\": \"...\"}`. Laat `--form preview=...` weg voor een live-deploy."
@@ -454,12 +454,12 @@ NL: Final[dict[str, str]] = {
         "Optional. The directory inside the archive that becomes the root of the site; everything next to it is not "
         "published. The path is relative to the root directory after unwrapping enclosing directories and must be an "
         "existing directory containing an `index.html`. Meant to confirm one of the suggestions a refused deploy "
-        "returns in `indexCandidates`; without this field Plak determines the root directory itself."
+        "returns in `indexCandidates`; without this field Toon determines the root directory itself."
     ): (
         "Optioneel. De map binnen het archief die de hoofdmap van de site wordt; alles wat ernaast staat wordt niet "
         "gepubliceerd. Het pad is relatief aan de hoofdmap na het afpellen van omhullende mappen en moet een bestaande "
         "map met een `index.html` erin zijn. Bedoeld als bevestiging van het voorstel dat een geweigerde deploy "
-        "meegeeft in `indexCandidates`; zonder dit veld bepaalt Plak de hoofdmap zelf."
+        "meegeeft in `indexCandidates`; zonder dit veld bepaalt Toon de hoofdmap zelf."
     ),
     "Clean up a preview": "Een preview opruimen",
     (
@@ -477,8 +477,8 @@ NL: Final[dict[str, str]] = {
         "\n"
         "```\n"
         "curl --fail --silent --show-error --request DELETE \\\n"
-        "  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n"
-        "  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n"
+        "  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n"
+        "  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n"
         "```"
     ): (
         "Haalt de preview met deze ref weg, inclusief haar bestanden. Bedoeld voor de CI-stap die draait als een pull "
@@ -494,8 +494,8 @@ NL: Final[dict[str, str]] = {
         "\n"
         "```\n"
         "curl --fail --silent --show-error --request DELETE \\\n"
-        "  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n"
-        "  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n"
+        "  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n"
+        "  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n"
         "```"
     ),
     "Name of the preview, usually the pull request number or the branch name as a slug.": (
@@ -514,16 +514,16 @@ NL: Final[dict[str, str]] = {
     ),
     "Start signing in with the CLI": "Inloggen met de CLI beginnen",
     (
-        "Step 1 of `plak login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` plus "
+        "Step 1 of `toon login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` plus "
         "`verificationUri`; the member opens that page in the admin interface, compares the code and approves. "
         "Meanwhile the CLI calls `POST /cli/tokens` every `interval` seconds. The codes expire after ten minutes.\n"
         "\n"
         "**Who can call this:** anyone, without authentication. Each IP address has its own limit on the number of "
         "requests, on top of the general rate limit."
     ): (
-        "Stap 1 van `plak login` (RFC 8628). De CLI krijgt een geheime `deviceCode` en toont de `userCode` plus "
-        "`verificationUri`; het lid opent die pagina in het beheer, vergelijkt de code en keurt goed. Intussen vraagt "
-        "de CLI elke `interval` seconden `POST /cli/tokens`. De codes verlopen na tien minuten.\n"
+        "Stap 1 van `toon login` (RFC 8628). De CLI krijgt een geheime `deviceCode` en laat de `userCode` plus "
+        "`verificationUri` zien; het lid opent die pagina in het beheer, vergelijkt de code en keurt goed. Intussen "
+        "vraagt de CLI elke `interval` seconden `POST /cli/tokens`. De codes verlopen na tien minuten.\n"
         "\n"
         "**Mag:** iedereen, zonder authenticatie. Per IP-adres geldt een eigen limiet op het aantal aanvragen, naast "
         "de algemene ratelimit."
@@ -547,7 +547,7 @@ NL: Final[dict[str, str]] = {
         "With `grantType` `refresh_token`: a new access token and a new refresh token. The old refresh token is "
         "invalid afterwards. If the refresh token that was just replaced is presented again within ten seconds (two "
         "refreshes at the same time), the response is `INVALID_GRANT` and the session remains valid. If a used refresh "
-        "token is presented after that window, or an older one is presented, two parties hold the same session: Plak "
+        "token is presented after that window, or an older one is presented, two parties hold the same session: Toon "
         "revokes the entire CLI session and writes `cli_refresh_reuse` to the audit log. A CLI session expires 30 days "
         "after the last refresh and in any case 90 days after sign-in.\n"
         "\n"
@@ -560,7 +560,7 @@ NL: Final[dict[str, str]] = {
         "Met `grantType` `refresh_token`: een nieuw toegangstoken en een nieuw verversingstoken. Het oude "
         "verversingstoken is daarna ongeldig. Wordt het zojuist vervangen verversingstoken binnen tien seconden nog "
         "eens aangeboden (twee verversingen tegelijk), dan volgt `INVALID_GRANT` en blijft de sessie staan. Komt een "
-        "al gebruikt verversingstoken later of ouder terug, dan hebben twee partijen dezelfde sessie in handen: Plak "
+        "al gebruikt verversingstoken later of ouder terug, dan hebben twee partijen dezelfde sessie in handen: Toon "
         "trekt de hele CLI-sessie in en schrijft `cli_refresh_reuse` in het auditlog. Een CLI-sessie verloopt 30 dagen "
         "na het laatste verversen en hoe dan ook 90 dagen na het koppelen.\n"
         "\n"
@@ -585,12 +585,12 @@ NL: Final[dict[str, str]] = {
     ),
     "Sign out with the CLI": "Uitloggen met de CLI",
     (
-        "Revokes the CLI session (`plak logout`), with all its tokens; it disappears from the list of linked CLI "
+        "Revokes the CLI session (`toon logout`), with all its tokens; it disappears from the list of linked CLI "
         "sessions. Identify the session in one of two ways:\n"
         "\n"
-        "* `Authorization: Bearer plakcli_...`: the access token, even if it has already expired, as long as it is "
+        "* `Authorization: Bearer tooncli_...`: the access token, even if it has already expired, as long as it is "
         "genuine and the session still exists;\n"
-        "* a JSON body `{\"refreshToken\": \"plakclr_...\"}` (as in RFC 7009), the current refresh token or one that "
+        "* a JSON body `{\"refreshToken\": \"toonclr_...\"}` (as in RFC 7009), the current refresh token or one that "
         "was already used.\n"
         "\n"
         "The response is always 204, even for an unknown or already revoked token: this way it does not reveal which "
@@ -599,12 +599,12 @@ NL: Final[dict[str, str]] = {
         "**Who can call this:** anyone who holds a token of the session; also a member who has been deactivated in the "
         "meantime."
     ): (
-        "Trekt de CLI-sessie in (`plak logout`), met al haar tokens; ze verdwijnt uit de lijst gekoppelde sessies. "
+        "Trekt de CLI-sessie in (`toon logout`), met al haar tokens; ze verdwijnt uit de lijst gekoppelde sessies. "
         "Noem de sessie op een van twee manieren:\n"
         "\n"
-        "* `Authorization: Bearer plakcli_...`: het toegangstoken, ook als het al verlopen is, zolang het echt is en "
+        "* `Authorization: Bearer tooncli_...`: het toegangstoken, ook als het al verlopen is, zolang het echt is en "
         "de sessie nog bestaat;\n"
-        "* een JSON-lichaam `{\"refreshToken\": \"plakclr_...\"}` (zoals RFC 7009), het huidige of een al gebruikt "
+        "* een JSON-lichaam `{\"refreshToken\": \"toonclr_...\"}` (zoals RFC 7009), het huidige of een al gebruikt "
         "verversingstoken.\n"
         "\n"
         "Het antwoord is altijd 204, ook voor een onbekend of al ingetrokken token: zo verraadt het niet welke tokens "
@@ -620,15 +620,15 @@ NL: Final[dict[str, str]] = {
     ),
     "Show the signed-in CLI member": "Wie is de CLI",
     (
-        "The member on whose behalf the CLI acts (`plak whoami`), and when the CLI session expires if it is not "
+        "The member on whose behalf the CLI acts (`toon whoami`), and when the CLI session expires if it is not "
         "refreshed. The member must still be active, as with every deploy.\n"
         "\n"
-        "**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer plakcli_...`)."
+        "**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer tooncli_...`)."
     ): (
-        "Het lid namens wie de CLI handelt (`plak whoami`), en tot wanneer de CLI-sessie loopt als hij niet meer "
+        "Het lid namens wie de CLI handelt (`toon whoami`), en tot wanneer de CLI-sessie loopt als hij niet meer "
         "ververst wordt. Het lid moet nog actief zijn, net als bij elke deploy.\n"
         "\n"
-        "**Mag:** de houder van een geldig CLI-toegangstoken (`Authorization: Bearer plakcli_...`)."
+        "**Mag:** de houder van een geldig CLI-toegangstoken (`Authorization: Bearer tooncli_...`)."
     ),
     "The member behind this access token and when the session expires.": (
         "Het lid achter dit toegangstoken en wanneer de sessie verloopt."
@@ -645,7 +645,7 @@ NL: Final[dict[str, str]] = {
     ),
     "Who runs this installation": "Wie deze installatie draait",
     (
-        "The organisation that runs this installation of Plak and the e-mail address at which people reach it about "
+        "The organisation that runs this installation of Toon and the e-mail address at which people reach it about "
         "privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`. The "
         "public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back "
         "as `null`.\n"
@@ -653,7 +653,7 @@ NL: Final[dict[str, str]] = {
         "**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and sets no "
         "cookie."
     ): (
-        "De organisatie die deze installatie van Plak draait en het e-mailadres waarop mensen haar bereiken over "
+        "De organisatie die deze installatie van Toon draait en het e-mailadres waarop mensen haar bereiken over "
         "privacy, toegankelijkheid en andere vragen, zoals ingesteld in `TOON_OPERATOR_NAME` en "
         "`TOON_OPERATOR_EMAIL`. De openbare privacy- en toegankelijkheidspagina's van het beheer tonen ze. Een "
         "instelling die leeg is, komt terug als `null`.\n"
@@ -775,8 +775,8 @@ NL: Final[dict[str, str]] = {
         "\n"
         "**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a reserved "
         "action: anyone who wants to publish something must be able to make a place for it themselves. Besides the "
-        "admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` "
-        "(`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, "
+        "admin session with a valid CSRF header, this is also allowed with a CLI token from `toon login` "
+        "(`Authorization: Bearer tooncli_...`), with exactly the same role check; the CSRF header is then not needed, "
         "because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each "
         "member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface "
         "and the CLI together."
@@ -788,7 +788,7 @@ NL: Final[dict[str, str]] = {
         "\n"
         "**Mag:** ieder actief lid, met een geldige CSRF-header. Een groep aanmaken is geen voorbehouden handeling: "
         "wie iets wil publiceren moet daar zelf een plek voor kunnen maken. Behalve met de beheersessie en een geldige "
-        "CSRF-header mag dit ook met een CLI-token uit `plak login` (`Authorization: Bearer plakcli_...`), met precies "
+        "CSRF-header mag dit ook met een CLI-token uit `toon login` (`Authorization: Bearer tooncli_...`), met precies "
         "dezelfde rolcontrole; de CSRF-header vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een "
         "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
         "minuten, via beheer en CLI samen."
@@ -796,11 +796,11 @@ NL: Final[dict[str, str]] = {
     "The created group.": "De aangemaakte groep.",
     (
         "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). "
-        "With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or expired "
+        "With a Bearer header: it is not a CLI token from `toon login`, or it is invalid, revoked or expired "
         "(`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`."
     ): (
         "Niet geauthenticeerd. Er is geen geldige beheersessie: het cookie ontbreekt, is ongeldig of is verlopen "
-        "(`NO_SESSION`). Met een Bearer-header: het is geen CLI-token uit `plak login`, of het is ongeldig, "
+        "(`NO_SESSION`). Met een Bearer-header: het is geen CLI-token uit `toon login`, of het is ongeldig, "
         "ingetrokken of verlopen (`TOKEN_INVALID`); het antwoord draagt dan `WWW-Authenticate: Bearer`."
     ),
     (
@@ -975,8 +975,8 @@ NL: Final[dict[str, str]] = {
         "**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes `admin` "
         "of the site they create, and may therefore choose the access right away: that is no more than they may do "
         "afterwards anyway. A platform administrator without a group role is not allowed. Besides the admin session "
-        "with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer "
-        "plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not "
+        "with a valid CSRF header, this is also allowed with a CLI token from `toon login` (`Authorization: Bearer "
+        "tooncli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not "
         "sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new "
         "groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together."
     ): (
@@ -987,7 +987,7 @@ NL: Final[dict[str, str]] = {
         "**Mag:** groepsrol `editor` of ruimer, met een geldige CSRF-header; de maker wordt `admin` van de site die "
         "hij aanmaakt, en mag de toegang dus meteen kiezen: dat is niets meer dan hij daarna zelf ook mag. Een "
         "platformbeheerder die geen groepsrol heeft, mag dit niet. Behalve met de beheersessie en een geldige "
-        "CSRF-header mag dit ook met een CLI-token uit `plak login` (`Authorization: Bearer plakcli_...`), met precies "
+        "CSRF-header mag dit ook met een CLI-token uit `toon login` (`Authorization: Bearer tooncli_...`), met precies "
         "dezelfde rolcontrole; de CSRF-header vervalt dan, want een token gaat niet vanzelf mee zoals een cookie. Een "
         "CI-ID-token mag het niet. Per lid geldt een limiet van 20 nieuwe groepen, sites en adressen samen per 60 "
         "minuten, via beheer en CLI samen."
@@ -1304,14 +1304,14 @@ NL: Final[dict[str, str]] = {
     (
         "Creates a secret link with which the site can be seen without signing in, while the `keys` exception is on.\n"
         "\n"
-        "The response contains `value` once: the full key `<selector>.<secret>`. Plak only stores a hash, so if you "
+        "The response contains `value` once: the full key `<selector>.<secret>`. Toon only stores a hash, so if you "
         "lose the value, create a new key.\n"
         "\n"
         "**Who can call this:** effective site role `admin`, with a valid CSRF header."
     ): (
         "Maakt een geheime link waarmee de site zonder inloggen te zien is, zolang de uitzondering `keys` aan staat.\n"
         "\n"
-        "Het antwoord bevat eenmalig `value`: de volledige sleutel `<selector>.<geheim>`. Plak bewaart alleen een "
+        "Het antwoord bevat eenmalig `value`: de volledige sleutel `<selector>.<geheim>`. Toon bewaart alleen een "
         "hash, dus wie de waarde kwijt is, maakt een nieuwe sleutel aan.\n"
         "\n"
         "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header."
@@ -1370,34 +1370,34 @@ NL: Final[dict[str, str]] = {
     ),
     "Link a repository to a site": "Repository aan een site koppelen",
     (
-        "Links a GitHub or Forgejo repository to this site, or replaces the link. Plak looks the repository up at the "
+        "Links a GitHub or Forgejo repository to this site, or replaces the link. Toon looks the repository up at the "
         "provider (`GET /repos/{owner}/{repo}`) and stores its numeric IDs: these stay the same when the repository is "
         "renamed, and a new repository under the same name does not get them. A CI ID token from this repository may "
         "publish afterwards: a preview (and its cleanup) from any branch, live only from `push`, `workflow_dispatch` "
         "or `schedule` and, if one is set, only from `liveBranch`.\n"
         "\n"
-        "Plak does the lookup without credentials, so it cannot see a private repository. In that case pass "
+        "Toon does the lookup without credentials, so it cannot see a private repository. In that case pass "
         "`repositoryId` and `ownerId` yourself (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): If the lookup "
-        "fails, Plak stores them as given. A wrong ID does not link anything else, it only causes every deploy to be "
-        "refused. If Plak does find the repository, the IDs must match.\n"
+        "fails, Toon stores them as given. A wrong ID does not link anything else, it only causes every deploy to be "
+        "refused. If Toon does find the repository, the IDs must match.\n"
         "\n"
-        "Also allowed with the CLI token from `plak login` (`plak site link`), then without a CSRF header. A CI ID "
+        "Also allowed with the CLI token from `toon login` (`toon site link`), then without a CSRF header. A CI ID "
         "token links nothing.\n"
         "\n"
         "**Who can call this:** effective site role `admin`, with a valid CSRF header or the CLI token."
     ): (
-        "Koppelt een GitHub- of Forgejo-repository aan deze site, of vervangt de koppeling. Plak zoekt de repository "
+        "Koppelt een GitHub- of Forgejo-repository aan deze site, of vervangt de koppeling. Toon zoekt de repository "
         "op bij de provider (`GET /repos/{owner}/{repo}`) en bewaart haar numerieke ids: die blijven gelijk bij een "
         "hernoeming, en een nieuwe repository onder dezelfde naam krijgt ze niet. Een CI-ID-token uit deze repository "
         "mag daarna publiceren: een preview (en het opruimen ervan) vanaf elke branch, live alleen vanuit `push`, "
         "`workflow_dispatch` of `schedule` en, als die is ingesteld, alleen vanaf `liveBranch`.\n"
         "\n"
-        "Plak zoekt zonder inloggegevens, dus een privé repository vindt het niet. Geef dan zelf `repositoryId` en "
-        "`ownerId` mee (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): Plak bewaart ze zonder opzoeking als die "
-        "faalt. Een verkeerd id koppelt niets anders, het weigert alleen elke deploy. Vindt Plak de repository wel, "
+        "Toon zoekt zonder inloggegevens en vindt dus geen privé repository. Geef dan zelf `repositoryId` en "
+        "`ownerId` mee (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): Toon bewaart ze zonder opzoeking als die "
+        "faalt. Een verkeerd id koppelt niets anders, het weigert alleen elke deploy. Vindt Toon de repository wel, "
         "dan moeten de ids kloppen.\n"
         "\n"
-        "Ook met het CLI-token uit `plak login` (`plak site link`), dan zonder CSRF-header. Een CI-ID-token koppelt "
+        "Ook met het CLI-token uit `toon login` (`toon site link`), dan zonder CSRF-header. Een CI-ID-token koppelt "
         "niets.\n"
         "\n"
         "**Mag:** effectieve siterol `admin`, met een geldige CSRF-header of het CLI-token."
@@ -1521,7 +1521,7 @@ NL: Final[dict[str, str]] = {
     "Approve a CLI login": "CLI-login goedkeuren",
     (
         "Approves the CLI login behind this user code for the signed-in member. The CLI then fetches its tokens itself "
-        "and from now on acts as this member, with exactly their roles. Only do this if you just started `plak login` "
+        "and from now on acts as this member, with exactly their roles. Only do this if you just started `toon login` "
         "yourself.\n"
         "\n"
         "**Who can call this:** any active member, with an admin session no older than fifteen minutes and a valid "
@@ -1529,7 +1529,7 @@ NL: Final[dict[str, str]] = {
         "minutes."
     ): (
         "Keurt de CLI-login achter deze gebruikerscode goed voor het ingelogde lid. De CLI haalt daarna zelf zijn "
-        "tokens op en handelt voortaan als dit lid, met precies diens rollen. Alleen doen als je zelf zojuist `plak "
+        "tokens op en handelt voortaan als dit lid, met precies diens rollen. Alleen doen als je zelf zojuist `toon "
         "login` startte.\n"
         "\n"
         "**Mag:** elk actief lid, met een beheersessie van hoogstens een kwartier oud en een geldige CSRF-header. Per "
@@ -1552,22 +1552,22 @@ NL: Final[dict[str, str]] = {
     "Denied. No content is returned.": "Geweigerd. Er komt geen inhoud terug.",
     "My linked CLI sessions": "Mijn gekoppelde sessies",
     (
-        "Every `plak login` that is still active, newest first. Expired sessions are no longer listed.\n"
+        "Every `toon login` that is still active, newest first. Expired sessions are no longer listed.\n"
         "\n"
         "**Who can call this:** any active member, for their own sessions."
     ): (
-        "Elke `plak login` die nog loopt, nieuwste eerst. Verlopen sessies staan er niet meer bij.\n"
+        "Elke `toon login` die nog loopt, nieuwste eerst. Verlopen sessies staan er niet meer bij.\n"
         "\n"
         "**Mag:** elk actief lid, voor zijn eigen sessies."
     ),
     "The CLI sessions of the signed-in member, newest first.": "De CLI-sessies van het ingelogde lid, nieuwste eerst.",
     "Revoke a linked CLI session": "Gekoppelde sessie intrekken",
     (
-        "Revokes a CLI session; whoever used it has to run `plak login` again afterwards.\n"
+        "Revokes a CLI session; whoever used it has to run `toon login` again afterwards.\n"
         "\n"
         "**Who can call this:** any active member, for their own sessions, with a valid CSRF header."
     ): (
-        "Trekt een CLI-sessie in; wie hem gebruikte moet daarna opnieuw `plak login` doen.\n"
+        "Trekt een CLI-sessie in; wie hem gebruikte moet daarna opnieuw `toon login` doen.\n"
         "\n"
         "**Mag:** elk actief lid, voor zijn eigen sessies, met een geldige CSRF-header."
     ),
@@ -1592,7 +1592,7 @@ NL: Final[dict[str, str]] = {
     "Add a member to a group": "Lid aan een groep toevoegen",
     (
         "Adds an existing platform member to this group, looked up by e-mail address or SSO subject. The member must "
-        "already have signed in to the admin interface once themselves; Plak does not create an account here.\n"
+        "already have signed in to the admin interface once themselves; Toon does not create an account here.\n"
         "\n"
         "Without `role` the member becomes `reader`: new members start with read-only access, and you give the role "
         "they need deliberately.\n"
@@ -1600,7 +1600,7 @@ NL: Final[dict[str, str]] = {
         "**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header."
     ): (
         "Voegt een bestaand platformlid aan deze groep toe, gezocht op e-mailadres of SSO-subject. Het lid moet al "
-        "eens zelf op het beheer ingelogd hebben; Plak maakt hier geen account aan.\n"
+        "eens zelf op het beheer ingelogd hebben; Toon maakt hier geen account aan.\n"
         "\n"
         "Zonder `role` wordt het lid `reader`: wie erbij komt kijkt eerst mee, en de rol die hij nodig heeft geef je "
         "bewust.\n"
@@ -1636,7 +1636,7 @@ NL: Final[dict[str, str]] = {
         "of at most ten names, not a dump of the whole organisation; someone who is already in the group is included, "
         "with `alreadyMember` set to `true`.\n"
         "\n"
-        "Only those who may add members may search, and Plak does not create an account here either: someone only "
+        "Only those who may add members may search, and Toon does not create an account here either: someone only "
         "appears once they have signed in to the admin interface themselves.\n"
         "\n"
         "**Who can call this:** group role `admin`, or a platform administrator."
@@ -1649,7 +1649,7 @@ NL: Final[dict[str, str]] = {
         "hoogstens tien namen, geen uitdraai van de hele organisatie; wie er al in de groep zit staat er wel bij, met "
         "`alreadyMember` op `true`.\n"
         "\n"
-        "Zoeken mag precies wie ook mag toevoegen, en Plak maakt hier net zomin een account aan: iemand verschijnt pas "
+        "Zoeken mag precies wie ook mag toevoegen, en Toon maakt hier net zomin een account aan: iemand verschijnt pas "
         "zodra hij zelf op het beheer heeft ingelogd.\n"
         "\n"
         "**Mag:** groepsrol `admin`, of een platformbeheerder."
@@ -1835,14 +1835,14 @@ NL: Final[dict[str, str]] = {
     (
         "Sets the status of a member to `deactivated`. Every subsequent API request from that member gets 403, even "
         "with a session that is still valid. Group memberships remain, so activating brings the member back as they "
-        "were. All CLI sessions (`plak login`) of the member are revoked, though: after reactivation they have to run "
-        "`plak login` again.\n"
+        "were. All CLI sessions (`toon login`) of the member are revoked, though: after reactivation they have to run "
+        "`toon login` again.\n"
         "\n"
         "**Who can call this:** only a platform administrator, with a valid CSRF header."
     ): (
         "Zet de status van een lid op `deactivated`. Elk volgend API-verzoek van dat lid krijgt 403, ook met een "
         "sessie die nog geldig is. Groepslidmaatschappen blijven staan, zodat activeren het lid terugbrengt zoals het "
-        "was. Alle CLI-sessies (`plak login`) van het lid worden wel ingetrokken: na heractiveren moet het opnieuw "
+        "was. Alle CLI-sessies (`toon login`) van het lid worden wel ingetrokken: na heractiveren moet het opnieuw "
         "koppelen.\n"
         "\n"
         "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header."
@@ -2113,9 +2113,9 @@ NL: Final[dict[str, str]] = {
         "audit row fails, no response is returned: see the `503`. Counts towards the daily limit on such lookups, even "
         "on a 404."
     ): (
-        "`GET /platform/audit` toont per regel alleen het afgeknotte netwerk (`ipTruncated`); dit endpoint ontsleutelt "
-        "het volledige adres dat er versleuteld naast staat (`TOON_AUDIT_IP_KEY`, een andere sleutel dan de "
-        "auditpepper). Bedoeld voor het uiterste geval waarin het netwerk niet volstaat, bijvoorbeeld bij een "
+        "`GET /platform/audit` laat per regel alleen het afgeknotte netwerk zien (`ipTruncated`); dit endpoint "
+        "ontsleutelt het volledige adres dat er versleuteld naast staat (`TOON_AUDIT_IP_KEY`, een andere sleutel dan "
+        "de auditpepper). Bedoeld voor het uiterste geval waarin het netwerk niet volstaat, bijvoorbeeld bij een "
         "incidentonderzoek.\n"
         "\n"
         "**Mag:** alleen een platformbeheerder, met een geldige CSRF-header en een `reason` van 10 tot 500 tekens. Het "
@@ -2199,7 +2199,7 @@ NL: Final[dict[str, str]] = {
         "You can simply pick group members here: a site role widens what they may already do through the group. What "
         "that is appears in `groupRole`, so you can see whether a site role adds anything.\n"
         "\n"
-        "Only those who may add members may search, and Plak does not create an account here either: someone only "
+        "Only those who may add members may search, and Toon does not create an account here either: someone only "
         "appears once they have signed in to the admin interface themselves.\n"
         "\n"
         "**Who can call this:** effective site role `admin`."
@@ -2215,7 +2215,7 @@ NL: Final[dict[str, str]] = {
         "Groepsleden kun je hier gewoon kiezen: een siterol verruimt wat zij via de groep al mogen. Wat dat is staat "
         "in `groupRole`, zodat je ziet of een siterol iets toevoegt.\n"
         "\n"
-        "Zoeken mag precies wie ook mag toevoegen, en Plak maakt hier net zomin een account aan: iemand verschijnt pas "
+        "Zoeken mag precies wie ook mag toevoegen, en Toon maakt hier net zomin een account aan: iemand verschijnt pas "
         "zodra hij zelf op het beheer heeft ingelogd.\n"
         "\n"
         "**Mag:** effectieve siterol `admin`."
@@ -2556,8 +2556,8 @@ NL: Final[dict[str, str]] = {
         "Laatste keer dat de CLI iets deed of verversde; `null` als dat nog niet gebeurde."
     ),
     "When the session expires without further use.": "Wanneer de sessie verloopt zonder verder gebruik.",
-    "A linked CLI session: an approved `plak login` of the signed-in member.": (
-        "Een gekoppelde sessie: een goedgekeurde `plak login` van het ingelogde lid."
+    "A linked CLI session: an approved `toon login` of the signed-in member.": (
+        "Een gekoppelde sessie: een goedgekeurde `toon login` van het ingelogde lid."
     ),
     (
         "ID of the version that was just created. It identifies the deploy in the site's version list, and it is what "
@@ -2630,7 +2630,7 @@ NL: Final[dict[str, str]] = {
         "Hoe de CLI zichzelf noemt; staat op het goedkeuringsscherm en in de lijst gekoppelde sessies. Hoogstens 100 "
         "tekens; stuur- en opmaaktekens worden eruit gehaald."
     ),
-    "The start of `plak login`.": "Het begin van `plak login`.",
+    "The start of `toon login`.": "Het begin van `toon login`.",
     (
         "`true` (the default) lets the page load scripts and styles from cdnjs, jsDelivr and unpkg, and fonts from "
         "Google Fonts. `false` only allows sources from the site itself, and is the safer choice for a confidential "
@@ -2833,10 +2833,10 @@ NL: Final[dict[str, str]] = {
     "A new secret link.": "Een nieuwe geheime link.",
     "The created key.": "De aangemaakte sleutel.",
     (
-        "The full key value `<selector>.<secret>` for use in the link. Plak only stores a hash, so this value cannot "
+        "The full key value `<selector>.<secret>` for use in the link. Toon only stores a hash, so this value cannot "
         "be retrieved anywhere afterwards."
     ): (
-        "De volledige sleutelwaarde `<selector>.<geheim>` voor in de link. Plak bewaart alleen een hash, dus deze "
+        "De volledige sleutelwaarde `<selector>.<geheim>` voor in de link. Toon bewaart alleen een hash, dus deze "
         "waarde is hierna nergens meer op te vragen."
     ),
     "The fresh key plus its value. This is the only moment the value can be seen.": (
@@ -2974,18 +2974,18 @@ NL: Final[dict[str, str]] = {
         "staan erin: op elke andere site van een groep geldt gewoon de groepsrol uit `groupRoles`."
     ),
     (
-        "The Forgejo instances whose CI ID tokens Plak accepts (`TOON_CI_FORGEJO_HOSTS`), as base URL. GitHub is "
+        "The Forgejo instances whose CI ID tokens Toon accepts (`TOON_CI_FORGEJO_HOSTS`), as base URL. GitHub is "
         "always accepted and is not listed here."
     ): (
-        "De Forgejo-instanties waarvan Plak CI-ID-tokens accepteert (`TOON_CI_FORGEJO_HOSTS`), als basis-URL. GitHub "
+        "De Forgejo-instanties waarvan Toon CI-ID-tokens accepteert (`TOON_CI_FORGEJO_HOSTS`), als basis-URL. GitHub "
         "wordt altijd geaccepteerd en staat hier niet in."
     ),
     (
         "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That is also the value for "
-        "the `host` input of the plak action."
+        "the `host` input of the Toon action."
     ): (
         "De audience die een CI-workflow voor zijn ID-token moet aanvragen: precies `TOON_BASE_URL`. Dat is ook de "
-        "waarde voor de invoer `host` van de plak-action."
+        "waarde voor de invoer `host` van de Toon-action."
     ),
     (
         "The language this member chose for the admin interface: `nl` or `en`. `null` means the member made no choice "
@@ -3038,8 +3038,8 @@ NL: Final[dict[str, str]] = {
         "(`TOON_OPERATOR_EMAIL`), of `null` als dat niet is ingesteld. Altijd een kaal adres zonder weergavenaam, "
         "geschikt voor een `mailto:`-link."
     ),
-    "Who runs this installation of Plak, and how to reach them.": (
-        "Wie deze installatie van Plak draait, en hoe je die bereikt."
+    "Who runs this installation of Toon, and how to reach them.": (
+        "Wie deze installatie van Toon draait, en hoe je die bereikt."
     ),
     (
         "Groups this member may see, sorted by slug: where they have a group role, and where they have a role on a "
@@ -3250,10 +3250,10 @@ NL: Final[dict[str, str]] = {
         "mogen altijd vanaf elke branch."
     ),
     (
-        "Numeric ID of the repository, only needed if Plak cannot look it up because it is private. Together with "
+        "Numeric ID of the repository, only needed if Toon cannot look it up because it is private. Together with "
         "`ownerId`, or omit both. Can be retrieved with `gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
     ): (
-        "Numeriek id van de repository, alleen nodig als Plak haar niet kan opzoeken omdat ze privé is. Samen met "
+        "Numeriek id van de repository, alleen nodig als Toon haar niet kan opzoeken omdat ze privé is. Samen met "
         "`ownerId`, of allebei weglaten. Op te vragen met `gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
     ),
     "Numeric ID of the owner, together with `repositoryId`.": "Numeriek id van de eigenaar, samen met `repositoryId`.",
@@ -3375,14 +3375,14 @@ NL: Final[dict[str, str]] = {
         "Het laatste verversingstoken, bij `grantType` `refresh_token`."
     ),
     "Exchange a device code, or a refresh token.": "Een apparaatcode inwisselen, of een verversingstoken.",
-    "Access token `plakcli_...` for `Authorization: Bearer`.": (
-        "Toegangstoken `plakcli_...` voor `Authorization: Bearer`."
+    "Access token `tooncli_...` for `Authorization: Bearer`.": (
+        "Toegangstoken `tooncli_...` voor `Authorization: Bearer`."
     ),
     (
-        "Refresh token `plakclr_...`. Single use: presenting a refresh token that has already been used revokes the "
+        "Refresh token `toonclr_...`. Single use: presenting a refresh token that has already been used revokes the "
         "entire CLI session."
     ): (
-        "Verversingstoken `plakclr_...`. Eenmalig: wie een al gebruikt verversingstoken nog eens aanbiedt, trekt "
+        "Verversingstoken `toonclr_...`. Eenmalig: wie een al gebruikt verversingstoken nog eens aanbiedt, trekt "
         "daarmee de hele CLI-sessie in."
     ),
     "Always `Bearer`.": "Altijd `Bearer`.",
@@ -3394,7 +3394,7 @@ NL: Final[dict[str, str]] = {
     "The user code, with or without hyphen, case-insensitive.": (
         "De gebruikerscode, met of zonder koppelteken, hoofdletterongevoelig."
     ),
-    "The code from the terminal of `plak login`.": "De code uit de terminal van `plak login`.",
+    "The code from the terminal of `toon login`.": "De code uit de terminal van `toon login`.",
     "Internal ID of the version; you use it to roll back.": "Interne id van de versie; hiermee rol je terug.",
     "`live` for the public URL, `preview` for a preview ref.": (
         "`live` voor de publieke URL, `preview` voor een preview-ref."
@@ -3459,8 +3459,8 @@ NL: Final[dict[str, str]] = {
     "Error message following RFC 9457 (`application/problem+json`), with `code` as an extension.": (
         "Foutbericht volgens RFC 9457 (`application/problem+json`), met `code` als extensie."
     ),
-    "Error type URI. Plak always uses `about:blank`; `code` carries the machine-readable meaning.": (
-        "Fouttype-URI. Plak gebruikt altijd `about:blank`; `code` draagt de machineleesbare betekenis."
+    "Error type URI. Toon always uses `about:blank`; `code` carries the machine-readable meaning.": (
+        "Fouttype-URI. Toon gebruikt altijd `about:blank`; `code` draagt de machineleesbare betekenis."
     ),
     "Short, fixed description of the status code, for example 'Forbidden'.": (
         "Korte, vaste omschrijving van de statuscode, bijvoorbeeld 'Geen toegang'."
@@ -3500,12 +3500,12 @@ NL: Final[dict[str, str]] = {
     ),
     (
         "A CI ID token (JWT from GitHub or Forgejo Actions, with the admin URL as audience) or a CLI token "
-        "`plakcli_...` from `plak login`. Paste the whole token under Authorize. Only the deploy endpoints and the CLI "
+        "`tooncli_...` from `toon login`. Paste the whole token under Authorize. Only the deploy endpoints and the CLI "
         "session endpoints accept it, and, with a CLI token only, creating a group, creating a site and linking a "
         "repository; anywhere else a Bearer header yields 401, even when the token is valid."
     ): (
-        "Een CI-ID-token (JWT van GitHub of Forgejo Actions, audience de beheer-URL) of een CLI-token `plakcli_...` "
-        "uit `plak login`. Plak het hele token achter Authorize. Alleen de deploy-endpoints en de CLI-sessie-endpoints "
+        "Een CI-ID-token (JWT van GitHub of Forgejo Actions, audience de beheer-URL) of een CLI-token `tooncli_...` "
+        "uit `toon login`. Plak het hele token achter Authorize. Alleen de deploy-endpoints en de CLI-sessie-endpoints "
         "accepteren het, en, alleen met een CLI-token, het aanmaken van een groep, het aanmaken van een site en het "
         "koppelen van een repository; elders levert een Bearer-header 401, ook als het token geldig is."
     ),

@@ -21,7 +21,7 @@ _NO_AUTH = {"security": [{}]}
 
 
 class OperatorOut(ApiModel):
-    """Who runs this installation of Plak, and how to reach them."""
+    """Who runs this installation of Toon, and how to reach them."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -56,7 +56,7 @@ class OperatorOut(ApiModel):
     summary="Who runs this installation",
     response_description="The name and e-mail address of the organisation, each `null` if not configured.",
     description=(
-        "The organisation that runs this installation of Plak and the e-mail address at which people reach "
+        "The organisation that runs this installation of Toon and the e-mail address at which people reach "
         "it about privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and "
         "`TOON_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. "
         "A setting that is empty comes back as `null`.\n\n"

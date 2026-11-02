@@ -1,6 +1,6 @@
-# Contributing to Plak
+# Contributing to Toon
 
-Plak is built by the Digi Gilde and licensed under the EUPL-1.2. Issues
+Toon is built by the Digi Gilde and licensed under the EUPL-1.2. Issues
 and pull requests are welcome. By contributing you agree that your work
 is released under that licence.
 

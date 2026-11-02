@@ -36,7 +36,7 @@ from toon.models.audit import ActorKind
 PROBLEM_CONTENT_TYPE = "application/problem+json"
 API_PATH_PREFIX = "/-/api/"
 
-WWW_AUTHENTICATE_BEARER = {"WWW-Authenticate": 'Bearer realm="plak", error="invalid_token"'}
+WWW_AUTHENTICATE_BEARER = {"WWW-Authenticate": 'Bearer realm="toon", error="invalid_token"'}
 
 # A 403 is a refusal whatever the method, and so is a 429 (only ApiError(429)
 # raises one, from the audit lookup daily limit; the ratelimit middleware's
@@ -69,7 +69,7 @@ class Problem(ApiModel):
 
     type: str = Field(
         default="about:blank",
-        description="Error type URI. Plak always uses `about:blank`; `code` carries the machine-readable meaning.",
+        description="Error type URI. Toon always uses `about:blank`; `code` carries the machine-readable meaning.",
     )
     title: str = Field(
         description="Short, fixed description of the status code, for example 'Forbidden'.",

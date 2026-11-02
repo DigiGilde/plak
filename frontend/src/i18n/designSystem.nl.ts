@@ -13,6 +13,10 @@
  * `tests/design-system-text.test.ts` checks it against the package on every
  * run: a word the design system rewrites is a word we have to look at again
  * rather than silently keep saying.
+ *
+ * The one exception is `designSystem.comboBox.openMenu`: the package says
+ * "Toon opties", which would read as the name of the product. The test lists
+ * it as reworded on purpose.
  */
 export const designSystemNl = {
   'designSystem.activityIndicator.loading': 'Laden',
@@ -22,7 +26,7 @@ export const designSystemNl = {
   'designSystem.codeViewer.copy': 'Kopieer',
   'designSystem.codeViewer.copied': 'Gekopieerd',
   'designSystem.codeViewer.copyFailed': 'Kopiëren mislukt',
-  'designSystem.comboBox.openMenu': 'Toon opties',
+  'designSystem.comboBox.openMenu': 'Opties tonen',
   'designSystem.comboBox.clear': 'Wis invoer',
   'designSystem.fileField.choose': 'Bestand kiezen',
   'designSystem.fileField.change': 'Wijzigen',

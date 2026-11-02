@@ -1,16 +1,16 @@
-# Plak
+# Toon
 
 [![status: beta](https://img.shields.io/badge/status-beta-orange.svg)](#disclaimer)
-[![Test and deploy](https://github.com/DigiGilde/plak/actions/workflows/deploy.yml/badge.svg?branch=beta)](https://github.com/DigiGilde/plak/actions/workflows/deploy.yml?query=branch%3Abeta)
-[![release](https://img.shields.io/github/v/release/DigiGilde/plak)](https://github.com/DigiGilde/plak/releases/latest)
-[![license: EUPL-1.2](https://img.shields.io/github/license/DigiGilde/plak)](LICENSE)
-[![Scheduled scan](https://github.com/DigiGilde/plak/actions/workflows/scan.yml/badge.svg)](https://github.com/DigiGilde/plak/actions/workflows/scan.yml)
+[![Test and deploy](https://github.com/DigiGilde/toon/actions/workflows/deploy.yml/badge.svg?branch=beta)](https://github.com/DigiGilde/toon/actions/workflows/deploy.yml?query=branch%3Abeta)
+[![release](https://img.shields.io/github/v/release/DigiGilde/toon)](https://github.com/DigiGilde/toon/releases/latest)
+[![license: EUPL-1.2](https://img.shields.io/github/license/DigiGilde/toon)](LICENSE)
+[![Scheduled scan](https://github.com/DigiGilde/toon/actions/workflows/scan.yml/badge.svg)](https://github.com/DigiGilde/toon/actions/workflows/scan.yml)
 
-**Status: beta, in production.** Plak runs in production on ZAD and is
+**Status: beta, in production.** Toon runs in production on ZAD and is
 still a beta: the design and the interface can change, as the disclaimer
 below says.
 
-Plak is a platform that lets government organisations (among them
+Toon is a platform that lets government organisations (among them
 MinBZK and the Nederlandse Digitale Dienst) publish and share static
 sites easily: publicly, behind SSO Rijk, with invitees by email
 address, or through a secret link. Every pull request can get a
@@ -20,7 +20,7 @@ preview of its own.
 
 Read this before you use anything here.
 
-- **Beta, in production.** Plak runs in production for real users, as a
+- **Beta, in production.** Toon runs in production for real users, as a
   beta. There is no support, no service level and no guarantee of any
   kind. The HTTP contract, the URL design, the database schema and the
   configuration can change without notice and without a migration path.
@@ -35,7 +35,7 @@ Read this before you use anything here.
   configurable, but no other platform and no other OIDC provider has
   been tried. If you run it elsewhere, you are the first.
 - **Reporting.** Security issues go through
-  [a private security advisory](https://github.com/DigiGilde/plak/security/advisories/new)
+  [a private security advisory](https://github.com/DigiGilde/toon/security/advisories/new)
   or to `digigilde@rijksoverheid.nl`, never through a public issue;
   `SECURITY.md` has the procedure. Everything else belongs in the issue
   tracker of this repository.
@@ -43,18 +43,16 @@ Read this before you use anything here.
   licence grants the software as is, without warranty of any kind and
   without liability, to the extent the law allows.
 
-Plak is not an archive. It deletes old live versions every night and
+Toon is not an archive. It deletes old live versions every night and
 lets administrators delete sites, so a published page can disappear.
 The publishing organisation keeps its own records under its selection
 list (Archiefwet). See §8 of `docs/publishing.md`.
 
-The name comes from `plakkaat`, the Dutch word for a placard. Placards
-used to be put up to share something with more people than you could
-reach yourself. That is what Plak does too. And like a placard it can
-hang in public space, visible to everyone, or in a closed-off place
-where only a smaller group comes.
+The name comes from the Dutch word `tonen`, to show. Toon shows your
+site to whoever may see it. That can be everyone, or only a small group.
+Toon used to be called Plak. §9 of `docs/publishing.md` says how to move over.
 
-Plak is built for our own use, and therefore runs on the combination we
+Toon is built for our own use, and therefore runs on the combination we
 use ourselves: deployment on ZAD (Zelfservice Applicatie Deployment,
 self-service application deployment) and login through that platform's
 Keycloak, which in turn brokers to SSO Rijk. It is not a product
@@ -112,27 +110,27 @@ root of the admin host, without a path prefix. See `docs/design.md` §4.
 | `/{group}/{site}` | site detail (admin host). Other tabs: `/previews`, `/versions`, `/access`, `/members`, `/deploy`, `/settings` |
 | `/-/groups`, `/-/platform`, `/-/sessions`, `/-/profile` | platform pages (admin host, `/-/platform` only for platform administrators) |
 | `/-/privacy`, `/-/accessibility`, `/-/about`, `/-/whats-new` | platform pages (publicly accessible, no login) |
-| `/cli-link` | where `plak login` sends you to approve a CLI session |
+| `/cli-link` | where `toon login` sends you to approve a CLI session |
 | `/-/login`, `/-/oauth2/callback`, `/-/logout` | OIDC login, the redirect URI and logout (POST on the admin host) |
 | `/-/api/v1/...` | JSON and deploy API (admin host only) |
 | `/-/api/docs` | API documentation (OpenAPI, self-hosted UI, publicly readable) |
-| `/` (content host) | 302 to the admin host, whose landing page says what Plak is |
+| `/` (content host) | 302 to the admin host, whose landing page says what Toon is |
 
 ## Quickstart: local development
 
 ```bash
 git clone <this-repo>
-cd plak
+cd toon
 ./dev/up.sh
 ```
 
 This starts the full stack (nginx + app + PostgreSQL + mock OIDC)
 through Podman compose on port `8080`. The stack has two hosts and
-separates them on the `Host` header: `beheer.plak.localhost` for
-the admin and `plak.localhost` for content. On most systems both resolve
+separates them on the `Host` header: `beheer.toon.localhost` for
+the admin and `toon.localhost` for content. On most systems both resolve
 to 127.0.0.1 by themselves; if they do not, put them in `/etc/hosts`.
 
-Log in through `http://beheer.plak.localhost:8080/-/login`; the mock
+Log in through `http://beheer.toon.localhost:8080/-/login`; the mock
 OIDC server logs you in automatically as a preconfigured dev
 administrator. `http://localhost:8080` does not work: an unknown host
 gets a 400.
@@ -144,20 +142,20 @@ See `docs/local-development.md` for prerequisites, the compose
 topology, justfile recipes and the Testcontainers/Podman socket
 pattern.
 
-## Publishing with the `plak` CLI
+## Publishing with the `toon` CLI
 
 The CLI lives in `cli/`, a uv project of its own. Install it as a tool
-and the `plak` command is on your `PATH`:
+and the `toon` command is on your `PATH`:
 
 ```bash
-uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
+uv tool install "git+https://github.com/DigiGilde/toon@beta#subdirectory=cli"
 ```
 
-That is the latest: `beta` is the default branch, so `uv tool upgrade plak`
+That is the latest: `beta` is the default branch, so `uv tool upgrade toon`
 picks up whatever has landed on it. Once a version tag exists, pin instead:
 
 ```bash
-uv tool install "git+https://github.com/DigiGilde/plak@<tag>#subdirectory=cli"
+uv tool install "git+https://github.com/DigiGilde/toon@<tag>#subdirectory=cli"
 ```
 
 There is no tag yet, so `<tag>` is the one thing to fill in. What a branch
@@ -165,29 +163,33 @@ gives up is the guarantee that tomorrow installs what you tested today.
 
 The repository is public, so either form clones without credentials.
 
+`toon` is also the command of the CLI of the TOON data format
+(Token-Oriented Object Notation). If `toon --version` does not print
+`toon-cli`, that other program comes first on your `PATH`.
+
 Then log in once and publish:
 
 ```bash
-plak login
-plak publish ./dist --site team-aurora/website
-plak publish ./dist --site team-aurora/website --preview pr-42
+toon login
+toon publish ./dist --site team-aurora/website
+toon publish ./dist --site team-aurora/website --preview pr-42
 ```
 
 Without `--host` the CLI talks to the DigiGilde instance,
-`https://beheer.plak.rijks.app`. For another instance, log in once with
-`plak login --host <admin origin>`: every command then uses that host
-until you log in somewhere else. `--host` or `PLAK_HOST` overrides it
+`https://beheer.toon.rijks.app`. For another instance, log in once with
+`toon login --host <admin origin>`: every command then uses that host
+until you log in somewhere else. `--host` or `TOON_HOST` overrides it
 for a single command.
 
-`plak login` uses the OAuth 2.0 Device Authorization Grant: it shows a
+`toon login` uses the OAuth 2.0 Device Authorization Grant: it shows a
 code, you confirm it in the admin, and the session belongs to your user
 account, for every directory. The tokens go into the system keyring
 (macOS Keychain, Secret Service on Linux, Windows Credential Manager).
 Where there is no usable keyring, or with `--insecure-storage`, they go
-into `~/.config/plak/hosts.json` (mode 0600; `%APPDATA%\plak\hosts.json`
-on Windows) and `plak login` says so.
+into `~/.config/toon/hosts.json` (mode 0600; `%APPDATA%\toon\hosts.json`
+on Windows) and `toon login` says so.
 That file also remembers the host you last logged in to; set
-`PLAK_CONFIG_DIR` or `XDG_CONFIG_HOME` to move it. An old `.env.plak`
+`TOON_CONFIG_DIR` or `XDG_CONFIG_HOME` to move it. An old `.env.plak`
 from an earlier version is no longer read: log in again and delete it.
 
 No site yet? Create the group and the site from the terminal too; you
@@ -196,8 +198,8 @@ become admin of both. The access flags are optional (`--access`,
 its group's default access:
 
 ```bash
-plak group create team-aurora --name "Team Aurora"
-plak site create team-aurora/docs --title "Documentation" --access sso
+toon group create team-aurora --name "Team Aurora"
+toon site create team-aurora/docs --title "Documentation" --access sso
 ```
 
 To publish from CI, link the repository to the site; as site admin. For
@@ -205,11 +207,11 @@ a GitHub repository the IDs come from your own `gh` login, so a private
 repository links too:
 
 ```bash
-plak site link team-aurora/docs minbzk/website --live-branch main
+toon site link team-aurora/docs minbzk/website --live-branch main
 ```
 
 It prints the site id the workflow names beside the site (`site-id` in
-the action, `--site-id` or `PLAK_SITE_ID` for the CLI).
+the action, `--site-id` or `TOON_SITE_ID` for the CLI).
 
 Deleting groups and sites, unlinking and managing members stays in the admin.
 
@@ -217,8 +219,8 @@ From a checkout of this repository the same commands run without
 installing anything:
 
 ```bash
-uv run --project cli plak login
-uv run --project cli plak publish ./dist --site team-aurora/website
+uv run --project cli toon login
+uv run --project cli toon publish ./dist --site team-aurora/website
 ```
 
 `docs/publishing.md` has the full story: the base path contract for
@@ -229,7 +231,7 @@ fallback and the error codes.
 
 The composite action in `actions/publish/` publishes from GitHub
 Actions or Forgejo Actions without a secret: the workflow proves who it
-is with an OIDC ID token, and Plak checks that token against the
+is with an OIDC ID token, and Toon checks that token against the
 repository linked to the site. Link the repository first, on the
 **Deploy** tab of the site in the admin; that tab also shows a
 ready-made workflow for the site. The core of it, a live deploy on every
@@ -251,8 +253,8 @@ jobs:
       - uses: actions/checkout@<commit-sha>
       - run: npm ci && npm run build
         env:
-          PLAK_BASE_PATH: /team-aurora/website/
-      - uses: DigiGilde/plak/actions/publish@<commit-sha>
+          TOON_BASE_PATH: /team-aurora/website/
+      - uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
           site-id: <site-id>
@@ -269,33 +271,33 @@ and its clean-up, and shows the Forgejo variant.
 
 The Claude Code plugin in `plugin/` lets Claude do the publishing with
 the rules of this project in hand: a preview by default, live only when
-you ask for it, and a `plak login` that you approve yourself. It uses
-the `plak` CLI above, so install that first. Then, in Claude Code:
+you ask for it, and a `toon login` that you approve yourself. It uses
+the `toon` CLI above, so install that first. Then, in Claude Code:
 
 ```text
-/plugin marketplace add DigiGilde/plak
-/plugin install plak@plak
+/plugin marketplace add DigiGilde/toon
+/plugin install toon@toon
 ```
 
 Ask for it in the directory of your site, for instance "zet deze map
-online op Plak". Auto-update is off for this marketplace unless you turn
+online op Toon". Auto-update is off for this marketplace unless you turn
 it on (`/plugin`, tab **Marketplaces**). To get a newer version by hand,
-refresh the marketplace with `/plugin marketplace update plak`, then pick
+refresh the marketplace with `/plugin marketplace update toon`, then pick
 **Update now** on the plugin in the **Installed** tab of `/plugin`, or
-run `claude plugin update plak@plak` in your shell. `docs/skill.md`
+run `claude plugin update toon@toon` in your shell. `docs/skill.md`
 covers what the skill does and how to run its evals.
 
 ## Deploying on ZAD
 
-Plak is not running in production yet; the rollout is prepared, not
+Toon is not running in production yet; the rollout is prepared, not
 done. The target is ZAD (Zelfservice voor Applicatie Deployment): no
 Kubernetes manifests, but one declarative project file that the
-platform manages. Plak is **one component** there, because the app
+platform manages. Toon is **one component** there, because the app
 serves content, the admin SPA and the host separation itself.
 
 - Two web addresses on that one component, through `publish-on-web`
   with a dotted `domain-format` and `root-component`:
-  `beheer.plak.<domain>` and `plak.<domain>`. Both have to be approved
+  `beheer.toon.<domain>` and `toon.<domain>`. Both have to be approved
   by the platform team; without approval the rollout falls back to the
   cluster address.
 - PostgreSQL and the content volume come as ZAD services, with the
@@ -310,7 +312,7 @@ serves content, the admin SPA and the host separation itself.
   ZAD Keycloak, and migrations run through a job in the portal or at
   container start: ZAD has no notion of a Job.
 
-`deploy/plak-project.example.yaml` is the project file with comments,
+`deploy/toon-project.example.yaml` is the project file with comments,
 `docs/deploying-on-zad.md` the step-by-step guide from nothing to
 running plus the open questions for the platform team.
 `.github/workflows/` holds the CI and deploy workflows. The checks run on
@@ -322,7 +324,8 @@ ZAD environment to deploy to yet.
 - `docs/design.md`: the numbered design. Every "spec §7" or
   "behaviour requirement 6" in the code points at a section there.
 - `docs/publishing.md`: how to publish a site (base path contract, the
-  `publish` action, curl fallback, previews and `_version`).
+  `publish` action, curl fallback, previews and `_version`), and what to
+  change when you move over from Plak.
 - `docs/skill.md`: the Claude Code plugin in `plugin/`: installing it,
   what the skill does, and running its evals.
 - `docs/security.md`: the living security checklist.
@@ -341,11 +344,11 @@ ZAD environment to deploy to yet.
   brotli (text files are stored and sent compressed).
 - `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`.
 - `cli/`: the publishing CLI, a uv project of its own that installs the
-  `plak` command; its only dependency is httpx and it shares no code with
+  `toon` command; its only dependency is httpx and it shares no code with
   the backend. `cli/tests/` is its suite (`just test-cli`).
 - `actions/publish/`: the composite action for GitHub Actions and
   Forgejo Actions that calls that CLI. `plugin/` is the Claude Code
-  plugin for the same job, with the `plak-publish` skill and its
+  plugin for the same job, with the `toon-publish` skill and its
   evals; `.claude-plugin/marketplace.json` offers it for installation.
 - The app serves content and the admin SPA itself (`FileResponse` with
   Range, ETag/304 and the fixed header set) and separates the admin and

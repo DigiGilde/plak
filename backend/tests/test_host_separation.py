@@ -24,8 +24,8 @@ from toon.host_separation import HostSeparationMiddleware, belongs_to_content
 from toon.main import create_app
 from toon.serving.response import NEUTRAL_404_BODY
 
-ADMIN = "https://beheer.plak.example"
-CONTENT = "https://plak.example"
+ADMIN = "https://beheer.toon.example"
+CONTENT = "https://toon.example"
 
 INDEX_HTML = b"<!doctype html><div id=app></div>"
 
@@ -56,7 +56,7 @@ class TestClassification:
         async def inner(scope: Scope, receive: Receive, send: Send) -> None:
             await PlainTextResponse("app")(scope, receive, send)
 
-        middleware = HostSeparationMiddleware(inner, content_host="plak.example")
+        middleware = HostSeparationMiddleware(inner, content_host="toon.example")
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=middleware), base_url=ADMIN) as client:
             response = await client.get(path)
         assert response.text == "app"
@@ -101,7 +101,7 @@ class TestClassification:
         async def inner(scope: Scope, receive: Receive, send: Send) -> None:
             calls.append(scope)
 
-        middleware = HostSeparationMiddleware(inner, content_host="plak.example")
+        middleware = HostSeparationMiddleware(inner, content_host="toon.example")
         scope: Scope = {"type": "websocket", "path": "/-/onbekend"}
 
         async def receive() -> None:
@@ -122,7 +122,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "db_url": "postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": make_client_jwk(),
         "oidc_required_acr": "urn:acr:hoog",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
@@ -266,7 +266,7 @@ class TestContentHost:
 
     async def test_host_comparison_ignores_gate_and_uppercase(self, tmp_path: Path) -> None:
         app = create_app(_settings(tmp_path))
-        async with app.router.lifespan_context(app), _client(app, "https://PLAK.example:8443") as content:
+        async with app.router.lifespan_context(app), _client(app, "https://TOON.example:8443") as content:
             # The SPA steps aside here, so this is content, not the interface.
             assert await _is_neutral_404(content, "/-/onbekend")
             assert (await content.get("/aurora/site")).status_code == 301

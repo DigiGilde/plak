@@ -3,6 +3,6 @@
  * rename touches a single line instead of every screen that links there.
  */
 
-/** Install and usage instructions for `plak login`, the CLI's own docs. */
+/** Install and usage instructions for `toon login`, the CLI's own docs. */
 export const TOON_LOGIN_DOCS_URL =
-  'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login';
+  'https://github.com/DigiGilde/toon/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-toon-login';

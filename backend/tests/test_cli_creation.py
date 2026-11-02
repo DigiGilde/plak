@@ -1,5 +1,5 @@
 """Creating a group or a site and linking a repository with the CLI token
-(`plak group create`, `plak site create`, `plak site link`), and the edge of
+(`toon group create`, `toon site create`, `toon site link`), and the edge of
 that: those three routes of api/admin.py take a bearer, no other admin
 route does.
 
@@ -47,15 +47,15 @@ from toon.models.publication import Site
 BASE = "/-/api/v1"
 PROBLEM = "application/problem+json"
 PEPPER = "audit-pepper-van-minstens-32-bytes!!"
-WWW_AUTHENTICATE = 'Bearer realm="plak", error="invalid_token"'
+WWW_AUTHENTICATE = 'Bearer realm="toon", error="invalid_token"'
 
 
 def _settings(content_root) -> Settings:
     return Settings(
-        db_url="postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        db_url="postgresql+asyncpg://toon:toon@localhost:5432/toon",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
@@ -116,7 +116,7 @@ async def _member(factory, sub: str, *, platform_role: PlatformRole = PlatformRo
 async def _token(factory, member: Member) -> str:
     """A CLI access token for this member, through the real device flow."""
     async with factory() as db:
-        created = await cli.create_device_authorization(db, client_name="plak-cli", ip_truncated=None)
+        created = await cli.create_device_authorization(db, client_name="toon-cli", ip_truncated=None)
     async with factory() as db:
         await cli.decide(db, created.user_code, await db.get(Member, member.id), approve=True)
     async with factory() as db:
@@ -154,7 +154,7 @@ async def _group(
 
 def _login(client, app, sub: str) -> dict[str, str]:
     session = set_session_cookie(client, app, sub=sub, email=f"{sub}@example.nl")
-    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="plak.example", path="/")
+    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="toon.example", path="/")
     return {CSRF_HEADER: session.csrf_token}
 
 
@@ -432,7 +432,21 @@ class TestCreationRefusals:
         )
 
         body = _problem(response, 401, "TOKEN_INVALID")
-        assert "plak login" in body["detail"]
+        assert "toon login" in body["detail"]
+        assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE
+        assert await _site(factory, "team", "docs") is None
+
+    async def test_a_token_under_its_old_prefix_is_401_and_names_the_cli_token(self, client, factory):
+        await _group(factory, "team")
+
+        response = await client.post(
+            f"{BASE}/groups/team/sites",
+            json={"title": "Docs", "slug": "docs"},
+            headers=_bearer(f"plakcli_{'a' * 16}_{'b' * 64}"),
+        )
+
+        body = _problem(response, 401, "TOKEN_INVALID")
+        assert "toon login" in body["detail"]
         assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE
         assert await _site(factory, "team", "docs") is None
 
@@ -446,7 +460,7 @@ class TestCreationRefusals:
 
     async def test_an_unknown_cli_token_is_401(self, client, factory):
         response = await client.post(
-            f"{BASE}/groups", json={"name": "Team", "slug": "team"}, headers=_bearer("plakcli_abc_def")
+            f"{BASE}/groups", json={"name": "Team", "slug": "team"}, headers=_bearer("tooncli_abc_def")
         )
 
         _problem(response, 401, "TOKEN_INVALID")
@@ -497,7 +511,7 @@ class TestCreationRefusals:
         response = await client.post(
             f"{BASE}/groups",
             json={"name": "Team", "slug": "team"},
-            headers={**headers, "Authorization": "Bearer plakcli_abc_def"},
+            headers={**headers, "Authorization": "Bearer tooncli_abc_def"},
         )
 
         _problem(response, 401, "TOKEN_INVALID")
@@ -677,7 +691,7 @@ class TestLinkRepositoryWithTheCliToken:
         headers = _login(client, app, "beheerder")
 
         response = await client.put(
-            REPOSITORY, json=PRIVATE, headers={**headers, "Authorization": "Bearer plakcli_abc_def"}
+            REPOSITORY, json=PRIVATE, headers={**headers, "Authorization": "Bearer tooncli_abc_def"}
         )
 
         _problem(response, 401, "TOKEN_INVALID")

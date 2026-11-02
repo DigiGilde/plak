@@ -45,7 +45,7 @@ const shared = {
   // One line: nldd-status-bar shows one and cuts the rest off with an
   // ellipsis. The first word carries the message, so it survives the
   // truncation on a narrow screen.
-  'beta.bar': 'Bètaversie - Plak is in ontwikkeling en kan fouten bevatten',
+  'beta.bar': 'Bètaversie - Toon is in ontwikkeling en kan fouten bevatten',
 
   // -- Roles ----------------------------------------------------------------
   'role.reader': 'Lezer',
@@ -101,7 +101,7 @@ const shared = {
   // -- The language choice itself -------------------------------------------
   // -- The app shell: toolbar, menu, footer ---------------------------------
   'shell.skip': 'Direct naar de inhoud',
-  'shell.brand.label': 'Plak, naar het overzicht',
+  'shell.brand.label': 'Toon, naar het overzicht',
   'shell.menu': 'Menu',
   'page.cliPair.title': 'CLI-sessie koppelen',
   'page.done.title': 'Site staat online',
@@ -114,7 +114,7 @@ const shared = {
   'nav.logout': 'Uitloggen',
   'footer.whatsNew': 'Wat is er nieuw',
   'footer.version': 'Versie {version}',
-  'footer.about': 'Over Plak',
+  'footer.about': 'Over Toon',
   'footer.accessibility': 'Toegankelijkheid',
   'footer.privacy': 'Privacy',
   'footer.api': 'API-documentatie',
@@ -132,7 +132,7 @@ const shared = {
   'profile.account.role.member': 'Lid',
   'profile.account.unknown': 'Onbekend',
   'profile.account.hint':
-    'Deze gegevens komen van SSO Rijk. Plak kan ze niet wijzigen. Klopt er iets niet, meld dat dan bij je eigen organisatie.',
+    'Deze gegevens komen van SSO Rijk. Toon kan ze niet wijzigen. Klopt er iets niet, meld dat dan bij je eigen organisatie.',
   'profile.language.heading': 'Taal van het beheer',
   'profile.language.subtitle':
     'De keuze staat op je account, dus hij geldt op elk apparaat waarop je inlogt.',
@@ -148,8 +148,8 @@ const shared = {
   'profile.language.failed.detail': 'Opslaan is niet gelukt.',
   'profile.sessions.heading': 'Gekoppelde CLI-sessies',
   'profile.sessions.body':
-    'Elke aanmelding met plak login die nog toegang heeft tot je account, met de mogelijkheid die in te trekken.',
-  'profile.sessions.install.before': 'Nog geen Plak-CLI? ',
+    'Elke aanmelding met "toon login" die nog toegang heeft tot je account, met de mogelijkheid die in te trekken.',
+  'profile.sessions.install.before': 'Nog geen Toon-CLI? ',
   'profile.sessions.install.link': 'Zo installeer en gebruik je hem.',
   'profile.sessions.link': 'Bekijk gekoppelde CLI-sessies',
 

@@ -1,4 +1,4 @@
-# Plak - development commands
+# Toon - development commands
 
 # Default: list the available commands
 default:
@@ -33,7 +33,7 @@ coverage:
     cd backend && uv run python -m pytest -n 4 --cov=src/toon --cov-report=term-missing:skip-covered
     # The CI tooling under scripts/ is a uv project of its own; its floor is in scripts/pyproject.toml.
     cd "{{justfile_directory()}}/scripts" && uv run coverage run -m pytest -q && uv run coverage report
-    cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=plak_cli --cov-report=term-missing:skip-covered
+    cd "{{justfile_directory()}}/cli" && uv run pytest tests -q --cov=toon_cli --cov-report=term-missing:skip-covered
     cd "{{justfile_directory()}}/frontend" && npm run coverage
 
 # Lint the backend and the CLI with ruff
@@ -41,7 +41,7 @@ lint:
     cd backend && uv run ruff check src tests
     # From the repo root, so ruff uses its defaults for cli/ instead of
     # backend/pyproject.toml; --project only picks the pinned ruff.
-    uv run --project backend ruff check cli/plak_cli cli/tests
+    uv run --project backend ruff check cli/toon_cli cli/tests
 
 # Purge expired audit entries; needs TOON_DB_URL
 purge-audit-log:

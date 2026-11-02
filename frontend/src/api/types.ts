@@ -63,7 +63,7 @@ export interface Member {
  * different origins).
  */
 export interface Me extends Member {
-  /** Origin of the content host (e.g. `https://plak.example`), without a trailing slash. */
+  /** Origin of the content host (e.g. `https://toon.example`), without a trailing slash. */
   contentBaseUrl: string;
   /** Groups this member has a role in, on slug. Empty when the member is nowhere a group member. */
   groupRoles: MyGroupRole[];
@@ -252,7 +252,7 @@ export interface SiteRepositoryInput {
   repo: string;
   liveBranch: string | null;
   /**
-   * Both or neither: the provider's ids, for a repository Plak cannot look up
+   * Both or neither: the provider's ids, for a repository Toon cannot look up
    * without credentials (a private one).
    */
   repositoryId?: number;

@@ -774,7 +774,7 @@ describe('TabAccess: secret links', () => {
     const secret = wrapper.find('[data-testid="new-key-link"]');
     expect(secret.exists()).toBe(true);
     // The secret link lives on the content host, not on the admin origin.
-    expect(secret.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
+    expect(secret.text()).toContain('https://sites.toon.test/team-aurora/website/?key=');
     expect(secret.text()).not.toContain(window.location.origin);
     expect(backend.data.keys).toHaveLength(2);
     const newKey = backend.data.keys[1]!;
@@ -803,7 +803,7 @@ describe('TabAccess: secret links', () => {
 
     const selector = backend.data.keys[1]!.selector;
     const bare = wrapper.find('[data-testid="new-key-link-without-code"]');
-    expect(bare.text()).toBe(`https://sites.plak.test/team-aurora/website/?key=${selector}`);
+    expect(bare.text()).toBe(`https://sites.toon.test/team-aurora/website/?key=${selector}`);
     const code = wrapper.find('[data-testid="new-key-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);

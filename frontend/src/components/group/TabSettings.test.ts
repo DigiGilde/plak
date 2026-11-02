@@ -962,7 +962,7 @@ describe('group TabSettings: address', () => {
     expect(wrapper.find('[data-testid="group-address-start"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="group-address-form"]').element.closest('nldd-sheet')).not.toBeNull();
     expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
-      'https://sites.plak.test/team-aurora/website/',
+      'https://sites.toon.test/team-aurora/website/',
     );
   });
 

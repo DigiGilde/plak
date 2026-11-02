@@ -491,7 +491,7 @@ async function openLinkForm(wrapper: ReturnType<typeof makeWrapper>): Promise<vo
   await untilIdle();
 }
 
-describe('TabDeploy: a repository Plak cannot look up', () => {
+describe('TabDeploy: a repository Toon cannot look up', () => {
   it('offers the id fields only after the lookup failed, then links with the entered ids', async () => {
     backend.data.repositories = [];
     const bodies = recordRepositoryPuts();
@@ -720,29 +720,29 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     expect(wrapper.find('[data-testid="repository-id"]').exists()).toBe(false);
   });
 
-  it('points at plak site link, with the live branch the form holds', async () => {
+  it('points at toon site link, with the live branch the form holds', async () => {
     backend.data.repositories = [];
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
     const hint = () => wrapper.find('[data-testid="repository-cli-hint"]');
     const command = () => hint().find('nldd-code-viewer[data-testid="repository-cli-command"]');
 
-    expect(command().text()).toBe('plak site link team-aurora/website');
+    expect(command().text()).toBe('toon site link team-aurora/website');
     expect(command().attributes('no-copy')).toBeUndefined();
     expect(hint().text()).toContain('haalt de CLI de ids zelf op via gh');
 
     typeInto(wrapper, 'repository-live-branch-input', ' main ');
     await untilIdle();
-    expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
+    expect(command().text()).toBe('toon site link team-aurora/website --live-branch main');
 
     // Named, the repository no longer depends on the checkout the command runs in.
     typeInto(wrapper, 'repository-owner-repo', 'https://github.com/minbzk/website.git');
     await untilIdle();
-    expect(command().text()).toBe('plak site link team-aurora/website minbzk/website --live-branch main');
+    expect(command().text()).toBe('toon site link team-aurora/website minbzk/website --live-branch main');
 
     typeInto(wrapper, 'repository-owner-repo', 'minbzk/');
     await untilIdle();
-    expect(command().text()).toBe('plak site link team-aurora/website --live-branch main');
+    expect(command().text()).toBe('toon site link team-aurora/website --live-branch main');
   });
 
   it('names a Forgejo repository by its URL, since a bare owner/repo means GitHub', async () => {
@@ -754,7 +754,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toBe(
-      'plak site link team-aurora/website https://code.overheid.nl/minbzk/website',
+      'toon site link team-aurora/website https://code.overheid.nl/minbzk/website',
     );
   });
 
@@ -766,11 +766,11 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     await untilIdle();
 
     expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toContain(
-      `plak site link team-aurora/website ${linked.owner}/${linked.repo}`,
+      `toon site link team-aurora/website ${linked.owner}/${linked.repo}`,
     );
   });
 
-  it('names plak site link first for a private GitHub repository, and only once', async () => {
+  it('names toon site link first for a private GitHub repository, and only once', async () => {
     backend.data.repositories = [];
     recordRepositoryPuts();
     const wrapper = makeWrapper();
@@ -783,7 +783,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     const blocks = explanation.findAll('nldd-code-viewer').map((block) => block.attributes('data-testid'));
     expect(blocks).toEqual(['repository-ids-cli', 'repository-ids-command']);
     expect(explanation.find('[data-testid="repository-ids-cli"]').text()).toBe(
-      'plak site link team-aurora/website team-aurora/prive-site --live-branch main',
+      'toon site link team-aurora/website team-aurora/prive-site --live-branch main',
     );
     expect(explanation.text()).toContain('Een verkeerd id koppelt niets anders');
     expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(false);
@@ -803,7 +803,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
     expect(wrapper.find('[data-testid="repository-cli-hint"]').exists()).toBe(true);
   });
 
-  it('points at plak site link in English too', async () => {
+  it('points at toon site link in English too', async () => {
     _setLocaleForTest('en');
     try {
       backend.data.repositories = [];
@@ -812,7 +812,7 @@ describe('TabDeploy: a repository Plak cannot look up', () => {
       const hint = wrapper.find('[data-testid="repository-cli-hint"]');
       expect(hint.text()).toContain('Rather from the terminal? Run this in a checkout of the repository');
       expect(hint.find('[data-testid="repository-cli-command"]').text()).toBe(
-        'plak site link team-aurora/website',
+        'toon site link team-aurora/website',
       );
     } finally {
       _setLocaleForTest('nl');
@@ -925,9 +925,9 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     await untilIdle();
 
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
-    expect(snippet).toContain('host: https://plak.test');
+    expect(snippet).toContain('host: https://toon.test');
     expect(snippet).toContain('site: team-aurora/website');
-    expect(snippet).toContain('DigiGilde/plak/actions/publish@<commit-sha>');
+    expect(snippet).toContain('DigiGilde/toon/actions/publish@<commit-sha>');
     expect(snippet).toContain('id-token: write');
     expect(snippet).toContain('branches: [main]');
     expect(snippet).toContain('preview-ref: pr-${{ github.event.pull_request.number }}');
@@ -945,7 +945,7 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const snippet = wrapper.find('[data-testid="workflow-snippet"]').text();
     expect(snippet).toContain('enable-openid-connect: true');
-    expect(snippet).toContain('uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>');
+    expect(snippet).toContain('uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>');
     expect(snippet).toContain('runs-on: docker');
     expect(snippet).not.toContain('secrets.');
   });
@@ -955,25 +955,25 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     await untilIdle();
 
     const snippet = wrapper.find('[data-testid="cli-snippet"]').text();
-    expect(snippet).toContain('plak login --host https://plak.test');
-    expect(snippet).toContain('plak publish ./dist --host https://plak.test --site team-aurora/website');
+    expect(snippet).toContain('toon login --host https://toon.test');
+    expect(snippet).toContain('toon publish ./dist --host https://toon.test --site team-aurora/website');
     expect(snippet).toContain(
-      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${backend.data.sites[0]!.id} --preview pr-42`,
+      `toon publish ./dist --host https://toon.test --site team-aurora/website --site-id ${backend.data.sites[0]!.id} --preview pr-42`,
     );
-    expect(snippet).toContain('plak logout');
+    expect(snippet).toContain('toon logout');
     expect(snippet).not.toContain(MOCK_CONTENT_BASE);
   });
 
-  it('links to the plak repo for the cli and to /cli-link', async () => {
+  it('links to the toon repo for the cli and to /cli-link', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
     const cliLink = wrapper.find('[data-testid="toon-cli-repo-link"]');
-    expect(cliLink.attributes('href')).toBe('https://github.com/DigiGilde/plak');
+    expect(cliLink.attributes('href')).toBe('https://github.com/DigiGilde/toon');
 
     const linkCliLink = wrapper.find('[data-testid="cli-link-link"]');
     expect(linkCliLink.attributes('href')).toBe('/cli-link');
-    expect(wrapper.html()).toContain('plak login');
+    expect(wrapper.html()).toContain('toon login');
   });
 
   it('gives the install and upgrade commands as one copyable block', async () => {
@@ -982,11 +982,11 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
 
     const install = wrapper.find('nldd-code-viewer[data-testid="cli-install"]');
     expect(install.text().split('\n')).toEqual([
-      'uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"',
-      'uv tool upgrade plak',
+      'uv tool install "git+https://github.com/DigiGilde/toon@beta#subdirectory=cli"',
+      'uv tool upgrade toon',
     ]);
     expect(install.attributes('no-copy')).toBeUndefined();
-    expect(install.element.parentElement!.textContent).toContain('uv run --project cli plak ...');
+    expect(install.element.parentElement!.textContent).toContain('uv run --project cli toon ...');
   });
 
   it('names the workflow file path and links to the versions tab', async () => {
@@ -1134,10 +1134,10 @@ describe('TabDeploy: the site id in the snippets', () => {
     const id = backend.data.sites[0]!.id;
     const commands = wrapper.find('[data-testid="cli-snippet"]').text().split('\n');
     expect(commands).toContain(
-      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${id}`,
+      `toon publish ./dist --host https://toon.test --site team-aurora/website --site-id ${id}`,
     );
     expect(commands).toContain(
-      `plak publish ./dist --host https://plak.test --site team-aurora/website --site-id ${id} --preview pr-42`,
+      `toon publish ./dist --host https://toon.test --site team-aurora/website --site-id ${id} --preview pr-42`,
     );
   });
 
@@ -1148,20 +1148,20 @@ describe('TabDeploy: the site id in the snippets', () => {
     await untilIdle();
 
     const commands = wrapper.find('[data-testid="cli-snippet"]').text().split('\n');
-    expect(commands).toContain('plak publish ./dist --host https://plak.test --site team-aurora/website');
+    expect(commands).toContain('toon publish ./dist --host https://toon.test --site team-aurora/website');
     expect(commands).toContain(
-      'plak publish ./dist --host https://plak.test --site team-aurora/website --preview pr-42',
+      'toon publish ./dist --host https://toon.test --site team-aurora/website --preview pr-42',
     );
     expect(commands.join('\n')).not.toContain('--site-id');
   });
 
-  it('keeps plak site link as it was', async () => {
+  it('keeps toon site link as it was', async () => {
     backend.data.repositories = [];
     const wrapper = makeWrapper();
     await openLinkForm(wrapper);
 
     expect(wrapper.find('[data-testid="repository-cli-command"]').text()).toBe(
-      'plak site link team-aurora/website',
+      'toon site link team-aurora/website',
     );
   });
 });
@@ -1769,7 +1769,7 @@ describe('TabDeploy: unlinking and configuration fallbacks', () => {
     await untilIdle();
 
     const snippet = wrapper.find('[data-testid="cli-snippet"]').text();
-    expect(snippet).toContain(`plak login --host ${window.location.origin}`);
+    expect(snippet).toContain(`toon login --host ${window.location.origin}`);
   });
 
   it('shows "onbekend" as who linked it when the repository has no recorded creator', async () => {

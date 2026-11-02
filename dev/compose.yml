@@ -10,12 +10,12 @@
 #
 # Explicit project name: this file lives in dev/, one level under the repo
 # root, so without this podman would derive the project name "dev" from the
-# directory and orphan the volumes of the existing "plak" project.
-name: plak
+# directory and orphan the volumes of the existing "toon" project.
+name: toon
 
 services:
   # POSTGRES_USER is the image's superuser and a bootstrap account only: the
-  # init script creates the ordinary account `plak` that owns the database and
+  # init script creates the ordinary account `toon` that owns the database and
   # that the app, the migrations and the retention job run on, the way the one
   # account on ZAD is an ordinary owner. The image runs its init scripts on an
   # empty data directory only, so changing this needs `podman compose down -v`.
@@ -23,7 +23,7 @@ services:
     image: docker.io/library/postgres:16@sha256:1beaa3084eee2676f20a9cd9928f0bf2c5bf674f8e49f81017912183d377c61c
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_DB: plak
+      POSTGRES_DB: toon
     env_file:
       - path: .secrets/postgres.env
         required: false
@@ -31,7 +31,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d plak"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d toon"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -79,18 +79,18 @@ services:
         required: false
     environment:
       TOON_CONTENT_ROOT: /content
-      # Via nginx (alias oidc.plak.localhost), not directly mock-oidc: this
+      # Via nginx (alias oidc.toon.localhost), not directly mock-oidc: this
       # way browser and app see the same issuer URL and the app's exact
       # issuer check matches the mock's Host-derived issuer.
-      TOON_OIDC_ISSUER: http://oidc.plak.localhost:8080/default
-      TOON_OIDC_CLIENT_ID: plak-dev
+      TOON_OIDC_ISSUER: http://oidc.toon.localhost:8080/default
+      TOON_OIDC_CLIENT_ID: toon-dev
       TOON_OIDC_REQUIRED_ACR: http://eidas.europa.eu/LoA/substantial
       TOON_BOOTSTRAP_ADMIN_SUB: dev-beheerder
       TOON_ENVIRONMENT: dev
       # Two origins (spec §4a): the app separates them itself on the Host
       # header, see docs/local-development.md for the /etc/hosts rules.
-      TOON_BASE_URL: http://beheer.plak.localhost:8080
-      TOON_CONTENT_BASE_URL: http://plak.localhost:8080
+      TOON_BASE_URL: http://beheer.toon.localhost:8080
+      TOON_CONTENT_BASE_URL: http://toon.localhost:8080
       # Built Vue SPA from the host instead of the copy in the image, so
       # `just build-spa` is visible directly without a rebuild.
       TOON_SPA_PATH: /spa
@@ -137,7 +137,7 @@ services:
     networks:
       default:
         aliases:
-          - oidc.plak.localhost
+          - oidc.toon.localhost
     depends_on:
       - app
 

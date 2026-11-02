@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Privacy statement: who is responsible, what Plak keeps, for how long, who
+// Privacy statement: who is responsible, what Toon keeps, for how long, who
 // can see it and what someone can ask of us.
 import PlatformPage from './PlatformPage.vue';
 import { useOperator } from '@/composables/operator';

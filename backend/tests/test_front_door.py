@@ -28,8 +28,8 @@ from toon.config import Settings
 from toon.main import create_app
 from toon.serving.response import NEUTRAL_404_BODY, PLATFORM_CSP
 
-ADMIN = "https://beheer.plak.example"
-CONTENT = "https://plak.example"
+ADMIN = "https://beheer.toon.example"
+CONTENT = "https://toon.example"
 
 
 def _settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -37,7 +37,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "db_url": "postgresql+asyncpg://unused:unused@localhost:5432/unused",
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": make_client_jwk(),
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",

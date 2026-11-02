@@ -10,16 +10,16 @@ describe('Page title', () => {
   it('puts the distinguishing part first and the product name last', () => {
     setDocumentTitle('Jaarverslag 2025', 'Versies');
 
-    expect(document.title).toBe('Jaarverslag 2025 - Versies - Plak');
+    expect(document.title).toBe('Jaarverslag 2025 - Versies - Toon');
   });
 
   it('does not name the product name twice', () => {
-    setDocumentTitle('Over Plak');
-    expect(document.title).toBe('Over Plak');
+    setDocumentTitle('Over Toon');
+    expect(document.title).toBe('Over Toon');
 
     // A site that happens to start with the same letters keeps its suffix.
-    setDocumentTitle('Plakkaat');
-    expect(document.title).toBe('Plakkaat - Plak');
+    setDocumentTitle('Toonbank');
+    expect(document.title).toBe('Toonbank - Toon');
   });
 
   it('leaves out parts that do not exist yet', () => {
@@ -27,6 +27,6 @@ describe('Page title', () => {
     // reserve a dash for it.
     setDocumentTitle(undefined, null, '');
 
-    expect(document.title).toBe('Plak');
+    expect(document.title).toBe('Toon');
   });
 });

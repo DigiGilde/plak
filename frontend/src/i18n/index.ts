@@ -41,7 +41,7 @@ const FALLBACK_LOCALE: Locale = 'en';
 
 const CATALOGUES: Record<Locale, Catalogue> = { nl, en };
 
-const STORAGE_KEY = 'plak-taal';
+const STORAGE_KEY = 'toon-taal';
 
 /**
  * The BCP 47 tag `Intl` gets per language. `en-GB` rather than plain `en`:

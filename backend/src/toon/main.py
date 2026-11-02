@@ -219,13 +219,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await engine.dispose()
 
     app = FastAPI(
-        title="Plak API",
+        title="Toon API",
         summary="Publish and share static sites, with previews per pull request.",
         description=docs.API_DESCRIPTION,
         version=API_VERSION,
         contact={
-            "name": "Plak",
-            "url": "https://github.com/DigiGilde/plak/issues",
+            "name": "Toon",
+            "url": "https://github.com/DigiGilde/toon/issues",
             "email": "digigilde@rijksoverheid.nl",
         },
         servers=[{"url": "/-/api/v1"}],

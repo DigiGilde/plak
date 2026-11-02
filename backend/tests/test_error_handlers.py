@@ -42,7 +42,7 @@ def _app() -> FastAPI:
 
 async def _fetch(path: str, headers: dict[str, str] | None = None) -> httpx.Response:
     transport = httpx.ASGITransport(app=_app())
-    async with httpx.AsyncClient(transport=transport, base_url="https://beheer.plak.example") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="https://beheer.toon.example") as client:
         return await client.get(path, headers=headers)
 
 
@@ -81,7 +81,7 @@ async def test_the_code_is_the_same_in_both_languages() -> None:
     assert english["detail"] != dutch["detail"]
 
 
-async def test_a_language_plak_does_not_have_falls_back_to_english() -> None:
+async def test_a_language_toon_does_not_have_falls_back_to_english() -> None:
     body = (await _fetch("/-/api/v1/crashes", {"Accept-Language": "fr-BE,fr;q=0.9"})).json()
 
     assert body["detail"] == messages.render("en", Msg("ROLLBACK_TARGET_PREVIEW"))
@@ -154,7 +154,7 @@ def _refusal_app(status: int, *, mark_audited: bool = False) -> FastAPI:
 
 async def _fetch_from(app: FastAPI, method: str, path: str) -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="https://beheer.plak.example") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="https://beheer.toon.example") as client:
         return await client.request(method, path)
 
 

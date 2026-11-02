@@ -3,7 +3,7 @@ the OP ends.
 
 Lives on the admin host only (host_separation.py keeps everything under `/-/`
 off the content host), takes the `logout_token` as a form field, verifies it
-per section 2.6 and then drops every Plak session that token points at. Both
+per section 2.6 and then drops every Toon session that token points at. Both
 session kinds go: one login at the OP produced them both, so the `sid` claim
 matches both.
 

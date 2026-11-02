@@ -1,6 +1,6 @@
-"""Alembic environment for Plak.
+"""Alembic environment for Toon.
 
-Migrations run under TOON_DB_URL, the one database account Plak has. ZAD's
+Migrations run under TOON_DB_URL, the one database account Toon has. ZAD's
 shared PostgreSQL service hands out exactly one user, so app, migrations and
 the retention job share it. The append-only guarantee of the audit log rests
 on the triggers in 0001_base alone.

@@ -362,8 +362,8 @@ class TestReclaim:
         assert result.held == []
         assert all((root / ref).is_dir() for ref in refs)
 
-    def test_leaves_names_plak_never_writes(self, store: ContentStore, root: Path):
-        """Only a directory named like a site id is Plak's: the volume's
+    def test_leaves_names_toon_never_writes(self, store: ContentStore, root: Path):
+        """Only a directory named like a site id is Toon's: the volume's
         lost+found, a backup an operator put there or what the layout before
         site ids left behind are not, and neither is a file or a symlink."""
         kept = self._version(store, SITE)

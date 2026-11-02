@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Device-flow approval for `plak login` (the OAuth device flow). The
+ * Device-flow approval for `toon login` (the OAuth device flow). The
  * CLI opens the browser here, with the user code from the terminal in the
  * query string; a human confirms the code matches before approving, so a
  * phished link or a shared code cannot silently grant access.

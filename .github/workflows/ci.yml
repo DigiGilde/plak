@@ -161,7 +161,7 @@ jobs:
           uv run coverage run -m pytest -q
           uv run coverage report
 
-  # cli/ is its own uv project (the `plak` command), separate from the
+  # cli/ is its own uv project (the `toon` command), separate from the
   # backend. Its lint runs in `pre-commit`, like the backend's.
   cli:
     runs-on: ubuntu-latest
@@ -175,7 +175,7 @@ jobs:
 
       - name: CLI tests with coverage
         working-directory: cli
-        run: uv run pytest tests -q -n auto --cov=plak_cli --cov-report=term-missing:skip-covered
+        run: uv run pytest tests -q -n auto --cov=toon_cli --cov-report=term-missing:skip-covered
 
   # The CLI supports Python 3.12 and up (cli/pyproject.toml); `cli` and
   # `cli-windows` run on cli/.python-version, the newest, and this job runs

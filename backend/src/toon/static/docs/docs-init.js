@@ -2,7 +2,7 @@
 // file and not an inline <script>: the admin CSP allows script-src 'self' only.
 
 (function () {
-  var CSRF_COOKIE = '__Host-plak-csrf';
+  var CSRF_COOKIE = '__Host-toon-csrf';
   var CSRF_HEADER = 'X-CSRF-Token';
 
   function csrfToken() {

@@ -1069,7 +1069,7 @@ async def test_the_storage_migration_moves_every_version_to_its_site_id_and_back
     # Left by a publish that never inserted its row.
     stray = root / group_slug / site_slug / str(uuid.uuid4())
     stray.mkdir()
-    # Not a group Plak knows: perhaps an operator's, so it stays.
+    # Not a group Toon knows: perhaps an operator's, so it stays.
     (root / "backup").mkdir()
     (root / "_tmp").mkdir()
     monkeypatch.setenv("TOON_CONTENT_ROOT", str(root))

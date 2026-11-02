@@ -67,8 +67,8 @@ describe('Done (the address is the answer)', () => {
 
     expect(wrapper.find('h1').text()).toBe('Je site staat online');
     const link = wrapper.find('[data-testid="done-address-link-site"]');
-    expect(link.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
-    expect(link.text()).toBe('https://sites.plak.test/team-aurora/website/');
+    expect(link.attributes('href')).toBe('https://sites.toon.test/team-aurora/website/');
+    expect(link.text()).toBe('https://sites.toon.test/team-aurora/website/');
     expect(link.attributes('target')).toBe('_blank');
 
     wrapper.unmount();
@@ -82,7 +82,7 @@ describe('Done (the address is the answer)', () => {
     expect(copy.attributes('text')).toBe('Kopieer adres');
     const openButtons = wrapper.find('[data-testid="done-open-site"]');
     expect(openButtons.attributes('text')).toBe('Open site');
-    expect(openButtons.attributes('href')).toBe('https://sites.plak.test/team-aurora/website/');
+    expect(openButtons.attributes('href')).toBe('https://sites.toon.test/team-aurora/website/');
     expect(openButtons.attributes('target')).toBe('_blank');
 
     wrapper.unmount();
@@ -109,7 +109,7 @@ describe('Done (the address is the answer)', () => {
     await wrapper.find('[data-testid="done-copy-site"]').trigger('click');
     await flushPromises();
 
-    expect(write).toHaveBeenCalledWith('https://sites.plak.test/team-aurora/website/');
+    expect(write).toHaveBeenCalledWith('https://sites.toon.test/team-aurora/website/');
     const notice = wrapper.find('[data-testid="done-copy-notice-site"]');
     expect(notice.text()).toBe('Adres gekopieerd.');
     // A status line, so a screen reader gets the confirmation too.
@@ -255,7 +255,7 @@ describe('Done (reload and share)', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="done-address-link-site"]').attributes('href')).toBe(
-      'https://sites.plak.test/team-aurora/tweede/',
+      'https://sites.toon.test/team-aurora/tweede/',
     );
 
     wrapper.unmount();
@@ -374,7 +374,7 @@ describe('Done (secret link)', () => {
     expect(banner.attributes('supporting-text')).toContain('Toegang');
     const link = wrapper.find('[data-testid="done-key-link"]');
     expect(link.text()).toContain('?key=');
-    expect(link.text()).toContain('https://sites.plak.test/team-aurora/website/');
+    expect(link.text()).toContain('https://sites.toon.test/team-aurora/website/');
 
     wrapper.unmount();
   });
@@ -404,7 +404,7 @@ describe('Done (secret link)', () => {
     await flushPromises();
 
     const bare = wrapper.find('[data-testid="done-key-link-without-code"]');
-    expect(bare.text()).toContain('https://sites.plak.test/team-aurora/website/?key=');
+    expect(bare.text()).toContain('https://sites.toon.test/team-aurora/website/?key=');
     const code = wrapper.find('[data-testid="done-key-code"]').text();
     expect(code).not.toBe('');
     expect(bare.text()).not.toContain(code);

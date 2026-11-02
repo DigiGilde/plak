@@ -26,10 +26,10 @@ such rather than assumed.
 - **Anonymous visitors**: people who view public or secret-link content
   without logging in; the audit log still records their (truncated/encrypted)
   IP address.
-- **CLI users**: members who authorize a `plak login` device (CLI publishing
+- **CLI users**: members who authorize a `toon login` device (CLI publishing
   tool).
 - **People named in published content**: anyone whose personal data appears
-  inside a published site, without ever interacting with Plak's own
+  inside a published site, without ever interacting with Toon's own
   authentication.
 
 ## Personal data processed, per store
@@ -43,9 +43,9 @@ such rather than assumed.
 | `access_keys` (`models/publication.py`) | `label`, `selector`, `verifier_hash` (SHA-256 of a random secret) | secret-link credential, not itself tied to a person | generated on creation | mandatory `expires_at`, 90 days default, 365 days maximum (BIO2 5.18.02, `docs/security.md`) |
 | `audit_log_entries` (`models/audit.py`) | `actor_pseudonym` (HMAC-SHA256 of the actor identifier under `TOON_AUDIT_PEPPER`), `ip_truncated` (/24 IPv4, /48 IPv6), `ip_encrypted` (AES-256-GCM, reversible, under the separate `TOON_AUDIT_IP_KEY`), `action`, `result`, `reason_code`, `refs` (for `group_name` and `site_title` also the previous name or title: free text that members choose, see below) | security and access audit trail | every login, access decision, admin action and CLI event | 90 days for pure viewing/login-success actions, 3 years for everything else, including every refusal, admin operation and publication (`docs/audit-log.md`, "Retention"; enforced in the database by `audit_log_retention()`, `backend/alembic/versions/0001_base.py`) |
 | Admin/content sessions (`auth/sessions.py`) | `sub`, `email`, `name`, refresh token (kept in process memory only, `repr=False`, never logged) | keeps someone logged in | OIDC login | in-memory only, not persisted to the database; expires after 12 hours (`MAX_SESSION_AGE`) or on logout; lost entirely on a restart (`docs/security.md`, "Sessions do not survive a restart") |
-| `cli_device_authorizations` (`models/cli.py`) | `device_hash`, `user_code_hash`, `client_name`, `ip_truncated`, `member_id` | `plak login` device pairing | CLI device flow (RFC 8628) | short-lived: expires after 10 minutes, deleted once exchanged, swept by the cleanup job |
+| `cli_device_authorizations` (`models/cli.py`) | `device_hash`, `user_code_hash`, `client_name`, `ip_truncated`, `member_id` | `toon login` device pairing | CLI device flow (RFC 8628) | short-lived: expires after 10 minutes, deleted once exchanged, swept by the cleanup job |
 | `cli_sessions` / `cli_refresh_tokens` (`models/cli.py`) | `member_id`, `client_name`, token selector/hash pairs | CLI publishing sessions | approved by a member in an admin session | access token 1 hour; session up to 30 days after last refresh, 90 days absolute (`docs/security.md`, "CI id token"/"CLI device flow") |
-| Published content (files on the content volume) | whatever the publisher includes: potentially names, contact details or special categories of data (AVG art. 9) | the published site itself | uploaded by a publisher (member or CI) | until the site or version is removed; Plak does not parse, classify or scan content for personal data |
+| Published content (files on the content volume) | whatever the publisher includes: potentially names, contact details or special categories of data (AVG art. 9) | the published site itself | uploaded by a publisher (member or CI) | until the site or version is removed; Toon does not parse, classify or scan content for personal data |
 
 `refs` on audit rows generally carries structural identifiers (group/site
 slugs, ids), not raw personal data; this was spot-checked for `invitee_add`/
@@ -85,14 +85,14 @@ to be recorded; see "Processors" below.
 ## Published content: publisher responsibility and EEA/GHCR boundary
 
 Published content can contain personal data, including special categories
-under art. 9, and Plak does not inspect, classify or filter it. The publisher
-who uploads or deploys a site is responsible for what it contains; Plak's
+under art. 9, and Toon does not inspect, classify or filter it. The publisher
+who uploads or deploys a site is responsible for what it contains; Toon's
 role is limited to storing and serving what it is given, subject to the
 access controls the publisher configures.
 
 Published content should stay on infrastructure within the EEA: never in
 GitHub.com repositories, and never baked into container images pushed to
-GHCR. Verified against Plak's own build and deploy design:
+GHCR. Verified against Toon's own build and deploy design:
 
 - The container image (`containers/toon/Containerfile`) copies in only the
   backend source and the built admin SPA (`frontend/dist`); it contains no
@@ -106,13 +106,13 @@ GHCR. Verified against Plak's own build and deploy design:
   or personal data from any deployment.
 
 **Unverified**: whether the ZAD platform itself, or the specific ZAD
-tenant/region Plak runs in, guarantees storage within the EEA is a platform
+tenant/region Toon runs in, guarantees storage within the EEA is a platform
 question, not something this repository's code can establish. That
 confirmation belongs with whoever operates the ZAD deployment.
 
 ## Retention and deletion
 
-What Plak does today:
+What Toon does today:
 
 - Audit log rows are deleted by `audit/retention.py` once their retention
   term (90 days or 3 years, see the table above) has passed, enforced not
@@ -132,7 +132,7 @@ What Plak does today:
 invitees, content viewers, audit rows including encrypted IPs) and need an
 explicit, bounded backup retention term, encryption at rest, and a deletion
 process that actually covers backups, not only the live tables. This gap is
-**not resolved**: Plak
+**not resolved**: Toon
 runs on ZAD's shared PostgreSQL service, and this repository's documentation
 (`docs/deploying-on-zad.md`) does not describe a backup retention or deletion
 policy for that service. Whether backups are made, for how long, and whether
@@ -173,7 +173,7 @@ as the code supports it:
   `PUT /sites/{group}/{site}/title`). The previous values in the audit log
   cannot be changed and expire with the retention term, 3 years.
 - **Erasure from published content**: entirely the publisher's
-  responsibility; Plak has no mechanism to locate or redact personal data
+  responsibility; Toon has no mechanism to locate or redact personal data
   inside a published site.
 
 A documented, FG-approved process for handling an access/rectification/
@@ -192,7 +192,7 @@ Open items, to be completed by the controller before go-live:
 - A privacy statement (privacyverklaring, art. 13) is served by the admin
   SPA at `/-/privacy` (texts in `frontend/src/i18n/pages.nl.ts` and
   `pages.en.ts`, keys `page.privacy.*`), reachable without logging in. It
-  is the standard statement of the software: what Plak processes, why, for
+  is the standard statement of the software: what Toon processes, why, for
   how long and who sees it, the data subject rights and the right to
   complain to the Autoriteit Persoonsgegevens. It names the operator and its
   address from `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`, and otherwise
@@ -203,19 +203,19 @@ Open items, to be completed by the controller before go-live:
 ## Risks
 
 Following the risk section (Deel C) of the Model DPIA Rijksdienst, applied
-to Plak's actual design.
+to Toon's actual design.
 
-| # | Risk | Mitigation in Plak today | Open |
+| # | Risk | Mitigation in Toon today | Open |
 |---|---|---|---|
 | R.1 | Published content (script or otherwise) reads session cookies, keys or other sites' data | per-site content session cookie path scoping, origin-per-site enforcement, subresource checks, sandbox CSP mode (`docs/security.md`, "Access to content", "Headers and CSP") | shared content hostname across sites remains a stopgap per `docs/security.md` (§5.10); sandbox/external-sources are per-site toggles an admin can turn off |
 | R.2 | Access level set too broadly, spreading sensitive content further than intended | access is deny-by-default per site (`NOBODY` unless a base or extra is chosen), admin-only to change (`access/gate.py`, `constants.py`) | no automatic warning or review workflow when a site is set to `public` |
-| R.3 | Leaked secret link | constant-time comparison, mandatory expiry (90/365 days), single code-page flow, key excluded from audit/access logs (`docs/security.md`, "Access to content") | none identified |
+| R.3 | Leaked secret link | constant-time comparison, mandatory expiry (90/365 days), single code-page flow, key excluded from audit/access logs (`docs/security.md`, "Access to content") | an old link sends its key to the redirect on the old host, which has to log without the query (`docs/deploying-on-zad.md`, §12) |
 | R.4 | Unauthorized access via a broken OIDC/session/authorization check | alg allowlist, `iss`/`at_hash` checks, CSRF, per-endpoint server-side authorization, neutral 404s (`docs/security.md`) | account separation on the shared database is not possible on ZAD today (`docs/security.md`, "DB account separation") |
 | R.5 | Personal data kept longer than necessary, in logs or in backups | audit log and `content_viewers` retention enforced by database trigger, not only application code (`docs/audit-log.md`) | database backup retention/deletion is undocumented and unverified, see "Retention and deletion" above |
 | R.6 | Re-identification of a person from a logged identifier or IP address | actor pseudonymisation (HMAC-SHA256, keyed pepper), IP truncation by default with reversible encryption gated behind an explicitly audited reveal action (`audit/pseudonymisation.py`, `audit/ip_crypto.py`) | the reveal key (`TOON_AUDIT_IP_KEY`) and the pepper are operational secrets whose storage falls outside this repository. Both can be rotated (`docs/audit-log.md`, "Rotating the pepper and the IP key"), but a rotation protects only the rows written after it: older rows keep the old value, so a leaked value plus a copy of the database still re-identifies them |
 | R.7 | Personal data in published content transferred outside the EEA | content never enters the container image or GHCR; content lives on the ZAD content volume (verified, see "Published content" above) | whether the ZAD platform/region itself guarantees EEA storage is unverified |
-| R.8 | Audit log tampering hides unlawful access or a data subject's history | append-only triggers, hash chain per shard, published chain head for external verification (`docs/audit-log.md`) | the schema owner (the one database account Plak has on ZAD) can disable the triggers, the `TRUNCATE` guard among them, and then empty the table; this is a documented, not a closed, gap (`docs/audit-log.md`, "Known gaps") |
-| R.9 | Member-chosen text in a log that cannot be corrected: the previous name of a group or title of a site stays readable in the audit log after it is corrected on the group or site, and it can be a person's name | only the previous text is logged, never the new one; a name or title that a rename sets is at most 200 characters (`TEXT_MAX_LENGTH`); like every admin operation the row expires after 3 years (`docs/audit-log.md`, "Retention") | an audit row cannot be changed or removed before its term ends. Residual risk: the create routes have no maximum (adding one needs a new API major), so an active member could create a group with a very long name and rename it, which writes that text once into a row kept 1096 days (3 years). That is bounded by the creation budget (20 per hour, new groups, sites and addresses together) and by the request body limit of whatever stands in front of Plak (the application sets none for JSON requests), and it is traceable to the member through the `group_create` and `group_name` rows (`site_create` and `site_title` for a site). Whether keeping the previous text is necessary and proportionate is for the DPIA (open action 1) |
+| R.8 | Audit log tampering hides unlawful access or a data subject's history | append-only triggers, hash chain per shard, published chain head for external verification (`docs/audit-log.md`) | the schema owner (the one database account Toon has on ZAD) can disable the triggers, the `TRUNCATE` guard among them, and then empty the table; this is a documented, not a closed, gap (`docs/audit-log.md`, "Known gaps") |
+| R.9 | Member-chosen text in a log that cannot be corrected: the previous name of a group or title of a site stays readable in the audit log after it is corrected on the group or site, and it can be a person's name | only the previous text is logged, never the new one; a name or title that a rename sets is at most 200 characters (`TEXT_MAX_LENGTH`); like every admin operation the row expires after 3 years (`docs/audit-log.md`, "Retention") | an audit row cannot be changed or removed before its term ends. Residual risk: the create routes have no maximum (adding one needs a new API major), so an active member could create a group with a very long name and rename it, which writes that text once into a row kept 1096 days (3 years). That is bounded by the creation budget (20 per hour, new groups, sites and addresses together) and by the request body limit of whatever stands in front of Toon (the application sets none for JSON requests), and it is traceable to the member through the `group_create` and `group_name` rows (`site_create` and `site_title` for a site). Whether keeping the previous text is necessary and proportionate is for the DPIA (open action 1) |
 
 ## Open actions
 
@@ -244,7 +244,7 @@ to Plak's actual design.
 8. Define and document a self-service or FG-mediated process for access,
    rectification and erasure requests, including how a member row is
    actually deleted (not only deactivated).
-9. Confirm, with the ZAD platform team, that the region/tenant Plak runs in
+9. Confirm, with the ZAD platform team, that the region/tenant Toon runs in
    guarantees storage within the EEA.
 10. Decide whether publishers need a content-classification step (personal
     data / special categories) before publishing.

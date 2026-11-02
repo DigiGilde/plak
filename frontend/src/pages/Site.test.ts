@@ -330,15 +330,15 @@ describe('Site: breadcrumb path', () => {
   });
 
   it('puts the site name and the tab in the browser tab title', async () => {
-    // Every route was called "Plak", so a row of tabs said nothing and a
+    // Every route was called "Toon", so a row of tabs said nothing and a
     // screen reader reported no location after navigating (WCAG 2.4.2).
     const { router } = await makeWrapper('/team-aurora/website');
-    expect(document.title).toBe('Team Aurora website - Plak');
+    expect(document.title).toBe('Team Aurora website - Toon');
 
     await router.push('/team-aurora/website/versions');
     await untilIdle();
 
-    expect(document.title).toBe('Team Aurora website - Versies - Plak');
+    expect(document.title).toBe('Team Aurora website - Versies - Toon');
   });
 
   // The group slug is whatever the visitor's URL decoded to, and the trail is
@@ -384,7 +384,7 @@ describe('Site: renaming', () => {
 
     expect(backend.data.sites[0]!.title).toBe('Documentatie');
     expect(wrapper.find('h1').text()).toBe('Documentatie');
-    expect(document.title).toBe('Documentatie - Instellingen - Plak');
+    expect(document.title).toBe('Documentatie - Instellingen - Toon');
     // The confirmation lives in the tab, which the refresh must leave alone.
     expect(wrapper.find('[data-testid="site-title-notice"]').text()).toBe(
       'Titel opgeslagen.',
@@ -489,7 +489,7 @@ describe('Site: changing the address', () => {
     );
     const sent: string[] = [];
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      sent.push(`${init?.method ?? 'GET'} ${new URL(String(input), 'http://plak.test').pathname}`);
+      sent.push(`${init?.method ?? 'GET'} ${new URL(String(input), 'http://toon.test').pathname}`);
       return backend.fetch(input, init);
     });
 
@@ -507,7 +507,7 @@ describe('Site: changing the address', () => {
     await dialogClosed(wrapper);
 
     expect(wrapper.find('[data-testid="site-address-notice"]').text()).toBe(
-      'Het adres is gewijzigd. team-aurora/website stuurt tot en met 7 november 2026 door naar team-aurora/handboek. Gebruik je automatisch publiceren of plak publish? Pas het adres daar nu aan.',
+      'Het adres is gewijzigd. team-aurora/website stuurt tot en met 7 november 2026 door naar team-aurora/handboek. Gebruik je automatisch publiceren of toon publish? Pas het adres daar nu aan.',
     );
     expect(focus.mock.contexts).toEqual([
       wrapper.find('[data-testid="site-address-start"]').element,
@@ -536,7 +536,7 @@ describe('Site: changing the address', () => {
     expect(wrapper.find('[data-testid="site-address-previous"] nldd-text-cell').attributes('supporting-text')).toBe(
       'Stuurt door tot en met 7 november 2026',
     );
-    expect(document.title).toBe('Team Aurora website - Instellingen - Plak');
+    expect(document.title).toBe('Team Aurora website - Instellingen - Toon');
   });
 
   it('keeps the title in the header and the page title: only the address has changed', async () => {
@@ -554,7 +554,7 @@ describe('Site: changing the address', () => {
 
     await changeAddress(wrapper, 'handboek');
 
-    expect(document.title).toBe('Team Aurora website - Instellingen - Plak');
+    expect(document.title).toBe('Team Aurora website - Instellingen - Toon');
   });
 
   it('takes the roles of the member along: an admin of this site alone stays one', async () => {

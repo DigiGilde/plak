@@ -1,5 +1,5 @@
 /**
- * CLI login helper (`plak login`, OAuth 2.0 device authorization grant).
+ * CLI login helper (`toon login`, OAuth 2.0 device authorization grant).
  * Drives the real flow: a Node-side request starts the device
  * authorization, the already-logged-in admin page approves it at
  * /cli-link (the SPA, exactly like a human would), and a Node-side poll
@@ -23,7 +23,7 @@ interface TokensOut {
 
 /**
  * Logs the CLI in as the member behind `adminPage`'s session and returns a
- * fresh CLI access token (`plakcli_...`). `adminApi` is a Node-side request
+ * fresh CLI access token (`tooncli_...`). `adminApi` is a Node-side request
  * context on the admin host (no session, no CSRF: device-authorization
  * creation needs neither); `adminPage` is a browser page already logged in
  * on the admin host, used to approve the code the way a human would.

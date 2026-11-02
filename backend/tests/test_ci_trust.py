@@ -30,7 +30,7 @@ from toon.models.ci import CiProvider, SiteRepository
 from toon.models.identity import Group
 from toon.models.publication import Site
 
-DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
+DB_URL = "postgresql+asyncpg://toon:toon@localhost:5432/toon"
 GITHUB_ISSUER_OBJ = Issuer(CiProvider.GITHUB, GITHUB_HOST, GITHUB_ISSUER)
 FORGEJO_ISSUER_OBJ = Issuer(CiProvider.FORGEJO, FORGEJO_HOST, FORGEJO_ISSUER)
 
@@ -45,14 +45,14 @@ async def factory(migrated_dsn: str):
 
     settings = Settings(
         db_url=migrated_dsn,
-        content_root="/onbestaand/plak-content",
+        content_root="/onbestaand/toon-content",
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak",
+        oidc_client_id="toon",
         oidc_client_private_jwk="{}",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
         audit_pepper="audit-pepper-van-minstens-32-bytes!!",
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-        content_base_url="https://plak.example",
+        content_base_url="https://toon.example",
         environment="dev",
     )
     engine = make_engine(settings)

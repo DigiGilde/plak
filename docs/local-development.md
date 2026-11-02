@@ -1,6 +1,6 @@
 # Local development
 
-This document describes how to run and test Plak locally.
+This document describes how to run and test Toon locally.
 
 ## Prerequisites
 
@@ -12,14 +12,14 @@ This document describes how to run and test Plak locally.
 - Node.js with npm, for the frontend.
 - `just` (justfile runner) for the usual commands.
 - Two hostnames pointing at 127.0.0.1 (spec §4a: two origins; the app
-  separates them itself on the `Host` header): `beheer.plak.localhost` and
-  `plak.localhost`. macOS and most Linux resolvers resolve everything under
+  separates them itself on the `Host` header): `beheer.toon.localhost` and
+  `toon.localhost`. macOS and most Linux resolvers resolve everything under
   `.localhost` themselves, so usually you need to do nothing. If you get a
   DNS error, put them in `/etc/hosts`:
 
   ```
-  127.0.0.1 beheer.plak.localhost
-  127.0.0.1 plak.localhost
+  127.0.0.1 beheer.toon.localhost
+  127.0.0.1 toon.localhost
   ```
 - A built SPA: `just build-spa` (npm run build) fills `frontend/dist`,
   which the compose stack mounts read-only into the app container. Without
@@ -79,12 +79,14 @@ faster thanks to the Podman build cache.
 The app reads its settings from `TOON_<NAME>` environment variables, and
 `dev/secrets.sh` writes the dev secrets under those names. The old
 `PLAK_<NAME>` names still work as a fallback, and at startup the app logs a
-warning that names every `PLAK_` variable still in use. A dev stack set up
-before the rename keeps running that way. A fresh database volume with old
-secret files fails in `dev/postgres-init`, and `e2e/run.sh` starts a fresh one
-every time, so start from scratch: run
-`podman compose -f dev/compose.yml down -v`, remove `dev/.secrets/`, then run
-`./dev/up.sh`.
+warning that names every `PLAK_` variable still in use. The compose project,
+the database and its role are called `toon`, where they were `plak`. A stack
+from before the rename keeps its volumes under the old project name, and its
+secret files name the old database and role. A fresh database with those
+files fails in `dev/postgres-init`, and `e2e/run.sh` starts a fresh one every
+time, so start from scratch: run
+`podman compose -p plak -f dev/compose.yml down -v`, remove `dev/.secrets/`,
+then run `./dev/up.sh`.
 
 ## Seeding dev content
 
@@ -146,14 +148,14 @@ What ends up there:
 
 The secret link of `kerncijfers` is shown once, at the bottom of the
 output, and cannot be reconstructed afterwards. Instead of a deploy
-token the seed prints how to log in with `plak login` to publish from
+token the seed prints how to log in with `toon login` to publish from
 your own machine (device flow, linking on `/cli-link`).
 
 Checking that it is there, without a browser:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/rijksoverheid/jaarverslag/
-curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/rijksoverheid/jaarverslag/_preview/pr-42/
+curl -s -o /dev/null -w '%{http_code}\n' http://toon.localhost:8080/rijksoverheid/jaarverslag/
+curl -s -o /dev/null -w '%{http_code}\n' http://toon.localhost:8080/rijksoverheid/jaarverslag/_preview/pr-42/
 ```
 
 `backend/tests/test_dev_seed.py` runs the same seed against the
@@ -179,23 +181,23 @@ The root of the admin host is the SPA, which shows the landing page itself.
 To check without a browser:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://plak.localhost:8080/          # 302 to the admin host
-curl -s -o /dev/null -w '%{http_code}\n' http://beheer.plak.localhost:8080/   # 200, the SPA
+curl -s -o /dev/null -w '%{http_code}\n' http://toon.localhost:8080/          # 302 to the admin host
+curl -s -o /dev/null -w '%{http_code}\n' http://beheer.toon.localhost:8080/   # 200, the SPA
 ```
 
 nginx stays in the dev stack only as a dumb reverse proxy: it passes the
 `Host` header and the `X-Forwarded-*` headers on to the app and provides
-the `oidc.plak.localhost` alias for the mock OIDC. The admin host
-(`beheer.plak.localhost`) and the content host (`plak.localhost`) both
+the `oidc.toon.localhost` alias for the mock OIDC. The admin host
+(`beheer.toon.localhost`) and the content host (`toon.localhost`) both
 point at the same nginx on port `8080`; the app makes the distinction.
 
 ```
 ┌───────────────────────────┐      ┌─────────────┐      ┌──────────────┐
 │    nginx (dumb proxy)     │─────▶│     app     │─────▶│  postgres    │
-│  beheer.plak.localhost    │◀─────│  (FastAPI)  │      │  (16)        │
-│  plak.localhost     :8080 │      │ content+SPA │      └──────────────┘
+│  beheer.toon.localhost    │◀─────│  (FastAPI)  │      │  (16)        │
+│  toon.localhost     :8080 │      │ content+SPA │      └──────────────┘
 └───────────────────────────┘      └──┬───────┬──┘
-                                      │       │ OIDC (via alias oidc.plak.localhost)
+                                      │       │ OIDC (via alias oidc.toon.localhost)
                           content-    │       ▼
                           volume ◀────┘  ┌──────────────┐
                           + frontend/dist│  mock-oidc   │
@@ -238,7 +240,7 @@ machine.
 
 | Port | Service | Purpose |
 |---|---|---|
-| `127.0.0.1:8080` | nginx | `beheer.plak.localhost`: SPA and API; `plak.localhost`: content |
+| `127.0.0.1:8080` | nginx | `beheer.toon.localhost`: SPA and API; `toon.localhost`: content |
 | `127.0.0.1:8081` | mock-oidc | OIDC discovery and tokens (reachable separately for debugging) |
 
 ## Mock login as dev administrator
@@ -250,7 +252,7 @@ fixed `tokenCallback` that gives every login the same claims:
 {
   "sub": "dev-beheerder",
   "acr": "http://eidas.europa.eu/LoA/substantial",
-  "email": "beheerder@plak.local",
+  "email": "beheerder@toon.local",
   "email_verified": true
 }
 ```
@@ -259,7 +261,7 @@ The app container gets `TOON_BOOTSTRAP_ADMIN_SUB=dev-beheerder`
 (see `dev/compose.yml`), so this sub record automatically gets the
 platform role `admin` and status `active` on the first login
 (spec §7, bootstrap). Log in via
-`http://beheer.plak.localhost:8080/-/login`; there is no
+`http://beheer.toon.localhost:8080/-/login`; there is no
 choice screen, every login comes in as `dev-beheerder`.
 
 Alongside the `authorization_code` rule, the mock server has the same rule for
@@ -294,10 +296,10 @@ field. Whatever you type there becomes the `sub` of the session, so you can
 walk into the admin as any account: `dev-beheerder` for the bootstrap
 administrator, anything else for a member you created or deactivated
 yourself through `/-/platform`. The config fills the rest of the claims
-around it (`acr` at the required level, `email` as `<subject>@plak.local`),
+around it (`acr` at the required level, `email` as `<subject>@toon.local`),
 so the app sees a complete id token whichever subject you pick.
 
-This is a manual testing aid, nothing more. It is not a login screen of Plak
+This is a manual testing aid, nothing more. It is not a login screen of Toon
 itself, it authenticates nobody, and it exists only in the dev stack.
 Two things to know while using it:
 
@@ -341,7 +343,7 @@ In `TOON_ENVIRONMENT=productie` the issuer is checked as well:
 anything under `.localhost`, `127.0.0.0/8` and `[::1]` are refused at startup,
 because an issuer there is the dev mock, not an IdP. On ZAD the check applies
 to the issuer derived from `OIDC_DISCOVERY_URL` just the same. In dev nothing
-changes: the mock runs on `http://oidc.plak.localhost:8080/default`.
+changes: the mock runs on `http://oidc.toon.localhost:8080/default`.
 
 Whatever the environment, the app logs one INFO line at startup naming the
 issuer and the client id (`OIDC configuration: issuer ..., client_id ...`), so a

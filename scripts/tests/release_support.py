@@ -37,32 +37,32 @@ BOTH_LANGUAGES = "a What's new note comes in Dutch and English."
 
 PYPROJECT = (
     '[build-system]\nversion = "keep"\n\n'
-    '[project]\nname = "plak"\nversion = "0.1.0"\ndependencies = ["httpx"]\n\n'
+    '[project]\nname = "toon"\nversion = "0.1.0"\ndependencies = ["httpx"]\n\n'
     '[tool.other]\nversion = "keep"\n'
 )
 LOCK = (
     "version = 1\n\n"
     '[[package]]\nname = "httpx"\nversion = "0.28.1"\nsource = { registry = "https://pypi.org/simple" }\n\n'
-    '[[package]]\nname = "plak"\nversion = "0.1.0"\nsource = { editable = "." }\n'
+    '[[package]]\nname = "toon"\nversion = "0.1.0"\nsource = { editable = "." }\n'
     'dependencies = [\n    { name = "httpx" },\n]\n'
 )
 PLUGIN = (
-    '{\n  "name": "plak",\n  "version": "0.3.1",\n'
-    '  "author": {\n    "name": "Plak team"\n  },\n  "keywords": ["plak"]\n}\n'
+    '{\n  "name": "toon",\n  "version": "0.3.1",\n'
+    '  "author": {\n    "name": "Toon team"\n  },\n  "keywords": ["toon"]\n}\n'
 )
-PUBLICCODE = 'name: Plak\n\nsoftwareVersion: "0.0.0"\nreleaseDate: "2026-07-18"\n\nlegal:\n  license: EUPL-1.2\n'
+PUBLICCODE = 'name: Toon\n\nsoftwareVersion: "0.0.0"\nreleaseDate: "2026-07-18"\n\nlegal:\n  license: EUPL-1.2\n'
 BACKEND_PYPROJECT = '[project]\nname = "toon-api"\nversion = "0.1.0"\n\n[build-system]\nrequires = ["hatchling"]\n'
 BACKEND_LOCK = (
     "version = 1\n\n"
     '[[package]]\nname = "toon-api"\nversion = "0.1.0"\nsource = { editable = "." }\n\n'
-    '[[package]]\nname = "plak"\nversion = "9.9.9"\nsource = { editable = "." }\n'
+    '[[package]]\nname = "toon"\nversion = "9.9.9"\nsource = { editable = "." }\n'
 )
 MAIN = 'import x\n\nAPI_VERSION = "1.0.0"\n\napp = 1\n'
 
 
 def spec_with(version: str = "1.0.0", paths: tuple[str, ...] = ("/a",), description: str = "") -> str:
     """An API schema as toon.api.openapi_file prints it, kept small."""
-    info = {"title": "Plak API", "version": version, "description": description}
+    info = {"title": "Toon API", "version": version, "description": description}
     return json.dumps({"openapi": "3.1.0", "info": info, "paths": {path: {} for path in paths}}, indent=2) + "\n"
 
 

@@ -9,22 +9,22 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   // -- Landing: access withdrawn -------------------------------------------
   'page.landing.withdrawn.title': 'Your access has been withdrawn',
   'page.landing.withdrawn.intro':
-    'You are signed in with your organisation account, but Plak no longer lets you in.',
+    'You are signed in with your organisation account, but you no longer have access to Toon.',
   'page.landing.withdrawn.body':
     'Your account is still there, with everything attached to it. Only your access is closed. If you do not know why, ask the platform administrator of your organisation. They can give your access back as well.',
   'page.landing.withdrawn.check': 'Check again',
   'page.landing.withdrawn.failed.title': 'Check failed',
   'page.landing.withdrawn.failed.detail':
-    'Plak cannot be reached right now. Try again in a moment.',
+    'The server cannot be reached right now. Try again in a moment.',
 
   // -- Landing: no session --------------------------------------------------
   'page.landing.intro':
-    'Share an HTML page quickly and simply. A report, an analysis or an overview, written by you or with an AI assistant: put it on Plak and share the link. You decide who may see it.',
+    'Share an HTML page quickly and simply. A report, an analysis or an overview, written by you or with an AI assistant: put it on Toon and share the link. You decide who may see it.',
   'page.landing.loginHint': 'Sign in with your Rijksoverheid account to get started.',
   'page.landing.login': 'Sign in',
   'page.landing.steps.heading': 'How to share a page',
   'page.landing.steps.upload':
-    'Put your HTML file on Plak by uploading it, or let your AI assistant do it for you.',
+    'Put your HTML file on Toon by uploading it, or let your AI assistant do it for you.',
   'page.landing.steps.audience':
     'Choose who may see it: everyone, colleagues who sign in, only the people you invite, or whoever has the secret link.',
   'page.landing.steps.share': 'Share the link.',
@@ -38,15 +38,15 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.start.loading': 'Loading...',
 
   // -- About ----------------------------------------------------------------
-  'page.whatsNew.title': "What's new in Plak",
+  'page.whatsNew.title': "What's new in Toon",
   'page.whatsNew.empty': 'No releases yet.',
-  'page.about.title': 'About Plak',
+  'page.about.title': 'About Toon',
   'page.about.intro':
-    'Plak is there for that one page you want to share. A report, an analysis, an overview: you put it online, choose who may see it and share the link. Not an attachment drifting through mailboxes, but an address you can update and withdraw again.',
+    'Toon is there for that one page you want to share. A report, an analysis, an overview: you put it online, choose who may see it and share the link. Not an attachment drifting through mailboxes, but an address you can update and withdraw again.',
   'page.about.features.heading': 'What you can do with it',
   'page.about.features.share.term': 'Share a page.',
   'page.about.features.share.body':
-    'Put your HTML file on Plak and you have an address to share.',
+    'Put your HTML file on Toon and you have an address to share.',
   'page.about.features.update.term': 'Update without a new address.',
   'page.about.features.update.body':
     'A new version goes over the previous one. Everyone with the link sees the latest one automatically. Older versions are kept.',
@@ -61,24 +61,24 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'If you work in a repository, you publish from GitHub or code.overheid.nl, with a preview per pull request.',
   'page.about.features.cli.term': 'From your own computer.',
   'page.about.features.cli.body':
-    'With the Plak CLI you publish from your laptop, once you have linked it to your account.',
+    'With the Toon CLI you publish from your laptop, once you have linked it to your account.',
   'page.about.name.heading': 'Did you know',
   'page.about.name.body':
-    'The name comes from plakkaat, Dutch for a placard: an announcement you put up nearby so that others can see it. A placard can hang in a public space, visible to everyone, or in a closed room only a small group enters. That is exactly what Plak does.',
+    'The name comes from the Dutch word tonen, to show. Toon shows your site to whoever may see it. That can be everyone, or only a small group.',
 
   // -- Privacy --------------------------------------------------------------
   'page.privacy.title':
     'Privacy',
   'page.privacy.intro':
-    'This statement describes how this installation of Plak handles personal data and which rights you have, under the General Data Protection Regulation (GDPR, in Dutch the AVG). Plak processes personal data to arrange access to published sites: an e-mail address when you sign in through your organisation, and possibly the e-mail address of an invited person when access is by invitation.',
+    'This statement describes how this installation of Toon handles personal data and which rights you have, under the General Data Protection Regulation (GDPR, in Dutch the AVG). Toon processes personal data to arrange access to published sites: an e-mail address when you sign in through your organisation, and possibly the e-mail address of an invited person when access is by invitation.',
   'page.privacy.standard':
-    'This is the standard statement of the Plak software. The organisation that runs this installation completes it with what only that organisation can say, such as its legal basis and its Data Protection Officer.',
+    'This is the standard statement of the Toon software. The organisation that runs this installation completes it with what only that organisation can say, such as its legal basis and its Data Protection Officer.',
   'page.privacy.controller.heading':
     'Who is responsible',
   'page.privacy.controller.named':
-    'This installation of Plak is run by {name}. That organisation, or the organisation it is part of, is the controller of the personal data processed through it.',
+    'This installation of Toon is run by {name}. That organisation, or the organisation it is part of, is the controller of the personal data processed through it.',
   'page.privacy.controller.unnamed':
-    'The organisation that runs this installation of Plak, or the organisation it is part of, is the controller of the personal data processed through it.',
+    'The organisation that runs this installation of Toon, or the organisation it is part of, is the controller of the personal data processed through it.',
   'page.privacy.data.heading':
     'Which data',
   'page.privacy.data.account':
@@ -90,7 +90,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.privacy.data.visits':
     'Visit data: which pages of a restricted site you looked at. Nothing is recorded for public sites.',
   'page.privacy.data.content':
-    'Published content: may contain personal data, but that belongs to the maker of the site. Plak does not read, classify or filter that content. The publishing organisation is responsible for it.',
+    'Published content: may contain personal data, but that belongs to the maker of the site. Toon does not read, classify or filter that content. The publishing organisation is responsible for it.',
   'page.privacy.purpose.heading':
     'Purpose and legal basis',
   'page.privacy.purpose.body':
@@ -98,7 +98,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.privacy.processors.heading':
     'Processors and hosting',
   'page.privacy.processors.body':
-    'Plak itself uses no web analytics and shares no data with other parties. Where this installation is hosted and which sign-in service it uses is up to the organisation that runs it.',
+    'Toon itself uses no web analytics and shares no data with other parties. Where this installation is hosted and which sign-in service it uses is up to the organisation that runs it.',
   'page.privacy.retention.heading':
     'Retention period',
   'page.privacy.retention.body':
@@ -106,7 +106,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.privacy.retention.ip':
     'Every audit entry also carries the IP address something happened from: a truncated network (not the full address) is simply in the log, kept as long as the entry itself. The full address sits beside it, encrypted, kept just as long, and only a platform administrator can request it, with the same mandatory, recorded reason.',
   'page.privacy.retention.session':
-    'If you view restricted content after signing in with your organisation, Plak keeps your SSO ID and e-mail address until ninety days after the last time you signed in. That is needed to trace an entry in the audit log back to a person, for instance during the investigation into a leak.',
+    'If you view restricted content after signing in with your organisation, Toon keeps your SSO ID and e-mail address until ninety days after the last time you signed in. That is needed to trace an entry in the audit log back to a person, for instance during the investigation into a leak.',
   'page.privacy.visibility.heading':
     'Who can see what',
   'page.privacy.visibility.body':
@@ -134,9 +134,9 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.accessibility.title':
     'Accessibility',
   'page.accessibility.intro':
-    'This statement describes to what extent the Plak software meets the accessibility requirements for government websites. The legal norm is WCAG 2.1 level AA, through EN 301 549 and mandatory under the Besluit digitale toegankelijkheid overheid (the Dutch decree on digital accessibility of government). It concerns the admin interface of Plak. Pages that you or your colleagues publish belong to their makers, and Plak does not check their accessibility.',
+    'This statement describes to what extent the Toon software meets the accessibility requirements for government websites. The legal norm is WCAG 2.1 level AA, through EN 301 549 and mandatory under the Besluit digitale toegankelijkheid overheid (the Dutch decree on digital accessibility of government). It concerns the admin interface of Toon. Pages that you or your colleagues publish belong to their makers, and Toon does not check their accessibility.',
   'page.accessibility.standard.before':
-    'This is the standard statement of the Plak software and rests on the tests of its makers. An investigation by an independent party has not taken place. The organisation that runs this installation draws up its own statement with the form assistant at ',
+    'This is the standard statement of the Toon software and rests on the tests of its makers. An investigation by an independent party has not taken place. The organisation that runs this installation draws up its own statement with the form assistant at ',
   'page.accessibility.standard.link':
     'toegankelijkheidsverklaring.nl',
   'page.accessibility.standard.after':
@@ -144,7 +144,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.accessibility.status.heading':
     'Compliance status',
   'page.accessibility.status.body':
-    'The accessibility of Plak has not been fully investigated yet. It has been tested (see below), but there is no complete, documented investigation against all success criteria of WCAG 2.1 AA yet. In the DigiToegankelijk model that is status C.',
+    'The accessibility of Toon has not been fully investigated yet. It has been tested (see below), but there is no complete, documented investigation against all success criteria of WCAG 2.1 AA yet. In the DigiToegankelijk model that is status C.',
   'page.accessibility.tested.heading':
     'How this was tested',
   'page.accessibility.tested.components':
@@ -180,21 +180,21 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.accessibility.enforcement.after':
     '.',
   'page.accessibility.prepared':
-    'This statement was prepared on 7 October 2026.',
+    'This statement was prepared on 2 November 2026.',
 
-  // -- Linking a CLI session (plak login) -----------------------------------
+  // -- Linking a CLI session (toon login) -----------------------------------
   'page.cliPair.loading': 'Loading',
   'page.cliPair.error.unknownCode':
-    'This code is unknown, expired or already used. Start plak login again.',
+    'This code is unknown, expired or already used. Start "toon login" again.',
   'page.cliPair.error.tooManyAttempts': 'Too many attempts. Try again in a moment.',
   'page.cliPair.unknownClient': 'Unknown program',
   'page.cliPair.login.intro': 'You can only link a CLI session shortly after signing in yourself.',
   'page.cliPair.login.afterwards':
-    'Sign in, then copy in the code that plak login shows in your terminal.',
+    'Sign in, then enter the code from your terminal.',
   'page.cliPair.login.action': 'Sign in',
   'page.cliPair.codeEntry.intro':
-    'Copy in the code your terminal shows to link plak login to your account.',
-  'page.cliPair.codeEntry.install.before': 'No Plak CLI yet? ',
+    'Enter the code from your terminal to link "toon login" to your account.',
+  'page.cliPair.codeEntry.install.before': 'No Toon CLI yet? ',
   'page.cliPair.codeEntry.install.link': 'Here is how to install and use it.',
   'page.cliPair.codeEntry.label': 'Code from your terminal',
   'page.cliPair.codeEntry.placeholder': 'ABCD-EFGH',
@@ -210,9 +210,9 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
   'page.cliPair.confirm.otherNetwork.title':
     'This request comes from a different network than the one you are on now',
   'page.cliPair.confirm.otherNetwork.detail':
-    'If plak login runs on another machine or over a VPN, that can be right. If you are in doubt, click Refuse.',
+    'If "toon login" runs on another machine or over a VPN, that can be right. If you are in doubt, click Refuse.',
   'page.cliPair.confirm.warning.title':
-    'Only link if you started plak login yourself just now',
+    'Only link if you started "toon login" yourself just now',
   'page.cliPair.confirm.warning.detail':
     'Did someone send you this link or code? Then click Refuse.',
   'page.cliPair.confirm.approve': 'Link',

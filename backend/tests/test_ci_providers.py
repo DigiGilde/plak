@@ -26,21 +26,21 @@ from toon.ci.providers import (
 from toon.config import Settings
 from toon.models.ci import CiProvider
 
-DB_URL = "postgresql+asyncpg://plak:plak@localhost:5432/plak"
+DB_URL = "postgresql+asyncpg://toon:toon@localhost:5432/toon"
 
 
 def _settings(**overrides) -> Settings:
     base: dict[str, object] = {
         "db_url": DB_URL,
-        "content_root": "/onbestaand/plak-content",
+        "content_root": "/onbestaand/toon-content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak",
+        "oidc_client_id": "toon",
         "oidc_client_private_jwk": "{}",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         "environment": "dev",
-        "content_base_url": "https://plak.example",
+        "content_base_url": "https://toon.example",
     }
     base.update(overrides)
     return Settings(**base)

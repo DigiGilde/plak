@@ -6,5 +6,5 @@ allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
 Werk mijn site bij met de nieuwe versie in ./dist. Het is team-aurora/website op
-https://beheer.plak.example.nl. Leg uit wat je gaat doen voordat je iets
+https://beheer.toon.example.nl. Leg uit wat je gaat doen voordat je iets
 uitvoert.

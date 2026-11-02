@@ -1,4 +1,4 @@
-"""The CI providers Plak trusts, and the outbound HTTP it does on their behalf.
+"""The CI providers Toon trusts, and the outbound HTTP it does on their behalf.
 
 Every URL fetched here is built from configuration (GitHub's fixed hosts and
 TOON_CI_FORGEJO_HOSTS), never from a token or a request: that is the whole

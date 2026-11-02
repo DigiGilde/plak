@@ -269,8 +269,8 @@ PRODUCTION_OVERRIDES = {
     "environment": "productie",
     "behind_proxy": True,
     "oidc_iss_required": True,
-    "base_url": "https://beheer.plak.example",
-    "content_base_url": "https://plak.example",
+    "base_url": "https://beheer.toon.example",
+    "content_base_url": "https://toon.example",
 }
 
 
@@ -294,11 +294,11 @@ class TestEmptyRequiredAcr:
         assert claims["acr"] == "0"
 
     async def test_no_acr_values_in_authorization_request(self, oidc_without_acr):
-        start = await oidc_without_acr.start_login("https://plak.example/-/oauth2/callback")
+        start = await oidc_without_acr.start_login("https://toon.example/-/oauth2/callback")
         assert "acr_values" not in dict(httpx.URL(start.authorization_url).params)
 
     async def test_acr_values_does_sent_along_with_list(self, oidc):
-        start = await oidc.start_login("https://plak.example/-/oauth2/callback")
+        start = await oidc.start_login("https://toon.example/-/oauth2/callback")
         q = dict(httpx.URL(start.authorization_url).params)
         assert q["acr_values"] == "urn:acr:hoog urn:acr:substantieel"
 
@@ -327,7 +327,7 @@ class TestClientSecret:
     """client_secret_post and client_secret_basic (RFC 6749 §2.3.1) for the
     ZAD Keycloak, which only creates client-secret clients."""
 
-    CALLBACK = "https://plak.example/-/oauth2/callback"
+    CALLBACK = "https://toon.example/-/oauth2/callback"
 
     async def test_client_secret_post_sends_secret_in_body(self, idp):
         oidc = make_oidc_client(make_settings(idp, oidc_client_auth="client_secret_post"), idp)
@@ -361,7 +361,7 @@ class TestClientSecret:
         assert base64.b64decode(credentials).decode("ascii") == f"{idp.client_id}:{CLIENT_SECRET}"
 
     async def test_client_secret_basic_form_url_encodes_credentials(self):
-        idp = MockIdP(client_id="plak client:1")
+        idp = MockIdP(client_id="toon client:1")
         settings = make_settings(
             idp, oidc_client_auth="client_secret_basic", oidc_client_secret="ge heim/&=+"
         )
@@ -370,7 +370,7 @@ class TestClientSecret:
         await oidc.exchange_code("code-123", self.CALLBACK, "verifier")
 
         credentials = idp.token_request_headers[0]["authorization"].removeprefix("Basic ")
-        assert base64.b64decode(credentials).decode("ascii") == "plak+client%3A1:ge+heim%2F%26%3D%2B"
+        assert base64.b64decode(credentials).decode("ascii") == "toon+client%3A1:ge+heim%2F%26%3D%2B"
 
     async def test_private_key_jwt_sends_no_secret(self, idp):
         oidc = make_oidc_client(make_settings(idp), idp)
@@ -398,7 +398,7 @@ class TestPrivateKeyJwt:
         oidc = make_oidc_client(settings, idp)
         idp.next_nonce = "nonce-1"
 
-        tokens = await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+        tokens = await oidc.exchange_code("code-123", "https://toon.example/-/oauth2/callback", "verifier")
         assert tokens["id_token"]
 
         assert len(idp.token_requests) == 1
@@ -419,7 +419,7 @@ class TestPrivateKeyJwt:
 
     async def test_pkce_challenge_is_s256_of_verifier(self, idp):
         oidc = make_oidc_client(make_settings(idp), idp)
-        start = await oidc.start_login("https://plak.example/-/oauth2/callback")
+        start = await oidc.start_login("https://toon.example/-/oauth2/callback")
         q = dict(httpx.URL(start.authorization_url).params)
         expected = (
             base64.urlsafe_b64encode(hashlib.sha256(start.code_verifier.encode("ascii")).digest())
@@ -446,7 +446,7 @@ class TestTokenResponseNotJson:
         http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         oidc = OidcClient(make_settings(idp), http)
         with pytest.raises(OidcError):
-            await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+            await oidc.exchange_code("code-123", "https://toon.example/-/oauth2/callback", "verifier")
 
     async def test_exchange_code_refuses_a_200_json_array(self, idp):
         def handler(request: httpx.Request) -> httpx.Response:
@@ -457,7 +457,7 @@ class TestTokenResponseNotJson:
         http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         oidc = OidcClient(make_settings(idp), http)
         with pytest.raises(OidcError):
-            await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+            await oidc.exchange_code("code-123", "https://toon.example/-/oauth2/callback", "verifier")
 
     async def test_refresh_tokens_treats_a_non_json_200_as_idp_unavailable(self, idp):
         idp.refresh_response_override = httpx.Response(200, text="<html>onderhoud</html>")
@@ -536,7 +536,7 @@ class TestJwksRefreshOnUnknownKid:
 class TestEndSessionUrl:
     """RP-initiated logout (OIDC RP-Initiated Logout 1.0 section 2)."""
 
-    REDIRECT = "https://plak.example/"
+    REDIRECT = "https://toon.example/"
 
     async def test_no_end_session_endpoint_returns_none(self, oidc):
         url = await oidc.end_session_url(post_logout_redirect_uri=self.REDIRECT, id_token=None)
@@ -701,7 +701,7 @@ class TestClientAssertionGuard:
         oidc = make_oidc_client(settings, idp)
         idp.next_nonce = "nonce-1"
 
-        await oidc.exchange_code("code-123", "https://plak.example/-/oauth2/callback", "verifier")
+        await oidc.exchange_code("code-123", "https://toon.example/-/oauth2/callback", "verifier")
 
         assertion = idp.token_requests[0]["client_assertion"][0]
         header_b64 = assertion.split(".")[0]
@@ -711,7 +711,7 @@ class TestClientAssertionGuard:
 
 
 class TestExchangeCodeFailures:
-    CALLBACK = "https://plak.example/-/oauth2/callback"
+    CALLBACK = "https://toon.example/-/oauth2/callback"
 
     async def test_network_error_is_oidc_error(self, idp):
         def handler(request: httpx.Request) -> httpx.Response:

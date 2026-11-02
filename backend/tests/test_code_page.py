@@ -38,8 +38,8 @@ from toon.serving.code_page import router as code_router
 from toon.serving.response import NEUTRAL_404_BODY
 from toon.serving.router import router as serving_router
 
-BASE_URL = "https://plak.example"
-ADMIN_URL = "https://beheer.plak.example"
+BASE_URL = "https://toon.example"
+ADMIN_URL = "https://beheer.toon.example"
 
 SECRET_INDEX = b"<h1>geheim</h1>"
 
@@ -55,7 +55,7 @@ def make_settings(content_root: Path) -> Settings:
         db_url="postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",

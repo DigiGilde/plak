@@ -17,7 +17,7 @@
  *
  * Dutch stays the fallback, because it is the component's own default and this
  * interface's first language. `designSystem.nl.ts` repeats those defaults
- * literally so the Dutch interface reads exactly as it did.
+ * literally, apart from the one reword it names itself.
  */
 import { watch } from 'vue';
 

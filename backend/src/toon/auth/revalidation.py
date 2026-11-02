@@ -1,8 +1,8 @@
 """Periodic re-validation of a browser session against the IdP.
 
-After login Plak keeps its own session for up to MAX_SESSION_AGE and never
+After login Toon keeps its own session for up to MAX_SESSION_AGE and never
 asks the IdP anything again. Someone blocked or removed at Keycloak or SSO
-Rijk therefore keeps their Plak session until it expires. This module bounds
+Rijk therefore keeps their Toon session until it expires. This module bounds
 that window to TOON_IDP_RECHECK_SECONDS: on the first request after that
 interval the session's refresh token goes to the token endpoint
 (grant_type=refresh_token).

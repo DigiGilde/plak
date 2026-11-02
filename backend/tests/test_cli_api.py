@@ -36,15 +36,15 @@ from toon.models.identity import Member, MemberStatus
 
 BASE = "/-/api/v1"
 PROBLEM = "application/problem+json"
-APP_BASE_URL = "https://plak.example"
+APP_BASE_URL = "https://toon.example"
 
 
 def _settings(content_root, *, base_url: str | None = APP_BASE_URL) -> Settings:
     return Settings(
-        db_url="postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        db_url="postgresql+asyncpg://toon:toon@localhost:5432/toon",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
@@ -137,8 +137,8 @@ def login(
         session = dataclasses.replace(session, created_at=datetime.now(UTC) - session_age)
         store._sessions[session.id] = session
     token = sign(app.state.settings.session_secret, session.id)
-    client.cookies.set(SESSION_COOKIE, token, domain="plak.example", path="/")
-    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="plak.example", path="/")
+    client.cookies.set(SESSION_COOKIE, token, domain="toon.example", path="/")
+    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="toon.example", path="/")
     return {CSRF_HEADER: session.csrf_token}
 
 
@@ -192,7 +192,7 @@ class TestCreateDeviceAuthorization:
         assert body["clientName"] is None if "clientName" in body else True
 
     async def test_shape_and_verification_uri_with_base_url(self, client):
-        body = await _create_device_authorization(client, clientName="plak-cli 1.2")
+        body = await _create_device_authorization(client, clientName="toon-cli 1.2")
         assert body["deviceCode"].startswith(cli.DEVICE_CODE_PREFIX + "_")
         assert len(body["userCode"]) == 9  # ABCD-EFGH
         assert body["userCode"][4] == "-"
@@ -208,7 +208,7 @@ class TestCreateDeviceAuthorization:
         assert body["verificationUri"] == f"{APP_BASE_URL}{cli_api.VERIFICATION_PATH}"
 
     async def test_client_name_is_sanitised(self, client):
-        body = await _create_device_authorization(client, clientName="plak-cli\x00\n 1.2")
+        body = await _create_device_authorization(client, clientName="toon-cli\x00\n 1.2")
         assert body["deviceCode"]  # sanity: request succeeded
         # sanitising happens server-side before storage; verify via lookup.
 
@@ -306,7 +306,7 @@ class TestFullHappyPath:
     async def test_create_pending_lookup_approve_exchange_whoami_refresh_reuse(self, client, app, factory):
         await _make_member(factory, sub="cli-lid")
 
-        created = await _create_device_authorization(client, clientName="plak-cli 1.2 on macOS")
+        created = await _create_device_authorization(client, clientName="toon-cli 1.2 on macOS")
         device_code = created["deviceCode"]
         user_code = created["userCode"]
 
@@ -325,7 +325,7 @@ class TestFullHappyPath:
         assert lookup_response.status_code == 200
         lookup_body = lookup_response.json()
         assert lookup_body["userCode"] == user_code
-        assert lookup_body["clientName"] == "plak-cli 1.2 on macOS"
+        assert lookup_body["clientName"] == "toon-cli 1.2 on macOS"
         assert lookup_body["ipTruncated"]
 
         approve_response = await client.post(
@@ -503,7 +503,18 @@ class TestPollingErrors:
 
     async def test_unknown_device_code_is_invalid_grant(self, client):
         response = await client.post(
-            f"{BASE}/cli/tokens", json={"grantType": "device_code", "deviceCode": "plakdc_" + "a" * 16 + "_" + "b" * 64}
+            f"{BASE}/cli/tokens", json={"grantType": "device_code", "deviceCode": "toondc_" + "a" * 16 + "_" + "b" * 64}
+        )
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_GRANT"
+
+    @pytest.mark.parametrize(
+        ("grant", "field", "old_prefix"),
+        [("device_code", "deviceCode", "plakdc"), ("refresh_token", "refreshToken", "plakclr")],
+    )
+    async def test_a_secret_under_its_old_prefix_is_invalid_grant(self, client, grant, field, old_prefix):
+        response = await client.post(
+            f"{BASE}/cli/tokens", json={"grantType": grant, field: f"{old_prefix}_{'a' * 16}_{'b' * 64}"}
         )
         assert response.status_code == 400
         assert response.json()["code"] == "INVALID_GRANT"
@@ -673,7 +684,7 @@ class TestBearerOutsideCliEndpoints:
 
         response = await client.get(f"{BASE}/groups", headers={"Authorization": f"Bearer {access_token}"})
         assert response.status_code == 401
-        assert response.headers["WWW-Authenticate"] == 'Bearer realm="plak", error="invalid_token"'
+        assert response.headers["WWW-Authenticate"] == 'Bearer realm="toon", error="invalid_token"'
 
 
 # -- whoami errors ------------------------------------------------------
@@ -684,6 +695,14 @@ class TestWhoami:
         response = await client.get(f"{BASE}/cli/whoami")
         assert response.status_code == 401
         assert response.json()["code"] == "TOKEN_INVALID"
+
+    async def test_a_token_under_its_old_prefix_is_401(self, client):
+        response = await client.get(
+            f"{BASE}/cli/whoami", headers={"Authorization": f"Bearer plakcli_{'a' * 16}_{'b' * 64}"}
+        )
+        assert response.status_code == 401
+        assert response.json()["code"] == "TOKEN_INVALID"
+        assert response.headers["WWW-Authenticate"] == 'Bearer realm="toon", error="invalid_token"'
 
     async def test_inactive_member_is_403(self, client, app, factory):
         member = await _make_member(factory, sub="lid-inactief")
@@ -740,7 +759,7 @@ class TestWhoami:
         )
         assert response.status_code == 204
         response = await client.request(
-            "DELETE", f"{BASE}/cli/session", json={"refreshToken": f"plakclr_{'a' * 16}_{'b' * 64}"}
+            "DELETE", f"{BASE}/cli/session", json={"refreshToken": f"toonclr_{'a' * 16}_{'b' * 64}"}
         )
         assert response.status_code == 204
         assert [row.result for row in await _audit_rows(factory)] == ["refused", "refused"]

@@ -1,5 +1,5 @@
-"""CLI login API (`plak login`): the device authorization grant (RFC 8628)
-that Plak brokers on top of its own admin SSO login.
+"""CLI login API (`toon login`): the device authorization grant (RFC 8628)
+that Toon brokers on top of its own admin SSO login.
 
 The CLI side lives here and needs no session: asking for a device code,
 polling the token endpoint, and logging out or asking who it is with its
@@ -53,9 +53,9 @@ _BEARER = {"security": [{SECURITY_BEARER: []}]}
 
 
 class DeviceAuthorizationRequest(ApiModel):
-    """The start of `plak login`."""
+    """The start of `toon login`."""
 
-    model_config = ConfigDict(json_schema_extra={"examples": [{"clientName": "plak-cli 1.2 on macOS"}, {}]})
+    model_config = ConfigDict(json_schema_extra={"examples": [{"clientName": "toon-cli 1.2 on macOS"}, {}]})
 
     client_name: str | None = Field(
         default=None,
@@ -64,7 +64,7 @@ class DeviceAuthorizationRequest(ApiModel):
             "How the CLI names itself; shown on the approval screen and in the list of linked CLI sessions. "
             f"At most {cli.CLIENT_NAME_MAX_LENGTH} characters; control and formatting characters are stripped."
         ),
-        examples=["plak-cli 1.2 on macOS"],
+        examples=["toon-cli 1.2 on macOS"],
     )
 
 
@@ -83,11 +83,11 @@ class DeviceAuthorizationOut(ApiModel):
     )
     verification_uri: str = Field(
         description="Page in the admin interface where the member enters the code.",
-        examples=["https://beheer.plak.example/cli-link"],
+        examples=["https://beheer.toon.example/cli-link"],
     )
     verification_uri_complete: str = Field(
         description="The same page with the code already filled in; for opening in a browser.",
-        examples=["https://beheer.plak.example/cli-link?code=WDJB-MJHT"],
+        examples=["https://beheer.toon.example/cli-link?code=WDJB-MJHT"],
     )
     expires_in: int = Field(description="Seconds until the codes expire.", examples=[600])
     interval: int = Field(description="Minimum number of seconds the CLI waits between attempts.", examples=[5])
@@ -99,8 +99,8 @@ class TokenRequest(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
-                {"grantType": "device_code", "deviceCode": "plakdc_..."},
-                {"grantType": "refresh_token", "refreshToken": "plakclr_..."},
+                {"grantType": "device_code", "deviceCode": "toondc_..."},
+                {"grantType": "refresh_token", "refreshToken": "toonclr_..."},
             ]
         }
     )
@@ -127,10 +127,10 @@ class CliMemberOut(ApiModel):
 class TokensOut(ApiModel):
     """A fresh set of tokens. The refresh token is invalid after use: always keep the new one."""
 
-    access_token: str = Field(description="Access token `plakcli_...` for `Authorization: Bearer`.")
+    access_token: str = Field(description="Access token `tooncli_...` for `Authorization: Bearer`.")
     refresh_token: str = Field(
         description=(
-            "Refresh token `plakclr_...`. Single use: presenting a refresh token that has already been used "
+            "Refresh token `toonclr_...`. Single use: presenting a refresh token that has already been used "
             "revokes the entire CLI session."
         )
     )
@@ -192,7 +192,7 @@ def _factory(request: Request) -> async_sessionmaker[AsyncSession]:
     summary="Start signing in with the CLI",
     response_description="The device code for the CLI and the user code for the member.",
     description=(
-        "Step 1 of `plak login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` "
+        "Step 1 of `toon login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` "
         "plus `verificationUri`; the member opens that page in the admin interface, compares the code and "
         "approves. Meanwhile the CLI calls `POST /cli/tokens` every `interval` seconds. The codes expire "
         "after ten minutes.\n\n"
@@ -248,7 +248,7 @@ async def create_device_authorization(
         "within ten seconds (two refreshes at the same time), the response is `INVALID_GRANT` and the "
         "session remains valid. If a used refresh token is presented after that window, or an older one is "
         "presented, two parties "
-        "hold the same session: Plak revokes the entire CLI session and writes `cli_refresh_reuse` to the "
+        "hold the same session: Toon revokes the entire CLI session and writes `cli_refresh_reuse` to the "
         "audit log. A CLI session expires 30 days after the last refresh and "
         "in any case 90 days after sign-in.\n\n"
         "**Who can call this:** anyone with a valid device code or refresh token; there is no other "
@@ -291,7 +291,7 @@ async def tokens(request: Request, body: TokenRequest) -> TokensOut:
         raise ApiError(400, error.message.key, params=error.message.params) from None
     if body.grant_type == "device_code":
         # The approval (cli_login) says who allowed it; this row says the
-        # credential actually left Plak, and which session it belongs to.
+        # credential actually left Toon, and which session it belongs to.
         await audit_request.write(
             request,
             vocabulary.CLI_TOKEN_ISSUED,
@@ -330,7 +330,7 @@ def _access_token(request: Request) -> str:
 class LogoutRequest(ApiModel):
     """Sign out with the refresh token, for when there is no (valid) access token any more."""
 
-    model_config = ConfigDict(json_schema_extra={"examples": [{"refreshToken": "plakclr_..."}]})
+    model_config = ConfigDict(json_schema_extra={"examples": [{"refreshToken": "toonclr_..."}]})
 
     refresh_token: str = Field(
         max_length=200, description="A refresh token of the session, the current one or one that was already used."
@@ -344,11 +344,11 @@ class LogoutRequest(ApiModel):
     openapi_extra={"security": [{SECURITY_BEARER: []}, {}]},
     summary="Sign out with the CLI",
     description=(
-        "Revokes the CLI session (`plak logout`), with all its tokens; it disappears from the list of linked CLI "
+        "Revokes the CLI session (`toon logout`), with all its tokens; it disappears from the list of linked CLI "
         "sessions. Identify the session in one of two ways:\n\n"
-        "* `Authorization: Bearer plakcli_...`: the access token, even if it has already expired, as long as "
+        "* `Authorization: Bearer tooncli_...`: the access token, even if it has already expired, as long as "
         "it is genuine and the session still exists;\n"
-        "* a JSON body `{\"refreshToken\": \"plakclr_...\"}` (as in RFC 7009), the current refresh token or "
+        "* a JSON body `{\"refreshToken\": \"toonclr_...\"}` (as in RFC 7009), the current refresh token or "
         "one that was already used.\n\n"
         "The response is always 204, even for an unknown or already revoked token: this way it does not "
         "reveal which tokens exist. The audit log does distinguish the two cases (`cli_logout` with "
@@ -396,9 +396,9 @@ async def logout(request: Request, body: Annotated[LogoutRequest | None, Body()]
     summary="Show the signed-in CLI member",
     response_description="The member behind this access token and when the session expires.",
     description=(
-        "The member on whose behalf the CLI acts (`plak whoami`), and when the CLI session expires if it "
+        "The member on whose behalf the CLI acts (`toon whoami`), and when the CLI session expires if it "
         "is not refreshed. The member must still be active, as with every deploy.\n\n"
-        "**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer plakcli_...`)."
+        "**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer tooncli_...`)."
     ),
     responses=error_responses(_WHOAMI_ERRORS),
 )

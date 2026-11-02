@@ -19,16 +19,16 @@ from toon.api.origin_guard import REASON_OTHER_ORIGIN, require_admin_origin
 from toon.config import Settings
 
 URL = "/-/api/v1/operator"
-APP_BASE_URL = "https://beheer.plak.example"
-CONTENT_ORIGIN = "https://plak.example"
+APP_BASE_URL = "https://beheer.toon.example"
+CONTENT_ORIGIN = "https://toon.example"
 
 
 def _settings(tmp_path: Path, **operator_settings: str) -> Settings:
     return Settings(
-        db_url="postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        db_url="postgresql+asyncpg://toon:toon@localhost:5432/toon",
         content_root=tmp_path,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",

@@ -49,7 +49,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.upload.field.dragHere': 'Drag the file or folder here',
   'publish.upload.field.dropHere': 'Drop the file or folder here',
   'publish.upload.field.help':
-    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site. A folder is packed by Plak in your browser, without the metadata of your operating system.',
+    'It takes an archive (.zip, .tar.gz or .tgz), a single HTML file, or a whole folder you drag here or choose with the "Choose a folder" button. A single HTML file becomes the start page of your site. Toon packs a folder in your browser, without the metadata of your operating system.',
   'publish.upload.folder': 'Choose a folder',
   'publish.upload.progress.reading': 'Reading folder',
   'publish.upload.progress.packing': 'Packing folder',
@@ -68,10 +68,10 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
 
   // -- Packing: what is refused before a byte goes over the wire ---------------
   'publish.packing.secret':
-    '"{path}" does not belong on a website, so Plak will not publish this folder. Choose the folder with the built site, usually "dist" or "build", instead of the whole project folder.',
+    '"{path}" does not belong on a website, so Toon will not publish this folder. Choose the folder with the built site, usually "dist" or "build", instead of the whole project folder.',
   'publish.packing.nothing': 'Nothing was dropped that can be published.',
   'publish.packing.notASite':
-    'Plak cannot make a site out of "{name}" alone. Drag the whole folder, an archive (.zip, .tar.gz or .tgz), or a single HTML file.',
+    'Toon cannot make a site out of "{name}" alone. Drag the whole folder, an archive (.zip, .tar.gz or .tgz), or a single HTML file.',
   'publish.packing.folderEmpty': 'There is nothing in this folder that can be published.',
   'publish.packing.bundleEmpty': 'There is nothing in "{name}" that can be published.',
   'publish.packing.tooManyFiles':
@@ -110,7 +110,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.repo.unknownWho': 'unknown',
   'publish.deploy.repo.unconfirmed': 'Not confirmed yet',
   'publish.deploy.repo.unconfirmedDetail':
-    'Plak could not look this repository up, so its name and IDs are as they were entered. The first publish from the repository confirms the IDs and corrects the name.',
+    'Toon could not look this repository up, so its name and IDs are as they were entered. The first publish from the repository confirms the IDs and corrects the name.',
   'publish.deploy.repo.change': 'Change',
   'publish.deploy.repo.unlink': 'Unlink',
   'publish.deploy.repo.empty': 'No repository linked yet',
@@ -148,11 +148,11 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.deploy.form.invalidReference':
     'Owner and repository separated by a slash (for example "minbzk/website"), or a repository URL.',
   'publish.deploy.form.idsIntro':
-    'Plak cannot look this repository up itself, for instance because it is private. Enter the two IDs below yourself, then. This gives the repository ID first, then the owner ID:',
+    'Toon cannot look this repository up itself, for instance because it is private. Enter the two IDs below yourself, then. This gives the repository ID first, then the owner ID:',
   'publish.deploy.form.cliHint':
-    'Rather from the terminal? Run this in a checkout of the repository, after plak login. For a private GitHub repository the CLI gets the IDs itself through gh.',
+    'Rather from the terminal? Run this in a checkout of the repository, after "toon login". For a private GitHub repository the CLI gets the IDs itself through gh.',
   'publish.deploy.form.idsIntroGithub':
-    'Plak cannot look this repository up itself, for instance because it is private. The easiest way is to link it from a checkout, after plak login: the CLI then gets the IDs itself with your own gh login.',
+    'Toon cannot look this repository up itself, for instance because it is private. The easiest way is to link it from a checkout, after "toon login": the CLI then gets the IDs itself with your own gh login.',
   'publish.deploy.form.idsManual':
     'Or enter the IDs below yourself. This gives the repository ID first, then the owner ID:',
   'publish.deploy.form.idsWrong':
@@ -185,9 +185,9 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   // -- Deploy tab: why this is safe ------------------------------------------------
   'publish.deploy.safety.summary': 'Why is this safe?',
   'publish.deploy.safety.noSecret':
-    'No secret is stored in the repository: the forge (GitHub or Forgejo) itself signs a short-lived token for exactly this workflow run, and Plak checks that signature.',
+    'No secret is stored in the repository: the forge (GitHub or Forgejo) itself signs a short-lived token for exactly this workflow run, and Toon checks that signature.',
   'publish.deploy.safety.scoped':
-    'That token only proves which repository the run started from. Plak accepts it here because you linked exactly that repository to this site.',
+    'That token only proves which repository the run started from. Toon accepts it here because you linked exactly that repository to this site.',
   'publish.deploy.safety.liveRestricted':
     'Publishing live only works from the live branch you set, and only from a push, a manual run or a schedule, never from a pull request.',
   'publish.deploy.safety.previews':
@@ -199,11 +199,11 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'From your own computer',
   'publish.deploy.cli.install':
-    'With the plak cli you publish without CI, with your own access. If you do not have it yet: {repo} holds it in {folder}. Install it, and update it later:',
+    'With the Toon CLI you publish without CI, with your own access. If you do not have it yet: {repo} holds it in {folder}. Install it, and update it later:',
   'publish.deploy.cli.run':
     'If you work from a checkout, {run} runs it without installing.',
   'publish.deploy.cli.login':
-    '{login} opens your browser at {link} to link the CLI session. After that the cli keeps that session for later {publish} calls.',
+    '{login} opens your browser at {link} to link the CLI session. After that the CLI keeps that session for later {publish} calls.',
 
   // -- Deploy tab: unlinking ---------------------------------------------------------
   'publish.deploy.unlink.title': 'Unlink repository?',
@@ -279,7 +279,7 @@ export const publishEn: Record<keyof typeof publishNl, string> = {
   'publish.access.invitees.on': 'Invitees are on',
   'publish.access.invitees.off': 'Invitees are off',
   'publish.access.invitees.intro':
-    'Invitees log in with SSO Rijk. Their verified email address has to be on this list. Plak sends no invitation itself: you share the link yourself.',
+    'Invitees log in with SSO Rijk. Their verified email address has to be on this list. Toon sends no invitation itself: you share the link yourself.',
   'publish.access.invitees.column.email': 'Email address',
   'publish.access.invitees.column.added': 'Added',
   'publish.access.invitees.empty': 'No invitees yet',

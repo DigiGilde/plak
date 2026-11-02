@@ -134,7 +134,7 @@ const readOnlyText = computed(() => {
 // -- What a change comes to ------------------------------------------------------
 
 const workflow = computed((): Sentence => {
-  const codes = { site: 'site:', flag: '--site', command: 'plak publish' };
+  const codes = { site: 'site:', flag: '--site', command: 'toon publish' };
   if (props.kind === 'site') {
     return {
       text: t('address.consequences.workflow.site'),
@@ -353,7 +353,7 @@ function succeeded(updated: Group | Site, from: string): void {
     text: t('address.changed', {
       date: retired ? lastRedirectDay(retired.redirectsUntil) : untilDate.value,
     }),
-    codes: { from: short(from), to: short(updated.slug), command: 'plak publish' },
+    codes: { from: short(from), to: short(updated.slug), command: 'toon publish' },
   };
   open.value = false;
   const done = (): void => {

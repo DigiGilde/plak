@@ -406,7 +406,7 @@ def container_section(image: str, digest: str, version: str) -> str:
     reference = f"{image}@{digest}"
     return (
         "## Container image\n\n"
-        f"- plak: `{image}:{version}`, digest `{digest}`\n\n"
+        f"- toon: `{image}:{version}`, digest `{digest}`\n\n"
         f"Verify where it was built: `gh attestation verify oci://{reference} -R {REPOSITORY}`\n"
         "Its SBOM (CycloneDX): the same command with `--predicate-type https://cyclonedx.org/bom`"
     )
@@ -425,7 +425,7 @@ WARNING = (
     "pull request description."
 )
 HINT = (
-    "frontend/src/ or cli/plak_cli/ changed without a What's new note. Is this visible to a member? "
+    "frontend/src/ or cli/toon_cli/ changed without a What's new note. Is this visible to a member? "
     f"Then add one: {FRAGMENTS}<slug>.note.nl.md and <slug>.note.en.md."
 )
 

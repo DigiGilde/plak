@@ -36,7 +36,7 @@ describe('verzoek', () => {
   });
 
   it('zet de X-CSRF-Token-header op een POST vanuit de csrf-cookie', async () => {
-    setCookie('__Host-plak-csrf', 'geheime-token-waarde');
+    setCookie('__Host-toon-csrf', 'geheime-token-waarde');
 
     const fetchMock = vi.fn(
       async (_path: string, _init?: RequestInit) =>
@@ -56,7 +56,7 @@ describe('verzoek', () => {
   });
 
   it('zet geen CSRF-header op een GET', async () => {
-    setCookie('__Host-plak-csrf', 'geheime-token-waarde');
+    setCookie('__Host-toon-csrf', 'geheime-token-waarde');
 
     const fetchMock = vi.fn(
       async (_path: string, _init?: RequestInit) =>
@@ -79,7 +79,7 @@ describe('verzoek', () => {
       async () =>
         new Response(
           JSON.stringify({
-            type: 'https://plak.example/fouten/onbekend-site',
+            type: 'https://toon.example/fouten/onbekend-site',
             title: 'Onbekende site',
             status: 404,
             detail: 'Er bestaat geen site met deze slug.',
@@ -94,7 +94,7 @@ describe('verzoek', () => {
 
     const error = await refusedWith(request('/-/api/v1/sites/groep/onbekend'));
     expect(error.problem).toEqual({
-      type: 'https://plak.example/fouten/onbekend-site',
+      type: 'https://toon.example/fouten/onbekend-site',
       title: 'Onbekende site',
       status: 404,
       detail: 'Er bestaat geen site met deze slug.',

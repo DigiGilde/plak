@@ -62,7 +62,7 @@ describe('WhatsNew', () => {
     _setLocaleForTest('en');
     const page = await mountPage(SOURCE);
 
-    expect(page.find('h1').text()).toBe("What's new in Plak");
+    expect(page.find('h1').text()).toBe("What's new in Toon");
     const headings = page.findAll('h2');
     expect(headings.map((h) => h.text())).toEqual(['1 October 2026', '30 September 2026']);
     expect(headings[0]!.find('time').attributes('datetime')).toBe('2026-10-01');
@@ -91,7 +91,7 @@ describe('WhatsNew', () => {
   it('follows the Dutch interface', async () => {
     const page = await mountPage(SOURCE);
 
-    expect(page.find('h1').text()).toBe('Wat is er nieuw in Plak');
+    expect(page.find('h1').text()).toBe('Wat is er nieuw in Toon');
     expect(page.find('h2').text()).toBe('1 oktober 2026');
     expect(page.find('h2').attributes('id')).toBe('d2026-10-01');
     expect(page.text()).toContain('Tweede');

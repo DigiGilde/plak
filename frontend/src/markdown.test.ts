@@ -52,8 +52,8 @@ describe('renderMarkdown blocks', () => {
 
 describe('renderMarkdown inline', () => {
   it('renders code and bold, also inside a heading and a list item', () => {
-    expect(render('Use `plak publish` and **mind** it')).toBe(
-      '<p>Use <code>plak publish</code> and <strong>mind</strong> it</p>',
+    expect(render('Use `toon publish` and **mind** it')).toBe(
+      '<p>Use <code>toon publish</code> and <strong>mind</strong> it</p>',
     );
     expect(render('## A `b`')).toBe('<h3>A <code>b</code></h3>');
     expect(render('- **x**')).toBe('<ul>\n  <li><strong>x</strong></li>\n</ul>');

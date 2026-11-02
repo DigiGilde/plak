@@ -16,24 +16,24 @@ from toon.api.errors import register_error_handlers
 from toon.api.origin_guard import _is_local_origin, normalise_origin, require_admin_origin
 from toon.config import Settings
 
-ADMIN_ORIGIN = "https://beheer.plak.example"
-CONTENT_ORIGIN = "https://plak.example"
+ADMIN_ORIGIN = "https://beheer.toon.example"
+CONTENT_ORIGIN = "https://toon.example"
 PATH = "/-/api/v1/ping"
 
 
 def _settings(**overrides) -> Settings:
     base = {
-        "db_url": "postgresql+asyncpg://plak:plak@localhost:5432/plak",
-        "content_root": "/onbestaand/plak-content",
+        "db_url": "postgresql+asyncpg://toon:toon@localhost:5432/toon",
+        "content_root": "/onbestaand/toon-content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": "{}",
         "oidc_required_acr": "urn:acr:hoog",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         "environment": "dev",
-        "content_base_url": "https://plak.example",
+        "content_base_url": "https://toon.example",
     }
     base.update(overrides)
     return Settings(**base)
@@ -85,9 +85,9 @@ class TestNormaliseOrigin:
     @pytest.mark.parametrize(
         ("input_", "expected"),
         [
-            ("https://beheer.plak.example", "https://beheer.plak.example"),
-            ("HTTPS://Beheer.Plak.Example", "https://beheer.plak.example"),
-            ("https://beheer.plak.example:443", "https://beheer.plak.example"),
+            ("https://beheer.toon.example", "https://beheer.toon.example"),
+            ("HTTPS://Beheer.Toon.Example", "https://beheer.toon.example"),
+            ("https://beheer.toon.example:443", "https://beheer.toon.example"),
             ("http://localhost:80", "http://localhost"),
             ("http://localhost:5173", "http://localhost:5173"),
             ("https://host.example:8443", "https://host.example:8443"),
@@ -178,8 +178,8 @@ class TestDevWithoutBaseUrl:
             assert response.status_code == 200
 
     async def test_own_origin_allowed(self, dev_app):
-        async with _client(dev_app, "https://dev.plak.example") as client:
-            response = await client.get(PATH, headers={"Origin": "https://dev.plak.example"})
+        async with _client(dev_app, "https://dev.toon.example") as client:
+            response = await client.get(PATH, headers={"Origin": "https://dev.toon.example"})
             assert response.status_code == 200
 
     async def test_foreign_origin_refused(self, dev_app):

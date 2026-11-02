@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the Plak dev stack (nginx + app + postgres + mock OIDC) via
+# Starts the Toon dev stack (nginx + app + postgres + mock OIDC) via
 # podman compose. Generates dev secrets in dev/.secrets/ (outside git)
 # once, picks the mock OIDC config and starts the stack with --build.
 set -euo pipefail

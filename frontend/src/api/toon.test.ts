@@ -55,7 +55,7 @@ describe('me (session)', () => {
   it('returns the logged-in member, with the content origin for shared links', async () => {
     const loggedIn = await toon.me();
     expect(loggedIn.ssoSubject).toBe('dev-beheerder');
-    expect(loggedIn.contentBaseUrl).toBe('https://sites.plak.test');
+    expect(loggedIn.contentBaseUrl).toBe('https://sites.toon.test');
   });
 
   it('says how many days an old address keeps redirecting', async () => {
@@ -1182,7 +1182,7 @@ describe('cli device linking', () => {
   it('looks up a valid code', async () => {
     const found = await toon.lookupDeviceAuthorization('abcd-efgh');
     expect(found.userCode).toBe('ABCD-EFGH');
-    expect(found.clientName).toBe('plak-cli');
+    expect(found.clientName).toBe('toon-cli');
   });
 
   it('returns 404 USER_CODE_UNKNOWN for an unknown code', async () => {

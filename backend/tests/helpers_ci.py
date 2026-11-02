@@ -20,7 +20,7 @@ from toon.ci.providers import GITHUB_API, GITHUB_ISSUER
 
 FORGEJO_HOST = "https://code.overheid.nl"
 FORGEJO_ISSUER = FORGEJO_HOST + "/api/actions"
-AUDIENCE = "https://plak.example"
+AUDIENCE = "https://toon.example"
 
 # Sentinel to leave a claim out of the token.
 OMIT = object()

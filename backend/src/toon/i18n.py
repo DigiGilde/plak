@@ -26,7 +26,7 @@ SUPPORTED: Final[tuple[str, ...]] = ("nl", "en")
 # are not the same question.
 #
 # Nothing asked for (a crawler, curl, a browser that sends no header): keep the
-# language of the service. Plak is a Dutch government platform, and there is
+# language of the service. Toon is a Dutch government platform, and there is
 # nothing here that says otherwise.
 #
 # Asked for a language we do not have (fr, de, pl): that visitor has told us
@@ -46,7 +46,7 @@ API_DEFAULT: Final[str] = "en"
 NL: Final[dict[str, str]] = {
     # The API documentation page (api/docs.py). `docs.language` is the name of
     # the language in that language itself: the switch shows the other one.
-    "docs.title": "Plak API-documentatie",
+    "docs.title": "API-documentatie van Toon",
     "docs.back": "Naar het beheer",
     "docs.schema": "OpenAPI-schema",
     "docs.language": "Nederlands",
@@ -71,7 +71,7 @@ NL: Final[dict[str, str]] = {
 }
 
 EN: Final[dict[str, str]] = {
-    "docs.title": "Plak API documentation",
+    "docs.title": "Toon API documentation",
     "docs.back": "To the admin interface",
     "docs.schema": "OpenAPI schema",
     "docs.language": "English",

@@ -1,15 +1,15 @@
 {
-  "name": "plak",
-  "displayName": "Plak",
+  "name": "toon",
+  "displayName": "Toon",
   "version": "2026.11.1",
-  "description": "Publish a static site to a Plak instance: a preview by default, live only when the user asks for it.",
+  "description": "Publish a static site to a Toon instance: a preview by default, live only when the user asks for it.",
   "author": {
-    "name": "Plak team",
+    "name": "Toon team",
     "email": "digigilde@rijksoverheid.nl",
-    "url": "https://github.com/DigiGilde/plak"
+    "url": "https://github.com/DigiGilde/toon"
   },
-  "homepage": "https://github.com/DigiGilde/plak/blob/beta/docs/skill.md",
-  "repository": "https://github.com/DigiGilde/plak",
+  "homepage": "https://github.com/DigiGilde/toon/blob/beta/docs/skill.md",
+  "repository": "https://github.com/DigiGilde/toon",
   "license": "EUPL-1.2",
-  "keywords": ["plak", "publishing", "static-site", "preview", "deploy"]
+  "keywords": ["toon", "publishing", "static-site", "preview", "deploy"]
 }

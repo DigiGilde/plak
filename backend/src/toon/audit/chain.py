@@ -9,7 +9,7 @@ SQL function the trigger uses, so the check cannot drift away from the write.
 
 What it proves: nobody has edited the table with the triggers in place, and
 nobody who switched them off has bothered to recompute the chain. What it does
-not prove: the account Plak runs under owns this schema, so an attacker holding
+not prove: the account Toon runs under owns this schema, so an attacker holding
 those credentials can disable the trigger, rewrite rows and recompute every
 hash. Only an outside verifier that kept an earlier chain hash of its own can
 catch that; against the schema owner this chain raises the cost of tampering

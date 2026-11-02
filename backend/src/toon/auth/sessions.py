@@ -3,11 +3,11 @@
 The browser receives only a signed reference to a server-side session record;
 claims never stand on their own in the cookie. Signing is HMAC-SHA256 with
 TOON_SESSION_SECRET (itsdangerous style, without the extra dependency). The
-store is in-memory: Plak runs with replicas:1, sessions
+store is in-memory: Toon runs with replicas:1, sessions
 deliberately do not survive a restart.
 
 Two session kinds: the management session
-(`__Host-plak-session`, SameSite=Strict, with a CSRF cookie)
+(`__Host-toon-session`, SameSite=Strict, with a CSRF cookie)
 on the management origin and the content session (without management
 authority) on the content origin. One store holds both; the field
 `kind` plus the separate cookie name keep them apart, also on a single shared
@@ -18,7 +18,7 @@ The content session rides in two cookies, because every site of every group
 is served from one hostname under a path prefix and uploaded content may run
 its own JavaScript:
 
-- `__Secure-plak-content`, `Path=/{group}/{site}/`: the session id for content
+- `__Secure-toon-content`, `Path=/{group}/{site}/`: the session id for content
   requests, the same scoping the secret-link cookie already has. It narrows
   what one session reaches: a site this browser has not opened carries no
   cookie, so a request aimed at it is anonymous. It is not the site boundary
@@ -26,7 +26,7 @@ its own JavaScript:
   against the page that asks (serving/router.py, `_foreign_subresource`, and
   the origin per site in serving/response.py). `__Secure-` and no longer
   `__Host-`, because that prefix requires `Path=/`. SameSite=None, see below.
-- `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
+- `__Secure-toon-content-anchor`, `Path=/-/`: the same session id where the
   login, the callback and the logout can see it. Never sent to a content path,
   so it grants nothing there. SameSite=Lax: the login, the callback and the
   logout are top-level navigations, which Lax covers, and this is the cookie
@@ -67,13 +67,13 @@ from toon.constants import PLATFORM_PREFIX, RESERVED_SLUGS, SLUG_RE
 if TYPE_CHECKING:
     from fastapi import Request, Response
 
-SESSION_COOKIE = "__Host-plak-session"
-CSRF_COOKIE = "__Host-plak-csrf"
-LOGIN_COOKIE = "__Host-plak-login"
-CONTENT_SESSION_COOKIE = "__Secure-plak-content"
-CONTENT_ANCHOR_COOKIE = "__Secure-plak-content-anchor"
-CONTENT_LOGIN_COOKIE = "__Host-plak-content-login"
-KEY_COOKIE = "__Secure-plak-key"
+SESSION_COOKIE = "__Host-toon-session"
+CSRF_COOKIE = "__Host-toon-csrf"
+LOGIN_COOKIE = "__Host-toon-login"
+CONTENT_SESSION_COOKIE = "__Secure-toon-content"
+CONTENT_ANCHOR_COOKIE = "__Secure-toon-content-anchor"
+CONTENT_LOGIN_COOKIE = "__Host-toon-content-login"
+KEY_COOKIE = "__Secure-toon-key"
 CSRF_HEADER = "X-CSRF-Token"
 
 # Where the anchor cookie lives: the platform namespace, which per SLUG_RE can
@@ -336,7 +336,7 @@ _KEY_COOKIE_PURPOSE = "key:"
 
 
 def sign_key_cookie(secret: str, key_id: str) -> str:
-    """Signs a key id for the __Secure-plak-key cookie, purpose-tagged so its
+    """Signs a key id for the __Secure-toon-key cookie, purpose-tagged so its
     signature cannot be replayed as a session or CSRF cookie value."""
     return sign(secret, f"{_KEY_COOKIE_PURPOSE}{key_id}")
 
@@ -389,7 +389,7 @@ def _session_from_cookie(request: Request, cookie: str, kind: SessionKind) -> Se
 
 
 def session_from_request(request: Request) -> Session | None:
-    """Management session from `__Host-plak-session`; a content session never counts here."""
+    """Management session from `__Host-toon-session`; a content session never counts here."""
     return _session_from_cookie(request, SESSION_COOKIE, SessionKind.ADMIN)
 
 
