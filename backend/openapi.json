@@ -1,15 +1,15 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Plak API",
+    "title": "Toon API",
     "summary": "Publish and share static sites, with previews per pull request.",
-    "description": "\nPlak publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Plak (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n    for that site, and only while the repository of that workflow is linked to it\n    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n    the admin URL itself, until another repository is linked or a site admin requires the site id;\n  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, the site id the workflow names, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\nAddresses are slugs and can change; the API knows only the current one, an old slug answers 404.\n",
+    "description": "\nToon publishes static sites per group and site, with a preview for every pull request.\nThis API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.\n\n## Authentication\n\nThere are two ways to identify yourself, and every endpoint accepts exactly one or two of them:\n\n* **Admin session** - a `Secure`/`HttpOnly`/`SameSite=Strict` cookie you get after SSO sign-in on the admin\n  host. Every session route also requires an **active** member: a new or deactivated member gets 403.\n  Mutations (POST, PUT, DELETE) additionally require the CSRF double-submit header `X-CSRF-Token`, with the\n  same value as the CSRF cookie.\n* **Bearer token** - `Authorization: Bearer <token>`, only on the two deploy endpoints, on\n  `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site\n  and on linking a repository. The token is one of two kinds:\n  * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin\n    URL of Toon (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only\n    for that site, and only while the repository of that workflow is linked to it\n    (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before\n    the site id existed, of a repository linked to that one site, also takes a token whose audience is\n    the admin URL itself, until another repository is linked or a site admin requires the site id;\n  * a **CLI token** `tooncli_...` from `toon login` (see the CLI login endpoints). It acts as the member who\n    signed in, with exactly their roles.\n\n  A Bearer header on any other endpoint yields 401, even when the token is valid.\n\nAll endpoints live on the admin origin and guard where a request comes from: an `Origin` or\n`Sec-Fetch-Site` that does not belong to the admin origin yields 403. CI and the CLI send neither header\nand so pass that guard unhindered.\n\n## Authorization\n\nWho may do what depends on the group: **group members** manage the sites of their own group according to\ntheir role, and any active member may create a group. A **platform administrator** also activates and\ndeactivates members and reads the audit log. With a CI ID token what counts is the repository linked to the\nsite, the site id the workflow names, and for a live deploy the live branch.\n\n## Errors\n\nErrors are `application/problem+json` following RFC 9457: `{type, title, status, detail}`, extended with\nthe extension member `code` holding a stable, machine-readable error code (`NOT_GROUP_MEMBER`, `SLUG_EXISTS`,\n`BODY_TOO_LARGE`, ...). Each endpoint below lists the status codes it can return. Codes are the contract\nfor clients; the `detail` text is meant for people and may change.\n\n## Language\n\nThis document and the `title` and `detail` of every error come in English and in Dutch. Send\n`Accept-Language: nl` for Dutch; a client that asks for nothing gets English. For this document `?lang=nl`\nor `?lang=en` overrides the header.\n\n## Conventions\n\nFields on the wire are lowerCamelCase. Timestamps are RFC 3339 in UTC with a `Z` suffix\n(`2026-09-12T09:30:00Z`). The full version of this API is in the `API-Version` header of every response;\nthe major version is in the path (`/-/api/v1`). Requests are rate limited: exceeding the limit yields 429.\nAddresses are slugs and can change; the API knows only the current one, an old slug answers 404.\n",
     "contact": {
-      "name": "Plak",
-      "url": "https://github.com/DigiGilde/plak/issues",
+      "name": "Toon",
+      "url": "https://github.com/DigiGilde/toon/issues",
       "email": "digigilde@rijksoverheid.nl"
     },
-    "version": "1.3.1"
+    "version": "1.4.0"
   },
   "servers": [
     {
@@ -23,7 +23,7 @@
           "Deploys"
         ],
         "summary": "Publish a bundle, live or as a preview",
-        "description": "The endpoint CI uses. Send the built site as `multipart/form-data` with the `file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under `/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions (`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Plak's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link still accepts it, exactly the admin URL itself; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any branch. A token bound to another site is never used here: its own repository gets 409 `SITE_MOVED` with the address of that site. (2) A CLI token from `plak login` (`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that accept a Bearer token; elsewhere that header yields 401.\n\n**Flow:** authorization comes first, only then is the body read, so a refused request costs no upload. The upload streams to disk and is unpacked against the limits below. Every deploy, whether it succeeds or is refused, ends up in the audit log.\n\n**Site root:** enclosing directories are repeatedly unwrapped while the root directory contains exactly one directory and nothing else, so an archive with only `mysite/dist/index.html` simply lands on the site root. Operating system metadata does not count and is not published either: the `__MACOSX` directory, `.DS_Store` and the AppleDouble files that start with `._`. A zip you make with a right-click in Finder therefore just works. After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, with the index paths found in `indexCandidates`. If the site is in a directory next to other things (a zipped project directory), send that directory as the `basePath` field: this confirms one of the suggestions. Plak never picks one of several candidates itself, because it would silently leave out files you thought you were publishing. The `basePath` is relative to the root directory after unwrapping, but a path that includes the unwrapped prefix works too, and a fixed value keeps working if unwrapping has already taken that directory away.\n\n**Limits** (configurable; these are the defaults): the request body is at most 100 MB (`TOON_INGEST_MAX_BODY`), a single unpacked file 50 MB (`TOON_INGEST_MAX_FILE`), the entire unpacked site 200 MB (`TOON_INGEST_MAX_TOTAL`), with at most 1000 entries (`TOON_INGEST_MAX_FILES`) and 10 levels of directory depth (`TOON_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not count. The archive as a whole may contain at most fifty times as many entries, and for a `.tar.gz` the unpacked size of all members counts, including the unpublished ones: a tar has no index, so getting to the next header means decompressing everything in between. The limits are enforced during unpacking and the headers are checked against the same limits beforehand, so a zip or tar bomb does not get past either.\n\n**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n\n```\ncurl --fail --silent --show-error \\\n  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n  --form file=@dist.zip \\\n  --form preview=pr-42 \\\n  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n```\n\nResponse: `201` with `{\"versionId\": \"...\"}`. Omit `--form preview=...` for a live deploy.",
+        "description": "The endpoint CI uses. Send the built site as `multipart/form-data` with the `file` field; without the `preview` field the bundle replaces the live site, with `preview` it ends up under `/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions (`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly Toon's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link still accepts it, exactly the admin URL itself; a live deploy must then come from a `push`, `workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any branch. A token bound to another site is never used here: its own repository gets 409 `SITE_MOVED` with the address of that site. (2) A CLI token from `toon login` (`Authorization: Bearer tooncli_...`): it acts as the member who signed in, with exactly their roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at least the `editor` role on this site. This endpoint and the preview teardown are, together with the CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that accept a Bearer token; elsewhere that header yields 401.\n\n**Flow:** authorization comes first, only then is the body read, so a refused request costs no upload. The upload streams to disk and is unpacked against the limits below. Every deploy, whether it succeeds or is refused, ends up in the audit log.\n\n**Site root:** enclosing directories are repeatedly unwrapped while the root directory contains exactly one directory and nothing else, so an archive with only `mysite/dist/index.html` simply lands on the site root. Operating system metadata does not count and is not published either: the `__MACOSX` directory, `.DS_Store` and the AppleDouble files that start with `._`. A zip you make with a right-click in Finder therefore just works. After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, with the index paths found in `indexCandidates`. If the site is in a directory next to other things (a zipped project directory), send that directory as the `basePath` field: this confirms one of the suggestions. Toon never picks one of several candidates itself, because it would silently leave out files you thought you were publishing. The `basePath` is relative to the root directory after unwrapping, but a path that includes the unwrapped prefix works too, and a fixed value keeps working if unwrapping has already taken that directory away.\n\n**Limits** (configurable; these are the defaults): the request body is at most 100 MB (`TOON_INGEST_MAX_BODY`), a single unpacked file 50 MB (`TOON_INGEST_MAX_FILE`), the entire unpacked site 200 MB (`TOON_INGEST_MAX_TOTAL`), with at most 1000 entries (`TOON_INGEST_MAX_FILES`) and 10 levels of directory depth (`TOON_INGEST_MAX_DEPTH`). These apply to what is published: what falls outside the `basePath` does not count. The archive as a whole may contain at most fifty times as many entries, and for a `.tar.gz` the unpacked size of all members counts, including the unpublished ones: a tar has no index, so getting to the next header means decompressing everything in between. The limits are enforced during unpacking and the headers are checked against the same limits beforehand, so a zip or tar bomb does not get past either.\n\n**Example** (`$TOON_TOKEN` is a CI ID token or a CLI token):\n\n```\ncurl --fail --silent --show-error \\\n  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n  --form file=@dist.zip \\\n  --form preview=pr-42 \\\n  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys\"\n```\n\nResponse: `201` with `{\"versionId\": \"...\"}`. Omit `--form preview=...` for a live deploy.",
         "operationId": "deploy___api_v1_sites__group_slug___site_slug__deploys_post",
         "parameters": [
           {
@@ -240,7 +240,7 @@
                     "examples": [
                       "dist"
                     ],
-                    "description": "Optional. The directory inside the archive that becomes the root of the site; everything next to it is not published. The path is relative to the root directory after unwrapping enclosing directories and must be an existing directory containing an `index.html`. Meant to confirm one of the suggestions a refused deploy returns in `indexCandidates`; without this field Plak determines the root directory itself."
+                    "description": "Optional. The directory inside the archive that becomes the root of the site; everything next to it is not published. The path is relative to the root directory after unwrapping enclosing directories and must be an existing directory containing an `index.html`. Meant to confirm one of the suggestions a refused deploy returns in `indexCandidates`; without this field Toon determines the root directory itself."
                   }
                 }
               },
@@ -268,7 +268,7 @@
           "Deploys"
         ],
         "summary": "Clean up a preview",
-        "description": "Removes the preview with this ref, including its files. Meant for the CI step that runs when a pull request closes. The live site and the version history are left alone.\n\n**Who can call this:** the same as the deploy: a CI ID token from the linked repository (from any branch), a CLI token or an admin session with CSRF header of an active member with effective site role `editor` or higher.\n\n**Idempotent:** a ref that does not (any more) exist also yields 204, so a repeated cleanup step in CI does not fail on a rerun.\n\n**Example:**\n\n```\ncurl --fail --silent --show-error --request DELETE \\\n  --header \"Authorization: Bearer $PLAK_TOKEN\" \\\n  \"$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n```",
+        "description": "Removes the preview with this ref, including its files. Meant for the CI step that runs when a pull request closes. The live site and the version history are left alone.\n\n**Who can call this:** the same as the deploy: a CI ID token from the linked repository (from any branch), a CLI token or an admin session with CSRF header of an active member with effective site role `editor` or higher.\n\n**Idempotent:** a ref that does not (any more) exist also yields 204, so a repeated cleanup step in CI does not fail on a rerun.\n\n**Example:**\n\n```\ncurl --fail --silent --show-error --request DELETE \\\n  --header \"Authorization: Bearer $TOON_TOKEN\" \\\n  \"$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42\"\n```",
         "operationId": "delete_preview___api_v1_sites__group_slug___site_slug__previews__ref__delete",
         "parameters": [
           {
@@ -441,7 +441,7 @@
           "CLI login"
         ],
         "summary": "Start signing in with the CLI",
-        "description": "Step 1 of `plak login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` plus `verificationUri`; the member opens that page in the admin interface, compares the code and approves. Meanwhile the CLI calls `POST /cli/tokens` every `interval` seconds. The codes expire after ten minutes.\n\n**Who can call this:** anyone, without authentication. Each IP address has its own limit on the number of requests, on top of the general rate limit.",
+        "description": "Step 1 of `toon login` (RFC 8628). The CLI receives a secret `deviceCode` and shows the `userCode` plus `verificationUri`; the member opens that page in the admin interface, compares the code and approves. Meanwhile the CLI calls `POST /cli/tokens` every `interval` seconds. The codes expire after ten minutes.\n\n**Who can call this:** anyone, without authentication. Each IP address has its own limit on the number of requests, on top of the general rate limit.",
         "operationId": "create_device_authorization___api_v1_cli_device_authorizations_post",
         "requestBody": {
           "content": {
@@ -516,7 +516,7 @@
           "CLI login"
         ],
         "summary": "Fetch or refresh tokens",
-        "description": "With `grantType` `device_code`: the CLI asks whether the member has approved yet. Until then, the response is 400 `AUTHORIZATION_PENDING`; polling faster than `interval` returns `SLOW_DOWN`, and the CLI must then wait five seconds longer between polls. After approval the tokens are returned once; after that the device code is spent.\n\nWith `grantType` `refresh_token`: a new access token and a new refresh token. The old refresh token is invalid afterwards. If the refresh token that was just replaced is presented again within ten seconds (two refreshes at the same time), the response is `INVALID_GRANT` and the session remains valid. If a used refresh token is presented after that window, or an older one is presented, two parties hold the same session: Plak revokes the entire CLI session and writes `cli_refresh_reuse` to the audit log. A CLI session expires 30 days after the last refresh and in any case 90 days after sign-in.\n\n**Who can call this:** anyone with a valid device code or refresh token; there is no other authentication.",
+        "description": "With `grantType` `device_code`: the CLI asks whether the member has approved yet. Until then, the response is 400 `AUTHORIZATION_PENDING`; polling faster than `interval` returns `SLOW_DOWN`, and the CLI must then wait five seconds longer between polls. After approval the tokens are returned once; after that the device code is spent.\n\nWith `grantType` `refresh_token`: a new access token and a new refresh token. The old refresh token is invalid afterwards. If the refresh token that was just replaced is presented again within ten seconds (two refreshes at the same time), the response is `INVALID_GRANT` and the session remains valid. If a used refresh token is presented after that window, or an older one is presented, two parties hold the same session: Toon revokes the entire CLI session and writes `cli_refresh_reuse` to the audit log. A CLI session expires 30 days after the last refresh and in any case 90 days after sign-in.\n\n**Who can call this:** anyone with a valid device code or refresh token; there is no other authentication.",
         "operationId": "tokens___api_v1_cli_tokens_post",
         "requestBody": {
           "content": {
@@ -584,7 +584,7 @@
           "CLI login"
         ],
         "summary": "Sign out with the CLI",
-        "description": "Revokes the CLI session (`plak logout`), with all its tokens; it disappears from the list of linked CLI sessions. Identify the session in one of two ways:\n\n* `Authorization: Bearer plakcli_...`: the access token, even if it has already expired, as long as it is genuine and the session still exists;\n* a JSON body `{\"refreshToken\": \"plakclr_...\"}` (as in RFC 7009), the current refresh token or one that was already used.\n\nThe response is always 204, even for an unknown or already revoked token: this way it does not reveal which tokens exist. The audit log does distinguish the two cases (`cli_logout` with `allowed` or `refused`).\n\n**Who can call this:** anyone who holds a token of the session; also a member who has been deactivated in the meantime.",
+        "description": "Revokes the CLI session (`toon logout`), with all its tokens; it disappears from the list of linked CLI sessions. Identify the session in one of two ways:\n\n* `Authorization: Bearer tooncli_...`: the access token, even if it has already expired, as long as it is genuine and the session still exists;\n* a JSON body `{\"refreshToken\": \"toonclr_...\"}` (as in RFC 7009), the current refresh token or one that was already used.\n\nThe response is always 204, even for an unknown or already revoked token: this way it does not reveal which tokens exist. The audit log does distinguish the two cases (`cli_logout` with `allowed` or `refused`).\n\n**Who can call this:** anyone who holds a token of the session; also a member who has been deactivated in the meantime.",
         "operationId": "logout___api_v1_cli_session_delete",
         "requestBody": {
           "content": {
@@ -638,7 +638,7 @@
           "CLI login"
         ],
         "summary": "Show the signed-in CLI member",
-        "description": "The member on whose behalf the CLI acts (`plak whoami`), and when the CLI session expires if it is not refreshed. The member must still be active, as with every deploy.\n\n**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer plakcli_...`).",
+        "description": "The member on whose behalf the CLI acts (`toon whoami`), and when the CLI session expires if it is not refreshed. The member must still be active, as with every deploy.\n\n**Who can call this:** the holder of a valid CLI access token (`Authorization: Bearer tooncli_...`).",
         "operationId": "whoami___api_v1_cli_whoami_get",
         "responses": {
           "200": {
@@ -699,7 +699,7 @@
           "Installation"
         ],
         "summary": "Who runs this installation",
-        "description": "The organisation that runs this installation of Plak and the e-mail address at which people reach it about privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back as `null`.\n\n**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and sets no cookie.",
+        "description": "The organisation that runs this installation of Toon and the e-mail address at which people reach it about privacy, accessibility and other questions, as set in `TOON_OPERATOR_NAME` and `TOON_OPERATOR_EMAIL`. The public privacy and accessibility pages of the admin interface show them. A setting that is empty comes back as `null`.\n\n**Who can call this:** anyone, without authentication. It needs no session and no CSRF header, and sets no cookie.",
         "operationId": "operator_contact___api_v1_operator_get",
         "responses": {
           "200": {
@@ -1008,7 +1008,7 @@
           "Groups"
         ],
         "summary": "Create a group",
-        "description": "Creates a group and makes the creator group admin (`admin`) right away, so they can put sites in it. The new group starts with base `site_team` and no exceptions, unless `defaultAccess` asks for something else; that can be changed afterwards. Because the creator becomes group admin, choosing the default access right away is no more than they may do afterwards anyway.\n\n**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a reserved action: anyone who wants to publish something must be able to make a place for it themselves. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
+        "description": "Creates a group and makes the creator group admin (`admin`) right away, so they can put sites in it. The new group starts with base `site_team` and no exceptions, unless `defaultAccess` asks for something else; that can be changed afterwards. Because the creator becomes group admin, choosing the default access right away is no more than they may do afterwards anyway.\n\n**Who can call this:** any active member, with a valid CSRF header. Creating a group is not a reserved action: anyone who wants to publish something must be able to make a place for it themselves. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `toon login` (`Authorization: Bearer tooncli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
         "operationId": "create_group___api_v1_groups_post",
         "requestBody": {
           "content": {
@@ -1032,7 +1032,7 @@
             }
           },
           "401": {
-            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `toon login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1784,7 +1784,7 @@
           "Sites"
         ],
         "summary": "Create a site",
-        "description": "Creates a site within a group. The site gets the default access of the group, or whatever `access` asks for instead, and is served at `/{groupSlug}/{siteSlug}/` on the content origin, as soon as something has been deployed to it.\n\n**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes `admin` of the site they create, and may therefore choose the access right away: that is no more than they may do afterwards anyway. A platform administrator without a group role is not allowed. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
+        "description": "Creates a site within a group. The site gets the default access of the group, or whatever `access` asks for instead, and is served at `/{groupSlug}/{siteSlug}/` on the content origin, as soon as something has been deployed to it.\n\n**Who can call this:** group role `editor` or higher, with a valid CSRF header; the creator becomes `admin` of the site they create, and may therefore choose the access right away: that is no more than they may do afterwards anyway. A platform administrator without a group role is not allowed. Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from `toon login` (`Authorization: Bearer tooncli_...`), with exactly the same role check; the CSRF header is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID token is not allowed. Each member has a limit of 20 new groups, sites and addresses combined per 60 minutes, across the admin interface and the CLI together.",
         "operationId": "create_site___api_v1_groups__group_slug__sites_post",
         "parameters": [
           {
@@ -1820,7 +1820,7 @@
             }
           },
           "401": {
-            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `toon login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3500,7 +3500,7 @@
           "Secret links"
         ],
         "summary": "Create a secret link",
-        "description": "Creates a secret link with which the site can be seen without signing in, while the `keys` exception is on.\n\nThe response contains `value` once: the full key `<selector>.<secret>`. Plak only stores a hash, so if you lose the value, create a new key.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header.",
+        "description": "Creates a secret link with which the site can be seen without signing in, while the `keys` exception is on.\n\nThe response contains `value` once: the full key `<selector>.<secret>`. Toon only stores a hash, so if you lose the value, create a new key.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header.",
         "operationId": "create_key___api_v1_sites__group_slug___site_slug__keys_post",
         "parameters": [
           {
@@ -3908,7 +3908,7 @@
           "Publishing from CI"
         ],
         "summary": "Link a repository to a site",
-        "description": "Links a GitHub or Forgejo repository to this site, or replaces the link. Plak looks the repository up at the provider (`GET /repos/{owner}/{repo}`) and stores its numeric IDs: these stay the same when the repository is renamed, and a new repository under the same name does not get them. A CI ID token from this repository may publish afterwards: a preview (and its cleanup) from any branch, live only from `push`, `workflow_dispatch` or `schedule` and, if one is set, only from `liveBranch`.\n\nPlak does the lookup without credentials, so it cannot see a private repository. In that case pass `repositoryId` and `ownerId` yourself (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): If the lookup fails, Plak stores them as given. A wrong ID does not link anything else, it only causes every deploy to be refused. If Plak does find the repository, the IDs must match.\n\nAlso allowed with the CLI token from `plak login` (`plak site link`), then without a CSRF header. A CI ID token links nothing.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header or the CLI token.",
+        "description": "Links a GitHub or Forgejo repository to this site, or replaces the link. Toon looks the repository up at the provider (`GET /repos/{owner}/{repo}`) and stores its numeric IDs: these stay the same when the repository is renamed, and a new repository under the same name does not get them. A CI ID token from this repository may publish afterwards: a preview (and its cleanup) from any branch, live only from `push`, `workflow_dispatch` or `schedule` and, if one is set, only from `liveBranch`.\n\nToon does the lookup without credentials, so it cannot see a private repository. In that case pass `repositoryId` and `ownerId` yourself (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): If the lookup fails, Toon stores them as given. A wrong ID does not link anything else, it only causes every deploy to be refused. If Toon does find the repository, the IDs must match.\n\nAlso allowed with the CLI token from `toon login` (`toon site link`), then without a CSRF header. A CI ID token links nothing.\n\n**Who can call this:** effective site role `admin`, with a valid CSRF header or the CLI token.",
         "operationId": "set_site_repository___api_v1_sites__group_slug___site_slug__repository_put",
         "parameters": [
           {
@@ -3954,7 +3954,7 @@
             }
           },
           "401": {
-            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
+            "description": "Not authenticated. There is no valid admin session: the cookie is missing, invalid or expired (`NO_SESSION`). With a Bearer header: it is not a CLI token from `toon login`, or it is invalid, revoked or expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4458,7 +4458,7 @@
           "CLI login"
         ],
         "summary": "Approve a CLI login",
-        "description": "Approves the CLI login behind this user code for the signed-in member. The CLI then fetches its tokens itself and from now on acts as this member, with exactly their roles. Only do this if you just started `plak login` yourself.\n\n**Who can call this:** any active member, with an admin session no older than fifteen minutes and a valid CSRF header. Per member, looking up, approving and denying together count towards a limit of 20 per 10 minutes.",
+        "description": "Approves the CLI login behind this user code for the signed-in member. The CLI then fetches its tokens itself and from now on acts as this member, with exactly their roles. Only do this if you just started `toon login` yourself.\n\n**Who can call this:** any active member, with an admin session no older than fifteen minutes and a valid CSRF header. Per member, looking up, approving and denying together count towards a limit of 20 per 10 minutes.",
         "operationId": "approve_device_authorization___api_v1_cli_device_authorizations_approve_post",
         "requestBody": {
           "content": {
@@ -4686,7 +4686,7 @@
           "CLI login"
         ],
         "summary": "My linked CLI sessions",
-        "description": "Every `plak login` that is still active, newest first. Expired sessions are no longer listed.\n\n**Who can call this:** any active member, for their own sessions.",
+        "description": "Every `toon login` that is still active, newest first. Expired sessions are no longer listed.\n\n**Who can call this:** any active member, for their own sessions.",
         "operationId": "my_cli_sessions___api_v1_me_cli_sessions_get",
         "responses": {
           "200": {
@@ -4767,7 +4767,7 @@
           "CLI login"
         ],
         "summary": "Revoke a linked CLI session",
-        "description": "Revokes a CLI session; whoever used it has to run `plak login` again afterwards.\n\n**Who can call this:** any active member, for their own sessions, with a valid CSRF header.",
+        "description": "Revokes a CLI session; whoever used it has to run `toon login` again afterwards.\n\n**Who can call this:** any active member, for their own sessions, with a valid CSRF header.",
         "operationId": "revoke_my_cli_session___api_v1_me_cli_sessions__session_id__delete",
         "parameters": [
           {
@@ -5007,7 +5007,7 @@
           "Group members"
         ],
         "summary": "Add a member to a group",
-        "description": "Adds an existing platform member to this group, looked up by e-mail address or SSO subject. The member must already have signed in to the admin interface once themselves; Plak does not create an account here.\n\nWithout `role` the member becomes `reader`: new members start with read-only access, and you give the role they need deliberately.\n\n**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header.",
+        "description": "Adds an existing platform member to this group, looked up by e-mail address or SSO subject. The member must already have signed in to the admin interface once themselves; Toon does not create an account here.\n\nWithout `role` the member becomes `reader`: new members start with read-only access, and you give the role they need deliberately.\n\n**Who can call this:** group role `admin`, or a platform administrator, with a valid CSRF header.",
         "operationId": "add_group_member___api_v1_groups__group_slug__members_post",
         "parameters": [
           {
@@ -5157,7 +5157,7 @@
           "Group members"
         ],
         "summary": "Find someone to add to the group",
-        "description": "Searches the platform members by name or e-mail address, so you can add someone without knowing their address by heart. The `identifier` of a hit is exactly what `POST /groups/{group_slug}/members` expects.\n\nOnly active members are returned: you do not add someone who has been deactivated. The answer is a shortlist of at most ten names, not a dump of the whole organisation; someone who is already in the group is included, with `alreadyMember` set to `true`.\n\nOnly those who may add members may search, and Plak does not create an account here either: someone only appears once they have signed in to the admin interface themselves.\n\n**Who can call this:** group role `admin`, or a platform administrator.",
+        "description": "Searches the platform members by name or e-mail address, so you can add someone without knowing their address by heart. The `identifier` of a hit is exactly what `POST /groups/{group_slug}/members` expects.\n\nOnly active members are returned: you do not add someone who has been deactivated. The answer is a shortlist of at most ten names, not a dump of the whole organisation; someone who is already in the group is included, with `alreadyMember` set to `true`.\n\nOnly those who may add members may search, and Toon does not create an account here either: someone only appears once they have signed in to the admin interface themselves.\n\n**Who can call this:** group role `admin`, or a platform administrator.",
         "operationId": "search_group_members___api_v1_groups__group_slug__members_search_get",
         "parameters": [
           {
@@ -5918,7 +5918,7 @@
           "Platform administration"
         ],
         "summary": "Deactivate a platform member",
-        "description": "Sets the status of a member to `deactivated`. Every subsequent API request from that member gets 403, even with a session that is still valid. Group memberships remain, so activating brings the member back as they were. All CLI sessions (`plak login`) of the member are revoked, though: after reactivation they have to run `plak login` again.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header.",
+        "description": "Sets the status of a member to `deactivated`. Every subsequent API request from that member gets 403, even with a session that is still valid. Group memberships remain, so activating brings the member back as they were. All CLI sessions (`toon login`) of the member are revoked, though: after reactivation they have to run `toon login` again.\n\n**Who can call this:** only a platform administrator, with a valid CSRF header.",
         "operationId": "deactivate_platform_member___api_v1_platform_members__member_id___deactivate_post",
         "parameters": [
           {
@@ -7229,7 +7229,7 @@
           "Site members"
         ],
         "summary": "Find someone to give a role on this site",
-        "description": "Searches the platform members by name or e-mail address, so you can give someone a role on this site without knowing their address by heart. The `identifier` of a hit is exactly what `POST /sites/{group_slug}/{site_slug}/members` expects.\n\nOnly active members are returned: you do not add someone who has been deactivated. The answer is a shortlist of at most ten names, not a dump of the whole organisation; someone who already has a direct site role here is included, with `alreadyMember` set to `true`.\n\nYou can simply pick group members here: a site role widens what they may already do through the group. What that is appears in `groupRole`, so you can see whether a site role adds anything.\n\nOnly those who may add members may search, and Plak does not create an account here either: someone only appears once they have signed in to the admin interface themselves.\n\n**Who can call this:** effective site role `admin`.",
+        "description": "Searches the platform members by name or e-mail address, so you can give someone a role on this site without knowing their address by heart. The `identifier` of a hit is exactly what `POST /sites/{group_slug}/{site_slug}/members` expects.\n\nOnly active members are returned: you do not add someone who has been deactivated. The answer is a shortlist of at most ten names, not a dump of the whole organisation; someone who already has a direct site role here is included, with `alreadyMember` set to `true`.\n\nYou can simply pick group members here: a site role widens what they may already do through the group. What that is appears in `groupRole`, so you can see whether a site role adds anything.\n\nOnly those who may add members may search, and Toon does not create an account here either: someone only appears once they have signed in to the admin interface themselves.\n\n**Who can call this:** effective site role `admin`.",
         "operationId": "search_site_members___api_v1_sites__group_slug___site_slug__members_search_get",
         "parameters": [
           {
@@ -8958,7 +8958,7 @@
             "title": "Clientname",
             "description": "How the CLI named itself when signing in.",
             "examples": [
-              "plak-cli 1.2 on macOS"
+              "toon-cli 1.2 on macOS"
             ]
           },
           "createdAt": {
@@ -9015,7 +9015,7 @@
           "id"
         ],
         "title": "CliSessionOut",
-        "description": "A linked CLI session: an approved `plak login` of the signed-in member."
+        "description": "A linked CLI session: an approved `toon login` of the signed-in member."
       },
       "DeployResult": {
         "properties": {
@@ -9030,7 +9030,7 @@
             "title": "Url",
             "description": "Where the deploy can be viewed: the live site, or for a preview the preview URL. CI can post a link to it, in a pull request for example.",
             "examples": [
-              "https://plak.example/team-aurora/website/_preview/pr-42/"
+              "https://toon.example/team-aurora/website/_preview/pr-42/"
             ]
           },
           "access": {
@@ -9067,7 +9067,7 @@
             "title": "Verificationuri",
             "description": "Page in the admin interface where the member enters the code.",
             "examples": [
-              "https://beheer.plak.example/cli-link"
+              "https://beheer.toon.example/cli-link"
             ]
           },
           "verificationUriComplete": {
@@ -9075,7 +9075,7 @@
             "title": "Verificationuricomplete",
             "description": "The same page with the code already filled in; for opening in a browser.",
             "examples": [
-              "https://beheer.plak.example/cli-link?code=WDJB-MJHT"
+              "https://beheer.toon.example/cli-link?code=WDJB-MJHT"
             ]
           },
           "expiresIn": {
@@ -9129,7 +9129,7 @@
             "title": "Clientname",
             "description": "How the CLI named itself; `null` if it gave nothing.",
             "examples": [
-              "plak-cli 1.2"
+              "toon-cli 1.2"
             ]
           },
           "ipTruncated": {
@@ -9217,16 +9217,16 @@
             "title": "Clientname",
             "description": "How the CLI names itself; shown on the approval screen and in the list of linked CLI sessions. At most 100 characters; control and formatting characters are stripped.",
             "examples": [
-              "plak-cli 1.2 on macOS"
+              "toon-cli 1.2 on macOS"
             ]
           }
         },
         "type": "object",
         "title": "DeviceAuthorizationRequest",
-        "description": "The start of `plak login`.",
+        "description": "The start of `toon login`.",
         "examples": [
           {
-            "clientName": "plak-cli 1.2 on macOS"
+            "clientName": "toon-cli 1.2 on macOS"
           },
           {}
         ]
@@ -9785,7 +9785,7 @@
           "value": {
             "type": "string",
             "title": "Value",
-            "description": "The full key value `<selector>.<secret>` for use in the link. Plak only stores a hash, so this value cannot be retrieved anywhere afterwards.",
+            "description": "The full key value `<selector>.<secret>` for use in the link. Toon only stores a hash, so this value cannot be retrieved anywhere afterwards.",
             "examples": [
               "a1b2c3d4.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             ]
@@ -9966,7 +9966,7 @@
         "description": "Sign out with the refresh token, for when there is no (valid) access token any more.",
         "examples": [
           {
-            "refreshToken": "plakclr_..."
+            "refreshToken": "toonclr_..."
           }
         ]
       },
@@ -10250,7 +10250,7 @@
             "title": "Contentbaseurl",
             "description": "Origin on which the published content lives. The SPA builds public URLs, preview links and secret links on it. Always a different host than the admin interface: content and admin never share an origin.",
             "examples": [
-              "https://sites.plak.example"
+              "https://sites.toon.example"
             ]
           },
           "groupRoles": {
@@ -10275,7 +10275,7 @@
             },
             "type": "array",
             "title": "Ciforgejohosts",
-            "description": "The Forgejo instances whose CI ID tokens Plak accepts (`TOON_CI_FORGEJO_HOSTS`), as base URL. GitHub is always accepted and is not listed here.",
+            "description": "The Forgejo instances whose CI ID tokens Toon accepts (`TOON_CI_FORGEJO_HOSTS`), as base URL. GitHub is always accepted and is not listed here.",
             "examples": [
               [
                 "https://code.overheid.nl"
@@ -10285,10 +10285,10 @@
           "ciAudience": {
             "type": "string",
             "title": "Ciaudience",
-            "description": "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That is also the value for the `host` input of the plak action.",
+            "description": "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That is also the value for the `host` input of the Toon action.",
             "default": "",
             "examples": [
-              "https://beheer.plak.example"
+              "https://beheer.toon.example"
             ]
           },
           "language": {
@@ -10411,7 +10411,7 @@
           "email"
         ],
         "title": "OperatorOut",
-        "description": "Who runs this installation of Plak, and how to reach them.",
+        "description": "Who runs this installation of Toon, and how to reach them.",
         "examples": [
           {
             "name": "Digi Gilde",
@@ -11058,7 +11058,7 @@
               }
             ],
             "title": "Repositoryid",
-            "description": "Numeric ID of the repository, only needed if Plak cannot look it up because it is private. Together with `ownerId`, or omit both. Can be retrieved with `gh api repos/{owner}/{repo} --jq '.id, .owner.id'`.",
+            "description": "Numeric ID of the repository, only needed if Toon cannot look it up because it is private. Together with `ownerId`, or omit both. Can be retrieved with `gh api repos/{owner}/{repo} --jq '.id, .owner.id'`.",
             "examples": [
               123456
             ]
@@ -11419,11 +11419,11 @@
         "examples": [
           {
             "grantType": "device_code",
-            "deviceCode": "plakdc_..."
+            "deviceCode": "toondc_..."
           },
           {
             "grantType": "refresh_token",
-            "refreshToken": "plakclr_..."
+            "refreshToken": "toonclr_..."
           }
         ]
       },
@@ -11432,12 +11432,12 @@
           "accessToken": {
             "type": "string",
             "title": "Accesstoken",
-            "description": "Access token `plakcli_...` for `Authorization: Bearer`."
+            "description": "Access token `tooncli_...` for `Authorization: Bearer`."
           },
           "refreshToken": {
             "type": "string",
             "title": "Refreshtoken",
-            "description": "Refresh token `plakclr_...`. Single use: presenting a refresh token that has already been used revokes the entire CLI session."
+            "description": "Refresh token `toonclr_...`. Single use: presenting a refresh token that has already been used revokes the entire CLI session."
           },
           "tokenType": {
             "type": "string",
@@ -11489,7 +11489,7 @@
           "userCode"
         ],
         "title": "UserCodeBody",
-        "description": "The code from the terminal of `plak login`.",
+        "description": "The code from the terminal of `toon login`.",
         "examples": [
           {
             "userCode": "WDJB-MJHT"
@@ -11708,7 +11708,7 @@
         "properties": {
           "type": {
             "default": "about:blank",
-            "description": "Error type URI. Plak always uses `about:blank`; `code` carries the machine-readable meaning.",
+            "description": "Error type URI. Toon always uses `about:blank`; `code` carries the machine-readable meaning.",
             "title": "Type",
             "type": "string"
           },
@@ -11788,13 +11788,13 @@
       "adminSession": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "__Host-plak-session",
+        "name": "__Host-toon-session",
         "description": "The admin session you get after SSO sign-in on the admin host. The browser sends the cookie by itself, so 'Try it out' works here once you are signed in; the Authorize button is not needed. Mutations also require the `X-CSRF-Token` header with the value of the CSRF cookie, which this page sends along automatically."
       },
       "bearerToken": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A CI ID token (JWT from GitHub or Forgejo Actions, with the admin URL as audience) or a CLI token `plakcli_...` from `plak login`. Paste the whole token under Authorize. Only the deploy endpoints and the CLI session endpoints accept it, and, with a CLI token only, creating a group, creating a site and linking a repository; anywhere else a Bearer header yields 401, even when the token is valid."
+        "description": "A CI ID token (JWT from GitHub or Forgejo Actions, with the admin URL as audience) or a CLI token `tooncli_...` from `toon login`. Paste the whole token under Authorize. Only the deploy endpoints and the CLI session endpoints accept it, and, with a CLI token only, creating a group, creating a site and linking a repository; anywhere else a Bearer header yields 401, even when the token is valid."
       }
     }
   },
@@ -11849,7 +11849,7 @@
     },
     {
       "name": "CLI login",
-      "description": "Signing in with the CLI (`plak login`) through the device flow: a code in the terminal, approval in the admin interface, and then tokens the CLI refreshes by itself."
+      "description": "Signing in with the CLI (`toon login`) through the device flow: a code in the terminal, approval in the admin interface, and then tokens the CLI refreshes by itself."
     },
     {
       "name": "Platform administration",
@@ -11861,7 +11861,7 @@
     },
     {
       "name": "Installation",
-      "description": "The organisation that runs this installation of Plak, and how to reach it."
+      "description": "The organisation that runs this installation of Toon, and how to reach it."
     }
   ]
 }

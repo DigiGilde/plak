@@ -1,1 +1,0 @@
-- The publish action always reports to GitHub with its own code, where a `toon_cli/github.py` in the checked-out repository used to run instead, with the token.

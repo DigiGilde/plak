@@ -1,7 +1,7 @@
 {
   "name": "toon",
   "displayName": "Toon",
-  "version": "2026.11.1",
+  "version": "2026.11.2.1",
   "description": "Publish a static site to a Toon instance: a preview by default, live only when the user asks for it.",
   "author": {
     "name": "Toon team",

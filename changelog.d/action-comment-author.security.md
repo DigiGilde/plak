@@ -1,1 +1,0 @@
-- The publish action only updates a pull request comment written by a bot or by the account behind its token, so another person's comment no longer carries the deploy link under their name.

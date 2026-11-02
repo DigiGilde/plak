@@ -1,6 +1,6 @@
 [project]
 name = "toon-api"
-version = "2026.11.2"
+version = "2026.11.2.1"
 description = "Toon API - statische sites publiceren en delen met previews per PR"
 requires-python = ">=3.15"
 license = "EUPL-1.2"

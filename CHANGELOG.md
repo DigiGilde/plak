@@ -14,6 +14,39 @@ write a fragment and the rest of the model are in
 
 Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.md).
 
+## [2026.11.2.1]
+
+### Changed
+
+- Plak is now called Toon, at `toon.rijks.app` and `beheer.toon.rijks.app`. The
+  old addresses redirect, so links keep working. A visitor who came in through a
+  secret link opens the full link once more.
+- A site built with absolute URLs on `https://plak.rijks.app` has to be built and
+  published again, because files it loads from the old host are blocked.
+- Everyone signs in again once, and each machine runs `toon login`, because a CLI
+  session from before the rename no longer works. "Linked CLI sessions" lists it
+  until it expires, at most 30 days later.
+- The CLI is the `toon` command instead of `plak`, and `toon --version` prints
+  `toon-cli` and the version. An old CLI stops with an error that names the new host.
+- The action is `DigiGilde/toon/actions/publish`, and a workflow changes its
+  `uses:` line and its `host`.
+- The action and the CLI translate the two old DigiGilde hosts to the new ones
+  and warn on stderr, so a workflow that only changed its `uses:` line keeps
+  publishing.
+- The CLI reads `TOON_HOST`, `TOON_SITE_ID`, `TOON_ACCESS_TOKEN` and
+  `TOON_CONFIG_DIR`, and falls back to the `PLAK_` name of each.
+- The Claude Code plugin and its marketplace are `toon`, installed with
+  `/plugin install toon@toon`.
+- The skill checks that `toon` is this CLI and not the CLI of the TOON data
+  format.
+- Pull request comments and GitHub deployments that an earlier version made are
+  still found and updated.
+
+### Security
+
+- The publish action only updates a pull request comment written by a bot or by the account behind its token, so another person's comment no longer carries the deploy link under their name.
+- The publish action always reports to GitHub with its own code, where a `toon_cli/github.py` in the checked-out repository used to run instead, with the token.
+
 ## [2026.11.2]
 
 ### Changed
@@ -354,7 +387,8 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.11.2...HEAD
+[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.11.2.1...HEAD
+[2026.11.2.1]: https://github.com/DigiGilde/toon/compare/v2026.11.2...v2026.11.2.1
 [2026.11.2]: https://github.com/DigiGilde/toon/compare/v2026.11.1...v2026.11.2
 [2026.11.1]: https://github.com/DigiGilde/toon/compare/v2026.10.31...v2026.11.1
 [2026.10.31]: https://github.com/DigiGilde/toon/compare/v2026.10.7...v2026.10.31
