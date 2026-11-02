@@ -14,6 +14,21 @@ write a fragment and the rest of the model are in
 
 Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.md).
 
+## [2026.11.2]
+
+### Changed
+
+- The preamble of `security.txt` says NCSC-NL is the central reporting point, no longer that it remains so.
+- The server reads its settings from `TOON_<NAME>` variables.
+- The `PLAK_<NAME>` names keep working for now, and at startup the app logs a
+  warning that names every `PLAK_` variable still in use.
+- A second warning names a `PLAK_` audit secret whose value the `TOON_` names
+  neither hold nor list as previous, so a wrong value shows before the old one
+  is removed.
+- New audit chain heads say `toon-audit-chain-checkpoint/3` as their format, and
+  lines in the older `plak-audit-chain-checkpoint/3` format still verify.
+- The image build argument is `TOON_VERSION` instead of `PLAK_VERSION`.
+
 ## [2026.11.1]
 
 ### Added
@@ -339,7 +354,8 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.11.1...HEAD
+[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.11.2...HEAD
+[2026.11.2]: https://github.com/DigiGilde/plak/compare/v2026.11.1...v2026.11.2
 [2026.11.1]: https://github.com/DigiGilde/plak/compare/v2026.10.31...v2026.11.1
 [2026.10.31]: https://github.com/DigiGilde/plak/compare/v2026.10.7...v2026.10.31
 [2026.10.7]: https://github.com/DigiGilde/plak/compare/v2026.10.4...v2026.10.7
