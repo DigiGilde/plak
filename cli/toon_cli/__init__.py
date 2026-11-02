@@ -1,42 +1,47 @@
-"""Plak CLI: publish static sites and clean up previews.
+"""Toon CLI: publish static sites and clean up previews.
 
 Install with `uv tool install`, or run it from a checkout without
-installing with `uv run --project cli plak ...`; see README.md.
+installing with `uv run --project cli toon ...`; see README.md.
 
 Usage:
-    plak login [--host <host>] [--no-open] [--insecure-storage]
-    plak logout [--host <host>]
-    plak whoami [--host <host>]
-    plak publish <dist-dir-or-file> --site <group/site> [--site-id <id>] \
+    toon login [--host <host>] [--no-open] [--insecure-storage]
+    toon logout [--host <host>]
+    toon whoami [--host <host>]
+    toon publish <dist-dir-or-file> --site <group/site> [--site-id <id>] \
         [--host <host>] [--preview <ref>] [--base-path <dir>] \
         [--output-file <path>]
-    plak preview-remove <ref> --site <group/site> [--site-id <id>] \
+    toon preview-remove <ref> --site <group/site> [--site-id <id>] \
         [--host <host>]
-    plak group create <group> --name <name> [--access <base>] \
+    toon group create <group> --name <name> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
-    plak site create <group/site> --title <title> [--access <base>] \
+    toon site create <group/site> --title <title> [--access <base>] \
         [--secret-links | --no-secret-links] [--invitees | --no-invitees] \
         [--host <host>]
-    plak site link <group/site> [<repository>] [--live-branch <branch>] \
+    toon site link <group/site> [<repository>] [--live-branch <branch>] \
         [--repository-id <id> --owner-id <id>] [--no-gh] [--host <host>]
 
-Signing in happens with 'plak login': the session belongs to your user
+Signing in happens with 'toon login': the session belongs to your user
 account, for every directory. The tokens go into the system keyring (macOS
 Keychain, Secret Service on Linux, Windows Credential Manager); without a
 usable keyring, or with --insecure-storage, they go into hosts.json in the
-config directory ($PLAK_CONFIG_DIR, else $XDG_CONFIG_HOME/plak, else
-%APPDATA%\\plak on Windows and ~/.config/plak elsewhere), with mode 0600
+config directory ($TOON_CONFIG_DIR, else $XDG_CONFIG_HOME/toon, else
+%APPDATA%\\toon on Windows and ~/.config/toon elsewhere), with mode 0600
 outside Windows. That file also remembers the host you last logged in
 to. In CI an OIDC token is used automatically (GitHub Actions with
 'id-token: write', Forgejo Actions with 'enable-openid-connect: true'), or
 supply a token yourself through the environment variable
-PLAK_ACCESS_TOKEN. With --site-id (or PLAK_SITE_ID) the OIDC token is
+TOON_ACCESS_TOKEN. With --site-id (or TOON_SITE_ID) the OIDC token is
 valid for that one site only.
 
-Every command finds its host in this order: --host, PLAK_HOST in the
+Every command finds its host in this order: --host, TOON_HOST in the
 environment, the host you last logged in to, then DEFAULT_HOST, the
-DigiGilde instance.
+DigiGilde instance. An old host of that instance is translated to its new
+one, with a warning.
+
+A TOON_ variable that is not present falls back to its old PLAK_ name.
+Present includes empty, so an empty TOON_HOST wins over a PLAK_HOST with a
+value.
 
 Exit codes:
     0 - success
@@ -71,28 +76,36 @@ import keyring
 import keyring.core
 import keyring.errors
 
-VERSION = importlib.metadata.version("plak")
+VERSION = importlib.metadata.version("toon")
 
 # The major of the server API contract (the `API-Version` response header)
 # this CLI understands. A server with a higher major is refused.
 SUPPORTED_API_MAJOR = 1
 API_VERSION_RE = re.compile(r"^(\d+)\.\d+\.\d+$")
 
-DEFAULT_HOST = "https://beheer.plak.rijks.app"
+DEFAULT_HOST = "https://beheer.toon.rijks.app"
 HOST_HELP = (
-    "Admin origin of Plak; defaults to PLAK_HOST, then the host you last "
+    "Admin origin of Toon; defaults to TOON_HOST, then the host you last "
     f"logged in to, then {DEFAULT_HOST}"
 )
 
+# The DigiGilde instance before it was renamed: a workflow that only changed
+# its `uses:` line still names these. Nothing else may translate, and the new
+# host comes from this table only, never from what was given.
+MOVED_HOSTS = {
+    "https://beheer.plak.rijks.app": "https://beheer.toon.rijks.app",
+    "https://plak.rijks.app": "https://toon.rijks.app",
+}
+
 SITE_ID_HELP = (
-    "Fixed id of the site, from its Deploy tab in Plak; defaults to PLAK_SITE_ID. "
+    "Fixed id of the site, from its Deploy tab in Toon; defaults to TOON_SITE_ID. "
     "In CI the ID token is then valid for this site only"
 )
 
 HOSTS_FILENAME = "hosts.json"
 # Its own name, so a test can run the Windows path on any platform.
 WINDOWS = sys.platform == "win32"
-KEYRING_SERVICE_PREFIX = "plak:"
+KEYRING_SERVICE_PREFIX = "toon:"
 KEYRING_USERNAME = "session"
 LEGACY_ENV_FILENAME = ".env.plak"
 
@@ -105,7 +118,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 VERSION_ID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
-# The fixed id of a site, as the Deploy tab shows it. Plak takes only the
+# The fixed id of a site, as the Deploy tab shows it. Toon takes only the
 # lowercase form in an audience, so the CLI lowers what it is given.
 SITE_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
@@ -162,13 +175,24 @@ def _split_site(site: str, label: str = "--site") -> tuple[str, str]:
     return _valid_slug(parts[0], "group"), _valid_slug(parts[1], "site")
 
 
+def _env_name(name: str) -> str:
+    """The variable that counts for `name`, a `TOON_` name: that one when it is
+    present, empty included, else its old `PLAK_` name. The server's rule."""
+    return name if name in os.environ else "PLAK_" + name.removeprefix("TOON_")
+
+
+def _env(name: str) -> str | None:
+    return os.environ.get(_env_name(name))
+
+
 def _site_id(args: argparse.Namespace) -> str | None:
-    """The site id from --site-id, else PLAK_SITE_ID (empty counts as unset),
+    """The site id from --site-id, else TOON_SITE_ID (empty counts as unset),
     lowercase; None without one. Checked before any token is asked for."""
     if args.site_id is not None:
         value, source = args.site_id, "--site-id"
     else:
-        value, source = os.environ.get("PLAK_SITE_ID") or None, "PLAK_SITE_ID"
+        source = _env_name("TOON_SITE_ID")
+        value = os.environ.get(source) or None
     if value is None:
         return None
     if not SITE_ID_RE.fullmatch(value):
@@ -195,7 +219,7 @@ def _valid_base_path(value: str) -> str:
 
 
 # Loopback per RFC 6761 §6.3: `localhost` and everything under `.localhost`
-# always resolve to the loopback, so `beheer.plak.localhost` of the dev stack
+# always resolve to the loopback, so `beheer.toon.localhost` of the dev stack
 # does too. Beyond that the whole 127.0.0.0/8 block and the IPv6 loopback
 # address.
 _LOOPBACK_RE = re.compile(
@@ -218,15 +242,28 @@ def _require_https(host: str) -> None:
 
 
 def _resolve_host(args: argparse.Namespace) -> str:
-    """Host from --host, PLAK_HOST in the environment, the host you last
-    logged in to, or DEFAULT_HOST."""
+    """Host from --host, TOON_HOST in the environment, the host you last
+    logged in to, or DEFAULT_HOST. An old host of the DigiGilde instance
+    becomes its new one here, before anything is built from it: the requests,
+    the CI audience and the key a session is stored under all name the new
+    one, so a session stored under the old host never goes along."""
     host = (
         getattr(args, "host", None)
-        or os.environ.get("PLAK_HOST")
+        or _env("TOON_HOST")
         or _stored_default_host()
         or DEFAULT_HOST
+    ).rstrip("/")
+    # A hostname has no case, but str.lower() also turns the Kelvin sign into a
+    # k, and a host spelled with that only looks like an old one.
+    moved = MOVED_HOSTS.get(host.lower()) if host.isascii() else None
+    if moved is None:
+        return host
+    print(
+        f"Warning: {host} has moved to {moved}. Using the new host. Update --host, "
+        "host: in the workflow or TOON_HOST, or log in again if it came from your last login.",
+        file=sys.stderr,
     )
-    return host.rstrip("/")
+    return moved
 
 
 def _same_origin(url: str, host: str) -> bool:
@@ -247,16 +284,16 @@ def _same_origin(url: str, host: str) -> bool:
 
 
 def _config_dir() -> Path:
-    explicit = os.environ.get("PLAK_CONFIG_DIR")
+    explicit = _env("TOON_CONFIG_DIR")
     if explicit:
         return Path(explicit)
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
-        return Path(xdg) / "plak"
+        return Path(xdg) / "toon"
     if WINDOWS:
         appdata = os.environ.get("APPDATA")
-        return (Path(appdata) if appdata else Path.home() / "AppData" / "Roaming") / "plak"
-    return Path.home() / ".config" / "plak"
+        return (Path(appdata) if appdata else Path.home() / "AppData" / "Roaming") / "toon"
+    return Path.home() / ".config" / "toon"
 
 
 def _hosts_path() -> Path:
@@ -272,7 +309,7 @@ def _read_hosts() -> dict:
     On Windows there are no mode bits or uid to check: the file is trusted on
     its location. %APPDATA% sits in the user profile, whose default ACL lets
     in only the user, SYSTEM and the Administrators; a directory named in
-    PLAK_CONFIG_DIR or XDG_CONFIG_HOME is protected as well as its own ACL
+    TOON_CONFIG_DIR or XDG_CONFIG_HOME is protected as well as its own ACL
     protects it."""
     path = _hosts_path()
     if WINDOWS:
@@ -474,7 +511,7 @@ def _forget_session(host: str) -> None:
     hosts = _host_entries(config)
     if host not in hosts:
         return
-    # The default host stays, so a later 'plak login' needs no --host.
+    # The default host stays, so a later 'toon login' needs no --host.
     del hosts[host]
     config["hosts"] = hosts
     _write_hosts(config)
@@ -488,9 +525,9 @@ def _stored_default_host() -> str | None:
 def _note_legacy_env_file() -> None:
     if (Path.cwd() / LEGACY_ENV_FILENAME).exists():
         print(
-            f"Note: plak no longer reads {LEGACY_ENV_FILENAME} in this directory; "
+            f"Note: toon no longer reads {LEGACY_ENV_FILENAME} in this directory; "
             "the session now belongs to your user account. Log in again with "
-            f"'plak login' and delete {LEGACY_ENV_FILENAME}.",
+            f"'toon login' and delete {LEGACY_ENV_FILENAME}.",
             file=sys.stderr,
         )
 
@@ -499,10 +536,10 @@ def _check_api_version(response: httpx.Response) -> None:
     match = API_VERSION_RE.match(response.headers.get("API-Version", ""))
     if match and int(match.group(1)) > SUPPORTED_API_MAJOR:
         raise IncompatibleServer(
-            f"this server speaks API {match.group(1)}.x, this plak CLI "
+            f"this server speaks API {match.group(1)}.x, this Toon CLI "
             f"({VERSION}) supports API {SUPPORTED_API_MAJOR}.x. Install a "
             "newer CLI: uv tool install --force "
-            '"git+https://github.com/DigiGilde/plak@<tag>#subdirectory=cli"'
+            '"git+https://github.com/DigiGilde/toon@<tag>#subdirectory=cli"'
         )
 
 
@@ -538,7 +575,7 @@ def _http(
     if _client is None:
         _client = httpx.Client()
     client = _client
-    headers = {**kwargs.pop("headers", {}), "User-Agent": f"plak-cli/{VERSION}"}
+    headers = {**kwargs.pop("headers", {}), "User-Agent": f"toon-cli/{VERSION}"}
 
     def send(extra: dict[str, str] | None = None) -> httpx.Response:
         return client.request(method, url, headers={**headers, **(extra or {})}, **kwargs)
@@ -596,7 +633,7 @@ def _refresh_token(host: str, refresh_token: str, entry: dict) -> str:
     except httpx.HTTPError as error:
         raise UsageError(f"Could not refresh the session: {error}") from error
     if response.status_code != 200:
-        raise UsageError("Session expired or revoked: log in again with 'plak login'")
+        raise UsageError("Session expired or revoked: log in again with 'toon login'")
     payload = _problem_data(response)
     access_token = payload.get("accessToken")
     if not isinstance(access_token, str) or not access_token:
@@ -639,7 +676,7 @@ def _stored_token(host: str) -> str | None:
         and expires_at - 60 <= time.time()
     ):
         if not refresh:
-            raise UsageError("Session expired: log in again with 'plak login'")
+            raise UsageError("Session expired: log in again with 'toon login'")
         token = _refresh_token(host, refresh, entry)
     return token
 
@@ -706,17 +743,17 @@ def _mask_in_ci_log(secret: str) -> None:
 def _warn_site_id_unused(site_id: str | None) -> None:
     if site_id is not None:
         print(
-            "Warning: --site-id (or PLAK_SITE_ID) only binds the CI ID token the CLI asks for; "
-            "ignored with a session or PLAK_ACCESS_TOKEN.",
+            "Warning: --site-id (or TOON_SITE_ID) only binds the CI ID token the CLI asks for; "
+            "ignored with a session or TOON_ACCESS_TOKEN.",
             file=sys.stderr,
         )
 
 
 def _get_bearer_token(host: str, site_id: str | None = None) -> str:
     """The token for the deploy endpoints and /cli/whoami, in order: an
-    explicit PLAK_ACCESS_TOKEN, a CI OIDC token, then the stored session.
+    explicit TOON_ACCESS_TOKEN, a CI OIDC token, then the stored session.
     Only the OIDC token carries the site id."""
-    env_token = os.environ.get("PLAK_ACCESS_TOKEN")
+    env_token = _env("TOON_ACCESS_TOKEN")
     if env_token:
         _warn_site_id_unused(site_id)
         return env_token
@@ -729,21 +766,21 @@ def _get_bearer_token(host: str, site_id: str | None = None) -> str:
         return stored
     _note_legacy_env_file()
     raise UsageError(
-        "No token: log in with 'plak login --host <host>', or set "
-        "PLAK_ACCESS_TOKEN (for instance an OIDC token in CI, see README)"
+        "No token: log in with 'toon login --host <host>', or set "
+        "TOON_ACCESS_TOKEN (for instance an OIDC token in CI, see README)"
     )
 
 
 def _get_member_token(host: str) -> str:
-    """The token for creating a group or a site: an explicit PLAK_ACCESS_TOKEN,
+    """The token for creating a group or a site: an explicit TOON_ACCESS_TOKEN,
     then the stored session. No CI OIDC token: the server takes only a
     member's CLI token there."""
-    token = os.environ.get("PLAK_ACCESS_TOKEN") or _stored_token(host)
+    token = _env("TOON_ACCESS_TOKEN") or _stored_token(host)
     if token:
         return token
     _note_legacy_env_file()
     raise UsageError(
-        "No session: log in with 'plak login --host <host>', or set PLAK_ACCESS_TOKEN"
+        "No session: log in with 'toon login --host <host>', or set TOON_ACCESS_TOKEN"
     )
 
 
@@ -1102,7 +1139,7 @@ def cmd_site_create(args: argparse.Namespace) -> int:
     title = _clean(data["title"]) if isinstance(data.get("title"), str) else site
     print(f"Created site '{group}/{site}' ({title}). You are its admin.")
     _print_access(site_access, "Access", f"{host}/{group}/{site}/access")
-    print(f"Publish to it with: plak publish <dist> --host {host} --site {group}/{site}")
+    print(f"Publish to it with: toon publish <dist> --host {host} --site {group}/{site}")
     return 0
 
 
@@ -1239,13 +1276,13 @@ def cmd_site_link(args: argparse.Namespace) -> int:
         body["provider"] = "forgejo"
         body["host"] = f"https://{hostname}"
     ids_from = None
-    # Why no IDs went along: printed when Plak's own anonymous lookup fails.
+    # Why no IDs went along: printed when Toon's own anonymous lookup fails.
     no_ids = None
     if args.repository_id is not None:
         body["repositoryId"], body["ownerId"] = args.repository_id, args.owner_id
         ids_from = "as given"
     elif hostname != GITHUB_HOSTNAME:
-        no_ids = f"To link it without Plak's lookup, {IDS_BY_HAND}."
+        no_ids = f"To link it without Toon's lookup, {IDS_BY_HAND}."
     elif not args.gh:
         no_ids = f"gh was not asked (--no-gh): run this again without --no-gh, or {IDS_BY_HAND}."
     else:
@@ -1289,7 +1326,7 @@ def cmd_site_link(args: argparse.Namespace) -> int:
               "Previews: from any branch.")
     if ids_from is not None:
         print(f"IDs {ids_from}: repository {body['repositoryId']}, owner {body['ownerId']}.")
-    # From the server, so only what is a site id reaches the terminal; a Plak
+    # From the server, so only what is a site id reaches the terminal; a server
     # from before the site id sends none.
     site_id = data.get("siteId")
     if isinstance(site_id, str) and SITE_ID_RE.fullmatch(site_id):
@@ -1334,9 +1371,9 @@ def _add_access_flags(parser: argparse.ArgumentParser, defaults: tuple[str, str,
 
 
 AUTH_ERROR_MESSAGES = {
-    "EXPIRED_TOKEN": "The login attempt expired. Try again with 'plak login'.",
+    "EXPIRED_TOKEN": "The login attempt expired. Try again with 'toon login'.",
     "ACCESS_DENIED": "Login refused in the browser.",
-    "INVALID_GRANT": "Invalid or revoked login attempt. Try again with 'plak login'.",
+    "INVALID_GRANT": "Invalid or revoked login attempt. Try again with 'toon login'.",
 }
 
 
@@ -1344,7 +1381,7 @@ def cmd_login(args: argparse.Namespace) -> int:
     host = _setup(args)
 
     print(f"Logging in at {host}", file=sys.stderr)
-    client_name = f"plak-cli {VERSION} on {platform.system()}"
+    client_name = f"toon-cli {VERSION} on {platform.system()}"
     response = _request(
         host,
         "POST",
@@ -1474,7 +1511,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         # Logging out still has to drop what is stored locally.
         print(f"Warning: {error}", file=sys.stderr)
         stored_access, refresh_token = None, None
-    access_token = os.environ.get("PLAK_ACCESS_TOKEN") or stored_access
+    access_token = _env("TOON_ACCESS_TOKEN") or stored_access
     revoked = True
     incompatible = None
     if access_token or refresh_token:
@@ -1537,10 +1574,10 @@ def cmd_whoami(args: argparse.Namespace) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="plak",
-        description="Publish static sites to Plak and manage previews.",
+        prog="toon",
+        description="Publish static sites to Toon and manage previews.",
     )
-    parser.add_argument("--version", action="version", version=f"plak {VERSION}")
+    parser.add_argument("--version", action="version", version=f"toon-cli {VERSION}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login = subparsers.add_parser(
@@ -1587,7 +1624,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Folder inside the archive that becomes the root of the site, for "
             "instance dist. Use this when the bundle holds more than the site "
-            "itself; without this flag Plak determines the root"
+            "itself; without this flag Toon determines the root"
         ),
     )
     publish.add_argument(
@@ -1673,7 +1710,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--repository-id",
         type=int,
         default=None,
-        help="Numeric ID of the repository, for one Plak and gh cannot look up (with --owner-id)",
+        help="Numeric ID of the repository, for one Toon and gh cannot look up (with --owner-id)",
     )
     site_link.add_argument(
         "--owner-id", type=int, default=None, help="Numeric ID of the repository's owner (with --repository-id)"
@@ -1682,7 +1719,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-gh",
         dest="gh",
         action="store_false",
-        help="Do not ask gh for the IDs; Plak looks the repository up itself, which finds a public one only",
+        help="Do not ask gh for the IDs; Toon looks the repository up itself, which finds a public one only",
     )
     site_link.add_argument("--host", default=None, help=HOST_HELP)
     site_link.set_defaults(func=cmd_site_link)

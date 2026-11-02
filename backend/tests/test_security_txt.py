@@ -34,10 +34,10 @@ from toon.platform.security_txt import (
 )
 from toon.serving.response import NEUTRAL_404_BODY
 
-ADMIN = "https://beheer.plak.example"
-CONTENT = "https://plak.example"
-ADVISORY = "https://github.com/DigiGilde/plak/security/advisories/new"
-SECURITY_MD = "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
+ADMIN = "https://beheer.toon.example"
+CONTENT = "https://toon.example"
+ADVISORY = "https://github.com/DigiGilde/toon/security/advisories/new"
+SECURITY_MD = "https://github.com/DigiGilde/toon/blob/beta/SECURITY.md"
 NCSC_POLICY = [
     "https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
     "https://www.ncsc.nl/en/cvd-report-form",
@@ -55,7 +55,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "db_url": "postgresql+asyncpg://unused:unused@localhost:5432/unused",
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": make_client_jwk(),
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
         "audit_pepper": "audit-pepper-van-minstens-32-bytes!!",
@@ -152,7 +152,7 @@ class TestContent:
         # advisory is the route a reporter should see first.
         assert _fields(body, "Contact")[0] == ADVISORY
         assert _fields(body, "Policy")[0] == (
-            "https://github.com/DigiGilde/plak/blob/beta/SECURITY.md"
+            "https://github.com/DigiGilde/toon/blob/beta/SECURITY.md"
         )
 
     def test_the_operator_address_follows_the_advisory_form(self, tmp_path: Path) -> None:
@@ -187,7 +187,7 @@ class TestContent:
     def test_no_encryption_key_is_offered(self, tmp_path: Path) -> None:
         """An Encryption field names the key researchers should use (RFC 9116
         section 2.5.4), tied to no Contact in particular, so NCSC's key would
-        read as the key for the Plak team's address. The NCSC routes stay as
+        read as the key for the Toon team's address. The NCSC routes stay as
         contacts; they publish their own key."""
         body = security_txt(_settings(tmp_path, security_txt_ncsc=True), datetime.now(UTC))
 
@@ -197,7 +197,7 @@ class TestContent:
 
     def test_the_canonical_lines_cover_both_retrieval_urls(self, tmp_path: Path) -> None:
         """A file whose retrieval URI appears in none of its Canonical fields
-        should not be trusted (RFC 9116 section 2.5.2), and Plak answers on two
+        should not be trusted (RFC 9116 section 2.5.2), and Toon answers on two
         hosts."""
         body = security_txt(_settings(tmp_path), datetime.now(UTC))
 
@@ -212,7 +212,7 @@ class TestContent:
         """A Canonical web URI must be https, so the dev and e2e stacks drop
         the field. It is optional; Contact and Expires are not."""
         settings = _settings(
-            tmp_path, base_url="http://beheer.plak.localhost:8080", content_base_url="http://plak.localhost:8080"
+            tmp_path, base_url="http://beheer.toon.localhost:8080", content_base_url="http://toon.localhost:8080"
         )
         body = security_txt(settings, datetime.now(UTC))
 

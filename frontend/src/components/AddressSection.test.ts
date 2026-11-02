@@ -35,7 +35,7 @@ afterEach(() => {
 const OLD: PreviousSlug = { slug: 'oude-naam', redirectsUntil: '2026-11-06T23:00:00Z' };
 const OLDER: PreviousSlug = { slug: 'oudere-naam', redirectsUntil: '2026-10-20T22:00:00Z' };
 
-const NEW_SITE = 'https://sites.plak.test/team-aurora/website/';
+const NEW_SITE = 'https://sites.toon.test/team-aurora/website/';
 
 interface Props {
   kind: 'group' | 'site';
@@ -266,7 +266,7 @@ describe('AddressSection (site): what everyone sees', () => {
     expect(button.element.tagName.toLowerCase()).toBe('nldd-button');
     expect(button.attributes('text')).toBe('Zet terug');
     expect(button.attributes('accessible-label')).toBe(
-      'Zet terug naar https://sites.plak.test/team-aurora/oude-naam/',
+      'Zet terug naar https://sites.toon.test/team-aurora/oude-naam/',
     );
     expect(button.attributes('appearance')).toBe('secondary');
     expect(button.attributes('size')).toBe('sm');
@@ -729,11 +729,11 @@ describe('AddressSection (site): the form', () => {
 
     type(wrapper, 'Hand');
     await untilIdle();
-    expect(help().text()).toBe('Het nieuwe adres wordt https://sites.plak.test/team-aurora/hand/');
+    expect(help().text()).toBe('Het nieuwe adres wordt https://sites.toon.test/team-aurora/hand/');
 
     type(wrapper, 'handboek ');
     await untilIdle();
-    expect(help().text()).toBe('Het nieuwe adres wordt https://sites.plak.test/team-aurora/handboek-/');
+    expect(help().text()).toBe('Het nieuwe adres wordt https://sites.toon.test/team-aurora/handboek-/');
     expect(help().find('code').attributes('translate')).toBe('no');
     expect(help().element.parentElement?.tagName.toLowerCase()).toBe('nldd-form-field');
 
@@ -854,14 +854,14 @@ describe('AddressSection (site): what a change comes to', () => {
 
     const items = consequences(wrapper).findAll('ul')[0]!.findAll('li');
     expect(items.map((item) => item.text())).toEqual([
-      `Automatisch publiceren stopt meteen. Pas site: in je workflow en --site bij plak publish aan naar team-aurora/handboek, en zet er site-id: ${backend.data.sites[0]!.id} bij als dat er nog niet staat.`,
+      `Automatisch publiceren stopt meteen. Pas site: in je workflow en --site bij toon publish aan naar team-aurora/handboek, en zet er site-id: ${backend.data.sites[0]!.id} bij als dat er nog niet staat.`,
       'Staat het oude adres in je site, bijvoorbeeld in canonical, og:url, een sitemap of een vast pad? Publiceer de site dan vóór 7 november 2026 opnieuw met het nieuwe adres. Tot en met 7 november 2026 laden stijlen en scripts nog via het oude adres. Daarna niet meer.',
       'Heb je een geheime link gedeeld? Na 7 november 2026 vervang je het adres in de link door het nieuwe adres. Alles na ?key= blijft hetzelfde.',
     ]);
     expect(items[0]!.findAll('code').map((code) => code.text())).toEqual([
       'site:',
       '--site',
-      'plak publish',
+      'toon publish',
       'team-aurora/handboek',
       `site-id: ${backend.data.sites[0]!.id}`,
     ]);
@@ -1064,7 +1064,7 @@ describe('AddressSection (site): changing the address', () => {
 
       await closeSheet(wrapper);
       expect(statusLine(wrapper).text()).toBe(
-        'Het adres is gewijzigd. team-aurora/website stuurt tot en met 7 november 2026 door naar team-aurora/handboek. Gebruik je automatisch publiceren of plak publish? Pas het adres daar nu aan.',
+        'Het adres is gewijzigd. team-aurora/website stuurt tot en met 7 november 2026 door naar team-aurora/handboek. Gebruik je automatisch publiceren of toon publish? Pas het adres daar nu aan.',
       );
     });
 
@@ -1078,7 +1078,7 @@ describe('AddressSection (site): changing the address', () => {
       expect(codes.map((code) => code.text())).toEqual([
         'team-aurora/website',
         'team-aurora/handboek',
-        'plak publish',
+        'toon publish',
       ]);
       expect(codes.every((code) => code.attributes('translate') === 'no')).toBe(true);
     });
@@ -1134,7 +1134,7 @@ describe('AddressSection (site): changing the address', () => {
       await closeOverlays(wrapper);
 
       expect(statusLine(wrapper).text()).toBe(
-        'The address has been changed. team-aurora/website redirects to team-aurora/handboek up to and including 7 November 2026. Do you publish automatically or with plak publish? Change the address there now.',
+        'The address has been changed. team-aurora/website redirects to team-aurora/handboek up to and including 7 November 2026. Do you publish automatically or with toon publish? Change the address there now.',
       );
     });
 
@@ -1160,7 +1160,7 @@ describe('AddressSection (site): changing the address', () => {
       await wrapper.setProps({ site: updated.slug, previousSlugs: updated.previousSlugs });
 
       expect(wrapper.find('[data-testid="site-address-current"]').text()).toContain(
-        'https://sites.plak.test/team-aurora/handboek/',
+        'https://sites.toon.test/team-aurora/handboek/',
       );
       const cell = wrapper.find('[data-testid="site-address-previous"] nldd-text-cell');
       expect(cell.find('code').text()).toBe('team-aurora/website');
@@ -1778,12 +1778,12 @@ describe('AddressSection (group)', () => {
       await untilIdle();
       const items = () => consequences(wrapper).findAll('ul')[0]!.findAll('li');
       expect(items()[0]!.text()).toBe(
-        'Automatisch publiceren stopt meteen, voor elke site in de groep. Pas site: in je workflow en --site bij plak publish aan naar aurora/<site>, en zet bij elke site haar site-ID erbij als dat er nog niet staat.',
+        'Automatisch publiceren stopt meteen, voor elke site in de groep. Pas site: in je workflow en --site bij toon publish aan naar aurora/<site>, en zet bij elke site haar site-ID erbij als dat er nog niet staat.',
       );
       expect(items()[0]!.findAll('code').map((code) => code.text())).toEqual([
         'site:',
         '--site',
-        'plak publish',
+        'toon publish',
         'aurora/<site>',
       ]);
     });
@@ -1796,11 +1796,11 @@ describe('AddressSection (group)', () => {
 
       const items = consequences(wrapper).findAll('ul')[1]!.findAll('li');
       expect(items[0]!.text()).toBe(
-        'Alle 2 sites in deze groep krijgen een nieuw adres. Bijvoorbeeld: https://sites.plak.test/team-aurora/website/ wordt https://sites.plak.test/aurora/website/.',
+        'Alle 2 sites in deze groep krijgen een nieuw adres. Bijvoorbeeld: https://sites.toon.test/team-aurora/website/ wordt https://sites.toon.test/aurora/website/.',
       );
       expect(items[0]!.findAll('code').map((code) => code.text())).toEqual([
-        'https://sites.plak.test/team-aurora/website/',
-        'https://sites.plak.test/aurora/website/',
+        'https://sites.toon.test/team-aurora/website/',
+        'https://sites.toon.test/aurora/website/',
       ]);
     });
 
@@ -1885,12 +1885,12 @@ describe('AddressSection (group)', () => {
       });
       await closeOverlays(wrapper);
       expect(statusLine(wrapper, 'group').text()).toBe(
-        'Het adres is gewijzigd. team-aurora stuurt tot en met 7 november 2026 door naar aurora. Gebruik je automatisch publiceren of plak publish? Pas het adres daar nu aan.',
+        'Het adres is gewijzigd. team-aurora stuurt tot en met 7 november 2026 door naar aurora. Gebruik je automatisch publiceren of toon publish? Pas het adres daar nu aan.',
       );
       expect(statusLine(wrapper, 'group').findAll('code').map((code) => code.text())).toEqual([
         'team-aurora',
         'aurora',
-        'plak publish',
+        'toon publish',
       ]);
     });
 

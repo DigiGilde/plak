@@ -55,10 +55,10 @@ KEY_VALUE_RE = re.compile(r"^[A-Za-z0-9]{8}\.[A-Za-z0-9]{32}$")
 
 def _settings(content_root) -> Settings:
     return Settings(
-        db_url="postgresql+asyncpg://plak:plak@localhost:5432/plak",
+        db_url="postgresql+asyncpg://toon:toon@localhost:5432/toon",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
@@ -89,7 +89,7 @@ def content_root(tmp_path):
 def _mock_ci() -> MockCi:
     ci = MockCi()
     ci.add_github("MinBZK", "Website", 1001, 2002)
-    ci.add_forgejo("minbzk", "plak", 3003, 4004)
+    ci.add_forgejo("minbzk", "toon", 3003, 4004)
     return ci
 
 
@@ -157,7 +157,7 @@ async def data(factory) -> SimpleNamespace:
 def login(client, app, *, sub: str, email: str | None = None) -> dict[str, str]:
     """Sets the session and CSRF cookie and returns the matching mutation headers."""
     session = set_session_cookie(client, app, sub=sub, email=email or f"{sub}@example.nl")
-    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="plak.example", path="/")
+    client.cookies.set(CSRF_COOKIE, session.csrf_token, domain="toon.example", path="/")
     return {CSRF_HEADER: session.csrf_token}
 
 
@@ -259,10 +259,10 @@ class TestAuthorization:
         assert response.json()["contentBaseUrl"] == CONTENT_BASE_URL
 
         app.state.settings = app.state.settings.model_copy(
-            update={"content_base_url": "https://sites.plak.example/"}
+            update={"content_base_url": "https://sites.toon.example/"}
         )
         response = await client.get(f"{BASE}/me")
-        assert response.json()["contentBaseUrl"] == "https://sites.plak.example"
+        assert response.json()["contentBaseUrl"] == "https://sites.toon.example"
 
     async def test_not_group_member_may_no_site_create(self, client, app, data):
         headers = login(client, app, sub="lid-b", email="b@example.nl")
@@ -2759,7 +2759,7 @@ class TestSiteRepository:
             ({"repo": "nieuwe-naam", "repositoryId": 1001, "ownerId": 2002}, False),
             ({"owner": "nieuwe-eigenaar", "repositoryId": 1001, "ownerId": 9999}, False),
             ({"repo": "Prive", "repositoryId": 5005, "ownerId": 6006}, True),
-            ({"provider": "forgejo", "host": FORGEJO_HOST, "owner": "minbzk", "repo": "plak"}, True),
+            ({"provider": "forgejo", "host": FORGEJO_HOST, "owner": "minbzk", "repo": "toon"}, True),
         ],
     )
     async def test_linking_another_repository_ends_what_an_older_link_accepted(
@@ -2797,7 +2797,7 @@ class TestSiteRepository:
         await client.put(REPOSITORY, json=_github(), headers=headers)
         response = await client.put(
             REPOSITORY,
-            json={"provider": "forgejo", "host": "https://Code.Overheid.nl/", "owner": "minbzk", "repo": "plak",
+            json={"provider": "forgejo", "host": "https://Code.Overheid.nl/", "owner": "minbzk", "repo": "toon",
                   "liveBranch": ""},
             headers=headers,
         )

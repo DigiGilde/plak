@@ -28,7 +28,7 @@ const shared = {
   'error.renamed.hint': 'Was the site or group renamed? Then look for it in your overview.',
   'error.renamed.link': 'Go to the overview',
 
-  'beta.bar': 'Beta - Plak is under development and may contain errors',
+  'beta.bar': 'Beta - Toon is under development and may contain errors',
 
   'role.reader': 'Reader',
   'role.editor': 'Editor',
@@ -78,7 +78,7 @@ const shared = {
   'access.nobodyWarning.detail': 'Turn on secret links or invitees below to let somebody in.',
 
   'shell.skip': 'Skip to main content',
-  'shell.brand.label': 'Plak, to the overview',
+  'shell.brand.label': 'Toon, to the overview',
   'shell.menu': 'Menu',
   'page.cliPair.title': 'Link a CLI session',
   'page.done.title': 'The site is online',
@@ -91,7 +91,7 @@ const shared = {
   'nav.logout': 'Sign out',
   'footer.whatsNew': "What's new",
   'footer.version': 'Version {version}',
-  'footer.about': 'About Plak',
+  'footer.about': 'About Toon',
   'footer.accessibility': 'Accessibility',
   'footer.privacy': 'Privacy',
   'footer.api': 'API documentation',
@@ -108,7 +108,7 @@ const shared = {
   'profile.account.role.member': 'Member',
   'profile.account.unknown': 'Unknown',
   'profile.account.hint':
-    'These details come from SSO Rijk. Plak cannot change them. If something is wrong, report it to your own organisation.',
+    'These details come from SSO Rijk. Toon cannot change them. If something is wrong, report it to your own organisation.',
   'profile.language.heading': 'Language of the admin',
   'profile.language.subtitle':
     'The choice lives on your account, so it holds on every device you sign in from.',
@@ -124,8 +124,8 @@ const shared = {
   'profile.language.failed.detail': 'Saving did not work.',
   'profile.sessions.heading': 'Linked CLI sessions',
   'profile.sessions.body':
-    'Every sign-in through plak login that still has access to your account, with a way to revoke it.',
-  'profile.sessions.install.before': 'No Plak CLI yet? ',
+    'Every sign-in through "toon login" that still has access to your account, with a way to revoke it.',
+  'profile.sessions.install.before': 'No Toon CLI yet? ',
   'profile.sessions.install.link': 'Here is how to install and use it.',
   'profile.sessions.link': 'View linked CLI sessions',
 

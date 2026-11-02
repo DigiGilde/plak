@@ -7,7 +7,7 @@ from toon import i18n
 
 class TestNegotiate:
     def test_a_visitor_who_asks_for_nothing_gets_the_language_of_the_service(self) -> None:
-        """No header is no signal, and Plak is a Dutch service. A lone `*` is
+        """No header is no signal, and Toon is a Dutch service. A lone `*` is
         not a request for a language either."""
         assert i18n.negotiate(None) == "nl"
         assert i18n.negotiate("") == "nl"

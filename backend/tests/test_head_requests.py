@@ -13,8 +13,8 @@ from toon.constants import HEAD_SCOPE_KEY, AccessBase, AccessPolicy
 from toon.head_requests import ContentHeadMiddleware
 from toon.serving.response import make_content_response
 
-CONTENT_HOST = "plak.example"
-ADMIN_HOST = "beheer.plak.example"
+CONTENT_HOST = "toon.example"
+ADMIN_HOST = "beheer.toon.example"
 
 
 def _scope(method: str, host: str, path: str = "/aurora/site/", **extra) -> Scope:
@@ -107,7 +107,7 @@ async def test_a_file_answers_a_head_without_reading_the_file(tmp_path: Path) ->
 
 
 async def test_the_host_is_compared_without_case() -> None:
-    seen, _ = await _run(_scope("HEAD", "PLAK.example"))
+    seen, _ = await _run(_scope("HEAD", "TOON.example"))
     assert seen[0]["method"] == "GET"
 
 

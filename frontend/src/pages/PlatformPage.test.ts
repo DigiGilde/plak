@@ -32,7 +32,7 @@ afterEach(() => {
 describe.each([
   { name: 'Privacy', component: Privacy, title: 'Privacy' },
   { name: 'Toegankelijkheid', component: Accessibility, title: 'Toegankelijkheid' },
-  { name: 'Over', component: About, title: 'Over Plak' },
+  { name: 'Over', component: About, title: 'Over Toon' },
 ])('$naam', ({ component, title }) => {
   it('shows the title and content', () => {
     wrapper = mount(component, { attachTo: document.body, global: { plugins: [router] } });

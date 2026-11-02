@@ -8,7 +8,7 @@ its issuer is that repository's provider and host, and:
   owner id. Ids survive a rename; names do not. A transfer to another owner
   changes the owner id, so the token is refused until the site is relinked.
 - the token carries no ids (Forgejo 15, e.g. code.overheid.nl): `repository`
-  must equal the stored `owner/repo` (case-insensitive), and Plak asks the
+  must equal the stored `owner/repo` (case-insensitive), and Toon asks the
   Forgejo REST API whether `owner/repo` still has the stored ids, so a
   repository deleted and recreated under the same name does not inherit the
   trust. GitHub always sends ids; a GitHub token without them is refused.

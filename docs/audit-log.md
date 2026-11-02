@@ -25,7 +25,7 @@ in step.
 | `ip_encrypted` | the full IP address, AES-256-GCM-encrypted under `TOON_AUDIT_IP_KEY` (a different key from `TOON_AUDIT_PEPPER`) or, for a row from before a rotation, under the key that was current then (see "Rotating the pepper and the IP key"); `null` if there was no IP. Lives as long as the row itself, and never travels in `GET /platform/audit`; only `POST /platform/audit/entries/{id}/ip` decrypts it |
 | `occurred_at` | time, set by the database |
 
-Alongside `audit_log_entries`, Plak keeps `content_viewers`: sso_subject,
+Alongside `audit_log_entries`, Toon keeps `content_viewers`: sso_subject,
 email address (can be `null`, if the identity provider sends no claim),
 whether that email address was a verified claim, and the time of the last
 login on the content host, of everyone who viewed protected content there
@@ -130,10 +130,10 @@ what the link stores: `false` when the admin entered the ids and the provider
 could not confirm them (a private repository, or the provider was
 unavailable), unless the link already had the same repository and ids
 confirmed, for instance when only the live branch changes. A later CI
-token that carries both ids, or a Forgejo token without ids that Plak's API
+token that carries both ids, or a Forgejo token without ids that Toon's API
 recheck confirms, confirms them without a row of its own; its `deploy` or
 `preview_teardown` row is the record. Linked with the
-CLI token (`plak site link`), the row carries `refs.via` and
+CLI token (`toon site link`), the row carries `refs.via` and
 `refs.cli_session` as a creation does.
 
 `site_repository_site_id_required` is written when a site admin ends, on the
@@ -206,7 +206,7 @@ starts with, in the same three fields as below: `refs.base`, `refs.keys` and
 `refs.invitees`, alongside group (and site). That is the effective access,
 whether it was chosen or taken from the default (for a group: `site_team`
 without extras; for a site: the group's default access). Created with the
-CLI token from `plak login` (`plak group create`, `plak site create`), the
+CLI token from `toon login` (`toon group create`, `toon site create`), the
 row also carries `refs.via` with the value `cli` and `refs.cli_session` with
 the id of the CLI session, as on a deploy. A refusal on those two routes
 through the CLI token arrives as `admin_access` like any other, with the
@@ -233,7 +233,7 @@ one transaction, so either the row for the group and the rows for the sites
 all describe a change that happened, or none of them is written.
 
 `member_deactivate` carries, besides `refs.member_id`, also
-`refs.cli_sessions_revoked`: the number of CLI sessions (`plak login`) of
+`refs.cli_sessions_revoked`: the number of CLI sessions (`toon login`) of
 that member revoked on deactivation. Reactivating does not bring them back.
 
 `admin_access` records authorization refusals only: every 403, and a 401 or
@@ -250,7 +250,7 @@ ordinary miss. 409, 413 and 422 are collisions, not refusals.
 | `preview_teardown` | `allowed`, `refused` |
 | `site_repository_rename` | `allowed` |
 
-The actor is `ci` for a CI ID token, `member` for a CLI token from `plak
+The actor is `ci` for a CI ID token, `member` for a CLI token from `toon
 login` or for an ordinary admin session. For a CI actor `refs` carries the
 claims from the token (`ci/trust.py`, `AUDIT_CLAIMS`, each truncated at 200
 characters): `provider`, and where present `repository`, `ref`, `sha`,
@@ -276,7 +276,7 @@ pseudonym as an ordinary login.
 repository differently from the name stored on the site's link: after a
 rename at the provider, or when an admin typed another name for a private
 repository. A transfer to another owner changes the owner id, and the token
-is refused before it gets here. Plak then stores the token's name, which is what the
+is refused before it gets here. Toon then stores the token's name, which is what the
 Deploy tab shows from then on (`ci/trust.py:follow_token`). The row comes
 before the `deploy` or `preview_teardown` row of the same request, with the
 same CI actor; `refs` carries group, site, provider, host, `repository` (the
@@ -298,14 +298,14 @@ The row is written in its own transaction after the removal committed, and a
 failure to write it is logged without stopping the cleanup of the next site,
 as with every other fail-open audit write.
 
-### CLI pairing (`plak login`)
+### CLI pairing (`toon login`)
 
 | Action | Result | When |
 |---|---|---|
 | `cli_login` | `allowed` | a member approved a pending device code on `/cli-link`. `refs.via` is `cli`, `refs.device_authorization` the id of the request |
 | `cli_login_denied` | `allowed` | a member refused a pending device code. Same `refs` as above |
-| `cli_token_issued` | `allowed` | the CLI exchanged its device code after approval: the tokens have left Plak and the CLI session exists. Actor is the member who approved, `refs.via` is `cli`, `refs.cli_session` the id of the new session. Refreshing writes no row |
-| `cli_logout` | `allowed` | a CLI session was revoked by `plak logout`, with the access token (an expired one too) or a refresh token. `refs.via` is `cli`, `refs.cli_session` the session id |
+| `cli_token_issued` | `allowed` | the CLI exchanged its device code after approval: the tokens have left Toon and the CLI session exists. Actor is the member who approved, `refs.via` is `cli`, `refs.cli_session` the id of the new session. Refreshing writes no row |
+| `cli_logout` | `allowed` | a CLI session was revoked by `toon logout`, with the access token (an expired one too) or a refresh token. `refs.via` is `cli`, `refs.cli_session` the session id |
 | `cli_logout` | `refused` | a logout attempt with an unknown or already revoked token; the answer is 204 anyway, so that the endpoint does not give away which tokens exist. Actor is `anonymous`, `reason_code` is `TOKEN_INVALID` |
 | `cli_session_revoke` | `allowed` | a member revoked a linked session via "Gekoppelde sessies". Same `refs` as with `cli_logout` |
 | `cli_refresh_reuse` | `refused` | an already used refresh token was presented again, later than ten seconds after the replacement or not the most recently replaced token; the whole CLI session has been revoked. The just-replaced token within those ten seconds (two refreshes at once) gets only `INVALID_GRANT` and writes no row. Actor is the member behind that session, or `anonymous` if the token could no longer be traced. `refs.via` is `cli`, `reason_code` is `INVALID_GRANT` |
@@ -414,7 +414,7 @@ result) function that `audit_log_entries` has.
 
 ## One database account
 
-Plak talks to the database under one account. The shared PostgreSQL service
+Toon talks to the database under one account. The shared PostgreSQL service
 on ZAD hands out exactly one user, so a separation between a migration, a
 runtime and a purge account cannot exist there. Locally we therefore run it
 the same way: one account for the app, for alembic and for the purge job.
@@ -787,7 +787,7 @@ pseudonyms. That is easiest for CI actors, whose identifiers
 (`provider:host:repository-id`) are public. Treat a leaked pepper or IP key as
 a possible personal data breach, and assess it as one. Older rows only
 disappear through the retention purge, and production does not run that yet
-([#211](https://github.com/DigiGilde/plak/issues/211)).
+([#211](https://github.com/DigiGilde/toon/issues/211)).
 
 **Procedure.** For the pepper, the IP key or both. A deployment that still runs
 on the `PLAK_` names reads `PLAK_` for `TOON_` below, or moves first
@@ -861,7 +861,7 @@ gone. The longest retention period is 1096 days ("Retention"), so a previous
 value can go 1096 days after the rotation, once the purge
 (`python -m toon.audit.retention`, `just purge-audit-log`) has run after that
 day. That holds only if the purge runs, and production does not run it yet
-([#211](https://github.com/DigiGilde/plak/issues/211)). Until it does, no row
+([#211](https://github.com/DigiGilde/toon/issues/211)). Until it does, no row
 is deleted and every previous value stays needed.
 
 Removing a value earlier has a price. Pseudonyms made under a removed pepper
@@ -912,17 +912,17 @@ What is not there yet, and why:
 
 - **No `processing_activity_id`.** It is a URI into the register of
   processing activities of the organisation that runs an installation, so
-  Plak cannot know it. The attribute can be added to each row, or derived
+  Toon cannot know it. The attribute can be added to each row, or derived
   from the action category above, once an installation has an entry there
   (`docs/privacy.md`, open action 6).
 - **No OTLP and no `traceparent`.** The standard's trace context exists to
-  follow a processing across organisations. Plak exchanges no data with other
+  follow a processing across organisations. Toon exchanges no data with other
   government systems, so there is no `foreign_operation` to record and no
   trace to propagate.
 
 ## Known gaps
 
-- Plak runs with one account, and that is the owner of the tables: `ALTER
+- Toon runs with one account, and that is the owner of the tables: `ALTER
   TABLE ... DISABLE TRIGGER` is open to it, and with the `TRUNCATE` guard off
   the log can be emptied in one command; `DROP TABLE` is open too. There is
   no second layer that stops that (see "One database account"); a published

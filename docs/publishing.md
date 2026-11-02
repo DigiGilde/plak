@@ -1,16 +1,17 @@
-# Publishing with Plak
+# Publishing with Toon
 
 This document describes the contract you use to publish a static site on
-Plak: the base path contract for your build, publishing from CI with an
-OIDC ID token, publishing from your own machine with `plak login`, the use
+Toon: the base path contract for your build, publishing from CI with an
+OIDC ID token, publishing from your own machine with `toon login`, the use
 of the `publish` action, the curl fallback, and the difference
-between a live version, a preview and a `_version` view.
+between a live version, a preview and a `_version` view. If you published
+to Plak before the rename, §9 lists what to change.
 
 The CLI and the action live in this repository: `cli/` is the CLI (a uv
-project of its own, installing the `plak` command),
+project of its own, installing the `toon` command),
 `actions/publish/action.yml` the composite
-action, and `plugin/skills/plak-publish/` the Claude skill that
-drives the CLI, shipped as the `plak` plugin (see `docs/skill.md`).
+action, and `plugin/skills/toon-publish/` the Claude skill that
+drives the CLI, shipped as the `toon` plugin (see `docs/skill.md`).
 Until 2026-09 they sat in a separate `plak-actions` repository; a
 `uses:` line that still names it points at code that no longer moves.
 
@@ -33,7 +34,7 @@ Until 2026-09 they sat in a separate `plak-actions` repository; a
 
 ## 2. Base path contract
 
-Plak does not serve your site from the root path of the host, but from
+Toon does not serve your site from the root path of the host, but from
 a path that contains the group, the site and (for previews) the ref:
 
 - Live: `/{group}/{site}/`
@@ -43,16 +44,16 @@ These two paths are a contract: a workflow may build them itself, and a
 change to them would be a breaking change, announced in the changelog.
 The full address is the content origin of the instance followed by the
 path; on the DigiGilde instance the content origin is
-`https://plak.rijks.app`, so a preview of `team-aurora/website` for pull
+`https://toon.rijks.app`, so a preview of `team-aurora/website` for pull
 request 42 lives at
-`https://plak.rijks.app/team-aurora/website/_preview/pr-42/`. A build
+`https://toon.rijks.app/team-aurora/website/_preview/pr-42/`. A build
 that writes absolute URLs (Astro's `site`, a canonical link, `og:url`)
 takes the content origin from there; after the deploy, the action's
 output `url` gives the same address.
 
 The group and the site in these paths are slugs, and those can change: a
 group admin can give the group another address, and a site admin with a role
-in the group the site (in the admin, on the tab "Instellingen"). Plak does not
+in the group the site (in the admin, on the tab "Instellingen"). Toon does not
 promise lasting addresses. The old address redirects to the new one for 30
 days, and after that it can come to lead to another site; see "After an
 address change" at the end of §3 for what to adjust.
@@ -63,8 +64,8 @@ tools support this through a "base" setting; the path differs per
 environment (main deploy versus PR preview), so set it through an
 environment variable that your CI step fills in.
 
-The `plak` CLI and the `publish` action (see §3) only upload;
-they do not compute or set `PLAK_BASE_PATH`. Determining that path
+The `toon` CLI and the `publish` action (see §3) only upload;
+they do not compute or set `TOON_BASE_PATH`. Determining that path
 and setting it as an environment variable is up to your own **build**
 step, before you call the CLI or the action. See the workflow example in
 §3 for a "Determine base path" step that does this.
@@ -77,8 +78,8 @@ step, before you call the CLI or the action. See the workflow example in
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
-  site: "https://plak.rijks.app",
-  base: process.env.PLAK_BASE_PATH ?? "/",
+  site: "https://toon.rijks.app",
+  base: process.env.TOON_BASE_PATH ?? "/",
   trailingSlash: "always",
 });
 ```
@@ -114,7 +115,7 @@ const basis = import.meta.env.BASE_URL;
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: process.env.PLAK_BASE_PATH ?? "/",
+  base: process.env.TOON_BASE_PATH ?? "/",
 });
 ```
 
@@ -134,8 +135,8 @@ before you publish, because the page comes online without an error and
 only the browser console tells you what is missing.
 
 Under the shielding the browser fetches some files in CORS mode, and from
-an opaque origin those requests reach Plak as `Origin: null` without the
-visitor's cookie. Plak sends no CORS headers, so the browser refuses them:
+an opaque origin those requests reach Toon as `Origin: null` without the
+visitor's cookie. Toon sends no CORS headers, so the browser refuses them:
 
 | What | Under the shielding |
 | --- | --- |
@@ -150,7 +151,7 @@ visitor's cookie. Plak sends no CORS headers, so the browser refuses them:
 In the console a refused module script looks like this:
 
 ```text
-Access to script at 'https://plak.example.nl/team-aurora/docs/_astro/Menu.astro_astro_type_script_index_0_lang.D4k2x9Qa.js'
+Access to script at 'https://toon.example.nl/team-aurora/docs/_astro/Menu.astro_astro_type_script_index_0_lang.D4k2x9Qa.js'
 from origin 'null' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'
 header is present on the requested resource.
 ```
@@ -179,7 +180,7 @@ compiles a WebAssembly module. Under the shielding the import is refused
 already, so the search box stays empty or answers nothing, and the
 console shows `Failed to fetch dynamically imported module`. Pagefind's
 `noWorker: true` does not help: the import and the index fetch are refused
-just the same. With the shielding off the search works: Plak allows
+just the same. With the shielding off the search works: Toon allows
 WebAssembly (`'wasm-unsafe-eval'`) on every site, and the worker gets that
 policy with its own response.
 
@@ -203,17 +204,17 @@ What you can do:
 CI publishes without a secret ("trusted publishing"): a GitHub or
 Forgejo workflow proves who it is with an OIDC ID token that the platform
 itself issues (`ACTIONS_ID_TOKEN_REQUEST_URL` on GitHub,
-`enable-openid-connect` on Forgejo), and Plak checks that token against the
+`enable-openid-connect` on Forgejo), and Toon checks that token against the
 repository linked to the site, and against the site id the workflow names.
 So there is no secret to create, store or rotate.
 
 ### Linking a repository
 
 First link the repository to the site, from the terminal or in the
-admin. From the terminal, with a CLI token from `plak login`:
+admin. From the terminal, with a CLI token from `toon login`:
 
 ```bash
-plak site link team-aurora/docs minbzk/website --live-branch main
+toon site link team-aurora/docs minbzk/website --live-branch main
 ```
 
 Name the repository as `owner/repo` (GitHub) or by its URL (GitHub or
@@ -222,7 +223,7 @@ run it in, which is only right in the right checkout: a fork or another
 project links that repository instead. Without `--live-branch` every
 branch may publish live. For a GitHub repository the CLI asks your own `gh` login for the
 ids and sends them along, so a private repository links without further
-ado; `--no-gh` leaves the lookup to Plak, and `--repository-id` with
+ado; `--no-gh` leaves the lookup to Toon, and `--repository-id` with
 `--owner-id` gives the ids by hand. Exit codes as for every command: `0`
 linked, `1` refused or unreachable, `2` wrong usage. It also prints the
 site id, the fixed id the workflow names beside the site (below).
@@ -231,25 +232,25 @@ In the admin: **site detail, tab
 Deploy** ("Publiceren vanuit GitHub of Forgejo"), button "Repository
 koppelen". Fill in the provider (GitHub or Forgejo, with for Forgejo the host
 from `TOON_CI_FORGEJO_HOSTS`), `eigenaar/repo` (owner/repo) and optionally
-a live branch. Plak looks the repository up at the provider and stores its
+a live branch. Toon looks the repository up at the provider and stores its
 numeric ids;
 those stay the same across a rename, and the name follows it: the next
 deploy stores the name its CI token gives, with a `site_repository_rename`
 row in the audit log. A transfer to another owner changes the owner id, so
-the site has to be linked again. Plak looks it up without credentials,
+the site has to be linked again. Toon looks it up without credentials,
 so it does not find a private repository; the form then asks for the two ids
 ("Repository-id", "Eigenaar-id"). Get them with
 `gh api repos/<owner>/<repo> --jq '.id, .owner.id'` (on Forgejo:
 `/api/v1/repos/<owner>/<repo>`, fields `id` and `owner.id`), or send them as
-`repositoryId` and `ownerId` with the `PUT`. When the lookup fails, Plak
+`repositoryId` and `ownerId` with the `PUT`. When the lookup fails, Toon
 stores the entered ids as they are; when it does find the repository, they
 must match. A wrong id links nothing else, it only refuses every deploy.
 Entered ids that the provider could not confirm show as "Nog niet bevestigd"
 (not confirmed yet) on the Deploy tab, until the first deploy whose token
-carries both ids (or, on Forgejo 15, passes Plak's API recheck) confirms them
+carries both ids (or, on Forgejo 15, passes Toon's API recheck) confirms them
 and corrects the name. A
 private repository on a Forgejo whose tokens carry no ids (Forgejo 15) still
-cannot publish: Plak confirms such a token against the Forgejo API, also
+cannot publish: Toon confirms such a token against the Forgejo API, also
 without credentials. Publishing live is allowed
 only from the events `push`, `workflow_dispatch` and `schedule`; a token
 without an `event_name` or with another event (`pull_request`,
@@ -264,10 +265,10 @@ can link (in the admin or with the CLI) and unlink (in the admin only),
 
 A workflow names its site twice: by address (`site: team-aurora/website`)
 and by its fixed id (`site-id: <site-id>`), which the Deploy tab of the site
-shows and `plak site link` prints. The CLI then asks the forge for an ID
+shows and `toon site link` prints. The CLI then asks the forge for an ID
 token whose audience is the admin origin followed by that id,
-`https://beheer.plak.example.org/-/sites/<site-id>`, so the token is valid
-for that one site only, and Plak uses it on that site or not at all.
+`https://beheer.toon.example.org/-/sites/<site-id>`, so the token is valid
+for that one site only, and Toon uses it on that site or not at all.
 
 That makes publishing a matter of consent from both sides, bound to the
 site rather than to its address: the site links the repository, and the
@@ -326,9 +327,9 @@ jobs:
       - name: Determine base path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
+            echo "TOON_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
           else
-            echo "PLAK_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
+            echo "TOON_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
           fi
 
       - name: Build site
@@ -338,18 +339,18 @@ jobs:
 
       - name: Publish live
         if: github.event_name == 'push'
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           dist-path: ./dist
 
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           dist-path: ./dist
@@ -360,16 +361,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Remove preview
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           preview-ref: pr-${{ github.event.pull_request.number }}
           teardown: "true"
 ```
 
-The step "Determine base path" sets `PLAK_BASE_PATH` before the build, so
+The step "Determine base path" sets `TOON_BASE_PATH` before the build, so
 that the build configuration (see the Astro and Vite examples above) can
 read it. This is the only place where that path is determined: neither the
 CLI nor the action does this for you.
@@ -390,13 +391,13 @@ those alone, teardown included, and sets its output `skipped` to `true`;
 same pull requests.
 
 The input `host` is the admin origin of the instance (`TOON_BASE_URL`, e.g.
-`https://beheer.plak.example.org`), without an `/admin` suffix, and at the
+`https://beheer.toon.example.org`), without an `/admin` suffix, and at the
 same time the start of the `aud` claim of the ID token: the action asks for
 `<host>/-/sites/<site-id>` itself, or for `<host>` alone without
 `site-id`. The deploy API exists only on that host; the content host
-(`https://plak.example.org`) answers `/admin/...` with a neutral 404. Leave
+(`https://toon.example.org`) answers `/admin/...` with a neutral 404. Leave
 `host` out to publish to the DigiGilde instance,
-`https://beheer.plak.rijks.app`, or to whatever `PLAK_HOST` in the job's
+`https://beheer.toon.rijks.app`, or to whatever `TOON_HOST` in the job's
 environment names.
 
 The action's output `url` is where the deploy can be seen, for a later step
@@ -429,7 +430,7 @@ permissions:
 # ...
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
           site: team-aurora/website
           site-id: <site-id>
@@ -471,9 +472,9 @@ jobs:
       - name: Determine base path
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "PLAK_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
+            echo "TOON_BASE_PATH=/team-aurora/website/_preview/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_ENV"
           else
-            echo "PLAK_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
+            echo "TOON_BASE_PATH=/team-aurora/website/" >> "$GITHUB_ENV"
           fi
 
       - name: Build site
@@ -483,18 +484,18 @@ jobs:
 
       - name: Publish live
         if: github.event_name == 'push'
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           dist-path: ./dist
 
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           dist-path: ./dist
@@ -506,9 +507,9 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Remove preview
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           preview-ref: pr-${{ github.event.pull_request.number }}
@@ -519,7 +520,7 @@ jobs:
 `permissions: id-token: write`. Always pin the action to a commit SHA, not
 to a tag or branch (supply chain requirement, see `docs/security.md`); on
 Forgejo Actions you use the full URL,
-`https://github.com/DigiGilde/plak/actions/publish@<commit-sha>`, because
+`https://github.com/DigiGilde/toon/actions/publish@<commit-sha>`, because
 Forgejo resolves a short `uses:` against its own `DEFAULT_ACTIONS_URL`, which
 is `https://data.forgejo.org`, not GitHub.
 
@@ -527,7 +528,7 @@ is `https://data.forgejo.org`, not GitHub.
 
 The GitHub form is documented and supported. GitHub's workflow syntax
 documents an action in a subdirectory of a repository as
-`{owner}/{repo}/{path}@{ref}`, so `DigiGilde/plak/actions/publish@<commit-sha>`
+`{owner}/{repo}/{path}@{ref}`, so `DigiGilde/toon/actions/publish@<commit-sha>`
 is the ordinary spelling and needs nothing special.
 
 The Forgejo form is **not proven yet**. Forgejo's Actions documentation shows
@@ -535,7 +536,7 @@ a `uses:` with a full URL, and it shows a path inside a repository for
 *reusable workflows*
 (`some-org/some-repo/.forgejo/workflows/reusable.yml@main`), but it does not
 document a subdirectory path for an *action*. Whether
-`https://github.com/DigiGilde/plak/actions/publish@<commit-sha>` resolves is
+`https://github.com/DigiGilde/toon/actions/publish@<commit-sha>` resolves is
 therefore a question for a real Forgejo runner, not for this document.
 
 One smoke test settles it. On a Forgejo instance with a runner and OIDC
@@ -543,8 +544,8 @@ enabled, in a repository linked to a site, add this workflow and start it by
 hand:
 
 ```yaml
-# .forgejo/workflows/plak-smoke-test.yml
-name: Plak smoke test
+# .forgejo/workflows/toon-smoke-test.yml
+name: Toon smoke test
 
 on: [workflow_dispatch]
 
@@ -554,9 +555,9 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Remove a preview that does not exist
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
-          host: https://beheer.plak.example.org
+          host: https://beheer.toon.example.org
           site: team-aurora/website
           site-id: <site-id>
           preview-ref: smoke-test
@@ -573,11 +574,11 @@ problem (OIDC, linking) and says nothing about the path.
 If it does not work, the fallback is to publish the action as its own small
 repository again, with `action.yml` in its root and a copy of `cli/`, generated from
 this repository so the two cannot drift, and to point Forgejo users at
-`https://github.com/DigiGilde/plak-actions@<commit-sha>`. The GitHub form in this
+`https://github.com/DigiGilde/toon-actions@<commit-sha>`. The GitHub form in this
 document stays as it is either way.
 
 Some Forgejo instances (for example code.overheid.nl, version 15) send
-no `repository_id` claim in the ID token; Plak then matches on
+no `repository_id` claim in the ID token; Toon then matches on
 `eigenaar/repo` and checks again on every deploy through the Forgejo API that
 that name still belongs to the linked ids (see `docs/security.md`).
 
@@ -616,25 +617,25 @@ runner.
 ### Outside the action: the curl fallback or the CLI with a CLI token
 
 The action is a thin layer around the HTTP contract in §4. Outside CI, or
-without the action, you publish with a CLI token from `plak login` (§6)
+without the action, you publish with a CLI token from `toon login` (§6)
 instead of an ID token: for the deploy API those two kinds of token are
 interchangeable, `Authorization: Bearer <token>`.
 
 In CI the CLI asks for the ID token itself, as the action does; give it
-the site id with `--site-id` or `PLAK_SITE_ID`, the CLI's side of the
-action's `site-id`. With a session or `PLAK_ACCESS_TOKEN` the site id binds
+the site id with `--site-id` or `TOON_SITE_ID`, the CLI's side of the
+action's `site-id`. With a session or `TOON_ACCESS_TOKEN` the site id binds
 nothing, and the CLI warns that it ignores it.
 
 If you publish an archive instead of a dist directory, and the site sits
 inside it in a subdirectory next to other files, you point at that directory
-with `--base-path dist` (action input `base-path`). Without that flag Plak
+with `--base-path dist` (action input `base-path`). Without that flag Toon
 refuses the deploy and the CLI prints the `index.html` paths it found, with
 the flag that resolves it; see §4 under "Payload".
 
 **Do not capture the CLI's stdout in CI.** In CI the CLI writes an
 `::add-mask::` workflow command there, which is how the runner learns to hide
 the ID token in the rest of the log. A runner only reads that command from
-its own stdout, so `token=$(plak publish ...)`, `| tee` or a wrapper script
+its own stdout, so `token=$(toon publish ...)`, `| tee` or a wrapper script
 takes the line away: the token is then not masked, and it sits in whatever
 captured it. The CLI skips the line when stdout is a plain file (`> log.txt`),
 because the runner would not have read it there anyway, but a pipe is
@@ -691,9 +692,9 @@ Addressing is on slugs (group, site, ref), never on UUIDs.
 Addresses are slugs and can change; the API knows only the current one, an
 old slug answers 404 (§3, "After an address change"). The
 endpoints live on the admin origin (`TOON_BASE_URL`); on the content host
-`/admin` does not exist. `${PLAK_TOKEN}` below is one of two things: a
-CI ID token (§3), or a CLI token from `plak login` (§6). Outside these two
-endpoints and the CLI session endpoints, Plak accepts a Bearer token
+`/admin` does not exist. `${TOON_TOKEN}` below is one of two things: a
+CI ID token (§3), or a CLI token from `toon login` (§6). Outside these two
+endpoints and the CLI session endpoints, Toon accepts a Bearer token
 nowhere.
 
 A GitHub workflow that requests the ID token itself, outside the action,
@@ -701,13 +702,13 @@ bound to the site by its id (§3, "Why a workflow names the site id"):
 
 ```bash
 id_token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-    "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://beheer.plak.example.org/-/sites/<site-id>" \
+    "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://beheer.toon.example.org/-/sites/<site-id>" \
     | jq -r .value)
 
 curl -sS -X POST \
     -H "Authorization: Bearer ${id_token}" \
     -F "file=@dist.zip" \
-    "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
+    "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
 That does require `permissions: id-token: write` on the job (§3); without
@@ -715,16 +716,16 @@ those rights `ACTIONS_ID_TOKEN_REQUEST_URL` and
 `ACTIONS_ID_TOKEN_REQUEST_TOKEN` do not exist in the step's environment.
 The audience is exact: the id in lowercase, as the Deploy tab shows it, and
 nothing after it, not even a slash. A link from before the site id also
-accepts `audience=https://beheer.plak.example.org` alone, until it requires
+accepts `audience=https://beheer.toon.example.org` alone, until it requires
 the site id.
 
 ### Live deploy
 
 ```bash
 curl -sS -X POST \
-    -H "Authorization: Bearer ${PLAK_TOKEN}" \
+    -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@dist.zip" \
-    "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
+    "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
 Success: `201` with JSON body
@@ -739,10 +740,10 @@ Add the form field `preview` with the ref:
 
 ```bash
 curl -sS -X POST \
-    -H "Authorization: Bearer ${PLAK_TOKEN}" \
+    -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@dist.zip" \
     -F "preview=pr-42" \
-    "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
+    "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
 A second deploy for the same ref replaces the previous preview version
@@ -752,15 +753,15 @@ A second deploy for the same ref replaces the previous preview version
 
 ```bash
 curl -sS -X DELETE \
-    -H "Authorization: Bearer ${PLAK_TOKEN}" \
-    "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/previews/pr-42"
+    -H "Authorization: Bearer ${TOON_TOKEN}" \
+    "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/previews/pr-42"
 ```
 
 Success: `204`, also if the preview no longer exists (idempotent).
 
 ### Payload
 
-One multipart file field `file`. Plak accepts two forms:
+One multipart file field `file`. Toon accepts two forms:
 
 - **a single `.html` file**: that becomes the `index.html` of your site,
   whatever the file itself is called;
@@ -777,7 +778,7 @@ refused with a message that says so.
 
 If in Finder or Explorer you compress the `dist` directory itself, instead
 of its contents, then everything in the archive sits under `dist/`. If the
-root contains exactly that one directory and nothing else, Plak strips it:
+root contains exactly that one directory and nothing else, Toon strips it:
 `dist/index.html` simply ends up at `/{group}/{site}/`. That repeats
 as long as the root contains exactly one directory, so an archive with only
 `mijnproject/build/dist/index.html` in it lands correctly too. Stripping
@@ -787,7 +788,7 @@ never loses a file: by definition there is nothing next to it.
 
 A zip you make with a right-click in Finder contains, next to your
 directory, also `__MACOSX/`, with per file an AppleDouble copy starting
-with `._`, and often a `.DS_Store`. Plak ignores those three entirely: they
+with `._`, and often a `.DS_Store`. Toon ignores those three entirely: they
 do not stop the stripping, they are not proposed as an index and they do
 not end up on your site. A Finder zip of your `dist` directory therefore
 works without you having to set anything.
@@ -813,14 +814,14 @@ What you do: publish the directory with the built site, usually `dist` or
 along as `basePath`; everything outside that path then does not count, so
 a `.git` next to it does not stop the publication.
 
-#### If something sits next to it, Plak does not choose
+#### If something sits next to it, Toon does not choose
 
 If something sits next to that directory in the root (a second directory,
 or a loose file such as `LEESMIJ.md`), the stripping stops there. If there
 is then no `index.html` in the root, the deploy is refused with `422`
 and code `NO_INDEX`. Nothing is published: no version, no files.
 
-Plak deliberately does not pick the shortest or deepest `index.html`
+Toon deliberately does not pick the shortest or deepest `index.html`
 itself: that would silently leave out files you thought you were
 publishing. Instead it makes a proposal. Next to the message, the error
 response carries the field `indexCandidates`, with the `index.html` paths
@@ -845,10 +846,10 @@ next to it is not published.
 
 ```bash
 curl -sS -X POST \
-    -H "Authorization: Bearer ${PLAK_TOKEN}" \
+    -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@mijnproject.zip" \
     -F "basePath=dist" \
-    "https://beheer.plak.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
+    "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
 ```
 
 With the CLI that is `--base-path dist`, with the action the input
@@ -879,7 +880,7 @@ count towards the directory depth, the size and those 1000 files: a deep
 
 Two limits do apply to the whole archive, including what you do not
 publish. The number of entries: fifty times the file limit, so
-50,000 by default, because every entry Plak walks past costs memory. And
+50,000 by default, because every entry Toon walks past costs memory. And
 with a `.tar.gz` the unpacked size of all members together: a tar has
 no index, so to get to the next header everything in between has to be
 decompressed. A `.zip` does have that index and there counts only
@@ -896,7 +897,7 @@ published or not.
 Beyond the one bundle, the site itself has a ceiling: every version of it
 together may occupy at most 500 MiB by default. A deploy that would cross it is
 refused with a `413` and the code `SITE_QUOTA_EXCEEDED`, naming what the site
-uses now and what this version would add. Every night Plak removes the live
+uses now and what this version would add. Every night Toon removes the live
 versions older than the current one and the ones before it that the site
 keeps: five by default (the platform administrator sets that default with
 `TOON_LIVE_VERSIONS_KEPT`), or the site's own number, which a site admin sets
@@ -975,18 +976,18 @@ no half upload. The live site stays as it was.
   browser storage throws, which a build from Astro or Vite (Vue, React,
   Svelte) runs into straight away. What breaks, how it shows and what to do
   is in §2, "Shielding: what a build tool has to know".
-- **No service workers**: Plak refuses the script of a service worker on
+- **No service workers**: Toon refuses the script of a service worker on
   every site, with the shielding on or off, so registering one fails and a
   PWA plugin brings no offline support. A service worker would see every
-  navigation under its path before Plak does, a secret link in the address
+  navigation under its path before Toon does, a secret link in the address
   included. One that your site registered before this change stays installed
   in your visitors' browsers and keeps answering: a failed update does not
   remove a registration that already has a worker. If your site used one,
   publish code that unregisters it (`navigator.serviceWorker.getRegistrations()`
   and `unregister()` on each), with the shielding off for that release: a
   shielded page cannot reach the service worker API.
-- **The query parameter `key` belongs to Plak**: when a `key` value starts
-  like a secret link (eight letters or digits and a dot), Plak takes every
+- **The query parameter `key` belongs to Toon**: when a `key` value starts
+  like a secret link (eight letters or digits and a dot), Toon takes every
   `key` out of the address before the page loads;
   on a page the visitor may see, it does the same for a value of exactly
   eight letters or digits (a link shared without its code). Do not use `key`
@@ -1000,57 +1001,57 @@ no half upload. The live site stays as it was.
   `_version`. `_version` is an inspection feature for group members, not a
   guarantee of a pixel-perfect rendering of every build configuration.
 
-## 6. Publishing from your own machine with `plak login`
+## 6. Publishing from your own machine with `toon login`
 
 Outside CI (or while trying out a workflow) you publish with a
-CLI token instead of a CI ID token. `plak login` fetches such a token through
+CLI token instead of a CI ID token. `toon login` fetches such a token through
 the OAuth 2.0 Device Authorization Grant (RFC 8628), without you ever
 entering a password or client secret yourself:
 
 ```bash
-uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
-plak login
+uv tool install "git+https://github.com/DigiGilde/toon@beta#subdirectory=cli"
+toon login
 ```
 
-Every command finds its host in this order: `--host`, `PLAK_HOST`, the
+Every command finds its host in this order: `--host`, `TOON_HOST`, the
 host you last logged in to, and otherwise the DigiGilde instance,
-`https://beheer.plak.rijks.app`. For another instance, log in once with
-`plak login --host <admin origin>`; the commands below then need no
+`https://beheer.toon.rijks.app`. For another instance, log in once with
+`toon login --host <admin origin>`; the commands below then need no
 `--host` either.
 
 `beta` is the default branch, so this installs the latest and
-`uv tool upgrade plak` follows it. Pin to a version tag instead once one
+`uv tool upgrade toon` follows it. Pin to a version tag instead once one
 exists; `README.md` carries both forms. The repository is public, so the
 install needs no credentials. From a
 checkout of this repository the same command runs without installing
 anything:
-`uv run --project cli plak login`, and so for every command below.
+`uv run --project cli toon login`, and so for every command below.
 
 The CLI shows a code (`ABCD-EFGH`) and an address in the admin
 (`/cli-link`); open that address (the CLI tries this automatically), check
 that the code matches what your terminal shows and that the account at the top
 is yours, and click "Koppelen" (link). If the request comes from a network
 other than the one your browser is on now, the page warns about that
-separately. Only continue if you started `plak login` yourself just now: if
+separately. Only continue if you started `toon login` yourself just now: if
 you were sent this link or code by somebody else, click "Weigeren" (refuse).
 Linking requires an admin session no older than fifteen minutes; if your
 session is older, the admin sends you past the login again first.
 
-After linking, the CLI stores the access token (`plakcli_...`, valid for an
-hour) and the refresh token (`plakclr_...`) itself; they refresh each other
+After linking, the CLI stores the access token (`tooncli_...`, valid for an
+hour) and the refresh token (`toonclr_...`) itself; they refresh each other
 without you having to link again. A linked session works at most
 30 days after the last refresh and in any case no longer than 90 days after
 the linking itself, and acts with exactly the roles of the member who linked.
 
 ```bash
-plak publish ./dist --site team-aurora/website --preview pr-42
+toon publish ./dist --site team-aurora/website --preview pr-42
 ```
 
 Leave `--preview` out for a live deploy. You purge a preview with the
 subcommand `preview-remove`:
 
 ```bash
-plak preview-remove pr-42 --site team-aurora/website
+toon preview-remove pr-42 --site team-aurora/website
 ```
 
 ### Creating a group or a site
@@ -1061,8 +1062,8 @@ you create, exactly as in the admin. Deleting and managing members stay in
 the admin: the CLI token is refused there.
 
 ```bash
-plak group create team-aurora --name "Team Aurora"
-plak site create team-aurora/docs --title "Documentation" --access sso
+toon group create team-aurora --name "Team Aurora"
+toon site create team-aurora/docs --title "Documentation" --access sso
 ```
 
 Any active member may create a group; a site needs group role `editor`
@@ -1085,20 +1086,20 @@ The CLI prints what it created and the access it ended up with. When that is
 not public, it says who can see it and where to change it:
 
 ```text
-$ plak site create team/docs --title Docs --secret-links
+$ toon site create team/docs --title Docs --secret-links
 Created site 'team/docs' (Docs). You are its admin.
 Access: nobody (nobody by default), secret links on, invitees off.
 Who can see it: anyone with a secret link.
-Change it at: https://beheer.plak.example.org/team/docs/access
-Publish to it with: plak publish <dist> --host https://beheer.plak.example.org --site team/docs
+Change it at: https://beheer.toon.example.org/team/docs/access
+Publish to it with: toon publish <dist> --host https://beheer.toon.example.org --site team/docs
 ```
 
 ```text
-$ plak group create team --name Team
+$ toon group create team --name Team
 Created group 'team' (Team). You are its admin.
 Default access for new sites: site_team (members of the site and its group), secret links off, invitees off.
 Who can see it: members of the site and its group.
-Change it at: https://beheer.plak.example.org/team/-/settings
+Change it at: https://beheer.toon.example.org/team/-/settings
 ```
 
 Per member at most 20 new groups, sites and addresses together per hour,
@@ -1116,19 +1117,19 @@ Your linked sessions are in the admin under the account menu,
 last used and when the session expires, with a button to revoke one. One
 machine can hold several, and the name in a row is the one the client
 program gave itself. Revoking takes effect immediately and retroactively:
-whoever used that session has to do `plak login` again afterwards. You reach
-the same from the machine itself with `plak logout`. That also works when the
+whoever used that session has to do `toon login` again afterwards. You reach
+the same from the machine itself with `toon logout`. That also works when the
 access token has already expired: the CLI then sends the (expired) access
 token or the refresh token
 along (`DELETE /-/api/v1/cli/session`, with
-`Authorization: Bearer plakcli_...` or a body
-`{"refreshToken": "plakclr_..."}`). The response is always `204`, also for
+`Authorization: Bearer tooncli_...` or a body
+`{"refreshToken": "toonclr_..."}`). The response is always `204`, also for
 an unknown token.
 
 Refreshing happens automatically; if you start two CLI commands at the same
 time, the second one may offer a refresh token that was just replaced. Within
 ten seconds that only gives `INVALID_GRANT` and the session stays; if an old
-refresh token turns up again later, Plak revokes the whole session,
+refresh token turns up again later, Toon revokes the whole session,
 because then somebody else has it. If a platform administrator deactivates
 you, all your linked sessions disappear; after reactivation you link again.
 
@@ -1145,11 +1146,11 @@ response header (for example `1.0.0`).
   what a release changed in the schema (`docs/releasing.md`).
 - The CLI reads `API-Version` on every response, before it looks at the body.
   If the server's major is higher than the one the CLI supports, it stops with
-  exit code 1 and `Error: this server speaks API 2.x, this plak CLI (<version>)
+  exit code 1 and `Error: this server speaks API 2.x, this Toon CLI (<version>)
   supports API 1.x. Install a newer CLI: ...`. A missing or malformed header
   is ignored.
-- `plak --version` prints the installed version (`plak 2026.10.1`). The CLI also
-  identifies itself on every request as `User-Agent: plak-cli/<version>`.
+- `toon --version` prints the installed version (`toon-cli 2026.10.1`). The CLI
+  also identifies itself on every request as `User-Agent: toon-cli/<version>`.
 
 ### A new major
 
@@ -1175,19 +1176,19 @@ set what happens to the first (`/core/transition-period`,
 
 How long the transition lasts is decided when v2 is planned.
 
-## 8. Plak is not an archive
+## 8. Toon is not an archive
 
 Published government content can be an archival record under the
-Archiefwet. Plak is a publishing platform, not a records system, and it
+Archiefwet. Toon is a publishing platform, not a records system, and it
 does not keep what it serves:
 
-- Every night Plak removes the live versions older than the ones a site
+- Every night Toon removes the live versions older than the ones a site
   keeps: the 5 previous live versions by default (§4). A site admin sets
   another number per site, and `0` keeps them all.
 - Previews expire automatically after thirty days without a new deploy.
 - A site admin can delete a site and a group admin a whole group, with
   every version in it.
-- The content volume is not backed up as an archive, and nothing in Plak
+- The content volume is not backed up as an archive, and nothing in Toon
   records that a page was an official publication.
 
 The publishing organisation keeps its own records. What has to be
@@ -1195,3 +1196,73 @@ preserved goes to the organisation's own archive, in line with its
 selection list (selectielijst), before it is published here or when it
 is withdrawn. Do not treat the `_version` view or the retained versions
 as that archive.
+
+## 9. Moving over from Plak
+
+Toon was called Plak. The old hosts `beheer.plak.rijks.app` and
+`plak.rijks.app` redirect to `beheer.toon.rijks.app` and `toon.rijks.app`,
+so links keep working. A visitor who came in through a secret link opens the
+full link once more, because the cookie it set belongs to the old host.
+Publishing does not follow a redirect:
+a CLI from before the rename stops with `Error: HTTP 302`. Everyone signs
+in to the admin again once, and a CLI session from before the rename no longer
+works, so each machine runs `toon login` once. `<tag>` below is the first release tag under
+the name Toon, or a later one.
+
+### A workflow
+
+GitHub does not redirect a `uses:` line to a renamed repository, so a
+workflow that still names `DigiGilde/plak` fails with `repository not found`.
+Change two lines in every step that uses the action, the repository in
+`uses:` and the `host`:
+
+```diff
+-      - uses: DigiGilde/plak/actions/publish@<old-commit-sha>
++      - uses: DigiGilde/toon/actions/publish@<new-commit-sha>  # <tag>
+         with:
+-          host: https://beheer.plak.rijks.app
++          host: https://beheer.toon.rijks.app
+```
+
+Pin the new line to the commit of `<tag>` (§3). The action and the CLI still
+translate the old DigiGilde hosts to the new ones and warn on stderr, so a
+workflow that only changed its `uses:` line keeps publishing for now. Change
+`host` anyway. A pull request comment or a GitHub deployment that the old
+action made is still found and updated, so an open pull request gets no
+second comment and no old deployment stays active.
+
+`PLAK_BASE_PATH` in your own build needs no change. Toon never reads it, and
+the examples in §2 and §3 call it `TOON_BASE_PATH`. A build that writes
+absolute URLs with the content origin (§2) has to be built again with
+`https://toon.rijks.app` and published, because files that a page loads from
+`https://plak.rijks.app` are blocked (§5).
+
+### The CLI
+
+The old `plak` command stops working at the move. Remove it, install the new
+one and sign in again:
+
+```bash
+uv tool uninstall plak
+uv tool install "git+https://github.com/DigiGilde/toon@<tag>#subdirectory=cli"
+toon login
+```
+
+The new CLI starts clean. Its configuration directory is `toon`
+(`~/.config/toon`) and its keyring entries are `toon:<host>`, and it does
+not read the `plak` ones, which can be deleted. `TOON_HOST`, `TOON_SITE_ID`,
+`TOON_ACCESS_TOKEN` and `TOON_CONFIG_DIR` replace the `PLAK_` names, which
+still work as a fallback when the `TOON_` one is not set. A `TOON_` variable
+set to an empty value counts as set.
+
+### The plugin
+
+The marketplace and the plugin are both called `toon` now, so `plak@plak` is
+no longer found. Remove the old marketplace, add the new one and install the
+plugin. The skill is `/toon:toon-publish` from then on.
+
+```text
+/plugin marketplace remove plak
+/plugin marketplace add DigiGilde/toon
+/plugin install toon@toon
+```

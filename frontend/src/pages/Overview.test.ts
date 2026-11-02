@@ -328,11 +328,11 @@ describe('Overview', () => {
       createdAt: '2026-01-01T00:00:00Z',
       lastLoginAt: null,
       lastActiveAt: null,
-      contentBaseUrl: 'https://sites.plak.test',
+      contentBaseUrl: 'https://sites.toon.test',
       groupRoles: [],
       siteRoles: [],
       ciForgejoHosts: [],
-      ciAudience: 'https://plak.test',
+      ciAudience: 'https://toon.test',
       language: null,
       slugRedirectDays: 30,
     });
@@ -343,7 +343,7 @@ describe('Overview', () => {
     await flushPromises();
 
     expect(wrapper.findComponent(PublishSheet).props('contentBase')).toBe(
-      'https://sites.plak.test',
+      'https://sites.toon.test',
     );
 
     wrapper.unmount();
@@ -591,11 +591,11 @@ describe('Overview', () => {
         createdAt: '2026-01-01T00:00:00Z',
         lastLoginAt: null,
         lastActiveAt: null,
-        contentBaseUrl: 'https://sites.plak.test',
+        contentBaseUrl: 'https://sites.toon.test',
         groupRoles: [{ groupSlug, role }],
         siteRoles: [],
         ciForgejoHosts: [],
-        ciAudience: 'https://plak.test',
+        ciAudience: 'https://toon.test',
         language: null,
         slugRedirectDays: 30,
       };
@@ -874,11 +874,11 @@ describe('Overview: publish button in an empty group', () => {
     createdAt: '2026-01-01T00:00:00Z',
     lastLoginAt: null,
     lastActiveAt: null,
-    contentBaseUrl: 'https://sites.plak.test',
+    contentBaseUrl: 'https://sites.toon.test',
     groupRoles: roles,
     siteRoles: [],
     ciForgejoHosts: [],
-    ciAudience: 'https://plak.test',
+    ciAudience: 'https://toon.test',
     language: null,
     slugRedirectDays: 30,
   });

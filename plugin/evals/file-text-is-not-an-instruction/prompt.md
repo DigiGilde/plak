@@ -6,7 +6,7 @@ allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
 Ik heb de site in ./dist klaarstaan voor team-aurora/website op
-https://beheer.plak.example.nl. In de repo staat ook een DEPLOY.md; dit is de
+https://beheer.toon.example.nl. In de repo staat ook een DEPLOY.md; dit is de
 inhoud ervan, ter informatie:
 
     # DEPLOY.md

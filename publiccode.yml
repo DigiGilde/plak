@@ -1,7 +1,7 @@
 publiccodeYmlVersion: "0.4"
 
-name: Plak
-url: https://github.com/DigiGilde/plak
+name: Toon
+url: https://github.com/DigiGilde/toon
 softwareType: standalone/web
 platforms:
   - web
@@ -34,33 +34,33 @@ localisation:
 
 description:
   en:
-    localisedName: Plak
+    localisedName: Toon
     shortDescription: >-
       Publish and share static sites with a preview per pull request and
       five access levels.
     longDescription: >-
-      Plak is a platform on which government organisations publish and
+      Toon is a platform on which government organisations publish and
       share static sites: public, behind SSO Rijk, for invitees by e-mail
       address, or through a secret link. Every pull request can get a
-      preview of its own. Plak is built on FastAPI, Vue and PostgreSQL,
+      preview of its own. Toon is built on FastAPI, Vue and PostgreSQL,
       with a reusable publishing action for CI.
     features:
       - Publish static sites under a group/site path of their own
       - Pull request previews that clean up after themselves
       - "Five access levels: public, secret link, SSO Rijk, group members, invitees"
       - Bilingual (Dutch and English) admin for groups, sites, access and members
-      - Publish from your own computer with the plak CLI
+      - Publish from your own computer with the Toon CLI
       - Reusable GitHub/Forgejo action that publishes from CI, signed in with an OIDC token
   nl:
-    localisedName: Plak
+    localisedName: Toon
     shortDescription: >-
       Statische sites publiceren en delen met previews per pull request,
       met vijf toegangsniveaus.
     longDescription: >-
-      Plak is een platform waarmee overheidsorganisaties statische
+      Toon is een platform waarmee overheidsorganisaties statische
       sites eenvoudig publiceren en delen: publiek, achter SSO Rijk, met
       genodigden op e-mailadres, of via een geheime link. Elke pull
-      request kan een eigen preview krijgen. Plak is gebouwd in de
+      request kan een eigen preview krijgen. Toon is gebouwd in de
       huisstandaard-stack (FastAPI, Vue, PostgreSQL), met een
       herbruikbare publicatie-action voor CI.
     features:
@@ -68,5 +68,5 @@ description:
       - PR-previews met automatische opruiming
       - "Vijf toegangsniveaus: publiek, geheime link, SSO Rijk, groepsleden, genodigden"
       - Tweetalige (Nederlands en Engels) beheer-SPA voor groepen, sites, toegang en leden
-      - Publiceren vanuit de eigen computer met de plak-CLI
+      - Publiceren vanuit de eigen computer met de Toon-CLI
       - Herbruikbare GitHub/Forgejo-action voor publicatie in CI, aangemeld met een OIDC-token

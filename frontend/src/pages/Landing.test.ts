@@ -75,11 +75,11 @@ async function clickCheck(): Promise<void> {
 }
 
 describe('Landing: no session', () => {
-  it('explains what Plak is and offers a login button', async () => {
+  it('explains what Toon is and offers a login button', async () => {
     wrapper = mount(Landing, { attachTo: document.body });
     await letUpdateLand();
 
-    expect(wrapper.find('nldd-title h1').text()).toBe('Plak');
+    expect(wrapper.find('nldd-title h1').text()).toBe('Toon');
     expect(wrapper.text()).toContain('Snel en eenvoudig een HTML-pagina delen');
     expect(wrapper.text()).toContain('Log in met je Rijksoverheid-account om te beginnen.');
     const login = wrapper.find('nldd-button[href="/-/login"]');
@@ -108,7 +108,7 @@ describe('Landing: no session', () => {
 
     const headings = wrapper.findAll('h2').map((h) => h.text());
     expect(headings.at(-1)).toBe('Wist je dat');
-    expect(wrapper.text()).toContain('De naam komt van plakkaat');
+    expect(wrapper.text()).toContain('De naam komt van tonen: laten zien');
   });
 
   it('has no axe violations', async () => {
@@ -126,7 +126,7 @@ describe('Landing: access withdrawn', () => {
 
     expect(wrapper.find('nldd-title h1').text()).toBe('Je toegang is ingetrokken');
     expect(wrapper.text()).toContain('Je bent ingelogd met je organisatieaccount');
-    expect(wrapper.text()).toContain('niet meer');
+    expect(wrapper.text()).toContain('geen toegang meer');
     expect(wrapper.find('[data-testid="reason"]').text()).toBe(WITHDRAWN);
     expect(wrapper.text()).toContain('Je account staat er nog');
     expect(wrapper.find('nldd-button[href="/-/login"]').exists()).toBe(false);

@@ -1,4 +1,4 @@
-"""What Plak fetches from an identity provider or a CI issuer, cached per key.
+"""What Toon fetches from an identity provider or a CI issuer, cached per key.
 
 The signing keys (JWKS) of the OIDC provider and of each CI issuer, and the
 OIDC discovery document, all go through RemoteCache:

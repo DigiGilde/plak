@@ -6,7 +6,7 @@ allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
 My Vue app is built in ./dist. Update my site team-aurora/docs on
-https://beheer.plak.example.nl with it. This is the built index.html:
+https://beheer.toon.example.nl with it. This is the built index.html:
 
     <!doctype html>
     <html lang="en">

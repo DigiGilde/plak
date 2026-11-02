@@ -2,12 +2,12 @@
 
 ## Responsible disclosure
 
-Plak runs in production as a beta (see `README.md`). If you have found a
+Toon runs in production as a beta (see `README.md`). If you have found a
 security vulnerability, report it responsibly:
 
 - Report vulnerabilities privately, not through a public GitHub issue.
 - Preferably through
-  [a private security advisory](https://github.com/DigiGilde/plak/security/advisories/new):
+  [a private security advisory](https://github.com/DigiGilde/toon/security/advisories/new):
   private vulnerability reporting is on, so the report stays between you
   and the maintainers until there is a fix.
 - By email it goes to `digigilde@rijksoverheid.nl` (see `publiccode.yml`,
@@ -50,7 +50,7 @@ Five things to know:
   address, under a preamble that names NCSC-NL. The Digi Gilde's own
   installation enables them.
 - There is no `Encryption` field. RFC 9116 cannot tie a key to one
-  `Contact`, and the first contacts are the Plak team, which has no key of
+  `Contact`, and the first contacts are the Toon team, which has no key of
   its own; NCSC-NL's key there would read as ours. The advisory form needs
   no key. `sectxt` recommends the field; leaving it out is deliberate.
 - We do not sign the file with PGP. `sectxt` recommends it, but signing

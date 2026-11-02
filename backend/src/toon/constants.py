@@ -1,4 +1,4 @@
-"""Core constants for Plak: slug validation, the path vocabulary both hosts
+"""Core constants for Toon: slug validation, the path vocabulary both hosts
 share, access levels and roles."""
 
 import enum

@@ -47,7 +47,7 @@ def _app(tmp_path: Path, **overrides):
     return create_app(_settings(content_root=tmp_path / "content", **overrides))
 
 
-async def _healthz(app, host: str = "plak.example") -> httpx.Response:
+async def _healthz(app, host: str = "toon.example") -> httpx.Response:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url=f"https://{host}") as client:
         return await client.get("/-/healthz")
@@ -240,7 +240,7 @@ def _productie(tmp_path: Path):
         environment="productie",
         behind_proxy=False,
         oidc_iss_required=True,
-        base_url="https://beheer.plak.example",
+        base_url="https://beheer.toon.example",
         oidc_issuer="https://idp.example",
     )
 
@@ -254,7 +254,7 @@ class TestContentRootAtStartup:
         root = (tmp_path / "content").resolve()
         with caplog.at_level(logging.ERROR, logger="toon.main"):
             async with app.router.lifespan_context(app):
-                response = await _healthz(app, "beheer.plak.example")
+                response = await _healthz(app, "beheer.toon.example")
         assert response.json() == {"status": "degraded", "checks": ["content_root"]}
         assert str(root) not in response.text
         assert f"{root} is not a mount point" in caplog.text
@@ -266,7 +266,7 @@ class TestContentRootAtStartup:
         app = _productie(tmp_path)
         with caplog.at_level(logging.ERROR, logger="toon.main"):
             async with app.router.lifespan_context(app):
-                response = await _healthz(app, "beheer.plak.example")
+                response = await _healthz(app, "beheer.toon.example")
         assert response.json() == {"status": "ok"}
         assert "is not a mount point" not in caplog.text
 
@@ -288,7 +288,7 @@ class TestContentRootAtStartup:
             idp_fault(app).record(
                 code="invalid_client", issuer="https://idp.example", now=NOW, window=RECHECK_BACKOFF
             )
-            response = await _healthz(app, "beheer.plak.example")
+            response = await _healthz(app, "beheer.toon.example")
         assert response.json() == {
             "status": "degraded",
             "checks": ["storage", "content_root", "idp_revalidation"],

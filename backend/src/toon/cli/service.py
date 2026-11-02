@@ -1,5 +1,5 @@
-"""CLI login (`plak login`): an OAuth 2.0 device authorization grant
-(RFC 8628) that Plak runs itself, on top of the admin SSO login.
+"""CLI login (`toon login`): an OAuth 2.0 device authorization grant
+(RFC 8628) that Toon runs itself, on top of the admin SSO login.
 
 The CLI asks for a device code and a user code, the member approves the user
 code in the admin SPA with a fresh session, and the CLI trades its device
@@ -34,9 +34,9 @@ from toon.messages import Msg
 from toon.models.cli import CliDeviceAuthorization, CliDeviceStatus, CliRefreshToken, CliSession
 from toon.models.identity import Member, MemberStatus
 
-DEVICE_CODE_PREFIX = "plakdc"
-ACCESS_TOKEN_PREFIX = "plakcli"  # noqa: S105 - fixed token format prefix, not a secret
-REFRESH_TOKEN_PREFIX = "plakclr"  # noqa: S105 - fixed token format prefix, not a secret
+DEVICE_CODE_PREFIX = "toondc"
+ACCESS_TOKEN_PREFIX = "tooncli"  # noqa: S105 - fixed token format prefix, not a secret
+REFRESH_TOKEN_PREFIX = "toonclr"  # noqa: S105 - fixed token format prefix, not a secret
 SELECTOR_LENGTH = 16
 SECRET_LENGTH = 64
 

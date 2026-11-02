@@ -23,18 +23,18 @@ from toon.main import create_app
 def schema() -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as content_root:
         settings = Settings(
-            db_url="postgresql+asyncpg://plak@localhost/plak",
+            db_url="postgresql+asyncpg://toon@localhost/toon",
             content_root=Path(content_root),
             oidc_issuer="https://idp.example",
-            oidc_client_id="plak",
+            oidc_client_id="toon",
             oidc_client_private_jwk="{}",
             oidc_required_acr="urn:acr:placeholder",
             session_secret="placeholder-session-secret-of-32-bytes",  # noqa: S106 - a placeholder, not a secret
             audit_pepper="placeholder-audit-pepper-of-32-bytes!",
             audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-            content_base_url="https://plak.example",
+            content_base_url="https://toon.example",
             environment="dev",
-            base_url="https://beheer.plak.example",
+            base_url="https://beheer.toon.example",
         )
         return create_app(settings).openapi()
 

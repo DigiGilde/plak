@@ -35,7 +35,7 @@ def _settings(tmp_path: Path, dsn: str) -> Settings:
         db_url=dsn,
         content_root=tmp_path / "content",
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak-client",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk=make_client_jwk(),
         oidc_required_acr="urn:acr:hoog",
         session_secret="sessie-geheim-van-minstens-32-bytes!",
@@ -77,7 +77,7 @@ async def _seed_site_with_token(app: FastAPI) -> str:
         db.add(site)
         await db.commit()
     async with factory() as db:
-        created = await cli.create_device_authorization(db, client_name="plak-cli", ip_truncated=None)
+        created = await cli.create_device_authorization(db, client_name="toon-cli", ip_truncated=None)
     async with factory() as db:
         await cli.decide(db, created.user_code, await db.get(Member, member.id), approve=True)
     async with factory() as db:
@@ -379,7 +379,8 @@ async def test_docs_page_is_english_with_a_switch_to_dutch(client: httpx.AsyncCl
     resp = await client.get("/-/api/docs")
 
     assert '<html lang="en">' in resp.text
-    assert "<title>Plak API documentation</title>" in resp.text
+    assert "<title>Toon API documentation</title>" in resp.text
+    assert '<span class="docs-brand__block">T</span>oon</span>' in resp.text
     assert '<a href="/-/api/openapi.json">OpenAPI schema</a>' in resp.text
     assert '<a href="/-/api/docs?lang=nl" lang="nl" hreflang="nl">Nederlands</a>' in resp.text
     assert resp.headers["content-language"] == "en"
@@ -390,7 +391,7 @@ async def test_docs_page_in_dutch_switches_to_english(client: httpx.AsyncClient)
     resp = await client.get("/-/api/docs?lang=nl")
 
     assert '<html lang="nl">' in resp.text
-    assert "<title>Plak API-documentatie</title>" in resp.text
+    assert "<title>API-documentatie van Toon</title>" in resp.text
     assert '<a href="/">Naar het beheer</a>' in resp.text
     assert '<a href="/-/api/openapi.json?lang=nl">OpenAPI-schema</a>' in resp.text
     assert '<a href="/-/api/docs?lang=en" lang="en" hreflang="en">English</a>' in resp.text
@@ -444,13 +445,13 @@ async def test_content_host_allowed_alongside_admin_host(
     without it the app rejects all content traffic that nginx forwards over
     that second origin."""
     settings = _settings(tmp_path, migrated_dsn).model_copy(
-        update={"content_base_url": "https://content.plak.example"}
+        update={"content_base_url": "https://content.toon.example"}
     )
     content_app = create_app(settings)
     async with content_app.router.lifespan_context(content_app):
         transport = httpx.ASGITransport(app=content_app)
         async with httpx.AsyncClient(
-            transport=transport, base_url="https://content.plak.example"
+            transport=transport, base_url="https://content.toon.example"
         ) as content_client:
             resp = await content_client.get("/onbekend/site/")
 
@@ -480,7 +481,7 @@ async def test_the_cli_login_runs_through_the_full_stack(app: FastAPI, client: h
     assert whoami.status_code == 200
     assert whoami.json()["member"]["email"] == "ci@example.org"
 
-    started = await client.post(f"{BASE}/cli/device-authorizations", json={"clientName": "plak-cli"})
+    started = await client.post(f"{BASE}/cli/device-authorizations", json={"clientName": "toon-cli"})
     assert started.status_code == 200
     assert started.json()["verificationUri"] == f"{APP_BASE_URL}/cli-link"
 

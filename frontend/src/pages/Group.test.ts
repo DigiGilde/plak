@@ -492,7 +492,7 @@ describe('Group: put a site online', () => {
     chooseFile(wrapper, 'documentatie.zip');
     await untilIdle();
     expect(wrapper.find('[data-testid="publish-address"]').text()).toContain(
-      'https://sites.plak.test/team-aurora/documentatie/',
+      'https://sites.toon.test/team-aurora/documentatie/',
     );
 
     await sheet.find('nldd-form').trigger('submit');
@@ -771,7 +771,7 @@ describe('Group: renaming the group', () => {
       { text: 'Overzicht', href: '/' },
       { text: 'Team Zonsopgang' },
     ]);
-    expect(document.title).toBe('Team Zonsopgang - Instellingen - Plak');
+    expect(document.title).toBe('Team Zonsopgang - Instellingen - Toon');
     expect(wrapper.find('[data-testid="group-name-notice"]').text()).toBe(
       'Naam opgeslagen.',
     );
@@ -828,7 +828,7 @@ describe('Group: the address of the group', () => {
     expect(wrapper.find('[data-testid="group-address-start"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="group-address-form"]').element.closest('nldd-sheet')).not.toBeNull();
     expect(wrapper.find('[data-testid="group-address-current"]').text()).toContain(
-      'https://sites.plak.test/team-aurora/website/',
+      'https://sites.toon.test/team-aurora/website/',
     );
   });
 
@@ -974,7 +974,7 @@ describe('Group: changing the address', () => {
     await dialogClosed(wrapper);
 
     expect(wrapper.find('[data-testid="group-address-notice"]').text()).toBe(
-      'Het adres is gewijzigd. team-aurora stuurt tot en met 7 november 2026 door naar aurora. Gebruik je automatisch publiceren of plak publish? Pas het adres daar nu aan.',
+      'Het adres is gewijzigd. team-aurora stuurt tot en met 7 november 2026 door naar aurora. Gebruik je automatisch publiceren of toon publish? Pas het adres daar nu aan.',
     );
     expect(focus.mock.contexts).toEqual([
       wrapper.find('[data-testid="group-address-start"]').element,
@@ -1014,7 +1014,7 @@ describe('Group: changing the address', () => {
 
     await changeAddress(wrapper, 'aurora');
 
-    expect(document.title).toBe('Team Aurora - Instellingen - Plak');
+    expect(document.title).toBe('Team Aurora - Instellingen - Toon');
   });
 
   it('keeps the name in the header: only the address has changed', async () => {
@@ -1023,7 +1023,7 @@ describe('Group: changing the address', () => {
     await changeAddress(wrapper, 'aurora');
 
     expect(wrapper.find('h1').text()).toBe('Team Aurora');
-    expect(document.title).toBe('Team Aurora - Instellingen - Plak');
+    expect(document.title).toBe('Team Aurora - Instellingen - Toon');
     expect(breadcrumbsFor('/aurora/-/settings')).toEqual([
       { text: 'Overzicht', href: '/' },
       { text: 'Team Aurora' },
@@ -1073,7 +1073,7 @@ describe('Group: changing the address', () => {
       { text: 'Overzicht', href: '/' },
       { text: 'team-aurora' },
     ]);
-    expect(document.title).toBe('team-aurora - Instellingen - Plak');
+    expect(document.title).toBe('team-aurora - Instellingen - Toon');
 
     // And forward again to the new one: a page that loaded in between does load again.
     await router.push('/aurora/-/settings');

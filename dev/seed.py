@@ -57,7 +57,7 @@ from toon.models.publication import Invitee, Preview, Site, Version
 # platform admin. Used as a fallback only: the configured value wins, so a
 # changed TOON_BOOTSTRAP_ADMIN_SUB still lands on the seeded member.
 DEFAULT_ADMIN_SUB = "dev-beheerder"
-ADMIN_EMAIL = "beheerder@plak.local"
+ADMIN_EMAIL = "beheerder@toon.local"
 
 BUNDLE_NAME = "site.tar.gz"
 
@@ -108,7 +108,7 @@ _PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<link rel="stylesheet" href="assets/plak.css">
+<link rel="stylesheet" href="assets/toon.css">
 </head>
 <body>
 <header>
@@ -120,7 +120,7 @@ _PAGE = """<!doctype html>
 {body}
 </main>
 <footer>
-<p>Gezaaide dev-inhoud van Plak, gebouwd op {stamp}.</p>
+<p>Gezaaide dev-inhoud van Toon, gebouwd op {stamp}.</p>
 </footer>
 </body>
 </html>
@@ -152,7 +152,7 @@ def _site_files(group_name: str, title: str, badge: str, lead: str) -> dict[str,
         "verantwoording.html": _PAGE.format(
             body=_SUB_BODY, **{**common, "title": f"Verantwoording - {title}"}
         ).encode(),
-        "assets/plak.css": _CSS.encode(),
+        "assets/toon.css": _CSS.encode(),
     }
 
 
@@ -284,19 +284,19 @@ async def seed(settings: Settings) -> SeedResult:
         admin_sub = settings.bootstrap_admin_sub or DEFAULT_ADMIN_SUB
         admin = _member(admin_sub, ADMIN_EMAIL, "Dev Beheerder", admin=True, age_days=240, seen_days_ago=0)
         editor = _member(
-            "dev-redacteur", "s.jansen@plak.local", "Sanne Jansen", age_days=180, seen_days_ago=1
+            "dev-redacteur", "s.jansen@toon.local", "Sanne Jansen", age_days=180, seen_days_ago=1
         )
-        reader = _member("dev-lezer", "t.devries@plak.local", "Tim de Vries", age_days=95, seen_days_ago=12)
+        reader = _member("dev-lezer", "t.devries@toon.local", "Tim de Vries", age_days=95, seen_days_ago=12)
         site_only = _member(
-            "dev-sitelid", "n.bakker@plak.local", "Noor Bakker", age_days=60, seen_days_ago=40
+            "dev-sitelid", "n.bakker@toon.local", "Noor Bakker", age_days=60, seen_days_ago=40
         )
         inspector = _member(
-            "dev-inspecteur", "w.dekker@plak.local", "Wim Dekker", age_days=30, seen_days_ago=3
+            "dev-inspecteur", "w.dekker@toon.local", "Wim Dekker", age_days=30, seen_days_ago=3
         )
         # Never logged in, so the platform page has a row where "last activity"
         # is empty and has to sort last in both date orders.
         deactivated_member = _member(
-            "dev-ontslagen", "k.visser@plak.local", "Kim Visser", deactivated=True, age_days=2
+            "dev-ontslagen", "k.visser@toon.local", "Kim Visser", deactivated=True, age_days=2
         )
         members = [admin, editor, reader, site_only, inspector, deactivated_member]
 
@@ -467,7 +467,7 @@ async def seed(settings: Settings) -> SeedResult:
 
 
 def _report(settings: Settings, result: SeedResult) -> str:
-    admin_base = (settings.base_url or "http://beheer.plak.localhost:8080").rstrip("/")
+    admin_base = (settings.base_url or "http://beheer.toon.localhost:8080").rstrip("/")
     content_base = (settings.content_base_url or admin_base).rstrip("/")
     annual = f"{content_base}/{GROUP_PUBLIC}/jaarverslag/"
     lines = [
@@ -484,8 +484,8 @@ def _report(settings: Settings, result: SeedResult) -> str:
         f"  preview    {annual}_preview/{PREVIEW_OPEN}/",
         f"  geheime link  {content_base}/{GROUP_PUBLIC}/kerncijfers/?key={result.secret_link_key}",
         "",
-        "Publiceren vanaf je eigen machine, met de plak-CLI:",
-        f"  plak login   (beheer-URL {admin_base})",
+        "Publiceren vanaf je eigen machine, met de Toon-CLI:",
+        f"  toon login   (beheer-URL {admin_base})",
         f"  en keur de code in je terminal goed op {admin_base}/cli-link",
         "",
     ]

@@ -108,7 +108,7 @@ export const groupNl = {
   'group.members.retry': 'Opnieuw proberen',
   'group.members.add.legend': 'Lid toevoegen',
   'group.members.add.supportingText':
-    'Iemand moet eerst zelf op het beheer ingelogd hebben. Plak maakt hier geen account aan.',
+    'Iemand moet eerst zelf op het beheer ingelogd hebben. Toon maakt hier geen account aan.',
   'group.members.add.identifier.label': 'Naam of e-mailadres',
   'group.members.add.identifier.placeholder': 'Typ een naam of e-mailadres',
   'group.members.add.identifier.help':

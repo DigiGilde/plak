@@ -1,4 +1,4 @@
-"""Tests for cli/service.py: the device authorization grant (RFC 8628) Plak
+"""Tests for cli/service.py: the device authorization grant (RFC 8628) Toon
 brokers itself, against a real PostgreSQL (testcontainers).
 
 These tests really commit (single-use rows, session rotation, deletes) and
@@ -119,16 +119,16 @@ class TestSanitiseClientName:
         assert cli.sanitise_client_name("   ") is None
 
     def test_strips_control_characters(self):
-        assert cli.sanitise_client_name("plak-cli\x00 1.2") == "plak-cli 1.2"
+        assert cli.sanitise_client_name("toon-cli\x00 1.2") == "toon-cli 1.2"
 
     def test_strips_bidi_override(self):
-        assert cli.sanitise_client_name("plak-cli‮ evil") == "plak-cli evil"
+        assert cli.sanitise_client_name("toon-cli‮ evil") == "toon-cli evil"
 
     def test_newlines_become_spaces(self):
-        assert cli.sanitise_client_name("plak-cli\n1.2\r\nmacOS") == "plak-cli 1.2 macOS"
+        assert cli.sanitise_client_name("toon-cli\n1.2\r\nmacOS") == "toon-cli 1.2 macOS"
 
     def test_collapses_whitespace(self):
-        assert cli.sanitise_client_name("plak-cli    1.2") == "plak-cli 1.2"
+        assert cli.sanitise_client_name("toon-cli    1.2") == "toon-cli 1.2"
 
     def test_truncates_to_max_length(self):
         long_name = "a" * 150
@@ -143,28 +143,40 @@ class TestSanitiseClientName:
 
 class TestParseSelector:
     def test_valid(self):
-        value, selector = "plakdc", "a" * 16
+        value, selector = "toondc", "a" * 16
         plaintext = f"{value}_{selector}_{'b' * 64}"
-        assert cli.parse_selector(plaintext, "plakdc") == selector
+        assert cli.parse_selector(plaintext, "toondc") == selector
 
     def test_wrong_prefix(self):
-        plaintext = f"plakcli_{'a' * 16}_{'b' * 64}"
-        assert cli.parse_selector(plaintext, "plakdc") is None
+        plaintext = f"tooncli_{'a' * 16}_{'b' * 64}"
+        assert cli.parse_selector(plaintext, "toondc") is None
+
+    @pytest.mark.parametrize(
+        ("old", "current"),
+        [
+            ("plakdc", cli.DEVICE_CODE_PREFIX),
+            ("plakcli", cli.ACCESS_TOKEN_PREFIX),
+            ("plakclr", cli.REFRESH_TOKEN_PREFIX),
+        ],
+    )
+    def test_a_secret_under_its_old_prefix_is_refused(self, old, current):
+        assert cli.parse_selector(f"{current}_{'a' * 16}_{'b' * 64}", current) == "a" * 16
+        assert cli.parse_selector(f"{old}_{'a' * 16}_{'b' * 64}", current) is None
 
     def test_wrong_part_count(self):
-        assert cli.parse_selector("plakdc_onlyoneunderscore", "plakdc") is None
+        assert cli.parse_selector("toondc_onlyoneunderscore", "toondc") is None
 
     def test_wrong_selector_length(self):
-        plaintext = f"plakdc_{'a' * 15}_{'b' * 64}"
-        assert cli.parse_selector(plaintext, "plakdc") is None
+        plaintext = f"toondc_{'a' * 15}_{'b' * 64}"
+        assert cli.parse_selector(plaintext, "toondc") is None
 
     def test_wrong_secret_length(self):
-        plaintext = f"plakdc_{'a' * 16}_{'b' * 63}"
-        assert cli.parse_selector(plaintext, "plakdc") is None
+        plaintext = f"toondc_{'a' * 16}_{'b' * 63}"
+        assert cli.parse_selector(plaintext, "toondc") is None
 
     def test_non_hex_characters(self):
-        plaintext = f"plakdc_{'g' * 16}_{'b' * 64}"
-        assert cli.parse_selector(plaintext, "plakdc") is None
+        plaintext = f"toondc_{'g' * 16}_{'b' * 64}"
+        assert cli.parse_selector(plaintext, "toondc") is None
 
 
 class TestMatches:
@@ -180,19 +192,25 @@ class TestMatches:
         # Costs the same as a wrong secret (dummy hash), but must still be False.
         assert cli.matches("iets", None) is False
 
+    def test_the_prefix_is_part_of_what_is_hashed(self):
+        """Why a CLI session from before the rename to Toon cannot be used: a
+        hash stored then matches no token of the new prefix, same secret or not."""
+        stored = cli.hash_secret(f"plakcli_{'a' * 16}_{'b' * 64}")
+        assert cli.matches(f"{cli.ACCESS_TOKEN_PREFIX}_{'a' * 16}_{'b' * 64}", stored) is False
+
 
 # -- create_device_authorization ---------------------------------------------
 
 
 class TestCreateDeviceAuthorization:
     async def test_creates_pending_row_with_expected_shape(self, factory):
-        created = await _create(factory, client_name="plak-cli 1.2")
+        created = await _create(factory, client_name="toon-cli 1.2")
         assert created.authorization.status == CliDeviceStatus.PENDING
         assert len(created.user_code) == cli.USER_CODE_LENGTH
         assert all(char in cli.USER_CODE_ALPHABET for char in created.user_code)
         assert created.device_code.startswith(cli.DEVICE_CODE_PREFIX + "_")
         assert created.authorization.expires_at == NOW + cli.DEVICE_CODE_TTL
-        assert created.authorization.client_name == "plak-cli 1.2"
+        assert created.authorization.client_name == "toon-cli 1.2"
         # Neither secret is ever stored in the clear.
         assert created.device_code not in created.authorization.device_hash
         row = await _get_authorization(factory, created.authorization.id)
@@ -300,7 +318,7 @@ class TestExchangeDeviceCode:
         assert excinfo.value.code == cli.INVALID_GRANT
 
     async def test_unknown_selector_is_invalid_grant(self, factory):
-        unknown = f"plakdc_{'a' * 16}_{'b' * 64}"
+        unknown = f"toondc_{'a' * 16}_{'b' * 64}"
         with pytest.raises(cli.GrantError) as excinfo:
             await _exchange(factory, unknown)
         assert excinfo.value.code == cli.INVALID_GRANT
@@ -407,7 +425,7 @@ class TestRefresh:
         assert excinfo.value.code == cli.INVALID_GRANT
 
     async def test_unknown_selector_is_invalid_grant(self, factory):
-        unknown = f"plakclr_{'a' * 16}_{'b' * 64}"
+        unknown = f"toonclr_{'a' * 16}_{'b' * 64}"
         with pytest.raises(cli.GrantError) as excinfo:
             await _refresh(factory, unknown)
         assert excinfo.value.code == cli.INVALID_GRANT
@@ -529,7 +547,7 @@ class TestRefresh:
 
 class TestSessionForAccessToken:
     async def test_unknown_selector_returns_none(self, factory):
-        unknown = f"plakcli_{'a' * 16}_{'b' * 64}"
+        unknown = f"tooncli_{'a' * 16}_{'b' * 64}"
         async with factory() as db:
             assert await cli.session_for_access_token(db, unknown, now=NOW) is None
 
@@ -705,9 +723,9 @@ class TestLogoutLookupAndRevokeAll:
         issued = await _issue_session(factory)
         selector = issued.access_token.split("_")[1]
         async with factory() as db:
-            assert await cli.session_for_logout(db, access_token=f"plakcli_{selector}_{'0' * 64}") is None
+            assert await cli.session_for_logout(db, access_token=f"tooncli_{selector}_{'0' * 64}") is None
             assert await cli.session_for_logout(db, access_token="rommel") is None
-            assert await cli.session_for_logout(db, refresh_token=f"plakclr_{'a' * 16}_{'b' * 64}") is None
+            assert await cli.session_for_logout(db, refresh_token=f"toonclr_{'a' * 16}_{'b' * 64}") is None
             assert await cli.session_for_logout(db, refresh_token="rommel") is None
             assert await cli.session_for_logout(db) is None
 
@@ -723,7 +741,7 @@ class TestLogoutLookupAndRevokeAll:
         issued = await _issue_session(factory)
         async with factory() as db:
             session = await cli.session_for_logout(
-                db, access_token="plakcli_" + "a" * 16 + "_" + "b" * 64, refresh_token=issued.refresh_token
+                db, access_token="tooncli_" + "a" * 16 + "_" + "b" * 64, refresh_token=issued.refresh_token
             )
         assert session.id == issued.session.id
 

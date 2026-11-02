@@ -1,7 +1,7 @@
 /**
- * The real CLI against the e2e stack: `plak publish` (preview and live),
- * `plak preview-remove` and `plak logout`, invoked the way a contributor
- * does with `uv run --project cli plak ...`.
+ * The real CLI against the e2e stack: `toon publish` (preview and live),
+ * `toon preview-remove` and `toon logout`, invoked the way a contributor
+ * does with `uv run --project cli toon ...`.
  *
  * The session comes from the device flow through the SPA (helpers/cli.ts),
  * so the token the CLI works with is the one a human ends up with; the
@@ -52,19 +52,20 @@ interface CliResult {
 }
 
 /**
- * Runs the CLI as a contributor does, but with PLAK_CONFIG_DIR in a temp
+ * Runs the CLI as a contributor does, but with TOON_CONFIG_DIR in a temp
  * dir: the CLI keeps its session per user account, and a run must not
  * overwrite the one a contributor may have.
  */
-async function plak(args: string[], extraEnv: Record<string, string> = {}): Promise<CliResult> {
+async function toon(args: string[], extraEnv: Record<string, string> = {}): Promise<CliResult> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !key.startsWith('PLAK_')) {
+    // The CLI reads TOON_* first and falls back to PLAK_*: neither may leak in.
+    if (value !== undefined && !key.startsWith('TOON_') && !key.startsWith('PLAK_')) {
       env[key] = value;
     }
   }
-  env.PLAK_CONFIG_DIR = configDir();
-  const command = ['run', '--project', path.join(REPO_ROOT, 'cli'), 'plak', ...args];
+  env.TOON_CONFIG_DIR = configDir();
+  const command = ['run', '--project', path.join(REPO_ROOT, 'cli'), 'toon', ...args];
   try {
     const { stdout, stderr } = await execFileAsync('uv', command, {
       cwd: workDir,
@@ -94,14 +95,14 @@ function writeDist(name: string, heading: string): string {
   return folder;
 }
 
-test.describe.serial('Plak CLI against the e2e stack', () => {
+test.describe.serial('Toon CLI against the e2e stack', () => {
   test.beforeAll(async ({ browser }) => {
     adminContext = await browser.newContext(CONTEXT_OPTIONS);
     adminPage = await adminContext.newPage();
     adminApi = await newHostContext(ADMIN_HOST);
     contentApi = await newHostContext(CONTENT_HOST);
 
-    workDir = mkdtempSync(path.join(tmpdir(), 'plak-cli-e2e-'));
+    workDir = mkdtempSync(path.join(tmpdir(), 'toon-cli-e2e-'));
     previewDist = writeDist('preview-dist', 'CLI preview pr-7');
     liveDist = writeDist('live-dist', 'CLI live');
 
@@ -139,8 +140,8 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     const token = await cliLoginToken(adminApi, adminPage, ADMIN_URL, ADMIN_SUB, {
       email: ADMIN_EMAIL,
     });
-    expect(token).toMatch(/^plakcli_/);
-    // What `plak login --insecure-storage` itself writes after the device
+    expect(token).toMatch(/^tooncli_/);
+    // What `toon login --insecure-storage` itself writes after the device
     // flow: the default host and the session in plain text, only readable by
     // the owner (the CLI ignores a looser file).
     mkdirSync(configDir(), { mode: 0o700 });
@@ -150,7 +151,7 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     };
     writeFileSync(path.join(configDir(), 'hosts.json'), JSON.stringify(hosts), { mode: 0o600 });
 
-    const preview = await plak([
+    const preview = await toon([
       'publish',
       previewDist,
       '--host',
@@ -172,7 +173,7 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     expect(previewStyle.headers()['content-type']).toContain('text/css');
 
     // Without --preview it is a live deploy, and the site itself serves it.
-    const live = await plak(['publish', liveDist, '--host', ADMIN_URL, '--site', `${GROUP}/${SITE}`]);
+    const live = await toon(['publish', liveDist, '--host', ADMIN_URL, '--site', `${GROUP}/${SITE}`]);
     expect(live.code, live.stderr).toBe(0);
     expect(live.stdout.trim()).toMatch(VERSION_ID);
 
@@ -180,7 +181,7 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     expect(livePage.status()).toBe(200);
     expect(await body(livePage)).toContain('CLI live');
 
-    const removed = await plak([
+    const removed = await toon([
       'preview-remove',
       PREVIEW_REF,
       '--host',
@@ -198,15 +199,15 @@ test.describe.serial('Plak CLI against the e2e stack', () => {
     const stillLive = await contentApi.get(`${SITE_PATH}/`);
     expect(stillLive.status()).toBe(200);
 
-    const logout = await plak(['logout', '--host', ADMIN_URL]);
+    const logout = await toon(['logout', '--host', ADMIN_URL]);
     expect(logout.code, logout.stderr).toBe(0);
     expect(logout.stdout).toContain('Logged out');
 
     // The token is revoked at the server, not just forgotten locally: the
     // same token in the environment no longer publishes anything.
-    const afterLogout = await plak(
+    const afterLogout = await toon(
       ['publish', liveDist, '--host', ADMIN_URL, '--site', `${GROUP}/${SITE}`],
-      { PLAK_ACCESS_TOKEN: token },
+      { TOON_ACCESS_TOKEN: token },
     );
     expect(afterLogout.code).toBe(1);
     expect(afterLogout.stderr).toContain('Error:');

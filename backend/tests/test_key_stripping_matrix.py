@@ -121,7 +121,7 @@ async def _get(app: FastAPI, world: World, credential: str, url: str) -> httpx.R
         elif credential in KEY_COOKIES:
             key_id = world.key_id if credential == "key_cookie" else world.revoked_key_id
             signed = sign_key_cookie(app.state.settings.session_secret, str(key_id))
-            client.cookies.set(KEY_COOKIE, signed, domain="plak.example", path="/")
+            client.cookies.set(KEY_COOKIE, signed, domain="toon.example", path="/")
         return await client.get(url, headers=NAVIGATION)
 
 
@@ -174,3 +174,30 @@ async def test_matrix_key_in_the_query(factory, tmp_path: Path, policy, credenti
                 assert location == f"{path}?x=1", cell
                 assert response.content == taken_out.content, cell
                 assert _without_location(response) == _without_location(taken_out), cell
+
+
+@pytest.mark.parametrize("policy", POLICIES, ids=policy_id)
+async def test_matrix_a_key_cookie_under_its_old_name_counts_for_nothing(factory, tmp_path: Path, policy):
+    """A browser can still hold the key cookie from before the rename to Toon,
+    signed with the same secret. Only the name keeps it out: the visitor gets
+    what a visitor without any cookie gets, a refusal byte for byte included."""
+    async with factory() as db:
+        world = await make_world(db, policy)
+        await db.commit()
+    app = _make_app(make_settings(tmp_path), factory, ContentStore(tmp_path))
+    signed = sign_key_cookie(app.state.settings.session_secret, str(world.key_id))
+    paths = (
+        "/aurora/site/",
+        f"/aurora/site/_preview/{world.preview_ref}/",
+        f"/aurora/site/_version/{world.live_version_id}/",
+    )
+    for path in paths:
+        without_cookie = await _get(app, world, "anonymous", path)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url=BASE_URL, follow_redirects=False
+        ) as client:
+            client.cookies.set("__Secure-plak-key", signed, domain="toon.example", path="/")
+            response = await client.get(path, headers=NAVIGATION)
+        assert response.status_code == without_cookie.status_code, path
+        assert response.content == without_cookie.content, path
+        assert _header_list(response) == _header_list(without_cookie), path

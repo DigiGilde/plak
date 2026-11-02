@@ -34,7 +34,7 @@ async def _ok_app(scope: Scope, receive: Receive, send: Send) -> None:
 def _make_settings(**overrides: object) -> Settings:
     base: dict[str, object] = {
         "db_url": "postgresql+asyncpg://user:pass@localhost/db",
-        "content_root": "var/plak-content",
+        "content_root": "var/toon-content",
         "oidc_issuer": "https://issuer.example.org",
         "oidc_client_id": "client-id",
         "oidc_client_private_jwk": "{}",
@@ -44,7 +44,7 @@ def _make_settings(**overrides: object) -> Settings:
         "audit_ip_key": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
         "environment": "dev",
         "behind_proxy": False,
-        "content_base_url": "https://plak.example",
+        "content_base_url": "https://toon.example",
     }
     base.update(overrides)
     return Settings(**base)
@@ -378,8 +378,8 @@ async def test_made_up_cli_tokens_do_not_open_fresh_budgets() -> None:
     own budget; bearer requests count per client IP instead."""
     settings = _make_settings(ratelimit_api_max=1, ratelimit_api_window_s=60)
     async with _make_client(settings) as client:
-        r1 = await client.get("/-/api/v1/x", headers={"authorization": "Bearer plakcli_0123456789abcdef_" + "a" * 64})
-        r2 = await client.get("/-/api/v1/x", headers={"authorization": "Bearer plakcli_fedcba9876543210_" + "b" * 64})
+        r1 = await client.get("/-/api/v1/x", headers={"authorization": "Bearer tooncli_0123456789abcdef_" + "a" * 64})
+        r2 = await client.get("/-/api/v1/x", headers={"authorization": "Bearer tooncli_fedcba9876543210_" + "b" * 64})
 
     assert [r1.status_code, r2.status_code] == [200, 429]
 

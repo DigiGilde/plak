@@ -21,16 +21,16 @@ def _clean_environment(monkeypatch):
 
 def _set_required_env(monkeypatch, **overrides):
     values = {
-        "TOON_DB_URL": "postgresql+asyncpg://gebruiker:wachtwoord@localhost/plak",
-        "TOON_CONTENT_ROOT": "/var/lib/plak/content",
+        "TOON_DB_URL": "postgresql+asyncpg://gebruiker:wachtwoord@localhost/toon",
+        "TOON_CONTENT_ROOT": "/var/lib/toon/content",
         "TOON_OIDC_ISSUER": "https://idp.example.org",
-        "TOON_OIDC_CLIENT_ID": "plak",
+        "TOON_OIDC_CLIENT_ID": "toon",
         "TOON_OIDC_CLIENT_PRIVATE_JWK": '{"kty": "RSA"}',
         "TOON_OIDC_REQUIRED_ACR": "urn:acr:hoog",
         "TOON_SESSION_SECRET": "x" * 32,
         "TOON_AUDIT_PEPPER": "y" * 32,
         "TOON_AUDIT_IP_KEY": base64.b64encode(b"z" * 32).decode(),
-        "TOON_CONTENT_BASE_URL": "https://plak.example",
+        "TOON_CONTENT_BASE_URL": "https://toon.example",
         "TOON_ENVIRONMENT": "dev",
     }
     values.update(overrides)
@@ -47,7 +47,7 @@ def test_missing_required_env_fails_with_clear_message(monkeypatch):
 def test_valid_configuration_loads_with_expected_defaults(monkeypatch):
     _set_required_env(monkeypatch)
     settings = load_settings()
-    assert str(settings.db_url) == "postgresql+asyncpg://gebruiker:wachtwoord@localhost/plak"
+    assert str(settings.db_url) == "postgresql+asyncpg://gebruiker:wachtwoord@localhost/toon"
     assert settings.environment == "dev"
     assert settings.base_url is None
     assert settings.spa_path == Path("../frontend/dist")
@@ -446,7 +446,7 @@ def test_production_without_base_url_refused(monkeypatch):
     assert "BASE_URL" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("value", ["beheer.plak.example", "/sites", "https://", "ftp://beheer.plak.example"])
+@pytest.mark.parametrize("value", ["beheer.toon.example", "/sites", "https://", "ftp://beheer.toon.example"])
 def test_base_url_without_usable_origin_refused(monkeypatch, value):
     # origin_guard.normalise_origin needs a http(s) scheme and a hostname to
     # turn this into an origin; anything else must not pass validation and
@@ -458,7 +458,7 @@ def test_base_url_without_usable_origin_refused(monkeypatch, value):
 
 
 @pytest.mark.parametrize(
-    "value", ["https://beheer.plak.example", "http://beheer.plak.localhost:8080"]
+    "value", ["https://beheer.toon.example", "http://beheer.toon.localhost:8080"]
 )
 def test_base_url_with_usable_origin_accepted(monkeypatch, value):
     _set_required_env(monkeypatch, TOON_BASE_URL=value)
@@ -486,7 +486,7 @@ def test_unknown_environment_value_refused(monkeypatch):
     assert "TOON_ENVIRONMENT" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("value", ["", "plak.example", "/sites", "https://"])
+@pytest.mark.parametrize("value", ["", "toon.example", "/sites", "https://"])
 def test_content_base_url_without_hostname_refused(monkeypatch, value):
     # The app derives the content host from this URL; without a hostname
     # every host comparison in the app would compare against the empty string.
@@ -499,9 +499,9 @@ def test_content_base_url_without_hostname_refused(monkeypatch, value):
 @pytest.mark.parametrize(
     ("url", "host"),
     [
-        ("https://plak.example", "plak.example"),
-        ("http://plak.localhost:8080", "plak.localhost"),
-        ("https://PLAK.example/sites/", "plak.example"),
+        ("https://toon.example", "toon.example"),
+        ("http://toon.localhost:8080", "toon.localhost"),
+        ("https://TOON.example/sites/", "toon.example"),
     ],
 )
 def test_content_host_is_the_hostname_of_the_content_origin(monkeypatch, url, host):
@@ -537,7 +537,7 @@ def test_operator_email_empty_after_stripping_is_not_configured(monkeypatch, val
     "value",
     [
         "digigilde@rijksoverheid.nl",
-        "Digi.Gilde+plak@Rijksoverheid.NL",
+        "Digi.Gilde+toon@Rijksoverheid.NL",
         "beheer@localhost",
         "a" * 64 + "@" + "b" * 186 + ".nl",
     ],
@@ -599,13 +599,13 @@ def test_production_full_configured_loads(monkeypatch):
         TOON_ENVIRONMENT="productie",
         TOON_BEHIND_PROXY="true",
         TOON_OIDC_ISS_REQUIRED="true",
-        TOON_BASE_URL="https://beheer.plak.example",
-        TOON_CONTENT_BASE_URL="https://plak.example",
+        TOON_BASE_URL="https://beheer.toon.example",
+        TOON_CONTENT_BASE_URL="https://toon.example",
     )
     settings = load_settings()
     assert settings.environment == "productie"
-    assert settings.base_url == "https://beheer.plak.example"
-    assert settings.content_base_url == "https://plak.example"
+    assert settings.base_url == "https://beheer.toon.example"
+    assert settings.content_base_url == "https://toon.example"
 
 
 def _production_env(monkeypatch, **overrides):
@@ -614,7 +614,7 @@ def _production_env(monkeypatch, **overrides):
         TOON_ENVIRONMENT="productie",
         TOON_BEHIND_PROXY="true",
         TOON_OIDC_ISS_REQUIRED="true",
-        TOON_BASE_URL="https://beheer.plak.example",
+        TOON_BASE_URL="https://beheer.toon.example",
         **overrides,
     )
 
@@ -623,8 +623,8 @@ def _production_env(monkeypatch, **overrides):
     "issuer",
     [
         "http://idp.example.org",
-        "http://idp.example.org/realms/plak",
-        "http://oidc.plak.localhost:8080/default",
+        "http://idp.example.org/realms/toon",
+        "http://oidc.toon.localhost:8080/default",
     ],
 )
 def test_production_refuses_a_http_issuer(monkeypatch, issuer):
@@ -638,8 +638,8 @@ def test_production_refuses_a_http_issuer(monkeypatch, issuer):
 @pytest.mark.parametrize(
     "issuer",
     [
-        "https://localhost/realms/plak",
-        "https://oidc.plak.localhost:8080/default",
+        "https://localhost/realms/toon",
+        "https://oidc.toon.localhost:8080/default",
         "https://127.0.0.1:8443/default",
         "https://127.9.9.9/default",
         "https://[::1]:8443/default",
@@ -657,7 +657,7 @@ def test_production_refuses_a_loopback_issuer(monkeypatch, issuer):
 
 @pytest.mark.parametrize(
     "issuer",
-    ["https://idp.example.org", "https://idp.example.org/realms/plak", "https://IDP.example.org"],
+    ["https://idp.example.org", "https://idp.example.org/realms/toon", "https://IDP.example.org"],
 )
 def test_production_accepts_a_https_issuer_on_a_real_host(monkeypatch, issuer):
     _production_env(monkeypatch, TOON_OIDC_ISSUER=issuer)
@@ -670,7 +670,7 @@ def test_production_checks_the_issuer_derived_from_the_zad_discovery_url(monkeyp
     _production_env(monkeypatch, TOON_OIDC_ISSUER="")
     monkeypatch.setenv(
         "OIDC_DISCOVERY_URL",
-        "http://keycloak.zad.local/realms/plak/.well-known/openid-configuration",
+        "http://keycloak.zad.local/realms/toon/.well-known/openid-configuration",
     )
     with pytest.raises(ConfigurationError) as excinfo:
         load_settings()
@@ -679,7 +679,7 @@ def test_production_checks_the_issuer_derived_from_the_zad_discovery_url(monkeyp
 
 @pytest.mark.parametrize(
     "issuer",
-    ["http://oidc.plak.localhost:8080/default", "http://localhost:8081/default"],
+    ["http://oidc.toon.localhost:8080/default", "http://localhost:8081/default"],
 )
 def test_dev_keeps_accepting_the_http_mock_issuer(monkeypatch, issuer):
     _set_required_env(monkeypatch, TOON_OIDC_ISSUER=issuer)
@@ -771,8 +771,8 @@ class TestRequiredAcr:
             TOON_ENVIRONMENT="productie",
             TOON_BEHIND_PROXY="true",
             TOON_OIDC_ISS_REQUIRED="true",
-            TOON_BASE_URL="https://beheer.plak.example",
-            TOON_CONTENT_BASE_URL="https://plak.example",
+            TOON_BASE_URL="https://beheer.toon.example",
+            TOON_CONTENT_BASE_URL="https://toon.example",
         )
         settings = load_settings()
         assert settings.environment == "productie"
@@ -784,8 +784,8 @@ class TestRequiredAcr:
             TOON_OIDC_REQUIRED_ACR="",
             TOON_ENVIRONMENT="productie",
             TOON_BEHIND_PROXY="true",
-            TOON_BASE_URL="https://beheer.plak.example",
-            TOON_CONTENT_BASE_URL="https://plak.example",
+            TOON_BASE_URL="https://beheer.toon.example",
+            TOON_CONTENT_BASE_URL="https://toon.example",
         )
         with pytest.raises(ConfigurationError) as excinfo:
             load_settings()
@@ -796,20 +796,20 @@ class TestZadSourceMapping:
     """The ZAD Keycloak service injects OIDC_DISCOVERY_URL, OIDC_CLIENT_ID and
     OIDC_CLIENT_SECRET (without a prefix)."""
 
-    DISCOVERY_URL = "https://keycloak.rijksapp.nl/realms/plak/.well-known/openid-configuration"
+    DISCOVERY_URL = "https://keycloak.rijksapp.nl/realms/toon/.well-known/openid-configuration"
 
     def _set_zad_env(self, monkeypatch, **overrides):
         values = {
-            "TOON_DB_URL": "postgresql+asyncpg://gebruiker:wachtwoord@localhost/plak",
-            "TOON_CONTENT_ROOT": "/var/lib/plak/content",
+            "TOON_DB_URL": "postgresql+asyncpg://gebruiker:wachtwoord@localhost/toon",
+            "TOON_CONTENT_ROOT": "/var/lib/toon/content",
             "TOON_SESSION_SECRET": "x" * 32,
             "TOON_AUDIT_PEPPER": "y" * 32,
             "TOON_AUDIT_IP_KEY": base64.b64encode(b"z" * 32).decode(),
             "TOON_OIDC_CLIENT_AUTH": "client_secret_post",
-            "TOON_CONTENT_BASE_URL": "https://plak.example",
+            "TOON_CONTENT_BASE_URL": "https://toon.example",
             "TOON_ENVIRONMENT": "dev",
             "OIDC_DISCOVERY_URL": self.DISCOVERY_URL,
-            "OIDC_CLIENT_ID": "plak-prd",
+            "OIDC_CLIENT_ID": "toon-prd",
             "OIDC_CLIENT_SECRET": "zad-geheim",
         }
         values.update(overrides)
@@ -819,8 +819,8 @@ class TestZadSourceMapping:
     def test_zad_variables_fill_the_oidc_settings(self, monkeypatch):
         self._set_zad_env(monkeypatch)
         settings = load_settings()
-        assert settings.oidc_issuer == "https://keycloak.rijksapp.nl/realms/plak"
-        assert settings.oidc_client_id == "plak-prd"
+        assert settings.oidc_issuer == "https://keycloak.rijksapp.nl/realms/toon"
+        assert settings.oidc_client_id == "toon-prd"
         assert settings.oidc_client_secret == "zad-geheim"
         assert settings.oidc_client_auth == "client_secret_post"
 
@@ -828,12 +828,12 @@ class TestZadSourceMapping:
         self._set_zad_env(
             monkeypatch,
             TOON_OIDC_ISSUER="https://idp.example.org",
-            TOON_OIDC_CLIENT_ID="plak-eigen",
+            TOON_OIDC_CLIENT_ID="toon-eigen",
             TOON_OIDC_CLIENT_SECRET="eigen-geheim",
         )
         settings = load_settings()
         assert settings.oidc_issuer == "https://idp.example.org"
-        assert settings.oidc_client_id == "plak-eigen"
+        assert settings.oidc_client_id == "toon-eigen"
         assert settings.oidc_client_secret == "eigen-geheim"
 
     def test_the_old_variables_go_for_zad_variables_too(self, monkeypatch):
@@ -857,7 +857,7 @@ class TestZadSourceMapping:
         settings = load_settings()
         assert settings.oidc_client_auth == "private_key_jwt"
         assert settings.oidc_client_secret == ""
-        assert settings.oidc_issuer == "https://keycloak.rijksapp.nl/realms/plak"
+        assert settings.oidc_issuer == "https://keycloak.rijksapp.nl/realms/toon"
 
     def test_without_zad_and_without_toon_issuer_refused(self, monkeypatch):
         self._set_zad_env(monkeypatch)
@@ -874,7 +874,7 @@ class TestZadSourceMapping:
         assert "TOON_OIDC_CLIENT_ID" in str(excinfo.value)
 
     def test_discovery_url_without_well_known_suffix_refused(self, monkeypatch):
-        self._set_zad_env(monkeypatch, OIDC_DISCOVERY_URL="https://keycloak.rijksapp.nl/realms/plak")
+        self._set_zad_env(monkeypatch, OIDC_DISCOVERY_URL="https://keycloak.rijksapp.nl/realms/toon")
         with pytest.raises(ConfigurationError) as excinfo:
             load_settings()
         message = str(excinfo.value)
@@ -954,8 +954,8 @@ class TestOldPrefix:
     def test_a_deployment_with_only_the_old_names_keeps_starting(self, monkeypatch):
         _set_old_env(monkeypatch)
         settings = load_settings()
-        assert settings.db_url == "postgresql+asyncpg://gebruiker:wachtwoord@localhost/plak"
-        assert settings.content_root == Path("/var/lib/plak/content")
+        assert settings.db_url == "postgresql+asyncpg://gebruiker:wachtwoord@localhost/toon"
+        assert settings.content_root == Path("/var/lib/toon/content")
         assert settings.session_secret == "x" * 32
         assert settings.audit_peppers == ("y" * 32,)
         assert settings.audit_ip_key_bytes == b"z" * 32

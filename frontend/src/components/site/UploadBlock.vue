@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * What it looks like to hand Plak a site, the same for a new site and for a new
+ * What it looks like to hand Toon a site, the same for a new site and for a new
  * version of an existing one. Only the look: reading and packing are in
  * `uploadIntake`, and what counts as a drop target is up to whoever uses this.
  *

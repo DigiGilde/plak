@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the E2E suite (spec 13): brings the compose stack up on its own
-# ports as a separate compose project (plak-e2e), waits for health,
+# ports as a separate compose project (toon-e2e), waits for health,
 # runs Playwright and tears the stack down again.
 #
 # Environment variables:
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT="plak-e2e"
+PROJECT="toon-e2e"
 export TOON_E2E_PORT="${TOON_E2E_PORT:-18888}"
 export TOON_E2E_OIDC_PORT="${TOON_E2E_OIDC_PORT:-18889}"
 ENGINE="${TOON_E2E_ENGINE:-podman}"
@@ -64,11 +64,11 @@ echo "== stack starten (project ${PROJECT}, poort ${TOON_E2E_PORT}) =="
 echo "== wachten op gezondheid =="
 ready=""
 for _ in $(seq 1 60); do
-    if curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
+    if curl -fsS -o /dev/null -H "Host: beheer.toon.localhost" \
             "http://127.0.0.1:${TOON_E2E_PORT}/healthz-proxy" \
-        && curl -fsS -o /dev/null -H "Host: plak.localhost" \
+        && curl -fsS -o /dev/null -H "Host: toon.localhost" \
             "http://127.0.0.1:${TOON_E2E_PORT}/healthz-proxy" \
-        && curl -fsS -o /dev/null -H "Host: beheer.plak.localhost" \
+        && curl -fsS -o /dev/null -H "Host: beheer.toon.localhost" \
             "http://127.0.0.1:${TOON_E2E_PORT}/"; then
         ready="ja"
         break

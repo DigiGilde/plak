@@ -53,10 +53,10 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.sessions.subtitle': 'Every sign-in through {command} that still has access to your account.',
   'admin.sessions.loading': 'Loading sessions',
   'admin.sessions.empty': 'No linked sessions yet',
-  'admin.sessions.empty.install.before': 'No Plak CLI yet? ',
+  'admin.sessions.empty.install.before': 'No Toon CLI yet? ',
   'admin.sessions.empty.install.link': 'Here is how to install and use it.',
   'admin.sessions.empty.detail':
-    'Run plak login on your computer to link the Plak CLI to your account.',
+    'Run "toon login" on your computer to link the Toon CLI to your account.',
   'admin.sessions.unknownClient': 'Unknown program',
   'admin.sessions.neverUsed': 'not yet',
   'admin.sessions.times': 'Linked {linked} - last used {lastUsed} - expires {expires}',
@@ -64,7 +64,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.sessions.revoke.label': 'Revoke the session of {name}',
   'admin.sessions.confirm.title': 'Revoke the session of {name}?',
   'admin.sessions.confirm.text':
-    'This session loses access to your account straight away. Linking up again takes another plak login.',
+    'This session loses access to your account straight away. Linking up again takes another "toon login".',
   'admin.sessions.confirm.keep': 'Keep the session',
   'admin.sessions.confirm.confirm': 'Revoke session',
   'admin.sessions.revokeFailed': 'The session of {name} was not revoked',
@@ -98,7 +98,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.suggestion.viaGroup': '{role} via the group',
   'admin.siteMembers.form.heading': 'Give someone a role on this site',
   'admin.siteMembers.form.hint':
-    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first. Plak does not create an account here.',
+    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first. Toon does not create an account here.',
   'admin.siteMembers.form.identifier': 'Name or email address',
   'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
   'admin.siteMembers.form.identifier.help':

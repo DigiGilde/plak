@@ -24,7 +24,7 @@ class AuditLogEntry(IDMixin, Base):
     """Rows are never updated, and deleted only once their retention period has expired
     (`audit/retention.py`): the migration installs triggers that refuse every UPDATE and
     TRUNCATE on this table, and a DELETE before the period is over. They hold for every session on
-    the one database account Plak has, including the app's own, so an owner who disables
+    the one database account Toon has, including the app's own, so an owner who disables
     them gets past them; `docs/audit-log.md` says what that costs.
 
     The chain columns (`chain_shard`, `chain_seq`, `chain_hash`, `chain_prev_hash`) are deliberately not

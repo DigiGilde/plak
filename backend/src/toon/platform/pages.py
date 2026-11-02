@@ -153,7 +153,7 @@ def _redirect_uri(request: Request, profile: _LoginProfile) -> str:
 
 # Whoever hears the name of the service and types the content host into the
 # address bar would otherwise land on the neutral 404. The root sends them on
-# to the admin host, whose landing page is public and says what Plak is. That
+# to the admin host, whose landing page is public and says what Toon is. That
 # page is the SPA, with the design system and its one copy of the text; the
 # content host cannot carry it, because it shares its origin with every
 # published site and so runs no platform script at all.

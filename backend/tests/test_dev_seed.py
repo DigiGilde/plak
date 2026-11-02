@@ -52,13 +52,13 @@ def settings(migrated_dsn: str, tmp_path: Path) -> Settings:
         # The seed never logs in; the OIDC fields are here only because
         # Settings refuses to be built without them.
         oidc_issuer="https://idp.example.org",
-        oidc_client_id="plak-test",
+        oidc_client_id="toon-test",
         oidc_client_auth="client_secret_post",
         oidc_client_secret="client-secret-van-minstens-32-bytes!!",
         session_secret="s" * 32,
         audit_pepper="p" * 32,
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-        content_base_url="https://plak.example",
+        content_base_url="https://toon.example",
         environment="dev",
         bootstrap_admin_sub="dev-beheerder",
     )
@@ -209,7 +209,7 @@ class TestSeed:
         store = ContentStore(settings.content_root)
         for storage_ref in refs:
             assert locate(store, storage_ref, "index.html") is not None
-            assert locate(store, storage_ref, "assets/plak.css") is not None
+            assert locate(store, storage_ref, "assets/toon.css") is not None
 
     async def test_a_preview_may_be_stricter_than_its_site(
         self, seed_module, settings: Settings, session_factory
@@ -265,6 +265,6 @@ class TestReport:
     ) -> None:
         result = await seed_module.seed(settings)
         report = seed_module._report(settings, result)
-        assert "plak login" in report
+        assert "toon login" in report
         assert "/cli-link" in report
-        assert "plak_" not in report.replace("plak login", "")
+        assert "toon_" not in report.replace("toon login", "")

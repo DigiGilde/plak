@@ -1,4 +1,4 @@
-"""CLI login models: the device authorization grant (RFC 8628) Plak brokers
+"""CLI login models: the device authorization grant (RFC 8628) Toon brokers
 itself, and the CLI sessions it results in.
 
 Every secret is stored as selector plus SHA-256 hash, never in plain text.
@@ -54,7 +54,7 @@ class CliDeviceAuthorization(IDMixin, Base):
 
 
 class CliSession(IDMixin, Base):
-    """One `plak login`: a rotating refresh token plus the current access
+    """One `toon login`: a rotating refresh token plus the current access
     token. `expires_at` slides with every refresh, `max_expires_at` does not."""
 
     __tablename__ = "cli_sessions"

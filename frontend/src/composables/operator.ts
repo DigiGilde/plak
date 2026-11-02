@@ -1,6 +1,6 @@
 /**
  * Who runs this installation, for the privacy and accessibility statements.
- * Plak is installed by more than one organisation, so the statements name
+ * Toon is installed by more than one organisation, so the statements name
  * the operator from `GET /operator` and otherwise "the organisation that runs
  * this installation".
  */

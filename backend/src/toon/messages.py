@@ -59,7 +59,7 @@ TITLES_EN: Final[dict[int, str]] = {
     503: "Unavailable",
 }
 
-# A status that is not in the table at all (never raised by Plak itself, but
+# A status that is not in the table at all (never raised by Toon itself, but
 # Starlette can produce one) still needs a title.
 FALLBACK_TITLE_NL: Final[str] = "Fout"
 FALLBACK_TITLE_EN: Final[str] = "Error"
@@ -97,7 +97,7 @@ NL: Final[dict[str, str]] = {
     "UNKNOWN_PREVIEW": "Onbekende preview.",
     "UNKNOWN_ASSET": "Onbekend docs-asset.",
     "CLI_SESSION_UNKNOWN": "Onbekende CLI-sessie.",
-    "USER_CODE_UNKNOWN": "Deze code is onbekend, verlopen of al gebruikt. Start plak login opnieuw.",
+    "USER_CODE_UNKNOWN": "Deze code is onbekend, verlopen of al gebruikt. Start `toon login` opnieuw.",
     "NOT_GROUP_MEMBER": "Dit lid zit niet in de groep.",
     "NOT_GROUP_MEMBER.you": "Je bent geen lid van deze groep.",
     "NOT_SITE_MEMBER": "Dit lid heeft geen rol op deze site.",
@@ -186,11 +186,11 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_ISSUER_UNKNOWN.mismatch": "De issuer van het CI-token klopt niet.",
     "CI_AUDIENCE_MISMATCH": (
-        "De audience van het CI-token moet precies de beheer-URL van Plak zijn ({audience}), of voor "
+        "De audience van het CI-token moet precies de beheer-URL van Toon zijn ({audience}), of voor "
         "één site {audience}/-/sites/ met het site-ID erachter."
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
-        "De audience van het CI-token moet precies de beheer-URL van Plak zijn "
+        "De audience van het CI-token moet precies de beheer-URL van Toon zijn "
         "(TOON_BASE_URL is niet ingesteld)."
     ),
     "CI_AUDIENCE_MISMATCH.site": (
@@ -208,7 +208,7 @@ NL: Final[dict[str, str]] = {
     ),
     "CI_SITE_ID_REQUIRED": (
         "Deze site accepteert alleen een workflow die haar site-ID noemt. Zet `site-id` (action) of "
-        "`--site-id` (CLI) in de workflow, met het ID van het tabblad Deploy van je site in Plak. "
+        "`--site-id` (CLI) in de workflow, met het ID van het tabblad Deploy van je site in Toon. "
         "Een oudere action of CLI negeert of weigert die optie. Werk die dan eerst bij."
     ),
     "SITE_MOVED": (
@@ -218,7 +218,7 @@ NL: Final[dict[str, str]] = {
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "Het token is ongeldig, ingetrokken of verlopen.",
     "TOKEN_INVALID.missing": "Het token ontbreekt.",
-    "TOKEN_INVALID.cli_only": "Hier wordt alleen een CLI-token uit 'plak login' geaccepteerd.",
+    "TOKEN_INVALID.cli_only": "Hier wordt alleen een CLI-token uit `toon login` geaccepteerd.",
     "EXPIRY_IN_PAST": "De vervaldatum ligt in het verleden.",
     "EXPIRY_TOO_FAR": "De vervaldatum mag hoogstens {days} dagen vooruit liggen.",
     # -- CLI login ------------------------------------------------------------
@@ -236,7 +236,7 @@ NL: Final[dict[str, str]] = {
     "INVALID_GRANT.refresh_token_reused": (
         "Dit verversingstoken is al gebruikt. De CLI-sessie is ingetrokken."
     ),
-    "INVALID_GRANT.session_expired": "De CLI-sessie is verlopen. Log opnieuw in met plak login.",
+    "INVALID_GRANT.session_expired": "De CLI-sessie is verlopen. Log opnieuw in met `toon login`.",
     "INVALID_GRANT.member_not_active": "Het lid achter deze CLI-sessie is niet (meer) actief.",
     "EXPIRED_TOKEN.device_code": "De apparaatcode is verlopen. Start het inloggen opnieuw.",
     "SLOW_DOWN": "Vraag hoogstens eens per {interval} seconden. Wacht langer.",
@@ -398,7 +398,7 @@ EN: Final[dict[str, str]] = {
     "UNKNOWN_PREVIEW": "Unknown preview.",
     "UNKNOWN_ASSET": "Unknown docs asset.",
     "CLI_SESSION_UNKNOWN": "Unknown CLI session.",
-    "USER_CODE_UNKNOWN": "This code is unknown, expired or already used. Run plak login again.",
+    "USER_CODE_UNKNOWN": "This code is unknown, expired or already used. Run `toon login` again.",
     "NOT_GROUP_MEMBER": "This member is not in the group.",
     "NOT_GROUP_MEMBER.you": "You are not a member of this group.",
     "NOT_SITE_MEMBER": "This member has no role on this site.",
@@ -492,11 +492,11 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_ISSUER_UNKNOWN.mismatch": "The issuer of the CI token is not right.",
     "CI_AUDIENCE_MISMATCH": (
-        "The audience of the CI token has to be exactly the beheer URL of Plak ({audience}), or for "
+        "The audience of the CI token has to be exactly the beheer URL of Toon ({audience}), or for "
         "one site {audience}/-/sites/ followed by the site id."
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
-        "The audience of the CI token has to be exactly the beheer URL of Plak "
+        "The audience of the CI token has to be exactly the beheer URL of Toon "
         "(TOON_BASE_URL is not set)."
     ),
     "CI_AUDIENCE_MISMATCH.site": "This ID token's repository is not linked to the site its site id names.",
@@ -512,7 +512,7 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_SITE_ID_REQUIRED": (
         "This site only accepts a workflow that names its site id. Add `site-id` (action) or "
-        "`--site-id` (CLI) with the id from the Deploy tab of your site in Plak. "
+        "`--site-id` (CLI) with the id from the Deploy tab of your site in Toon. "
         "An older action or CLI ignores or refuses that option: update it first."
     ),
     "SITE_MOVED": (
@@ -522,7 +522,7 @@ EN: Final[dict[str, str]] = {
     # -- Deploy tokens, keys, expiry -----------------------------------------
     "TOKEN_INVALID": "The token is invalid, revoked or expired.",
     "TOKEN_INVALID.missing": "The token is missing.",
-    "TOKEN_INVALID.cli_only": "Only a CLI token from 'plak login' is accepted here.",
+    "TOKEN_INVALID.cli_only": "Only a CLI token from `toon login` is accepted here.",
     "EXPIRY_IN_PAST": "The expiry date is in the past.",
     "EXPIRY_TOO_FAR": "The expiry date may be at most {days} days ahead.",
     # -- CLI login ------------------------------------------------------------
@@ -540,7 +540,7 @@ EN: Final[dict[str, str]] = {
     "INVALID_GRANT.refresh_token_reused": (
         "This refresh token has been used before. The CLI session has been revoked."
     ),
-    "INVALID_GRANT.session_expired": "The CLI session has expired. Sign in again with plak login.",
+    "INVALID_GRANT.session_expired": "The CLI session has expired. Sign in again with `toon login`.",
     "INVALID_GRANT.member_not_active": "The member behind this CLI session is no longer active.",
     "EXPIRED_TOKEN.device_code": "The device code has expired. Start signing in again.",
     "SLOW_DOWN": "Ask at most once every {interval} seconds. Wait longer.",

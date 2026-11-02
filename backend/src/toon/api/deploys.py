@@ -6,7 +6,7 @@ Auth is one of three:
   Actions), verified by ci/tokens.py and matched against the site's linked
   repository by ci/trust.py; a token bound to a site is used on that site
   or not at all (`_target_site`);
-- a CLI access token (`Authorization: Bearer plakcli_...` from `plak login`),
+- a CLI access token (`Authorization: Bearer tooncli_...` from `toon login`),
   which acts as its member with exactly that member's roles;
 - an admin session with CSRF, for the upload in the SPA.
 
@@ -152,7 +152,7 @@ _DEPLOY_OPENAPI = {
                                 "directory after unwrapping enclosing directories and must be an existing directory "
                                 "containing an `index.html`. Meant to confirm one of the suggestions a "
                                 "refused deploy returns in `indexCandidates`; without this field "
-                                "Plak determines the root directory itself."
+                                "Toon determines the root directory itself."
                             ),
                         },
                     },
@@ -180,7 +180,7 @@ class DeployResult(ApiModel):
             "Where the deploy can be viewed: the live site, or for a preview the preview URL. CI can post a "
             "link to it, in a pull request for example."
         ),
-        examples=["https://plak.example/team-aurora/website/_preview/pr-42/"],
+        examples=["https://toon.example/team-aurora/website/_preview/pr-42/"],
     )
     access: AccessOut = Field(
         description=(
@@ -700,13 +700,13 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "`/{groupSlug}/{siteSlug}/_preview/{ref}/`.\n\n"
         "**Who can call this:** any of three callers. (1) A CI ID token from GitHub or Forgejo Actions "
         "(`Authorization: Bearer <JWT>`) from the repository linked to this site, whose audience is exactly "
-        "Plak's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link "
+        "Toon's admin URL followed by `/-/sites/` and the `id` of this site, or, while the link "
         "still accepts it, exactly the admin URL itself; a live deploy must then come from a `push`, "
         "`workflow_dispatch` or `schedule`, and from the live branch if one is set; a preview may come from any "
         "branch. A token bound to another site is never used here: its own repository gets 409 `SITE_MOVED` "
         "with the address of that site. "
-        "(2) A CLI token from `plak login` "
-        "(`Authorization: Bearer plakcli_...`): it acts as the member who signed in, with exactly their "
+        "(2) A CLI token from `toon login` "
+        "(`Authorization: Bearer tooncli_...`): it acts as the member who signed in, with exactly their "
         "roles. (3) An admin session plus CSRF header. With (2) and (3) the member must be active and have at "
         "least the `editor` role on this site. This endpoint and the preview teardown are, together with the "
         "CLI session endpoints, the creation of a group or site and the linking of a repository, the only ones that "
@@ -722,7 +722,7 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "After that there must be an `index.html` in the root directory; otherwise the response is 422 `NO_INDEX`, "
         "with the index paths found in `indexCandidates`. If the site is in a directory "
         "next to other things (a zipped project directory), send that directory as the `basePath` field: this "
-        "confirms one of the suggestions. Plak never picks one of several candidates itself, because it "
+        "confirms one of the suggestions. Toon never picks one of several candidates itself, because it "
         "would silently leave out files you thought you were publishing. The `basePath` is relative to the "
         "root directory after unwrapping, but a path that includes the unwrapped prefix works too, and "
         "a fixed value keeps working if unwrapping has already taken that directory away.\n\n"
@@ -736,13 +736,13 @@ def _deployer(auth: _DeployAuth) -> Deployer:
         "header means decompressing everything in between. The limits are enforced during unpacking and "
         "the headers are checked against the same limits beforehand, so a zip or tar bomb does not get "
         "past either.\n\n"
-        "**Example** (`$PLAK_TOKEN` is a CI ID token or a CLI token):\n\n"
+        "**Example** (`$TOON_TOKEN` is a CI ID token or a CLI token):\n\n"
         "```\n"
         "curl --fail --silent --show-error \\\n"
-        '  --header "Authorization: Bearer $PLAK_TOKEN" \\\n'
+        '  --header "Authorization: Bearer $TOON_TOKEN" \\\n'
         "  --form file=@dist.zip \\\n"
         "  --form preview=pr-42 \\\n"
-        '  "$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys"\n'
+        '  "$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/deploys"\n'
         "```\n\n"
         'Response: `201` with `{"versionId": "..."}`. Omit `--form preview=...` for a live deploy.'
     ),
@@ -895,8 +895,8 @@ async def deploy(request: Request, group_slug: str, site_slug: str) -> DeployRes
         "**Example:**\n\n"
         "```\n"
         "curl --fail --silent --show-error --request DELETE \\\n"
-        '  --header "Authorization: Bearer $PLAK_TOKEN" \\\n'
-        '  "$PLAK_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42"\n'
+        '  --header "Authorization: Bearer $TOON_TOKEN" \\\n'
+        '  "$TOON_ADMIN_URL/-/api/v1/sites/aurora/docs/previews/pr-42"\n'
         "```"
     ),
     responses={204: {"description": "The preview no longer exists. No content is returned."}}

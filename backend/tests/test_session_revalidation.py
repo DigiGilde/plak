@@ -568,7 +568,7 @@ async def test_healthz_names_the_idp_check_and_nothing_more(tmp_path, monkeypatc
     app = create_app(make_settings(idp, content_root=tmp_path, storage_min_free_bytes=0))
 
     async def health() -> httpx.Response:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://plak.example") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://toon.example") as client:
             return await client.get("/-/healthz")
 
     async with app.router.lifespan_context(app):

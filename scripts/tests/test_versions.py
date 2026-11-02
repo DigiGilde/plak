@@ -28,10 +28,10 @@ class TestShippedPaths:
             "frontend/vite.config.ts",
             "frontend/public/favicon.svg",
             "containers/toon/Containerfile",
-            "cli/plak_cli/__init__.py",
+            "cli/toon_cli/__init__.py",
             "cli/pyproject.toml",
             "cli/uv.lock",
-            "plugin/skills/plak-publish/SKILL.md",
+            "plugin/skills/toon-publish/SKILL.md",
             "plugin/.claude-plugin/plugin.json",
             "actions/publish/action.yml",
         ],
@@ -72,12 +72,12 @@ class TestShippedPaths:
 class TestVersionEdits:
     def test_only_the_project_version_changes_in_pyproject(self):
         edited = versions.set_pyproject_version(PYPROJECT, "2026.10.1")
-        assert edited == PYPROJECT.replace('name = "plak"\nversion = "0.1.0"', 'name = "plak"\nversion = "2026.10.1"')
+        assert edited == PYPROJECT.replace('name = "toon"\nversion = "0.1.0"', 'name = "toon"\nversion = "2026.10.1"')
         assert versions.pyproject_version(edited) == "2026.10.1"
 
     @pytest.mark.parametrize(
         ("text", "reason"),
-        [("[tool.x]\nversion = \"1\"\n", r"no \[project\] table"), ('[project]\nname = "plak"\n', "no version")],
+        [("[tool.x]\nversion = \"1\"\n", r"no \[project\] table"), ('[project]\nname = "toon"\n', "no version")],
     )
     def test_a_pyproject_without_a_project_version_is_refused(self, text, reason):
         with pytest.raises(errors.ReleaseError, match=reason):
@@ -87,19 +87,19 @@ class TestVersionEdits:
 
     def test_only_the_root_package_changes_in_the_lock(self):
         edited = versions.set_lock_version(LOCK, "2026.10.1")
-        assert edited == LOCK.replace('"plak"\nversion = "0.1.0"', '"plak"\nversion = "2026.10.1"')
+        assert edited == LOCK.replace('"toon"\nversion = "0.1.0"', '"toon"\nversion = "2026.10.1"')
         assert 'name = "httpx"\nversion = "0.28.1"' in edited
 
-    @pytest.mark.parametrize("text", ["version = 1\n", LOCK + LOCK[LOCK.index("[[package]]\nname = \"plak\"") :]])
+    @pytest.mark.parametrize("text", ["version = 1\n", LOCK + LOCK[LOCK.index("[[package]]\nname = \"toon\"") :]])
     def test_a_lock_without_exactly_one_root_package_is_refused(self, text):
-        with pytest.raises(errors.ReleaseError, match="expected one editable package 'plak'"):
+        with pytest.raises(errors.ReleaseError, match="expected one editable package 'toon'"):
             versions.set_lock_version(text, "2026.10.1")
 
     def test_the_plugin_manifest_keeps_its_formatting(self):
         edited = versions.set_plugin_version(PLUGIN, "2026.10.1")
         assert edited == PLUGIN.replace('"version": "0.3.1"', '"version": "2026.10.1"')
 
-    @pytest.mark.parametrize("text", ['{\n  "name": "plak"\n}\n', '{\n  "a": {\n  "version": "1"\n}}\n'])
+    @pytest.mark.parametrize("text", ['{\n  "name": "toon"\n}\n', '{\n  "a": {\n  "version": "1"\n}}\n'])
     def test_a_plugin_manifest_without_a_top_level_version_is_refused(self, text):
         with pytest.raises(errors.ReleaseError, match="no top-level"):
             versions.set_plugin_version(text, "2026.10.1")

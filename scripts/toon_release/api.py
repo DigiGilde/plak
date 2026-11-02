@@ -21,6 +21,13 @@ API_VERSION_VALUE = re.compile(r'^API_VERSION = "([^"\n]*)"$', re.MULTILINE)
 SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 #: oasdiff's level for a breaking change (ERR); WARN is 2 and INFO 1.
 BREAKING = 3
+#: The one change at that level that breaks nobody: a browser gets this cookie
+#: from the server and sends it back by itself, and an API client uses a bearer
+#: token. Exact on purpose, so any other change to the scheme stays breaking.
+SESSION_COOKIE_RENAME = (
+    "the component security scheme `adminSession` api key name changed "
+    "from `__Host-plak-session` to `__Host-toon-session`"
+)
 
 
 #: oasdiff's changelog of a base schema against a head schema, both as text.
@@ -46,7 +53,9 @@ def _where(change: dict[str, Any]) -> str:
 
 
 def breaking_problems(changes: list[dict[str, Any]], major: int) -> list[str]:
-    breaking = [change for change in changes if change.get("level") == BREAKING]
+    breaking = [
+        change for change in changes if change.get("level") == BREAKING and change.get("text") != SESSION_COOKIE_RENAME
+    ]
     if not breaking:
         return []
     return [

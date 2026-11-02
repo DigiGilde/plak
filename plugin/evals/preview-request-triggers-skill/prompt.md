@@ -6,4 +6,4 @@ allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
 We hebben net ./build opnieuw gebouwd voor team-aurora/website op
-https://beheer.plak.example.nl. Maak er een preview van en geef me het adres.
+https://beheer.toon.example.nl. Maak er een preview van en geef me het adres.

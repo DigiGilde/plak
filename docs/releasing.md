@@ -1,6 +1,6 @@
 # Releasing
 
-Plak releases itself, from `CHANGELOG.md`. Nobody picks a version
+Toon releases itself, from `CHANGELOG.md`. Nobody picks a version
 number and nobody tags by hand. A pull request adds a fragment file for
 its change, and a release pull request turns the fragments into the
 changelog.
@@ -83,7 +83,7 @@ which component gets a new version. The list is `SHIPPED_PATHS` in
 - `frontend/src/`, `frontend/package.json`, `frontend/package-lock.json`,
   `frontend/index.html`, `frontend/vite.config.ts`, `frontend/public/`
 - `containers/toon/`
-- `cli/plak_cli/`, `cli/pyproject.toml`, `cli/uv.lock`
+- `cli/toon_cli/`, `cli/pyproject.toml`, `cli/uv.lock`
 - `plugin/`, except `plugin/evals/`
 - `actions/publish/`
 
@@ -225,8 +225,8 @@ previous tag:
   follow every release. What the footer shows still comes from the tag
   itself, through `TOON_VERSION` at build time.
 - **The CLI**: `[project] version` in `cli/pyproject.toml` and the
-  version of the editable package `plak` in `cli/uv.lock`, when anything
-  under `cli/plak_cli/`, `cli/pyproject.toml` or `cli/uv.lock` changed,
+  version of the editable package `toon` in `cli/uv.lock`, when anything
+  under `cli/toon_cli/`, `cli/pyproject.toml` or `cli/uv.lock` changed,
   its own version line aside.
 - **The plugin**: `version` in `plugin/.claude-plugin/plugin.json`, when
   anything under `plugin/` changed, `plugin/evals/` and its own version
@@ -291,6 +291,13 @@ change oasdiff lists goes into one sticky comment, with the version the
 next release gives the API; the comment goes away when there is none.
 Until a release has written the file, the check passes with a notice.
 
+One change oasdiff calls breaking is accepted: the rename of the admin
+session cookie to `__Host-toon-session` (`SESSION_COOKIE_RENAME` in
+`scripts/toon_release/api.py`). It breaks no client, because a browser gets
+the cookie from the server and sends it back by itself, and an API client
+uses a bearer token. It is an exact match on that one change, and from the
+first release under the new name the contract has that name already.
+
 On a release pull request, and on the release commit in the merge
 queue, it also wants `backend/openapi.json` and `API_VERSION` to be what
 `prepare` would write now. When an API change merged after the release
@@ -354,7 +361,7 @@ a time and in push order.
 1. **`decide`** runs `release.py decide`, without any token. On `none`
    that is the end of it.
 2. **`tag`**, in the environment `release`, gets a token of the App with
-   Contents: Read and write, tags the commit `decide` named (`Plak vX`)
+   Contents: Read and write, tags the commit `decide` named (`Toon vX`)
    and pushes the tag, and only the tag. No job pushes to `beta`.
 
 The pull request is checked by `changelog.yml` and `api.yml`, as any
@@ -432,7 +439,7 @@ fragment was added, unless the description has a
 `No changelog entry: <reason>` line. A release pull request never
 warns. On a pull request the warning is one sticky comment that goes
 away once the fragment or the reason is there. A separate hint appears
-when `frontend/src/` or `cli/plak_cli/` changed without a note
+when `frontend/src/` or `cli/toon_cli/` changed without a note
 fragment. In the merge queue only the failing half runs.
 
 `release.py check --base origin/beta` runs the same check locally.
@@ -461,8 +468,9 @@ with a *Container image* section: the image, its digest and the
 `gh attestation verify` commands. Anything that is not an image name
 and a sha256 digest is refused rather than published.
 
-The tag itself is annotated with `Plak v2026.10.1` as its only text
-(`git tag -a v2026.10.1 -m "Plak v2026.10.1"`). The notes live in
+The tag itself is annotated with `Toon v2026.10.1` as its only text
+(`git tag -a v2026.10.1 -m "Toon v2026.10.1"`). Tags from before the rename
+say `Plak vX` and stay as they are. The notes live in
 `CHANGELOG.md` at the tagged commit (`git show v2026.10.1:CHANGELOG.md`)
 and in the GitHub Release. They stay out of the tag because a tag
 message cannot be edited once pushed, the changelog at that commit
@@ -481,7 +489,7 @@ organisation.
 1. **Create the App** under *Settings, Developer settings, GitHub Apps,
    New GitHub App* of the organisation:
    - name `digigilde-toon-release`, homepage
-     `https://github.com/DigiGilde/plak`;
+     `https://github.com/DigiGilde/toon`;
    - *Webhook*: untick *Active*;
    - *Repository permissions*: *Contents: Read and write* and
      *Pull requests: Read and write*, nothing else (*Metadata:
@@ -490,14 +498,14 @@ organisation.
 2. **Note the Client ID** on the App's page and **generate a private
    key**; the browser downloads a `.pem` file.
 3. **Install the App** on the organisation, with *Only select
-   repositories* and only `plak`.
+   repositories* and only `toon`.
 4. **Create the environment `release`**, deployable from `beta` only:
 
    ```bash
-   gh api --method PUT repos/DigiGilde/plak/environments/release \
+   gh api --method PUT repos/DigiGilde/toon/environments/release \
      -F 'deployment_branch_policy[protected_branches]=false' \
      -F 'deployment_branch_policy[custom_branch_policies]=true'
-   gh api --method POST repos/DigiGilde/plak/environments/release/deployment-branch-policies \
+   gh api --method POST repos/DigiGilde/toon/environments/release/deployment-branch-policies \
      -f name=beta -f type=branch
    ```
 
@@ -506,8 +514,8 @@ organisation.
    read them:
 
    ```bash
-   gh variable set RELEASE_APP_CLIENT_ID --env release --repo DigiGilde/plak --body '<client id>'
-   gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo DigiGilde/plak < digigilde-toon-release.private-key.pem
+   gh variable set RELEASE_APP_CLIENT_ID --env release --repo DigiGilde/toon --body '<client id>'
+   gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo DigiGilde/toon < digigilde-toon-release.private-key.pem
    ```
 
    Then move the `.pem` to the Trash; GitHub keeps no copy, and a new key
@@ -522,9 +530,9 @@ organisation.
      force push.
 
    ```bash
-   gh api --method PUT repos/DigiGilde/plak/rulesets/24241440 --input .github/rulesets/beta.json
-   gh api --method POST repos/DigiGilde/plak/rulesets --input .github/rulesets/beta-history.json
-   gh api --method DELETE repos/DigiGilde/plak/branches/beta/protection
+   gh api --method PUT repos/DigiGilde/toon/rulesets/24241440 --input .github/rulesets/beta.json
+   gh api --method POST repos/DigiGilde/toon/rulesets --input .github/rulesets/beta-history.json
+   gh api --method DELETE repos/DigiGilde/toon/branches/beta/protection
    ```
 
    `24241440` is the existing *Merge queue on beta* ruleset, which
@@ -540,8 +548,8 @@ organisation.
    ```bash
    APP_ID='<app id>'
    jq --argjson app "$APP_ID" '.bypass_actors[0].actor_id = $app' .github/rulesets/release-tags.json \
-     | gh api --method POST repos/DigiGilde/plak/rulesets --input -
-   gh api --method POST repos/DigiGilde/plak/rulesets --input .github/rulesets/release-tags-fixed.json
+     | gh api --method POST repos/DigiGilde/toon/rulesets --input -
+   gh api --method POST repos/DigiGilde/toon/rulesets --input .github/rulesets/release-tags-fixed.json
    ```
 
 8. **Check them under *Settings, Rules, Rulesets*:** the App shows up by
@@ -554,7 +562,7 @@ exist.
 
 A file in `.github/rulesets/` only takes effect once it is applied. After
 changing one, apply it with the `gh api --method PUT` command above (with
-the ruleset's id, `gh api repos/DigiGilde/plak/rulesets` lists them) before
+the ruleset's id, `gh api repos/DigiGilde/toon/rulesets` lists them) before
 the pull request merges. The `rulesets` check
 (`scripts/rulesets.py`) is what catches a forgotten apply: the
 workflow *Rulesets* (`rulesets.yml`) runs it on every pull request, in the

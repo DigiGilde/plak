@@ -30,7 +30,7 @@ from toon.ingest.store import ContentStore
 from toon.main import ApiVersionHeaderMiddleware, SessionRecheckMiddleware, create_app
 from toon.serving.response import NEUTRAL_404_BODY
 
-BASE_URL = "https://plak.example"
+BASE_URL = "https://toon.example"
 
 
 def _make_settings(tmp_path: Path, **overrides: object) -> Settings:
@@ -38,7 +38,7 @@ def _make_settings(tmp_path: Path, **overrides: object) -> Settings:
         "db_url": "postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": make_client_jwk(),
         "oidc_required_acr": "urn:acr:hoog",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
@@ -78,8 +78,8 @@ async def test_startup_logs_the_idp_configuration_without_any_secret(
     private_jwk = make_client_jwk()
     settings = _make_settings(
         tmp_path,
-        oidc_issuer="https://idp.example/realms/plak",
-        oidc_client_id="plak-client",
+        oidc_issuer="https://idp.example/realms/toon",
+        oidc_client_id="toon-client",
         oidc_client_private_jwk=private_jwk,
     )
     app = create_app(settings)
@@ -91,8 +91,8 @@ async def test_startup_logs_the_idp_configuration_without_any_secret(
     lines = [row.getMessage() for row in caplog.records if row.name == "toon.main"]
     configuration = [line for line in lines if "OIDC configuration" in line]
     assert len(configuration) == 1
-    assert "https://idp.example/realms/plak" in configuration[0]
-    assert "plak-client" in configuration[0]
+    assert "https://idp.example/realms/toon" in configuration[0]
+    assert "toon-client" in configuration[0]
     assert private_jwk not in caplog.text
     assert settings.session_secret not in caplog.text
     assert settings.audit_pepper not in caplog.text
@@ -437,7 +437,7 @@ async def test_ratelimit_counts_content_session_per_viewer_not_per_ip(tmp_path: 
 
 
 async def test_trustedhost_middleware_refused_on_wrong_host(tmp_path: Path) -> None:
-    settings = _make_settings(tmp_path, base_url="https://beheer.plak.example")
+    settings = _make_settings(tmp_path, base_url="https://beheer.toon.example")
     app = create_app(settings)
 
     async with app.router.lifespan_context(app):
@@ -452,13 +452,13 @@ async def test_trustedhost_middleware_refused_on_wrong_host(tmp_path: Path) -> N
 
 async def test_trustedhost_middleware_allows_both_own_hosts(tmp_path: Path) -> None:
     # Two origins share this one app (spec §4a), so both are on the allowlist.
-    settings = _make_settings(tmp_path, base_url="https://beheer.plak.example")
+    settings = _make_settings(tmp_path, base_url="https://beheer.toon.example")
     app = create_app(settings)
 
     async with app.router.lifespan_context(app):
         async with _client_for(app) as content:
             on_content = await content.get("/robots.txt")
-        async with _client_for(app, base="https://beheer.plak.example") as admin:
+        async with _client_for(app, base="https://beheer.toon.example") as admin:
             on_admin = await admin.get("/robots.txt")
 
     assert on_content.status_code == 200

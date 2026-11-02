@@ -85,7 +85,7 @@ const formLiveBranch = ref('');
 const formTouched = ref(false);
 const formError = ref<string | null>(null);
 const formBusy = ref(false);
-// The id fields appear once Plak could not look the repository up itself,
+// The id fields appear once Toon could not look the repository up itself,
 // which is what a private repository looks like from here.
 const idsVisible = ref(false);
 const formRepositoryId = ref('');
@@ -288,7 +288,7 @@ watch(formProvider, (provider) => {
 });
 
 /**
- * The entered ids, `{}` while both fields are empty (Plak then looks the
+ * The entered ids, `{}` while both fields are empty (Toon then looks the
  * repository up as usual), or null when they cannot be sent as they are.
  */
 function enteredIds(): { repositoryId?: number; ownerId?: number } | null {
@@ -333,7 +333,7 @@ const idsCommand = computed(() => {
 const cliLinkCommand = computed(() => {
   const parsed = repositoryReference.value;
   const branch = formLiveBranch.value.trim();
-  let command = `plak site link ${props.group}/${props.site}`;
+  let command = `toon site link ${props.group}/${props.site}`;
   if (parsed.kind === 'valid') {
     const path = `${parsed.owner}/${parsed.repo}`;
     command += formProvider.value === 'forgejo' ? ` ${formHost.value}/${path}` : ` ${path}`;
@@ -482,7 +482,7 @@ jobs:
 
       - name: Publish live
         if: github.event_name == 'push'
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -491,7 +491,7 @@ jobs:
 
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -504,7 +504,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Remove preview
-        uses: DigiGilde/plak/actions/publish@<commit-sha>
+        uses: DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -542,7 +542,7 @@ jobs:
 
       - name: Publish live
         if: github.event_name == 'push'
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -551,7 +551,7 @@ jobs:
 
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -565,7 +565,7 @@ jobs:
     enable-openid-connect: true
     steps:
       - name: Remove preview
-        uses: https://github.com/DigiGilde/plak/actions/publish@<commit-sha>
+        uses: https://github.com/DigiGilde/toon/actions/publish@<commit-sha>
         with:
           host: ${host.value}
           site: ${siteRef.value}
@@ -614,8 +614,8 @@ const siteIdOptional = computed(() => segments('publish.deploy.siteId.optional',
 
 const cliInstall = computed(() => segments('publish.deploy.cli.install', ['repo', 'folder']));
 
-const cliInstallCommands = `uv tool install "git+https://github.com/DigiGilde/plak@beta#subdirectory=cli"
-uv tool upgrade plak`;
+const cliInstallCommands = `uv tool install "git+https://github.com/DigiGilde/toon@beta#subdirectory=cli"
+uv tool upgrade toon`;
 
 const cliRun = computed(() => segments('publish.deploy.cli.run', ['run']));
 
@@ -626,15 +626,15 @@ const cliLogin = computed(() =>
 const cliSiteId = computed(() => (siteId.value ? ` --site-id ${siteId.value}` : ''));
 
 const cliSnippet = computed(
-  () => `plak login --host ${host.value}
+  () => `toon login --host ${host.value}
 
 # Live: vervangt direct wat bezoekers zien
-plak publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value}
+toon publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value}
 
 # Preview: eigen pad, laat de live site ongemoeid
-plak publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value} --preview pr-42
+toon publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value} --preview pr-42
 
-plak logout
+toon logout
 `,
 );
 </script>
@@ -999,16 +999,16 @@ plak logout
         <nldd-rich-text>
           <p>
             {{ cliInstall[0]
-            }}<nldd-link href="https://github.com/DigiGilde/plak" data-testid="toon-cli-repo-link"
-              >github.com/DigiGilde/plak</nldd-link
+            }}<nldd-link href="https://github.com/DigiGilde/toon" data-testid="toon-cli-repo-link"
+              >github.com/DigiGilde/toon</nldd-link
             >{{ cliInstall[1] }}<code>cli/</code>{{ cliInstall[2] }}
           </p>
           <nldd-code-viewer language="bash" data-testid="cli-install">{{ cliInstallCommands }}</nldd-code-viewer>
-          <p>{{ cliRun[0] }}<code>uv run --project cli plak ...</code>{{ cliRun[1] }}</p>
+          <p>{{ cliRun[0] }}<code>uv run --project cli toon ...</code>{{ cliRun[1] }}</p>
           <p>
-            {{ cliLogin[0] }}<code>plak login</code>{{ cliLogin[1]
+            {{ cliLogin[0] }}<code>toon login</code>{{ cliLogin[1]
             }}<nldd-link href="/cli-link" data-testid="cli-link-link">/cli-link</nldd-link
-            >{{ cliLogin[2] }}<code>plak publish</code>{{ cliLogin[3] }}
+            >{{ cliLogin[2] }}<code>toon publish</code>{{ cliLogin[3] }}
           </p>
           <nldd-code-viewer language="bash" data-testid="cli-snippet">{{ cliSnippet }}</nldd-code-viewer>
         </nldd-rich-text>

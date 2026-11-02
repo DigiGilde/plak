@@ -48,13 +48,13 @@ PREAMBLE_NCSC = (
 # operator below, and the sentence would point at NCSC-NL's or at none.
 PREAMBLE_OPERATOR_EMAIL = (
     "# Het e-mailadres hieronder is de directe lijn naar de organisatie die deze",
-    "# installatie van Plak beheert.",
+    "# installatie van Toon beheert.",
     "#",
     "# The email address below is the direct line to the organisation that runs",
-    "# this installation of Plak.",
+    "# this installation of Toon.",
 )
 
-POLICY = ("Policy: https://github.com/DigiGilde/plak/blob/beta/SECURITY.md",)
+POLICY = ("Policy: https://github.com/DigiGilde/toon/blob/beta/SECURITY.md",)
 
 POLICY_NCSC = (
     "Policy: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
@@ -68,7 +68,7 @@ POLICY_NCSC = (
 # URL answered a 404. See docs/security.md, "Now the repo is on GitHub".
 # The operator's address (TOON_OPERATOR_EMAIL) goes between this and
 # CONTACT_NCSC.
-CONTACT = ("Contact: https://github.com/DigiGilde/plak/security/advisories/new",)
+CONTACT = ("Contact: https://github.com/DigiGilde/toon/security/advisories/new",)
 
 CONTACT_NCSC = (
     "Contact: https://www.ncsc.nl/producten-en-diensten/kwetsbaarheid-melden-cvd",
@@ -77,7 +77,7 @@ CONTACT_NCSC = (
 )
 
 # No Encryption field: RFC 9116 cannot tie a key to one Contact, so a reporter
-# would take it for the key of the first contacts, the Plak team, who have none.
+# would take it for the key of the first contacts, the Toon team, who have none.
 CLOSING = ("Preferred-Languages: nl, en",)
 
 

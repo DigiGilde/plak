@@ -163,7 +163,7 @@ class Settings(BaseSettings):
     # Periodic re-validation of a browser session against the IdP
     # (auth/revalidation.py): at most one check per session per this many
     # seconds, 0 turns it off. It bounds how long someone blocked or removed
-    # at the IdP keeps their Plak session.
+    # at the IdP keeps their Toon session.
     idp_recheck_seconds: int = Field(default=900, ge=0)
     # Injected by the ZAD Keycloak service; a validation_alias falls outside
     # env_prefix, so these are read without TOON_.
@@ -462,7 +462,7 @@ class Settings(BaseSettings):
         if not urlsplit(value).hostname:
             raise ValueError(
                 "TOON_CONTENT_BASE_URL must be an absolute URL with a hostname, "
-                "for example https://plak.example.org"
+                "for example https://toon.example.org"
             )
         return value
 

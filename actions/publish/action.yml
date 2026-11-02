@@ -1,17 +1,18 @@
 name: 'publish'
 description: >-
-  Publishes a dist directory or file to Plak (live or as a preview), or
+  Publishes a dist directory or file to Toon (live or as a preview), or
   cleans up a preview. Works on GitHub Actions and Forgejo Actions.
-author: 'Plak'
+author: 'Toon'
 
 inputs:
   host:
     description: >-
-      Admin origin of the Plak instance (the TOON_BASE_URL), for example
-      https://beheer.plak.example.nl, without an /admin suffix. The deploy
+      Admin origin of the Toon instance (the TOON_BASE_URL), for example
+      https://beheer.toon.example.nl, without an /admin suffix. The deploy
       API exists only on this host; the content host answers with a 404.
-      Empty means PLAK_HOST from the environment, else the DigiGilde
-      instance https://beheer.plak.rijks.app.
+      Empty means TOON_HOST from the environment, else the DigiGilde
+      instance https://beheer.toon.rijks.app. Its old host still works,
+      with a warning.
     required: false
     default: ''
   site:
@@ -19,9 +20,9 @@ inputs:
     required: true
   site-id:
     description: >-
-      Fixed id of the site, from the Deploy tab in Plak. With it, the ID
+      Fixed id of the site, from the Deploy tab in Toon. With it, the ID
       token is valid for that one site only; a new repository link
-      requires it. Empty means PLAK_SITE_ID from the environment, else a
+      requires it. Empty means TOON_SITE_ID from the environment, else a
       token without a site id.
     required: false
     default: ''
@@ -42,7 +43,7 @@ inputs:
     description: >-
       Directory inside the bundle that becomes the root of the site, dist for
       example. Needed when the bundle holds more than the site itself;
-      whatever sits beside it is not published. Without this field Plak works
+      whatever sits beside it is not published. Without this field Toon works
       out the root itself, and refuses the deploy if there is no index.html
       there.
     required: false
@@ -104,26 +105,26 @@ runs:
       id: bot-check
       shell: bash
       env:
-        PLAK_INPUT_SKIP_BOT_PRS: ${{ inputs.skip-bot-prs }}
-        PLAK_EVENT_NAME: ${{ github.event_name }}
-        PLAK_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-        PLAK_PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        TOON_INPUT_SKIP_BOT_PRS: ${{ inputs.skip-bot-prs }}
+        TOON_EVENT_NAME: ${{ github.event_name }}
+        TOON_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        TOON_PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
       run: |
         set -euo pipefail
-        case "$PLAK_INPUT_SKIP_BOT_PRS" in
+        case "$TOON_INPUT_SKIP_BOT_PRS" in
           true) ;;
           false) exit 0 ;;
           *) echo "Error: skip-bot-prs must be 'true' or 'false'" >&2; exit 2 ;;
         esac
-        case "$PLAK_EVENT_NAME" in
+        case "$TOON_EVENT_NAME" in
           pull_request|pull_request_target) ;;
           *) exit 0 ;;
         esac
-        case "$PLAK_PR_AUTHOR" in
+        case "$TOON_PR_AUTHOR" in
           "dependabot[bot]"|"renovate[bot]"|"pre-commit-ci[bot]"|"github-actions[bot]") ;;
-          *) [ "$PLAK_PR_AUTHOR_TYPE" = "Bot" ] || exit 0 ;;
+          *) [ "$TOON_PR_AUTHOR_TYPE" = "Bot" ] || exit 0 ;;
         esac
-        echo "::notice::Skipping: pull request author '$PLAK_PR_AUTHOR' is a bot"
+        echo "::notice::Skipping: pull request author '$TOON_PR_AUTHOR' is a bot"
         echo "skipped=true" >> "$GITHUB_OUTPUT"
 
     # setup-uv puts uv on PATH for every step that follows. enable-cache
@@ -155,7 +156,7 @@ runs:
             contents: read
         On Forgejo Actions: set on the runner (runner config or workflow)
           enable-openid-connect: true
-        Working locally, use 'plak login' instead of this action.
+        Working locally, use 'toon login' instead of this action.
         EOF
         exit 2
 
@@ -165,15 +166,15 @@ runs:
       if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       env:
-        PLAK_INPUT_ENVIRONMENT: ${{ inputs.environment }}
-        PLAK_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
+        TOON_INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        TOON_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
       run: |
         set -euo pipefail
-        case "$PLAK_INPUT_COMMENT" in
+        case "$TOON_INPUT_COMMENT" in
           true|false) ;;
           *) echo "Error: comment-on-pr must be 'true' or 'false'" >&2; exit 2 ;;
         esac
-        if [ -z "$PLAK_INPUT_ENVIRONMENT" ] && [ "$PLAK_INPUT_COMMENT" = "false" ]; then
+        if [ -z "$TOON_INPUT_ENVIRONMENT" ] && [ "$TOON_INPUT_COMMENT" = "false" ]; then
           exit 0
         fi
         if [ "${FORGEJO_ACTIONS:-}" = "true" ]; then
@@ -186,67 +187,67 @@ runs:
       if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown != 'true' }}
       shell: bash
       env:
-        PLAK_ACTION_PATH: ${{ github.action_path }}
-        PLAK_INPUT_HOST: ${{ inputs.host }}
-        PLAK_SITE: ${{ inputs.site }}
-        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
-        PLAK_INPUT_DIST_PATH: ${{ inputs.dist-path }}
-        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
-        PLAK_INPUT_BASE_PATH: ${{ inputs.base-path }}
+        TOON_ACTION_PATH: ${{ github.action_path }}
+        TOON_INPUT_HOST: ${{ inputs.host }}
+        TOON_SITE: ${{ inputs.site }}
+        TOON_INPUT_SITE_ID: ${{ inputs.site-id }}
+        TOON_INPUT_DIST_PATH: ${{ inputs.dist-path }}
+        TOON_PREVIEW_REF: ${{ inputs.preview-ref }}
+        TOON_INPUT_BASE_PATH: ${{ inputs.base-path }}
       run: |
         set -euo pipefail
-        if [ -z "$PLAK_INPUT_DIST_PATH" ]; then
+        if [ -z "$TOON_INPUT_DIST_PATH" ]; then
           echo "Error: dist-path is required unless teardown is 'true'" >&2
           exit 2
         fi
-        ARGS=(publish "$PLAK_INPUT_DIST_PATH" --site "$PLAK_SITE")
-        # Without --host the CLI takes PLAK_HOST, then its default instance;
-        # without --site-id it takes PLAK_SITE_ID.
-        if [ -n "$PLAK_INPUT_HOST" ]; then
-          ARGS+=(--host "$PLAK_INPUT_HOST")
+        ARGS=(publish "$TOON_INPUT_DIST_PATH" --site "$TOON_SITE")
+        # Without --host the CLI takes TOON_HOST, then its default instance;
+        # without --site-id it takes TOON_SITE_ID.
+        if [ -n "$TOON_INPUT_HOST" ]; then
+          ARGS+=(--host "$TOON_INPUT_HOST")
         fi
-        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
-          ARGS+=(--site-id "$PLAK_INPUT_SITE_ID")
+        if [ -n "$TOON_INPUT_SITE_ID" ]; then
+          ARGS+=(--site-id "$TOON_INPUT_SITE_ID")
         fi
-        if [ -n "$PLAK_PREVIEW_REF" ]; then
-          ARGS+=(--preview "$PLAK_PREVIEW_REF")
+        if [ -n "$TOON_PREVIEW_REF" ]; then
+          ARGS+=(--preview "$TOON_PREVIEW_REF")
         fi
-        if [ -n "$PLAK_INPUT_BASE_PATH" ]; then
-          ARGS+=(--base-path "$PLAK_INPUT_BASE_PATH")
+        if [ -n "$TOON_INPUT_BASE_PATH" ]; then
+          ARGS+=(--base-path "$TOON_INPUT_BASE_PATH")
         fi
         # --output-file, not capturing stdout: stdout also carries the
         # '::add-mask::' command for the OIDC token, and $(...) would pull
         # that into the version-id variable.
         ARGS+=(--output-file "$GITHUB_OUTPUT")
-        # PLAK_ACTION_PATH (github.action_path) is actions/publish/ inside the checked-out
-        # plak repository; the CLI project sits two levels up, in cli/.
+        # TOON_ACTION_PATH (github.action_path) is actions/publish/ inside the checked-out
+        # toon repository; the CLI project sits two levels up, in cli/.
         # --project, not uvx: the same invocation contributors use from a
         # checkout, so one form is documented and exercised.
-        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" plak "${ARGS[@]}"
+        uv run --locked --project "$TOON_ACTION_PATH/../../cli" toon "${ARGS[@]}"
 
     - name: Remove preview
       if: ${{ steps.bot-check.outputs.skipped != 'true' && inputs.teardown == 'true' }}
       shell: bash
       env:
-        PLAK_ACTION_PATH: ${{ github.action_path }}
-        PLAK_INPUT_HOST: ${{ inputs.host }}
-        PLAK_SITE: ${{ inputs.site }}
-        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
-        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
+        TOON_ACTION_PATH: ${{ github.action_path }}
+        TOON_INPUT_HOST: ${{ inputs.host }}
+        TOON_SITE: ${{ inputs.site }}
+        TOON_INPUT_SITE_ID: ${{ inputs.site-id }}
+        TOON_PREVIEW_REF: ${{ inputs.preview-ref }}
       run: |
         set -euo pipefail
-        if [ -z "$PLAK_PREVIEW_REF" ]; then
+        if [ -z "$TOON_PREVIEW_REF" ]; then
           echo "Error: preview-ref is required when teardown is 'true'" >&2
           exit 2
         fi
-        ARGS=(preview-remove "$PLAK_PREVIEW_REF" --site "$PLAK_SITE")
-        if [ -n "$PLAK_INPUT_HOST" ]; then
-          ARGS+=(--host "$PLAK_INPUT_HOST")
+        ARGS=(preview-remove "$TOON_PREVIEW_REF" --site "$TOON_SITE")
+        if [ -n "$TOON_INPUT_HOST" ]; then
+          ARGS+=(--host "$TOON_INPUT_HOST")
         fi
-        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
-          ARGS+=(--site-id "$PLAK_INPUT_SITE_ID")
+        if [ -n "$TOON_INPUT_SITE_ID" ]; then
+          ARGS+=(--site-id "$TOON_INPUT_SITE_ID")
         fi
-        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" plak "${ARGS[@]}"
+        uv run --locked --project "$TOON_ACTION_PATH/../../cli" toon "${ARGS[@]}"
 
     # Forgejo shows a summary only where both runner and server support it;
     # elsewhere the variable is not set and this step writes nothing.
@@ -254,74 +255,74 @@ runs:
       if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       env:
-        PLAK_INPUT_TEARDOWN: ${{ inputs.teardown }}
-        PLAK_SITE: ${{ inputs.site }}
-        PLAK_INPUT_SITE_ID: ${{ inputs.site-id }}
-        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
-        PLAK_URL: ${{ steps.publish.outputs.url }}
-        PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
+        TOON_INPUT_TEARDOWN: ${{ inputs.teardown }}
+        TOON_SITE: ${{ inputs.site }}
+        TOON_INPUT_SITE_ID: ${{ inputs.site-id }}
+        TOON_PREVIEW_REF: ${{ inputs.preview-ref }}
+        TOON_URL: ${{ steps.publish.outputs.url }}
+        TOON_VERSION_ID: ${{ steps.publish.outputs.version-id }}
       run: |
         set -euo pipefail
         if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
           exit 0
         fi
-        SITE="\`$PLAK_SITE\`"
-        if [ -n "$PLAK_INPUT_SITE_ID" ]; then
-          SITE="$SITE (site id \`$PLAK_INPUT_SITE_ID\`)"
+        SITE="\`$TOON_SITE\`"
+        if [ -n "$TOON_INPUT_SITE_ID" ]; then
+          SITE="$SITE (site id \`$TOON_INPUT_SITE_ID\`)"
         fi
-        if [ -n "$PLAK_PREVIEW_REF" ]; then
-          WHAT="Preview \`$PLAK_PREVIEW_REF\` of $SITE"
+        if [ -n "$TOON_PREVIEW_REF" ]; then
+          WHAT="Preview \`$TOON_PREVIEW_REF\` of $SITE"
         else
           WHAT="Live site $SITE"
         fi
-        if [ "$PLAK_INPUT_TEARDOWN" = "true" ]; then
+        if [ "$TOON_INPUT_TEARDOWN" = "true" ]; then
           LINE="$WHAT is removed."
-        elif [ -n "$PLAK_URL" ]; then
-          LINE="$WHAT is published: $PLAK_URL (version \`$PLAK_VERSION_ID\`)"
+        elif [ -n "$TOON_URL" ]; then
+          LINE="$WHAT is published: $TOON_URL (version \`$TOON_VERSION_ID\`)"
         else
-          LINE="$WHAT is published (version \`$PLAK_VERSION_ID\`)."
+          LINE="$WHAT is published (version \`$TOON_VERSION_ID\`)."
         fi
-        printf '### Plak\n\n%s\n' "$LINE" >> "$GITHUB_STEP_SUMMARY"
+        printf '### Toon\n\n%s\n' "$LINE" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Report to GitHub
       if: ${{ steps.bot-check.outputs.skipped != 'true' }}
       shell: bash
       env:
-        PLAK_ACTION_PATH: ${{ github.action_path }}
+        TOON_ACTION_PATH: ${{ github.action_path }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        PLAK_INPUT_ENVIRONMENT: ${{ inputs.environment }}
-        PLAK_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
-        PLAK_INPUT_TEARDOWN: ${{ inputs.teardown }}
-        PLAK_SITE: ${{ inputs.site }}
-        PLAK_PREVIEW_REF: ${{ inputs.preview-ref }}
-        PLAK_URL: ${{ steps.publish.outputs.url }}
-        PLAK_VERSION_ID: ${{ steps.publish.outputs.version-id }}
-        PLAK_ACCESS: ${{ steps.publish.outputs.access }}
+        TOON_INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        TOON_INPUT_COMMENT: ${{ inputs.comment-on-pr }}
+        TOON_INPUT_TEARDOWN: ${{ inputs.teardown }}
+        TOON_SITE: ${{ inputs.site }}
+        TOON_PREVIEW_REF: ${{ inputs.preview-ref }}
+        TOON_URL: ${{ steps.publish.outputs.url }}
+        TOON_VERSION_ID: ${{ steps.publish.outputs.version-id }}
+        TOON_ACCESS: ${{ steps.publish.outputs.access }}
       run: |
         set -euo pipefail
-        if [ -z "$PLAK_INPUT_ENVIRONMENT" ] && [ "$PLAK_INPUT_COMMENT" = "false" ]; then
+        if [ -z "$TOON_INPUT_ENVIRONMENT" ] && [ "$TOON_INPUT_COMMENT" = "false" ]; then
           exit 0
         fi
-        if [ "$PLAK_INPUT_TEARDOWN" = "true" ]; then
+        if [ "$TOON_INPUT_TEARDOWN" = "true" ]; then
           ARGS=(teardown)
-        elif [ -z "$PLAK_URL" ]; then
-          echo "Error: the Plak server returned no url; environment and comment-on-pr need a newer Plak" >&2
+        elif [ -z "$TOON_URL" ]; then
+          echo "Error: the Toon server returned no url; environment and comment-on-pr need a newer Toon" >&2
           exit 1
         else
-          ARGS=(publish --url "$PLAK_URL" --version-id "$PLAK_VERSION_ID")
-          # Empty from a Plak before the access field: the comment then leaves it out.
-          if [ -n "$PLAK_ACCESS" ]; then
-            ARGS+=(--access "$PLAK_ACCESS")
+          ARGS=(publish --url "$TOON_URL" --version-id "$TOON_VERSION_ID")
+          # Empty from a server before the access field: the comment then leaves it out.
+          if [ -n "$TOON_ACCESS" ]; then
+            ARGS+=(--access "$TOON_ACCESS")
           fi
         fi
-        ARGS+=(--site "$PLAK_SITE")
-        if [ -n "$PLAK_PREVIEW_REF" ]; then
-          ARGS+=(--preview-ref "$PLAK_PREVIEW_REF")
+        ARGS+=(--site "$TOON_SITE")
+        if [ -n "$TOON_PREVIEW_REF" ]; then
+          ARGS+=(--preview-ref "$TOON_PREVIEW_REF")
         fi
-        if [ -n "$PLAK_INPUT_ENVIRONMENT" ]; then
-          ARGS+=(--environment "$PLAK_INPUT_ENVIRONMENT")
+        if [ -n "$TOON_INPUT_ENVIRONMENT" ]; then
+          ARGS+=(--environment "$TOON_INPUT_ENVIRONMENT")
         fi
-        if [ "$PLAK_INPUT_COMMENT" = "true" ]; then
+        if [ "$TOON_INPUT_COMMENT" = "true" ]; then
           ARGS+=(--comment)
         fi
-        uv run --locked --project "$PLAK_ACTION_PATH/../../cli" python -m plak_cli.github "${ARGS[@]}"
+        uv run --locked --project "$TOON_ACTION_PATH/../../cli" python -m toon_cli.github "${ARGS[@]}"

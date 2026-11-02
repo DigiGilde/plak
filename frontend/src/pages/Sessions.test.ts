@@ -37,7 +37,7 @@ describe('Sessions: overview', () => {
 
     const row = wrapper.find('[data-testid="session-cli-sessie-1"]');
     expect(row.exists()).toBe(true);
-    expect(row.html()).toContain('plak-cli');
+    expect(row.html()).toContain('toon-cli');
     expect(row.html()).toContain('Gekoppeld');
     expect(row.html()).toContain('laatst gebruikt');
     expect(row.html()).toContain('verloopt');
@@ -63,7 +63,7 @@ describe('Sessions: overview', () => {
     );
   });
 
-  it('explains plak login in the empty state', async () => {
+  it('explains toon login in the empty state', async () => {
     backend.data.cliSessions = [];
 
     const wrapper = await makeWrapper();
@@ -74,9 +74,9 @@ describe('Sessions: overview', () => {
     // icon and the heading, which left the sentence hanging beside them.
     const empty = wrapper.find('[data-testid="sessions-empty"]');
     expect(empty.exists()).toBe(true);
-    expect(empty.attributes('supporting-text')).toContain('plak login');
+    expect(empty.attributes('supporting-text')).toContain('toon login');
     expect(empty.attributes('supporting-text')).toContain(
-      'de Plak-CLI te koppelen aan je account',
+      'de Toon-CLI te koppelen aan je account',
     );
   });
 
@@ -88,7 +88,7 @@ describe('Sessions: overview', () => {
 
     const link = wrapper.find('[data-testid="sessions-cli-install"]');
     expect(link.attributes('href')).toBe(
-      'https://github.com/DigiGilde/plak/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-plak-login',
+      'https://github.com/DigiGilde/toon/blob/beta/docs/publishing.md#6-publishing-from-your-own-machine-with-toon-login',
     );
     expect(link.attributes('target')).toBe('_blank');
   });

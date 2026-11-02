@@ -645,14 +645,14 @@ class TestTheReleaseGuards:
         _git(tmp_path, "init", "-q", "-b", "beta", str(work))
         _git(work, "remote", "add", "origin", str(origin))
         _git(work, "commit", "-q", "--allow-empty", "-m", "one")
-        _git(work, "tag", "-a", "v2026.9.30", "-m", "Plak v2026.9.30")
+        _git(work, "tag", "-a", "v2026.9.30", "-m", "Toon v2026.9.30")
         _git(work, "commit", "-q", "--allow-empty", "-m", "two")
         _git(work, "push", "-q", "origin", "beta", "--tags")
         return work
 
     @staticmethod
     def _tag(work: Path, tag: str, ref: str = "HEAD") -> None:
-        _git(work, "tag", "-a", tag, ref, "-m", f"Plak {tag}")
+        _git(work, "tag", "-a", tag, ref, "-m", f"Toon {tag}")
         _git(work, "push", "-q", "origin", tag)
 
     @staticmethod
@@ -889,14 +889,14 @@ class TestTheReleaseImage:
             _step(build, "Determine the release version"),
             tmp_path,
             TAG="v2026.10.1",
-            NAME="ghcr.io/digigilde/plak",
+            NAME="ghcr.io/digigilde/toon",
             RELEASE_TAG=deploy["env"]["RELEASE_TAG"],
             GITHUB_OUTPUT=str(output),
         )
         assert result.returncode == 0, result.stdout
         assert output.read_text().splitlines() == [
             "build-args=TOON_VERSION=2026.10.1",
-            "image=ghcr.io/digigilde/plak:2026.10.1",
+            "image=ghcr.io/digigilde/toon:2026.10.1",
         ]
 
     def test_a_malformed_tag_builds_nothing(self, build, deploy, tmp_path) -> None:
@@ -908,8 +908,8 @@ class TestTheReleaseImage:
             _step(build, "Determine the release version"),
             tmp_path,
             TAG="v2026.10.1,evil",
-            NAME="ghcr.io/digigilde/plak",
-            IMAGE="ghcr.io/digigilde/plak:abc123",
+            NAME="ghcr.io/digigilde/toon",
+            IMAGE="ghcr.io/digigilde/toon:abc123",
             RELEASE_TAG=deploy["env"]["RELEASE_TAG"],
             GITHUB_OUTPUT=str(output),
         )
@@ -1188,7 +1188,7 @@ def _opening(tag: str, **env: str) -> dict[str, str]:
     return {
         "GH_TOKEN": "app-token",
         "APP_SLUG": "digigilde-toon-release",
-        "GITHUB_REPOSITORY": "DigiGilde/plak",
+        "GITHUB_REPOSITORY": "DigiGilde/toon",
         "GITHUB_SHA": "0123abc",
         "TAG": tag,
         "EVENT": "workflow_dispatch",
@@ -1308,7 +1308,7 @@ class TestTheReleaseWorkflow:
         assert _git(origin, "rev-parse", "v2026.10.1^{commit}") == released
         tagged = _git(origin, "for-each-ref", "--format=%(contents:subject)|%(taggername)|%(taggeremail)", "refs/tags")
         assert tagged == (
-            "Plak v2026.10.1|digigilde-toon-release[bot]|"
+            "Toon v2026.10.1|digigilde-toon-release[bot]|"
             "<123456+digigilde-toon-release[bot]@users.noreply.github.com>"
         )
         assert _git(origin, "rev-parse", "beta") == beta
@@ -1320,7 +1320,7 @@ class TestTheReleaseWorkflow:
         refused rather than moving it, and the job goes red."""
         origin, work = _origin(tmp_path)
         first = _git(work, "rev-parse", "HEAD")
-        _git(work, "tag", "-a", "v2026.10.1", "-m", "Plak v2026.10.1")
+        _git(work, "tag", "-a", "v2026.10.1", "-m", "Toon v2026.10.1")
         _git(work, "push", "-q", "origin", "v2026.10.1")
         _git(work, "tag", "-d", "v2026.10.1")
         _git(work, "commit", "-q", "--allow-empty", "-m", "Release v2026.10.1")
@@ -1558,7 +1558,7 @@ class TestThePrepareReleaseWorkflow:
             "pr",
             "create",
             "--repo",
-            "DigiGilde/plak",
+            "DigiGilde/toon",
             "--base",
             "beta",
             "--head",
@@ -1637,7 +1637,7 @@ class TestThePrepareReleaseWorkflow:
         [call] = _gh_calls(log)
         token, *args = call
         assert token == "app-token"
-        assert args[:5] == ["pr", "comment", "12", "--repo", "DigiGilde/plak"]
+        assert args[:5] == ["pr", "comment", "12", "--repo", "DigiGilde/toon"]
         assert "Refreshed from beta 0123abc" in args[-1]
         assert "edits made here are overwritten" in args[-1]
 
@@ -1735,7 +1735,7 @@ class TestThePrepareReleaseWorkflow:
         created, closed = _gh_calls(log)
         assert created[1:3] == ["pr", "create"]
         assert created[created.index("--head") + 1] == "release/v2026.10.2"
-        assert closed[1:6] == ["pr", "close", "12", "--repo", "DigiGilde/plak"]
+        assert closed[1:6] == ["pr", "close", "12", "--repo", "DigiGilde/toon"]
         assert "--delete-branch" in closed
         assert "Replaced by the release pull request for v2026.10.2" in closed[-1]
 
@@ -1787,7 +1787,7 @@ class TestThePrepareReleaseWorkflow:
             ROOT,
             PATH=self._listing_stub(tmp_path, listing),
             EVENT=event,
-            GITHUB_REPOSITORY="DigiGilde/plak",
+            GITHUB_REPOSITORY="DigiGilde/toon",
             GITHUB_OUTPUT=str(output),
             GH_TOKEN="x",
             PENDING=pending,
@@ -1809,7 +1809,7 @@ class TestThePrepareReleaseWorkflow:
             _step(job, "Find the open release pull request"),
             ROOT,
             PATH=self._listing_stub(tmp_path, listing),
-            GITHUB_REPOSITORY="DigiGilde/plak",
+            GITHUB_REPOSITORY="DigiGilde/toon",
             GITHUB_OUTPUT=str(output),
             GH_TOKEN="x",
         )
@@ -1891,7 +1891,7 @@ class TestTheGitHubRelease:
             tmp_path,
             PATH=f"{stubs}:{os.environ['PATH']}",
             TAG="v2026.10.4",
-            IMAGE="ghcr.io/digigilde/plak",
+            IMAGE="ghcr.io/digigilde/toon",
             DIGEST="sha256:" + "a" * 64,
             RUNNER_TEMP=str(tmp_path),
         )

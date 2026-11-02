@@ -61,7 +61,7 @@ TAG_PLATFORM = "Platform administration"
 TAG_INSTALLATION = "Installation"
 
 API_DESCRIPTION = """
-Plak publishes static sites per group and site, with a preview for every pull request.
+Toon publishes static sites per group and site, with a preview for every pull request.
 This API serves two kinds of client: the admin SPA on the admin host, and the CI that runs deploys.
 
 ## Authentication
@@ -76,12 +76,12 @@ There are two ways to identify yourself, and every endpoint accepts exactly one 
   `DELETE /cli/session` and `GET /cli/whoami`, and, with a CLI token only, on creating a group or a site
   and on linking a repository. The token is one of two kinds:
   * a **CI ID token** (JWT) from GitHub Actions or Forgejo Actions, whose audience is exactly the admin
-    URL of Plak (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only
+    URL of Toon (`TOON_BASE_URL`) followed by `/-/sites/` and the `id` of one site. It is valid only
     for that site, and only while the repository of that workflow is linked to it
     (`PUT /sites/{groupSlug}/{siteSlug}/repository`); there is no secret to keep. A link made before
     the site id existed, of a repository linked to that one site, also takes a token whose audience is
     the admin URL itself, until another repository is linked or a site admin requires the site id;
-  * a **CLI token** `plakcli_...` from `plak login` (see the CLI login endpoints). It acts as the member who
+  * a **CLI token** `tooncli_...` from `toon login` (see the CLI login endpoints). It acts as the member who
     signed in, with exactly their roles.
 
   A Bearer header on any other endpoint yields 401, even when the token is valid.
@@ -155,7 +155,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     {
         "name": TAG_CLI,
         "description": (
-            "Signing in with the CLI (`plak login`) through the device flow: a code in the terminal, approval "
+            "Signing in with the CLI (`toon login`) through the device flow: a code in the terminal, approval "
             "in the admin interface, and then tokens the CLI refreshes by itself."
         ),
     },
@@ -172,7 +172,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
     },
     {
         "name": TAG_INSTALLATION,
-        "description": "The organisation that runs this installation of Plak, and how to reach it.",
+        "description": "The organisation that runs this installation of Toon, and how to reach it.",
     },
 ]
 
@@ -225,7 +225,7 @@ _DOCS_HTML = """<!doctype html>
 </head>
 <body>
 <header class="docs-header">
-<span class="docs-brand"><span class="docs-brand__block">P</span>lak</span>
+<span class="docs-brand"><span class="docs-brand__block">T</span>oon</span>
 <span class="docs-header__divider"></span>
 <a href="/">{back}</a>
 <a href="/-/api/openapi.json{schema_query}">{schema}</a>
@@ -331,7 +331,7 @@ _SECURITY_SCHEMES: dict[str, dict[str, Any]] = {
         "scheme": "bearer",
         "description": (
             "A CI ID token (JWT from GitHub or Forgejo Actions, with the admin URL as audience) or a CLI token "
-            "`plakcli_...` from `plak login`. Paste the whole token under Authorize. Only the deploy endpoints "
+            "`tooncli_...` from `toon login`. Paste the whole token under Authorize. Only the deploy endpoints "
             "and the CLI session endpoints accept it, and, with a CLI token only, creating a group, creating a "
             "site and linking a repository; anywhere else a Bearer header yields 401, even when the token is "
             "valid."

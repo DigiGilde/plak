@@ -1,11 +1,11 @@
 # Deploying on ZAD
 
-From nothing to a running Plak on ZAD (Zelfservice voor Applicatie
+From nothing to a running Toon on ZAD (Zelfservice voor Applicatie
 Deployment, self-service application deployment, the RijksICTGilde platform).
-The example project file is in `deploy/plak-project.example.yaml`; the
+The example project file is in `deploy/toon-project.example.yaml`; the
 workflows in `.github/workflows/` do the build and the rollout.
 
-**Status: in production, as a beta.** Plak runs on ZAD. This document describes
+**Status: in production, as a beta.** Toon runs on ZAD. This document describes
 the route as it follows from the ZAD project schema, the service catalogue and
 the platform documentation, with the open questions named explicitly in §10.
 
@@ -23,7 +23,7 @@ file with four concepts:
 - **deployment**: an environment (`productie`) that fixes an image and a web
   address per component.
 
-Plak fits in there as **one component**. The app serves the content, the admin
+Toon fits in there as **one component**. The app serves the content, the admin
 SPA and the host separation itself, so no nginx sidecar and no shared volume
 are needed. On every deploy CI sets only the image of that component.
 
@@ -31,7 +31,7 @@ are needed. On every deploy CI sets only the image of that component.
 
 1. Request a ZAD project through the portal or `zadctl project create`. The
    platform assigns a project key (the `project-id` that CI uses).
-2. Put the administrators of Plak in as project members (`users:` in the
+2. Put the administrators of Toon in as project members (`users:` in the
    project file, role `admin`).
 3. Create an API key for CI and set it as the repository secret
    `ZAD_API_KEY`. Set the project key as the repository variable
@@ -39,12 +39,12 @@ are needed. On every deploy CI sets only the image of that component.
 
 ## 3. Getting the domain and subdomain approved
 
-Plak needs two hostnames on one component:
+Toon needs two hostnames on one component:
 
 | Host | What is there |
 |---|---|
-| `beheer.plak.<domein>` | the admin SPA, the API and the deploy endpoints |
-| `plak.<domein>` | the published content and the content login |
+| `beheer.toon.<domein>` | the admin SPA, the API and the deploy endpoints |
+| `toon.<domein>` | the published content and the content login |
 
 These come from a dotted `domain-format` plus `root-component`, both directly
 on the deployment (not under a service):
@@ -54,16 +54,16 @@ deployments:
   - name: productie
     domain-format: component.subdomain
     domain-mode: nice-url
-    subdomain: plak
+    subdomain: toon
     base-domain: rijks.app
     issuer: letsencrypt
     root-component: beheer
 ```
 
 `component.subdomain` yields `{component}.{subdomain}.{domein}`; because the
-component is called `beheer` that is `beheer.plak.rijks.app`.
+component is called `beheer` that is `beheer.toon.rijks.app`.
 `root-component` makes that same component also serve the address without that
-first label: `plak.rijks.app`. Two Ingress objects, two Let's Encrypt
+first label: `toon.rijks.app`. Two Ingress objects, two Let's Encrypt
 certificates, one pod.
 
 Three things to know:
@@ -74,7 +74,7 @@ Three things to know:
   object itself. The field `domain-mode` still exists (optional in the
   schema), but is not derived from `domain-format`: the Operations Manager
   reads `domain-mode` literally, and both the root ingress
-  (`plak.rijks.app`) and the self-service registration of the subdomain
+  (`toon.rijks.app`) and the self-service registration of the subdomain
   start only if that value is exactly `nice-url`. Without
   `domain-mode: nice-url` alongside it there is no second host, even with
   `domain-format` and `root-component` set.
@@ -91,12 +91,12 @@ Three things to know:
 
 Request the subdomain through the portal or the API; a platform administrator
 sets it to `approved`. Check with `zadctl project subdomains` and
-`zadctl project check-subdomain plak rijks.app`: that second command wants
+`zadctl project check-subdomain toon rijks.app`: that second command wants
 subdomain and base domain, both mandatory.
 
 ## 4. Applying the configuration
 
-Take `deploy/plak-project.example.yaml` as a base and adjust: `name`, `users`,
+Take `deploy/toon-project.example.yaml` as a base and adjust: `name`, `users`,
 `subdomain`, `base-domain` and the redirect URI in the Keycloak service
 configuration. The file validates against `opi/schemas/project_v2.json` of
 RIG-Cluster.
@@ -105,11 +105,11 @@ What is in it and why:
 
 | Part | Why |
 |---|---|
-| `services: publish-on-web, postgresql-database, persistent-storage, keycloak` | the four services Plak needs |
+| `services: publish-on-web, postgresql-database, persistent-storage, keycloak` | the four services Toon needs |
 | component `beheer`, inbound 8080 | the app; one container, port 8080 as in the Containerfile |
 | `persistent-storage` `content` on `/content` | the content volume, `TOON_CONTENT_ROOT` |
 | `probe: scheme: tcp` | `/-/healthz` exists on the admin host only and the probe arrives with the pod IP as Host; an HTTP probe would always fail |
-| `aliases` for `TOON_DB_URL` | the DB service delivers separate variables, Plak wants a DSN |
+| `aliases` for `TOON_DB_URL` | the DB service delivers separate variables, Toon wants a DSN |
 | `backup: enabled: true` | content sits on a PVC, not in the database |
 
 Changes go in through the portal, `zadctl` or the API; the project file itself
@@ -149,7 +149,7 @@ name set to an empty value counts as set, and wins over its `PLAK_` name. An
 existing deployment moves over as described under "Moving an existing deployment
 to the `TOON_` names" below.
 
-What Plak needs. `TOON_DB_URL`, `TOON_CONTENT_ROOT`, `TOON_SESSION_SECRET`,
+What Toon needs. `TOON_DB_URL`, `TOON_CONTENT_ROOT`, `TOON_SESSION_SECRET`,
 `TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` have no default value and are
 always there; the bottom four become mandatory as soon as
 `TOON_ENVIRONMENT=productie`. If one is missing the app does not start and the
@@ -169,8 +169,8 @@ anybody an administrator.
 | `TOON_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional, only after a rotation: the keys `TOON_AUDIT_IP_KEY` replaced, comma-separated, newest first, each in the format of the key itself. A single key works. See below |
 | `TOON_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |
 | `TOON_ENVIRONMENT` | env-vars | `productie` |
-| `TOON_BASE_URL` | env-vars | `https://beheer.plak.<domein>` |
-| `TOON_CONTENT_BASE_URL` | env-vars | `https://plak.<domein>` |
+| `TOON_BASE_URL` | env-vars | `https://beheer.toon.<domein>` |
+| `TOON_CONTENT_BASE_URL` | env-vars | `https://toon.<domein>` |
 | `TOON_BEHIND_PROXY` | env-vars | `true`: the HAProxy router stands in front of the pod |
 | `TOON_OIDC_ISS_REQUIRED` | env-vars | `true` |
 | `TOON_IDP_RECHECK_SECONDS` | env-vars | optional, default `900`; how often at most a session is checked again at Keycloak, `0` turns it off |
@@ -191,7 +191,7 @@ anybody an administrator.
 The last six defaults fit the 10Gi content volume (§9). While a deploy runs,
 its upload and what it unpacks sit on the volume side by side, so one deploy
 needs at most `TOON_INGEST_MAX_BODY` plus `TOON_INGEST_MAX_TOTAL` (300 MiB)
-on top of the stored versions. Plak measures the actual deploy, not that
+on top of the stored versions. Toon measures the actual deploy, not that
 maximum: it checks the declared upload size before reading the body and keeps
 checking while it writes, refusing with `503` `STORAGE_UNAVAILABLE` rather than
 letting the volume drop below `TOON_STORAGE_MIN_FREE_BYTES`. Keep the floor plus
@@ -200,7 +200,7 @@ a large deploy can only ever be refused.
 
 Besides the host separation, `TOON_BASE_URL` is also the exact CI audience: a
 GitHub or Forgejo workflow requests its ID token with this value as
-`audience`, and Plak refuses a token whose `aud` is not literally equal to it
+`audience`, and Toon refuses a token whose `aud` is not literally equal to it
 (`ci/tokens.py`, no normalisation of a trailing `/`). Without
 `TOON_BASE_URL` CI tokens are refused anyway. The pod needs outbound https to
 `token.actions.githubusercontent.com` (JWKS for GitHub tokens),
@@ -277,7 +277,7 @@ them back before you switch to such an image (§7).
 ### OIDC
 
 The `keycloak` service injects `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID` and
-`OIDC_CLIENT_SECRET` (without the `TOON_` prefix). Plak reads those as the
+`OIDC_CLIENT_SECRET` (without the `TOON_` prefix). Toon reads those as the
 source for `TOON_OIDC_ISSUER`, `TOON_OIDC_CLIENT_ID` and
 `TOON_OIDC_CLIENT_SECRET`, so you do not have to set those three yourself.
 What you do have to set:
@@ -291,18 +291,18 @@ What you do have to set:
 
 ### Revalidation at the IdP
 
-With `TOON_IDP_RECHECK_SECONDS` (default 900) Plak redeems the refresh token
+With `TOON_IDP_RECHECK_SECONDS` (default 900) Toon redeems the refresh token
 of the session at the token endpoint of Keycloak on the first request after
 that interval, with the same client authentication as the login
 (`TOON_OIDC_CLIENT_AUTH`). If Keycloak refuses with `invalid_grant`, the
-session has been ended there (blocked, deleted, logged out) and the Plak
+session has been ended there (blocked, deleted, logged out) and the Toon
 session lapses immediately. For that the pod needs outbound https to the
 Keycloak service, which already applied for the login anyway.
 
 If something goes wrong with the link itself instead of with a session
 (`invalid_client` because the client secret no longer matches,
 `unauthorized_client` or `unsupported_grant_type` because the client is not
-allowed the refresh grant), then nobody is logged out, but Plak complains
+allowed the refresh grant), then nobody is logged out, but Toon complains
 loudly: an ERROR line with the error code and the issuer, at most one per
 minute, and for as long as it lasts `GET /-/healthz` on the admin host
 answers with status 200 and
@@ -326,7 +326,7 @@ then no extra risk, but also no extra certainty.
 Nobody watches the ZAD probe (`tcp`), so trouble with the content volume (10Gi,
 §9) is made visible in three places.
 
-`GET https://beheer.plak.<domain>/-/healthz` is public and needs no login. It
+`GET https://beheer.toon.<domain>/-/healthz` is public and needs no login. It
 is on the admin host only; the content host answers it with the neutral 404.
 It is never cached, and it counts against the normal rate limit. The answer
 names only the checks that complain, never a message or a number:
@@ -344,7 +344,7 @@ defaults): the point where a deploy of the maximum size would be refused. With
 
 `content_root` is decided once, at startup, and only with
 `TOON_ENVIRONMENT=productie`: the content root is on the same device as its
-parent, so no volume is mounted there. Plak creates the directory itself, so a
+parent, so no volume is mounted there. Toon creates the directory itself, so a
 wrong `TOON_CONTENT_ROOT` would otherwise write into the container's own layer
 and lose everything at the next restart. This is a warning, the pod starts
 anyway, and only a restart with the right mount clears it.
@@ -381,7 +381,7 @@ under the same threshold as `storage`.
 
 ## 6. Registering the second OIDC redirect URI
 
-Plak logs in on two origins: `/-/oauth2/callback` on the admin host and
+Toon logs in on two origins: `/-/oauth2/callback` on the admin host and
 `/-/oauth2/callback` on the content host. The ZAD Keycloak automatically sets
 `https://{host}/*` for every **ingress host of the deployment**, but as soon
 as `domain-format` is set explicitly the root host is not counted in there.
@@ -394,7 +394,7 @@ services:
       config:
         template: sso-only
         additional_redirect_uris:
-          - "https://plak.rijks.app/-/oauth2/callback"
+          - "https://toon.rijks.app/-/oauth2/callback"
 ```
 
 One line of its own per environment. After the first rollout, check that both
@@ -403,10 +403,10 @@ URIs are on the client; without the second one every viewer login breaks on
 
 ## 6a. Keycloak client: logout settings
 
-Plak offers the endpoint from OIDC Back-Channel Logout 1.0 on the admin host:
+Toon offers the endpoint from OIDC Back-Channel Logout 1.0 on the admin host:
 
 ```
-POST https://beheer.plak.<domein>/-/oidc/backchannel-logout
+POST https://beheer.toon.<domein>/-/oidc/backchannel-logout
 ```
 
 The endpoint expects a `logout_token` as a form field. A cheap, unverified
@@ -416,7 +416,7 @@ cache), then the full check: the signature (through the JWKS of the issuer),
 `iss`, `aud`, a recent `iat`, `exp`, the claim `events` with
 `http://schemas.openid.net/event/backchannel-logout`, the presence of `sid` or
 `sub`, the absence of a `nonce`, and a `jti` that did not come by shortly
-before. After that the corresponding Plak sessions (admin and content) lapse
+before. After that the corresponding Toon sessions (admin and content) lapse
 and a 200 follows with `Cache-Control: no-store`. See `docs/security.md`
 ("Session lifetime and logout") for the full session picture and the
 pre-check.
@@ -431,10 +431,10 @@ Settings):
 | Field | Value | Why |
 |---|---|---|
 | Front channel logout | Off | While it is on, Keycloak skips back-channel logout for the client entirely, whatever the URL says |
-| Backchannel logout URL | `https://beheer.plak.<domein>/-/oidc/backchannel-logout` | Empty means Keycloak never calls us and `POST /-/oidc/backchannel-logout` is dead code. Per environment its own admin host |
+| Backchannel logout URL | `https://beheer.toon.<domein>/-/oidc/backchannel-logout` | Empty means Keycloak never calls us and `POST /-/oidc/backchannel-logout` is dead code. Per environment its own admin host |
 | Backchannel logout session required | On | Puts `sid` in the logout token, which is what matches the exact session; only the session it is about lapses. Off means the token carries only a `sub`, and every session of that person lapses |
-| Backchannel logout revoke offline sessions | Off | Only adds a `revoke_offline_access` event to the token; Plak keeps no offline sessions and does not act on it |
-| Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Plak does not speak |
+| Backchannel logout revoke offline sessions | Off | Only adds a `revoke_offline_access` event to the token; Toon keeps no offline sessions and does not act on it |
+| Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Toon does not speak |
 
 Without this configuration the rest works fine: the endpoint then only exists
 and is never called, and the periodic revalidation stays the boundary (at
@@ -466,7 +466,7 @@ task, and `zadctl` has no `job` command. There are three real routes:
 3. **Bootstrap actions**: HTTP calls that the platform fires at the app after
    the rollout. That is suitable for initialisation through an endpoint, not
    for a schema migration, and the field is not in the schema version that
-   `deploy/plak-project.example.yaml` is validated against.
+   `deploy/toon-project.example.yaml` is validated against.
 
 Route 1 is the most honest for the first rollout (you see the output), route 2
 is the route as soon as there are regular migrations. Pick one and write it
@@ -489,6 +489,9 @@ An image without `0004` does not start on a database that has it either, but
 here there is a way back: `alembic stamp 0003_storage_by_site_id` from the
 current image (route 1 is enough, it needs no volume) marks the database as
 before `0004` and leaves the column in place, which the older code ignores.
+The rename to Toon adds no migration, so going back over it needs no stamp. A
+CLI session signed in on one side of it does not work on the other, because a
+stored hash covers the token prefix.
 
 An image from before compression (design.md §5.4a) cannot serve a file that a
 newer one keeps compressed only: it looks at the file's own path, finds
@@ -509,7 +512,7 @@ cannot read what newer images wrote. An IP address encrypted under version
 chain head in the `toon-audit-chain-checkpoint/3` format. Both work again after
 rolling forward, and nothing is lost.
 
-Plak runs on one database account. The shared PostgreSQL service delivers one
+Toon runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the
 purge job therefore all three use `TOON_DB_URL`. Local runs the same way, so
 that dev and production give the same picture.
@@ -568,9 +571,9 @@ costs an approval:
   `component-deployment-project` plus `root-component: beheer`, the API
   returns one URL.
 - A dotted domain needs a subdomain claim, and a subdomain belongs to exactly
-  one deployment. `productie` holds `plak | rijks.app`, and a second
-  deployment asking for it fails the rollout with "Subdomein 'plak.rijks.app'
-  is niet beschikbaar".
+  one deployment. When this was tried, `productie` held `plak | rijks.app`,
+  and a second deployment asking for it failed the rollout with "Subdomein
+  'plak.rijks.app' is niet beschikbaar".
 - A subdomain of its own per pull request does work, and was measured to
   compose the right addresses, but every claim arrives as `requested` and
   waits for a platform administrator. One approval for one long-lived
@@ -592,8 +595,9 @@ a question for whoever needs one. The approval is a single click, once.
 
 ### A second deployment
 
-Nothing runs beside `productie`. Whoever adds a deployment next, staging or
-otherwise, starts from three things the previews taught; the route they
+Beside `productie` only the redirect on the old name runs (§12). Whoever adds a
+deployment next, staging or otherwise, starts from three things the previews
+taught; the route they
 used is in the history of `deploy.yml`, before `aecdb30`.
 
 - **A clone does not carry over the settings of the source.** `components`
@@ -622,7 +626,7 @@ used is in the history of `deploy.yml`, before `aecdb30`.
 
 ## 9. Storage sizing
 
-Plak's content volume is **10Gi**, granted by the platform team. The
+Toon's content volume is **10Gi**, granted by the platform team. The
 `persistent-storage` catalogue still offers 50Mi, 100Mi, 250Mi, 500Mi and 1Gi,
 and a volume can grow but not shrink (source: RIG-Cluster,
 `operations-manager/python/opi/services/catalog/shared/storage.py`,
@@ -660,7 +664,7 @@ number of sites times that settled size, plus the floor and one full deploy
 their own number, and then the quota is their only bound.
 
 The candidate sites are 1 to 13 MB now, but every kept version and every
-preview counts towards the volume. Plak writes to that one volume and nowhere
+preview counts towards the volume. Toon writes to that one volume and nowhere
 else (`ContentStore` is a plain filesystem class). More room than 10Gi would need a
 larger grant from the platform team or storage other than a volume; the quota and the cleanup
 above are what keep the volume from filling.
@@ -682,7 +686,7 @@ is not there:
 1. **Answered.** The `persistent-storage` catalogue offers at most 1Gi per
    volume, and a volume can grow but not shrink (RIG-Cluster,
    `operations-manager/python/opi/services/catalog/shared/storage.py`). The
-   platform team granted Plak 10Gi outside that catalogue (§9). What stays
+   platform team granted Toon 10Gi outside that catalogue (§9). What stays
    open is whether there is a ReadWriteMany option and whether a component can
    run more than one replica: the project schema has no `replicas` field and
    the platform renders 1 hard (§9). For now: 10Gi, one pod, the default site
@@ -716,7 +720,7 @@ is not there:
 
 ## 11. Exit strategy
 
-Plak holds three things, and each one can be taken off ZAD:
+Toon holds three things, and each one can be taken off ZAD:
 
 - **The image.** An OCI image, built from `containers/toon/Containerfile` and
   published to GHCR, attested and with an SBOM (`docs/security.md`, "Supply
@@ -737,7 +741,7 @@ stop matching and the encrypted IP addresses can no longer be read.
 Two properties to know when planning a move or a failure:
 
 - **State lives in process memory.** Sessions and the replay cache of the
-  back-channel logout sit in the process, so Plak runs
+  back-channel logout sit in the process, so Toon runs
   as one replica, and a restart logs everyone out (`docs/security.md`,
   "Sessions do not survive a restart").
 - **The probe is a TCP probe.** It only sees that the port answers, not that
@@ -745,9 +749,37 @@ Two properties to know when planning a move or a failure:
   availability risk we accept for now. `/-/healthz` shows the state, but
   nothing on the platform reads it (§5, "Content volume").
 
+## 12. The old name
+
+Toon was called Plak. `productie` moved from the subdomain `plak` to `toon`
+(§3), and the ZAD project keeps its internal name `plak-jr3`, because
+renaming a project means a new one. A second deployment answers on the old
+subdomain. It redirects every request on `plak.rijks.app` and
+`beheer.plak.rijks.app` to the same path and query on `toon.rijks.app` and
+`beheer.toon.rijks.app`, apart from its own probes on `/healthz` and `/readyz`.
+
+- **The subdomain `plak` stays claimed and is never released.** Both old
+  hosts sent HSTS for a year with `includeSubDomains`, so a browser that visited
+  them in that year refuses to continue past a certificate error on them. The
+  certificate comes from the ingress of ZAD for as long as the redirect
+  deployment exists. If someone else claimed `plak.rijks.app`, they would answer
+  for every old link, bookmark and client.
+- **The redirect logs without the query.** The key of a secret link sits in the
+  query, and an old link still sends it to the old host. The `haproxy-redirect`
+  image logs the whole request line as it comes (`option httplog`), so that key
+  would land in the log of this project. Give the redirect a log format without
+  the query before it takes traffic.
+- **The back-channel logout URL moves too.** It names the new admin host (§6a),
+  because logging out must not depend on a redirect.
+- **`DigiGilde` never gets a repository named `plak` again.** GitHub
+  redirects web traffic and git operations from the old address of a renamed
+  repository, which keeps old links, git remotes and install commands
+  working. It stops redirecting as soon as a new repository takes the old
+  name.
+
 ## See also
 
-- `deploy/plak-project.example.yaml`: the project file with comments.
+- `deploy/toon-project.example.yaml`: the project file with comments.
 - `docs/security.md`: the security checklist, including the headers the app
   sets itself because there is no nginx in front of it any more.
 - `docs/local-development.md`: the dev stack with two hosts on `:8080`.

@@ -15,11 +15,11 @@ function me(groupRoles: Me['groupRoles'], siteRoles: Me['siteRoles'] = []): Me {
     createdAt: '2026-01-01T00:00:00Z',
     lastLoginAt: null,
     lastActiveAt: null,
-    contentBaseUrl: 'https://sites.plak.test',
+    contentBaseUrl: 'https://sites.toon.test',
     groupRoles,
     siteRoles,
     ciForgejoHosts: [],
-    ciAudience: 'plak',
+    ciAudience: 'toon',
     language: null,
     slugRedirectDays: 30,
   };

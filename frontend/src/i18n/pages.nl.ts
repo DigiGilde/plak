@@ -10,21 +10,21 @@ export const pagesNl = {
   // -- Landing: access withdrawn -------------------------------------------
   'page.landing.withdrawn.title': 'Je toegang is ingetrokken',
   'page.landing.withdrawn.intro':
-    'Je bent ingelogd met je organisatieaccount, maar Plak laat je niet meer binnen.',
+    'Je bent ingelogd met je organisatieaccount, maar je hebt geen toegang meer tot Toon.',
   'page.landing.withdrawn.body':
     'Je account staat er nog, met alles wat eraan hangt. Alleen de toegang is dicht. Weet je niet waarom, vraag het dan aan de platformbeheerder van je organisatie. Die kan je toegang ook teruggeven.',
   'page.landing.withdrawn.check': 'Controleer opnieuw',
   'page.landing.withdrawn.failed.title': 'Controle mislukt',
-  'page.landing.withdrawn.failed.detail': 'Plak is even niet bereikbaar. Probeer het zo nog eens.',
+  'page.landing.withdrawn.failed.detail': 'De server is even niet bereikbaar. Probeer het zo nog eens.',
 
   // -- Landing: no session --------------------------------------------------
   'page.landing.intro':
-    'Snel en eenvoudig een HTML-pagina delen. Een rapport, analyse of overzicht, zelf gemaakt of met een AI-assistent: zet het op Plak en deel de link. Jij bepaalt wie het mag zien.',
+    'Snel en eenvoudig een HTML-pagina delen. Een rapport, analyse of overzicht, zelf gemaakt of met een AI-assistent: zet het op Toon en deel de link. Jij bepaalt wie het mag zien.',
   'page.landing.loginHint': 'Log in met je Rijksoverheid-account om te beginnen.',
   'page.landing.login': 'Inloggen',
   'page.landing.steps.heading': 'Zo deel je een pagina',
   'page.landing.steps.upload':
-    'Zet je HTML-bestand op Plak door het te uploaden, of laat je AI-assistent dit doen.',
+    'Zet je HTML-bestand op Toon door het te uploaden, of laat je AI-assistent dit doen.',
   'page.landing.steps.audience':
     "Kies wie het mag zien: iedereen, collega's die inloggen, alleen wie je uitnodigt, of wie de geheime link heeft.",
   'page.landing.steps.share': 'Deel de link.',
@@ -38,15 +38,15 @@ export const pagesNl = {
   'page.start.loading': 'Bezig met laden...',
 
   // -- About ----------------------------------------------------------------
-  'page.whatsNew.title': 'Wat is er nieuw in Plak',
+  'page.whatsNew.title': 'Wat is er nieuw in Toon',
   'page.whatsNew.empty': 'Er zijn nog geen releases.',
-  'page.about.title': 'Over Plak',
+  'page.about.title': 'Over Toon',
   'page.about.intro':
-    'Plak is er voor die ene pagina die je wilt delen. Een rapport, een analyse, een overzicht: je zet het online, kiest wie het mag zien en deelt de link. Geen bijlage die door mailboxen zwerft, maar een adres dat je kunt bijwerken en weer kunt intrekken.',
+    'Toon is er voor die ene pagina die je wilt delen. Een rapport, een analyse, een overzicht: je zet het online, kiest wie het mag zien en deelt de link. Geen bijlage die door mailboxen zwerft, maar een adres dat je kunt bijwerken en weer kunt intrekken.',
   'page.about.features.heading': 'Wat je ermee kunt',
   'page.about.features.share.term': 'Een pagina delen.',
   'page.about.features.share.body':
-    'Zet je HTML-bestand op Plak en je hebt een adres om te delen.',
+    'Zet je HTML-bestand op Toon en je hebt een adres om te delen.',
   'page.about.features.update.term': 'Bijwerken zonder nieuw adres.',
   'page.about.features.update.body':
     'Een nieuwe versie komt over de vorige heen. Iedereen met de link ziet vanzelf de laatste. Oudere versies blijven bewaard.',
@@ -61,24 +61,24 @@ export const pagesNl = {
     'Werk je in een repository, dan publiceer je vanuit GitHub of code.overheid.nl, met een preview per pull request.',
   'page.about.features.cli.term': 'Vanaf je eigen computer.',
   'page.about.features.cli.body':
-    'Met de Plak-CLI publiceer je vanaf je laptop, nadat je die eenmalig aan je account hebt gekoppeld.',
+    'Met de Toon-CLI publiceer je vanaf je laptop, nadat je die eenmalig aan je account hebt gekoppeld.',
   'page.about.name.heading': 'Wist je dat',
   'page.about.name.body':
-    'De naam komt van plakkaat: een aankondiging die je in de buurt ophangt zodat anderen hem kunnen zien. Een plakkaat kan in de openbare ruimte hangen, zichtbaar voor iedereen, of in een afgesloten ruimte waar alleen een kleine groep komt. Dat is precies wat Plak doet.',
+    'De naam komt van tonen: laten zien. Toon laat je site zien aan wie hem mag zien. Dat kan iedereen zijn, of alleen een kleine groep.',
 
   // -- Privacy --------------------------------------------------------------
   'page.privacy.title':
     'Privacy',
   'page.privacy.intro':
-    'Deze verklaring beschrijft hoe deze installatie van Plak omgaat met persoonsgegevens en welke rechten je hebt, volgens de Algemene verordening gegevensbescherming (AVG). Plak verwerkt persoonsgegevens om toegang tot gepubliceerde sites te regelen: een e-mailadres bij inloggen via je organisatie, en eventueel een e-mailadres van een genodigde bij toegang op uitnodiging.',
+    'Deze verklaring beschrijft hoe deze installatie van Toon omgaat met persoonsgegevens en welke rechten je hebt, volgens de Algemene verordening gegevensbescherming (AVG). Toon verwerkt persoonsgegevens om toegang tot gepubliceerde sites te regelen: een e-mailadres bij inloggen via je organisatie, en eventueel een e-mailadres van een genodigde bij toegang op uitnodiging.',
   'page.privacy.standard':
-    'Dit is de standaardverklaring van de software Plak. De organisatie die deze installatie beheert, vult haar aan met wat alleen die organisatie kan zeggen, zoals de grondslag en de Functionaris Gegevensbescherming.',
+    'Dit is de standaardverklaring van de software Toon. De organisatie die deze installatie beheert, vult haar aan met wat alleen die organisatie kan zeggen, zoals de grondslag en de Functionaris Gegevensbescherming.',
   'page.privacy.controller.heading':
     'Wie is verantwoordelijk',
   'page.privacy.controller.named':
-    'Deze installatie van Plak wordt beheerd door {name}. Die organisatie, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
+    'Deze installatie van Toon wordt beheerd door {name}. Die organisatie, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
   'page.privacy.controller.unnamed':
-    'De organisatie die deze installatie van Plak beheert, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
+    'De organisatie die deze installatie van Toon beheert, of de organisatie waar zij onder valt, is verwerkingsverantwoordelijke voor de persoonsgegevens die via deze installatie worden verwerkt.',
   'page.privacy.data.heading':
     'Welke gegevens',
   'page.privacy.data.account':
@@ -90,15 +90,15 @@ export const pagesNl = {
   'page.privacy.data.visits':
     "Bezoekgegevens: welke pagina's van een afgeschermde site je bekeek. Van openbare sites wordt niets bijgehouden.",
   'page.privacy.data.content':
-    'Gepubliceerde inhoud: kan persoonsgegevens bevatten, maar die zijn van de maker van de site. Plak leest, classificeert of filtert die inhoud niet. De publicerende organisatie is er zelf verantwoordelijk voor.',
+    'Gepubliceerde inhoud: kan persoonsgegevens bevatten, maar die zijn van de maker van de site. Toon leest, classificeert of filtert die inhoud niet. De publicerende organisatie is er zelf verantwoordelijk voor.',
   'page.privacy.purpose.heading':
     'Doel en grondslag',
   'page.privacy.purpose.body':
-    'Deze gegevens worden verwerkt om gepubliceerde sites alleen te tonen aan wie ze mag zien, en om het platform veilig te houden en misbruik te kunnen onderzoeken. Welke grondslag uit artikel 6 van de AVG geldt, hangt af van de organisatie die deze installatie beheert.',
+    'Deze gegevens worden verwerkt om gepubliceerde sites alleen te laten zien aan wie ze mag zien, en om het platform veilig te houden en misbruik te kunnen onderzoeken. Welke grondslag uit artikel 6 van de AVG geldt, hangt af van de organisatie die deze installatie beheert.',
   'page.privacy.processors.heading':
     'Verwerkers en hosting',
   'page.privacy.processors.body':
-    'Plak zelf gebruikt geen webstatistieken en deelt geen gegevens met andere partijen. Waar deze installatie draait en via welke inlogdienst je inlogt, bepaalt de organisatie die haar beheert.',
+    'Toon gebruikt zelf geen webstatistieken en deelt geen gegevens met andere partijen. Waar deze installatie draait en via welke inlogdienst je inlogt, bepaalt de organisatie die haar beheert.',
   'page.privacy.retention.heading':
     'Bewaartermijn',
   'page.privacy.retention.body':
@@ -106,7 +106,7 @@ export const pagesNl = {
   'page.privacy.retention.ip':
     'Bij elke auditregel hoort ook het IP-adres van waaraf iets gebeurde: een afgekapt netwerk (niet het volledige adres) staat gewoon in het log, even lang bewaard als de regel zelf. Het volledige adres staat er versleuteld naast, even lang bewaard, en alleen een platformbeheerder kan het opvragen, met dezelfde verplichte, vastgelegde reden.',
   'page.privacy.retention.session':
-    'Bekijk je afgeschermde content na inloggen met je organisatie, dan bewaart Plak je SSO-id en e-mailadres tot negentig dagen na je laatste keer inloggen. Dat is nodig om een regel in het auditlog bij een persoon te kunnen brengen, bijvoorbeeld bij het onderzoek naar een lek.',
+    'Bekijk je afgeschermde content na inloggen met je organisatie, dan bewaart Toon je SSO-id en e-mailadres tot negentig dagen na je laatste keer inloggen. Dat is nodig om een regel in het auditlog bij een persoon te kunnen brengen, bijvoorbeeld bij het onderzoek naar een lek.',
   'page.privacy.visibility.heading':
     'Wie kan wat zien',
   'page.privacy.visibility.body':
@@ -134,9 +134,9 @@ export const pagesNl = {
   'page.accessibility.title':
     'Toegankelijkheid',
   'page.accessibility.intro':
-    "Deze verklaring beschrijft in hoeverre de software Plak voldoet aan de toegankelijkheidseisen voor overheidswebsites. De wettelijke norm is WCAG 2.1 niveau AA, via EN 301 549 en verplicht onder het Besluit digitale toegankelijkheid overheid. Het gaat om de beheeromgeving van Plak. Pagina's die jij of je collega's publiceren zijn van de makers zelf, en Plak controleert de toegankelijkheid daarvan niet.",
+    "Deze verklaring beschrijft in hoeverre de software Toon voldoet aan de toegankelijkheidseisen voor overheidswebsites. De wettelijke norm is WCAG 2.1 niveau AA, via EN 301 549 en verplicht onder het Besluit digitale toegankelijkheid overheid. Het gaat om de beheeromgeving van Toon. Pagina's die jij of je collega's publiceren zijn van de makers zelf, en Toon controleert de toegankelijkheid daarvan niet.",
   'page.accessibility.standard.before':
-    'Dit is de standaardverklaring van de software Plak en berust op de toetsen van de makers. Een onderzoek door een onafhankelijke partij heeft niet plaatsgevonden. De organisatie die deze installatie beheert, stelt een eigen verklaring op met de invulassistent op ',
+    'Dit is de standaardverklaring van de software Toon en berust op de toetsen van de makers. Een onderzoek door een onafhankelijke partij heeft niet plaatsgevonden. De organisatie die deze installatie beheert, stelt een eigen verklaring op met de invulassistent op ',
   'page.accessibility.standard.link':
     'toegankelijkheidsverklaring.nl',
   'page.accessibility.standard.after':
@@ -144,7 +144,7 @@ export const pagesNl = {
   'page.accessibility.status.heading':
     'Nalevingsstatus',
   'page.accessibility.status.body':
-    'De toegankelijkheid van Plak is nog niet volledig onderzocht. Er is wel getoetst (zie hieronder), maar er ligt nog geen volledig, gedocumenteerd onderzoek tegen alle succescriteria van WCAG 2.1 AA. In het model van DigiToegankelijk is dat status C.',
+    'De toegankelijkheid van Toon is nog niet volledig onderzocht. Er is wel getoetst (zie hieronder), maar er ligt nog geen volledig, gedocumenteerd onderzoek tegen alle succescriteria van WCAG 2.1 AA. In het model van DigiToegankelijk is dat status C.',
   'page.accessibility.tested.heading':
     'Hoe dit getoetst is',
   'page.accessibility.tested.components':
@@ -180,21 +180,21 @@ export const pagesNl = {
   'page.accessibility.enforcement.after':
     '.',
   'page.accessibility.prepared':
-    'Deze verklaring is opgesteld op 7 oktober 2026.',
+    'Deze verklaring is opgesteld op 2 november 2026.',
 
-  // -- Linking a CLI session (plak login) -----------------------------------
+  // -- Linking a CLI session (toon login) -----------------------------------
   'page.cliPair.loading': 'Bezig met laden',
   'page.cliPair.error.unknownCode':
-    'Deze code is onbekend, verlopen of al gebruikt. Start plak login opnieuw.',
+    'Deze code is onbekend, verlopen of al gebruikt. Start "toon login" opnieuw.',
   'page.cliPair.error.tooManyAttempts': 'Te veel pogingen. Probeer het zo nog eens.',
   'page.cliPair.unknownClient': 'Onbekend programma',
   'page.cliPair.login.intro': 'Een CLI-sessie koppelen kan alleen kort nadat je zelf bent ingelogd.',
   'page.cliPair.login.afterwards':
-    'Log in en vul daarna de code over die plak login in je terminal toont.',
+    'Log in en vul daarna de code uit je terminal in.',
   'page.cliPair.login.action': 'Inloggen',
   'page.cliPair.codeEntry.intro':
-    'Vul de code over die je terminal toont om plak login te koppelen aan je account.',
-  'page.cliPair.codeEntry.install.before': 'Nog geen Plak-CLI? ',
+    'Vul de code uit je terminal in om "toon login" aan je account te koppelen.',
+  'page.cliPair.codeEntry.install.before': 'Nog geen Toon-CLI? ',
   'page.cliPair.codeEntry.install.link': 'Zo installeer en gebruik je hem.',
   'page.cliPair.codeEntry.label': 'Code uit je terminal',
   'page.cliPair.codeEntry.placeholder': 'ABCD-EFGH',
@@ -210,9 +210,9 @@ export const pagesNl = {
   'page.cliPair.confirm.otherNetwork.title':
     'Deze aanvraag komt van een ander netwerk dan waar jij nu bent',
   'page.cliPair.confirm.otherNetwork.detail':
-    'Draait plak login op een andere machine of via een VPN, dan kan dat kloppen. Twijfel je, klik dan op Weigeren.',
+    'Draait "toon login" op een andere machine of via een VPN, dan kan dat kloppen. Twijfel je, klik dan op Weigeren.',
   'page.cliPair.confirm.warning.title':
-    'Alleen koppelen als je zelf zojuist plak login hebt gestart',
+    'Alleen koppelen als je zelf zojuist "toon login" hebt gestart',
   'page.cliPair.confirm.warning.detail':
     'Heeft iemand je deze link of code gestuurd? Klik dan op Weigeren.',
   'page.cliPair.confirm.approve': 'Koppelen',

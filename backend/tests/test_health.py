@@ -19,7 +19,7 @@ from toon.ingest.store import ContentStore
 from toon.main import create_app
 from toon.serving.response import NEUTRAL_404_BODY
 
-UNREACHABLE_DB = "postgresql+asyncpg://plak:plak@127.0.0.1:1/plak"
+UNREACHABLE_DB = "postgresql+asyncpg://toon:toon@127.0.0.1:1/toon"
 
 
 def _app(tmp_path: Path, db_url: str, **overrides):

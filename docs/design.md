@@ -1,7 +1,7 @@
-# Plak: the numbered design
+# Toon: the numbered design
 
 This document holds the rules the code cites. A comment that says "spec §7" or
-"behaviour requirement 6" means a section number here. It describes Plak as it
+"behaviour requirement 6" means a section number here. It describes Toon as it
 is, not as it was designed: where an older design paper and the code disagree,
 the code is the subject and the older paper is gone.
 
@@ -13,12 +13,12 @@ The numbering is fixed by the references in the code and cannot be renumbered
 without breaking them. Behaviour requirement *N* under serving is section 5.*N*;
 the two spellings are the same rule.
 
-## 1. What Plak is
+## 1. What Toon is
 
-Plak publishes static sites for government organisations: public, behind SSO
+Toon publishes static sites for government organisations: public, behind SSO
 Rijk, for invitees on an email address, or through a secret link. Every pull
-request can get a preview of its own. A site is a tree of files that Plak does
-not interpret; what Plak owns is who may see it, which version is live and who
+request can get a preview of its own. A site is a tree of files that Toon does
+not interpret; what Toon owns is who may see it, which version is live and who
 may change that.
 
 One application answers on two hosts (§4a), serves content and the admin
@@ -181,7 +181,7 @@ kind, kept by triggers (§12).
 
 That is a conscious deviation from persistent addresses ("Cool URIs don't
 change", W3C): GitHub and GitLab keep a redirect until somebody claims the
-old name again, and Google advises keeping one for at least a year. Plak stops
+old name again, and Google advises keeping one for at least a year. Toon stops
 after 30 days and frees the slug, so an old address can come to mean another
 site; what that costs is in `docs/publishing.md` ("After an address change")
 and `docs/security.md`.
@@ -227,7 +227,7 @@ and content stand on separate origins:
 
 - **admin host** (`beheer.<domain>`, `TOON_BASE_URL`): the SPA, `/-/api/v1`,
   login, callback, logout, back-channel logout. Carries the admin session
-  cookie (`__Host-plak-session`, SameSite=Strict) and the CSRF cookie.
+  cookie (`__Host-toon-session`, SameSite=Strict) and the CSRF cookie.
 - **content host** (`<domain>`, `TOON_CONTENT_BASE_URL`): published sites,
   previews and version views, a redirect to the admin host on `/`, and of the platform
   namespace exactly four paths: content login, its callback, content logout and
@@ -446,7 +446,7 @@ content session cookie and the secret-link cookie are `SameSite=None` (§7.6);
 under `SameSite=Lax` a non-public site serves its pages and none of its
 assets. What cannot work is what the browser fetches in CORS mode from such a
 document: web fonts, module scripts and `fetch`/XHR go out with `Origin: null`
-and no cookie, and Plak sets no CORS headers anywhere. A site that needs a web
+and no cookie, and Toon sets no CORS headers anywhere. A site that needs a web
 font of its own, ES modules or calls back to itself has to have this switch
 off.
 
@@ -681,7 +681,7 @@ Code: `ingest/unpacker.py`, `ingest/store.py`, `ingest/service.py`. Guarded by:
 
 Looking and administering are separate. The browser only ever gets an HttpOnly
 session cookie; no token ever lives in the web app (BFF). The reason is that
-Plak's core resource is static content the browser navigates and loads itself,
+Toon's core resource is static content the browser navigates and loads itself,
 where nothing can carry an Authorization header.
 
 ### 7.1 Access is a base plus two extras
@@ -772,7 +772,7 @@ A secret link is `?key=selector.verifier`. The database keeps the selector and
 SHA-256 of the verifier, compared in constant time; the plaintext exists only at
 the moment of creation. A valid key is redeemed: the response is a 302 to the
 same URL without `key` with `Cache-Control: no-store`, setting a
-`__Secure-plak-key` cookie (HttpOnly, SameSite=None) on the path of exactly that
+`__Secure-toon-key` cookie (HttpOnly, SameSite=None) on the path of exactly that
 site or preview, so the key does not stay behind in the address bar, the history
 or a log. The cookie is a reference to the key record, not proof in itself, and
 is validated server-side on every request, so revoking or expiry breaks
@@ -829,7 +829,7 @@ Guarded by: `test_keys.py`, `test_code_page.py`, `test_serving.py`,
 A login only to look creates no member record: the decision uses session claims
 only. A record comes into being on a first admin visit, and it is created
 **active** straight away, because anyone who can complete the SSO login may use
-Plak. `TOON_BOOTSTRAP_ADMIN_SUB` additionally makes that member a platform
+Toon. `TOON_BOOTSTRAP_ADMIN_SUB` additionally makes that member a platform
 administrator, idempotently. A member set to `deactivated` loses admin access
 and the `site_team` route; the other ways in do not depend on member status.
 
@@ -845,7 +845,7 @@ Code: `auth/members.py`, `auth/content_viewers.py`. Guarded by:
 
 Server-side sessions with a signed `__Host` cookie; the browser gets a signed
 reference, claims never stand on their own in the cookie. The store is in
-process memory, because Plak runs one replica (§11), and sessions deliberately
+process memory, because Toon runs one replica (§11), and sessions deliberately
 do not survive a restart. Maximum session age is 12 hours, with session id
 rotation at login. Two kinds (§4a) live in one store, kept apart by the kind
 field plus a separate cookie name: admin routes accept the admin session only,
@@ -867,7 +867,7 @@ host is POST only and ends the content session too, through a redirect to
 The content session rides in two cookies, because all sites share one
 hostname (§5.10):
 
-- `__Secure-plak-content`, `Path=/{group}/{site}/`: the session id for content
+- `__Secure-toon-content`, `Path=/{group}/{site}/`: the session id for content
   requests. `__Secure-` rather than `__Host-`, because the `__Host-` prefix
   requires `Path=/`. What that prefix also forbids is a `Domain` attribute, and
   giving that up is what makes this cookie shadowable from a sibling host on the
@@ -876,7 +876,7 @@ hostname (§5.10):
   of the shadower's own, on an origin that has no session-borne mutations. The
   admin cookie keeps its `__Host-` prefix and with it the guarantee that
   nothing on the content host can write it.
-- `__Secure-plak-content-anchor`, `Path=/-/`: the same session id where the
+- `__Secure-toon-content-anchor`, `Path=/-/`: the same session id where the
   login, the callback and the logout can read it, and nowhere else.
 
 One server-side session behind both: one 12-hour lifetime, one `kind`, one
@@ -928,7 +928,7 @@ Back-channel logout is accepted on `/-/oidc/backchannel-logout`, admin host
 only, with signature, `iss`, `aud`/`azp`, a recent `iat`, the logout event
 claim, `sid` or `sub`, the absence of a `nonce` and a `jti` replay cache.
 
-Because a Plak session outlives the IdP's own, a session is re-validated against
+Because a Toon session outlives the IdP's own, a session is re-validated against
 the IdP on the first request after `TOON_IDP_RECHECK_SECONDS` (default 900, `0`
 turns it off) with `grant_type=refresh_token`. Success keeps the session and
 rotates the stored refresh token; the `sub` of a new id token must match. A hard
@@ -947,7 +947,7 @@ Code: `auth/oidc.py`, `auth/revalidation.py`, `platform/backchannel.py`,
 
 The admin API refuses everything that does not demonstrably come from the
 admin origin (§4a) and never sets CORS headers. Session-borne mutations need
-the CSRF double submit against `__Host-plak-csrf`. A `Bearer` Authorization
+the CSRF double submit against `__Host-toon-csrf`. A `Bearer` Authorization
 header is accepted on the two deploy endpoints and the two CLI session endpoints
 and nowhere else; a middleware answers 401 to any other request carrying one.
 Deploy tokens no longer exist: a Bearer is either a CI ID token or a CLI access
@@ -1033,7 +1033,7 @@ repository's provider and host and it carries the stored `repository_id` (and
 `repository_owner_id` where present), because ids survive a rename while names
 do not; a transfer to another owner changes the owner id and is refused. A
 Forgejo version that sends no ids matches on
-`owner/repo` case-insensitively, and Plak then asks the Forgejo REST API whether
+`owner/repo` case-insensitively, and Toon then asks the Forgejo REST API whether
 that name still has the stored ids, so a repository deleted and recreated under
 the same name does not inherit the trust. A GitHub token without ids is refused.
 The name a version records as its origin, and the name on the link, come from
@@ -1069,8 +1069,8 @@ site or its group gets another address, which the triggers of migration
 0005 see to, so an exempt link cannot follow its site onto an address that
 used to be another's. A member's CLI token is not affected: its role decides.
 
-**CLI login.** `plak login` is an OAuth 2.0 device authorization grant (RFC
-8628) Plak runs itself on top of the admin SSO login: the CLI asks for a device
+**CLI login.** `toon login` is an OAuth 2.0 device authorization grant (RFC
+8628) Toon runs itself on top of the admin SSO login: the CLI asks for a device
 code and a user code, the member approves that code in the SPA with a fresh
 session, and the CLI trades its device code for a one-hour access token plus a
 rotating refresh token (idle 30 days, absolute 90). A refresh token presented
@@ -1211,10 +1211,10 @@ Code: `ratelimit.py`, `net.py`, `constants.py`. Guarded by: `test_ratelimit.py`,
 
 ## 11. Deployment
 
-Plak is **one component** on ZAD, because the application serves content, the
+Toon is **one component** on ZAD, because the application serves content, the
 SPA and the host separation itself. Two web addresses on that one component
 through `publish-on-web` with a dotted `domain-format` and `root-component`:
-`beheer.plak.<domain>` and `plak.<domain>`. PostgreSQL and the content volume
+`beheer.toon.<domain>` and `toon.<domain>`. PostgreSQL and the content volume
 are ZAD services, with the volume's size declared in the project file. How full
 the volume is shows in `/-/healthz`, in the log and in the platform
 administrator's view (§6).
@@ -1227,7 +1227,7 @@ audit pepper, audit IP key, session secret) come in as user env vars; nothing
 sits in the image or the repository. Migrations run as a job in the portal or at
 container start, because ZAD has no notion of a Job.
 
-`deploy/plak-project.example.yaml` is the annotated project file,
+`deploy/toon-project.example.yaml` is the annotated project file,
 `docs/deploying-on-zad.md` the step-by-step guide; `dev/compose.yml` mirrors the
 topology locally (nginx as a dumb proxy, app, PostgreSQL, mock OIDC), see
 `docs/local-development.md`.
@@ -1290,7 +1290,7 @@ a setting, and the purge job asks the database what has expired instead of
 carrying a term of its own. `guard_last_group_admin` keeps a group from losing
 its last admin (§3.5).
 
-**One database account.** Plak talks to the database under one account, for the
+**One database account.** Toon talks to the database under one account, for the
 app, for Alembic and for the purge job, because the shared PostgreSQL service on
 ZAD hands out exactly one user; locally it is run the same way. The separation
 between a migration, a runtime and a purge account that an earlier design
@@ -1348,7 +1348,7 @@ guessing:
 
 - **Deploy tokens** (`plak_<prefix8>_<secret32>` bearer tokens with a group or
   site scope, under the old §7 and §8) no longer exist. CI authenticates with an
-  ID token from its forge and a person with a CLI token from `plak login` (§8).
+  ID token from its forge and a person with a CLI token from `toon login` (§8).
 - **The X-Accel-Redirect datapath and the nginx header discipline** under the
   old §5, together with the parity test between the dev path and the nginx path,
   are gone: the application serves content itself and there is only one path

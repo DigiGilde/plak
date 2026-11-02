@@ -26,7 +26,7 @@ describe('mockFetch route parsing', () => {
   it('accepts a URL instance as input', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch(new URL('https://plak.test/-/api/v1/overview'));
+    const response = await backend.fetch(new URL('https://toon.test/-/api/v1/overview'));
 
     expect(response.status).toBe(200);
   });
@@ -34,7 +34,7 @@ describe('mockFetch route parsing', () => {
   it('accepts a Request instance as input', async () => {
     const backend = makeMockBackend();
 
-    const response = await backend.fetch(new Request('https://plak.test/-/api/v1/overview'));
+    const response = await backend.fetch(new Request('https://toon.test/-/api/v1/overview'));
 
     expect(response.status).toBe(200);
   });

@@ -166,16 +166,16 @@ function logout(): void {
           data-testid="beta-banner"
         ></nldd-status-bar>
         <div class="toolbar">
-          <nldd-toolbar accessible-label="Plak">
+          <nldd-toolbar>
             <!-- The whole wordmark sits in the media slot and there is no
-                 `text`: with both, the P would be read twice ("[P] Plak"). The
+                 `text`: with both, the T would be read twice ("[T] Toon"). The
                  min-width is the width of that wordmark: without it the title
                  shrinks below its own content on a narrow screen and the buttons
                  slide over it. -->
-            <nldd-toolbar-title slot="start" href="/" min-width="5rem">
+            <nldd-toolbar-title slot="start" href="/" min-width="5.75rem">
               <span slot="media" class="brand" role="img" :aria-label="t('shell.brand.label')">
-                <span class="brand__block" aria-hidden="true">P</span>
-                <span class="brand__word" aria-hidden="true">lak</span>
+                <span class="brand__block" aria-hidden="true">T</span>
+                <span class="brand__word" aria-hidden="true">oon</span>
               </span>
             </nldd-toolbar-title>
             <nldd-toolbar-item v-if="member" slot="end">
@@ -285,7 +285,7 @@ function logout(): void {
           ></nldd-breadcrumbs-item>
         </nldd-breadcrumbs>
         <!-- Per NLDD the end slot is for "privacy, accessibility", while
-             start is for a "© notice, version". Plak has no copyright line, so
+             start is for a "© notice, version". Toon has no copyright line, so
              start carries the version, as the link to its release notes. -->
         <nldd-page-footer-legal-bar slot="legal-bar">
           <nldd-page-footer-legal-bar-item
@@ -368,7 +368,7 @@ function logout(): void {
   }
 }
 
-/* The block with the "P" followed by "lak": together one wordmark, [P]lak. The
+/* The block with the "T" followed by "oon": together one wordmark, [T]oon. The
    typeface is the one of the title nldd-toolbar-title would draw itself, so the
    wordmark sits in the row as if it were the title. */
 .brand {

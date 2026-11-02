@@ -914,7 +914,7 @@ describe('site TabSettings: address', () => {
     const wrapper = await loadedWrapper();
 
     expect(address(wrapper).find('[data-testid="site-address-current"]').text()).toBe(
-      'Het adres van deze site is https://sites.plak.test/team-aurora/website/.',
+      'Het adres van deze site is https://sites.toon.test/team-aurora/website/.',
     );
     expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-text-cell').find('code').text()).toBe('team-aurora/oude-naam');
     expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-text-cell').attributes('supporting-text')).toBe(
@@ -1025,7 +1025,7 @@ describe('site TabSettings: address', () => {
     expect(wrapper.emitted('renamed')![0]![0]).toMatchObject({ slug: 'handboek' });
     // Not yet on the new route, but the section already speaks of the new address.
     expect(address(wrapper).find('[data-testid="site-address-current"]').text()).toContain(
-      'https://sites.plak.test/team-aurora/handboek/',
+      'https://sites.toon.test/team-aurora/handboek/',
     );
     expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-text-cell').find('code').text()).toBe('team-aurora/website');
     expect(address(wrapper).find('[data-testid="site-address-previous"] nldd-text-cell').attributes('supporting-text')).toBe(
@@ -1047,7 +1047,7 @@ describe('site TabSettings: address', () => {
     );
     const sent: string[] = [];
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      sent.push(`${init?.method ?? 'GET'} ${new URL(String(input), 'http://plak.test').pathname}`);
+      sent.push(`${init?.method ?? 'GET'} ${new URL(String(input), 'http://toon.test').pathname}`);
       return backend.fetch(input, init);
     });
 

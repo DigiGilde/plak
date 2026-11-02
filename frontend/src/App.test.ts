@@ -142,7 +142,7 @@ function texts(
 }
 
 describe('App', () => {
-  it('warns in a status bar that Plak is still in development', async () => {
+  it('warns in a status bar that Toon is still in development', async () => {
     const wrapper = await mountApp();
 
     const bar = wrapper.find('[data-testid="beta-banner"]');
@@ -150,7 +150,7 @@ describe('App', () => {
     expect(bar.element.tagName.toLowerCase()).toBe('nldd-status-bar');
     // Detached, Lit does not reflect; read the property Vue set.
     expect(property<string>(bar.element, 'text')).toBe(
-      'Bètaversie - Plak is in ontwikkeling en kan fouten bevatten',
+      'Bètaversie - Toon is in ontwikkeling en kan fouten bevatten',
     );
     expect(property<string>(bar.element, 'variant')).toBe('warning');
     // The bar shows one line and truncates the rest, so the first word has
@@ -295,11 +295,11 @@ describe('App', () => {
     expect(target.attributes('tabindex')).toBe('-1');
   });
 
-  it('renders the whole [P]lak brand as media of the toolbar title, without separate title text', async () => {
+  it('renders the whole [T]oon brand as media of the toolbar title, without separate title text', async () => {
     const app = await mountApp();
 
     const title = app.find('nldd-toolbar-title');
-    // With both `text` and a P block, the P would be read out twice.
+    // With both `text` and a T block, the T would be read out twice.
     expect(property<string | undefined>(title.element, 'text')).toBeFalsy();
     expect(property<string>(title.element, 'href')).toBe('/');
 
@@ -307,8 +307,8 @@ describe('App', () => {
     expect(brand.exists()).toBe(true);
     // The wordmark carries the window's name, since there is no title text left.
     expect(brand.attributes('role')).toBe('img');
-    expect(brand.attributes('aria-label')).toContain('Plak');
-    expect(brand.text().replace(/\s+/g, '')).toBe('Plak');
+    expect(brand.attributes('aria-label')).toContain('Toon');
+    expect(brand.text().replace(/\s+/g, '')).toBe('Toon');
     expect(brand.findAll('[aria-hidden="true"]')).toHaveLength(2);
   });
 
@@ -333,12 +333,12 @@ describe('App', () => {
     expect(bar.attributes('slot')).toBeUndefined();
   });
 
-  it('names the toolbar for assistive technology', async () => {
-    const app = await mountApp();
-    const bar = app.find('nldd-toolbar');
-    // nldd-toolbar ignores `label` without a warning; only accessible-label names it.
-    expect(bar.attributes('accessible-label')).toBe('Plak');
-    expect(bar.attributes('label')).toBeUndefined();
+  it('leaves its only toolbar unnamed, so the name does not read as a command', async () => {
+    const app = await mountAppInDocument();
+    const toolbar = app.find('nldd-toolbar').element.shadowRoot?.querySelector('[role="toolbar"]');
+    expect(toolbar).toBeTruthy();
+    // "Toon werkbalk" sounds like an order. A name is only needed beside a second toolbar.
+    expect(toolbar?.hasAttribute('aria-label')).toBe(false);
   });
 
   // jsdom computes no layout, so whether the wordmark really sits at the same x
@@ -695,7 +695,7 @@ describe('App', () => {
   });
 
   it('does not show the breadcrumbs of another route', async () => {
-    setBreadcrumbs('/-/platform', [{ text: 'Plak', href: '/' }, { text: 'Leden' }]);
+    setBreadcrumbs('/-/platform', [{ text: 'Toon', href: '/' }, { text: 'Leden' }]);
     const app = await mountApp();
 
     expect(app.find('nldd-breadcrumbs').exists()).toBe(false);
@@ -751,22 +751,22 @@ describe('App', () => {
         ],
       });
       await mountApp();
-      document.title = 'Overzicht - Plak';
+      document.title = 'Overzicht - Toon';
 
       _setLocaleForTest('en');
       await flushPromises();
 
-      expect(document.title).toBe('Overview - Plak');
+      expect(document.title).toBe('Overview - Toon');
     });
 
     it('leaves a title that the page sets itself to that page', async () => {
       await mountApp();
-      document.title = 'Team Aurora - Plak';
+      document.title = 'Team Aurora - Toon';
 
       _setLocaleForTest('en');
       await flushPromises();
 
-      expect(document.title).toBe('Team Aurora - Plak');
+      expect(document.title).toBe('Team Aurora - Toon');
     });
   });
 

@@ -34,8 +34,8 @@ export async function adminFetch(
     async ({ method, path, body }) => {
       const csrf = document.cookie
         .split('; ')
-        .find((part) => part.startsWith('__Host-plak-csrf='))
-        ?.substring('__Host-plak-csrf='.length);
+        .find((part) => part.startsWith('__Host-toon-csrf='))
+        ?.substring('__Host-toon-csrf='.length);
       const headers: Record<string, string> = {};
       if (csrf) {
         headers['X-CSRF-Token'] = decodeURIComponent(csrf);
@@ -74,8 +74,8 @@ export async function uploadViaSession(
     async ({ group, site, data, previewRef }) => {
       const csrf = document.cookie
         .split('; ')
-        .find((part) => part.startsWith('__Host-plak-csrf='))
-        ?.substring('__Host-plak-csrf='.length);
+        .find((part) => part.startsWith('__Host-toon-csrf='))
+        ?.substring('__Host-toon-csrf='.length);
       const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
       const form = new FormData();
       form.set('file', new Blob([bytes], { type: 'application/gzip' }), 'site.tar.gz');

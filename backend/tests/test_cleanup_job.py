@@ -139,13 +139,13 @@ def _settings(content_root: Path) -> Settings:
         db_url="postgresql+asyncpg://ongebruikt/ongebruikt",
         content_root=content_root,
         oidc_issuer="https://idp.example",
-        oidc_client_id="plak",
+        oidc_client_id="toon",
         oidc_client_private_jwk="{}",
         oidc_required_acr="urn:acr",
         session_secret="s" * 32,
         audit_pepper="p" * 32,
         audit_ip_key="a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-        content_base_url="https://plak.example",
+        content_base_url="https://toon.example",
         environment="dev",
     )
 

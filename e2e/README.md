@@ -12,7 +12,7 @@ just e2e
 
 That script (`e2e/run.sh`):
 
-1. starts the stack as a separate compose project `plak-e2e` on ports of
+1. starts the stack as a separate compose project `toon-e2e` on ports of
    its own (nginx `127.0.0.1:18888`, mock OIDC `127.0.0.1:18889`), so
    that the ordinary dev stack on 8080 stays untouched;
 2. waits until both hosts are healthy;
@@ -34,7 +34,7 @@ fails: the config keeps a trace and a screenshot per failed scenario.
 No `/etc/hosts` lines are needed: the browser pins `*.localhost` to
 `127.0.0.1` through `--host-resolver-rules`, and requests on the Node
 side go to `127.0.0.1` with an explicit `Host` header. The CLI scenario is
-the exception: the CLI resolves `beheer.plak.localhost` itself, which works
+the exception: the CLI resolves `beheer.toon.localhost` itself, which works
 as long as the resolver sends `*.localhost` to loopback (it does on macOS
 and on the usual Linux setups).
 
@@ -52,16 +52,16 @@ and on the usual Linux setups).
   host (same contract as the SPA: `__Host-` session cookie, CSRF header,
   `Sec-Fetch-Site: same-origin`); bearer deploys through the Node side
   without an Origin header, the path that CI and the CLI both use.
-- `helpers/cli.ts`: `plak login` (device flow): a request on the Node
+- `helpers/cli.ts`: `toon login` (device flow): a request on the Node
   side, approving it in the real SPA on `/cli-link` with the
   already logged-in admin page, and the token exchange on the Node side
   again; yields the CLI token that the bearer deploys use.
 - `helpers/tar.ts`: builds the multi-file dist fixtures (html + css +
   subdirectory) in memory as `.tar.gz`.
 - `tests/toon.spec.ts`: the scenarios, built up serially.
-- `tests/cli.spec.ts`: the real CLI (`uv run --project cli plak ...`)
+- `tests/cli.spec.ts`: the real CLI (`uv run --project cli toon ...`)
   against the same stack: publishing a preview and a live version,
-  removing the preview and logging out. It points `PLAK_CONFIG_DIR` at
+  removing the preview and logging out. It points `TOON_CONFIG_DIR` at
   a temp directory, because the CLI keeps its session per user account
   and a run must not touch a contributor's own.
 - `tests/shared-origin.spec.ts`: a page of another site cannot read a

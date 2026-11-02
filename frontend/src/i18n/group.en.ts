@@ -108,7 +108,7 @@ export const groupEn: Record<keyof typeof groupNl, string> = {
   'group.members.retry': 'Try again',
   'group.members.add.legend': 'Add a member',
   'group.members.add.supportingText':
-    'Someone has to sign in to the admin themselves first. Plak creates no account here.',
+    'Someone has to sign in to the admin themselves first. Toon creates no account here.',
   'group.members.add.identifier.label': 'Name or email address',
   'group.members.add.identifier.placeholder': 'Type a name or email address',
   'group.members.add.identifier.help':

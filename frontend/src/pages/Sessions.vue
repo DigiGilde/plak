@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Linked sessions of the CLI login (`plak login`): every browser-approved
+ * Linked sessions of the CLI login (`toon login`): every browser-approved
  * device-flow session of the current member, with a way to revoke one. One
  * machine can hold several; what a row names is the client program, not a
  * device.
@@ -27,7 +27,7 @@ import { useConfirm } from '@/composables/confirm';
 const route = useRoute();
 
 /**
- * The sentence around `plak login`, split on the placeholder so the command
+ * The sentence around `toon login`, split on the placeholder so the command
  * keeps its own <code> while the rest of the sentence stays one message.
  */
 const subtitle = computed(() => t('admin.sessions.subtitle').split('{command}'));
@@ -87,7 +87,7 @@ const {
     <Notices ref="notices" />
 
     <SectionHeading :level="1" :size="1" :text="t('nav.sessions')">
-      <template #intro>{{ subtitle[0] }}<code>plak login</code>{{ subtitle[1] }}</template>
+      <template #intro>{{ subtitle[0] }}<code>toon login</code>{{ subtitle[1] }}</template>
     </SectionHeading>
 
     <nldd-spacer size="24"></nldd-spacer>

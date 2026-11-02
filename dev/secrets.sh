@@ -49,7 +49,7 @@ jwk = {
     "kty": "RSA",
     "use": "sig",
     "alg": "RS256",
-    "kid": "plak-dev",
+    "kid": "toon-dev",
     "n": b64url(pub.n),
     "e": b64url(pub.e),
     "d": b64url(priv.d),
@@ -75,7 +75,7 @@ EOF
         app_db_password_urlenc="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${app_db_password}")"
 
         cat > "${APP_ENV}" <<EOF
-TOON_DB_URL=postgresql+asyncpg://plak:${app_db_password_urlenc}@postgres:5432/plak
+TOON_DB_URL=postgresql+asyncpg://toon:${app_db_password_urlenc}@postgres:5432/toon
 TOON_SESSION_SECRET=${session_secret}
 TOON_AUDIT_PEPPER=${audit_pepper}
 TOON_AUDIT_IP_KEY=${audit_ip_key}

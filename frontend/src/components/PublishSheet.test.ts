@@ -33,11 +33,11 @@ function meWith(groupRoles: MyGroupRole[]): Me {
     createdAt: '2026-01-01T00:00:00Z',
     lastLoginAt: null,
     lastActiveAt: null,
-    contentBaseUrl: 'https://sites.plak.test',
+    contentBaseUrl: 'https://sites.toon.test',
     groupRoles,
     siteRoles: [],
     ciForgejoHosts: [],
-    ciAudience: 'https://plak.test',
+    ciAudience: 'https://toon.test',
     language: null,
     slugRedirectDays: 30,
   };
@@ -87,7 +87,7 @@ function flow(override: Partial<Flow> = {}): Flow {
 function mountComponent(
   options: { groups?: Group[]; me?: Me | null; contentBase?: string; open?: boolean } & Partial<Flow> = {},
 ): { wrapper: Wrapper; actions: Flow } {
-  const { groups = [AURORA], me = null, contentBase = 'https://sites.plak.test', open = true, ...rest } =
+  const { groups = [AURORA], me = null, contentBase = 'https://sites.toon.test', open = true, ...rest } =
     options;
   const actions = flow(rest);
   const wrapper = mount(PublishSheet, {
@@ -148,7 +148,7 @@ describe('PublishSheet (the file drives the rest)', () => {
 
     expect(wrapper.find('nldd-text-field[name="title"]').attributes('value')).toBe('Mijn site');
     expect(textOf(wrapper, 'publish-address')).toContain(
-      'https://sites.plak.test/team-aurora/mijn-site/',
+      'https://sites.toon.test/team-aurora/mijn-site/',
     );
   });
 
@@ -272,7 +272,7 @@ describe('PublishSheet (the address is always visible and editable)', () => {
       'mijn-nieuwe-site',
     );
     expect(textOf(wrapper, 'publish-address')).toContain(
-      'https://sites.plak.test/team-aurora/mijn-nieuwe-site/',
+      'https://sites.toon.test/team-aurora/mijn-nieuwe-site/',
     );
   });
 
@@ -1512,7 +1512,7 @@ describe('PublishSheet (dragging)', () => {
       props: {
         open: false,
         groups: [AURORA],
-        contentBase: 'https://sites.plak.test',
+        contentBase: 'https://sites.toon.test',
         initialDrop: Promise.resolve(dropped),
         ...actions,
       },
@@ -1533,7 +1533,7 @@ describe('PublishSheet (dragging)', () => {
       props: {
         open: false,
         groups: [AURORA],
-        contentBase: 'https://sites.plak.test',
+        contentBase: 'https://sites.toon.test',
         initialDrop: Promise.reject(new Error('niet leesbaar')),
         ...actions,
       },
@@ -1649,7 +1649,7 @@ describe('PublishSheet (the same upload block as on a site)', () => {
   it('keeps the field in place during a drag, since a new one would lose its file', async () => {
     const actions = flow();
     const wrapper = mount(PublishSheet, {
-      props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...actions },
+      props: { open: true, groups: [AURORA], contentBase: 'https://sites.toon.test', ...actions },
       attachTo: document.body,
     });
     const field = document.body.querySelector('nldd-file-field');
@@ -1685,7 +1685,7 @@ describe('PublishSheet (the same upload block as on a site)', () => {
     /** A real teleport: the stub rebuilds its contents, and the mark along with them. */
     function mountAttached() {
       const wrapper = mount(PublishSheet, {
-        props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...flow() },
+        props: { open: true, groups: [AURORA], contentBase: 'https://sites.toon.test', ...flow() },
         attachTo: document.body,
       });
       const field = document.body.querySelector('nldd-file-field')!;
@@ -1851,7 +1851,7 @@ describe('PublishSheet (a refused upload forgets the earlier choice)', () => {
       props: {
         open: false,
         groups: [AURORA],
-        contentBase: 'https://sites.plak.test',
+        contentBase: 'https://sites.toon.test',
         initialDrop: Promise.reject(new Error('niet leesbaar')),
         ...actions,
       },
@@ -1990,7 +1990,7 @@ describe('PublishSheet (a refused upload forgets the earlier choice)', () => {
       vi.stubGlobal('DataTransfer', FakeDataTransfer);
       const actions = flow();
       const wrapper = mount(PublishSheet, {
-        props: { open: true, groups: [AURORA], contentBase: 'https://sites.plak.test', ...actions },
+        props: { open: true, groups: [AURORA], contentBase: 'https://sites.toon.test', ...actions },
         attachTo: document.body,
       });
       const field = document.body.querySelector('nldd-file-field')!;

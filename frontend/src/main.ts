@@ -1,6 +1,6 @@
 import '@nldd/design-system';
 // The open-font build (Inter): RijksSans is licensed for Rijksoverheid publications
-// only, and anyone may run Plak.
+// only, and anyone may run Toon.
 import '@nldd/design-system/styles/open-font';
 import './global.css';
 

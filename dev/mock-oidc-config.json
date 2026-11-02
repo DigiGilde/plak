@@ -12,7 +12,7 @@
           "claims": {
             "sub": "dev-beheerder",
             "acr": "http://eidas.europa.eu/LoA/substantial",
-            "email": "beheerder@plak.local",
+            "email": "beheerder@toon.local",
             "email_verified": true
           }
         },
@@ -22,7 +22,7 @@
           "claims": {
             "sub": "dev-beheerder",
             "acr": "http://eidas.europa.eu/LoA/substantial",
-            "email": "beheerder@plak.local",
+            "email": "beheerder@toon.local",
             "email_verified": true
           }
         }

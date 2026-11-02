@@ -66,7 +66,7 @@ describe('TabVersions: states', () => {
     await runAction(wrapper, 'view-versie-0');
 
     expect(open).toHaveBeenCalledWith(
-      'https://sites.plak.test/team-aurora/website/_version/versie-0/',
+      'https://sites.toon.test/team-aurora/website/_version/versie-0/',
       '_blank',
       'noopener',
     );

@@ -43,6 +43,33 @@ class TestApiVersion:
         problems = api.breaking_problems([{"level": 3, "text": "t", "section": "components"}], 1)
         assert problems[0] == "Breaking API change: components: t."
 
+    def test_the_rename_of_the_session_cookie_breaks_nobody(self):
+        """oasdiff calls it breaking. It is listed as a change, so a minor."""
+        base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with(paths=("/a", "/b")))
+        rename = {"id": "api-security-component-api-key-name-changed", "level": 3, "text": api.SESSION_COOKIE_RENAME}
+        assert api.breaking_problems([rename], 1) == []
+        assert api.next_api_version(base, head, [rename]) == "1.4.0"
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "the component security scheme `adminSession` api key name changed "
+            "from `__Host-toon-session` to `__Host-other-session`",
+            "the component security scheme `other` api key name changed "
+            "from `__Host-plak-session` to `__Host-toon-session`",
+        ],
+        ids=["another-cookie", "another-scheme"],
+    )
+    def test_any_other_change_to_an_api_key_stays_breaking(self, text):
+        problems = api.breaking_problems([{"level": 3, "text": text, "section": "components"}], 1)
+        assert problems[0] == f"Breaking API change: components: {text}."
+
+    def test_the_rename_does_not_hide_a_real_break_next_to_it(self):
+        rename = {"level": 3, "text": api.SESSION_COOKIE_RENAME}
+        problems = api.breaking_problems([rename, change(3, "api path removed", "/a", "POST")], 1)
+        assert problems[0] == "Breaking API change: POST /a: api path removed."
+        assert len(problems) == 2
+
     def test_a_new_major_starts_at_zero_and_may_break(self):
         base, head = json.loads(spec_with("1.3.2")), json.loads(spec_with("2.0.0", paths=()))
         assert api.next_api_version(base, head, [change(3)]) == "2.0.0"
@@ -78,7 +105,7 @@ class TestApiVersion:
         rendering = 'json.dumps(document, indent=2, ensure_ascii=False) + "\\n"'
         printer = (ROOT / "backend" / "src" / "toon" / "api" / "openapi_file.py").read_text(encoding="utf-8")
         assert f"    return {rendering}\n" in printer
-        spec = json.loads(spec_with(description="Plak publiceert één site."))
+        spec = json.loads(spec_with(description="Toon publiceert één site."))
         assert api.render_spec(spec, "1.0.0") == json.dumps(spec, indent=2, ensure_ascii=False) + "\n"
         assert json.loads(api.render_spec(spec, "1.2.0"))["info"]["version"] == "1.2.0"
 

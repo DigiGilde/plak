@@ -1,7 +1,7 @@
 [project]
 name = "toon-api"
 version = "2026.11.2"
-description = "Plak API - statische sites publiceren en delen met previews per PR"
+description = "Toon API - statische sites publiceren en delen met previews per PR"
 requires-python = ">=3.15"
 license = "EUPL-1.2"
 dependencies = [
@@ -31,7 +31,7 @@ dev = [
     # The parser behind the Digital Trust Center's security.txt check, so the
     # file is validated where it is written rather than after a deploy.
     "sectxt>=0.9,<1",
-    # Validates deploy/plak-project.example.yaml against ZAD's own
+    # Validates deploy/toon-project.example.yaml against ZAD's own
     # project_v2.json when that schema is available on disk.
     "jsonschema>=4,<5",
 ]

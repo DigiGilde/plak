@@ -68,7 +68,7 @@ class TestReleaseProblems:
             ({"frontend/package.json": "{"}, "frontend/package.json"),
             ({"frontend/package.json": "[]\n"}, "frontend/package.json"),
             ({"frontend/package.json": PACKAGE}, "frontend/package.json"),
-            ({"publiccode.yml": "name: Plak\n"}, "publiccode.yml"),
+            ({"publiccode.yml": "name: Toon\n"}, "publiccode.yml"),
             ({"publiccode.yml": "softwareVersion: 2026.9.1\n"}, "publiccode.yml"),
         ],
         ids=[
@@ -223,9 +223,9 @@ class TestPrepare:
             "# Changelog\n\nWhat changed, newest first.\n\n"
             f"## [Unreleased]\n\n{changelog.UNRELEASED_POINTER}\n\n"
             f"## [2026.10.1]\n\n{ENTRY}\n\n### Fixed\n\n- Fixed it,\n  at last.\n\n{older}\n\n"
-            "[Unreleased]: https://github.com/DigiGilde/plak/compare/v2026.10.1...HEAD\n"
-            "[2026.10.1]: https://github.com/DigiGilde/plak/compare/v2026.9.1...v2026.10.1\n"
-            "[2026.9.1]: https://github.com/DigiGilde/plak/releases/tag/v2026.9.1\n"
+            "[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.10.1...HEAD\n"
+            "[2026.10.1]: https://github.com/DigiGilde/toon/compare/v2026.9.1...v2026.10.1\n"
+            "[2026.9.1]: https://github.com/DigiGilde/toon/releases/tag/v2026.9.1\n"
         )
         assert changelog.changelog_problems(repo.read("CHANGELOG.md")) == []
         staged = repo.git("diff", "--cached", "--name-only").split()
@@ -245,7 +245,7 @@ class TestPrepare:
         commands.prepare(repo.handle, DAY, SPEC, NO_CHANGES)
 
         assert _versions(repo) == ("2026.10.1", "2026.10.1")
-        assert 'name = "plak"\nversion = "2026.10.1"' in repo.read("cli/uv.lock")
+        assert 'name = "toon"\nversion = "2026.10.1"' in repo.read("cli/uv.lock")
         assert 'softwareVersion: "2026.10.1"\nreleaseDate: "2026-10-01"' in repo.read("publiccode.yml")
         assert _image_versions(repo) == {"2026.10.1"}
 
@@ -268,10 +268,10 @@ class TestPrepare:
 
     def test_the_image_gets_every_release_also_when_only_the_cli_changed(self, released):
         """Every tag builds and ships a new image, whatever changed."""
-        released.commit({**FRAGMENT, "cli/plak_cli/__init__.py": "x = 2\n"})
+        released.commit({**FRAGMENT, "cli/toon_cli/__init__.py": "x = 2\n"})
         commands.prepare(released.handle, DAY, SPEC, NO_CHANGES)
         assert _image_versions(released) == {"2026.10.1"}
-        assert 'name = "plak"\nversion = "9.9.9"' in released.read("backend/uv.lock")
+        assert 'name = "toon"\nversion = "9.9.9"' in released.read("backend/uv.lock")
 
     def test_a_missing_image_package_file_stops_the_release(self, released):
         released.remove("frontend/package-lock.json")
@@ -283,10 +283,10 @@ class TestPrepare:
     @pytest.mark.parametrize(
         ("files", "expected"),
         [
-            ({"cli/plak_cli/__init__.py": "x = 2\n"}, ("2026.10.1", "2026.9.1")),
+            ({"cli/toon_cli/__init__.py": "x = 2\n"}, ("2026.10.1", "2026.9.1")),
             ({"cli/pyproject.toml": PYPROJECT.replace('["httpx"]', '["httpx", "keyring"]')}, ("2026.10.1", "2026.9.1")),
             ({"cli/uv.lock": LOCK.replace("0.28.1", "0.28.2")}, ("2026.10.1", "2026.9.1")),
-            ({"plugin/skills/plak/SKILL.md": "better\n"}, ("2026.9.1", "2026.10.1")),
+            ({"plugin/skills/toon/SKILL.md": "better\n"}, ("2026.9.1", "2026.10.1")),
             ({"cli/tests/test_x.py": "def test(): pass\n"}, ("2026.9.1", "2026.9.1")),
             ({"plugin/evals/x/prompt.md": "zet dit online\n"}, ("2026.9.1", "2026.9.1")),
         ],
@@ -486,7 +486,7 @@ class TestPrepare:
 
 class TestReleaseNotes:
     def test_the_body_is_the_section_with_the_component_versions(self, released):
-        released.commit({"changelog.d/a-fix.fixed.md": "- A fix.\n", "cli/plak_cli/__init__.py": "x = 2\n"})
+        released.commit({"changelog.d/a-fix.fixed.md": "- A fix.\n", "cli/toon_cli/__init__.py": "x = 2\n"})
         released.release(TAG, DAY)
 
         assert commands.release_notes(released.handle, TAG) == (
@@ -521,23 +521,23 @@ class TestReleaseNotes:
 
     def test_with_the_image_it_ends_with_how_to_verify_it(self, released):
         digest = "sha256:" + "a" * 64
-        notes = commands.release_notes(released.handle, "v2026.9.1", "ghcr.io/digigilde/plak", digest)
+        notes = commands.release_notes(released.handle, "v2026.9.1", "ghcr.io/digigilde/toon", digest)
         assert notes.endswith(
             "API 1.0.0\n\n## Container image\n\n"
-            f"- plak: `ghcr.io/digigilde/plak:2026.9.1`, digest `{digest}`\n\n"
-            f"Verify where it was built: `gh attestation verify oci://ghcr.io/digigilde/plak@{digest} "
-            "-R DigiGilde/plak`\n"
+            f"- toon: `ghcr.io/digigilde/toon:2026.9.1`, digest `{digest}`\n\n"
+            f"Verify where it was built: `gh attestation verify oci://ghcr.io/digigilde/toon@{digest} "
+            "-R DigiGilde/toon`\n"
             "Its SBOM (CycloneDX): the same command with `--predicate-type https://cyclonedx.org/bom`\n"
         )
 
     @pytest.mark.parametrize(
         ("image", "digest"),
         [
-            ("ghcr.io/digigilde/plak", None),
+            ("ghcr.io/digigilde/toon", None),
             (None, "sha256:" + "a" * 64),
-            ("ghcr.io/DigiGilde/plak", "sha256:" + "a" * 64),
-            ("ghcr.io/digigilde/plak`; rm", "sha256:" + "a" * 64),
-            ("ghcr.io/digigilde/plak", "sha256:abc"),
+            ("ghcr.io/DigiGilde/toon", "sha256:" + "a" * 64),
+            ("ghcr.io/digigilde/toon`; rm", "sha256:" + "a" * 64),
+            ("ghcr.io/digigilde/toon", "sha256:abc"),
         ],
         ids=["no-digest", "no-image", "upper-case", "markdown-break", "short-digest"],
     )
@@ -549,9 +549,9 @@ class TestReleaseNotes:
 
     def test_main_prints_the_container_section(self, released, capsys):
         digest = "sha256:" + "b" * 64
-        args = ["notes", "--tag", "v2026.9.1", "--image", "ghcr.io/digigilde/plak", "--digest", digest]
+        args = ["notes", "--tag", "v2026.9.1", "--image", "ghcr.io/digigilde/toon", "--digest", digest]
         assert release.main(args) == 0
-        assert f"oci://ghcr.io/digigilde/plak@{digest}" in capsys.readouterr().out
+        assert f"oci://ghcr.io/digigilde/toon@{digest}" in capsys.readouterr().out
 
     def test_a_tag_from_before_the_schema_has_no_api_line(self, repo):
         """v2026.9.30 was tagged by hand, before releases wrote the schema."""
@@ -630,7 +630,7 @@ class TestVerifyStaged:
     def prepared(self, released) -> Repo:
         """v2026.9.1 released, then a change with an entry and a note,
         prepared as TAG with an addition to the API."""
-        released.commit({**FRAGMENT, **NOTE_FRAGMENTS, "cli/plak_cli/__init__.py": "x = 2\n"})
+        released.commit({**FRAGMENT, **NOTE_FRAGMENTS, "cli/toon_cli/__init__.py": "x = 2\n"})
         commands.prepare(released.handle, DAY, spec_with(paths=("/a", "/b")), lambda b, h: [change(1)])
         return released
 
@@ -838,9 +838,9 @@ class TestVerifyStaged:
     def test_a_file_prepare_could_not_have_written_is_refused(self, released):
         """HEAD's publiccode.yml has no version lines, so prepare would have
         refused; a staged one is not its work."""
-        released.commit({**FRAGMENT, "publiccode.yml": "name: Plak\n"})
+        released.commit({**FRAGMENT, "publiccode.yml": "name: Toon\n"})
         released.git("rm", "-q", "--cached", *FRAGMENT)
-        released.write({"publiccode.yml": 'name: Plak\nsoftwareVersion: "2026.10.1"\n'})
+        released.write({"publiccode.yml": 'name: Toon\nsoftwareVersion: "2026.10.1"\n'})
         released.git("add", "publiccode.yml")
         problems = commands.verify_staged(released.handle, TAG)
         assert problems[0] == "publiccode.yml is not what the release writes for v2026.10.1."
@@ -1173,7 +1173,7 @@ class TestCheck:
         errors = commands.check(branch.handle, "beta").errors
         assert reason in errors[0]
 
-    @pytest.mark.parametrize("path", ["frontend/src/App.vue", "cli/plak_cli/__init__.py"])
+    @pytest.mark.parametrize("path", ["frontend/src/App.vue", "cli/toon_cli/__init__.py"])
     def test_a_member_facing_change_without_a_note_gets_a_hint(self, branch, path):
         branch.commit({path: "changed\n", **FRAGMENT})
         result = commands.check(branch.handle, "beta")
@@ -1403,7 +1403,7 @@ class TestFindingTheReleasePullRequest:
     def test_the_release_branch_of_this_repository_is_found(self):
         a_fork = pull(8, "release/v2026.10.1", "b" * 40, "someone")
         listing = json.dumps([pull(7, "feature/x"), a_fork, pull(9, "release/v2026.10.1")])
-        assert commands.release_pull_request(listing, "DigiGilde/plak") == ("9", "v2026.10.1", "a" * 40)
+        assert commands.release_pull_request(listing, "DigiGilde/toon") == ("9", "v2026.10.1", "a" * 40)
 
     @pytest.mark.parametrize(
         "listing",
@@ -1411,7 +1411,7 @@ class TestFindingTheReleasePullRequest:
         ids=["nothing-open", "no-release-branch", "a-fork", "no-calver-tag"],
     )
     def test_anything_else_is_no_release_pull_request(self, listing):
-        assert commands.release_pull_request(json.dumps(listing), "DigiGilde/plak") == ("", "", "")
+        assert commands.release_pull_request(json.dumps(listing), "DigiGilde/toon") == ("", "", "")
 
     @pytest.mark.parametrize(
         "entry",
@@ -1425,12 +1425,12 @@ class TestFindingTheReleasePullRequest:
     def test_a_number_or_sha_that_is_not_plain_is_refused(self, entry):
         """What goes into `gh pr close` and the lease has one shape."""
         with pytest.raises(errors.ReleaseError, match="has no plain number and head sha"):
-            commands.release_pull_request(json.dumps([entry]), "DigiGilde/plak")
+            commands.release_pull_request(json.dumps([entry]), "DigiGilde/toon")
 
     @pytest.mark.parametrize(("listing", "reason"), [("{", "is not JSON"), ('{"a": 1}', "is not a list")])
     def test_a_listing_that_is_not_one_is_refused(self, listing, reason):
         with pytest.raises(errors.ReleaseError, match=reason):
-            commands.release_pull_request(listing, "DigiGilde/plak")
+            commands.release_pull_request(listing, "DigiGilde/toon")
 
     def test_main_reads_the_listing_and_writes_the_step_output(self, monkeypatch, tmp_path, capsys):
         """Without a repository: it only parses, so a checkout is not needed."""
@@ -1438,7 +1438,7 @@ class TestFindingTheReleasePullRequest:
         monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps([pull(12, "release/v2026.10.1")])))
         output = tmp_path / "output"
         monkeypatch.setenv("GITHUB_OUTPUT", str(output))
-        assert release.main(["release-pr", "--repo", "DigiGilde/plak"]) == 0
+        assert release.main(["release-pr", "--repo", "DigiGilde/toon"]) == 0
         expected = f"number=12\nold_tag=v2026.10.1\nold_sha={'a' * 40}\n"
         assert capsys.readouterr().out == expected
         assert output.read_text() == expected
@@ -1446,5 +1446,5 @@ class TestFindingTheReleasePullRequest:
     def test_main_prints_empty_values_without_one(self, monkeypatch, tmp_path, capsys):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(sys, "stdin", io.StringIO("[]"))
-        assert release.main(["release-pr", "--repo", "DigiGilde/plak"]) == 0
+        assert release.main(["release-pr", "--repo", "DigiGilde/toon"]) == 0
         assert capsys.readouterr().out == "number=\nold_tag=\nold_sha=\n"

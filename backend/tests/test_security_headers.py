@@ -160,9 +160,9 @@ class TestPlatformCsp:
         assert found["base-uri"] == ["'none'"]
 
 
-ADMIN = "https://beheer.plak.example"
-CONTENT = "https://plak.example"
-CONTENT_HOST = "plak.example"
+ADMIN = "https://beheer.toon.example"
+CONTENT = "https://toon.example"
+CONTENT_HOST = "toon.example"
 
 
 async def _inner(scope: Scope, receive: Receive, send: Send) -> None:
@@ -199,9 +199,9 @@ def _client(*, hsts: bool, base: str = ADMIN) -> httpx.AsyncClient:
 
 class TestMiddleware:
     def test_is_https(self) -> None:
-        assert is_https("https://beheer.plak.example")
-        assert is_https("HTTPS://beheer.plak.example")
-        assert not is_https("http://beheer.plak.localhost:8080")
+        assert is_https("https://beheer.toon.example")
+        assert is_https("HTTPS://beheer.toon.example")
+        assert not is_https("http://beheer.toon.localhost:8080")
         assert not is_https(None)
 
     def test_is_html_reads_the_content_type(self) -> None:
@@ -306,7 +306,7 @@ def _settings(tmp_path: Path, **overrides: object) -> Settings:
         "db_url": "postgresql+asyncpg://ongebruikt:ongebruikt@localhost:5432/ongebruikt",
         "content_root": tmp_path / "content",
         "oidc_issuer": "https://idp.example",
-        "oidc_client_id": "plak-client",
+        "oidc_client_id": "toon-client",
         "oidc_client_private_jwk": make_client_jwk(),
         "oidc_required_acr": "urn:acr:hoog",
         "session_secret": "sessie-geheim-van-minstens-32-bytes!",
@@ -466,13 +466,13 @@ class TestFullApp:
     async def test_no_hsts_with_http_base_url(self, tmp_path: Path) -> None:
         app = create_app(
             _settings(
-                tmp_path, base_url="http://beheer.plak.localhost:8080", content_base_url="http://plak.localhost:8080"
+                tmp_path, base_url="http://beheer.toon.localhost:8080", content_base_url="http://toon.localhost:8080"
             )
         )
         transport = httpx.ASGITransport(app=app)
         async with (
             app.router.lifespan_context(app),
-            httpx.AsyncClient(transport=transport, base_url="http://beheer.plak.localhost:8080") as client,
+            httpx.AsyncClient(transport=transport, base_url="http://beheer.toon.localhost:8080") as client,
         ):
             response = await client.get("/")
         assert response.status_code == 200

@@ -49,7 +49,7 @@ export const publishNl = {
   'publish.upload.field.dragHere': 'Sleep het bestand of de map hierheen',
   'publish.upload.field.dropHere': 'Zet het bestand of de map hier neer',
   'publish.upload.field.help':
-    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site. Een map pakt Plak in je browser in, zonder de metadata van je besturingssysteem.',
+    'Er kan een archief in (.zip, .tar.gz of .tgz), een los HTML-bestand, of een hele map die je hierheen sleept of kiest met de knop "Kies een map". Een los HTML-bestand wordt de startpagina van je site. Toon pakt een map in je browser in, zonder de metadata van je besturingssysteem.',
   'publish.upload.folder': 'Kies een map',
   'publish.upload.progress.reading': 'Map uitlezen',
   'publish.upload.progress.packing': 'Map inpakken',
@@ -68,10 +68,10 @@ export const publishNl = {
 
   // -- Packing: what is refused before a byte goes over the wire ---------------
   'publish.packing.secret':
-    '"{path}" hoort niet op een website, dus Plak publiceert deze map niet. Kies de map met de gebouwde site, meestal "dist" of "build", in plaats van de hele projectmap.',
+    '"{path}" hoort niet op een website, dus Toon publiceert deze map niet. Kies de map met de gebouwde site, meestal "dist" of "build", in plaats van de hele projectmap.',
   'publish.packing.nothing': 'Er is niets neergezet dat gepubliceerd kan worden.',
   'publish.packing.notASite':
-    'Van "{name}" alleen kan Plak geen site maken. Sleep de hele map, een archief (.zip, .tar.gz of .tgz), of een los HTML-bestand.',
+    'Van "{name}" alleen kan Toon geen site maken. Sleep de hele map, een archief (.zip, .tar.gz of .tgz), of een los HTML-bestand.',
   'publish.packing.folderEmpty': 'In deze map staat niets dat gepubliceerd kan worden.',
   'publish.packing.bundleEmpty': 'In "{name}" staat niets dat gepubliceerd kan worden.',
   'publish.packing.tooManyFiles':
@@ -110,7 +110,7 @@ export const publishNl = {
   'publish.deploy.repo.unknownWho': 'onbekend',
   'publish.deploy.repo.unconfirmed': 'Nog niet bevestigd',
   'publish.deploy.repo.unconfirmedDetail':
-    'Plak kon deze repository niet opzoeken, dus de naam en de ids staan zoals ze zijn ingevuld. De eerste publicatie vanuit de repository bevestigt de ids en zet de naam goed.',
+    'Toon kon deze repository niet opzoeken, dus de naam en de ids staan zoals ze zijn ingevuld. De eerste publicatie vanuit de repository bevestigt de ids en zet de naam goed.',
   'publish.deploy.repo.change': 'Wijzigen',
   'publish.deploy.repo.unlink': 'Ontkoppelen',
   'publish.deploy.repo.empty': 'Nog geen repository gekoppeld',
@@ -148,11 +148,11 @@ export const publishNl = {
   'publish.deploy.form.invalidReference':
     'Eigenaar en repository gescheiden door een schuine streep (bijvoorbeeld "minbzk/website"), of een repository-URL.',
   'publish.deploy.form.idsIntro':
-    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Vul dan de twee ids hieronder zelf in. Dit geeft eerst het repository-id, dan het eigenaar-id:',
+    'Toon kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Vul dan de twee ids hieronder zelf in. Dit geeft eerst het repository-id, dan het eigenaar-id:',
   'publish.deploy.form.cliHint':
-    'Liever vanuit de terminal? Draai dit in een checkout van de repository, na plak login. Bij een privé GitHub-repository haalt de CLI de ids zelf op via gh.',
+    'Liever vanuit de terminal? Draai dit in een checkout van de repository, na "toon login". Bij een privé GitHub-repository haalt de CLI de ids zelf op via gh.',
   'publish.deploy.form.idsIntroGithub':
-    'Plak kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Het makkelijkst koppel je haar vanuit een checkout, na plak login: de CLI haalt de ids dan zelf op met je eigen gh-login.',
+    'Toon kan deze repository niet zelf opzoeken, bijvoorbeeld omdat ze privé is. Het makkelijkst koppel je haar vanuit een checkout, na "toon login": de CLI haalt de ids dan zelf op met je eigen gh-login.',
   'publish.deploy.form.idsManual':
     'Of vul de ids hieronder zelf in. Dit geeft eerst het repository-id, dan het eigenaar-id:',
   'publish.deploy.form.idsWrong':
@@ -185,9 +185,9 @@ export const publishNl = {
   // -- Deploy tab: why this is safe ------------------------------------------------
   'publish.deploy.safety.summary': 'Waarom is dit veilig?',
   'publish.deploy.safety.noSecret':
-    'Er komt geen geheim in de repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Plak controleert die handtekening.',
+    'Er komt geen geheim in de repository: de forge (GitHub of Forgejo) ondertekent zelf een kort geldig token voor precies deze workflow-run, en Toon controleert die handtekening.',
   'publish.deploy.safety.scoped':
-    'Dat token bewijst alleen welke repository de run start. Plak accepteert het hier omdat jij precies die repository aan deze site gekoppeld hebt.',
+    'Dat token bewijst alleen welke repository de run start. Toon accepteert het hier omdat jij precies die repository aan deze site gekoppeld hebt.',
   'publish.deploy.safety.liveRestricted':
     'Live publiceren kan alleen vanaf de ingestelde live-branch, en alleen via een push, een handmatige run of een schedule, nooit vanuit een pull request.',
   'publish.deploy.safety.previews':
@@ -199,7 +199,7 @@ export const publishNl = {
   // -- Deploy tab: publishing from your own computer -------------------------------
   'publish.deploy.cli.heading': 'Vanaf je eigen computer',
   'publish.deploy.cli.install':
-    'Met de Plak-CLI publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren en later bijwerken:',
+    'Met de Toon-CLI publiceer je zonder CI, met je eigen toegang. Heb je hem nog niet: {repo} bevat hem in {folder}. Installeren en later bijwerken:',
   'publish.deploy.cli.run':
     'Werk je uit een checkout, dan draait {run} hem zonder installatie.',
   'publish.deploy.cli.login':
@@ -279,7 +279,7 @@ export const publishNl = {
   'publish.access.invitees.on': 'Genodigden staan aan',
   'publish.access.invitees.off': 'Genodigden staan uit',
   'publish.access.invitees.intro':
-    'Genodigden loggen in met SSO Rijk. Hun geverifieerde e-mailadres moet op deze lijst staan. Plak stuurt zelf geen uitnodiging: de link deel je zelf.',
+    'Genodigden loggen in met SSO Rijk. Hun geverifieerde e-mailadres moet op deze lijst staan. Toon stuurt zelf geen uitnodiging: de link deel je zelf.',
   'publish.access.invitees.column.email': 'E-mailadres',
   'publish.access.invitees.column.added': 'Toegevoegd',
   'publish.access.invitees.empty': 'Nog geen genodigden',

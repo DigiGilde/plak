@@ -82,7 +82,7 @@ describe('useDesignSystemText', () => {
     const parent = container();
     const field = comboBox(parent);
     stop = useDesignSystemText(parent);
-    expect(field.translations?.[OPEN_MENU]).toBe('Toon opties');
+    expect(field.translations?.[OPEN_MENU]).toBe('Opties tonen');
 
     _setLocaleForTest('en');
     await nextTick();

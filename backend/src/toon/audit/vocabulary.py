@@ -134,7 +134,7 @@ IDP_TOKEN_INVALID: Final = "IDP_TOKEN_INVALID"  # noqa: S105 - a reason code, no
 IDP_BACKCHANNEL_LOGOUT: Final = "IDP_BACKCHANNEL_LOGOUT"
 
 # refs["via"] on a deploy, a preview teardown, or a group or site creation by a
-# member through `plak login`.
+# member through `toon login`.
 VIA_CLI: Final = "cli"
 
 # refs["ip_unvouched"], set to true on a row whose IP address was derived over

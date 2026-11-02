@@ -1,7 +1,7 @@
 # E2E overlay on dev/compose.yml. Run from the repo root as a separate
 # compose project, so the regular dev stack (port 8080) is left alone:
 #
-#   podman compose -p plak-e2e -f dev/compose.yml -f e2e/compose.e2e.yml up -d --build
+#   podman compose -p toon-e2e -f dev/compose.yml -f e2e/compose.e2e.yml up -d --build
 #
 # Differences from dev:
 # - own host ports (18888/18889, overridable via TOON_E2E_PORT and
@@ -43,8 +43,8 @@ services:
       content-owner:
         condition: service_completed_successfully
     environment:
-      TOON_BASE_URL: http://beheer.plak.localhost:${TOON_E2E_PORT:-18888}
-      TOON_CONTENT_BASE_URL: http://plak.localhost:${TOON_E2E_PORT:-18888}
+      TOON_BASE_URL: http://beheer.toon.localhost:${TOON_E2E_PORT:-18888}
+      TOON_CONTENT_BASE_URL: http://toon.localhost:${TOON_E2E_PORT:-18888}
       TOON_RATELIMIT_LOGIN_MAX: "100"
       TOON_RATELIMIT_API_MAX: "600"
       TOON_SPA_PATH: /app/spa

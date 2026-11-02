@@ -65,7 +65,7 @@ async function checkAgain(): Promise<void> {
   </nldd-simple-section>
 
   <nldd-simple-section v-else class="reading-width">
-    <nldd-title slot="header" :size="1"><h1>Plak</h1></nldd-title>
+    <nldd-title slot="header" :size="1"><h1>Toon</h1></nldd-title>
     <nldd-rich-text>
       <p>{{ t('page.landing.intro') }}</p>
       <p>{{ t('page.landing.loginHint') }}</p>

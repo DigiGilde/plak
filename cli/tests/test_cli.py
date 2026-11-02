@@ -1,4 +1,4 @@
-"""Tests for the plak CLI against a local stub server.
+"""Tests for the Toon CLI against a local stub server.
 
 Run with:
     just test-cli
@@ -32,11 +32,11 @@ import keyring.backend
 import keyring.backends.fail
 import keyring.backends.null
 import keyring.errors
+import pytest
 
 # The package installed in this project's environment, the same code the
-# `plak` command runs.
-import plak_cli as cli
-import pytest
+# `toon` command runs.
+import toon_cli as cli
 import yaml
 
 # Mode bits and a uid mean nothing on NTFS (chmod there only toggles the
@@ -193,7 +193,7 @@ def stub_server():
     # Every request of every test that goes through the stub carries the
     # User-Agent, so a call that bypasses the shared helper fails here.
     for record in server.requests:  # type: ignore[attr-defined]
-        assert record["headers"].get("User-Agent") == f"plak-cli/{cli.VERSION}"
+        assert record["headers"].get("User-Agent") == f"toon-cli/{cli.VERSION}"
 
 
 @pytest.fixture
@@ -204,7 +204,7 @@ def host(stub_server) -> str:
 @pytest.fixture
 def token_env(monkeypatch) -> str:
     """Most deploy tests only need some token or other."""
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     return "tok"
 
 
@@ -248,15 +248,16 @@ class _MemoryKeyring(keyring.backend.KeyringBackend):
         del self.secrets[(service, username)]
 
 
-TEST_DEFAULT_HOST = "https://default.plak.invalid"
+TEST_DEFAULT_HOST = "https://default.toon.invalid"
 
 
 @pytest.fixture(autouse=True)
 def memory_keyring(tmp_path, monkeypatch):
-    """No test ever touches the real keyring, the real ~/.config/plak or the
+    """No test ever touches the real keyring, the real ~/.config/toon or the
     real default host."""
-    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "config"))
-    monkeypatch.delenv("PLAK_HOST", raising=False)
+    monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "config"))
+    for name in ("TOON_HOST", "PLAK_HOST", "PLAK_CONFIG_DIR", "PLAK_ACCESS_TOKEN", "PLAK_SITE_ID"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(cli, "DEFAULT_HOST", TEST_DEFAULT_HOST)
     backend = _MemoryKeyring()
     previous = keyring.get_keyring()
@@ -666,7 +667,7 @@ def test_preview_remove_is_idempotent(stub_server, host, token_env):
 
 
 def test_preview_remove_client_error_gives_exit_1(stub_server, host, monkeypatch, capsys):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "onjuist")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "onjuist")
     stub_server.responder = _json_responder(
         401,
         {
@@ -736,7 +737,7 @@ def test_publish_http_not_localhost_gives_exit_2_without_a_request(
             "publish",
             str(dist_folder),
             "--host",
-            "http://plak.example.nl",
+            "http://toon.example.nl",
             "--site",
             "team-aurora/website",
         ]
@@ -754,9 +755,9 @@ def test_publish_http_not_localhost_gives_exit_2_without_a_request(
         "http://127.0.0.1:8080",
         "http://127.1.2.3",
         "http://[::1]:8080",
-        # Plak's own dev stack; `.localhost` is loopback per RFC 6761 6.3.
-        "http://beheer.plak.localhost:8080",
-        "http://PLAK.LOCALHOST",
+        # Toon's own dev stack; `.localhost` is loopback per RFC 6761 6.3.
+        "http://beheer.toon.localhost:8080",
+        "http://TOON.LOCALHOST",
     ],
 )
 def test_http_is_allowed_to_loopback(host):
@@ -766,7 +767,7 @@ def test_http_is_allowed_to_loopback(host):
 @pytest.mark.parametrize(
     "host",
     [
-        "http://plak.example.nl",
+        "http://toon.example.nl",
         # Not loopback: `localhost` does not sit at the end of the name here.
         "http://localhost.example.nl",
         "http://notlocalhost",
@@ -784,7 +785,7 @@ def test_http_is_not_allowed_to_the_network(host):
     [
         "https://user:token@beheer.example.nl",
         "https://user@beheer.example.nl",
-        "http://user:token@beheer.plak.localhost:8080",
+        "http://user:token@beheer.toon.localhost:8080",
     ],
 )
 def test_credentials_in_the_host_are_refused(host):
@@ -797,7 +798,7 @@ def test_credentials_in_the_host_are_refused(host):
 def test_publish_token_via_environment_variable(
     stub_server, host, dist_folder, monkeypatch, capsys
 ):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "geheim-uit-omgeving")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "geheim-uit-omgeving")
 
     code = cli.main(["publish", str(dist_folder), "--host", host, "--site", "team-aurora/website"])
 
@@ -810,7 +811,7 @@ def test_publish_client_error_does_not_leak_the_token_in_the_output(
     stub_server, host, dist_folder, monkeypatch, capsys
 ):
     token = "supergeheim-token-mag-nergens-verschijnen"
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", token)
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", token)
     stub_server.responder = _json_responder(
         422,
         {
@@ -836,10 +837,10 @@ def test_publish_without_any_token_source_asks_to_log_in(
 
     assert code == 2
     assert stub_server.requests == []
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
 
 
-# --- plak login: device flow ------------------------------------------------
+# --- toon login: device flow ------------------------------------------------
 
 
 def test_login_device_flow_success_stores_the_tokens_in_the_keyring(
@@ -895,7 +896,7 @@ def test_login_device_flow_success_stores_the_tokens_in_the_keyring(
     assert "access-1" not in out.err
     assert "Session stored in the system keyring." in out.err
 
-    assert json.loads(memory_keyring.secrets[(f"plak:{host}", "session")]) == {
+    assert json.loads(memory_keyring.secrets[(f"toon:{host}", "session")]) == {
         "access_token": "access-1",
         "refresh_token": "refresh-1",
     }
@@ -992,7 +993,7 @@ def test_login_device_flow_stops_on_denial(
 
 
 def test_login_requires_https(stub_server, isolated_cwd, capsys):
-    code = cli.main(["login", "--host", "http://plak.example.nl", "--no-open"])
+    code = cli.main(["login", "--host", "http://toon.example.nl", "--no-open"])
 
     assert code == 2
     assert "https" in capsys.readouterr().err.lower()
@@ -1056,14 +1057,14 @@ def test_refresh_failure_asks_to_log_in_again(stub_server, host, isolated_cwd, c
     code = cli.main(["whoami", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
 
 
 def test_whoami_without_a_session_asks_to_log_in(stub_server, host, isolated_cwd, capsys):
     code = cli.main(["whoami", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -1071,7 +1072,7 @@ def test_version_flag_prints_the_installed_version(capsys):
     code = cli.main(["--version"])
 
     assert code == 0
-    assert capsys.readouterr().out == f"plak {importlib.metadata.version('plak')}\n"
+    assert capsys.readouterr().out == f"toon-cli {importlib.metadata.version('toon')}\n"
 
 
 def test_every_http_call_goes_through_the_shared_helper():
@@ -1095,13 +1096,13 @@ def test_every_http_call_goes_through_the_shared_helper():
 
 
 def test_requests_carry_the_user_agent(stub_server, host, isolated_cwd, monkeypatch):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     stub_server.responder = _json_responder(200, {"member": {"email": "a@b.nl"}})
 
     assert cli.main(["whoami", "--host", host]) == 0
 
     agent = stub_server.requests[0]["headers"]["User-Agent"]
-    assert agent == f"plak-cli/{importlib.metadata.version('plak')}"
+    assert agent == f"toon-cli/{importlib.metadata.version('toon')}"
 
 
 @pytest.mark.parametrize(
@@ -1119,7 +1120,7 @@ def test_requests_carry_the_user_agent(stub_server, host, isolated_cwd, monkeypa
     ],
 )
 def test_api_major_check(stub_server, host, isolated_cwd, monkeypatch, capsys, header, code):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     if header is not None:
         stub_server.extra_headers["API-Version"] = header
     stub_server.responder = _json_responder(200, {"member": {"email": "a@b.nl"}})
@@ -1135,7 +1136,7 @@ def test_api_major_check(stub_server, host, isolated_cwd, monkeypatch, capsys, h
         major = header.split(".")[0]
         assert f"Error: this server speaks API {major}.x" in captured.err
         assert f"supports API {cli.SUPPORTED_API_MAJOR}.x" in captured.err
-        assert "<tag>#subdirectory=cli" in captured.err
+        assert "git+https://github.com/DigiGilde/toon@<tag>#subdirectory=cli" in captured.err
 
 
 def test_a_newer_api_major_is_refused_before_the_body_is_read(
@@ -1190,7 +1191,7 @@ def test_logout_clears_the_stored_session(stub_server, host, isolated_cwd, memor
     assert memory_keyring.secrets == {}
     config = cli._read_hosts()
     assert host not in config["hosts"]
-    # The default host stays: a next 'plak login' needs no --host.
+    # The default host stays: a next 'toon login' needs no --host.
     assert config["default_host"] == host
 
 
@@ -1238,10 +1239,10 @@ def test_publish_fetches_and_masks_an_oidc_token_in_ci(
     assert not cli._hosts_path().exists()
 
 
-def test_explicit_plak_access_token_takes_priority_over_oidc(
+def test_explicit_toon_access_token_takes_priority_over_oidc(
     stub_server, host, dist_folder, isolated_cwd, monkeypatch
 ):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "expliciet-token")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "expliciet-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
 
@@ -1282,8 +1283,8 @@ def ci_runner(stub_server, host, isolated_cwd, monkeypatch) -> None:
     )
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", f"{host}/oidc-token")
     monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
-    monkeypatch.delenv("PLAK_ACCESS_TOKEN", raising=False)
-    monkeypatch.delenv("PLAK_SITE_ID", raising=False)
+    monkeypatch.delenv("TOON_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("TOON_SITE_ID", raising=False)
 
 
 @pytest.mark.parametrize(
@@ -1309,10 +1310,10 @@ def test_the_id_token_names_the_site_id_when_there_is_one(
     stub_server, host, dist_folder, ci_runner, monkeypatch, capsys, command, flag, environment, bound
 ):
     """With a site id the token is valid for that one site only: the audience
-    is the host plus /-/sites/ and the id, lowercase, the one form Plak
-    accepts. --site-id wins over PLAK_SITE_ID; an empty one is none."""
+    is the host plus /-/sites/ and the id, lowercase, the one form Toon
+    accepts. --site-id wins over TOON_SITE_ID; an empty one is none."""
     if environment is not None:
-        monkeypatch.setenv("PLAK_SITE_ID", environment)
+        monkeypatch.setenv("TOON_SITE_ID", environment)
     argv = [str(dist_folder) if part == "DIST" else part for part in command] + ["--host", host]
     if flag is not None:
         argv += ["--site-id", flag]
@@ -1352,18 +1353,18 @@ def test_a_site_id_that_is_no_uuid_stops_before_any_token_is_asked_for(
     )
 
 
-def test_an_invalid_plak_site_id_is_named_as_such(stub_server, host, dist_folder, ci_runner, monkeypatch, capsys):
-    monkeypatch.setenv("PLAK_SITE_ID", "team-aurora/website")
+def test_an_invalid_toon_site_id_is_named_as_such(stub_server, host, dist_folder, ci_runner, monkeypatch, capsys):
+    monkeypatch.setenv("TOON_SITE_ID", "team-aurora/website")
 
     code = cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host])
 
     assert code == 2
     assert stub_server.requests == []
-    assert "Error: PLAK_SITE_ID must be a site id" in capsys.readouterr().err
+    assert "Error: TOON_SITE_ID must be a site id" in capsys.readouterr().err
 
 
 def test_a_site_id_is_checked_also_where_no_id_token_is_asked_for(stub_server, host, dist_folder, token_env, capsys):
-    """Outside CI, or with PLAK_ACCESS_TOKEN, the id names no audience, but a
+    """Outside CI, or with TOON_ACCESS_TOKEN, the id names no audience, but a
     typo in it is still one: better now than on the runner."""
     code = cli.main(
         ["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host, "--site-id", "website"]
@@ -1374,13 +1375,13 @@ def test_a_site_id_is_checked_also_where_no_id_token_is_asked_for(stub_server, h
 
 
 SITE_ID_IGNORED = (
-    "Warning: --site-id (or PLAK_SITE_ID) only binds the CI ID token the CLI asks for; "
-    "ignored with a session or PLAK_ACCESS_TOKEN."
+    "Warning: --site-id (or TOON_SITE_ID) only binds the CI ID token the CLI asks for; "
+    "ignored with a session or TOON_ACCESS_TOKEN."
 )
 
 
 @pytest.mark.parametrize("command", ["publish", "preview-remove"])
-@pytest.mark.parametrize("credential", ["PLAK_ACCESS_TOKEN", "session"])
+@pytest.mark.parametrize("credential", ["TOON_ACCESS_TOKEN", "session"])
 @pytest.mark.parametrize(("source", "warnings"), [("flag", 1), ("environment", 1), (None, 0)])
 def test_a_site_id_beside_a_member_credential_is_ignored_with_a_warning(
     stub_server, host, dist_folder, isolated_cwd, monkeypatch, capsys, command, credential, source, warnings
@@ -1395,13 +1396,13 @@ def test_a_site_id_beside_a_member_credential_is_ignored_with_a_warning(
             "/-/api/v1/sites/team-aurora/website/previews/pr-42": [lambda _record: (204, None, "text/plain")],
         }
     )
-    for name in ("ACTIONS_ID_TOKEN_REQUEST_URL", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "PLAK_SITE_ID"):
+    for name in ("ACTIONS_ID_TOKEN_REQUEST_URL", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "TOON_SITE_ID"):
         monkeypatch.delenv(name, raising=False)
-    if credential == "PLAK_ACCESS_TOKEN":
-        monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    if credential == "TOON_ACCESS_TOKEN":
+        monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
         sent = "Bearer tok"
     else:
-        monkeypatch.delenv("PLAK_ACCESS_TOKEN", raising=False)
+        monkeypatch.delenv("TOON_ACCESS_TOKEN", raising=False)
         _store_session(host)
         sent = "Bearer access-1"
     first = str(dist_folder) if command == "publish" else "pr-42"
@@ -1409,7 +1410,7 @@ def test_a_site_id_beside_a_member_credential_is_ignored_with_a_warning(
     if source == "flag":
         argv += ["--site-id", SITE_ID]
     elif source == "environment":
-        monkeypatch.setenv("PLAK_SITE_ID", SITE_ID)
+        monkeypatch.setenv("TOON_SITE_ID", SITE_ID)
 
     assert cli.main(argv) == 0
 
@@ -1442,7 +1443,7 @@ ACTION_YML_PATH = Path(__file__).resolve().parents[2] / "actions" / "publish" / 
 
 def test_action_yml_does_not_capture_publish_stdout():
     """A $(...) capture around the publish call would swallow the OIDC
-    '::add-mask::' workflow command that 'plak publish' also prints on
+    '::add-mask::' workflow command that 'toon publish' also prints on
     stdout, and any newline-guard on the captured value never sees it."""
     content = ACTION_YML_PATH.read_text()
     assert "VERSION_ID=$(" not in content
@@ -1464,11 +1465,11 @@ def test_action_yml_runs_the_cli_from_the_project_two_levels_up():
     """github.action_path is actions/publish/ in this repository, so the
     reference to the CLI project in cli/ has to climb out of it."""
     content = ACTION_YML_PATH.read_text()
-    assert content.count('--locked --project "$PLAK_ACTION_PATH/../../cli" plak') == 2
-    assert content.count("PLAK_ACTION_PATH: ${{ github.action_path }}") == 3
+    assert content.count('--locked --project "$TOON_ACTION_PATH/../../cli" toon') == 2
+    assert content.count("TOON_ACTION_PATH: ${{ github.action_path }}") == 3
     project = (ACTION_YML_PATH.parent / ".." / ".." / "cli").resolve()
     assert (project / "pyproject.toml").is_file()
-    assert (project / "plak_cli" / "__init__.py").is_file()
+    assert (project / "toon_cli" / "__init__.py").is_file()
 
 
 def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
@@ -1491,7 +1492,7 @@ def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
     github_output.write_text("")
 
     env = os.environ.copy()
-    env.pop("PLAK_ACCESS_TOKEN", None)
+    env.pop("TOON_ACCESS_TOKEN", None)
     env["ACTIONS_ID_TOKEN_REQUEST_URL"] = f"{host}/oidc-token"
     env["ACTIONS_ID_TOKEN_REQUEST_TOKEN"] = "runner-bearer"
 
@@ -1499,7 +1500,7 @@ def test_publish_step_writes_version_id_to_output_file_and_masks_the_oidc_token(
         [
             sys.executable,
             "-m",
-            "plak_cli",
+            "toon_cli",
             "publish",
             str(dist_folder),
             "--host",
@@ -1620,7 +1621,7 @@ def _run_action(
         if "if" in step and not _step_runs(step["if"], values):
             continue
         step_env = dict(os.environ)
-        step_env.pop("PLAK_ACCESS_TOKEN", None)
+        step_env.pop("TOON_ACCESS_TOKEN", None)
         # Set when this suite itself runs on GitHub Actions; a test that wants a
         # summary passes its own file.
         step_env.pop("GITHUB_STEP_SUMMARY", None)
@@ -1809,16 +1810,17 @@ def test_action_hands_the_site_id_to_the_cli_for_the_token(
     assert _audience(oidc) == audience.format(host=host)
 
 
-def test_action_without_a_site_id_input_leaves_plak_site_id_to_the_cli(
-    stub_server, host, dist_folder, isolated_cwd, action_env
+@pytest.mark.parametrize("variable", ["TOON_SITE_ID", "PLAK_SITE_ID"])
+def test_action_without_a_site_id_input_leaves_the_site_id_of_the_job_to_the_cli(
+    stub_server, host, dist_folder, isolated_cwd, action_env, variable
 ):
-    """Like PLAK_HOST: a site id the job sets in its environment still counts
-    when the input is left empty."""
+    """Like TOON_HOST: a site id the job sets in its environment still counts
+    when the input is left empty, also under the old name."""
     _action_responder(stub_server)
 
     run = _run_action(
         {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
-        env={**action_env, "PLAK_SITE_ID": SITE_ID},
+        env={**action_env, variable: SITE_ID},
         cwd=isolated_cwd,
     )
 
@@ -1827,12 +1829,18 @@ def test_action_without_a_site_id_input_leaves_plak_site_id_to_the_cli(
     assert _audience(oidc) == f"{host}/-/sites/{SITE_ID}"
 
 
-def test_action_leaves_plak_host_and_plak_site_id_of_the_job_alone():
+def test_action_leaves_the_variables_the_cli_reads_of_the_job_alone():
     """On a runner a step's env shadows the job's, so the inputs go in under
-    names of their own and become flags only when filled; a PLAK_HOST or
-    PLAK_SITE_ID the job sets still reaches the CLI."""
+    names of their own and become flags only when filled; a TOON_HOST or
+    TOON_SITE_ID the job sets still reaches the CLI, and so does the old name
+    of either."""
+    read_by_the_cli = {
+        f"{prefix}_{name}"
+        for prefix in ("TOON", "PLAK")
+        for name in ("HOST", "SITE_ID", "ACCESS_TOKEN", "CONFIG_DIR")
+    }
     for step in _action_definition()["runs"]["steps"]:
-        assert not {"PLAK_HOST", "PLAK_SITE_ID"} & set(step.get("env", {})), step["name"]
+        assert not read_by_the_cli & set(step.get("env", {})), step["name"]
 
 
 def test_action_stops_on_a_site_id_that_is_no_uuid(stub_server, host, dist_folder, isolated_cwd, action_env):
@@ -1888,7 +1896,7 @@ def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
 ):
     """Without `permissions: id-token: write` the two request variables are
     not in the environment at all. The step has to name that itself: the CLI
-    would otherwise fall through to 'log in with plak login', which is no
+    would otherwise fall through to 'log in with toon login', which is no
     advice on a runner."""
     _action_responder(stub_server)
 
@@ -1910,7 +1918,7 @@ def test_action_stops_before_publishing_when_the_runner_offers_no_oidc(
 def test_action_fails_the_step_when_the_server_refuses_the_deploy(
     stub_server, host, dist_folder, isolated_cwd, action_env
 ):
-    """A refusal from Plak (no trust relation, quota, a broken bundle) has to
+    """A refusal from Toon (no trust relation, quota, a broken bundle) has to
     come out as a failed step. `set -e` plus a non-zero CLI is what carries
     that; a silent pass would let a workflow report a deploy that never was."""
     _action_responder(
@@ -1951,14 +1959,15 @@ def test_action_fails_the_teardown_step_when_the_server_refuses_it(
     assert "Not your preview." in run.stderr
 
 
+@pytest.mark.parametrize("variable", ["TOON_HOST", "PLAK_HOST"])
 def test_action_without_host_leaves_the_host_to_the_cli(
-    stub_server, host, dist_folder, isolated_cwd, action_env
+    stub_server, host, dist_folder, isolated_cwd, action_env, variable
 ):
-    """An empty host input passes no --host at all, so PLAK_HOST set on the
-    job reaches the CLI; on a runner without it the CLI's DEFAULT_HOST
-    applies (test_default_host_*)."""
+    """An empty host input passes no --host at all, so TOON_HOST set on the
+    job, or its old name, reaches the CLI; on a runner without it the CLI's
+    DEFAULT_HOST applies (test_default_host_*)."""
     _action_responder(stub_server)
-    env = {**action_env, "PLAK_HOST": host}
+    env = {**action_env, variable: host}
 
     publish = _run_action(
         {"site": "team-aurora/website", "dist-path": str(dist_folder), "preview-ref": "pr-42"},
@@ -2136,7 +2145,7 @@ def test_action_refuses_a_skip_bot_prs_input_that_is_not_true_or_false(
     assert stub_server.requests == []
 
 
-PREVIEW_URL = "https://plak.example/team-aurora/website/_preview/pr-42/"
+PREVIEW_URL = "https://toon.example/team-aurora/website/_preview/pr-42/"
 
 
 @pytest.fixture
@@ -2201,21 +2210,22 @@ def test_action_reports_a_preview_to_github_as_deployment_and_comment(
         ("POST", f"{repo}/deployments"),
         ("POST", f"{repo}/deployments/7/statuses"),
         ("GET", f"{repo}/deployments"),
+        ("GET", f"{repo}/deployments"),
         ("GET", f"{repo}/issues/42/comments"),
         ("POST", f"{repo}/issues/42/comments"),
     ]
     assert all(r["headers"]["Authorization"] == "Bearer ghs-token" for r in github)
     assert json.loads(github[1]["body"])["environment_url"] == PREVIEW_URL
-    comment = json.loads(github[4]["body"])["body"]
+    comment = json.loads(github[5]["body"])["body"]
     assert PREVIEW_URL in comment
-    assert "Open to anyone with an SSO Rijk account, after signing in on Plak." in comment
+    assert "Open to anyone with an SSO Rijk account, after signing in on Toon." in comment
     assert f"url={PREVIEW_URL}" in Path(github_runner["GITHUB_OUTPUT"]).read_text()
 
 
 def test_action_fails_the_report_when_the_server_returns_no_url(
     stub_server, host, dist_folder, isolated_cwd, github_runner
 ):
-    """A Plak from before the url field: the deploy stands, but a comment
+    """A server from before the url field: the deploy stands, but a comment
     without a link is no comment, so the step says why it cannot."""
     _action_responder(stub_server)
 
@@ -2241,7 +2251,7 @@ def test_action_fails_the_report_when_the_server_returns_no_url(
 def test_action_comments_without_access_when_the_server_sends_none(
     stub_server, host, dist_folder, isolated_cwd, github_runner
 ):
-    """A Plak from before the access field: the comment still carries the link."""
+    """A server from before the access field: the comment still carries the link."""
     repo = "/repos/digigilde/website"
     stub_server.responder = _sequence_responder(
         {
@@ -2307,6 +2317,7 @@ def test_action_teardown_reports_the_removal_to_github(
         "GET /oidc-token",
         "DELETE /-/api/v1/sites/team-aurora/website/previews/pr-42",
         f"GET {repo}/deployments",
+        f"GET {repo}/deployments",
         f"GET {repo}/issues/42/comments",
     ]
 
@@ -2327,13 +2338,13 @@ def test_action_teardown_reports_the_removal_to_github(
         ),
         (
             {},
-            {"versionId": "11111111-2222-3333-4444-555555555555", "url": "https://plak.example/team-aurora/website/"},
+            {"versionId": "11111111-2222-3333-4444-555555555555", "url": "https://toon.example/team-aurora/website/"},
             (
-                "Live site `team-aurora/website` is published: https://plak.example/team-aurora/website/ "
+                "Live site `team-aurora/website` is published: https://toon.example/team-aurora/website/ "
                 "(version `11111111-2222-3333-4444-555555555555`)"
             ),
         ),
-        # A Plak from before the url field still gets the version in the summary.
+        # A server from before the url field still gets the version in the summary.
         (
             {},
             {"versionId": "11111111-2222-3333-4444-555555555555"},
@@ -2354,7 +2365,7 @@ def test_action_writes_the_deploy_to_the_step_summary(
     )
 
     assert run.returncode == 0, run.stderr
-    assert summary.read_text() == f"### Plak\n\n{line}\n"
+    assert summary.read_text() == f"### Toon\n\n{line}\n"
     assert "Published" in run.stderr
 
 
@@ -2387,7 +2398,7 @@ def test_action_names_the_site_id_beside_the_site_in_the_summary(
     )
 
     assert run.returncode == 0, run.stderr
-    assert summary.read_text() == f"### Plak\n\n{line}\n"
+    assert summary.read_text() == f"### Toon\n\n{line}\n"
 
 
 def test_action_writes_the_teardown_to_the_step_summary(stub_server, host, isolated_cwd, action_env):
@@ -2401,7 +2412,7 @@ def test_action_writes_the_teardown_to_the_step_summary(stub_server, host, isola
     )
 
     assert run.returncode == 0, run.stderr
-    assert summary.read_text() == "### Plak\n\nPreview `pr-42` of `team-aurora/website` is removed.\n"
+    assert summary.read_text() == "### Toon\n\nPreview `pr-42` of `team-aurora/website` is removed.\n"
 
 
 def test_action_writes_no_summary_after_a_refused_deploy(
@@ -2436,14 +2447,14 @@ def _repository_reference() -> str:
 # snippet in the Deploy tab referenced an organization that never existed for
 # months, because nothing read these four files together.
 _REPOSITORY_MENTION = re.compile(
-    r"(?:github\.com/|uses:\s*|marketplace add\s+|['\"])([A-Za-z0-9][\w.-]*/plak)(?=[/@\s'\"`#])"
+    r"(?:github\.com/|uses:\s*|marketplace add\s+|['\"])([A-Za-z0-9][\w.-]*/toon)(?=[/@\s'\"`#])"
 )
 
 ACTION_REFERENCE_FILES = (
     "frontend/src/components/site/TabDeploy.vue",
     "frontend/src/components/site/TabDeploy.test.ts",
     "docs/publishing.md",
-    "plugin/skills/plak-publish/SKILL.md",
+    "plugin/skills/toon-publish/SKILL.md",
     "README.md",
 )
 
@@ -2454,7 +2465,7 @@ def test_every_place_that_names_the_action_names_the_same_repository():
     for name in ACTION_REFERENCE_FILES:
         content = (REPO_ROOT / name).read_text(encoding="utf-8")
         owners = set(re.findall(_REPOSITORY_MENTION, content))
-        assert owners, f"{name} names the plak repository nowhere any more"
+        assert owners, f"{name} names the toon repository nowhere any more"
         found[name] = owners
     for name, owners in found.items():
         assert owners == {reference}, f"{name} points at {sorted(owners)}, not {reference}"
@@ -2466,7 +2477,7 @@ def test_the_deploy_tab_snippet_and_the_docs_point_at_the_action_path():
     reference = _repository_reference()
     for name in ("frontend/src/components/site/TabDeploy.vue", "docs/publishing.md"):
         content = (REPO_ROOT / name).read_text(encoding="utf-8")
-        uses = re.findall(r"uses:\s*(\S*/plak/\S+)", content)
+        uses = re.findall(r"uses:\s*(\S*/toon/\S+)", content)
         assert uses, f"{name} has no `uses:` for the action"
         for value in uses:
             assert value.startswith(
@@ -2483,7 +2494,7 @@ def test_the_generated_snippet_only_uses_inputs_the_action_declares():
         encoding="utf-8"
     )
     blocks = re.findall(
-        r"uses: \S*/plak/actions/publish@\S+\n {8}with:\n((?: {10}[\w-]+:.*\n)+)", snippet
+        r"uses: \S*/toon/actions/publish@\S+\n {8}with:\n((?: {10}[\w-]+:.*\n)+)", snippet
     )
     assert len(blocks) == 6, "two snippets, three action steps each"
     for block in blocks:
@@ -2492,7 +2503,7 @@ def test_the_generated_snippet_only_uses_inputs_the_action_declares():
         assert {"host", "site"} <= keys
 
 
-# --- plak login: only same-origin URLs, server strings cleaned -------------
+# --- toon login: only same-origin URLs, server strings cleaned -------------
 
 
 def test_login_rejects_a_verification_uri_that_is_not_same_origin(
@@ -2612,7 +2623,7 @@ def test_login_cleans_control_characters_from_server_strings(
 def test_whoami_cleans_control_characters_from_server_strings(
     stub_server, host, isolated_cwd, monkeypatch, capsys
 ):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     stub_server.responder = _json_responder(
         200,
         {
@@ -2644,7 +2655,7 @@ def _write_raw_hosts(content: str | bytes, mode: int = 0o600) -> Path:
 
 
 def test_default_host_is_used_when_no_host_flag_given(stub_server, host, monkeypatch):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     _store_session(host)
     stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
 
@@ -2654,7 +2665,7 @@ def test_default_host_is_used_when_no_host_flag_given(stub_server, host, monkeyp
     assert stub_server.requests[0]["path"] == "/-/api/v1/cli/whoami"
 
 
-def test_the_host_comes_from_the_flag_then_plak_host_then_the_last_login_then_the_default(
+def test_the_host_comes_from_the_flag_then_toon_host_then_the_last_login_then_the_default(
     monkeypatch,
 ):
     assert _resolved_host() == TEST_DEFAULT_HOST
@@ -2662,7 +2673,7 @@ def test_the_host_comes_from_the_flag_then_plak_host_then_the_last_login_then_th
     _store_session("https://laatst.example")
     assert _resolved_host() == "https://laatst.example"
 
-    monkeypatch.setenv("PLAK_HOST", "https://omgeving.example/")
+    monkeypatch.setenv("TOON_HOST", "https://omgeving.example/")
     assert _resolved_host() == "https://omgeving.example"
 
     assert cli._resolve_host(argparse.Namespace(host="https://vlag.example/")) == "https://vlag.example"
@@ -2688,9 +2699,9 @@ def test_publish_and_preview_remove_need_no_host_flag(stub_server, host, dist_fo
 
 
 def test_the_built_in_default_host_is_used_without_anything_else(monkeypatch, stub_server, host):
-    """Without --host, PLAK_HOST or a login, a command goes to DEFAULT_HOST."""
+    """Without --host, TOON_HOST or a login, a command goes to DEFAULT_HOST."""
     monkeypatch.setattr(cli, "DEFAULT_HOST", host)
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "tok")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "tok")
     stub_server.responder = _json_responder(200, {"member": {"email": "iemand@example.nl"}})
 
     code = cli.main(["whoami"])
@@ -2820,7 +2831,7 @@ def test_plain_text_session_in_an_untrusted_hosts_file_is_never_sent(
     code = cli.main(["whoami", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -2869,46 +2880,46 @@ def test_odd_shapes_in_the_hosts_file_count_as_no_session(stub_server, host, con
 
     assert code == 2
     error_output = capsys.readouterr().err
-    assert "plak login" in error_output
+    assert "toon login" in error_output
     assert stub_server.requests == []
 
 
-def test_config_dir_follows_plak_config_dir_then_xdg_then_home(tmp_path, monkeypatch):
+def test_config_dir_follows_toon_config_dir_then_xdg_then_home(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "WINDOWS", False)
-    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "eigen"))
+    monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "eigen"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     # Path.home() reads USERPROFILE on Windows, HOME elsewhere.
     monkeypatch.setenv("HOME", str(tmp_path / "thuis"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "thuis"))
     assert cli._hosts_path() == tmp_path / "eigen" / "hosts.json"
 
-    monkeypatch.delenv("PLAK_CONFIG_DIR")
-    assert cli._hosts_path() == tmp_path / "xdg" / "plak" / "hosts.json"
+    monkeypatch.delenv("TOON_CONFIG_DIR")
+    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
 
     monkeypatch.delenv("XDG_CONFIG_HOME")
-    assert cli._hosts_path() == tmp_path / "thuis" / ".config" / "plak" / "hosts.json"
+    assert cli._hosts_path() == tmp_path / "thuis" / ".config" / "toon" / "hosts.json"
 
 
-def test_config_dir_on_windows_follows_plak_config_dir_then_xdg_then_appdata(
+def test_config_dir_on_windows_follows_toon_config_dir_then_xdg_then_appdata(
     tmp_path, monkeypatch
 ):
     monkeypatch.setattr(cli, "WINDOWS", True)
-    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "eigen"))
+    monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "eigen"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("APPDATA", str(tmp_path / "roaming"))
     monkeypatch.setenv("HOME", str(tmp_path / "thuis"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "thuis"))
     assert cli._hosts_path() == tmp_path / "eigen" / "hosts.json"
 
-    monkeypatch.delenv("PLAK_CONFIG_DIR")
-    assert cli._hosts_path() == tmp_path / "xdg" / "plak" / "hosts.json"
+    monkeypatch.delenv("TOON_CONFIG_DIR")
+    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
 
     monkeypatch.delenv("XDG_CONFIG_HOME")
-    assert cli._hosts_path() == tmp_path / "roaming" / "plak" / "hosts.json"
+    assert cli._hosts_path() == tmp_path / "roaming" / "toon" / "hosts.json"
 
     # A service account can run without APPDATA; it points here by default.
     monkeypatch.delenv("APPDATA")
-    assert cli._hosts_path() == tmp_path / "thuis" / "AppData" / "Roaming" / "plak" / "hosts.json"
+    assert cli._hosts_path() == tmp_path / "thuis" / "AppData" / "Roaming" / "toon" / "hosts.json"
 
 
 @pytest.fixture
@@ -2956,8 +2967,8 @@ def test_sessions_for_two_hosts_live_side_by_side(memory_keyring):
     # The host logged in to last is the default.
     assert cli._read_hosts()["default_host"] == "https://twee.example"
     assert set(memory_keyring.secrets) == {
-        ("plak:https://een.example", "session"),
-        ("plak:https://twee.example", "session"),
+        ("toon:https://een.example", "session"),
+        ("toon:https://twee.example", "session"),
     }
 
 
@@ -3212,7 +3223,7 @@ def test_a_session_is_never_sent_to_another_host(stub_server, host, dist_folder,
     code = cli.main([*argv, "--host", other_host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -3251,7 +3262,7 @@ def test_a_keyring_entry_that_is_gone_or_garbled_counts_as_no_session(
     stub_server, host, memory_keyring, secret, capsys
 ):
     _store_session(host)
-    service = (f"plak:{host}", "session")
+    service = (f"toon:{host}", "session")
     if secret is None:
         del memory_keyring.secrets[service]
     else:
@@ -3260,7 +3271,7 @@ def test_a_keyring_entry_that_is_gone_or_garbled_counts_as_no_session(
     code = cli.main(["whoami", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -3326,7 +3337,7 @@ def test_logout_of_a_plain_text_session_removes_the_tokens_from_the_file(stub_se
 # --- a leftover .env.plak -----------------------------------------------------------
 
 
-LEGACY_NOTE = "plak no longer reads .env.plak in this directory"
+LEGACY_NOTE = "toon no longer reads .env.plak in this directory"
 
 
 def test_login_points_at_a_leftover_env_file(stub_server, host, isolated_cwd, capsys):
@@ -3381,7 +3392,7 @@ def test_without_a_leftover_env_file_there_is_no_note(stub_server, host, isolate
     assert LEGACY_NOTE not in capsys.readouterr().err
 
 
-# --- plak logout: refresh token in the body, clear reporting ----------------
+# --- toon logout: refresh token in the body, clear reporting ----------------
 
 
 def test_logout_sends_the_refresh_token_in_the_body(stub_server, host, isolated_cwd):
@@ -3481,11 +3492,11 @@ def _device_start_step(host: str, **overrides: Any):
 
 
 def test_https_host_is_accepted_without_complaint():
-    cli._require_https("https://plak.example.nl")
+    cli._require_https("https://toon.example.nl")
 
 
 def test_python_dash_m_entry_point_uses_the_same_main():
-    import plak_cli.__main__ as entry
+    import toon_cli.__main__ as entry
 
     assert entry.main is cli.main
 
@@ -3549,7 +3560,7 @@ def test_publish_writes_the_url_beside_the_version_id(
         201,
         {
             "versionId": "00000000-0000-0000-0000-000000000000",
-            "url": "https://plak.example/team-aurora/website/_preview/pr-42/",
+            "url": "https://toon.example/team-aurora/website/_preview/pr-42/",
         },
     )
     output_file = tmp_path / "github_output.txt"
@@ -3572,7 +3583,7 @@ def test_publish_writes_the_url_beside_the_version_id(
     assert code == 0
     assert output_file.read_text() == (
         "version-id=00000000-0000-0000-0000-000000000000\n"
-        "url=https://plak.example/team-aurora/website/_preview/pr-42/\n"
+        "url=https://toon.example/team-aurora/website/_preview/pr-42/\n"
     )
 
 
@@ -3585,7 +3596,7 @@ def test_publish_writes_the_access_beside_the_url(
         201,
         {
             "versionId": "00000000-0000-0000-0000-000000000000",
-            "url": "https://plak.example/team-aurora/website/",
+            "url": "https://toon.example/team-aurora/website/",
             "access": {"base": "site_team", "keys": False, "invitees": True},
         },
     )
@@ -3626,7 +3637,7 @@ def test_publish_leaves_out_an_access_it_does_not_know(
         201,
         {
             "versionId": "00000000-0000-0000-0000-000000000000",
-            "url": "https://plak.example/team-aurora/website/",
+            "url": "https://toon.example/team-aurora/website/",
             "access": access,
         },
     )
@@ -3649,7 +3660,7 @@ def test_publish_leaves_out_an_access_it_does_not_know(
     assert "Warning: leaving out an access this CLI does not know" in capsys.readouterr().err
     assert output_file.read_text() == (
         "version-id=00000000-0000-0000-0000-000000000000\n"
-        "url=https://plak.example/team-aurora/website/\n"
+        "url=https://toon.example/team-aurora/website/\n"
     )
 
 
@@ -3662,7 +3673,7 @@ def test_publish_says_where_the_deploy_went_on_stderr(
         201,
         {
             "versionId": "00000000-0000-0000-0000-000000000000",
-            "url": "https://plak.example/team-aurora/website/",
+            "url": "https://toon.example/team-aurora/website/",
         },
     )
 
@@ -3672,7 +3683,7 @@ def test_publish_says_where_the_deploy_went_on_stderr(
     out = capsys.readouterr()
     assert out.out == "00000000-0000-0000-0000-000000000000\n"
     assert out.err == (
-        "Published: https://plak.example/team-aurora/website/ "
+        "Published: https://toon.example/team-aurora/website/ "
         "(version 00000000-0000-0000-0000-000000000000)\n"
     )
 
@@ -3680,7 +3691,7 @@ def test_publish_says_where_the_deploy_went_on_stderr(
 def test_publish_without_a_url_from_the_server_still_names_the_version(
     stub_server, host, dist_folder, token_env, tmp_path, capsys
 ):
-    """A Plak from before the url field: the log still shows that the deploy
+    """A server from before the url field: the log still shows that the deploy
     went through, and which version it made."""
     code = cli.main(
         [
@@ -3702,11 +3713,11 @@ def test_publish_without_a_url_from_the_server_still_names_the_version(
 @pytest.mark.parametrize(
     "url",
     [
-        "https://plak.example/\nversion-id=evil",
-        "https://plak.example/a b/",
+        "https://toon.example/\nversion-id=evil",
+        "https://toon.example/a b/",
         "https://x/)[Sign in again](https://evil.example",
-        "https://plak.example/<img src=x>",
-        "https://plak.example/`code`",
+        "https://toon.example/<img src=x>",
+        "https://toon.example/`code`",
         "javascript:alert(1)",
         42,
     ],
@@ -3860,7 +3871,7 @@ def test_stored_host_without_a_token_asks_to_log_in(stub_server, host, isolated_
     code = cli.main(["whoami", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -3970,7 +3981,7 @@ def test_oidc_answer_without_a_value_gives_exit_2(
     assert len(stub_server.requests) == 1
 
 
-# --- plak login: the start call and the polling loop go wrong ---------------
+# --- toon login: the start call and the polling loop go wrong ---------------
 
 
 def test_login_connection_failure_at_the_start_gives_exit_1(
@@ -4236,11 +4247,11 @@ def test_a_token_with_a_line_break_cannot_change_the_default_host():
     assert _stored_tokens("https://beheer.example") == (token, token)
 
 
-# --- plak logout: no host, server unreachable --------------------------------
+# --- toon logout: no host, server unreachable --------------------------------
 
 
 def test_logout_refuses_http_to_the_network(stub_server, capsys):
-    code = cli.main(["logout", "--host", "http://plak.example.nl"])
+    code = cli.main(["logout", "--host", "http://toon.example.nl"])
 
     assert code == 2
     assert "Use https://" in capsys.readouterr().err
@@ -4374,7 +4385,7 @@ def test_group_create_without_a_session_asks_to_log_in_and_sends_nothing(
     code = cli.main(["group", "create", "team", "--name", "Team", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -4399,7 +4410,7 @@ def test_group_create_refuses_an_invalid_slug(stub_server, host, token_env, caps
 
 
 def test_group_create_refuses_plain_http_to_another_host(stub_server, token_env, capsys):
-    code = cli.main(["group", "create", "team", "--name", "Team", "--host", "http://plak.example"])
+    code = cli.main(["group", "create", "team", "--name", "Team", "--host", "http://toon.example"])
 
     assert code == 2
     assert "https://" in capsys.readouterr().err
@@ -4474,7 +4485,7 @@ def test_site_create_without_access_flags_lets_the_site_inherit(stub_server, hos
     assert capsys.readouterr().out.splitlines() == [
         "Created site 'team/docs' (Docs). You are its admin.",
         "Access: public (anyone), secret links off, invitees off.",
-        f"Publish to it with: plak publish <dist> --host {host} --site team/docs",
+        f"Publish to it with: toon publish <dist> --host {host} --site team/docs",
     ]
 
 
@@ -4496,7 +4507,7 @@ def test_site_create_sends_only_the_given_flags_and_says_who_can_see_it(stub_ser
         "Access: nobody (nobody by default), secret links on, invitees off.",
         "Who can see it: anyone with a secret link.",
         f"Change it at: {host}/team/docs/access",
-        f"Publish to it with: plak publish <dist> --host {host} --site team/docs",
+        f"Publish to it with: toon publish <dist> --host {host} --site team/docs",
     ]
 
 
@@ -4545,7 +4556,7 @@ def test_site_create_without_a_session_asks_to_log_in(stub_server, host, isolate
     code = cli.main(["site", "create", "team/docs", "--title", "Docs", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -4598,7 +4609,7 @@ _STORED_REFRESH = "stored-refresh-token-must-never-be-printed"
             ["site", "create", "team/docs", "--title", "Docs"],
             _site_answer("public"),
             None,
-            "Publish to it with: plak publish <dist> --host {host} --site team/docs",
+            "Publish to it with: toon publish <dist> --host {host} --site team/docs",
         ),
         (["login", "--no-open"], None, "post", "Logging in at {host}"),
     ],
@@ -4609,7 +4620,7 @@ def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_ar
 ):
     """With --insecure-storage the host and the tokens share hosts.json; a
     message naming the host must carry the host alone."""
-    for name in ("PLAK_HOST", "PLAK_ACCESS_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"):
+    for name in ("TOON_HOST", "TOON_ACCESS_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL"):
         monkeypatch.delenv(name, raising=False)
     _store_session(host, access=_STORED_ACCESS, refresh=_STORED_REFRESH, insecure=True)
     if answer is not None:
@@ -4626,7 +4637,7 @@ def test_a_host_taken_from_the_stored_session_is_printed_but_its_tokens_never_ar
     assert _STORED_REFRESH not in printed
 
 
-# -- plak site link ---------------------------------------------------------------
+# -- toon site link ---------------------------------------------------------------
 
 
 def _completed(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:
@@ -4728,7 +4739,7 @@ def test_site_link_prints_the_site_id_and_how_a_workflow_names_it(
 
 @pytest.mark.parametrize("site_id", ["abc", 7, None, SITE_ID + "\x1b[31m", SITE_ID + "\n"])
 def test_site_link_prints_no_site_id_it_cannot_vouch_for(stub_server, host, token_env, fake_run, capsys, site_id):
-    """A Plak from before the site id sends none; anything else that is not
+    """A server from before the site id sends none; anything else that is not
     a lowercase UUID is not printed, so the server cannot write into the
     terminal through it."""
     answer = _link_answer() if site_id is None else _link_answer(siteId=site_id)
@@ -4798,7 +4809,7 @@ def test_site_link_sends_given_ids_without_asking_gh(stub_server, host, token_en
     assert "IDs as given: repository 7007, owner 8008." in capsys.readouterr().out
 
 
-def test_site_link_with_no_gh_leaves_the_lookup_to_plak(stub_server, host, token_env, fake_run, capsys):
+def test_site_link_with_no_gh_leaves_the_lookup_to_toon(stub_server, host, token_env, fake_run, capsys):
     stub_server.responder = _json_responder(200, _link_answer())
 
     code = cli.main(["site", "link", "team/docs", "minbzk/website", "--no-gh", "--host", host])
@@ -4954,7 +4965,7 @@ def test_site_link_without_a_session_asks_to_log_in(stub_server, host, isolated_
     code = cli.main(["site", "link", "team/docs", "o/r", "--host", host])
 
     assert code == 2
-    assert "plak login" in capsys.readouterr().err
+    assert "toon login" in capsys.readouterr().err
     assert stub_server.requests == []
 
 
@@ -5007,7 +5018,7 @@ _RATE_LIMITED = {
         "unusable",
     ],
 )
-def test_site_link_says_why_gh_gave_no_ids_when_plak_cannot_find_the_repository(
+def test_site_link_says_why_gh_gave_no_ids_when_toon_cannot_find_the_repository(
     stub_server, host, token_env, fake_run, capsys, gh, hint
 ):
     fake_run.outcomes["gh"] = gh
@@ -5022,7 +5033,7 @@ def test_site_link_says_why_gh_gave_no_ids_when_plak_cannot_find_the_repository(
     ]
 
 
-def test_site_link_with_no_gh_says_to_drop_it_when_plak_cannot_find_the_repository(
+def test_site_link_with_no_gh_says_to_drop_it_when_toon_cannot_find_the_repository(
     stub_server, host, token_env, fake_run, capsys
 ):
     stub_server.responder = _json_responder(422, _NOT_FOUND)
@@ -5037,7 +5048,7 @@ def test_site_link_with_no_gh_says_to_drop_it_when_plak_cannot_find_the_reposito
     ]
 
 
-def test_site_link_points_a_forgejo_repository_plak_cannot_find_at_the_ids_not_at_gh(
+def test_site_link_points_a_forgejo_repository_toon_cannot_find_at_the_ids_not_at_gh(
     stub_server, host, token_env, fake_run, capsys
 ):
     stub_server.responder = _json_responder(422, _NOT_FOUND)
@@ -5048,7 +5059,7 @@ def test_site_link_points_a_forgejo_repository_plak_cannot_find_at_the_ids_not_a
     assert fake_run.calls == []
     assert capsys.readouterr().err.splitlines() == [
         "Error: Repository o/r not found on code.overheid.nl, or not public.",
-        "To link it without Plak's lookup, pass --repository-id and --owner-id.",
+        "To link it without Toon's lookup, pass --repository-id and --owner-id.",
     ]
 
 
@@ -5453,3 +5464,596 @@ def test_a_single_file_is_streamed_from_disk_and_closed_also_when_the_server_is_
     assert cli.main(["publish", str(page), "--host", host, "--site", "team-aurora/website"]) == 1
 
     assert opened[0].closed
+
+
+# --- the TOON_ variables and their old PLAK_ names ---------------------------------
+
+
+def test_the_host_variable_reads_toon_first_then_plak(monkeypatch):
+    monkeypatch.setenv("PLAK_HOST", "https://oud.example")
+    assert _resolved_host() == "https://oud.example"
+
+    monkeypatch.setenv("TOON_HOST", "https://nieuw.example")
+    assert _resolved_host() == "https://nieuw.example"
+
+
+@pytest.mark.parametrize(("toon", "plak"), [("", "https://oud.example"), (None, "")], ids=["empty-toon", "empty-plak"])
+def test_an_empty_host_variable_names_no_host_and_hides_the_old_name(monkeypatch, toon, plak):
+    """Present includes empty, as on the server: an empty TOON_HOST is the
+    variable that counts, so the old name is not read at all."""
+    if toon is not None:
+        monkeypatch.setenv("TOON_HOST", toon)
+    monkeypatch.setenv("PLAK_HOST", plak)
+    assert _resolved_host() == TEST_DEFAULT_HOST
+
+    _store_session("https://laatst.example")
+    assert _resolved_host() == "https://laatst.example"
+
+
+_TOKEN_COMMANDS = {
+    "whoami": (["whoami"], _json_responder(200, {"member": {"email": "iemand@example.nl"}})),
+    "group-create": (["group", "create", "team", "--name", "Team"], _json_responder(201, _group_answer())),
+    "logout": (["logout"], _empty_responder(204)),
+}
+
+
+@pytest.mark.parametrize("command", _TOKEN_COMMANDS)
+@pytest.mark.parametrize(
+    ("toon", "plak", "sent"),
+    [("nieuw", "oud", "Bearer nieuw"), ("nieuw", None, "Bearer nieuw"), (None, "oud", "Bearer oud")],
+)
+def test_the_access_token_reads_toon_first_then_plak(
+    stub_server, host, isolated_cwd, monkeypatch, command, toon, plak, sent
+):
+    argv, stub_server.responder = _TOKEN_COMMANDS[command]
+    if toon is not None:
+        monkeypatch.setenv("TOON_ACCESS_TOKEN", toon)
+    if plak is not None:
+        monkeypatch.setenv("PLAK_ACCESS_TOKEN", plak)
+
+    assert cli.main([*argv, "--host", host]) == 0
+
+    [request] = stub_server.requests
+    assert request["headers"]["Authorization"] == sent
+
+
+@pytest.mark.parametrize("command", _TOKEN_COMMANDS)
+@pytest.mark.parametrize(("toon", "plak"), [("", "oud"), (None, "")], ids=["empty-toon", "empty-plak"])
+def test_an_empty_access_token_leaves_the_session_and_hides_the_old_name(
+    stub_server, host, isolated_cwd, monkeypatch, command, toon, plak
+):
+    argv, stub_server.responder = _TOKEN_COMMANDS[command]
+    if toon is not None:
+        monkeypatch.setenv("TOON_ACCESS_TOKEN", toon)
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", plak)
+    _store_session(host, access="uit-de-sessie")
+
+    assert cli.main([*argv, "--host", host]) == 0
+
+    [request] = stub_server.requests
+    assert request["headers"]["Authorization"] == "Bearer uit-de-sessie"
+
+
+@pytest.mark.parametrize(("command", "code"), [("whoami", 2), ("group-create", 2), ("logout", 0)])
+def test_an_empty_toon_access_token_without_a_session_sends_nothing(
+    stub_server, host, isolated_cwd, monkeypatch, command, code
+):
+    """The old token is not the way out of an empty new one."""
+    argv, _ = _TOKEN_COMMANDS[command]
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "")
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+
+    assert cli.main([*argv, "--host", host]) == code
+
+    assert stub_server.requests == []
+
+
+def test_the_old_access_token_takes_priority_over_oidc_like_the_new_one(
+    stub_server, host, dist_folder, ci_runner, monkeypatch
+):
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+
+    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
+
+    [deploy] = stub_server.requests
+    assert deploy["headers"]["Authorization"] == "Bearer oud"
+
+
+def test_an_empty_toon_access_token_leaves_ci_to_the_id_token(stub_server, host, dist_folder, ci_runner, monkeypatch):
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "")
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+
+    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
+
+    assert _deploy_requests(stub_server)[0]["headers"]["Authorization"] == "Bearer oidc-jwt-token"
+
+
+@pytest.mark.parametrize(
+    ("toon", "plak", "bound"),
+    [
+        (SITE_ID, "11111111-2222-3333-4444-555555555555", True),
+        (SITE_ID, "geen-uuid", True),
+        (None, SITE_ID, True),
+        (None, SITE_ID.upper(), True),
+        ("", SITE_ID, False),
+        ("", "geen-uuid", False),
+        (None, "", False),
+    ],
+)
+def test_the_site_id_reads_toon_first_then_plak(
+    stub_server, host, dist_folder, ci_runner, monkeypatch, capsys, toon, plak, bound
+):
+    if toon is not None:
+        monkeypatch.setenv("TOON_SITE_ID", toon)
+    monkeypatch.setenv("PLAK_SITE_ID", plak)
+
+    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
+
+    [oidc] = _oidc_requests(stub_server)
+    assert _audience(oidc) == (f"{host}/-/sites/{SITE_ID}" if bound else host)
+    assert "Warning" not in capsys.readouterr().err
+
+
+def test_an_invalid_site_id_is_named_under_the_old_variable_it_came_from(
+    stub_server, host, dist_folder, ci_runner, monkeypatch, capsys
+):
+    monkeypatch.setenv("PLAK_SITE_ID", "team-aurora/website")
+
+    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 2
+
+    assert stub_server.requests == []
+    assert "Error: PLAK_SITE_ID must be a site id" in capsys.readouterr().err
+
+
+def test_an_old_site_id_beside_an_old_token_is_ignored_with_the_warning(
+    stub_server, host, dist_folder, isolated_cwd, monkeypatch, capsys
+):
+    monkeypatch.setenv("PLAK_SITE_ID", SITE_ID)
+    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+
+    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
+
+    assert capsys.readouterr().err.count(SITE_ID_IGNORED) == 1
+
+
+def test_the_config_dir_reads_toon_first_then_plak(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "nieuw"))
+    monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "oud"))
+    assert cli._hosts_path() == tmp_path / "nieuw" / "hosts.json"
+
+    monkeypatch.delenv("TOON_CONFIG_DIR")
+    assert cli._hosts_path() == tmp_path / "oud" / "hosts.json"
+
+    monkeypatch.setenv("TOON_CONFIG_DIR", "")
+    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
+
+    monkeypatch.delenv("TOON_CONFIG_DIR")
+    monkeypatch.setenv("PLAK_CONFIG_DIR", "")
+    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
+
+
+def test_a_session_in_the_old_config_dir_is_not_carried_over(stub_server, host, tmp_path, monkeypatch, capsys):
+    """Everyone logs in once: without a variable naming it, the old directory
+    is not read, for the session and for the default host."""
+    monkeypatch.delenv("TOON_CONFIG_DIR")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    old = tmp_path / "xdg" / "plak"
+    old.mkdir(parents=True, mode=0o700)
+    (old / "hosts.json").write_text(
+        json.dumps({"default_host": host, "hosts": {host: {"storage": "file", "access_token": "oud"}}})
+    )
+    (old / "hosts.json").chmod(0o600)
+
+    assert _resolved_host() == TEST_DEFAULT_HOST
+    assert cli.main(["whoami", "--host", host]) == 2
+
+    assert "toon login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+def test_the_keyring_item_under_the_old_name_is_not_read(stub_server, host, memory_keyring, capsys):
+    _store_session(host)
+    memory_keyring.secrets[(f"plak:{host}", "session")] = memory_keyring.secrets.pop((f"toon:{host}", "session"))
+
+    assert cli.main(["whoami", "--host", host]) == 2
+
+    assert "toon login" in capsys.readouterr().err
+    assert stub_server.requests == []
+
+
+# --- the old hosts of the DigiGilde instance ---------------------------------------
+
+
+OLD_ADMIN_HOST = "https://beheer.plak.rijks.app"
+NEW_ADMIN_HOST = "https://beheer.toon.rijks.app"
+OLD_CONTENT_HOST = "https://plak.rijks.app"
+NEW_CONTENT_HOST = "https://toon.rijks.app"
+
+_HOST_SOURCES = ["--host", "TOON_HOST", "PLAK_HOST", "stored"]
+
+
+def _name_host(source: str, value: str, monkeypatch) -> list[str]:
+    """Names the host through `source`, and returns what that adds to the
+    command line."""
+    if source == "--host":
+        return ["--host", value]
+    if source == "stored":
+        cli._write_hosts(cli._read_hosts() | {"default_host": value})
+    else:
+        monkeypatch.setenv(source, value)
+    return []
+
+
+@pytest.mark.parametrize("source", _HOST_SOURCES)
+@pytest.mark.parametrize(
+    ("given", "new"),
+    [
+        (OLD_ADMIN_HOST, NEW_ADMIN_HOST),
+        (OLD_CONTENT_HOST, NEW_CONTENT_HOST),
+        (f"{OLD_ADMIN_HOST}/", NEW_ADMIN_HOST),
+        (f"{OLD_ADMIN_HOST}///", NEW_ADMIN_HOST),
+        (f"{OLD_CONTENT_HOST}/", NEW_CONTENT_HOST),
+        # DNS and RFC 3986 have no case here: this is the same host.
+        ("https://Beheer.Plak.Rijks.App", NEW_ADMIN_HOST),
+        (OLD_ADMIN_HOST.upper(), NEW_ADMIN_HOST),
+        (f"{OLD_CONTENT_HOST.upper()}/", NEW_CONTENT_HOST),
+    ],
+)
+def test_an_old_host_is_translated_with_one_warning_from_every_source(source, given, new, monkeypatch, capsys):
+    argv = _name_host(source, given, monkeypatch)
+    args = argparse.Namespace(host=argv[1]) if argv else argparse.Namespace()
+
+    assert cli._resolve_host(args) == new
+
+    assert capsys.readouterr().err == (
+        f"Warning: {given.rstrip('/')} has moved to {new}. Using the new host. Update --host, "
+        "host: in the workflow or TOON_HOST, or log in again if it came from your last login.\n"
+    )
+
+
+_LOOK_ALIKES = [
+    f"{OLD_ADMIN_HOST}:8443",
+    f"{OLD_ADMIN_HOST}:443",
+    f"{OLD_ADMIN_HOST}.",
+    f"{OLD_CONTENT_HOST}.",
+    f"{OLD_ADMIN_HOST}.evil.example",
+    f"{OLD_CONTENT_HOST}.evil.example",
+    f"{OLD_ADMIN_HOST}/-/api",
+    f"{OLD_ADMIN_HOST}/?x=1",
+    f"{OLD_ADMIN_HOST}?x=1",
+    f"{OLD_ADMIN_HOST}#x",
+    f"{OLD_ADMIN_HOST} ",
+    f"{OLD_ADMIN_HOST}\n",
+    "https://www.plak.rijks.app",
+    "https://xplak.rijks.app",
+    "https://beheer.plak.rijks.apps",
+    "https://beheer-plak.rijks.app",
+    "https://beheer.plak.rijks.nl",
+    "https://beheer.plak.example.nl",
+    "https://plak.example",
+    f"https://evil.example/{OLD_ADMIN_HOST}",
+    # A Kelvin sign, which str.lower() would turn into a k.
+    "https://beheer.plaK.rijks.app",
+    "https://plaK.rijks.app",
+]
+
+
+@pytest.mark.parametrize("given", _LOOK_ALIKES)
+def test_a_host_that_only_looks_like_an_old_one_stays_as_it_is(given, capsys):
+    assert cli._resolve_host(argparse.Namespace(host=given)) == given
+
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("given", [NEW_ADMIN_HOST, NEW_CONTENT_HOST])
+def test_a_new_host_stays_as_it_is_without_a_warning(given, capsys):
+    assert cli._resolve_host(argparse.Namespace(host=given)) == given
+
+    assert capsys.readouterr().err == ""
+
+
+def test_the_built_in_default_is_the_new_admin_host():
+    # The memory_keyring fixture replaces DEFAULT_HOST; the help text keeps the real one.
+    assert cli.HOST_HELP.endswith(f"then {NEW_ADMIN_HOST}")
+
+
+def test_empty_values_name_no_host_and_translate_nothing(monkeypatch, capsys):
+    monkeypatch.setenv("TOON_HOST", "")
+    monkeypatch.setenv("PLAK_HOST", OLD_ADMIN_HOST)
+    _write_raw_hosts(json.dumps({"default_host": ""}))
+
+    assert cli._resolve_host(argparse.Namespace(host="")) == TEST_DEFAULT_HOST
+
+    assert capsys.readouterr().err == ""
+
+
+def test_an_old_host_further_down_the_order_is_not_used_and_not_warned_about(monkeypatch, capsys):
+    monkeypatch.setenv("PLAK_HOST", OLD_ADMIN_HOST)
+    monkeypatch.setenv("TOON_HOST", NEW_ADMIN_HOST)
+    assert _resolved_host() == NEW_ADMIN_HOST
+
+    monkeypatch.setenv("TOON_HOST", OLD_ADMIN_HOST)
+    assert cli._resolve_host(argparse.Namespace(host="https://ander.example/")) == "https://ander.example"
+
+    assert capsys.readouterr().err == ""
+
+
+def test_on_windows_a_stored_old_host_is_translated_too(windows, capsys):
+    _write_raw_hosts(json.dumps({"default_host": OLD_ADMIN_HOST}), 0o644)
+
+    assert _resolved_host() == NEW_ADMIN_HOST
+
+    assert f"has moved to {NEW_ADMIN_HOST}." in capsys.readouterr().err
+
+
+class _MovedInstance:
+    """The instance on its new host, on a mock transport: these tests go
+    through the real table with the real hosts, and nothing leaves this
+    machine. Every request is recorded."""
+
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
+        self.answers: dict[tuple[str, str], tuple[int, dict | None]] = {
+            ("GET", "/oidc-token"): (200, {"value": "oidc-jwt-token"}),
+            ("GET", "/-/api/v1/cli/whoami"): (200, {"member": {"email": "iemand@example.nl"}}),
+            ("POST", "/-/api/v1/cli/device-authorizations"): (200, self.device_start(NEW_ADMIN_HOST)),
+            ("POST", "/-/api/v1/cli/tokens"): (
+                200,
+                {"accessToken": "access-2", "refreshToken": "refresh-2", "expiresIn": 3600},
+            ),
+            ("DELETE", "/-/api/v1/cli/session"): (204, None),
+            ("POST", "/-/api/v1/sites/team-aurora/website/deploys"): (
+                201,
+                {"versionId": "00000000-0000-0000-0000-000000000000"},
+            ),
+            ("DELETE", "/-/api/v1/sites/team-aurora/website/previews/pr-42"): (204, None),
+        }
+
+    @staticmethod
+    def device_start(host: str) -> dict:
+        return {
+            "deviceCode": "devicecode-1",
+            "userCode": "ABCD-1234",
+            "verificationUri": f"{host}/-/device",
+            "expiresIn": 60,
+            "interval": 0,
+        }
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        status, data = self.answers[(request.method, request.url.path)]
+        return httpx.Response(status) if data is None else httpx.Response(status, json=data)
+
+    def urls(self) -> list[str]:
+        return [str(request.url) for request in self.requests]
+
+
+@pytest.fixture
+def moved_instance(monkeypatch) -> _MovedInstance:
+    instance = _MovedInstance()
+    monkeypatch.setattr(cli, "_client", httpx.Client(transport=httpx.MockTransport(instance)))
+    return instance
+
+
+@pytest.mark.parametrize(
+    "command",
+    [["publish", "DIST", "--site", "team-aurora/website"], ["preview-remove", "pr-42", "--site", "team-aurora/website"]],
+    ids=["publish", "preview-remove"],
+)
+@pytest.mark.parametrize("source", _HOST_SOURCES)
+@pytest.mark.parametrize("site_id", [None, SITE_ID])
+def test_the_ci_audience_is_built_from_the_new_host(
+    moved_instance, dist_folder, isolated_cwd, monkeypatch, capsys, command, source, site_id
+):
+    """A workflow that only changed its `uses:` line: the server takes only an
+    audience that names its own host, so an audience with the old one would be
+    refused."""
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_URL", "https://runner.invalid/oidc-token")
+    monkeypatch.setenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "runner-bearer")
+    argv = [str(dist_folder) if part == "DIST" else part for part in command]
+    argv += _name_host(source, OLD_ADMIN_HOST, monkeypatch)
+    if site_id is not None:
+        argv += ["--site-id", site_id]
+
+    assert cli.main(argv) == 0
+
+    [oidc, call] = moved_instance.requests
+    assert oidc.url.params["audience"] == (NEW_ADMIN_HOST if site_id is None else f"{NEW_ADMIN_HOST}/-/sites/{SITE_ID}")
+    assert call.url.host == "beheer.toon.rijks.app"
+    assert call.headers["Authorization"] == "Bearer oidc-jwt-token"
+    assert capsys.readouterr().err.count(f"has moved to {NEW_ADMIN_HOST}.") == 1
+
+
+@pytest.mark.parametrize(
+    ("inputs", "env"),
+    [
+        ({"host": OLD_ADMIN_HOST}, {}),
+        ({"host": f"{OLD_ADMIN_HOST}/"}, {}),
+        ({}, {"TOON_HOST": OLD_ADMIN_HOST}),
+        ({}, {"PLAK_HOST": OLD_ADMIN_HOST}),
+    ],
+    ids=["input", "input-with-slash", "toon-host", "plak-host"],
+)
+def test_action_with_an_old_host_asks_the_id_token_for_the_new_one(
+    stub_server, dist_folder, isolated_cwd, action_env, inputs, env
+):
+    """The real steps and the real CLI. The runner refuses the token here, so
+    the run stops before anything goes to the real host."""
+    stub_server.responder = _sequence_responder({"/oidc-token": [_json_step(403, {})]})
+
+    run = _run_action(
+        {"site": "team-aurora/website", "dist-path": str(dist_folder), **inputs},
+        env={**action_env, **env},
+        cwd=isolated_cwd,
+    )
+
+    assert run.failed_step == "Publish"
+    [oidc] = stub_server.requests
+    assert _audience(oidc) == NEW_ADMIN_HOST
+    assert f"Warning: {OLD_ADMIN_HOST} has moved to {NEW_ADMIN_HOST}." in run.stderr
+
+
+@pytest.mark.parametrize(
+    ("command", "code"),
+    [
+        (["whoami"], 2),
+        (["publish", "DIST", "--site", "team-aurora/website"], 2),
+        (["preview-remove", "pr-42", "--site", "team-aurora/website"], 2),
+        (["group", "create", "team", "--name", "Team"], 2),
+        (["site", "create", "team/docs", "--title", "Docs"], 2),
+        (["logout"], 0),
+    ],
+    ids=["whoami", "publish", "preview-remove", "group-create", "site-create", "logout"],
+)
+@pytest.mark.parametrize("storage", ["file", "keyring"])
+@pytest.mark.parametrize("source", _HOST_SOURCES)
+def test_a_session_stored_under_an_old_host_is_not_sent_to_the_new_one(
+    moved_instance, dist_folder, isolated_cwd, memory_keyring, monkeypatch, capsys, command, code, storage, source
+):
+    """The session was issued for the old host, and the translation does not
+    change that: whatever the old host is named through, the entry under its
+    key is not looked at."""
+    tokens = {"access_token": "oude-access", "refresh_token": "oude-refresh"}
+    entry: dict[str, Any] = {"access_expires_at": 9999999999.0, "storage": storage}
+    if storage == "file":
+        entry |= tokens
+    else:
+        memory_keyring.secrets[(f"toon:{OLD_ADMIN_HOST}", "session")] = json.dumps(tokens)
+    _write_raw_hosts(json.dumps({"hosts": {OLD_ADMIN_HOST: entry}}))
+    argv = [str(dist_folder) if part == "DIST" else part for part in command]
+
+    assert cli.main([*argv, *_name_host(source, OLD_ADMIN_HOST, monkeypatch)]) == code
+
+    assert moved_instance.requests == []
+    output = capsys.readouterr()
+    assert "oude-access" not in output.out + output.err
+    if code == 2:
+        assert "toon login" in output.err
+
+
+def test_a_session_of_the_new_host_goes_to_the_new_host_when_an_old_one_is_named(moved_instance, capsys):
+    _store_session(NEW_ADMIN_HOST)
+
+    assert cli.main(["whoami", "--host", f"{OLD_ADMIN_HOST}/"]) == 0
+
+    [request] = moved_instance.requests
+    assert str(request.url) == f"{NEW_ADMIN_HOST}/-/api/v1/cli/whoami"
+    assert request.headers["Authorization"] == "Bearer access-1"
+    assert f"on {NEW_ADMIN_HOST}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("stored_for", "named"),
+    [(NEW_ADMIN_HOST, OLD_CONTENT_HOST), (NEW_CONTENT_HOST, OLD_ADMIN_HOST)],
+    ids=["content-for-admin", "admin-for-content"],
+)
+def test_each_old_host_becomes_only_its_own_new_one(moved_instance, isolated_cwd, capsys, stored_for, named):
+    """The session of one new host never goes to the other, whichever old
+    host is named."""
+    _store_session(stored_for)
+
+    assert cli.main(["whoami", "--host", named]) == 2
+
+    assert moved_instance.requests == []
+    assert "toon login" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("given", _LOOK_ALIKES)
+def test_a_look_alike_never_gets_the_session_of_the_new_host(moved_instance, isolated_cwd, capsys, given):
+    _store_session(NEW_ADMIN_HOST)
+
+    assert cli.main(["whoami", "--host", given]) == 2
+
+    assert moved_instance.requests == []
+    assert "toon login" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        OLD_ADMIN_HOST.replace("https://", "http://"),
+        OLD_ADMIN_HOST.replace("https://", "http://").upper(),
+        OLD_CONTENT_HOST.replace("https://", "http://"),
+        OLD_ADMIN_HOST.replace("https://", "ftp://"),
+        OLD_ADMIN_HOST.removeprefix("https://"),
+        OLD_CONTENT_HOST.removeprefix("https://"),
+        OLD_ADMIN_HOST.removeprefix("https:"),
+        f" {OLD_ADMIN_HOST}",
+        "https://user@beheer.plak.rijks.app",
+        "https://user:token@plak.rijks.app",
+        "https://beheer.plak.rijks.app@evil.example",
+        "/",
+        " ",
+    ],
+)
+def test_an_old_host_in_a_form_that_is_refused_stays_refused(moved_instance, isolated_cwd, capsys, given):
+    """The translation is no way around the https check: plain http does not
+    become https, and credentials do not get dropped."""
+    _store_session(NEW_ADMIN_HOST)
+
+    assert cli.main(["whoami", "--host", given]) == 2
+
+    assert moved_instance.requests == []
+    assert "has moved" not in capsys.readouterr().err
+
+
+def test_a_login_at_an_old_stored_host_is_a_login_at_the_new_one(moved_instance, isolated_cwd, memory_keyring, capsys):
+    """And the login replaces the stored default, as the warning promises."""
+    _write_raw_hosts(json.dumps({"default_host": OLD_ADMIN_HOST}))
+
+    assert cli.main(["login", "--no-open"]) == 0
+
+    assert capsys.readouterr().err.count(f"has moved to {NEW_ADMIN_HOST}.") == 1
+    assert moved_instance.urls() == [
+        f"{NEW_ADMIN_HOST}/-/api/v1/cli/device-authorizations",
+        f"{NEW_ADMIN_HOST}/-/api/v1/cli/tokens",
+    ]
+    assert set(memory_keyring.secrets) == {(f"toon:{NEW_ADMIN_HOST}", "session")}
+    config = cli._read_hosts()
+    assert config["default_host"] == NEW_ADMIN_HOST
+    assert set(config["hosts"]) == {NEW_ADMIN_HOST}
+
+    assert cli.main(["whoami"]) == 0
+
+    assert "has moved" not in capsys.readouterr().err
+    assert moved_instance.requests[-1].headers["Authorization"] == "Bearer access-2"
+
+
+def test_a_login_refuses_a_verification_url_on_the_old_host(moved_instance, isolated_cwd, memory_keyring, capsys):
+    """The same-origin check runs against the host the CLI really talks to."""
+    moved_instance.answers[("POST", "/-/api/v1/cli/device-authorizations")] = (
+        200,
+        moved_instance.device_start(OLD_ADMIN_HOST),
+    )
+
+    assert cli.main(["login", "--host", OLD_ADMIN_HOST, "--no-open"]) == 1
+
+    assert f"does not belong to {NEW_ADMIN_HOST}" in capsys.readouterr().err
+    assert moved_instance.urls() == [f"{NEW_ADMIN_HOST}/-/api/v1/cli/device-authorizations"]
+    assert memory_keyring.secrets == {}
+
+
+def test_a_refresh_at_an_old_host_stays_on_the_new_one(moved_instance, memory_keyring):
+    _store_session(NEW_ADMIN_HOST, expires_at=1.0)
+
+    assert cli.main(["whoami", "--host", OLD_ADMIN_HOST]) == 0
+
+    assert moved_instance.urls() == [f"{NEW_ADMIN_HOST}/-/api/v1/cli/tokens", f"{NEW_ADMIN_HOST}/-/api/v1/cli/whoami"]
+    assert moved_instance.requests[0].headers.get("Authorization") is None
+    assert json.loads(moved_instance.requests[0].content)["refreshToken"] == "refresh-1"
+    assert moved_instance.requests[1].headers["Authorization"] == "Bearer access-2"
+    assert set(memory_keyring.secrets) == {(f"toon:{NEW_ADMIN_HOST}", "session")}
+    assert set(cli._read_hosts()["hosts"]) == {NEW_ADMIN_HOST}
+
+
+def test_a_logout_at_an_old_host_ends_the_session_of_the_new_one(moved_instance, memory_keyring):
+    _store_session(NEW_ADMIN_HOST)
+
+    assert cli.main(["logout", "--host", OLD_ADMIN_HOST]) == 0
+
+    [request] = moved_instance.requests
+    assert str(request.url) == f"{NEW_ADMIN_HOST}/-/api/v1/cli/session"
+    assert request.headers["Authorization"] == "Bearer access-1"
+    assert memory_keyring.secrets == {}
+    assert NEW_ADMIN_HOST not in cli._read_hosts()["hosts"]

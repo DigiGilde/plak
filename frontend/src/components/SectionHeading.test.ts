@@ -25,11 +25,11 @@ describe('SectionHeading', () => {
   it('takes an intro that is more than a string through its slot', () => {
     const wrapper = mount(SectionHeading, {
       props: { text: 'Sessies', level: 1, size: 1 },
-      slots: { intro: 'Via <code>plak login</code>' },
+      slots: { intro: 'Via <code>toon login</code>' },
     });
 
     expect(wrapper.find('h1').exists()).toBe(true);
     expect(wrapper.find('nldd-title').attributes('size')).toBe('1');
-    expect(wrapper.find('span[slot="supporting-text"] code').text()).toBe('plak login');
+    expect(wrapper.find('span[slot="supporting-text"] code').text()).toBe('toon login');
   });
 });

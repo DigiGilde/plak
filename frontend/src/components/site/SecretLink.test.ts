@@ -5,7 +5,7 @@ import { expectNoAxeViolations } from '../../../tests/a11y';
 
 import SecretLink from './SecretLink.vue';
 
-const SITE = 'https://sites.plak.test/team-aurora/website/';
+const SITE = 'https://sites.toon.test/team-aurora/website/';
 const VALUE = 'AbCdEfGh.geheimeverifier';
 
 function makeWrapper() {

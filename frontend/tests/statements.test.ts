@@ -1,5 +1,5 @@
 /**
- * The privacy and accessibility statements are legal texts, and Plak is
+ * The privacy and accessibility statements are legal texts, and Toon is
  * installed by more than one organisation. What matters: every authority is
  * there as a working link, in both languages; the operator's address comes
  * from `GET /operator`, never from the code; and without an operator, or
@@ -63,8 +63,8 @@ describe('privacy statement', () => {
     expect(hrefs(wrapper)).toEqual(['https://www.autoriteitpersoonsgegevens.nl']);
     const unnamed =
       locale === 'nl'
-        ? 'De organisatie die deze installatie van Plak beheert'
-        : 'The organisation that runs this installation of Plak';
+        ? 'De organisatie die deze installatie van Toon beheert'
+        : 'The organisation that runs this installation of Toon';
     expect(wrapper.text()).toContain(unnamed);
     wrapper.unmount();
   });
@@ -73,13 +73,13 @@ describe('privacy statement', () => {
     serve({ name: null, email: 'privacy@voorbeeld.nl' });
     const address = await render(Privacy, 'en');
     expect(hrefs(address)).toContain('mailto:privacy@voorbeeld.nl');
-    expect(address.text()).toContain('The organisation that runs this installation of Plak');
+    expect(address.text()).toContain('The organisation that runs this installation of Toon');
     address.unmount();
 
     serve({ name: 'Gemeente Voorbeeld', email: null });
     const name = await render(Privacy, 'en');
     expect(hrefs(name)).not.toContain('mailto:privacy@voorbeeld.nl');
-    expect(name.text()).toContain('This installation of Plak is run by Gemeente Voorbeeld.');
+    expect(name.text()).toContain('This installation of Toon is run by Gemeente Voorbeeld.');
     expect(name.text()).toContain('to the organisation that runs this installation.');
     name.unmount();
   });

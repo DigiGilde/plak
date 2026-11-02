@@ -34,7 +34,7 @@ from toon.serving import response
 
 # The SPA middleware steps aside on the content host, so it has to know
 # which host that is; the value only has to differ from the base_url below.
-CONTENT_HOST = "plak.localhost"
+CONTENT_HOST = "toon.localhost"
 
 # Added by FileResponse/the server, not part of the contract.
 EXTRA = {"content-length", "last-modified", "accept-ranges"}
@@ -153,7 +153,7 @@ class TestSpaHeaderset:
         (dist / "assets" / "index-abc123.js").write_text("export {}", encoding="utf-8")
         return TestClient(
             spa.SpaMiddleware(_inner, spa_path=dist, content_host=CONTENT_HOST),
-            base_url="http://beheer.plak.localhost",
+            base_url="http://beheer.toon.localhost",
         )
 
     def test_header_builder_per_kind(self) -> None:

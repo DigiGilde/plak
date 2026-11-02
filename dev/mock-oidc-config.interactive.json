@@ -12,7 +12,7 @@
           "claims": {
             "sub": "${subject}",
             "acr": "http://eidas.europa.eu/LoA/substantial",
-            "email": "${subject}@plak.local",
+            "email": "${subject}@toon.local",
             "email_verified": true
           }
         }

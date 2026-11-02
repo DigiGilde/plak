@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The member's own account page: who Plak thinks you are, and the one setting
+ * The member's own account page: who Toon thinks you are, and the one setting
  * that is yours alone, the interface language.
  *
  * Route: /-/profile. The linked sessions keep a page of their own

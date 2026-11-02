@@ -17,7 +17,7 @@ router too (bearer CI sends no Origin/Sec-Fetch-Site and passes it
 unhindered).
 
 Three routes here do take a bearer as well: creating a group, creating a
-site and linking a repository accept the CLI token from `plak login`
+site and linking a repository accept the CLI token from `toon login`
 (`require_creator`), with the same role checks as the session. A bearer
 request carries no ambient credentials, so it skips the CSRF check; the
 origin guard stays on it, as on the deploy router. Every other route in this router is session only, which
@@ -808,7 +808,7 @@ class MyProfile(MemberOut):
             "and secret links on it. Always a different host than the admin interface: content and admin "
             "never share an origin."
         ),
-        examples=["https://sites.plak.example"],
+        examples=["https://sites.toon.example"],
     )
     group_roles: list[MyGroupRole] = Field(
         default_factory=list,
@@ -828,7 +828,7 @@ class MyProfile(MemberOut):
     ci_forgejo_hosts: list[str] = Field(
         default_factory=list,
         description=(
-            "The Forgejo instances whose CI ID tokens Plak accepts (`TOON_CI_FORGEJO_HOSTS`), as "
+            "The Forgejo instances whose CI ID tokens Toon accepts (`TOON_CI_FORGEJO_HOSTS`), as "
             "base URL. GitHub is always accepted and is not listed here."
         ),
         examples=[["https://code.overheid.nl"]],
@@ -837,9 +837,9 @@ class MyProfile(MemberOut):
         default="",
         description=(
             "The audience a CI workflow must request for its ID token: exactly `TOON_BASE_URL`. That "
-            "is also the value for the `host` input of the plak action."
+            "is also the value for the `host` input of the Toon action."
         ),
-        examples=["https://beheer.plak.example"],
+        examples=["https://beheer.toon.example"],
     )
     language: MemberLanguage | None = Field(
         default=None,
@@ -1116,7 +1116,7 @@ class KeyCreated(ApiModel):
     key: KeyOut = Field(description="The created key.")
     value: str = Field(
         description=(
-            "The full key value `<selector>.<secret>` for use in the link. Plak only stores a hash, "
+            "The full key value `<selector>.<secret>` for use in the link. Toon only stores a hash, "
             "so this value cannot be retrieved anywhere afterwards."
         ),
         examples=["a1b2c3d4.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
@@ -1302,7 +1302,7 @@ class SiteRepositoryBody(ApiModel):
     repository_id: int | None = Field(
         default=None,
         description=(
-            "Numeric ID of the repository, only needed if Plak cannot look it up because it is private. "
+            "Numeric ID of the repository, only needed if Toon cannot look it up because it is private. "
             "Together with `ownerId`, or omit both. Can be retrieved with "
             "`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`."
         ),
@@ -1367,7 +1367,7 @@ class SiteRepositoryOut(ApiModel):
 
 
 class UserCodeBody(ApiModel):
-    """The code from the terminal of `plak login`."""
+    """The code from the terminal of `toon login`."""
 
     model_config = ConfigDict(json_schema_extra={"examples": [{"userCode": "WDJB-MJHT"}]})
 
@@ -1383,7 +1383,7 @@ class DeviceAuthorizationPendingOut(ApiModel):
 
     user_code: str = Field(description="The user code, normalised.", examples=["WDJB-MJHT"])
     client_name: str | None = Field(
-        default=None, description="How the CLI named itself; `null` if it gave nothing.", examples=["plak-cli 1.2"]
+        default=None, description="How the CLI named itself; `null` if it gave nothing.", examples=["toon-cli 1.2"]
     )
     ip_truncated: str | None = Field(
         default=None,
@@ -1409,11 +1409,11 @@ class DeviceAuthorizationPendingOut(ApiModel):
 
 
 class CliSessionOut(ApiModel):
-    """A linked CLI session: an approved `plak login` of the signed-in member."""
+    """A linked CLI session: an approved `toon login` of the signed-in member."""
 
     id: uuid.UUID = Field(description="ID of the CLI session; you use it to revoke it.")
     client_name: str | None = Field(
-        default=None, description="How the CLI named itself when signing in.", examples=["plak-cli 1.2 on macOS"]
+        default=None, description="How the CLI named itself when signing in.", examples=["toon-cli 1.2 on macOS"]
     )
     created_at: str | None = Field(
         default=None, description="Time of sign-in.", json_schema_extra=_timestamp_schema()
@@ -2987,7 +2987,7 @@ _ERROR_APPROVAL = {
 }
 _ERROR_CLI_TOKEN = {
     401: (
-        "With a Bearer header: it is not a CLI token from `plak login`, or it is invalid, revoked or "
+        "With a Bearer header: it is not a CLI token from `toon login`, or it is invalid, revoked or "
         "expired (`TOKEN_INVALID`); the response then carries `WWW-Authenticate: Bearer`."
     ),
     403: "With a CLI token: the member is not (or no longer) active (`MEMBER_NOT_ACTIVE`).",
@@ -3001,7 +3001,7 @@ _ERROR_CREATIONS = {
 }
 _CREATION_RULE = (
     "Besides the admin session with a valid CSRF header, this is also allowed with a CLI token from "
-    "`plak login` (`Authorization: Bearer plakcli_...`), with exactly the same role check; the CSRF header "
+    "`toon login` (`Authorization: Bearer tooncli_...`), with exactly the same role check; the CSRF header "
     "is then not needed, because a token is not sent along automatically the way a cookie is. A CI ID "
     "token is not allowed. "
     f"Each member has a limit of {CREATION_MAX_PER_WINDOW} new groups, sites and addresses combined per "
@@ -3970,7 +3970,7 @@ def make_admin_router() -> APIRouter:
         description=(
             "Creates a secret link with which the site can be seen without signing in, while the `keys` exception is "
             "on.\n\n"
-            "The response contains `value` once: the full key `<selector>.<secret>`. Plak only stores "
+            "The response contains `value` once: the full key `<selector>.<secret>`. Toon only stores "
             "a hash, so if you lose the value, create a new key.\n\n"
             "**Who can call this:** effective site role `admin`, with a valid CSRF header."
         ),
@@ -4085,17 +4085,17 @@ def make_admin_router() -> APIRouter:
         summary="Link a repository to a site",
         response_description="The linked repository, with the IDs the provider returned.",
         description=(
-            "Links a GitHub or Forgejo repository to this site, or replaces the link. Plak looks the "
+            "Links a GitHub or Forgejo repository to this site, or replaces the link. Toon looks the "
             "repository up at the provider (`GET /repos/{owner}/{repo}`) and stores its numeric IDs: "
             "these stay the same when the repository is renamed, and a new repository under the same name "
             "does not get them. A CI ID token from this repository may publish afterwards: a preview (and "
             "its cleanup) from any branch, live only from `push`, `workflow_dispatch` or `schedule` and, if "
             "one is set, only from `liveBranch`.\n\n"
-            "Plak does the lookup without credentials, so it cannot see a private repository. In that case pass "
+            "Toon does the lookup without credentials, so it cannot see a private repository. In that case pass "
             "`repositoryId` and `ownerId` yourself (`gh api repos/{owner}/{repo} --jq '.id, .owner.id'`): If the "
-            "lookup fails, Plak stores them as given. A wrong ID does not link anything else, it only causes "
-            "every deploy to be refused. If Plak does find the repository, the IDs must match.\n\n"
-            "Also allowed with the CLI token from `plak login` (`plak site link`), then without a CSRF header. "
+            "lookup fails, Toon stores them as given. A wrong ID does not link anything else, it only causes "
+            "every deploy to be refused. If Toon does find the repository, the IDs must match.\n\n"
+            "Also allowed with the CLI token from `toon login` (`toon site link`), then without a CSRF header. "
             "A CI ID token links nothing.\n\n"
             "**Who can call this:** effective site role `admin`, with a valid CSRF header or the CLI token."
         ),
@@ -4344,7 +4344,7 @@ def make_admin_router() -> APIRouter:
         description=(
             "Approves the CLI login behind this user code for the signed-in member. The CLI then fetches "
             "its tokens itself and from now on acts as this member, with exactly their roles. Only do this if "
-            "you just started `plak login` yourself.\n\n" + _APPROVAL_RULE
+            "you just started `toon login` yourself.\n\n" + _APPROVAL_RULE
         ),
         responses=_deleted("Approved.") | _errors(_ERROR_CSRF, _ERROR_APPROVAL),
     )
@@ -4395,7 +4395,7 @@ def make_admin_router() -> APIRouter:
         summary="My linked CLI sessions",
         response_description="The CLI sessions of the signed-in member, newest first.",
         description=(
-            "Every `plak login` that is still active, newest first. Expired sessions are no longer listed.\n\n"
+            "Every `toon login` that is still active, newest first. Expired sessions are no longer listed.\n\n"
             "**Who can call this:** any active member, for their own sessions."
         ),
         responses=_errors(),
@@ -4418,7 +4418,7 @@ def make_admin_router() -> APIRouter:
         tags=[TAG_CLI],
         summary="Revoke a linked CLI session",
         description=(
-            "Revokes a CLI session; whoever used it has to run `plak login` again afterwards.\n\n"
+            "Revokes a CLI session; whoever used it has to run `toon login` again afterwards.\n\n"
             "**Who can call this:** any active member, for their own sessions, with a valid CSRF header."
         ),
         responses=_deleted("The CLI session has been revoked.")
@@ -4466,7 +4466,7 @@ def make_admin_router() -> APIRouter:
             "deactivated. The answer is a shortlist of at most ten names, not a dump of the "
             "whole organisation; someone who is already in the group is included, with `alreadyMember` set "
             "to `true`.\n\n"
-            "Only those who may add members may search, and Plak does not create an account here "
+            "Only those who may add members may search, and Toon does not create an account here "
             "either: someone only appears once they have signed in to the admin interface themselves.\n\n"
             "**Who can call this:** group role `admin`, or a platform administrator."
         ),
@@ -4489,7 +4489,7 @@ def make_admin_router() -> APIRouter:
         response_description="The added group member.",
         description=(
             "Adds an existing platform member to this group, looked up by e-mail address or SSO subject. The "
-            "member must already have signed in to the admin interface once themselves; Plak does not "
+            "member must already have signed in to the admin interface once themselves; Toon does not "
             "create an account here.\n\n"
             "Without `role` the member becomes `reader`: new members start with read-only access, and you "
             "give the role they need deliberately.\n\n"
@@ -4763,8 +4763,8 @@ def make_admin_router() -> APIRouter:
         description=(
             "Sets the status of a member to `deactivated`. Every subsequent API request from that member gets "
             "403, even with a session that is still valid. Group memberships remain, so activating brings "
-            "the member back as they were. All CLI sessions (`plak login`) of the member are revoked, "
-            "though: after reactivation they have to run `plak login` again.\n\n"
+            "the member back as they were. All CLI sessions (`toon login`) of the member are revoked, "
+            "though: after reactivation they have to run `toon login` again.\n\n"
             "**Who can call this:** only a platform administrator, with a valid CSRF header."
         ),
         responses=_errors(_ERROR_CSRF, _ERROR_ADMIN, {404: "Unknown member (`UNKNOWN_MEMBER`)."}),
@@ -5190,7 +5190,7 @@ def make_admin_router() -> APIRouter:
             "You can simply pick group members here: a site role widens what they may already do "
             "through the group. What that is appears in `groupRole`, so you can see whether a site role "
             "adds anything.\n\n"
-            "Only those who may add members may search, and Plak does not create an account here "
+            "Only those who may add members may search, and Toon does not create an account here "
             "either: someone only appears once they have signed in to the admin interface themselves.\n\n"
             "**Who can call this:** effective site role `admin`."
         ),

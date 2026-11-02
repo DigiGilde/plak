@@ -1,4 +1,4 @@
-# Manifest checks for the `plak` Claude Code plugin in `plugin/`.
+# Manifest checks for the `toon` Claude Code plugin in `plugin/`.
 #
 # `claude plugin validate` reads the two manifests and costs nothing: no
 # model is called. The version in plugin.json is not checked here: a

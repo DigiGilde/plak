@@ -41,7 +41,7 @@ import type {
 
 /** Content of the mock's `/me`, matching a real CI setup for local dev. */
 const MOCK_CI_FORGEJO_HOSTS = ['https://code.overheid.nl'];
-const MOCK_CI_AUDIENCE = 'https://plak.test';
+const MOCK_CI_AUDIENCE = 'https://toon.test';
 
 /** Id of the demo site that `defaultData()` seeds. */
 const MOCK_SITE_ID = '3f2b8a1e-5d4c-4e9a-9b6f-7c1d2e3a4b5c';
@@ -234,10 +234,10 @@ function slugInvalid(slug: string): Response {
 
 /**
  * Content origin the mock hands out in `/me`. Deliberately a different host
- * from the tests' admin origin (https://plak.test), so that a link built on
+ * from the tests' admin origin (https://toon.test), so that a link built on
  * `window.location.origin` by accident stands out in the tests.
  */
-export const MOCK_CONTENT_BASE = 'https://sites.plak.test';
+export const MOCK_CONTENT_BASE = 'https://sites.toon.test';
 
 /**
  * A group member as `group_members` holds it: the site roles on the wire row
@@ -590,7 +590,7 @@ function defaultData(): MockData {
     deviceAuthorizations: [
       {
         userCode: 'ABCD-EFGH',
-        clientName: 'plak-cli',
+        clientName: 'toon-cli',
         ipTruncated: '203.0.113.0/24',
         sameNetwork: true,
         createdAt: lastPublishedAt,
@@ -601,7 +601,7 @@ function defaultData(): MockData {
     cliSessions: [
       {
         id: 'cli-sessie-1',
-        clientName: 'plak-cli',
+        clientName: 'toon-cli',
         createdAt: firstDeploy,
         lastUsedAt: lastPublishedAt,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -833,7 +833,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
   async function mockFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
     const url = new URL(
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url,
-      'https://plak.test',
+      'https://toon.test',
     );
     const method = (init.method ?? 'GET').toUpperCase();
     const path = url.pathname;

@@ -18,14 +18,14 @@ import { nl } from './nl';
 async function localeForBrowser(languages: string[]): Promise<string> {
   vi.resetModules();
   vi.stubGlobal('navigator', { languages, language: languages[0] ?? '' });
-  window.localStorage.removeItem('plak-taal');
+  window.localStorage.removeItem('toon-taal');
   const reloaded = await import('./index');
   return reloaded.currentLocale.value;
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  window.localStorage.removeItem('plak-taal');
+  window.localStorage.removeItem('toon-taal');
   _setLocaleForTest('nl');
 });
 
@@ -104,17 +104,17 @@ describe('Interface language', () => {
   it('remembers the account choice in this browser, so a reload does not flash', async () => {
     vi.resetModules();
     vi.stubGlobal('navigator', { languages: ['nl-NL', 'nl'], language: 'nl-NL' });
-    window.localStorage.setItem('plak-taal', 'en');
+    window.localStorage.setItem('toon-taal', 'en');
     const reloaded = await import('./index');
     expect(reloaded.currentLocale.value).toBe('en');
   });
 
   it('forgets the cache again once the choice goes back to the browser', () => {
     setLocale('en');
-    expect(window.localStorage.getItem('plak-taal')).toBe('en');
+    expect(window.localStorage.getItem('toon-taal')).toBe('en');
 
     setLocale(null);
-    expect(window.localStorage.getItem('plak-taal')).toBeNull();
+    expect(window.localStorage.getItem('toon-taal')).toBeNull();
   });
 
   it('renders without storage at all', async () => {
@@ -149,7 +149,7 @@ describe('Language from the address', () => {
     adoptLanguageParam();
 
     expect(currentLocale.value).toBe('en');
-    expect(window.localStorage.getItem('plak-taal')).toBe('en');
+    expect(window.localStorage.getItem('toon-taal')).toBe('en');
     expect(window.location.pathname + window.location.search + window.location.hash).toBe(
       '/-/about?x=1#top',
     );
