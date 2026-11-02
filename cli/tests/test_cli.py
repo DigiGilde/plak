@@ -1450,6 +1450,30 @@ def test_action_yml_does_not_capture_publish_stdout():
     assert "--output-file" in content
 
 
+def test_action_yml_keeps_the_callers_checkout_off_the_path_of_the_report_step():
+    """The step runs from the caller's checkout, with the token in its environment."""
+    assert 'python -P -m toon_cli.github "${ARGS[@]}"' in ACTION_YML_PATH.read_text()
+
+
+@pytest.mark.parametrize(("flags", "the_workspace_runs"), [(["-m"], True), (["-P", "-m"], False)])
+def test_only_dash_capital_p_stops_a_toon_cli_in_the_workspace(tmp_path, flags, the_workspace_runs):
+    planted = tmp_path / "toon_cli"
+    planted.mkdir()
+    (planted / "__init__.py").write_text("")
+    (planted / "github.py").write_text('print("from the workspace")\n')
+
+    result = subprocess.run(
+        [sys.executable, *flags, "toon_cli.github", "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert ("from the workspace" in result.stdout) is the_workspace_runs
+    assert ("usage: python -m toon_cli.github" in result.stdout) is not the_workspace_runs
+
+
 def test_action_yml_pins_every_nested_action_to_a_commit_sha():
     """A tag can be moved, a commit cannot; the same rule as for the
     workflows in .github/ (scripts/tests/test_workflows.py)."""

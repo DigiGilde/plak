@@ -1,7 +1,7 @@
 """Reports a Toon deploy back to GitHub for the publish action: a deployment
 in an environment, and a comment on the pull request with the link.
 
-Not a `toon` subcommand: actions/publish runs it as `python -m
+Not a `toon` subcommand: actions/publish runs it as `python -P -m
 toon_cli.github`, with the runner's GITHUB_* variables in the environment.
 
 Usage:
@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import sys
+from functools import cached_property
 
 import httpx
 
@@ -48,6 +49,16 @@ class GitHub:
         raise GitHubError(
             f"{method} {url} answered {response.status_code}: {response.text[:500]}", response.status_code
         )
+
+    @cached_property
+    def token_owner(self) -> str | None:
+        """The account behind a personal token. GITHUB_TOKEN and an app token
+        have none: /user refuses them."""
+        try:
+            response = self.client.get("/user")
+        except httpx.HTTPError:
+            return None
+        return response.json()["login"] if response.is_success else None
 
     def pages(self, path: str, params: dict[str, str | int]):
         page = 1
@@ -135,9 +146,16 @@ def create_deployment(
         _deactivate(github, environment, tasks, keep=deployment["id"])
 
 
+def _is_ours(github: GitHub, comment: dict) -> bool:
+    # Anyone who can comment can start a comment with the marker. Only an app
+    # installed on the repository writes as a bot, GITHUB_TOKEN among them.
+    author = comment.get("user") or {}
+    return author.get("type") == "Bot" or ("login" in author and author["login"] == github.token_owner)
+
+
 def _find_comment(github: GitHub, number: int, markers: tuple[str, str]) -> dict | None:
     for comment in github.pages(f"/issues/{number}/comments", {}):
-        if (comment.get("body") or "").startswith(markers):
+        if (comment.get("body") or "").startswith(markers) and _is_ours(github, comment):
             return comment
     return None
 

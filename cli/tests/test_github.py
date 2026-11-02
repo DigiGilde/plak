@@ -16,6 +16,21 @@ MARKER = "<!-- toon-preview team-aurora/website pr-42 -->"
 OLD_MARKER = "<!-- plak-preview team-aurora/website pr-42 -->"
 TASK = "deploy:toon/team-aurora/website/pr-42"
 OLD_TASK = "deploy:plak/team-aurora/website/pr-42"
+BOT = {"login": "github-actions[bot]", "type": "Bot"}
+SOMEONE = {"login": "mallory", "type": "User"}
+TOKEN_OWNER = {"login": "robbert", "type": "User"}
+
+
+def _by_bot(comment_id: int, body: str | None) -> dict:
+    return {"id": comment_id, "body": body, "user": BOT}
+
+
+def _token_without_an_owner(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(403, json={"message": "Resource not accessible by integration"})
+
+
+def _github_unreachable(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("no route to host", request=request)
 
 
 def _deployments(by_task: dict[str, list]):
@@ -53,6 +68,9 @@ class FakeGitHub:
         if isinstance(answer, httpx.Response):
             return answer
         return httpx.Response(201 if request.method == "POST" else 200, json=answer)
+
+    def on_user(self, *answers) -> None:
+        self.answers[("GET", "/user")] = list(answers)
 
     def calls(self, method: str | None = None) -> list[tuple[str, str]]:
         return [
@@ -247,7 +265,7 @@ def test_a_later_deploy_updates_the_comment_instead_of_adding_one(fake, runner_e
     fake.on(
         "GET",
         "/issues/42/comments",
-        [{"id": 5, "body": f"> {MARKER}\n> quoted"}, {"id": 6, "body": f"{MARKER}\nold"}],
+        [_by_bot(5, f"> {MARKER}\n> quoted"), _by_bot(6, f"{MARKER}\nold")],
     )
     fake.on("PATCH", "/issues/comments/6", {})
 
@@ -256,6 +274,7 @@ def test_a_later_deploy_updates_the_comment_instead_of_adding_one(fake, runner_e
     [update] = fake.sent("PATCH", "/issues/comments/6")
     assert PREVIEW_URL in update["body"]
     assert fake.calls("POST") == []
+    assert ("GET", "/user") not in fake.calls()
 
 
 def test_a_comment_outside_a_pull_request_is_skipped_with_a_notice(
@@ -354,7 +373,7 @@ def test_teardown_switches_off_the_deployments_and_marks_the_comment(fake, runne
     fake.on("GET", "/deployments", _deployments({TASK: [{"id": 8}]}))
     fake.on("GET", "/deployments/8/statuses", [{"state": "success"}])
     fake.on("POST", "/deployments/8/statuses", {})
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{MARKER}\nold"}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, f"{MARKER}\nold")])
     fake.on("PATCH", "/issues/comments/6", {})
 
     code = _run(
@@ -438,7 +457,7 @@ def test_an_old_deployment_of_something_else_stays_active(fake, runner_env, othe
 def test_a_comment_under_the_old_marker_is_updated_and_takes_the_new_one(fake, runner_env):
     """A pull request open across the rename keeps its one comment, and from
     then on it carries the new marker."""
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{OLD_MARKER}\n**Preview:** old"}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, f"{OLD_MARKER}\n**Preview:** old")])
     fake.on("PATCH", "/issues/comments/6", {})
 
     assert _publish_preview(fake, "--comment") == 0
@@ -449,7 +468,7 @@ def test_a_comment_under_the_old_marker_is_updated_and_takes_the_new_one(fake, r
 
 
 def test_a_live_comment_under_the_old_marker_is_updated_too(fake, runner_env):
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": "<!-- plak-preview team-aurora/website live -->\nold"}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, "<!-- plak-preview team-aurora/website live -->\nold")])
     fake.on("PATCH", "/issues/comments/6", {})
 
     code = _run(
@@ -465,7 +484,7 @@ def test_a_live_comment_under_the_old_marker_is_updated_too(fake, runner_env):
 
 
 def test_teardown_marks_a_comment_under_the_old_marker_removed(fake, runner_env):
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{OLD_MARKER}\nold"}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, f"{OLD_MARKER}\nold")])
     fake.on("PATCH", "/issues/comments/6", {})
 
     assert _run(fake, "teardown", "--site", SITE, "--preview-ref", "pr-42", "--comment") == 0
@@ -492,7 +511,7 @@ _NOT_OUR_OLD_COMMENTS = [
 def test_a_comment_that_only_resembles_the_old_marker_is_left_alone(fake, runner_env, body):
     """Somebody else's comment, or that of another preview or site: editing
     it would fail on permissions or overwrite the wrong link."""
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": body}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, body)])
     fake.on("POST", "/issues/42/comments", {"id": 7})
 
     assert _publish_preview(fake, "--comment") == 0
@@ -504,7 +523,7 @@ def test_a_comment_that_only_resembles_the_old_marker_is_left_alone(fake, runner
 
 @pytest.mark.parametrize("body", _NOT_OUR_OLD_COMMENTS)
 def test_teardown_leaves_a_comment_that_only_resembles_the_old_marker_alone(fake, runner_env, body):
-    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": body}])
+    fake.on("GET", "/issues/42/comments", [_by_bot(6, body)])
 
     assert _run(fake, "teardown", "--site", SITE, "--preview-ref", "pr-42", "--comment") == 0
 
@@ -515,13 +534,72 @@ def test_with_comments_under_both_markers_the_first_is_updated_and_none_is_added
     fake.on(
         "GET",
         "/issues/42/comments",
-        [{"id": 6, "body": f"{OLD_MARKER}\nold"}, {"id": 7, "body": f"{MARKER}\nnewer"}],
+        [_by_bot(6, f"{OLD_MARKER}\nold"), _by_bot(7, f"{MARKER}\nnewer")],
     )
     fake.on("PATCH", "/issues/comments/6", {})
 
     assert _publish_preview(fake, "--comment") == 0
 
     assert [call for call in fake.calls() if call[0] != "GET"] == [("PATCH", "/issues/comments/6")]
+
+
+# --- whose comment -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("who_is_the_token", [_token_without_an_owner, _github_unreachable])
+def test_a_comment_by_someone_else_with_the_marker_is_left_alone(fake, runner_env, who_is_the_token):
+    """Anyone who can comment can start one with the marker. Updating it would
+    put the link under their name, and no comment of ours would appear."""
+    fake.on_user(who_is_the_token)
+    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{MARKER}\nold", "user": SOMEONE}])
+    fake.on("POST", "/issues/42/comments", {"id": 7})
+
+    assert _publish_preview(fake, "--comment") == 0
+
+    assert fake.calls("PATCH") == []
+    [comment] = fake.sent("POST", "/issues/42/comments")
+    assert comment["body"].startswith(f"{MARKER}\n**Preview:** {PREVIEW_URL}")
+
+
+def test_teardown_leaves_a_comment_by_someone_else_alone(fake, runner_env):
+    fake.on_user(_token_without_an_owner)
+    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{MARKER}\nold", "user": SOMEONE}])
+
+    assert _run(fake, "teardown", "--site", SITE, "--preview-ref", "pr-42", "--comment") == 0
+
+    assert [call for call in fake.calls() if call[0] != "GET"] == []
+
+
+def test_a_comment_by_a_deleted_account_is_left_alone(fake, runner_env):
+    """GitHub answers user: null for it, and a token without an owner must not
+    count as that same nobody."""
+    fake.on_user(_token_without_an_owner)
+    fake.on("GET", "/issues/42/comments", [{"id": 6, "body": f"{MARKER}\nold", "user": None}])
+    fake.on("POST", "/issues/42/comments", {"id": 7})
+
+    assert _publish_preview(fake, "--comment") == 0
+
+    assert fake.calls("PATCH") == []
+    assert len(fake.sent("POST", "/issues/42/comments")) == 1
+
+
+def test_a_personal_token_updates_its_own_comment_and_asks_who_it_is_once(fake, runner_env):
+    fake.on_user(TOKEN_OWNER)
+    fake.on(
+        "GET",
+        "/issues/42/comments",
+        [
+            {"id": 5, "body": f"{MARKER}\nfirst", "user": SOMEONE},
+            {"id": 6, "body": f"{MARKER}\nsecond", "user": SOMEONE},
+            {"id": 7, "body": f"{MARKER}\nold", "user": TOKEN_OWNER},
+        ],
+    )
+    fake.on("PATCH", "/issues/comments/7", {})
+
+    assert _publish_preview(fake, "--comment") == 0
+
+    assert [call for call in fake.calls() if call[0] != "GET"] == [("PATCH", "/issues/comments/7")]
+    assert fake.calls("GET").count(("GET", "/user")) == 1
 
 
 # --- refusals ---------------------------------------------------------------
