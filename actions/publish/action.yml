@@ -325,4 +325,6 @@ runs:
         if [ "$TOON_INPUT_COMMENT" = "true" ]; then
           ARGS+=(--comment)
         fi
-        uv run --locked --project "$TOON_ACTION_PATH/../../cli" python -m toon_cli.github "${ARGS[@]}"
+        # -P: this runs from the caller's checkout, and a toon_cli/ in there
+        # would otherwise run instead of this one, with the token.
+        uv run --locked --project "$TOON_ACTION_PATH/../../cli" python -P -m toon_cli.github "${ARGS[@]}"

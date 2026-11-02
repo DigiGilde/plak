@@ -443,7 +443,9 @@ permissions:
 Give the teardown step the same `environment` and `comment-on-pr`. Both use the
 workflow's own `GITHUB_TOKEN`; pass another one through `github-token` if
 needed. A pull request from a fork gets a read-only token, so there these
-two cannot write, just as the deploy itself gets no ID token.
+two cannot write, just as the deploy itself gets no ID token. The action only
+updates a comment written by a bot or by the account behind the token, so a
+comment from anyone else that starts with the same marker stays as it is.
 
 ### Forgejo Actions
 
