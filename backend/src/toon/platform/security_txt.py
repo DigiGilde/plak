@@ -37,10 +37,10 @@ EXPIRES_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 # installation inside the Dutch central government, so they appear only when
 # TOON_SECURITY_TXT_NCSC is on.
 PREAMBLE_NCSC = (
-    "# NCSC-NL blijft het centrale CVD-meldpunt voor kwetsbaarheden en incidenten",
+    "# NCSC-NL is het centrale CVD-meldpunt voor kwetsbaarheden en incidenten",
     "# voor de Rijksoverheid.",
     "#",
-    "# NCSC-NL remains the central CVD reporting point for vulnerabilities and",
+    "# NCSC-NL is the central CVD reporting point for vulnerabilities and",
     "# incidents for the Dutch central government.",
 )
 
