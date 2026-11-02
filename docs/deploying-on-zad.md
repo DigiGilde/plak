@@ -783,12 +783,14 @@ zadctl attachment assign old-hosts-haproxy wacht \
 Nothing connects the file in the repository to the pods. A change is uploaded
 again with `--replace`, followed by `zadctl deployment refresh` of both.
 
-- **The subdomain `plak` stays claimed and is never released.** Both old
+- **The subdomain `plak` stays claimed for now.** Both old
   hosts sent HSTS for a year with `includeSubDomains`, so a browser that visited
   them in that year refuses to continue past a certificate error on them. The
   certificate comes from the ingress of ZAD for as long as the redirect
   deployments exist. If someone else claimed `plak.rijks.app`, they would answer
-  for every old link, bookmark and client.
+  for every old link, bookmark and client, with the keys in old secret links.
+  Deleting `oud` releases the claim, so that is a decision of its own, not part
+  of a cleanup.
 - **The redirect logs without the query.** The key of a secret link sits in the
   query, and an old link still sends it to the old host. The `haproxy-redirect`
   image logs the whole request line as it comes (`option httplog`), so that key
