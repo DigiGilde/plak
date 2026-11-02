@@ -3,7 +3,7 @@
 # command without pulling in the server.
 [project]
 name = "toon"
-version = "2026.11.1"
+version = "2026.11.2.1"
 description = "Toon CLI - publish static sites and clean up previews"
 requires-python = ">=3.12"
 license = "EUPL-1.2"

@@ -1353,7 +1353,7 @@ wheels = [
 
 [[package]]
 name = "toon-api"
-version = "2026.11.2"
+version = "2026.11.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
