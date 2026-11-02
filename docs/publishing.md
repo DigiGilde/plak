@@ -697,15 +697,19 @@ CI ID token (§3), or a CLI token from `toon login` (§6). Outside these two
 endpoints and the CLI session endpoints, Toon accepts a Bearer token
 nowhere.
 
+`--fail-with-body` (curl 7.76 or newer) makes a refused request exit
+non-zero and still prints Toon's explanation. Without it curl exits 0, and a
+workflow goes green while nothing was published.
+
 A GitHub workflow that requests the ID token itself, outside the action,
 bound to the site by its id (§3, "Why a workflow names the site id"):
 
 ```bash
-id_token=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+id_token=$(curl -sS --fail-with-body -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://beheer.toon.example.org/-/sites/<site-id>" \
     | jq -r .value)
 
-curl -sS -X POST \
+curl -sS --fail-with-body -X POST \
     -H "Authorization: Bearer ${id_token}" \
     -F "file=@dist.zip" \
     "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
@@ -722,7 +726,7 @@ the site id.
 ### Live deploy
 
 ```bash
-curl -sS -X POST \
+curl -sS --fail-with-body -X POST \
     -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@dist.zip" \
     "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/deploys"
@@ -739,7 +743,7 @@ preview's own access when it has one, else the site's.
 Add the form field `preview` with the ref:
 
 ```bash
-curl -sS -X POST \
+curl -sS --fail-with-body -X POST \
     -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@dist.zip" \
     -F "preview=pr-42" \
@@ -752,7 +756,7 @@ A second deploy for the same ref replaces the previous preview version
 ### Purging a preview (teardown)
 
 ```bash
-curl -sS -X DELETE \
+curl -sS --fail-with-body -X DELETE \
     -H "Authorization: Bearer ${TOON_TOKEN}" \
     "https://beheer.toon.example.org/-/api/v1/sites/${GROUP}/${SITE}/previews/pr-42"
 ```
@@ -845,7 +849,7 @@ directory inside the archive becomes the root of the site, and everything
 next to it is not published.
 
 ```bash
-curl -sS -X POST \
+curl -sS --fail-with-body -X POST \
     -H "Authorization: Bearer ${TOON_TOKEN}" \
     -F "file=@mijnproject.zip" \
     -F "basePath=dist" \
