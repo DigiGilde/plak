@@ -49,7 +49,8 @@ The publishing organisation keeps its own records under its selection
 list (Archiefwet). See §8 of `docs/publishing.md`.
 
 The name comes from the Dutch word `tonen`, to show. Toon shows your
-site to whoever may see it. That can be everyone, or only a small group.
+page or site to whoever may see it. That can be everyone, or only a small
+group.
 Toon used to be called Plak. §9 of `docs/publishing.md` says how to move over.
 
 Toon is built for our own use, and therefore runs on the combination we

@@ -1,6 +1,6 @@
 ## Plak heet nu Toon
 
-Plak heeft een nieuwe naam: Toon. De naam komt van tonen: laten zien. Toon laat je site zien aan wie hem mag zien. Dat kan iedereen zijn, of alleen een kleine groep.
+Plak heeft een nieuwe naam: Toon. De naam komt van tonen: laten zien. Toon laat je pagina of site zien aan wie die mag zien. Dat kan iedereen zijn, of alleen een kleine groep.
 
 - De adressen zijn `toon.rijks.app` en `beheer.toon.rijks.app`. De oude sturen door, dus links blijven werken. Kwam een bezoeker binnen met een geheime link? Die opent de volledige link één keer opnieuw.
 - Log één keer opnieuw in.

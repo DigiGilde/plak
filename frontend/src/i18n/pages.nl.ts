@@ -64,7 +64,7 @@ export const pagesNl = {
     'Met de Toon-CLI publiceer je vanaf je laptop, nadat je die eenmalig aan je account hebt gekoppeld.',
   'page.about.name.heading': 'Wist je dat',
   'page.about.name.body':
-    'De naam komt van tonen: laten zien. Toon laat je site zien aan wie hem mag zien. Dat kan iedereen zijn, of alleen een kleine groep.',
+    'De naam komt van tonen: laten zien. Toon laat je pagina of site zien aan wie die mag zien. Dat kan iedereen zijn, of alleen een kleine groep.',
 
   // -- Privacy --------------------------------------------------------------
   'page.privacy.title':

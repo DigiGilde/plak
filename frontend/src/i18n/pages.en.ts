@@ -64,7 +64,7 @@ export const pagesEn: Record<keyof typeof pagesNl, string> = {
     'With the Toon CLI you publish from your laptop, once you have linked it to your account.',
   'page.about.name.heading': 'Did you know',
   'page.about.name.body':
-    'The name comes from the Dutch word tonen, to show. Toon shows your site to whoever may see it. That can be everyone, or only a small group.',
+    'The name comes from the Dutch word tonen, to show. Toon shows your page or site to whoever may see it. That can be everyone, or only a small group.',
 
   // -- Privacy --------------------------------------------------------------
   'page.privacy.title':
