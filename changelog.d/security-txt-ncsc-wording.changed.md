@@ -1,1 +1,0 @@
-- The preamble of `security.txt` says NCSC-NL is the central reporting point, no longer that it remains so.
