@@ -1,6 +1,6 @@
 ## Plak is now Toon
 
-Plak has a new name: Toon. The name comes from the Dutch word tonen, to show. Toon shows your site to whoever may see it. That can be everyone, or only a small group.
+Plak has a new name: Toon. The name comes from the Dutch word tonen, to show. Toon shows your page or site to whoever may see it. That can be everyone, or only a small group.
 
 - The addresses are `toon.rijks.app` and `beheer.toon.rijks.app`. The old ones redirect, so links keep working. Did a visitor come in through a secret link? They open the full link once more.
 - Sign in again once.
