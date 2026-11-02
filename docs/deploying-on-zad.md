@@ -753,22 +753,48 @@ Two properties to know when planning a move or a failure:
 
 Toon was called Plak. `productie` moved from the subdomain `plak` to `toon`
 (§3), and the ZAD project keeps its internal name `plak-jr3`, because
-renaming a project means a new one. A second deployment answers on the old
-subdomain. It redirects every request on `plak.rijks.app` and
-`beheer.plak.rijks.app` to the same path and query on `toon.rijks.app` and
-`beheer.toon.rijks.app`, apart from its own probes on `/healthz` and `/readyz`.
+renaming a project means a new one. Two small deployments answer on the old
+subdomain, both of the component `wacht`. That component has only
+`publish-on-web`, and runs the `haproxy-redirect` image with
+`deploy/old-hosts-haproxy.cfg` as an attachment:
+
+| Deployment | `domain-format` | Host |
+|---|---|---|
+| `oud` | `component.subdomain`, with `root-component: wacht` | `plak.rijks.app`, and `wacht.plak.rijks.app` |
+| `beheer` | `deployment.subdomain` | `beheer.plak.rijks.app` |
+
+There are two because `component.subdomain` takes the first label from the
+component, and `beheer` in this project is the app, with its database, Keycloak
+and volume. `deployment.subdomain` takes it from the deployment and writes no
+claim, so it does not collide with `oud`, which holds the claim on `plak`.
+
+Together they redirect every read on the old hosts to the same path and query
+on `toon.rijks.app` and `beheer.toon.rijks.app`, apart from their own probes on
+`/healthz` and `/readyz`. A write (`POST`, `PUT`, `PATCH`, `DELETE`) gets a `410`
+with problem+json that names the new host, because a client that publishes does
+not follow a redirect.
+
+```bash
+zadctl attachment assign old-hosts-haproxy wacht \
+  --from-file deploy/old-hosts-haproxy.cfg \
+  --mount-path /usr/local/etc/haproxy/haproxy.cfg
+```
+
+Nothing connects the file in the repository to the pods. A change is uploaded
+again with `--replace`, followed by `zadctl deployment refresh` of both.
 
 - **The subdomain `plak` stays claimed and is never released.** Both old
   hosts sent HSTS for a year with `includeSubDomains`, so a browser that visited
   them in that year refuses to continue past a certificate error on them. The
   certificate comes from the ingress of ZAD for as long as the redirect
-  deployment exists. If someone else claimed `plak.rijks.app`, they would answer
+  deployments exist. If someone else claimed `plak.rijks.app`, they would answer
   for every old link, bookmark and client.
 - **The redirect logs without the query.** The key of a secret link sits in the
   query, and an old link still sends it to the old host. The `haproxy-redirect`
   image logs the whole request line as it comes (`option httplog`), so that key
-  would land in the log of this project. Give the redirect a log format without
-  the query before it takes traffic.
+  would land in the log of this project. The file replaces that with a log
+  format without the query, so the attachment has to be there before the
+  redirect takes traffic.
 - **The back-channel logout URL moves too.** It names the new admin host (§6a),
   because logging out must not depend on a redirect.
 - **`DigiGilde` never gets a repository named `plak` again.** GitHub
