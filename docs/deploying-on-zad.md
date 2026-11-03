@@ -46,14 +46,13 @@ Toon needs two hostnames on one component:
 | `beheer.toon.<domein>` | the admin SPA, the API and the deploy endpoints |
 | `toon.<domein>` | the published content and the content login |
 
-These come from a dotted `domain-format` plus `root-component`, both directly
-on the deployment (not under a service):
+These come from a dotted `domain-format` plus `root-component`.
+`deploy/toon-project.example.yaml` writes them loose on the deployment:
 
 ```yaml
 deployments:
   - name: productie
     domain-format: component.subdomain
-    domain-mode: nice-url
     subdomain: toon
     base-domain: rijks.app
     issuer: letsencrypt
@@ -68,16 +67,17 @@ certificates, one pod.
 
 Three things to know:
 
-- **The web address fields sit directly on the deployment, not under a
-  service.** `project_v2.json` knows `domain-format`, `subdomain`,
-  `base-domain`, `issuer` and `root-component` as fields of the deployment
-  object itself. The field `domain-mode` still exists (optional in the
-  schema), but is not derived from `domain-format`: the Operations Manager
-  reads `domain-mode` literally, and both the root ingress
-  (`toon.rijks.app`) and the self-service registration of the subdomain
-  start only if that value is exactly `nice-url`. Without
-  `domain-mode: nice-url` alongside it there is no second host, even with
-  `domain-format` and `root-component` set.
+- **The platform keeps the web address fields under the `publish-on-web`
+  service, per deployment.** `zadctl service config get publish-on-web` shows
+  them for `productie`: `issuer`, `subdomain`, `base-domain`, `domain-format`
+  and `root-component`. The loose form above is still read, and the fields
+  move under the service when the platform next migrates the file. There is
+  no `domain-mode` any more: the platform's v2.8 migration turned `nice-url`
+  into `domain-format: component.subdomain` and dropped the key. A subdomain
+  is registered for a dotted `domain-format` with a component in it, plus
+  `subdomain` and `base-domain`. The root address (`toon.rijks.app`) also
+  needs `root-component` and the approval below (see
+  `opi/manager/project_manager.py` in `RijksICTGilde/RIG-Cluster`).
 - **The component name is the first label of the hostname.** That is why the
   component is called `beheer` and not `app`.
 - **Approval is a hard precondition.** All platform domains (`rijks.app`,
@@ -425,6 +425,12 @@ Self-service has no field for this, so this is set per client in the Keycloak
 admin console (Clients -> `<client>` -> Settings), where the project has
 access; otherwise ask the platform team.
 
+The Keycloak service does have a field `Logout-pad` (`logout-path` in the
+project file), but that sets the front-channel logout URL of the client, which
+Keycloak only uses while Front channel logout is on. Leave it empty for Toon:
+the endpoint above is back-channel, and Toon ends its own session before it
+redirects (to Keycloak's end-session endpoint if `TOON_OIDC_RP_LOGOUT` is on).
+
 Per environment, on the client in the ZAD Keycloak (Clients -> `<client>` ->
 Settings):
 
@@ -435,6 +441,15 @@ Settings):
 | Backchannel logout session required | On | Puts `sid` in the logout token, which is what matches the exact session; only the session it is about lapses. Off means the token carries only a `sub`, and every session of that person lapses |
 | Backchannel logout revoke offline sessions | Off | Only adds a `revoke_offline_access` event to the token; Toon keeps no offline sessions and does not act on it |
 | Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Toon does not speak |
+
+On a client that exists, a rollout leaves these settings alone. The update
+that `create_deployment_client` sends covers only the redirect URIs, the web
+origins and the attributes `post.logout.redirect.uris` and
+`frontchannel.logout.url`, merged over the attributes that are there
+(`opi/connectors/keycloak.py` in `RijksICTGilde/RIG-Cluster`, read in `main`
+on 3 November 2026 and not measured). A new or recreated client starts
+without any of this and with Front channel logout on, so the table applies
+to it again.
 
 Without this configuration the rest works fine: the endpoint then only exists
 and is never called, and the periodic revalidation stays the boundary (at
@@ -692,10 +707,16 @@ is not there:
    the platform renders 1 hard (§9). For now: 10Gi, one pod, the default site
    quota of 500 MiB, and the signals of §5 ("Content volume") to see it fill up.
 2. **Can the Keycloak client of the project be set to `client-jwt`
-   (private_key_jwt with JWKS) and to exact-match redirect URIs, and can
-   `directAccessGrants` and service accounts be turned off?** Self-service
-   does not offer that. For now: `client_secret_post`, with wildcard redirect
-   URIs, as a documented deviation from the OAuth NL profile.
+   (private_key_jwt with JWKS) and to exact-match redirect URIs?**
+   Self-service does not offer that. For now: `client_secret_post`, with
+   wildcard redirect URIs, as a documented deviation from the OAuth NL
+   profile. Exact URIs can be added next to the wildcard ones (§6), but the
+   wildcard for every host stays. A new client now has `directAccessGrants`
+   and service accounts off, and the Keycloak service has the options
+   `direct-access-grants` and `service-accounts` to turn them on. A client
+   that exists keeps the flows it was created with. The old default had both
+   on, so Toon's client may still have them: check it in the console (Clients
+   -> `<client>` -> Settings, Capability config).
 3. **Can the realm pass on an `acr` value that belongs to SSO Rijk?** SSO Rijk
    is SAML and delivers no acr; the ZAD Keycloak advertises `0` and `1`. For
    now: no acr check, logged explicitly at startup.
