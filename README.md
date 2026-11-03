@@ -75,19 +75,25 @@ platform is not ruled out.
 - **Preview**: a named temporary variant per ref (for example
   `pr-42`), pointing at a version with target `preview`.
 
-## The five access levels
+## Access
 
-Visibility is a property per site (previews inherit it, with an
-optional override per preview):
+Access is a property per site (previews inherit it, with an optional
+override per preview): one base, plus two extras that let more people in.
+
+The base is one of:
 
 1. **Public**: everyone.
-2. **Secret link**: access through `?key=selector.verifier`, without
-   logging in.
-3. **SSO Rijk**: any valid SSO Rijk login.
-4. **Group members**: logged in and an active member of the site's
-   group.
-5. **Invitees**: logged in and the sub or verified email address is on
-   the site's invitee list.
+2. **SSO Rijk**: anyone who signs in with SSO Rijk.
+3. **Site team**: logged in and an active member with a role on the site
+   or on its group.
+4. **Nobody**: lets no one in by itself, only the extras do.
+
+The extras, each on or off beside the base:
+
+- **Secret link**: access through `?key=selector.verifier`, without
+  logging in.
+- **Invitees**: logged in and the sub or verified email address is on
+  the site's invitee list.
 
 Viewing and administering are separated: a login only to look at
 something creates no member record. Administering (creating sites,
@@ -153,14 +159,16 @@ uv tool install "git+https://github.com/DigiGilde/toon@beta#subdirectory=cli"
 ```
 
 That is the latest: `beta` is the default branch, so `uv tool upgrade toon`
-picks up whatever has landed on it. Once a version tag exists, pin instead:
+picks up whatever has landed on it. Releases are tagged, so you can pin one
+instead:
 
 ```bash
 uv tool install "git+https://github.com/DigiGilde/toon@<tag>#subdirectory=cli"
 ```
 
-There is no tag yet, so `<tag>` is the one thing to fill in. What a branch
-gives up is the guarantee that tomorrow installs what you tested today.
+`<tag>` is the tag of a [release](https://github.com/DigiGilde/toon/releases)
+from `v2026.11.2.1` on. Earlier tags install the old `plak` command. What a
+branch gives up is the guarantee that tomorrow installs what you tested today.
 
 The repository is public, so either form clones without credentials.
 
@@ -290,9 +298,8 @@ covers what the skill does and how to run its evals.
 
 ## Deploying on ZAD
 
-Toon is not running in production yet; the rollout is prepared, not
-done. The target is ZAD (Zelfservice voor Applicatie Deployment): no
-Kubernetes manifests, but one declarative project file that the
+Toon runs in production on ZAD (Zelfservice voor Applicatie Deployment):
+no Kubernetes manifests, but one declarative project file that the
 platform manages. Toon is **one component** there, because the app
 serves content, the admin SPA and the host separation itself.
 
@@ -317,8 +324,8 @@ serves content, the admin SPA and the host separation itself.
 `docs/deploying-on-zad.md` the step-by-step guide from nothing to
 running plus the open questions for the platform team.
 `.github/workflows/` holds the CI and deploy workflows. The checks run on
-every commit; the rollout half is still preparatory, because there is no
-ZAD environment to deploy to yet.
+every commit. A push to `beta` deploys nowhere: production follows the
+release tags (`docs/releasing.md`).
 
 ## Documentation
 
@@ -345,8 +352,8 @@ ZAD environment to deploy to yet.
   brotli (text files are stored and sent compressed).
 - `frontend/`: Vue 3 (runtime-only build), Vite, `@nldd/design-system`.
 - `cli/`: the publishing CLI, a uv project of its own that installs the
-  `toon` command; its only dependency is httpx and it shares no code with
-  the backend. `cli/tests/` is its suite (`just test-cli`).
+  `toon` command. Its dependencies are httpx and keyring, and it shares no
+  code with the backend. `cli/tests/` is its suite (`just test-cli`).
 - `actions/publish/`: the composite action for GitHub Actions and
   Forgejo Actions that calls that CLI. `plugin/` is the Claude Code
   plugin for the same job, with the `toon-publish` skill and its
