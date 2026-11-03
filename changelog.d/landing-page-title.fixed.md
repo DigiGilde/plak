@@ -1,0 +1,1 @@
+- The browser tab of the landing page is titled "Toon" for a visitor who is not signed in, no longer "Overview - Toon".

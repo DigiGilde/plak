@@ -2,9 +2,12 @@ import '@nldd/design-system';
 
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router';
 
 import { MOCK_CONTENT_BASE } from '../../tests/mock-api';
 import { _resetCurrentMemberCache } from '../composables/currentMember';
+import { _setLocaleForTest } from '@/i18n';
+import { routes, titleAfterNavigation } from '@/router';
 import Landing from './Landing.vue';
 import Start from './Start.vue';
 
@@ -107,5 +110,68 @@ describe('Start: the three session states', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="overview"]').exists()).toBe(true);
+  });
+});
+
+/** `/` the way the app serves it: the real route table, and the hook that titles the tab after a navigation. */
+async function openThroughRouter(status: number) {
+  vi.stubGlobal('fetch', meFetch(status));
+  const router = createRouter({ history: createMemoryHistory(), routes });
+  router.afterEach(titleAfterNavigation);
+  await router.push('/');
+  const mounted = mount(RouterView, {
+    global: {
+      plugins: [router],
+      stubs: { Overview: { template: '<div data-testid="overview"></div>' } },
+    },
+  });
+  await flushPromises();
+  return mounted;
+}
+
+describe('Start: the title of the browser tab', () => {
+  afterEach(() => {
+    _setLocaleForTest('nl');
+    document.title = '';
+  });
+
+  it.each(['nl', 'en'] as const)(
+    'is the name of the product without a session, like the heading (%s)',
+    async (locale) => {
+      _setLocaleForTest(locale);
+      wrapper = await openThroughRouter(401);
+
+      expect(wrapper.find('h1').text()).toBe('Toon');
+      expect(document.title).toBe('Toon');
+    },
+  );
+
+  it.each([
+    ['nl', 'Overzicht - Toon'],
+    ['en', 'Overview - Toon'],
+  ] as const)('names the overview for a member (%s)', async (locale, title) => {
+    _setLocaleForTest(locale);
+    wrapper = await openThroughRouter(200);
+
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(true);
+    expect(document.title).toBe(title);
+  });
+
+  it('does not give the withdrawn page the title of the landing page', async () => {
+    wrapper = await openThroughRouter(403);
+
+    expect(wrapper.find('[data-testid="reason"]').exists()).toBe(true);
+    expect(document.title).not.toBe('Toon');
+  });
+
+  it('takes the title of the landing page when the check finds the session gone', async () => {
+    wrapper = await openThroughRouter(403);
+
+    wrapper
+      .findComponent(Landing)
+      .vm.$emit('refreshed', { state: 'no-session', member: null, reason: '' });
+    await flushPromises();
+
+    expect(document.title).toBe('Toon');
   });
 });

@@ -3,12 +3,13 @@
 // a visitor who is not logged in. The landing page on the content host's root
 // is a backend platform page (platform/pages.py); this is the admin-side
 // equivalent of it.
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watchEffect } from 'vue';
 
 import { fetchSession, type Session, type SessionState } from '../composables/currentMember';
 import Landing from './Landing.vue';
 import Overview from './Overview.vue';
 import { t } from '@/i18n';
+import { setDocumentTitle } from '@/title';
 
 const loading = ref(true);
 const state = ref<SessionState>('no-session');
@@ -18,6 +19,13 @@ function takeOver(session: Session): void {
   state.value = session.state;
   reason.value = session.reason;
 }
+
+// The route titles '/' after the overview, which only a member has. A visitor
+// gets a page headed with the name of the product, and the tab says the same.
+// Until the session is read `state` says 'no-session' too, hence `loading`.
+watchEffect(() => {
+  if (!loading.value && state.value === 'no-session') setDocumentTitle();
+});
 
 onMounted(async () => {
   try {
