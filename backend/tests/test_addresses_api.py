@@ -521,6 +521,20 @@ class TestASite:
         assert response.json()["detail"] == "This needs at least the role admin."
         await _assert_refusal_logged(factory, code="INSUFFICIENT_ROLE", route=SITE_ROUTE)
 
+    async def test_the_refusal_of_an_editor_names_the_role_in_dutch_when_asked_in_dutch(
+        self, client, app, data, factory
+    ):
+        await _join_site(factory, data.site, data.member_b, Role.EDITOR)
+        headers = login(client, app, sub="lid-b", email="b@example.nl")
+
+        response = await client.put(
+            f"{BASE}/sites/team/site/slug", json={"slug": "docs"}, headers={**headers, "Accept-Language": "nl"}
+        )
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "INSUFFICIENT_ROLE"
+        assert response.json()["detail"] == "Hiervoor heb je minimaal de rol beheerder nodig."
+
     async def test_a_member_without_a_role_gets_the_404_of_an_unknown_site(self, client, app, data, factory):
         headers = login(client, app, sub="lid-b", email="b@example.nl")
 

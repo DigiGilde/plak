@@ -81,6 +81,9 @@ NL: Final[dict[str, str]] = {
     "INSUFFICIENT_ROLE.site_address_release": (
         "Het adres van een andere site vrijgeven kan alleen een beheerder van de groep."
     ),
+    "role.reader": "lezer",
+    "role.editor": "redacteur",
+    "role.admin": "beheerder",
     "NO_AUTHENTICATION": "Geen geldige sessie of bearer-token.",
     "BEARER_NOT_ACCEPTED": (
         "Bearer-authenticatie wordt alleen op de deploy- en CLI-endpoints, bij het aanmaken van "
@@ -375,13 +378,16 @@ EN: Final[dict[str, str]] = {
     "MEMBER_DEACTIVATED": "Your access has been withdrawn by a platform administrator.",
     "MEMBER_NOT_ACTIVE": "Not an active member.",
     "CSRF_INVALID": "The CSRF token is missing or invalid.",
-    "ORIGIN_REFUSED": "This request does not come from the beheer origin.",
+    "ORIGIN_REFUSED": "This request does not come from the admin origin.",
     "NOT_ADMIN": "Only a platform administrator may do this.",
     "INSUFFICIENT_ROLE": "This needs at least the role {role}.",
     "INSUFFICIENT_ROLE.site_address": "Changing a site's address needs a role in its group.",
     "INSUFFICIENT_ROLE.site_address_release": (
         "Only an administrator of the group can release another site's address."
     ),
+    "role.reader": "reader",
+    "role.editor": "editor",
+    "role.admin": "admin",
     "NO_AUTHENTICATION": "No valid session or bearer token.",
     "BEARER_NOT_ACCEPTED": (
         "Bearer authentication is accepted on the deploy and CLI endpoints, for creating a group or "
@@ -392,7 +398,7 @@ EN: Final[dict[str, str]] = {
     "UNKNOWN_SITE": "Unknown site.",
     "UNKNOWN_SITE.deploy": "Unknown group or site.",
     "UNKNOWN_MEMBER": "Unknown member.",
-    "UNKNOWN_MEMBER.must_sign_in": "Unknown member. They have to sign in to beheer themselves first.",
+    "UNKNOWN_MEMBER.must_sign_in": "Unknown member. They have to sign in to the admin themselves first.",
     "UNKNOWN_INVITEE": "Unknown invitee.",
     "UNKNOWN_KEY": "Unknown key.",
     "UNKNOWN_PREVIEW": "Unknown preview.",
@@ -492,16 +498,16 @@ EN: Final[dict[str, str]] = {
     ),
     "CI_ISSUER_UNKNOWN.mismatch": "The issuer of the CI token is not right.",
     "CI_AUDIENCE_MISMATCH": (
-        "The audience of the CI token has to be exactly the beheer URL of Toon ({audience}), or for "
+        "The audience of the CI token has to be exactly the admin URL of Toon ({audience}), or for "
         "one site {audience}/-/sites/ followed by the site id."
     ),
     "CI_AUDIENCE_MISMATCH.no_base_url": (
-        "The audience of the CI token has to be exactly the beheer URL of Toon "
+        "The audience of the CI token has to be exactly the admin URL of Toon "
         "(TOON_BASE_URL is not set)."
     ),
     "CI_AUDIENCE_MISMATCH.site": "This ID token's repository is not linked to the site its site id names.",
     "CI_REPOSITORY_NOT_TRUSTED": (
-        "This repository may not publish to this site. Link it to the site in beheer first."
+        "This repository may not publish to this site. Link it to the site in the admin first."
     ),
     "CI_BRANCH_NOT_ALLOWED.event": (
         "Publishing live is allowed from a push, a manual run (workflow_dispatch) or a schedule "
@@ -544,7 +550,7 @@ EN: Final[dict[str, str]] = {
     "INVALID_GRANT.member_not_active": "The member behind this CLI session is no longer active.",
     "EXPIRED_TOKEN.device_code": "The device code has expired. Start signing in again.",
     "SLOW_DOWN": "Ask at most once every {interval} seconds. Wait longer.",
-    "AUTHORIZATION_PENDING": "Not approved in beheer yet.",
+    "AUTHORIZATION_PENDING": "Not approved in the admin yet.",
     "ACCESS_DENIED": "Linking was refused.",
     "ACCESS_DENIED.approver_not_active": "The member who approved this is no longer active.",
     # -- Upload and multipart -------------------------------------------------

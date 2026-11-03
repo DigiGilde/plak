@@ -2373,8 +2373,7 @@ NL: Final[dict[str, str]] = {
         "\n"
         "`nobody` grants no access on its own. A site on that base is unreachable unless\n"
         "one of the two exceptions beside it (secret links, invitees) is on, which is\n"
-        "what makes \"alleen via de uitzonderingen hieronder\" (\"only through the exceptions below\")\n"
-        "expressible at all."
+        "what makes \"only through the exceptions below\" expressible at all."
     ): (
         "Het basisantwoord op \"wie mag deze site zien\": precies één per site,\n"
         "en nooit het hele verhaal.\n"
@@ -3086,13 +3085,15 @@ NL: Final[dict[str, str]] = {
         "\n"
         "A reader looks on, an editor changes content, an admin changes policy: who\n"
         "may look, who may join in, and what disappears for good. The interface\n"
-        "labels these lezer, redacteur and beheerder."
+        "labels these Reader, Editor and Administrator in English and lezer,\n"
+        "redacteur and beheerder in Dutch."
     ): (
         "Rol binnen een groep of binnen een site.\n"
         "\n"
         "Een lezer kijkt mee, een redacteur wijzigt content, een beheerder wijzigt het beleid: wie\n"
         "mag kijken, wie mag meedoen, en wat voorgoed verdwijnt. De interface noemt deze\n"
-        "lezer, redacteur en beheerder."
+        "lezer, redacteur en beheerder in het Nederlands en reader, editor en administrator in\n"
+        "het Engels."
     ),
     (
         "`true` (the default) serves the content with a CSP sandbox without `allow-same-origin`, so the page gets an "

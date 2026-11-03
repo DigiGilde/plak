@@ -8,6 +8,7 @@ that the Dutch side rots the moment a message is added in English only.
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import import_module
@@ -17,6 +18,8 @@ import pytest
 
 import toon
 from toon import i18n, messages
+from toon.api.authorization import insufficient_role_params
+from toon.constants import Role
 from toon.messages import Msg
 
 
@@ -37,6 +40,38 @@ def test_no_catalogue_entry_is_empty() -> None:
     for catalogue in (messages.NL, messages.EN):
         for key, text in catalogue.items():
             assert text.strip(), key
+
+
+# (Dutch, English) name of each role in running text.
+ROLE_NAMES = {
+    Role.READER: ("lezer", "reader"),
+    Role.EDITOR: ("redacteur", "editor"),
+    Role.ADMIN: ("beheerder", "admin"),
+}
+
+DUTCH_ROLE_WORDS = re.compile(r"\b(beheer\w*|redacteur\w*|lezer\w*)\b", re.IGNORECASE)
+WIRE_ROLE_WORDS = re.compile(r"\b(reader|editor|admin)s?\b", re.IGNORECASE)
+
+
+def test_every_role_has_a_name_to_test() -> None:
+    assert set(ROLE_NAMES) == set(Role)
+
+
+@pytest.mark.parametrize("role", list(Role))
+def test_a_refusal_names_the_role_in_the_language_it_is_told_in(role: Role) -> None:
+    dutch, english = ROLE_NAMES[role]
+    refusal = Msg("INSUFFICIENT_ROLE", insufficient_role_params(role))
+
+    assert messages.render("nl", refusal) == f"Hiervoor heb je minimaal de rol {dutch} nodig."
+    assert messages.render("en", refusal) == f"This needs at least the role {english}."
+
+
+def test_english_text_uses_no_dutch_role_label_and_no_beheer() -> None:
+    assert [key for key, text in messages.EN.items() if DUTCH_ROLE_WORDS.search(text)] == []
+
+
+def test_dutch_text_names_no_role_by_its_wire_value() -> None:
+    assert [key for key, text in messages.NL.items() if WIRE_ROLE_WORDS.search(text)] == []
 
 
 class TestCheckCatalogues:

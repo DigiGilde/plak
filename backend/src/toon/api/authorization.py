@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from toon.access import roles
 from toon.api.errors import ApiError
 from toon.constants import Role
+from toon.messages import Msg
 from toon.models.identity import Member
 from toon.models.publication import Site
 
@@ -26,9 +27,9 @@ REASON_INSUFFICIENT_ROLE = "INSUFFICIENT_ROLE"
 
 
 def insufficient_role_params(minimum: Role) -> dict[str, object]:
-    """The role names double as the UI names, so the enum value can go into the
-    message as is, in either language."""
-    return {"role": minimum.value}
+    """The role goes in as a fragment, so each language names it with its own
+    word: the enum value is the wire's, not the Dutch interface's."""
+    return {"role": Msg(f"role.{minimum.value}")}
 
 
 def require_at_least(role: Role | None, minimum: Role) -> None:

@@ -98,7 +98,7 @@ export const adminEn: Record<keyof typeof adminNl, string> = {
   'admin.siteMembers.suggestion.viaGroup': '{role} via the group',
   'admin.siteMembers.form.heading': 'Give someone a role on this site',
   'admin.siteMembers.form.hint':
-    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to log in on the administration themselves first. Toon does not create an account here.',
+    'A site role only widens: whoever may already do more via the group keeps that. You take access away at the group. Someone has to sign in to the admin themselves first. Toon does not create an account here.',
   'admin.siteMembers.form.identifier': 'Name or email address',
   'admin.siteMembers.form.identifier.placeholder': 'Type a name or email address',
   'admin.siteMembers.form.identifier.help':
