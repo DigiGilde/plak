@@ -142,12 +142,9 @@ over the component-wide value. That choice determines what a second
 deployment inherits, because a clone does not copy the deployment block of
 the component along with it (§8, "A second deployment").
 
-The settings are `TOON_<NAME>` variables. The old `PLAK_<NAME>` names still
-work, each as a fallback when its `TOON_` name is not set, and at startup the
-app logs a warning that names every `PLAK_` variable still in use. A `TOON_`
-name set to an empty value counts as set, and wins over its `PLAK_` name. An
-existing deployment moves over as described under "Moving an existing deployment
-to the `TOON_` names" below.
+The settings are `TOON_<NAME>` variables. The old `PLAK_<NAME>` names are not
+read: a deployment that has only those stops at its entrypoint with `database
+unreachable after 30 attempts`, whatever the database is doing.
 
 What Toon needs. `TOON_DB_URL`, `TOON_CONTENT_ROOT`, `TOON_SESSION_SECRET`,
 `TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` have no default value and are
@@ -227,9 +224,6 @@ secrets themselves, and each call rolls out at once unless you pass
 bites either way. The list first fails, because the app refuses to start when
 a previous value equals the current one. The new value first leaves the older
 rows out of reach until the list follows.
-A deployment that has not moved to the `TOON_` names yet rotates under its
-`PLAK_` names, or moves first: a `TOON_` list replaces the `PLAK_` one, and
-`zadctl env set` fails on a name that layer does not have yet.
 The steps, the check on the startup log, what rotation does not repair and
 what removing an entry too early costs are in `docs/audit-log.md` ("Rotating
 the pepper and the IP key").
@@ -238,41 +232,6 @@ the pepper and the IP key").
 the host separation from them (which path exists on which host), the HSTS
 decision, and every shareable URL the SPA shows. If they differ from what the
 ingress serves, everybody gets a neutral 404.
-
-### Moving an existing deployment to the `TOON_` names
-
-A deployment that still has `PLAK_` variables keeps running, and the warning at
-startup names the ones the app still reads. Move over one kind of variable at a
-time:
-
-- **Non-secret variables.** Set each one again under its `TOON_` name with the
-  same value, the alias for the database URL included, and let the app restart.
-  Then remove the `PLAK_` ones.
-- **The session secret.** Give `TOON_SESSION_SECRET` a new value, and remove
-  `PLAK_SESSION_SECRET` once the app has restarted on it. Everyone signs in
-  again, as after every restart, and visitors with a secret-link cookie open
-  their link again, because the cookie is signed with this secret
-  (`docs/security.md`).
-- **The OIDC secrets.** `PLAK_OIDC_CLIENT_SECRET` and
-  `PLAK_OIDC_CLIENT_PRIVATE_JWK`, if you set them yourself, move the same way
-  with the same value.
-- **The `_PREVIOUS` lists.** After a rotation they move whole. A `TOON_` list
-  replaces the `PLAK_` one, and the two are not merged.
-- **The two audit secrets.** Set `TOON_AUDIT_PEPPER` and `TOON_AUDIT_IP_KEY` to
-  exactly the values of their `PLAK_` names, and keep them in a password vault.
-  `zadctl` does not return a value, but the ZAD portal can show it. After the
-  restart, read the startup log first: a warning that says a `PLAK_` audit
-  variable holds a value that is neither current nor previous means the two
-  names differ. Then check that `actor-identity` still finds an older row and
-  that an older IP address can still be revealed, and only then remove the
-  `PLAK_` names. A different value here is a rotation, and then the old value
-  has to go into the matching `_PREVIOUS` list (`docs/audit-log.md`, "Rotating
-  the pepper and the IP key"). Without that, older rows are out of reach.
-
-Removing the `PLAK_` names also ends the way back past this release: an older
-image reads only those names, and without them its entrypoint stops with
-`database unreachable after 30 attempts`, whatever the database is doing. Put
-them back before you switch to such an image (§7).
 
 ### OIDC
 
@@ -520,12 +479,13 @@ switching the image. An ERROR instead says why not: not enough room above
 files whose copy is damaged. Rolling back before that line breaks every site
 deployed since compression.
 
-An image from before the `TOON_` names reads only the `PLAK_` variables, so
-keep those set for as long as you may want to roll back past it. It also
-cannot read what newer images wrote. An IP address encrypted under version
-`0x03` cannot be revealed (404 `AUDIT_IP_UNKNOWN`), and `--against` refuses a
-chain head in the `toon-audit-chain-checkpoint/3` format. Both work again after
-rolling forward, and nothing is lost.
+An image from before the `TOON_` names, so older than `v2026.11.2`, reads only
+the `PLAK_` variables, and without them its entrypoint stops with `database
+unreachable after 30 attempts`. Put them back before you switch to such an
+image. It also cannot read what newer images wrote. An IP address encrypted
+under version `0x03` cannot be revealed (404 `AUDIT_IP_UNKNOWN`), and
+`--against` refuses a chain head in the `toon-audit-chain-checkpoint/3` format.
+Both work again after rolling forward, and nothing is lost.
 
 Toon runs on one database account. The shared PostgreSQL service delivers one
 user plus an `_ro` variant, and no `CREATE ROLE`. The app, alembic and the

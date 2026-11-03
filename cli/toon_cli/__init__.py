@@ -39,10 +39,6 @@ environment, the host you last logged in to, then DEFAULT_HOST, the
 DigiGilde instance. An old host of that instance is translated to its new
 one, with a warning.
 
-A TOON_ variable that is not present falls back to its old PLAK_ name.
-Present includes empty, so an empty TOON_HOST wins over a PLAK_HOST with a
-value.
-
 Exit codes:
     0 - success
     1 - error from the server (a network or API error, say); detail on
@@ -175,24 +171,13 @@ def _split_site(site: str, label: str = "--site") -> tuple[str, str]:
     return _valid_slug(parts[0], "group"), _valid_slug(parts[1], "site")
 
 
-def _env_name(name: str) -> str:
-    """The variable that counts for `name`, a `TOON_` name: that one when it is
-    present, empty included, else its old `PLAK_` name. The server's rule."""
-    return name if name in os.environ else "PLAK_" + name.removeprefix("TOON_")
-
-
-def _env(name: str) -> str | None:
-    return os.environ.get(_env_name(name))
-
-
 def _site_id(args: argparse.Namespace) -> str | None:
     """The site id from --site-id, else TOON_SITE_ID (empty counts as unset),
     lowercase; None without one. Checked before any token is asked for."""
     if args.site_id is not None:
         value, source = args.site_id, "--site-id"
     else:
-        source = _env_name("TOON_SITE_ID")
-        value = os.environ.get(source) or None
+        value, source = os.environ.get("TOON_SITE_ID") or None, "TOON_SITE_ID"
     if value is None:
         return None
     if not SITE_ID_RE.fullmatch(value):
@@ -268,7 +253,7 @@ def _resolve_host(args: argparse.Namespace) -> str:
     one, so a session stored under the old host never goes along."""
     host = (
         getattr(args, "host", None)
-        or _env("TOON_HOST")
+        or os.environ.get("TOON_HOST")
         or _stored_default_host()
         or DEFAULT_HOST
     ).rstrip("/")
@@ -303,7 +288,7 @@ def _same_origin(url: str, host: str) -> bool:
 
 
 def _config_dir() -> Path:
-    explicit = _env("TOON_CONFIG_DIR")
+    explicit = os.environ.get("TOON_CONFIG_DIR")
     if explicit:
         return Path(explicit)
     xdg = os.environ.get("XDG_CONFIG_HOME")
@@ -773,7 +758,7 @@ def _get_bearer_token(host: str, site_id: str | None = None) -> str:
     """The token for the deploy endpoints and /cli/whoami, in order: an
     explicit TOON_ACCESS_TOKEN, a CI OIDC token, then the stored session.
     Only the OIDC token carries the site id."""
-    env_token = _env("TOON_ACCESS_TOKEN")
+    env_token = os.environ.get("TOON_ACCESS_TOKEN")
     if env_token:
         _warn_site_id_unused(site_id)
         return env_token
@@ -795,7 +780,7 @@ def _get_member_token(host: str) -> str:
     """The token for creating a group or a site: an explicit TOON_ACCESS_TOKEN,
     then the stored session. No CI OIDC token: the server takes only a
     member's CLI token there."""
-    token = _env("TOON_ACCESS_TOKEN") or _stored_token(host)
+    token = os.environ.get("TOON_ACCESS_TOKEN") or _stored_token(host)
     if token:
         return token
     _note_legacy_env_file()
@@ -1531,7 +1516,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         # Logging out still has to drop what is stored locally.
         print(f"Warning: {error}", file=sys.stderr)
         stored_access, refresh_token = None, None
-    access_token = _env("TOON_ACCESS_TOKEN") or stored_access
+    access_token = os.environ.get("TOON_ACCESS_TOKEN") or stored_access
     revoked = True
     incompatible = None
     if access_token or refresh_token:

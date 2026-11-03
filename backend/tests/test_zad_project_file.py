@@ -146,7 +146,6 @@ def test_the_10gi_volume_runs_with_the_default_site_quota() -> None:
     env = PROJECT["deployments"][0]["components"][0]["env-vars"]
     assert "TOON_BASE_URL" in env, "the file no longer uses the names this test looks for"
     assert "TOON_SITE_MAX_BYTES" not in env
-    assert "PLAK_SITE_MAX_BYTES" not in env
 
 
 def test_urls_come_up_with_the_composed_hosts() -> None:

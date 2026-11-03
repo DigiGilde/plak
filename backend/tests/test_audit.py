@@ -482,7 +482,6 @@ def test_the_job_refuses_to_run_without_a_dsn(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.delenv(retention.DB_URL_VAR, raising=False)
-    monkeypatch.delenv("PLAK_DB_URL", raising=False)
 
     assert retention.main() == 1
     assert retention.DB_URL_VAR in caplog.text

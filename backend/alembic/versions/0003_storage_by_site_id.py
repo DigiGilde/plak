@@ -4,7 +4,7 @@ Moves every version directory on the content volume from
 {group}/{site}/{version_id} to {site_id}/{version_id} and rewrites
 versions.storage_ref to match, so no slug is part of a path. It runs where the
 volume is mounted (the entrypoint on ZAD, the migrate service in dev/) and
-needs PLAK_CONTENT_ROOT only when there are versions to move.
+needs TOON_CONTENT_ROOT only when there are versions to move.
 
 The renames are not part of the transaction. A run that stops halfway leaves
 the rows as they were and some directories at their new place; the next run
@@ -82,8 +82,8 @@ def _move(moves: list[tuple[object, str, str]]) -> Path | None:
     moves = [move for move in moves if move[1] != move[2]]
     if not moves:
         return None
-    # Inline: a migration may not import application code, and both names are in use.
-    value = os.environ.get(CONTENT_ROOT_VAR, os.environ.get("PLAK_CONTENT_ROOT"))
+    # Inline: a migration may not import application code.
+    value = os.environ.get(CONTENT_ROOT_VAR)
     if not value:
         raise RuntimeError(f"{CONTENT_ROOT_VAR} is not set; the version directories cannot move along.")
     root = Path(value)

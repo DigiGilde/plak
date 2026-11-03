@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from toon.audit import vocabulary
-from toon.config import server_variable
 from toon.db import make_session_factory
 from toon.models.audit import ActorKind, AuditLogEntry
 
@@ -116,7 +116,7 @@ async def purge(dsn: str, *, batch: int = BATCH_DEFAULT) -> int:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    dsn = server_variable(DB_URL_VAR)
+    dsn = os.environ.get(DB_URL_VAR)
     if not dsn:
         _logger.error("%s is not set; the purge does not know which database to talk to.", DB_URL_VAR)
         return 1

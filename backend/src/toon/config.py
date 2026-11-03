@@ -1,11 +1,5 @@
 """Configuration through environment variables (12-factor), prefix TOON_.
 
-A setting reads `TOON_<NAME>` when that variable is present in the environment,
-else the old `PLAK_<NAME>`, else its default. Present includes empty, so an
-empty `TOON_<NAME>` wins over a `PLAK_<NAME>` with a value. What reads a variable
-without Settings follows the same rule through `server_variable`, and at startup
-main.py logs the old names still in use (`Settings.old_variables_in_use`).
-
 Fail-fast: missing or invalid required values produce a clear error
 message naming the variable involved, instead of passing on the bare pydantic
 ValidationError.
@@ -14,7 +8,7 @@ OIDC on ZAD: the ZAD Keycloak service injects `OIDC_DISCOVERY_URL`,
 `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` (without a prefix) into the
 container. Those serve as the source for `TOON_OIDC_ISSUER`,
 `TOON_OIDC_CLIENT_ID` and `TOON_OIDC_CLIENT_SECRET` as long as the setting
-itself is not set under either prefix.
+itself is not set.
 """
 
 from __future__ import annotations
@@ -22,18 +16,16 @@ from __future__ import annotations
 import base64
 import binascii
 import ipaddress
-import os
 import unicodedata
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from pydantic import Field, ValidationError, field_validator, model_validator
-from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from toon.audit.ip_crypto import _key_id
 
 ENV_PREFIX = "TOON_"
-OLD_ENV_PREFIX = "PLAK_"
 
 MIN_SECRET_BYTES = 32
 AUDIT_IP_KEY_BYTES = 32
@@ -50,13 +42,6 @@ _OPERATOR_EMAIL_FORBIDDEN = frozenset('<>"(),;:[]\\?&#%')
 
 class ConfigurationError(RuntimeError):
     """Raised on missing or invalid configuration."""
-
-
-def server_variable(name: str) -> str | None:
-    """The rule of Settings, for what reads one variable without loading them
-    all: `name`, a `TOON_` name, when it is present in the environment, else
-    its `PLAK_` name, else None."""
-    return os.environ.get(name, os.environ.get(OLD_ENV_PREFIX + name.removeprefix(ENV_PREFIX)))
 
 
 def issuer_from_discovery_url(discovery_url: str) -> str:
@@ -131,15 +116,6 @@ def _decode_audit_ip_key(field_name: str, value: str) -> str:
     if len(decoded) != AUDIT_IP_KEY_BYTES:
         raise ValueError(f"{field_name} must be the base64 encoding of {AUDIT_IP_KEY_BYTES} bytes")
     return value
-
-
-def _decoded_old_ip_key(value: str) -> bytes:
-    """The key in a value that settings did not read, so it was never validated.
-    Empty when the value holds no key, as no row can be written under that."""
-    try:
-        return base64.b64decode(_decode_audit_ip_key("the old audit IP key", value))
-    except ValueError:
-        return b""
 
 
 class Settings(BaseSettings):
@@ -277,18 +253,6 @@ class Settings(BaseSettings):
     ratelimit_code_window_s: int = Field(default=900)
     ratelimit_code_global_max: int = Field(default=500)
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        old_env_settings = EnvSettingsSource(settings_cls, env_prefix=OLD_ENV_PREFIX)
-        return init_settings, env_settings, old_env_settings, dotenv_settings, file_secret_settings
-
     @field_validator("ci_forgejo_hosts")
     @classmethod
     def _ci_forgejo_hosts_valid(cls, value: str) -> str:
@@ -404,44 +368,6 @@ class Settings(BaseSettings):
     @property
     def audit_ip_keys_previous_bytes(self) -> tuple[bytes, ...]:
         return tuple(base64.b64decode(key) for key in _comma_separated(self.audit_ip_key_previous))
-
-    def old_variables_in_use(self) -> list[str]:
-        """The `PLAK_` names settings are still read from, sorted: those whose
-        `TOON_` name is absent. Names in upper case, because pydantic-settings
-        matches a variable whatever its case."""
-        present = {name.upper() for name in os.environ}
-        settings = [
-            name.upper() for name, field in type(self).model_fields.items() if field.validation_alias is None
-        ]
-        return sorted(
-            OLD_ENV_PREFIX + name
-            for name in settings
-            if OLD_ENV_PREFIX + name in present and ENV_PREFIX + name not in present
-        )
-
-    def old_audit_variables_left_behind(self) -> list[str]:
-        """The `PLAK_` audit variables holding a value the settings do not have,
-        neither current nor previous, sorted. A `TOON_` name shadowing them with
-        another or an empty value leaves the rows written under that value out of
-        reach, and removing the variable makes it permanent if no copy exists.
-        Names in upper case, for the reason in `old_variables_in_use`."""
-        old = {name.upper(): value for name, value in os.environ.items()}
-        old_peppers = {
-            "PLAK_AUDIT_PEPPER": {old.get("PLAK_AUDIT_PEPPER", "")},
-            "PLAK_AUDIT_PEPPER_PREVIOUS": set(_comma_separated(old.get("PLAK_AUDIT_PEPPER_PREVIOUS", ""))),
-        }
-        old_ip_keys = {
-            "PLAK_AUDIT_IP_KEY": {_decoded_old_ip_key(old.get("PLAK_AUDIT_IP_KEY", ""))},
-            "PLAK_AUDIT_IP_KEY_PREVIOUS": {
-                _decoded_old_ip_key(entry) for entry in _comma_separated(old.get("PLAK_AUDIT_IP_KEY_PREVIOUS", ""))
-            },
-        }
-        peppers = {"", *self.audit_peppers}
-        ip_keys = {b"", self.audit_ip_key_bytes, *self.audit_ip_keys_previous_bytes}
-        return sorted(
-            [name for name, values in old_peppers.items() if values - peppers]
-            + [name for name, values in old_ip_keys.items() if values - ip_keys]
-        )
 
     @field_validator("base_url")
     @classmethod

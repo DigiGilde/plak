@@ -789,10 +789,7 @@ a possible personal data breach, and assess it as one. Older rows only
 disappear through the retention purge, and production does not run that yet
 ([#211](https://github.com/DigiGilde/toon/issues/211)).
 
-**Procedure.** For the pepper, the IP key or both. A deployment that still runs
-on the `PLAK_` names reads `PLAK_` for `TOON_` below, or moves first
-(`docs/deploying-on-zad.md`, "Moving an existing deployment to the `TOON_`
-names"): a `TOON_` list replaces the `PLAK_` one, and the two are not merged.
+**Procedure.** For the pepper, the IP key or both.
 
 1. Generate the new value: `openssl rand -hex 32` for the pepper,
    `openssl rand -base64 32` for the IP key.
