@@ -228,6 +228,28 @@ _LOOPBACK_RE = re.compile(
 )
 
 
+def _require_valid_url(host: str) -> None:
+    # httpx builds every request from the host, urllib reads it in the checks
+    # below and in _same_origin, and each refuses strings the other takes. Some
+    # of that only shows on use: urllib parses the port when it is read, httpx
+    # decodes an xn-- label when .host is read, and socket and ssl encode the
+    # name httpx hands them (.raw_host) like .encode("idna") does, where an
+    # empty label or one over 63 characters is a UnicodeError that httpx lets
+    # through.
+    sources = "--host, TOON_HOST or your last login"
+    try:
+        url = httpx.URL(host)
+        _ = url.host
+        url.raw_host.decode("ascii").encode("idna")
+        _ = urllib.parse.urlsplit(host).port
+    except httpx.InvalidURL as error:
+        raise UsageError(f"The host is not valid ({sources}): {error}") from None
+    except ValueError:
+        # Without the message: urllib's names the whole netloc of a non-ASCII
+        # host, credentials included.
+        raise UsageError(f"The host is not valid ({sources})") from None
+
+
 def _require_https(host: str) -> None:
     # Credentials in the host itself: httpx sends them, and every message that
     # names the host afterwards puts them in a terminal or a CI log. The check
@@ -606,9 +628,10 @@ def _request(host: str, method: str, url: str, **kwargs: Any) -> httpx.Response 
 
 
 def _setup(args: argparse.Namespace) -> str:
-    """The host a command talks to, checked for https; a UsageError ends in
-    `main` as an error line and exit code 2."""
+    """The host a command talks to, checked for a valid URL and for https. A
+    UsageError ends in `main` as an error line and exit code 2."""
     host = _resolve_host(args)
+    _require_valid_url(host)
     _require_https(host)
     return host
 
