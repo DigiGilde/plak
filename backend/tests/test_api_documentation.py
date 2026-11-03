@@ -13,14 +13,19 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import AsyncIterator
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
+import httpx
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from helpers_oidc import MockIdP, make_settings, make_test_client
 
-from toon import messages
+from toon import i18n, messages
 from toon.api.deploys import accepts_bearer
 from toon.api.docs import (
     _ASSETS,
@@ -539,6 +544,88 @@ class TestSchemaEditsOnEdgeCases:
         schema: dict[str, Any] = {"components": {"schemas": {}}}
         _restore_examples(schema)
         assert schema["components"]["schemas"] == {}
+
+
+class _Spoken(HTMLParser):
+    """What a screen reader meets in a piece of HTML, in the order it meets it.
+
+    An element with `role="img"` is one piece, named by its `aria-label`. What
+    sits inside `aria-hidden="true"` is not met at all. Any other run of text is
+    a piece of its own: the header is a flex row, so the browser hands each of
+    its boxes to the screen reader separately, and a "T" beside "oon" is two
+    pieces, not the word Toon.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pieces: list[str] = []
+        self._hidden: list[bool] = []
+
+    def _inside_hidden(self) -> bool:
+        return bool(self._hidden) and self._hidden[-1]
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        self._hidden.append(self._inside_hidden() or attributes.get("aria-hidden") == "true")
+        if attributes.get("role") == "img" and not self._inside_hidden():
+            self.pieces.append(attributes.get("aria-label") or "")
+
+    def handle_endtag(self, tag: str) -> None:
+        self._hidden.pop()
+
+    def handle_data(self, data: str) -> None:
+        if data.strip() and not self._inside_hidden():
+            self.pieces.append(data.strip())
+
+
+def _spoken(html: str) -> list[str]:
+    parser = _Spoken()
+    parser.feed(html)
+    return parser.pieces
+
+
+@pytest_asyncio.fixture
+async def docs_client(tmp_path: Path) -> AsyncIterator[httpx.AsyncClient]:
+    """The page through the whole app. The lifespan only builds the engine and a
+    page without a session reads no database, so this needs no container."""
+    app = create_app(make_settings(MockIdP(), content_root=tmp_path / "content"))
+    async with app.router.lifespan_context(app), make_test_client(app) as client:
+        yield client
+
+
+class TestDocsHeaderWordmark:
+    """The header draws the name as a block with a T beside the letters "oon",
+    two boxes. A screen reader still has to meet one word, the way it does in
+    the admin SPA (App.vue): an image named Toon whose two pieces are hidden."""
+
+    @pytest.mark.parametrize("lang", i18n.SUPPORTED)
+    async def test_a_screen_reader_meets_the_name_whole_and_once(
+        self, docs_client: httpx.AsyncClient, lang: str
+    ) -> None:
+        other = next(language for language in i18n.SUPPORTED if language != lang)
+
+        response = await docs_client.get(f"/-/api/docs?lang={lang}")
+
+        assert response.status_code == 200
+        header = re.search(r'<header class="docs-header">(.*?)</header>', response.text, re.DOTALL)
+        assert header, "the docs page has no header"
+        assert _spoken(header.group(1)) == [
+            "Toon",
+            i18n.t(lang, "docs.back"),
+            i18n.t(lang, "docs.schema"),
+            i18n.t(other, "docs.language"),  # the switch names the other language, in that language
+        ]
+
+    def test_the_check_tells_the_old_markup_from_the_new(self) -> None:
+        """Without this the test above could pass on any markup."""
+        old = '<span class="docs-brand"><span class="docs-brand__block">T</span>oon</span>'
+        new = (
+            '<span role="img" aria-label="Toon">'
+            '<span aria-hidden="true">T</span><span aria-hidden="true">oon</span></span>'
+        )
+
+        assert _spoken(old) == ["T", "oon"]
+        assert _spoken(new) == ["Toon"]
 
 
 class TestAssetOnAllowlistButMissing:

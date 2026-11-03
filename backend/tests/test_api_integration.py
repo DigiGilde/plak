@@ -380,7 +380,7 @@ async def test_docs_page_is_english_with_a_switch_to_dutch(client: httpx.AsyncCl
 
     assert '<html lang="en">' in resp.text
     assert "<title>Toon API documentation</title>" in resp.text
-    assert '<span class="docs-brand__block">T</span>oon</span>' in resp.text
+    assert '<span class="docs-brand" role="img" aria-label="Toon">' in resp.text
     assert '<a href="/-/api/openapi.json">OpenAPI schema</a>' in resp.text
     assert '<a href="/-/api/docs?lang=nl" lang="nl" hreflang="nl">Nederlands</a>' in resp.text
     assert resp.headers["content-language"] == "en"
