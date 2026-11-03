@@ -77,16 +77,14 @@ On a first run building the images takes a while; later runs are
 faster thanks to the Podman build cache.
 
 The app reads its settings from `TOON_<NAME>` environment variables, and
-`dev/secrets.sh` writes the dev secrets under those names. The old
-`PLAK_<NAME>` names still work as a fallback, and at startup the app logs a
-warning that names every `PLAK_` variable still in use. The compose project,
+`dev/secrets.sh` writes the dev secrets under those names. The compose project,
 the database and its role are called `toon`, where they were `plak`. A stack
 from before the rename keeps its volumes under the old project name, and its
-secret files name the old database and role. A fresh database with those
-files fails in `dev/postgres-init`, and `e2e/run.sh` starts a fresh one every
-time, so start from scratch: run
-`podman compose -p plak -f dev/compose.yml down -v`, remove `dev/.secrets/`,
-then run `./dev/up.sh`.
+secret files name the old database and role, older ones under the `PLAK_` names
+the app no longer reads. A fresh database with those files fails in
+`dev/postgres-init`, and `e2e/run.sh` starts a fresh one every time, so start
+from scratch: run `podman compose -p plak -f dev/compose.yml down -v`, remove
+`dev/.secrets/`, then run `./dev/up.sh`.
 
 ## Seeding dev content
 

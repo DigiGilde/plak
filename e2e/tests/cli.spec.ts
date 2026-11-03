@@ -59,8 +59,8 @@ interface CliResult {
 async function toon(args: string[], extraEnv: Record<string, string> = {}): Promise<CliResult> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
-    // The CLI reads TOON_* first and falls back to PLAK_*: neither may leak in.
-    if (value !== undefined && !key.startsWith('TOON_') && !key.startsWith('PLAK_')) {
+    // The CLI reads TOON_*: none of it may leak in.
+    if (value !== undefined && !key.startsWith('TOON_')) {
       env[key] = value;
     }
   }

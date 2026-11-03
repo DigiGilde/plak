@@ -1260,8 +1260,7 @@ The new CLI starts clean. Its configuration directory is `toon`
 (`~/.config/toon`) and its keyring entries are `toon:<host>`, and it does
 not read the `plak` ones, which can be deleted. `TOON_HOST`, `TOON_SITE_ID`,
 `TOON_ACCESS_TOKEN` and `TOON_CONFIG_DIR` replace the `PLAK_` names, which
-still work as a fallback when the `TOON_` one is not set. A `TOON_` variable
-set to an empty value counts as set.
+the CLI no longer reads.
 
 ### The plugin
 

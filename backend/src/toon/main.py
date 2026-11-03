@@ -151,22 +151,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 previous_peppers,
                 previous_ip_keys,
             )
-        # Names only: never a value.
-        old_variables = settings.old_variables_in_use()
-        if old_variables:
-            _logger.warning(
-                "Environment variables with the old PLAK_ prefix are still in use: %s. "
-                "See docs/deploying-on-zad.md.",
-                ", ".join(old_variables),
-            )
-        left_behind = settings.old_audit_variables_left_behind()
-        if left_behind:
-            _logger.warning(
-                "%s hold a value that is neither current nor previous, so audit rows written "
-                "under it are out of reach. Do not remove them before this is solved. "
-                "See docs/deploying-on-zad.md.",
-                ", ".join(left_behind),
-            )
         if not spa_available(settings.spa_path):
             _logger.warning(
                 "Admin SPA not found in %s (TOON_SPA_PATH): the admin host answers 503 "

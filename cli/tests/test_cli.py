@@ -256,8 +256,7 @@ def memory_keyring(tmp_path, monkeypatch):
     """No test ever touches the real keyring, the real ~/.config/toon or the
     real default host."""
     monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "config"))
-    for name in ("TOON_HOST", "PLAK_HOST", "PLAK_CONFIG_DIR", "PLAK_ACCESS_TOKEN", "PLAK_SITE_ID"):
-        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("TOON_HOST", raising=False)
     monkeypatch.setattr(cli, "DEFAULT_HOST", TEST_DEFAULT_HOST)
     backend = _MemoryKeyring()
     previous = keyring.get_keyring()
@@ -1834,17 +1833,16 @@ def test_action_hands_the_site_id_to_the_cli_for_the_token(
     assert _audience(oidc) == audience.format(host=host)
 
 
-@pytest.mark.parametrize("variable", ["TOON_SITE_ID", "PLAK_SITE_ID"])
 def test_action_without_a_site_id_input_leaves_the_site_id_of_the_job_to_the_cli(
-    stub_server, host, dist_folder, isolated_cwd, action_env, variable
+    stub_server, host, dist_folder, isolated_cwd, action_env
 ):
     """Like TOON_HOST: a site id the job sets in its environment still counts
-    when the input is left empty, also under the old name."""
+    when the input is left empty."""
     _action_responder(stub_server)
 
     run = _run_action(
         {"host": host, "site": "team-aurora/website", "dist-path": str(dist_folder)},
-        env={**action_env, variable: SITE_ID},
+        env={**action_env, "TOON_SITE_ID": SITE_ID},
         cwd=isolated_cwd,
     )
 
@@ -1856,13 +1854,8 @@ def test_action_without_a_site_id_input_leaves_the_site_id_of_the_job_to_the_cli
 def test_action_leaves_the_variables_the_cli_reads_of_the_job_alone():
     """On a runner a step's env shadows the job's, so the inputs go in under
     names of their own and become flags only when filled; a TOON_HOST or
-    TOON_SITE_ID the job sets still reaches the CLI, and so does the old name
-    of either."""
-    read_by_the_cli = {
-        f"{prefix}_{name}"
-        for prefix in ("TOON", "PLAK")
-        for name in ("HOST", "SITE_ID", "ACCESS_TOKEN", "CONFIG_DIR")
-    }
+    TOON_SITE_ID the job sets still reaches the CLI."""
+    read_by_the_cli = {"TOON_HOST", "TOON_SITE_ID", "TOON_ACCESS_TOKEN", "TOON_CONFIG_DIR"}
     for step in _action_definition()["runs"]["steps"]:
         assert not read_by_the_cli & set(step.get("env", {})), step["name"]
 
@@ -1983,15 +1976,14 @@ def test_action_fails_the_teardown_step_when_the_server_refuses_it(
     assert "Not your preview." in run.stderr
 
 
-@pytest.mark.parametrize("variable", ["TOON_HOST", "PLAK_HOST"])
 def test_action_without_host_leaves_the_host_to_the_cli(
-    stub_server, host, dist_folder, isolated_cwd, action_env, variable
+    stub_server, host, dist_folder, isolated_cwd, action_env
 ):
     """An empty host input passes no --host at all, so TOON_HOST set on the
-    job, or its old name, reaches the CLI; on a runner without it the CLI's
-    DEFAULT_HOST applies (test_default_host_*)."""
+    job reaches the CLI; on a runner without it the CLI's DEFAULT_HOST applies
+    (test_default_host_*)."""
     _action_responder(stub_server)
-    env = {**action_env, variable: host}
+    env = {**action_env, "TOON_HOST": host}
 
     publish = _run_action(
         {"site": "team-aurora/website", "dist-path": str(dist_folder), "preview-ref": "pr-42"},
@@ -5490,27 +5482,29 @@ def test_a_single_file_is_streamed_from_disk_and_closed_also_when_the_server_is_
     assert opened[0].closed
 
 
-# --- the TOON_ variables and their old PLAK_ names ---------------------------------
+# --- the TOON_ variables, and the old PLAK_ names that are no longer read -----------
 
 
-def test_the_host_variable_reads_toon_first_then_plak(monkeypatch):
+def test_the_host_variable_reads_toon_and_not_plak(monkeypatch):
     monkeypatch.setenv("PLAK_HOST", "https://oud.example")
-    assert _resolved_host() == "https://oud.example"
+    assert _resolved_host() == TEST_DEFAULT_HOST
 
     monkeypatch.setenv("TOON_HOST", "https://nieuw.example")
     assert _resolved_host() == "https://nieuw.example"
 
 
-@pytest.mark.parametrize(("toon", "plak"), [("", "https://oud.example"), (None, "")], ids=["empty-toon", "empty-plak"])
-def test_an_empty_host_variable_names_no_host_and_hides_the_old_name(monkeypatch, toon, plak):
-    """Present includes empty, as on the server: an empty TOON_HOST is the
-    variable that counts, so the old name is not read at all."""
-    if toon is not None:
-        monkeypatch.setenv("TOON_HOST", toon)
-    monkeypatch.setenv("PLAK_HOST", plak)
+def test_an_empty_host_variable_names_no_host(monkeypatch):
+    monkeypatch.setenv("TOON_HOST", "")
     assert _resolved_host() == TEST_DEFAULT_HOST
 
     _store_session("https://laatst.example")
+    assert _resolved_host() == "https://laatst.example"
+
+
+def test_the_old_host_variable_does_not_come_before_the_last_login(monkeypatch):
+    monkeypatch.setenv("PLAK_HOST", "https://oud.example")
+    _store_session("https://laatst.example")
+
     assert _resolved_host() == "https://laatst.example"
 
 
@@ -5520,36 +5514,32 @@ _TOKEN_COMMANDS = {
     "logout": (["logout"], _empty_responder(204)),
 }
 
+_NO_TOON_ACCESS_TOKEN = pytest.mark.parametrize(
+    "variables",
+    [{"TOON_ACCESS_TOKEN": ""}, {"PLAK_ACCESS_TOKEN": "oud"}, {"TOON_ACCESS_TOKEN": "", "PLAK_ACCESS_TOKEN": "oud"}],
+    ids=["empty-toon", "plak-alone", "empty-toon-with-plak"],
+)
+
 
 @pytest.mark.parametrize("command", _TOKEN_COMMANDS)
-@pytest.mark.parametrize(
-    ("toon", "plak", "sent"),
-    [("nieuw", "oud", "Bearer nieuw"), ("nieuw", None, "Bearer nieuw"), (None, "oud", "Bearer oud")],
-)
-def test_the_access_token_reads_toon_first_then_plak(
-    stub_server, host, isolated_cwd, monkeypatch, command, toon, plak, sent
-):
+def test_the_toon_access_token_is_sent(stub_server, host, isolated_cwd, monkeypatch, command):
     argv, stub_server.responder = _TOKEN_COMMANDS[command]
-    if toon is not None:
-        monkeypatch.setenv("TOON_ACCESS_TOKEN", toon)
-    if plak is not None:
-        monkeypatch.setenv("PLAK_ACCESS_TOKEN", plak)
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "nieuw")
 
     assert cli.main([*argv, "--host", host]) == 0
 
     [request] = stub_server.requests
-    assert request["headers"]["Authorization"] == sent
+    assert request["headers"]["Authorization"] == "Bearer nieuw"
 
 
 @pytest.mark.parametrize("command", _TOKEN_COMMANDS)
-@pytest.mark.parametrize(("toon", "plak"), [("", "oud"), (None, "")], ids=["empty-toon", "empty-plak"])
-def test_an_empty_access_token_leaves_the_session_and_hides_the_old_name(
-    stub_server, host, isolated_cwd, monkeypatch, command, toon, plak
+@_NO_TOON_ACCESS_TOKEN
+def test_without_a_toon_access_token_the_session_is_sent(
+    stub_server, host, isolated_cwd, monkeypatch, command, variables
 ):
     argv, stub_server.responder = _TOKEN_COMMANDS[command]
-    if toon is not None:
-        monkeypatch.setenv("TOON_ACCESS_TOKEN", toon)
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", plak)
+    for name, value in variables.items():
+        monkeypatch.setenv(name, value)
     _store_session(host, access="uit-de-sessie")
 
     assert cli.main([*argv, "--host", host]) == 0
@@ -5559,33 +5549,25 @@ def test_an_empty_access_token_leaves_the_session_and_hides_the_old_name(
 
 
 @pytest.mark.parametrize(("command", "code"), [("whoami", 2), ("group-create", 2), ("logout", 0)])
-def test_an_empty_toon_access_token_without_a_session_sends_nothing(
-    stub_server, host, isolated_cwd, monkeypatch, command, code
+@_NO_TOON_ACCESS_TOKEN
+def test_without_a_toon_access_token_or_a_session_nothing_is_sent(
+    stub_server, host, isolated_cwd, monkeypatch, command, code, variables
 ):
-    """The old token is not the way out of an empty new one."""
     argv, _ = _TOKEN_COMMANDS[command]
-    monkeypatch.setenv("TOON_ACCESS_TOKEN", "")
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+    for name, value in variables.items():
+        monkeypatch.setenv(name, value)
 
     assert cli.main([*argv, "--host", host]) == code
 
     assert stub_server.requests == []
 
 
-def test_the_old_access_token_takes_priority_over_oidc_like_the_new_one(
-    stub_server, host, dist_folder, ci_runner, monkeypatch
+@_NO_TOON_ACCESS_TOKEN
+def test_without_a_toon_access_token_ci_uses_the_id_token(
+    stub_server, host, dist_folder, ci_runner, monkeypatch, variables
 ):
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
-
-    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
-
-    [deploy] = stub_server.requests
-    assert deploy["headers"]["Authorization"] == "Bearer oud"
-
-
-def test_an_empty_toon_access_token_leaves_ci_to_the_id_token(stub_server, host, dist_folder, ci_runner, monkeypatch):
-    monkeypatch.setenv("TOON_ACCESS_TOKEN", "")
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+    for name, value in variables.items():
+        monkeypatch.setenv(name, value)
 
     assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
 
@@ -5595,21 +5577,21 @@ def test_an_empty_toon_access_token_leaves_ci_to_the_id_token(stub_server, host,
 @pytest.mark.parametrize(
     ("toon", "plak", "bound"),
     [
-        (SITE_ID, "11111111-2222-3333-4444-555555555555", True),
-        (SITE_ID, "geen-uuid", True),
-        (None, SITE_ID, True),
-        (None, SITE_ID.upper(), True),
+        (SITE_ID, None, True),
+        (SITE_ID.upper(), None, True),
+        (None, SITE_ID, False),
+        (None, "geen-uuid", False),
         ("", SITE_ID, False),
-        ("", "geen-uuid", False),
-        (None, "", False),
+        ("", None, False),
     ],
 )
-def test_the_site_id_reads_toon_first_then_plak(
+def test_the_site_id_reads_toon_and_not_plak(
     stub_server, host, dist_folder, ci_runner, monkeypatch, capsys, toon, plak, bound
 ):
     if toon is not None:
         monkeypatch.setenv("TOON_SITE_ID", toon)
-    monkeypatch.setenv("PLAK_SITE_ID", plak)
+    if plak is not None:
+        monkeypatch.setenv("PLAK_SITE_ID", plak)
 
     assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
 
@@ -5618,51 +5600,39 @@ def test_the_site_id_reads_toon_first_then_plak(
     assert "Warning" not in capsys.readouterr().err
 
 
-def test_an_invalid_site_id_is_named_under_the_old_variable_it_came_from(
-    stub_server, host, dist_folder, ci_runner, monkeypatch, capsys
-):
-    monkeypatch.setenv("PLAK_SITE_ID", "team-aurora/website")
-
-    assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 2
-
-    assert stub_server.requests == []
-    assert "Error: PLAK_SITE_ID must be a site id" in capsys.readouterr().err
-
-
-def test_an_old_site_id_beside_an_old_token_is_ignored_with_the_warning(
+def test_an_old_site_id_beside_a_token_gets_no_warning_as_it_is_not_read(
     stub_server, host, dist_folder, isolated_cwd, monkeypatch, capsys
 ):
     monkeypatch.setenv("PLAK_SITE_ID", SITE_ID)
-    monkeypatch.setenv("PLAK_ACCESS_TOKEN", "oud")
+    monkeypatch.setenv("TOON_ACCESS_TOKEN", "nieuw")
 
     assert cli.main(["publish", str(dist_folder), "--site", "team-aurora/website", "--host", host]) == 0
 
-    assert capsys.readouterr().err.count(SITE_ID_IGNORED) == 1
+    assert SITE_ID_IGNORED not in capsys.readouterr().err
 
 
-def test_the_config_dir_reads_toon_first_then_plak(tmp_path, monkeypatch):
+def test_the_config_dir_reads_toon_and_not_plak(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("TOON_CONFIG_DIR", str(tmp_path / "nieuw"))
     monkeypatch.setenv("PLAK_CONFIG_DIR", str(tmp_path / "oud"))
     assert cli._hosts_path() == tmp_path / "nieuw" / "hosts.json"
 
     monkeypatch.delenv("TOON_CONFIG_DIR")
-    assert cli._hosts_path() == tmp_path / "oud" / "hosts.json"
+    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
 
     monkeypatch.setenv("TOON_CONFIG_DIR", "")
     assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
 
-    monkeypatch.delenv("TOON_CONFIG_DIR")
-    monkeypatch.setenv("PLAK_CONFIG_DIR", "")
-    assert cli._hosts_path() == tmp_path / "xdg" / "toon" / "hosts.json"
 
-
-def test_a_session_in_the_old_config_dir_is_not_carried_over(stub_server, host, tmp_path, monkeypatch, capsys):
-    """Everyone logs in once: without a variable naming it, the old directory
-    is not read, for the session and for the default host."""
+@pytest.mark.parametrize("named", [False, True], ids=["old-place", "named-by-the-old-variable"])
+def test_a_session_in_the_old_config_dir_is_not_carried_over(stub_server, host, tmp_path, monkeypatch, capsys, named):
+    """Everyone logs in once: the old directory is not read, for the session and
+    for the default host, also with the old variable naming it."""
     monkeypatch.delenv("TOON_CONFIG_DIR")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     old = tmp_path / "xdg" / "plak"
+    if named:
+        monkeypatch.setenv("PLAK_CONFIG_DIR", str(old))
     old.mkdir(parents=True, mode=0o700)
     (old / "hosts.json").write_text(
         json.dumps({"default_host": host, "hosts": {host: {"storage": "file", "access_token": "oud"}}})
@@ -5694,7 +5664,7 @@ NEW_ADMIN_HOST = "https://beheer.toon.rijks.app"
 OLD_CONTENT_HOST = "https://plak.rijks.app"
 NEW_CONTENT_HOST = "https://toon.rijks.app"
 
-_HOST_SOURCES = ["--host", "TOON_HOST", "PLAK_HOST", "stored"]
+_HOST_SOURCES = ["--host", "TOON_HOST", "stored"]
 
 
 def _name_host(source: str, value: str, monkeypatch) -> list[str]:
@@ -5784,7 +5754,6 @@ def test_the_built_in_default_is_the_new_admin_host():
 
 def test_empty_values_name_no_host_and_translate_nothing(monkeypatch, capsys):
     monkeypatch.setenv("TOON_HOST", "")
-    monkeypatch.setenv("PLAK_HOST", OLD_ADMIN_HOST)
     _write_raw_hosts(json.dumps({"default_host": ""}))
 
     assert cli._resolve_host(argparse.Namespace(host="")) == TEST_DEFAULT_HOST
@@ -5792,8 +5761,16 @@ def test_empty_values_name_no_host_and_translate_nothing(monkeypatch, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_an_old_host_further_down_the_order_is_not_used_and_not_warned_about(monkeypatch, capsys):
+def test_an_old_host_in_the_old_variable_is_not_read_and_not_warned_about(monkeypatch, capsys):
     monkeypatch.setenv("PLAK_HOST", OLD_ADMIN_HOST)
+
+    assert _resolved_host() == TEST_DEFAULT_HOST
+
+    assert capsys.readouterr().err == ""
+
+
+def test_an_old_host_further_down_the_order_is_not_used_and_not_warned_about(monkeypatch, capsys):
+    _write_raw_hosts(json.dumps({"default_host": OLD_ADMIN_HOST}))
     monkeypatch.setenv("TOON_HOST", NEW_ADMIN_HOST)
     assert _resolved_host() == NEW_ADMIN_HOST
 
@@ -5895,9 +5872,8 @@ def test_the_ci_audience_is_built_from_the_new_host(
         ({"host": OLD_ADMIN_HOST}, {}),
         ({"host": f"{OLD_ADMIN_HOST}/"}, {}),
         ({}, {"TOON_HOST": OLD_ADMIN_HOST}),
-        ({}, {"PLAK_HOST": OLD_ADMIN_HOST}),
     ],
-    ids=["input", "input-with-slash", "toon-host", "plak-host"],
+    ids=["input", "input-with-slash", "toon-host"],
 )
 def test_action_with_an_old_host_asks_the_id_token_for_the_new_one(
     stub_server, dist_folder, isolated_cwd, action_env, inputs, env

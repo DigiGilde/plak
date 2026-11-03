@@ -16,7 +16,6 @@ from datetime import timedelta
 import asyncpg
 import pytest
 from helpers_audit import insert_aged_audit_row
-from sqlalchemy.exc import NoSuchModuleError
 
 from toon import i18n
 from toon.audit import vocabulary
@@ -1215,7 +1214,6 @@ async def test_the_storage_migration_needs_the_content_root_when_there_is_someth
 ) -> None:
     versions = await _slug_layout_versions(own_database, tmp_path / "content", sites=1, per_site=1)
     monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
-    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
 
     with pytest.raises(RuntimeError, match="TOON_CONTENT_ROOT"):
         await asyncio.to_thread(_alembic, own_database, "upgrade", _STORAGE_MOVE)
@@ -1233,31 +1231,28 @@ def _storage_migration():
 
 
 # Moving something that is not on the volume stops at the check that names the
-# root it looked under, before it touches the database: that says which variable
-# the root came from, without a database.
+# root it looked under, before it touches the database: that shows the root it
+# read, without a database.
 _A_MOVE = [(uuid.uuid4(), "group/site/version", "site/version")]
 
 
-async def test_the_storage_migration_prefers_the_new_name_of_the_content_root(tmp_path, monkeypatch) -> None:
+async def test_the_storage_migration_reads_the_new_name_of_the_content_root(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TOON_CONTENT_ROOT", str(tmp_path / "new"))
-    monkeypatch.setenv("PLAK_CONTENT_ROOT", str(tmp_path / "old"))
 
     with pytest.raises(RuntimeError, match=f"No version directory found under {tmp_path / 'new'}"):
         _storage_migration()._move(_A_MOVE)
 
 
-async def test_the_storage_migration_reads_the_old_name_of_the_content_root_alone(tmp_path, monkeypatch) -> None:
-    """A deployment that has not moved yet has only this one when it reaches 0003."""
+async def test_the_storage_migration_does_not_read_the_old_name_of_the_content_root(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
     monkeypatch.setenv("PLAK_CONTENT_ROOT", str(tmp_path / "old"))
 
-    with pytest.raises(RuntimeError, match=f"No version directory found under {tmp_path / 'old'}"):
+    with pytest.raises(RuntimeError, match="TOON_CONTENT_ROOT is not set"):
         _storage_migration()._move(_A_MOVE)
 
 
 async def test_the_storage_migration_names_the_new_variable_without_a_content_root(monkeypatch) -> None:
     monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
-    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
 
     with pytest.raises(RuntimeError, match="TOON_CONTENT_ROOT is not set"):
         _storage_migration()._move(_A_MOVE)
@@ -1265,7 +1260,6 @@ async def test_the_storage_migration_names_the_new_variable_without_a_content_ro
 
 async def test_the_storage_migration_needs_no_content_root_when_nothing_moves(monkeypatch) -> None:
     monkeypatch.delenv("TOON_CONTENT_ROOT", raising=False)
-    monkeypatch.delenv("PLAK_CONTENT_ROOT", raising=False)
 
     assert _storage_migration()._move([(uuid.uuid4(), "site/version", "site/version")]) is None
 
@@ -1289,24 +1283,21 @@ def _offline_upgrade() -> str:
 _A_DSN = "postgresql+asyncpg://user:password@db.invalid/app"
 
 
-async def test_the_migrations_read_the_old_database_url_alone(monkeypatch) -> None:
-    monkeypatch.delenv("TOON_DB_URL", raising=False)
-    monkeypatch.setenv("PLAK_DB_URL", _A_DSN)
+async def test_the_migrations_read_the_new_database_url(monkeypatch) -> None:
+    monkeypatch.setenv("TOON_DB_URL", _A_DSN)
 
     assert "CREATE TABLE" in _offline_upgrade()
 
 
-async def test_the_migrations_prefer_the_new_database_url(monkeypatch) -> None:
-    monkeypatch.setenv("TOON_DB_URL", "nosuchdialect://only-the-new-name-says-this")
-    monkeypatch.setenv("PLAK_DB_URL", _A_DSN)
-
-    with pytest.raises(NoSuchModuleError, match="nosuchdialect"):
-        _offline_upgrade()
-
-
-async def test_the_migrations_refuse_under_neither_database_url(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "environment",
+    [{}, {"PLAK_DB_URL": _A_DSN}, {"TOON_DB_URL": "", "PLAK_DB_URL": _A_DSN}],
+    ids=["neither-name", "old-name-alone", "empty-new-value"],
+)
+async def test_the_migrations_refuse_without_the_new_database_url(monkeypatch, environment) -> None:
     monkeypatch.delenv("TOON_DB_URL", raising=False)
-    monkeypatch.delenv("PLAK_DB_URL", raising=False)
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
 
     with pytest.raises(RuntimeError, match="TOON_DB_URL"):
         _offline_upgrade()

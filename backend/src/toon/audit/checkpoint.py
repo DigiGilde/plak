@@ -32,6 +32,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -40,7 +41,6 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from toon.config import server_variable
 from toon.db import make_session_factory
 
 DB_URL_VAR = "TOON_DB_URL"
@@ -347,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     arguments = parser.parse_args(argv)
 
-    dsn = server_variable(DB_URL_VAR)
+    dsn = os.environ.get(DB_URL_VAR)
     if not dsn:
         _logger.error("Cannot publish: %s is not set", DB_URL_VAR)
         return 1

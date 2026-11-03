@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from toon.audit import chain, checkpoint, retention
-from toon.config import ConfigurationError, load_settings, server_variable
+from toon.config import ConfigurationError, load_settings
 
 ZAD_OIDC_VARIABLES = ("OIDC_DISCOVERY_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET")
 
@@ -15,7 +15,7 @@ ZAD_OIDC_VARIABLES = ("OIDC_DISCOVERY_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRE
 @pytest.fixture(autouse=True)
 def _clean_environment(monkeypatch):
     for key in list(os.environ):
-        if key.upper().startswith(("TOON_", "PLAK_")) or key in ZAD_OIDC_VARIABLES:
+        if key.upper().startswith("TOON_") or key in ZAD_OIDC_VARIABLES:
             monkeypatch.delenv(key, raising=False)
 
 
@@ -836,7 +836,7 @@ class TestZadSourceMapping:
         assert settings.oidc_client_id == "toon-eigen"
         assert settings.oidc_client_secret == "eigen-geheim"
 
-    def test_the_old_variables_go_for_zad_variables_too(self, monkeypatch):
+    def test_the_old_variables_do_not_go_for_zad_variables(self, monkeypatch):
         self._set_zad_env(
             monkeypatch,
             PLAK_OIDC_ISSUER="https://old-idp.example.org",
@@ -844,9 +844,9 @@ class TestZadSourceMapping:
             PLAK_OIDC_CLIENT_SECRET="old-secret",
         )
         settings = load_settings()
-        assert settings.oidc_issuer == "https://old-idp.example.org"
-        assert settings.oidc_client_id == "old-client"
-        assert settings.oidc_client_secret == "old-secret"
+        assert settings.oidc_issuer == "https://keycloak.rijksapp.nl/realms/toon"
+        assert settings.oidc_client_id == "toon-prd"
+        assert settings.oidc_client_secret == "zad-geheim"
 
     def test_zad_secret_not_taken_over_under_private_key_jwt(self, monkeypatch):
         self._set_zad_env(
@@ -892,455 +892,171 @@ def test_store_compressed_can_be_turned_off(monkeypatch):
     assert load_settings().store_compressed is False
 
 
-# --- The old PLAK_ names --------------------------------------------------------------
+# --- The old PLAK_ names are no longer read -------------------------------------------
 
 
-def _set_old_env(monkeypatch, **overrides):
-    """The required settings under the PLAK_ names alone, the way a deployment
-    from before the rename has them."""
-    _set_required_env(monkeypatch)
-    for key in [key for key in os.environ if key.startswith("TOON_")]:
-        monkeypatch.setenv("PLAK_" + key.removeprefix("TOON_"), os.environ[key])
-        monkeypatch.delenv(key)
-    for key, value in overrides.items():
-        monkeypatch.setenv(key, value)
-
-
-def _refusal_without(*secrets: str) -> str:
-    """The message of the refusal, after checking that nothing of it, traceback
-    included, shows one of these values."""
-    with pytest.raises(ConfigurationError) as excinfo:
-        load_settings()
-    text = _full_traceback(excinfo.value)
-    for secret in secrets:
-        assert secret not in text
-    return str(excinfo.value)
-
-
-class TestOldPrefix:
-    """A setting reads TOON_<NAME> when that is present, else PLAK_<NAME>, else
-    its default."""
-
-    # Name, attribute, then a value under each prefix: as written and as read.
+class TestOldPrefixIsNotRead:
+    # Name, attribute, a value under the old name, what the setting holds without it.
     SETTINGS = (
-        ("OPERATOR_NAME", "operator_name", "New Operator", "New Operator", "Old Operator", "Old Operator"),
-        ("SITE_MAX_BYTES", "site_max_bytes", "2000", 2000, "1000", 1000),
-        ("STORE_COMPRESSED", "store_compressed", "true", True, "false", False),
-        ("BEHIND_PROXY", "behind_proxy", "false", False, "true", True),
-        ("SPA_PATH", "spa_path", "/new/spa", Path("/new/spa"), "/old/spa", Path("/old/spa")),
-        (
-            "BASE_URL",
-            "base_url",
-            "https://new.example.org",
-            "https://new.example.org",
-            "https://old.example.org",
-            "https://old.example.org",
-        ),
-        ("AUDIT_PEPPER_PREVIOUS", "audit_pepper_previous", "n" * 32, "n" * 32, "o" * 32, "o" * 32),
-        ("AUDIT_IP_KEY_PREVIOUS", "audit_ip_key_previous", _ip_key("n"), _ip_key("n"), _ip_key("o"), _ip_key("o")),
+        ("OPERATOR_NAME", "operator_name", "Old Operator", ""),
+        ("SITE_MAX_BYTES", "site_max_bytes", "1000", 500 * 1024 * 1024),
+        ("STORE_COMPRESSED", "store_compressed", "false", True),
+        ("BEHIND_PROXY", "behind_proxy", "true", None),
+        ("SPA_PATH", "spa_path", "/old/spa", Path("../frontend/dist")),
+        ("BASE_URL", "base_url", "https://old.example.org", None),
+        ("AUDIT_PEPPER_PREVIOUS", "audit_pepper_previous", "o" * 32, ""),
+        ("AUDIT_IP_KEY_PREVIOUS", "audit_ip_key_previous", _ip_key("o"), ""),
     )
 
-    # A production pepper can be anything of 32 bytes or more.
-    AWKWARD_PEPPERS = (
-        "  an old pepper, with a comma and spaces around it  ",
+    def test_a_deployment_with_only_the_old_names_does_not_start(self, monkeypatch):
+        """The required settings under the PLAK_ names alone, as from before the
+        rename. The refusal names what to set, and shows none of those values."""
+        _set_required_env(monkeypatch)
+        for key in [key for key in os.environ if key.startswith("TOON_")]:
+            monkeypatch.setenv("PLAK_" + key.removeprefix("TOON_"), os.environ[key])
+            monkeypatch.delenv(key)
+        with pytest.raises(ConfigurationError) as excinfo:
+            load_settings()
+        message = str(excinfo.value)
+        for name in (
+            "TOON_DB_URL",
+            "TOON_CONTENT_ROOT",
+            "TOON_SESSION_SECRET",
+            "TOON_AUDIT_PEPPER",
+            "TOON_AUDIT_IP_KEY",
+            "TOON_CONTENT_BASE_URL",
+        ):
+            assert f"{name}: Field required" in message
+        assert "PLAK_" not in message
+        text = _full_traceback(excinfo.value)
+        for value in ("wachtwoord", "x" * 32, "y" * 32, _ip_key("z")):
+            assert value not in text
+
+    @pytest.mark.parametrize(
+        "name", ["DB_URL", "CONTENT_ROOT", "SESSION_SECRET", "AUDIT_PEPPER", "AUDIT_IP_KEY", "CONTENT_BASE_URL"]
+    )
+    def test_a_required_setting_under_the_old_name_alone_is_refused(self, monkeypatch, name):
+        _set_required_env(monkeypatch)
+        monkeypatch.setenv(f"PLAK_{name}", os.environ[f"TOON_{name}"])
+        monkeypatch.delenv(f"TOON_{name}")
+        with pytest.raises(ConfigurationError) as excinfo:
+            load_settings()
+        assert f"TOON_{name}: Field required" in str(excinfo.value)
+        assert "PLAK_" not in str(excinfo.value)
+
+    @pytest.mark.parametrize(("name", "attribute", "old", "without_it"), SETTINGS)
+    def test_an_optional_setting_under_the_old_name_is_not_read(self, monkeypatch, name, attribute, old, without_it):
+        _set_required_env(monkeypatch, **{f"PLAK_{name}": old})
+        assert getattr(load_settings(), attribute) == without_it
+
+    @pytest.mark.parametrize(
+        "old_values",
+        [
+            {"PLAK_AUDIT_PEPPER_PREVIOUS": "too-short"},
+            {"PLAK_AUDIT_IP_KEY_PREVIOUS": "not-base64!!!"},
+            {"PLAK_INGEST_MAX_BODY": "not-a-number"},
+            {"PLAK_BASE_URL": "not-a-url"},
+            {"PLAK_OPERATOR_EMAIL": "not-an-address"},
+            {"PLAK_OIDC_CLIENT_AUTH": "unknown"},
+        ],
+        ids=["previous-pepper", "previous-key", "not-a-number", "base-url", "operator-email", "client-auth"],
+    )
+    def test_a_bad_value_under_the_old_name_is_not_read_so_not_refused(self, monkeypatch, old_values):
+        _set_required_env(monkeypatch, **old_values)
+        settings = load_settings()
+        assert settings.audit_peppers == ("y" * 32,)
+        assert settings.audit_ip_keys_previous_bytes == ()
+
+    def test_the_old_names_do_not_lift_a_production_requirement(self, monkeypatch):
+        """TOON_ENVIRONMENT is what says dev: without it the app is in production,
+        whatever the old names say."""
+        _set_required_env(
+            monkeypatch,
+            PLAK_ENVIRONMENT="dev",
+            PLAK_BEHIND_PROXY="false",
+            PLAK_OIDC_ISS_REQUIRED="true",
+            PLAK_BASE_URL="https://old.example.org",
+        )
+        monkeypatch.delenv("TOON_ENVIRONMENT")
+        with pytest.raises(ConfigurationError) as excinfo:
+            load_settings()
+        assert "TOON_BEHIND_PROXY is required" in str(excinfo.value)
+
+    def test_an_old_name_in_lower_case_is_not_read_where_a_new_one_is(self, monkeypatch):
+        """pydantic-settings matches a variable whatever its case."""
+        _set_required_env(monkeypatch, plak_operator_name="Old Operator", toon_site_max_bytes="2000")
+        settings = load_settings()
+        assert settings.operator_name == ""
+        assert settings.site_max_bytes == 2000
+
+
+@pytest.mark.parametrize(
+    "pepper",
+    [
+        "  a pepper, with a comma and spaces around it  ",
         "," * 32,
         " " * 32,
         "\t\n" * 16,
         "é" * 16,
         "'a pepper in quotes, of 32 bytes or more'",
         '{"looks": "like JSON, but is a pepper"}',
-    )
-
-    def test_a_deployment_with_only_the_old_names_keeps_starting(self, monkeypatch):
-        _set_old_env(monkeypatch)
-        settings = load_settings()
-        assert settings.db_url == "postgresql+asyncpg://gebruiker:wachtwoord@localhost/toon"
-        assert settings.content_root == Path("/var/lib/toon/content")
-        assert settings.session_secret == "x" * 32
-        assert settings.audit_peppers == ("y" * 32,)
-        assert settings.audit_ip_key_bytes == b"z" * 32
-        assert settings.audit_ip_keys_previous_bytes == ()
-        assert settings.environment == "dev"
-
-    @pytest.mark.parametrize(("name", "attribute", "_new", "_read_new", "old", "read_old"), SETTINGS)
-    def test_the_old_name_alone_is_read(self, monkeypatch, name, attribute, _new, _read_new, old, read_old):
-        _set_required_env(monkeypatch, **{f"PLAK_{name}": old})
-        assert getattr(load_settings(), attribute) == read_old
-
-    @pytest.mark.parametrize(("name", "attribute", "new", "read_new", "old", "_read_old"), SETTINGS)
-    def test_the_new_name_wins_over_the_old_one(self, monkeypatch, name, attribute, new, read_new, old, _read_old):
-        _set_required_env(monkeypatch, **{f"TOON_{name}": new, f"PLAK_{name}": old})
-        assert getattr(load_settings(), attribute) == read_new
-
-    def test_an_empty_new_value_is_present_and_wins(self, monkeypatch):
-        _set_required_env(monkeypatch, TOON_OIDC_REQUIRED_ACR="", PLAK_OIDC_REQUIRED_ACR="urn:acr:old")
-        assert load_settings().oidc_required_acr == ""
-
-    def test_a_new_audit_secret_shadows_the_old_one_and_leaves_no_previous_value(self, monkeypatch):
-        """The two audit secrets have no rule of their own: under a new value the
-        old one is not read at all. Reaching rows written under it takes listing
-        it as a previous value, or setting the same value under the new name."""
-        _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER="o" * 32, PLAK_AUDIT_IP_KEY=_ip_key("o"))
-        settings = load_settings()
-        assert settings.audit_peppers == ("y" * 32,)
-        assert settings.audit_ip_key_bytes == b"z" * 32
-        assert settings.audit_ip_keys_previous_bytes == ()
-
-    @pytest.mark.parametrize("pepper", AWKWARD_PEPPERS)
-    @pytest.mark.parametrize("variable", ["TOON_AUDIT_PEPPER", "PLAK_AUDIT_PEPPER"])
-    def test_any_value_of_32_bytes_works_as_the_pepper_under_either_name(self, monkeypatch, variable, pepper):
-        """Taken verbatim under both names: read any other way, a pepper with a
-        comma or outer whitespace would change every pseudonym it ever made."""
-        _set_required_env(monkeypatch)
-        monkeypatch.delenv("TOON_AUDIT_PEPPER")
-        monkeypatch.setenv(variable, pepper)
-        settings = load_settings()
-        assert settings.audit_pepper == pepper
-        assert settings.audit_peppers == (pepper,)
-
-    def test_a_setting_missing_under_both_names_is_refused_under_the_new_name(self, monkeypatch):
-        _set_old_env(monkeypatch)
-        monkeypatch.delenv("PLAK_DB_URL")
-        message = _refusal_without()
-        assert "TOON_DB_URL: Field required" in message
-        assert "PLAK_DB_URL" not in message
-
-    @pytest.mark.parametrize(
-        ("old_name", "value", "new_name"),
-        [
-            ("PLAK_ENVIRONMENT", "staging", "TOON_ENVIRONMENT"),
-            ("PLAK_INGEST_MAX_BODY", "not-a-number", "TOON_INGEST_MAX_BODY"),
-            ("PLAK_BASE_URL", "not-a-url", "TOON_BASE_URL"),
-        ],
-    )
-    def test_a_bad_value_under_the_old_name_goes_through_the_same_validation(
-        self, monkeypatch, old_name, value, new_name
-    ):
-        _set_old_env(monkeypatch, **{old_name: value})
-        message = _refusal_without()
-        assert new_name in message
-        assert old_name not in message
-
-    @pytest.mark.parametrize(
-        ("old_name", "value", "new_name"),
-        [
-            ("PLAK_SESSION_SECRET", "a-secret-too-short", "TOON_SESSION_SECRET"),
-            ("PLAK_AUDIT_PEPPER", "a-secret-too-short", "TOON_AUDIT_PEPPER"),
-            ("PLAK_AUDIT_PEPPER_PREVIOUS", "a-secret-too-short", "TOON_AUDIT_PEPPER_PREVIOUS"),
-            ("PLAK_AUDIT_IP_KEY", "a-secret-not-base64", "TOON_AUDIT_IP_KEY"),
-            ("PLAK_AUDIT_IP_KEY_PREVIOUS", "a-secret-not-base64", "TOON_AUDIT_IP_KEY_PREVIOUS"),
-        ],
-    )
-    def test_a_bad_secret_under_the_old_name_is_refused_without_showing_it(
-        self, monkeypatch, old_name, value, new_name
-    ):
-        _set_old_env(monkeypatch, **{old_name: value})
-        message = _refusal_without(value)
-        assert new_name in message
-        assert old_name not in message
-
-    @pytest.mark.parametrize(
-        ("overrides", "refusal"),
-        [
-            ({"PLAK_AUDIT_PEPPER": "x" * 32}, "TOON_AUDIT_PEPPER must differ from TOON_SESSION_SECRET"),
-            ({"TOON_SESSION_SECRET": "y" * 32}, "TOON_AUDIT_PEPPER must differ from TOON_SESSION_SECRET"),
-            (
-                {"PLAK_AUDIT_PEPPER": _ip_key("z")},
-                "TOON_AUDIT_IP_KEY must differ from TOON_SESSION_SECRET and TOON_AUDIT_PEPPER",
-            ),
-            (
-                {"TOON_AUDIT_IP_KEY": _ip_key("q"), "PLAK_AUDIT_PEPPER": _ip_key("q")},
-                "TOON_AUDIT_IP_KEY must differ from TOON_SESSION_SECRET and TOON_AUDIT_PEPPER",
-            ),
-        ],
-        ids=["old-with-old", "old-with-new", "old-pepper-old-key", "old-pepper-new-key"],
-    )
-    def test_the_secrets_stay_distinct_across_the_two_prefixes(self, monkeypatch, overrides, refusal):
-        """What counts is the value each setting ends up with, under whichever
-        name it came."""
-        _set_old_env(monkeypatch, **overrides)
-        assert refusal in _refusal_without(*overrides.values())
-
-    @pytest.mark.parametrize(
-        "old_values",
-        [
-            {"PLAK_AUDIT_PEPPER": "too-short"},
-            {"PLAK_AUDIT_PEPPER": "x" * 32},
-            {"PLAK_AUDIT_IP_KEY": "not-base64!!!"},
-            {"PLAK_AUDIT_IP_KEY": "y" * 44},
-            {"PLAK_SESSION_SECRET": "too-short"},
-            {"PLAK_ENVIRONMENT": "staging"},
-        ],
-        ids=["short-pepper", "pepper-is-session-secret", "key-no-base64", "key-is-pepper", "short-secret", "bad-value"],
-    )
-    def test_a_shadowed_old_value_is_not_read_so_not_refused(self, monkeypatch, old_values):
-        _set_required_env(monkeypatch, **old_values)
-        settings = load_settings()
-        assert settings.audit_peppers == ("y" * 32,)
-        assert settings.audit_ip_keys_previous_bytes == ()
-        assert settings.environment == "dev"
-
-    def test_the_production_requirements_hold_under_the_old_names(self, monkeypatch):
-        _set_old_env(monkeypatch, PLAK_ENVIRONMENT="productie")
-        assert "TOON_BEHIND_PROXY is required" in _refusal_without()
-
-    def test_a_field_read_by_its_alias_is_not_read_under_a_prefix(self, monkeypatch):
-        _set_required_env(monkeypatch, TOON_ZAD_OIDC_CLIENT_ID="new-client", PLAK_ZAD_OIDC_CLIENT_ID="old-client")
-        assert load_settings().zad_oidc_client_id == ""
+    ],
+)
+def test_any_value_of_32_bytes_works_as_the_pepper(monkeypatch, pepper):
+    """Taken verbatim: read any other way, a pepper with a comma or outer
+    whitespace would change every pseudonym it ever made."""
+    _set_required_env(monkeypatch, TOON_AUDIT_PEPPER=pepper)
+    settings = load_settings()
+    assert settings.audit_pepper == pepper
+    assert settings.audit_peppers == (pepper,)
 
 
-class TestOldVariablesInUse:
-    def test_none_with_only_the_new_names(self, monkeypatch):
-        _set_required_env(monkeypatch)
-        assert load_settings().old_variables_in_use() == []
-
-    def test_every_setting_read_through_the_fallback_is_listed_and_sorted(self, monkeypatch):
-        _set_old_env(monkeypatch)
-        assert load_settings().old_variables_in_use() == [
-            "PLAK_AUDIT_IP_KEY",
-            "PLAK_AUDIT_PEPPER",
-            "PLAK_CONTENT_BASE_URL",
-            "PLAK_CONTENT_ROOT",
-            "PLAK_DB_URL",
-            "PLAK_ENVIRONMENT",
-            "PLAK_OIDC_CLIENT_ID",
-            "PLAK_OIDC_CLIENT_PRIVATE_JWK",
-            "PLAK_OIDC_ISSUER",
-            "PLAK_OIDC_REQUIRED_ACR",
-            "PLAK_SESSION_SECRET",
-        ]
-
-    def test_an_empty_old_value_read_through_the_fallback_is_listed(self, monkeypatch):
-        """It beats the default just as a value does, so taking it away changes
-        what the app does."""
-        _set_required_env(monkeypatch, PLAK_SITE_MAX_BYTES="0", PLAK_OPERATOR_NAME="")
-        assert load_settings().old_variables_in_use() == ["PLAK_OPERATOR_NAME", "PLAK_SITE_MAX_BYTES"]
-
-    @pytest.mark.parametrize(
-        "old_values",
-        [
-            {"PLAK_DB_URL": "postgresql+asyncpg://old@localhost/old"},
-            {"PLAK_SESSION_SECRET": "o" * 32},
-            {"PLAK_AUDIT_PEPPER": "o" * 32},
-            {"PLAK_AUDIT_PEPPER": "y" * 32},
-            {"PLAK_AUDIT_IP_KEY": _ip_key("o")},
-            {"PLAK_AUDIT_IP_KEY": _ip_key("z")},
-        ],
-        ids=["setting", "session-secret", "other-pepper", "same-pepper", "other-key", "same-key"],
-    )
-    def test_an_old_name_that_is_shadowed_is_not_listed(self, monkeypatch, old_values):
-        _set_required_env(monkeypatch, **old_values)
-        assert load_settings().old_variables_in_use() == []
-
-    def test_an_old_name_shadowed_by_an_empty_new_value_is_not_listed(self, monkeypatch):
-        _set_required_env(monkeypatch, TOON_OPERATOR_NAME="", PLAK_OPERATOR_NAME="Old Operator")
-        assert load_settings().old_variables_in_use() == []
-
-    @pytest.mark.parametrize(
-        "name",
-        [
-            "PLAK_HOST",
-            "PLAK_SITE_ID",
-            "PLAK_ACCESS_TOKEN",
-            "PLAK_CONFIG_DIR",
-            "PLAK_BASE_PATH",
-            "PLAK_TOKEN",
-            "PLAK_ADMIN_URL",
-            "PLAK_TRUSTED_PROXIES",
-            "PLAK_ZAD_OIDC_CLIENT_ID",
-        ],
-    )
-    def test_an_old_name_that_is_no_server_setting_is_not_listed(self, monkeypatch, name):
-        _set_required_env(monkeypatch, **{name: "something"})
-        assert load_settings().old_variables_in_use() == []
-
-    def test_a_name_counts_whatever_its_case_as_the_settings_read_it(self, monkeypatch):
-        """pydantic-settings matches a variable whatever its case, so the report
-        has to: by exact name it would miss the first and list the second."""
-        _set_required_env(
-            monkeypatch,
-            plak_operator_name="Old Operator",
-            PLAK_SITE_MAX_BYTES="1000",
-            toon_site_max_bytes="2000",
-        )
-        settings = load_settings()
-        assert settings.operator_name == "Old Operator"
-        assert settings.site_max_bytes == 2000
-        assert settings.old_variables_in_use() == ["PLAK_OPERATOR_NAME"]
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("TOON_SESSION_SECRET", "a-secret-too-short"),
+        ("TOON_AUDIT_PEPPER", "a-secret-too-short"),
+        ("TOON_AUDIT_PEPPER_PREVIOUS", "a-secret-too-short"),
+        ("TOON_AUDIT_IP_KEY", "a-secret-not-base64"),
+        ("TOON_AUDIT_IP_KEY_PREVIOUS", "a-secret-not-base64"),
+    ],
+)
+def test_a_bad_secret_is_refused_without_showing_it(monkeypatch, variable, value):
+    _set_required_env(monkeypatch, **{variable: value})
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert variable in str(excinfo.value)
+    assert value not in _full_traceback(excinfo.value)
 
 
-class TestOldAuditVariablesLeftBehind:
-    """`_set_required_env` holds pepper `y` and IP key `z` under the new names."""
-
-    OTHER_KEY = _ip_key("o")
-    ANOTHER_KEY = _ip_key("p")
-
-    def test_none_with_only_the_new_names(self, monkeypatch):
-        _set_required_env(monkeypatch)
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_none_with_only_the_old_names(self, monkeypatch):
-        _set_old_env(monkeypatch, PLAK_AUDIT_PEPPER_PREVIOUS="o" * 32, PLAK_AUDIT_IP_KEY_PREVIOUS=self.OTHER_KEY)
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_a_move_with_the_same_values_leaves_nothing_behind(self, monkeypatch):
-        _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER="y" * 32, PLAK_AUDIT_IP_KEY=_ip_key("z"))
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    @pytest.mark.parametrize("pepper", TestOldPrefix.AWKWARD_PEPPERS)
-    def test_an_awkward_pepper_compares_verbatim(self, monkeypatch, pepper):
-        """Split or stripped, a correct move of such a pepper would be reported."""
-        _set_required_env(monkeypatch, TOON_AUDIT_PEPPER=pepper, PLAK_AUDIT_PEPPER=pepper)
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_another_spelling_of_the_same_ip_key_is_the_same_key(self, monkeypatch):
-        _set_required_env(monkeypatch, PLAK_AUDIT_IP_KEY=_respelled(_ip_key("z")))
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_another_new_value_leaves_the_old_one_behind(self, monkeypatch):
-        _set_required_env(monkeypatch, PLAK_AUDIT_PEPPER="o" * 32, PLAK_AUDIT_IP_KEY=self.OTHER_KEY)
-        assert load_settings().old_audit_variables_left_behind() == ["PLAK_AUDIT_IP_KEY", "PLAK_AUDIT_PEPPER"]
-
-    @pytest.mark.parametrize(
-        ("old_values", "expected"),
-        [
-            ({"PLAK_AUDIT_PEPPER": "o" * 32}, ["PLAK_AUDIT_PEPPER"]),
-            ({"PLAK_AUDIT_IP_KEY": OTHER_KEY}, ["PLAK_AUDIT_IP_KEY"]),
-        ],
-        ids=["pepper", "ip-key"],
-    )
-    def test_one_value_left_behind_names_that_one_only(self, monkeypatch, old_values, expected):
-        _set_required_env(monkeypatch, **old_values)
-        assert load_settings().old_audit_variables_left_behind() == expected
-
-    def test_a_rotation_that_lists_the_old_value_leaves_nothing_behind(self, monkeypatch):
-        _set_required_env(
-            monkeypatch,
-            PLAK_AUDIT_PEPPER="o" * 32,
-            PLAK_AUDIT_IP_KEY=self.OTHER_KEY,
-            TOON_AUDIT_PEPPER_PREVIOUS="o" * 32,
-            TOON_AUDIT_IP_KEY_PREVIOUS=self.OTHER_KEY,
-        )
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_an_old_list_still_read_through_the_fallback_leaves_nothing_behind(self, monkeypatch):
-        _set_required_env(
-            monkeypatch,
-            PLAK_AUDIT_PEPPER="o" * 32,
-            PLAK_AUDIT_IP_KEY=self.OTHER_KEY,
-            PLAK_AUDIT_PEPPER_PREVIOUS="o" * 32,
-            PLAK_AUDIT_IP_KEY_PREVIOUS=self.OTHER_KEY,
-        )
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_an_empty_new_list_leaves_the_old_list_behind(self, monkeypatch):
-        """Present includes empty, so this list wins and holds nothing."""
-        _set_required_env(
-            monkeypatch,
-            TOON_AUDIT_PEPPER_PREVIOUS="",
-            TOON_AUDIT_IP_KEY_PREVIOUS="",
-            PLAK_AUDIT_PEPPER_PREVIOUS="o" * 32,
-            PLAK_AUDIT_IP_KEY_PREVIOUS=self.OTHER_KEY,
-        )
-        assert load_settings().old_audit_variables_left_behind() == [
-            "PLAK_AUDIT_IP_KEY_PREVIOUS",
-            "PLAK_AUDIT_PEPPER_PREVIOUS",
-        ]
-
-    def test_a_new_list_that_drops_one_entry_leaves_the_old_list_behind(self, monkeypatch):
-        _set_required_env(
-            monkeypatch,
-            TOON_AUDIT_PEPPER_PREVIOUS="o" * 32,
-            TOON_AUDIT_IP_KEY_PREVIOUS=self.OTHER_KEY,
-            PLAK_AUDIT_PEPPER_PREVIOUS=f"{'o' * 32},{'p' * 32}",
-            PLAK_AUDIT_IP_KEY_PREVIOUS=f"{self.OTHER_KEY},{self.ANOTHER_KEY}",
-        )
-        assert load_settings().old_audit_variables_left_behind() == [
-            "PLAK_AUDIT_IP_KEY_PREVIOUS",
-            "PLAK_AUDIT_PEPPER_PREVIOUS",
-        ]
-
-    def test_a_new_list_in_another_order_leaves_nothing_behind(self, monkeypatch):
-        _set_required_env(
-            monkeypatch,
-            TOON_AUDIT_PEPPER_PREVIOUS=f"{'p' * 32},{'o' * 32}",
-            TOON_AUDIT_IP_KEY_PREVIOUS=f"{self.ANOTHER_KEY},{self.OTHER_KEY}",
-            PLAK_AUDIT_PEPPER_PREVIOUS=f"{'o' * 32},{'p' * 32}",
-            PLAK_AUDIT_IP_KEY_PREVIOUS=f"{self.OTHER_KEY},{self.ANOTHER_KEY}",
-        )
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_an_old_value_moved_to_the_other_place_is_still_there(self, monkeypatch):
-        """The old previous value became the current one under the new name. The
-        empty new lists keep the settings from reading the old ones, which they
-        would refuse for holding the current value."""
-        _set_required_env(
-            monkeypatch,
-            TOON_AUDIT_PEPPER_PREVIOUS="",
-            TOON_AUDIT_IP_KEY_PREVIOUS="",
-            PLAK_AUDIT_PEPPER_PREVIOUS="y" * 32,
-            PLAK_AUDIT_IP_KEY_PREVIOUS=_ip_key("z"),
-        )
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    @pytest.mark.parametrize(
-        "old_values",
-        [
-            {"PLAK_AUDIT_PEPPER": ""},
-            {"PLAK_AUDIT_IP_KEY": ""},
-            {"PLAK_AUDIT_PEPPER_PREVIOUS": ""},
-            {"PLAK_AUDIT_IP_KEY_PREVIOUS": " , "},
-        ],
-        ids=["pepper", "ip-key", "pepper-list", "ip-key-list"],
-    )
-    def test_an_empty_old_value_held_nothing(self, monkeypatch, old_values):
-        _set_required_env(monkeypatch, **old_values)
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    @pytest.mark.parametrize(
-        "old_values",
-        [
-            {"PLAK_AUDIT_IP_KEY": "not-base64!!!"},
-            {"PLAK_AUDIT_IP_KEY": "y" * 44},
-            {"TOON_AUDIT_IP_KEY_PREVIOUS": "", "PLAK_AUDIT_IP_KEY_PREVIOUS": "not-base64!!!"},
-            {"TOON_AUDIT_IP_KEY_PREVIOUS": "", "PLAK_AUDIT_IP_KEY_PREVIOUS": "y" * 44},
-        ],
-        ids=["not-base64", "wrong-length", "list-not-base64", "list-wrong-length"],
-    )
-    def test_an_old_value_that_is_no_ip_key_held_no_rows(self, monkeypatch, old_values):
-        """The app refuses such a value, so nothing was written under it. Shadowed
-        it is not read, and it must not stop the start here either."""
-        _set_required_env(monkeypatch, **old_values)
-        assert load_settings().old_audit_variables_left_behind() == []
-
-    def test_a_name_counts_whatever_its_case_as_the_settings_read_it(self, monkeypatch):
-        _set_required_env(monkeypatch, plak_audit_pepper="o" * 32)
-        assert load_settings().old_audit_variables_left_behind() == ["PLAK_AUDIT_PEPPER"]
+@pytest.mark.parametrize(
+    ("overrides", "refusal"),
+    [
+        ({"TOON_AUDIT_PEPPER": "x" * 32}, "TOON_AUDIT_PEPPER must differ from TOON_SESSION_SECRET"),
+        ({"TOON_SESSION_SECRET": "y" * 32}, "TOON_AUDIT_PEPPER must differ from TOON_SESSION_SECRET"),
+        (
+            {"TOON_AUDIT_PEPPER": _ip_key("z")},
+            "TOON_AUDIT_IP_KEY must differ from TOON_SESSION_SECRET and TOON_AUDIT_PEPPER",
+        ),
+        (
+            {"TOON_SESSION_SECRET": _ip_key("z")},
+            "TOON_AUDIT_IP_KEY must differ from TOON_SESSION_SECRET and TOON_AUDIT_PEPPER",
+        ),
+    ],
+    ids=["pepper-is-session-secret", "session-secret-is-pepper", "pepper-is-ip-key", "session-secret-is-ip-key"],
+)
+def test_two_secrets_with_one_value_are_refused_without_showing_it(monkeypatch, overrides, refusal):
+    _set_required_env(monkeypatch, **overrides)
+    with pytest.raises(ConfigurationError) as excinfo:
+        load_settings()
+    assert refusal in str(excinfo.value)
+    for value in overrides.values():
+        assert value not in _full_traceback(excinfo.value)
 
 
-class TestServerVariable:
-    """The rule of Settings, for what reads a variable without loading them all."""
-
-    def test_the_new_name_wins(self, monkeypatch):
-        monkeypatch.setenv("TOON_DB_URL", "new")
-        monkeypatch.setenv("PLAK_DB_URL", "old")
-        assert server_variable("TOON_DB_URL") == "new"
-
-    def test_an_empty_new_value_is_present_and_wins(self, monkeypatch):
-        monkeypatch.setenv("TOON_DB_URL", "")
-        monkeypatch.setenv("PLAK_DB_URL", "old")
-        assert server_variable("TOON_DB_URL") == ""
-
-    def test_the_old_name_alone_is_read(self, monkeypatch):
-        monkeypatch.setenv("PLAK_DB_URL", "old")
-        assert server_variable("TOON_DB_URL") == "old"
-
-    def test_neither_name_is_none(self):
-        assert server_variable("TOON_DB_URL") is None
-
-    def test_another_name_is_not_read(self, monkeypatch):
-        monkeypatch.setenv("PLAK_CONTENT_ROOT", "old")
-        assert server_variable("TOON_DB_URL") is None
+def test_a_field_read_by_its_alias_is_not_read_under_the_prefix(monkeypatch):
+    _set_required_env(monkeypatch, TOON_ZAD_OIDC_CLIENT_ID="a-client")
+    assert load_settings().zad_oidc_client_id == ""
 
 
 _NO_CHAINS = checkpoint.Checkpoint(taken_at=datetime(2026, 11, 1, tzinfo=UTC), heads=())
@@ -1367,24 +1083,18 @@ def _record_dsn(monkeypatch, module, job, result) -> list[str]:
 
 
 @_AUDIT_JOBS
-@pytest.mark.parametrize(
-    ("environment", "expected"),
-    [({"TOON_DB_URL": "new", "PLAK_DB_URL": "old"}, "new"), ({"PLAK_DB_URL": "old"}, "old")],
-    ids=["both-names", "old-name-alone"],
-)
-def test_an_audit_job_reads_the_database_url_by_that_rule(monkeypatch, module, job, result, run, environment, expected):
+def test_an_audit_job_reads_the_new_database_url(monkeypatch, module, job, result, run):
     seen = _record_dsn(monkeypatch, module, job, result)
-    for name, value in environment.items():
-        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("TOON_DB_URL", "new")
     assert run() == 0
-    assert seen == [expected]
+    assert seen == ["new"]
 
 
 @_AUDIT_JOBS
 @pytest.mark.parametrize(
     "environment",
-    [{}, {"TOON_DB_URL": "", "PLAK_DB_URL": "old"}],
-    ids=["neither-name", "empty-new-value"],
+    [{}, {"TOON_DB_URL": ""}, {"PLAK_DB_URL": "old"}, {"TOON_DB_URL": "", "PLAK_DB_URL": "old"}],
+    ids=["neither-name", "empty-new-value", "old-name-alone", "empty-new-value-beside-the-old-name"],
 )
 def test_an_audit_job_without_a_database_url_refuses_and_names_the_new_one(
     monkeypatch, caplog, module, job, result, run, environment

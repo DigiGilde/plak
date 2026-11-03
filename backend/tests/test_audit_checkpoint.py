@@ -576,7 +576,6 @@ async def test_a_front_without_a_deadline_counts_as_removed(
 
 async def test_main_without_dsn_says_so(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     monkeypatch.delenv(checkpoint.DB_URL_VAR, raising=False)
-    monkeypatch.delenv("PLAK_DB_URL", raising=False)
     with caplog.at_level("ERROR"):
         assert checkpoint.main([]) == 1
     assert checkpoint.DB_URL_VAR in caplog.text
