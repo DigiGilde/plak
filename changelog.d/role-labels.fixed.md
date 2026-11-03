@@ -1,0 +1,1 @@
+- Dutch messages name a role by its Dutch label instead of the English identifier, and English messages say "admin" instead of the Dutch word "beheer".

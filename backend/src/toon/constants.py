@@ -107,8 +107,7 @@ class AccessBase(enum.StrEnum):
 
     `nobody` grants no access on its own. A site on that base is unreachable unless
     one of the two exceptions beside it (secret links, invitees) is on, which is
-    what makes "alleen via de uitzonderingen hieronder" ("only through the exceptions below")
-    expressible at all.
+    what makes "only through the exceptions below" expressible at all.
     """
 
     PUBLIC = "public"
@@ -154,7 +153,8 @@ class Role(enum.StrEnum):
 
     A reader looks on, an editor changes content, an admin changes policy: who
     may look, who may join in, and what disappears for good. The interface
-    labels these lezer, redacteur and beheerder.
+    labels these Reader, Editor and Administrator in English and lezer,
+    redacteur and beheerder in Dutch.
     """
 
     READER = "reader"

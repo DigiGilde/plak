@@ -47,6 +47,17 @@ describe('Interface language', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(nl).sort());
   });
 
+  it('names a role by its own language only: no wire value in Dutch, no Dutch label in English', () => {
+    const wireValue = /\b(readers?|editors?|admins?)\b/i;
+    const dutchLabel = /\b(lezers?|redacteuren?|beheerders?|beheer\w*)\b/i;
+
+    const keysMatching = (catalogue: Record<string, string>, pattern: RegExp) =>
+      Object.keys(catalogue).filter((key) => pattern.test(catalogue[key]));
+
+    expect(keysMatching(nl, wireValue)).toEqual([]);
+    expect(keysMatching(en, dutchLabel)).toEqual([]);
+  });
+
   it('fills placeholders with the given values', () => {
     setLocale('nl');
     expect(t('access.label.only', { extras: 'geheime links' })).toBe('Alleen geheime links');

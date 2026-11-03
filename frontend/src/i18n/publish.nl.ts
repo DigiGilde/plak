@@ -24,7 +24,7 @@ export const publishNl = {
   'publish.sheet.groupName.hintNone':
     'Je hebt er nog geen. Deze maak je nu aan en je bent er meteen lid van.',
   'publish.sheet.groupName.hintNoRole':
-    'Je hebt in geen van je groepen de rol editor of beheerder. Maak een nieuwe groep aan om hier te publiceren.',
+    'Je hebt in geen van je groepen de rol redacteur of beheerder. Maak een nieuwe groep aan om hier te publiceren.',
   'publish.sheet.groupName.required': 'Een naam voor je groep',
   'publish.sheet.address.label': 'Adres',
   'publish.sheet.address.hint': 'Het laatste stuk van de URL.',

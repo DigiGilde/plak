@@ -554,7 +554,7 @@ describe('PublishSheet (the group, filtered by role)', () => {
 
     const field = wrapper.find('nldd-form-field[label="Naam van je groep"]');
     expect(field.exists()).toBe(true);
-    expect(field.attributes('supporting-label')).toContain('editor of beheerder');
+    expect(field.attributes('supporting-label')).toContain('redacteur of beheerder');
 
     typeIn(wrapper, 'group-name', 'Mijn team');
     choose(wrapper, file('mijn-site.zip'));
@@ -571,7 +571,7 @@ describe('PublishSheet (the group, filtered by role)', () => {
 
     const field = wrapper.find('nldd-form-field[label="Naam van je groep"]');
     expect(field.attributes('supporting-label')).toContain('nog geen');
-    expect(field.attributes('supporting-label')).not.toContain('editor of beheerder');
+    expect(field.attributes('supporting-label')).not.toContain('redacteur of beheerder');
   });
 });
 

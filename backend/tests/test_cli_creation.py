@@ -542,6 +542,23 @@ class TestCreationRefusals:
             "cli_session": await _cli_session_id(factory, member),
         }
 
+    async def test_the_refusal_names_the_missing_role_in_the_language_asked_for(self, client, factory):
+        member = await _member(factory, "lezer")
+        await _group(factory, "team", members={member: Role.READER})
+        token = await _token(factory, member)
+        site = {"title": "Docs", "slug": "docs"}
+
+        english = await client.post(f"{BASE}/groups/team/sites", json=site, headers=_bearer(token))
+        dutch = await client.post(
+            f"{BASE}/groups/team/sites", json=site, headers={**_bearer(token), "Accept-Language": "nl"}
+        )
+
+        assert _problem(english, 403, "INSUFFICIENT_ROLE")["detail"] == "This needs at least the role editor."
+        assert (
+            _problem(dutch, 403, "INSUFFICIENT_ROLE")["detail"]
+            == "Hiervoor heb je minimaal de rol redacteur nodig."
+        )
+
     async def test_a_member_outside_the_group_may_not_create_a_site(self, client, factory):
         member = await _member(factory, "buitenstaander")
         await _group(factory, "team")
