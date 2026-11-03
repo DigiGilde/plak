@@ -810,44 +810,33 @@ def no_request(monkeypatch):
     monkeypatch.setattr(cli, "_http", refuse)
 
 
-# One host per kind of mistake. The second item is what httpx says about it,
-# which the message repeats. It is None where urllib or the name encoding
-# refuses the host, and the message then says no more than NOT_A_VALID_HOST.
+# One host per kind of mistake.
 _UNUSABLE_HOSTS = [
-    pytest.param("https://[bad", None, id="bracket-never-closed"),
-    pytest.param("https://[bad]", "Invalid IPv6 address: '[bad]'", id="brackets-around-no-address"),
-    pytest.param("https://beheer.toon.rijks.app:abc", "Invalid port: 'abc'", id="port-no-number"),
-    pytest.param("https://beheer.toon.rijks.app:99999", None, id="port-above-65535"),
-    pytest.param("https://beheer.toon.rijks.app:\u0664\u0664\u0663", None, id="port-in-arabic-digits"),
-    pytest.param("https://beheer.toon.rijks.app\n", "'\\n' at position 29", id="trailing-line-break"),
-    pytest.param("https://256.1.1.1", "Invalid IPv4 address: '256.1.1.1'", id="ipv4-above-255"),
-    pytest.param(
-        "https://\U0001f600.toon.rijks.app",
-        "Invalid IDNA hostname: '\U0001f600.toon.rijks.app'",
-        id="emoji-in-name",
-    ),
-    pytest.param("https://us\uff03er@beheer.toon.rijks.app", None, id="fullwidth-hash-in-userinfo"),
-    pytest.param("https://beheer..toon.rijks.app", None, id="empty-label"),
-    pytest.param(f"https://{'a' * 64}.toon.rijks.app", None, id="label-over-63-characters"),
-    pytest.param("https://xn--.toon.rijks.app", None, id="punycode-label-without-a-name"),
+    pytest.param("https://[bad", id="bracket-never-closed"),
+    pytest.param("https://[bad]", id="brackets-around-no-address"),
+    pytest.param("https://beheer.toon.rijks.app:abc", id="port-no-number"),
+    pytest.param("https://beheer.toon.rijks.app:99999", id="port-above-65535"),
+    pytest.param("https://beheer.toon.rijks.app:\u0664\u0664\u0663", id="port-in-arabic-digits"),
+    pytest.param("https://beheer.toon.rijks.app\n", id="trailing-line-break"),
+    pytest.param("https://256.1.1.1", id="ipv4-above-255"),
+    pytest.param("https://\U0001f600.toon.rijks.app", id="emoji-in-name"),
+    pytest.param("https://us\uff03er@beheer.toon.rijks.app", id="fullwidth-hash-in-userinfo"),
+    pytest.param("https://beheer..toon.rijks.app", id="empty-label"),
+    pytest.param(f"https://{'a' * 64}.toon.rijks.app", id="label-over-63-characters"),
+    pytest.param("https://xn--.toon.rijks.app", id="punycode-label-without-a-name"),
 ]
 
 
-@pytest.mark.parametrize(("bad_host", "reason"), _UNUSABLE_HOSTS)
+@pytest.mark.parametrize("bad_host", _UNUSABLE_HOSTS)
 def test_an_unusable_host_gives_exit_2_and_one_line_instead_of_a_traceback(
-    no_request, token_env, capsys, bad_host, reason
+    no_request, token_env, capsys, bad_host
 ):
     code = cli.main(["whoami", "--host", bad_host])
 
     assert code == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    if reason is None:
-        assert captured.err == f"Error: {NOT_A_VALID_HOST}\n"
-    else:
-        assert captured.err.startswith(f"Error: {NOT_A_VALID_HOST}: ")
-        assert reason in captured.err
-        assert captured.err.count("\n") == 1
+    assert captured.err == f"Error: {NOT_A_VALID_HOST}\n"
 
 
 _COMMANDS = {
@@ -891,12 +880,24 @@ def test_an_unusable_host_is_refused_wherever_it_came_from(no_request, token_env
         "https://user:hunter2\uff03@beheer.toon.rijks.app",
         "https://user:hunter2@beheer.toon.rijks.app:abc",
         "https://user:hunter2@beheer.toon.rijks.app\n",
+        "https://user:hunter2#@beheer.toon.rijks.app",
+        "https://user:hunter2/@beheer.toon.rijks.app",
+        "https://user:hunter2?@beheer.toon.rijks.app",
     ],
-    ids=["urllib", "urllib-names-the-whole-netloc", "httpx-port", "httpx-line-break"],
+    ids=[
+        "urllib",
+        "urllib-names-the-whole-netloc",
+        "httpx-port",
+        "httpx-line-break",
+        "hash-ends-the-authority",
+        "slash-ends-the-authority",
+        "question-mark-ends-the-authority",
+    ],
 )
 def test_an_unusable_host_with_credentials_does_not_print_them(no_request, token_env, capsys, bad_host):
-    """The message of urllib for a non-ASCII netloc quotes all of it, userinfo
-    included."""
+    """A parser's message can quote the host. httpx reads the password as the
+    port when a #, / or ? comes before the @, and urllib quotes the whole
+    netloc of a non-ASCII host."""
     assert cli.main(["whoami", "--host", bad_host]) == 2
 
     captured = capsys.readouterr()
