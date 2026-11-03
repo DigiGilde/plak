@@ -236,18 +236,15 @@ def _require_valid_url(host: str) -> None:
     # name httpx hands them (.raw_host) like .encode("idna") does, where an
     # empty label or one over 63 characters is a UnicodeError that httpx lets
     # through.
-    sources = "--host, TOON_HOST or your last login"
     try:
         url = httpx.URL(host)
         _ = url.host
         url.raw_host.decode("ascii").encode("idna")
         _ = urllib.parse.urlsplit(host).port
-    except httpx.InvalidURL as error:
-        raise UsageError(f"The host is not valid ({sources}): {error}") from None
-    except ValueError:
-        # Without the message: urllib's names the whole netloc of a non-ASCII
-        # host, credentials included.
-        raise UsageError(f"The host is not valid ({sources})") from None
+    except (httpx.InvalidURL, ValueError):
+        # Not a parser's message: it can quote the host, and what httpx reads
+        # as a port can be a password (https://user:secret#@host).
+        raise UsageError("The host is not valid (--host, TOON_HOST or your last login)") from None
 
 
 def _require_https(host: str) -> None:
