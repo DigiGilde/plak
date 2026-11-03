@@ -225,7 +225,10 @@ _DOCS_HTML = """<!doctype html>
 </head>
 <body>
 <header class="docs-header">
-<span class="docs-brand"><span class="docs-brand__block">T</span>oon</span>
+<span class="docs-brand" role="img" aria-label="Toon">
+<span class="docs-brand__block" aria-hidden="true">T</span>
+<span aria-hidden="true">oon</span>
+</span>
 <span class="docs-header__divider"></span>
 <a href="/">{back}</a>
 <a href="/-/api/openapi.json{schema_query}">{schema}</a>
