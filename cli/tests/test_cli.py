@@ -795,6 +795,155 @@ def test_credentials_in_the_host_are_refused(host):
         cli._require_https(host)
 
 
+# --- a host that a URL parser refuses ----------------------------------------
+
+NOT_A_VALID_HOST = "The host is not valid (--host, TOON_HOST or your last login)"
+
+
+@pytest.fixture
+def no_request(monkeypatch):
+    """Nothing may be sent for a host that is refused."""
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a request went out")
+
+    monkeypatch.setattr(cli, "_http", refuse)
+
+
+# One host per kind of mistake. The second item is what httpx says about it,
+# which the message repeats. It is None where urllib or the name encoding
+# refuses the host, and the message then says no more than NOT_A_VALID_HOST.
+_UNUSABLE_HOSTS = [
+    pytest.param("https://[bad", None, id="bracket-never-closed"),
+    pytest.param("https://[bad]", "Invalid IPv6 address: '[bad]'", id="brackets-around-no-address"),
+    pytest.param("https://beheer.toon.rijks.app:abc", "Invalid port: 'abc'", id="port-no-number"),
+    pytest.param("https://beheer.toon.rijks.app:99999", None, id="port-above-65535"),
+    pytest.param("https://beheer.toon.rijks.app:\u0664\u0664\u0663", None, id="port-in-arabic-digits"),
+    pytest.param("https://beheer.toon.rijks.app\n", "'\\n' at position 29", id="trailing-line-break"),
+    pytest.param("https://256.1.1.1", "Invalid IPv4 address: '256.1.1.1'", id="ipv4-above-255"),
+    pytest.param(
+        "https://\U0001f600.toon.rijks.app",
+        "Invalid IDNA hostname: '\U0001f600.toon.rijks.app'",
+        id="emoji-in-name",
+    ),
+    pytest.param("https://us\uff03er@beheer.toon.rijks.app", None, id="fullwidth-hash-in-userinfo"),
+    pytest.param("https://beheer..toon.rijks.app", None, id="empty-label"),
+    pytest.param(f"https://{'a' * 64}.toon.rijks.app", None, id="label-over-63-characters"),
+    pytest.param("https://xn--.toon.rijks.app", None, id="punycode-label-without-a-name"),
+]
+
+
+@pytest.mark.parametrize(("bad_host", "reason"), _UNUSABLE_HOSTS)
+def test_an_unusable_host_gives_exit_2_and_one_line_instead_of_a_traceback(
+    no_request, token_env, capsys, bad_host, reason
+):
+    code = cli.main(["whoami", "--host", bad_host])
+
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    if reason is None:
+        assert captured.err == f"Error: {NOT_A_VALID_HOST}\n"
+    else:
+        assert captured.err.startswith(f"Error: {NOT_A_VALID_HOST}: ")
+        assert reason in captured.err
+        assert captured.err.count("\n") == 1
+
+
+_COMMANDS = {
+    "login": ["login", "--no-open"],
+    "logout": ["logout"],
+    "whoami": ["whoami"],
+    "publish": ["publish", "dist", "--site", "team-aurora/website"],
+    "preview-remove": ["preview-remove", "pr-42", "--site", "team-aurora/website"],
+    "group-create": ["group", "create", "team-aurora", "--name", "Team Aurora"],
+    "site-create": ["site", "create", "team-aurora/website", "--title", "Website"],
+    "site-link": ["site", "link", "team-aurora/website", "minbzk/website"],
+}
+
+
+@pytest.mark.parametrize("argv", _COMMANDS.values(), ids=_COMMANDS)
+def test_every_command_refuses_an_unusable_host(no_request, token_env, capsys, argv):
+    assert cli.main([*argv, "--host", "https://[bad"]) == 2
+
+    assert capsys.readouterr().err == f"Error: {NOT_A_VALID_HOST}\n"
+
+
+@pytest.mark.parametrize("source", ["--host", "TOON_HOST", "stored"])
+def test_an_unusable_host_is_refused_wherever_it_came_from(no_request, token_env, monkeypatch, capsys, source):
+    argv = ["whoami"]
+    if source == "--host":
+        argv += ["--host", "https://[bad"]
+    elif source == "TOON_HOST":
+        monkeypatch.setenv("TOON_HOST", "https://[bad")
+    else:
+        cli._write_hosts({"default_host": "https://[bad"})
+
+    assert cli.main(argv) == 2
+
+    assert capsys.readouterr().err == f"Error: {NOT_A_VALID_HOST}\n"
+
+
+@pytest.mark.parametrize(
+    "bad_host",
+    [
+        "https://user:hunter2@[bad",
+        "https://user:hunter2\uff03@beheer.toon.rijks.app",
+        "https://user:hunter2@beheer.toon.rijks.app:abc",
+        "https://user:hunter2@beheer.toon.rijks.app\n",
+    ],
+    ids=["urllib", "urllib-names-the-whole-netloc", "httpx-port", "httpx-line-break"],
+)
+def test_an_unusable_host_with_credentials_does_not_print_them(no_request, token_env, capsys, bad_host):
+    """The message of urllib for a non-ASCII netloc quotes all of it, userinfo
+    included."""
+    assert cli.main(["whoami", "--host", bad_host]) == 2
+
+    captured = capsys.readouterr()
+    assert "hunter2" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize(
+    "good_host",
+    [
+        "https://beheer.toon.rijks.app",
+        "http://127.0.0.1:8080",
+        "http://[::1]:8080",
+        "http://beheer.toon.localhost:8080",
+        "https://beheer.example.nl:8443",
+        "https://beheer.example.nl:",
+        "https://beheer.example.nl.",
+        "https://beheer.example.nl/toon",
+        "https://b\u00fcro.example.nl",
+        "https://xn--bro-kva.example.nl",
+        f"https://{'a' * 63}.example.nl",
+        "https://[fe80::1%25eth0]",
+    ],
+)
+def test_a_host_that_both_parsers_take_is_not_refused(good_host):
+    cli._require_valid_url(good_host)
+
+
+@pytest.mark.parametrize("bad_host", ["https://[bad", "https://beheer..toon.rijks.app"], ids=["urllib", "socket"])
+def test_the_toon_command_ends_in_exit_2_and_no_traceback_for_an_unusable_host(isolated_cwd, bad_host):
+    """What the old code did, a traceback and exit code 1, only shows in a
+    process of its own. The token makes the host check the only thing between
+    the command and a request."""
+    result = subprocess.run(
+        [sys.executable, "-m", "toon_cli", "whoami", "--host", bad_host],
+        env={**os.environ, "TOON_ACCESS_TOKEN": "tok"},
+        cwd=str(isolated_cwd),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr == f"Error: {NOT_A_VALID_HOST}\n"
+
+
 def test_publish_token_via_environment_variable(
     stub_server, host, dist_folder, monkeypatch, capsys
 ):
@@ -5990,7 +6139,8 @@ def test_a_look_alike_never_gets_the_session_of_the_new_host(moved_instance, iso
     assert cli.main(["whoami", "--host", given]) == 2
 
     assert moved_instance.requests == []
-    assert "toon login" in capsys.readouterr().err
+    # With a line break there is no URL left to look a session up for.
+    assert (NOT_A_VALID_HOST if "\n" in given else "toon login") in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
