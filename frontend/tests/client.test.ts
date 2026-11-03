@@ -26,7 +26,7 @@ function clearCookies(): void {
   });
 }
 
-describe('verzoek', () => {
+describe('request', () => {
   beforeEach(() => {
     clearCookies();
   });
@@ -35,7 +35,7 @@ describe('verzoek', () => {
     vi.unstubAllGlobals();
   });
 
-  it('zet de X-CSRF-Token-header op een POST vanuit de csrf-cookie', async () => {
+  it('sets the X-CSRF-Token header on a POST from the csrf cookie', async () => {
     setCookie('__Host-toon-csrf', 'geheime-token-waarde');
 
     const fetchMock = vi.fn(
@@ -55,7 +55,7 @@ describe('verzoek', () => {
     expect(headers.get('X-CSRF-Token')).toBe('geheime-token-waarde');
   });
 
-  it('zet geen CSRF-header op een GET', async () => {
+  it('sets no CSRF header on a GET', async () => {
     setCookie('__Host-toon-csrf', 'geheime-token-waarde');
 
     const fetchMock = vi.fn(
@@ -74,7 +74,7 @@ describe('verzoek', () => {
     expect(headers.get('X-CSRF-Token')).toBeNull();
   });
 
-  it('parseert een application/problem+json-fout naar een Fout-object', async () => {
+  it('parses an application/problem+json error into an error object', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(
@@ -101,7 +101,7 @@ describe('verzoek', () => {
     });
   });
 
-  it('valt terug op een generiek Fout-object als de body geen problem+json is', async () => {
+  it('falls back to a generic error object when the body is not problem+json', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response('Internal Server Error', {

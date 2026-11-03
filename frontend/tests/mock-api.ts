@@ -375,9 +375,9 @@ function defaultData(): MockData {
         lastActiveAt: '2026-04-11T09:45:00Z',
       },
       // Four accounts without a role anywhere, so typing a few letters in the
-      // toevoegveld actually turns up someone to pick. Three of them answer to
+      // add field actually turns up someone to pick. Three of them answer to
       // "ver", next to the Ada Vermeer above who is already a group member:
-      // that is what the al-lid marking is there for.
+      // that is what the already-member marking is there for.
       {
         id: 'lid-6',
         ssoSubject: 'sanne-vermeulen',
@@ -762,7 +762,7 @@ const SEARCH_MIN_LENGTH = 2;
 const SEARCH_LIMIT = 10;
 
 /**
- * The member search behind both toevoegvelden: active accounts whose name or
+ * The member search behind both add fields: active accounts whose name or
  * e-mail contains the query, by name and then e-mail, capped. `taken` holds
  * the identifiers and addresses that already have a role of their own here,
  * which marks them in the list instead of leaving them out. `viaGroup` is what
@@ -937,7 +937,7 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
           identifier: creator.email,
           name: creator.name,
           email: creator.email,
-          // Like the backend: whoever makes the group is its beheerder.
+          // Like the backend: whoever makes the group is its admin.
           role: 'admin',
         });
       }
@@ -1236,8 +1236,8 @@ export function makeMockBackend(seed: MockData = defaultData()): MockBackend {
         const member = data.members.find((l) => l.id === rest[2]);
         if (!member) return problem(404, 'Onbekend lid', `Geen lid met id "${rest[2]}".`);
         // The three refusals the real backend makes (yourself, the last active
-        // beheerder, the bootstrap account) are deliberately not mocked: the
-        // dev mock has one beheerder and no session of its own to compare
+        // admin, the bootstrap account) are deliberately not mocked: the
+        // dev mock has one admin and no session of its own to compare
         // against, so it would refuse everything.
         const roleBody = readJson() as { platformRole: PlatformRole };
         member.platformRole = roleBody.platformRole;

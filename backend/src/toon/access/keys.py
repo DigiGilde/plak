@@ -1,4 +1,4 @@
-"""Secret links (sleutels): creating, verifying, cookie validation and
+"""Secret links (keys): creating, verifying, cookie validation and
 revoking.
 
 The database keeps selector + SHA-256(verifier); the plaintext

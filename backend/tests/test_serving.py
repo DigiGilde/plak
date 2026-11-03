@@ -972,7 +972,7 @@ class TestPreview:
         assert response.content == PREVIEW_INDEX
         assert response.headers["etag"] == f'"{environment.world.preview_version_id}"'
         assert response.headers["x-robots-tag"] == "noindex, nofollow"
-        # Public preview (inherits publiek): no private prefix.
+        # Public preview (inherits public): no private prefix.
         assert response.headers["cache-control"] == "no-cache, must-revalidate"
 
     async def test_login_gated_preview_anonymous_neutral_404(self, client):
@@ -1156,15 +1156,15 @@ class TestSandboxedOwnSubresource:
 class TestNeutral404ByteIdentical:
     async def test_all_refusal_variants_are_byte_identical(self, client, environment):
         paths = [
-            "/nergens/niks/",  # unknown groep
+            "/nergens/niks/",  # unknown group
             "/aurora/bestaat-niet/",  # unknown site
-            "/aurora/leeg/",  # public site without a live versie
+            "/aurora/leeg/",  # public site without a live version
             "/aurora/geheim/",  # refusal (key, anonymous)
             "/aurora/geheim/?key=fout.fout",  # invalid key
             "/aurora/site/_preview/pr-999/",  # unknown preview
             "/aurora/site/_preview/pr-besloten/",  # login-gated preview, anonymous
-            "/aurora/site/_version/geen-uuid/",  # invalid versie id
-            f"/aurora/site/_version/{uuid.uuid4()}/",  # versie without membership
+            "/aurora/site/_version/geen-uuid/",  # invalid version id
+            f"/aurora/site/_version/{uuid.uuid4()}/",  # version without membership
             "/aurora/zonder404/bestaat-niet",  # allowed, file missing, no 404.html
             "/robots.txt/onbekend",  # reserved slug
         ]
@@ -2141,7 +2141,7 @@ class TestLoginRedirect:
         assert version.status_code == 404
 
     async def test_platform_namespace_is_neutral_404_without_audit(self, client, environment):
-        # /-/... is the platform namespace on the content host: never a groep,
+        # /-/... is the platform namespace on the content host: never a group,
         # so no DB lookup, no 301 and no audit row.
         for path in ("/-/onbekend", "/-/onbekend/", "/-/x/y/z"):
             response = await client.get(path)
@@ -2837,7 +2837,7 @@ class TestAudit:
 
     async def test_looking_at_protected_content_becomes_audited(self, client, environment):
         """Viewing non-public content is logged, with the short retention
-        (docs/audit-log.md). Sleutel, sso and a login-gated preview each count."""
+        (docs/audit-log.md). Key, sso and a login-gated preview each count."""
         set_content_session_cookie(
             client, environment.app, sub="willekeurige-kijker", sites=("/aurora/intern/", "/aurora/site/")
         )

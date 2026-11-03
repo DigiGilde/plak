@@ -20,13 +20,13 @@ ENGINE="${TOON_E2E_ENGINE:-podman}"
 COMPOSE=("${ENGINE}" compose -p "${PROJECT}" -f dev/compose.yml -f e2e/compose.e2e.yml)
 
 if ! command -v "${ENGINE}" >/dev/null 2>&1; then
-    echo "${ENGINE} niet gevonden op PATH." >&2
+    echo "${ENGINE} not found on PATH." >&2
     exit 1
 fi
 if [[ "${ENGINE}" == "podman" ]] && podman machine list --format '{{.Name}}' >/dev/null 2>&1; then
     running="$(podman machine list --format '{{.Running}}' 2>/dev/null | head -n1)"
     if [[ "${running}" != "true" ]]; then
-        echo "Podman-machine draait niet; start 'm met 'podman machine start'." >&2
+        echo "The Podman machine is not running. Start it with 'podman machine start'." >&2
         exit 1
     fi
 fi
@@ -46,11 +46,11 @@ cleanup() {
     # relative to the repo root, so back to the root for logs and teardown.
     cd "${REPO_ROOT}"
     if [[ "${TOON_E2E_KEEP_UP:-0}" == "1" ]]; then
-        echo "TOON_E2E_KEEP_UP=1: stack blijft draaien (project ${PROJECT})."
+        echo "TOON_E2E_KEEP_UP=1: the stack stays up (project ${PROJECT})."
         return "${status}"
     fi
     if [[ ${status} -ne 0 ]]; then
-        echo "== laatste app/nginx-logs (run faalde) =="
+        echo "== last app/nginx logs (the run failed) =="
         "${COMPOSE[@]}" logs --tail 50 app nginx || true
     fi
     "${COMPOSE[@]}" down -v --remove-orphans || true
@@ -58,10 +58,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "== stack starten (project ${PROJECT}, poort ${TOON_E2E_PORT}) =="
+echo "== starting the stack (project ${PROJECT}, port ${TOON_E2E_PORT}) =="
 "${COMPOSE[@]}" up -d --build
 
-echo "== wachten op gezondheid =="
+echo "== waiting for health =="
 ready=""
 for _ in $(seq 1 60); do
     if curl -fsS -o /dev/null -H "Host: beheer.toon.localhost" \
@@ -76,11 +76,11 @@ for _ in $(seq 1 60); do
     sleep 2
 done
 if [[ -z "${ready}" ]]; then
-    echo "Stack werd niet gezond binnen 120 seconden." >&2
+    echo "The stack did not become healthy within 120 seconds." >&2
     exit 1
 fi
 
-echo "== Playwright draaien =="
+echo "== running Playwright =="
 cd "${REPO_ROOT}/e2e"
 if [[ ! -d node_modules ]]; then
     if [[ -f package-lock.json ]]; then

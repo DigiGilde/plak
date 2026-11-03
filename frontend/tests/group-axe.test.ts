@@ -114,12 +114,12 @@ async function mountGroup(path: string, stubs: Record<string, boolean> = {}) {
   return mount(Host, { global: { plugins: [router], stubs }, attachTo: document.body });
 }
 
-describe('axe: groepspagina', () => {
+describe('axe: group page', () => {
   it.each([
     ['Sites', '/team-aurora'],
-    ['Groepsleden', '/team-aurora/-/members'],
-    ['Instellingen', '/team-aurora/-/settings'],
-  ])('tabblad %s van een gevulde groep is zonder violations', async (_name, path) => {
+    ['Members', '/team-aurora/-/members'],
+    ['Settings', '/team-aurora/-/settings'],
+  ])('has no violations on the %s tab of a filled group', async (_name, path) => {
     const wrapper = await mountGroup(path);
     await flushPromises();
 
@@ -131,7 +131,7 @@ describe('axe: groepspagina', () => {
     wrapper.unmount();
   });
 
-  it('Instellingen voor een redacteur (de naam als tekst) is zonder violations', async () => {
+  it('has no violations on the settings for an editor (the name as text)', async () => {
     // lid-3 (Ada Vermeer) is editor on team-aurora: no form, no danger zone.
     backend.data.loggedInMemberId = 'lid-3';
     const wrapper = await mountGroup('/team-aurora/-/settings');
@@ -146,7 +146,7 @@ describe('axe: groepspagina', () => {
     wrapper.unmount();
   });
 
-  it('Instellingen met een geweigerde naam bij het veld is zonder violations', async () => {
+  it('has no violations on the settings with a refused name at the field', async () => {
     const wrapper = await mountGroup('/team-aurora/-/settings');
     await flushPromises();
 
@@ -245,7 +245,7 @@ describe('axe: groepspagina', () => {
     wrapper.unmount();
   });
 
-  it('lege groep is zonder violations', async () => {
+  it('has no violations on an empty group', async () => {
     backend.data.groups.push({ slug: 'leeg', name: 'Lege groep', defaultAccess: { base: 'public', keys: false, invitees: false }, previousSlugs: [] });
     const wrapper = await mountGroup('/leeg');
     await flushPromises();
@@ -255,7 +255,7 @@ describe('axe: groepspagina', () => {
     wrapper.unmount();
   });
 
-  it('foutstaat (onbekende groep) is zonder violations', async () => {
+  it('has no violations on the error state (unknown group)', async () => {
     const wrapper = await mountGroup('/onbekend');
     await flushPromises();
 

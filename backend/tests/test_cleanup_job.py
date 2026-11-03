@@ -95,7 +95,7 @@ async def environment(session_factory, tmp_path: Path) -> Environment:
 async def _make_preview_version(
     environment: Environment, *, expires_at: datetime | None, ref: str | None = None
 ) -> tuple[uuid.UUID, str]:
-    """Creates a versie with doel=preview and, when ref is set, a matching
+    """Creates a version with target=preview and, when ref is set, a matching
     preview row; returns (version_id, storage_ref)."""
     version_id = uuid.uuid4()
     storage_ref = environment.store.store_version(

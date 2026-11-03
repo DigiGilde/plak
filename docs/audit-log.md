@@ -16,7 +16,7 @@ in step.
 | Field | Contents |
 |---|---|
 | `actor_kind` | `member`, `ci`, `system` or `anonymous` |
-| `actor_pseudonym` | HMAC-SHA256 with `TOON_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:eigenaar/repo` in lower case); never stored in readable form, and not recomputed when the pepper is rotated (see "Rotating the pepper and the IP key") |
+| `actor_pseudonym` | HMAC-SHA256 with `TOON_AUDIT_PEPPER` of the SSO subject (member or content viewer), or for a CI actor of `provider:host:repository-id` (for a refused token without ids: `provider:host:owner/repo` in lower case); never stored in readable form, and not recomputed when the pepper is rotated (see "Rotating the pepper and the IP key") |
 | `action` | see below |
 | `result` | `allowed`, `refused` or `login_redirect` |
 | `reason_code` | why, as a machine-readable code; empty on an ordinary allow |
@@ -121,7 +121,7 @@ who attempted it, and more personal data adds little for investigation.
 `site_repository_set` and `site_repository_remove` are about the repository
 linked to a site so that it may publish from there with a CI ID token
 (`api/admin.py`, "Linked repository"); `refs` carries group, site, provider,
-host, `repository` (`eigenaar/repo`), `repository_id`, `ids_confirmed`,
+host, `repository` (`owner/repo`), `repository_id`, `ids_confirmed`,
 `site_id_required` and `live_branch`, and on unlinking only group and site.
 `site_id_required` is what the link stores afterwards: `true` for a new link
 and for a link that got another repository, unchanged when the same
@@ -613,7 +613,7 @@ makes the check below impossible.
 window between two published heads smaller, which is the only thing frequency
 buys. The line is a few hundred bytes.
 
-**Checking a line against the database.** `just verify-audit-head <bestand>`
+**Checking a line against the database.** `just verify-audit-head <file>`
 (`python -m toon.audit.checkpoint --against -` reads standard input) takes a
 line as it stands in the log, timestamp and marker and all, and holds every
 published head against the database:
@@ -701,8 +701,8 @@ belongs to nothing (a loose SSO subject, say) is still pseudonymised
 literally, as `unknown`.
 
 If `identifier` matches no member and no content viewer, and contains no
-`@`, then `actor-pseudonym` tries it as a linked repository: `eigenaar/repo`,
-`host/eigenaar/repo` or `https://host/eigenaar/repo`. Only a repository that
+`@`, then `actor-pseudonym` tries it as a linked repository: `owner/repo`,
+`host/owner/repo` or `https://host/owner/repo`. Only a repository that
 is linked to a site at this moment yields `resolved_as` `ci`; if the same
 name is linked at two providers without the host being supplied, the answer
 here too is 409 `IDENTIFIER_AMBIGUOUS`, with the message to name the host as

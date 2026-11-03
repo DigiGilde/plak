@@ -659,7 +659,7 @@ Code: `platform/health.py`, `ingest/storage_health.py`, `main.py`, `api/admin.py
 `test_admin_api.py`, `test_host_separation.py`.
 
 The root of the site is settled in three steps: a chain of enclosing directories
-holding exactly one entry is peeled off; a `basispad` from the caller then wins;
+holding exactly one entry is peeled off; a `base_path` from the caller then wins;
 and if that yields no `index.html` in the root the bundle is refused, naming the
 `index.html` paths found as a proposal. The machine proposes, the human
 confirms. Capitalisation counts, because both the filesystem and §5.2 look for
@@ -1127,7 +1127,7 @@ no CDN. Both come in English and Dutch: `?lang=`, then the language a signed-in
 member set on their profile, then `Accept-Language`, and otherwise English, the
 same default as problem+json (`api/openapi_i18n.py`).
 
-The workflow examples, the curl fallback and the `publiceer` action
+The workflow examples, the curl fallback and the `publish` action
 (`actions/publish/`) are in `docs/publishing.md`.
 
 Code: `api/deploys.py`, `api/cli.py`, `api/admin.py`, `api/errors.py`,

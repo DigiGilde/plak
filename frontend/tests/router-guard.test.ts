@@ -27,7 +27,7 @@ function testRouter() {
 }
 
 describe('router-guard /-/platform', () => {
-  it('laat een platformbeheerder toe', async () => {
+  it('lets a platform admin in', async () => {
     backend = makeMockBackend();
     vi.stubGlobal('fetch', backend.fetch);
     const router = testRouter();
@@ -37,7 +37,7 @@ describe('router-guard /-/platform', () => {
     expect(router.currentRoute.value.name).toBe('platform');
   });
 
-  it('stuurt een gewoon lid terug naar het overzicht', async () => {
+  it('sends an ordinary member back to the overview', async () => {
     const data = makeMockBackend().data;
     data.loggedInMemberId = 'lid-2';
     data.members.find((l) => l.id === 'lid-2')!.status = 'active';
@@ -50,7 +50,7 @@ describe('router-guard /-/platform', () => {
     expect(router.currentRoute.value.name).toBe('overview');
   });
 
-  it('stuurt een anonieme bezoeker terug naar het overzicht', async () => {
+  it('sends an anonymous visitor back to the overview', async () => {
     const data = makeMockBackend().data;
     data.loggedInMemberId = null;
     backend = makeMockBackend(data);
@@ -62,7 +62,7 @@ describe('router-guard /-/platform', () => {
     expect(router.currentRoute.value.name).toBe('overview');
   });
 
-  it('stuurt terug naar het overzicht als de sessie niet is op te halen', async () => {
+  it('sends back to the overview when the session cannot be fetched', async () => {
     // An unexpected (non-401/403) failure while resolving /me: deny by
     // default rather than let navigation hang on a network hiccup.
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('netwerkfout'))));
@@ -73,7 +73,7 @@ describe('router-guard /-/platform', () => {
     expect(router.currentRoute.value.name).toBe('overview');
   });
 
-  it('laat publieke platformpagina\'s door zonder sessiecheck', async () => {
+  it('lets public platform pages through without a session check', async () => {
     // No fetch stub: if the guard were to call me() here after all, the test fails on a network error.
     const router = testRouter();
     router.beforeEach(platformAdminGuard);

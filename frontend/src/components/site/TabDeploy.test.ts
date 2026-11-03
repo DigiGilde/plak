@@ -13,7 +13,7 @@ let backend: MockBackend;
 beforeEach(() => {
   backend = makeMockBackend();
   vi.stubGlobal('fetch', backend.fetch);
-  // /me is session-cached across tests; the "zichtbaarheid naar rol" cases
+  // /me is session-cached across tests; the "visibility by role" cases
   // switch the logged-in member, so the cache must not leak between them.
   _resetCurrentMemberCache();
 });
@@ -962,6 +962,37 @@ describe('TabDeploy: workflow snippet and curl fallback', () => {
     );
     expect(snippet).toContain('toon logout');
     expect(snippet).not.toContain(MOCK_CONTENT_BASE);
+  });
+
+  it.each([
+    ['nl', 'github'],
+    ['en', 'github'],
+    ['nl', 'forgejo'],
+    ['en', 'forgejo'],
+  ] as const)('writes the comments in the snippets in English in the %s interface (%s)', async (locale, provider) => {
+    _setLocaleForTest(locale);
+    try {
+      backend.data.repositories[0]!.provider = provider;
+      if (provider === 'forgejo') backend.data.repositories[0]!.host = 'https://code.overheid.nl';
+
+      const wrapper = makeWrapper();
+      await untilIdle();
+
+      const commentsIn = (testid: string) =>
+        wrapper
+          .find(`[data-testid="${testid}"]`)
+          .text()
+          .split('\n')
+          .flatMap((line) => /(?:^|\s)#\s+(\S.*)$/.exec(line)?.[1] ?? []);
+      const runnerLabel = 'the runner label of this Forgejo instance';
+      expect(commentsIn('workflow-snippet')).toEqual(provider === 'forgejo' ? [runnerLabel, runnerLabel] : []);
+      expect(commentsIn('cli-snippet')).toEqual([
+        'Live: replaces what visitors see right away',
+        'Preview: its own path, leaves the live site untouched',
+      ]);
+    } finally {
+      _setLocaleForTest('nl');
+    }
   });
 
   it('links to the toon repo for the cli and to /cli-link', async () => {

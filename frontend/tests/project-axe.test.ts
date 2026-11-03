@@ -132,13 +132,13 @@ async function expectNoViolations(component: Component): Promise<void> {
   wrapper.unmount();
 }
 
-describe('axe: tabbladen van de sitedetailpagina', () => {
-  it('Overzicht is zonder violations', () => expectNoViolations(TabOverview));
-  it('Previews is zonder violations', () => expectNoViolations(TabPreviews));
-  it('Versies is zonder violations', () => expectNoViolations(TabVersions));
-  it('Toegang is zonder violations', () => expectNoViolations(TabAccess));
+describe('axe: tabs of the site detail page', () => {
+  it('has no violations on the Overview tab', () => expectNoViolations(TabOverview));
+  it('has no violations on the Previews tab', () => expectNoViolations(TabPreviews));
+  it('has no violations on the Versions tab', () => expectNoViolations(TabVersions));
+  it('has no violations on the Access tab', () => expectNoViolations(TabAccess));
 
-  it('Toegang met beide uitzonderingen aan is zonder violations', async () => {
+  it('has no violations on the Access tab with both exceptions on', async () => {
     // The two tables and their row menus only exist when the extras are on, so
     // the default fixture would leave the busiest half of this tab unchecked.
     const backend = makeMockBackend();
@@ -146,7 +146,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     vi.stubGlobal('fetch', backend.fetch);
     await expectNoViolations(TabAccess);
   });
-  it('Versies met een eigen aantal bewaarde versies is zonder violations', async () => {
+  it('has no violations on the Versions tab with a number of retained versions of its own', async () => {
     // The number field only exists under the custom option; the default fixture
     // follows the platform and would leave it unchecked.
     _resetCurrentMemberCache();
@@ -163,7 +163,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     wrapper.unmount();
   });
 
-  it('Versies met een geweigerd aantal bij het veld is zonder violations', async () => {
+  it('has no violations on the Versions tab with a refused number at the field', async () => {
     _resetCurrentMemberCache();
     const backend = makeMockBackend();
     backend.data.sites[0]!.liveVersionsKept = 3;
@@ -180,7 +180,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     await expectNoViolationsIn(wrapper.element);
     wrapper.unmount();
   });
-  it('Versies met een niet opgeslagen keuze onder de opties is zonder violations', async () => {
+  it('has no violations on the Versions tab with an unsaved choice under the options', async () => {
     _resetCurrentMemberCache();
     const backend = makeMockBackend();
     backend.data.sites[0]!.liveVersionsKept = 3;
@@ -200,11 +200,11 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     await expectNoViolationsIn(wrapper.element);
     wrapper.unmount();
   });
-  it('Leden is zonder violations', () => expectNoViolations(TabMembers));
-  it('Deploy is zonder violations', () => expectNoViolations(TabDeploy));
-  it('Instellingen is zonder violations', () => expectNoViolations(TabSettings));
+  it('has no violations on the Members tab', () => expectNoViolations(TabMembers));
+  it('has no violations on the Deploy tab', () => expectNoViolations(TabDeploy));
+  it('has no violations on the Settings tab', () => expectNoViolations(TabSettings));
 
-  it('Instellingen voor een redacteur (de titel als tekst) is zonder violations', async () => {
+  it('has no violations on the settings for an editor (the title as text)', async () => {
     // lid-3 (Ada Vermeer) is editor in the group: no form, no danger zone.
     const backend = makeMockBackend();
     backend.data.loggedInMemberId = 'lid-3';
@@ -221,7 +221,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     wrapper.unmount();
   });
 
-  it('Instellingen met een geweigerde titel bij het veld is zonder violations', async () => {
+  it('has no violations on the settings with a refused title at the field', async () => {
     const provide = await provideSiteGroupFromApi();
     const wrapper = mount(TabSettings, {
       props: { group: 'team-aurora', site: 'website', contentBase: MOCK_CONTENT_BASE },
@@ -362,7 +362,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     wrapper.unmount();
   });
 
-  it('Deploy met een verplicht site-ID is zonder violations', async () => {
+  it('has no violations on the Deploy tab with a required site ID', async () => {
     // The default link still accepts a workflow without the site id; this is the other state.
     _resetCurrentMemberCache();
     const backend = makeMockBackend();
@@ -371,7 +371,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     await expectNoViolations(TabDeploy);
   });
 
-  it('de volledige sitepagina (kop, tabs en tabblad) is zonder violations', async () => {
+  it('has no violations on the whole site page (header, tabs and tab)', async () => {
     const Empty = defineComponent({ render: () => h('div') });
     const router = createRouter({
       history: createMemoryHistory(),
@@ -399,7 +399,7 @@ describe('axe: tabbladen van de sitedetailpagina', () => {
     wrapper.unmount();
   });
 
-  it('de sitepagina met het tabblad Instellingen (zeven tabs) is zonder violations', async () => {
+  it('has no violations on the site page with the Settings tab (seven tabs)', async () => {
     const Empty = defineComponent({ render: () => h('div') });
     const router = createRouter({
       history: createMemoryHistory(),

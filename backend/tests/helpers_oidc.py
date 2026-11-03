@@ -1,4 +1,4 @@
-"""Test helpers for the OIDC, session and lid tests: a mock IdP without a
+"""Test helpers for the OIDC, session and member tests: a mock IdP without a
 network.
 
 The IdP runs entirely in-process through httpx.MockTransport; discovery, JWKS

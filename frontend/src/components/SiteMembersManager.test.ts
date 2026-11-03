@@ -920,7 +920,7 @@ describe('SiteMembersManager (suggestions)', () => {
     expect(items.map((item) => item.attributes('details'))).toEqual([undefined, undefined]);
   });
 
-  it('offers a groepslid, with the role it already reaches this site with', async () => {
+  it('offers a group member, with the role it already reaches this site with', async () => {
     const search = vi.fn().mockResolvedValue([
       suggestionOf({ groupRole: 'reader' }),
       suggestionOf({

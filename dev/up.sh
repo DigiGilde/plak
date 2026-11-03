@@ -24,11 +24,11 @@ fi
 
 ensure_dev_secrets
 
-# Mock-IdP-config: standaard logt iedereen stilzwijgend in als
-# dev-beheerder (dev/mock-oidc-config.json, de default van TOON_MOCK_CONFIG
-# in dev/compose.yml; de e2e-suite rekent daarop).
-# TOON_MOCK_INTERACTIVE_LOGIN=1 kiest dev/mock-oidc-config.interactive.json:
-# dan toont de mock een inlogscherm waarin je zelf een subject typt. Zie
+# Mock IdP config: by default everyone is logged in silently as
+# dev-beheerder (dev/mock-oidc-config.json, the default of TOON_MOCK_CONFIG
+# in dev/compose.yml; the e2e suite relies on it).
+# TOON_MOCK_INTERACTIVE_LOGIN=1 picks dev/mock-oidc-config.interactive.json:
+# the mock then shows a login screen where you type a subject yourself. See
 # docs/local-development.md.
 mock_config="./mock-oidc-config.json"
 mode="stil (elke aanmelding wordt dev-beheerder)"

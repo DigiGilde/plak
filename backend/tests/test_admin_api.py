@@ -125,8 +125,8 @@ async def client(app):
 
 @pytest_asyncio.fixture
 async def data(factory) -> SimpleNamespace:
-    """An admin, an active groepslid (lid-a), an active non-member (lid-b),
-    and groep 'team' with site 'site'."""
+    """An admin, an active group member (lid-a), an active non-member (lid-b),
+    and group 'team' with site 'site'."""
     async with factory() as db:
         admin_member = Member(
             sso_subject="admin-sub",
@@ -178,7 +178,7 @@ def _statements(factory):
 
 
 async def _join_group(factory, group, member, role: Role) -> None:
-    """Puts a lid in the groep with this role; setup, never the thing tested."""
+    """Puts a member in the group with this role; setup, never the thing tested."""
     async with factory() as db:
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=role))
         await db.commit()
@@ -192,7 +192,7 @@ async def _join_site(factory, site, member, role: Role) -> None:
 
 async def _new_member(factory, *, sub: str, email: str, name: str | None = None,
                       status: MemberStatus = MemberStatus.ACTIVE) -> Member:
-    """An extra platformlid; setup, never the thing tested."""
+    """An extra platform member; setup, never the thing tested."""
     async with factory() as db:
         member = Member(sso_subject=sub, email=email, name=name, status=status)
         db.add(member)
@@ -295,7 +295,7 @@ class TestAuthorization:
         assert response.json()["code"] == "SLUG_INVALID"
 
     async def test_every_active_member_may_a_group_create(self, client, app, data):
-        """Creating a groep is not a reserved action: whoever wants to publish
+        """Creating a group is not a reserved action: whoever wants to publish
         something has to be able to make a place for it themselves. The creator
         becomes a member at once, so they can put a site in it at once."""
         headers = login(client, app, sub="lid-a", email="a@example.nl")
@@ -316,7 +316,7 @@ class TestAuthorization:
         assert response.status_code == 401
 
     async def test_group_create_creates_creator_group_member(self, client, app, data):
-        """Whoever creates a groep is a member immediately and can create a
+        """Whoever creates a group is a member immediately and can create a
         site in it at once; without membership that would give a 403
         NOT_GROUP_MEMBER."""
         headers = login(client, app, sub="admin-sub", email="admin@example.nl")
@@ -785,7 +785,7 @@ class TestCsrf:
         assert (await client.get(f"{BASE}/overview")).status_code == 200
 
     async def test_csrf_fails_before_member_becomes_created(self, client, app, factory, data):
-        """A forged request without a CSRF header must not upsert a lid record."""
+        """A forged request without a CSRF header must not upsert a member record."""
         set_session_cookie(client, app, sub="spook-sub", email="spook@example.nl")
         response = await client.post(
             f"{BASE}/groups/team/sites", json={"title": "X", "slug": "x"}
@@ -992,8 +992,8 @@ class TestGroupsAndSites:
     async def test_a_group_role_covers_a_site_a_site_role_also_names(
         self, client, app, data, factory
     ):
-        """member_a already sees the whole groep through its group role; a
-        siterol on a site already inside that groep adds nothing and must not
+        """member_a already sees the whole group through its group role; a
+        site role on a site already inside that group adds nothing and must not
         list the site twice."""
         await _join_site(factory, data.site, data.member_a, Role.EDITOR)
         login(client, app, sub="lid-a", email="a@example.nl")
@@ -1089,7 +1089,7 @@ class TestGroupsAndSites:
         assert response.json()["access"] == {"base": "public", "keys": False, "invitees": False}
 
     async def test_external_sources_default_on_and_switchable(self, client, app, data, factory):
-        """Aan, tenzij je het uitzet: a site that never touches this setting
+        """On unless you turn it off: a site that never touches this setting
         may load from the fixed list of hosts."""
         headers = login(client, app, sub="lid-a", email="a@example.nl")
         group = await client.get(f"{BASE}/groups/team")
@@ -1303,8 +1303,8 @@ class TestGroupMembers:
         assert response.json()["identifier"] == "b@example.nl"
 
     async def test_last_member_can_there_not_from(self, client, app, data):
-        """A groep without members is unmanageable: only someone who is in it may
-        add people, so removing the last member makes the groep unrecoverable."""
+        """A group without members is unmanageable: only someone who is in it may
+        add people, so removing the last member makes the group unrecoverable."""
         headers = login(client, app, sub="lid-a", email="a@example.nl")
 
         response = await client.delete(
@@ -1566,7 +1566,7 @@ class TestGroupMemberSiteRoles:
     @pytest_asyncio.fixture
     async def elsewhere(self, factory, data) -> SimpleNamespace:
         """A second group with a site of its own, where member_a holds a site
-        role that has nothing to do with groep 'team'."""
+        role that has nothing to do with group 'team'."""
         async with factory() as db:
             group = Group(slug="ander", name="Ander", default_access_base=AccessBase.SITE_TEAM)
             db.add(group)
@@ -1608,7 +1608,7 @@ class TestGroupMemberSiteRoles:
     async def test_a_site_role_in_another_group_stays_out_of_this_list(
         self, client, app, data, elsewhere
     ):
-        """The whole point: an admin of groep 'team' may not learn from this
+        """The whole point: an admin of group 'team' may not learn from this
         screen that this person also works somewhere else."""
         login(client, app, sub="lid-a", email="a@example.nl")
 
@@ -1695,7 +1695,7 @@ class TestGroupMemberSiteRoles:
     async def test_every_removed_site_role_writes_the_audit_row_of_the_site_screen(
         self, client, app, data, factory
     ):
-        """Same action and the same refs as `DELETE /sites/{groep}/{site}/members`:
+        """Same action and the same refs as `DELETE /sites/{group}/{site}/members`:
         one vocabulary, whichever screen the removal came from."""
         async with factory() as db:
             second = Site(
@@ -1873,20 +1873,20 @@ class TestRoles:
         assert (await client.get(f"{BASE}/sites/team/site/invitees")).status_code == 200
 
         refused = {
-            "zichtbaarheid": await client.put(
+            "visibility": await client.put(
                 f"{BASE}/sites/team/site/access", json={"base": "public"}, headers=headers
             ),
-            "sleutel": await client.post(
+            "key": await client.post(
                 f"{BASE}/sites/team/site/keys",
                 json={"label": "x", "expiresAt": None},
                 headers=headers,
             ),
-            "genodigde": await client.post(
+            "invitee": await client.post(
                 f"{BASE}/sites/team/site/invitees",
                 json={"identifier": "gast@example.nl"},
                 headers=headers,
             ),
-            "verwijderen": await client.delete(f"{BASE}/sites/team/site", headers=headers),
+            "delete": await client.delete(f"{BASE}/sites/team/site", headers=headers),
         }
         for what, response in refused.items():
             assert response.status_code == 403, what
@@ -1895,8 +1895,8 @@ class TestRoles:
     async def test_a_site_role_widens_the_group_role_on_that_one_site(
         self, client, app, data, factory
     ):
-        """A siterol adds and never subtracts: the reader publishes on this one
-        site and stays a reader on the rest of the groep."""
+        """A site role adds and never subtracts: the reader publishes on this one
+        site and stays a reader on the rest of the group."""
         second = Site(
             group_id=data.group.id,
             slug="tweede",
@@ -1937,22 +1937,22 @@ class TestRoles:
         self, client, app, data
     ):
         """A platform admin manages people and groups; for content he gives
-        himself a visible groepsrol (spec §3.4)."""
+        himself a visible group role (spec §3.4)."""
         headers = login(client, app, sub="admin-sub", email="admin@example.nl")
         assert (await client.get(f"{BASE}/groups/team")).status_code == 200
         assert (await client.get(f"{BASE}/groups/team/members")).status_code == 200
 
         refused = {
-            "site aanmaken": await client.post(
+            "create site": await client.post(
                 f"{BASE}/groups/team/sites", json={"title": "X", "slug": "x"}, headers=headers
             ),
-            "standaardzichtbaarheid": await client.put(
+            "default visibility": await client.put(
                 f"{BASE}/groups/team/default-access",
                 json={"base": "public"},
                 headers=headers,
             ),
             "repository": await client.get(f"{BASE}/sites/team/site/repository"),
-            "versies": await client.get(f"{BASE}/sites/team/site/versions"),
+            "versions": await client.get(f"{BASE}/sites/team/site/versions"),
         }
         for what, response in refused.items():
             assert response.status_code == 403, what
@@ -1987,7 +1987,7 @@ class TestSiteMembers:
         assert [row["siteSlug"] for row in rows] == ["site", "site"]
 
     async def test_the_widest_of_the_two_roles_wins(self, client, app, data, factory):
-        """A lezer in the groep who is admin here is admin here, both
+        """A reader in the group who is admin here is admin here, both
         in the list and in what the API lets them do."""
         await _join_group(factory, data.group, data.member_b, Role.READER)
         await _join_site(factory, data.site, data.member_b, Role.ADMIN)
@@ -2126,12 +2126,12 @@ class TestSiteMembers:
         headers = login(client, app, sub="lid-a", email="a@example.nl")
 
         refused = {
-            "wijzigen": await client.put(
+            "change": await client.put(
                 f"{BASE}/sites/team/site/members/{uuid.uuid4()}/role",
                 json={"role": "editor"},
                 headers=headers,
             ),
-            "weghalen": await client.delete(
+            "remove": await client.delete(
                 f"{BASE}/sites/team/site/members/{uuid.uuid4()}", headers=headers
             ),
         }
@@ -2142,7 +2142,7 @@ class TestSiteMembers:
     async def test_a_group_member_has_no_site_role_to_change_here(
         self, client, app, data, factory
     ):
-        """Someone who reaches this site through the groep is changed on the
+        """Someone who reaches this site through the group is changed on the
         group page; these routes touch only a role of their own."""
         await _join_group(factory, data.group, data.member_b, Role.EDITOR)
         headers = login(client, app, sub="lid-a", email="a@example.nl")
@@ -2156,12 +2156,12 @@ class TestSiteMembers:
         )
 
         refused = {
-            "wijzigen": await client.put(
+            "change": await client.put(
                 f"{BASE}/sites/team/site/members/{data.member_b.id}/role",
                 json={"role": "admin"},
                 headers=headers,
             ),
-            "weghalen": await client.delete(
+            "remove": await client.delete(
                 f"{BASE}/sites/team/site/members/{data.member_b.id}", headers=headers
             ),
         }
@@ -2176,17 +2176,17 @@ class TestSiteMembers:
         assert (await client.get(f"{BASE}/sites/team/site/members")).status_code == 200
 
         refused = {
-            "toevoegen": await client.post(
+            "add": await client.post(
                 f"{BASE}/sites/team/site/members",
                 json={"identifier": "admin@example.nl"},
                 headers=headers,
             ),
-            "wijzigen": await client.put(
+            "change": await client.put(
                 f"{BASE}/sites/team/site/members/{data.member_a.id}/role",
                 json={"role": "reader"},
                 headers=headers,
             ),
-            "weghalen": await client.delete(
+            "remove": await client.delete(
                 f"{BASE}/sites/team/site/members/{data.member_a.id}", headers=headers
             ),
         }
@@ -2204,7 +2204,7 @@ class TestSiteMembers:
     async def test_a_site_role_alone_shows_only_that_site_in_the_overview(
         self, client, app, data, factory
     ):
-        """A site role grants nothing at group level, so the rest of the groep
+        """A site role grants nothing at group level, so the rest of the group
         stays hidden. This is Noor Bakker in the dev seed."""
         async with factory() as db:
             db.add(
@@ -2239,7 +2239,7 @@ class TestSiteMembers:
 
 
 class TestMemberSearch:
-    """Searching for someone to add, on the groep and on de site.
+    """Searching for someone to add, on the group and on the site.
 
     Searching demands exactly the role that adding demands, so the permission
     to look someone up equals the permission to add them.
@@ -2358,8 +2358,8 @@ class TestMemberSearch:
     async def test_on_a_site_only_an_own_site_role_counts_as_already_there(
         self, client, app, data, factory
     ):
-        """A groepslid can still be given a siterol, because a siterol only
-        widens. Only an eigen siterol rules someone out."""
+        """A group member can still be given a site role, because a site role only
+        widens. Only a site role of their own rules someone out."""
         await _new_member(factory, sub="lid-buiten", email="buiten@example.nl", name="Bea Buiten")
         await _join_site(factory, data.site, data.member_b, Role.EDITOR)
         login(client, app, sub="lid-a", email="a@example.nl")
@@ -2374,8 +2374,8 @@ class TestMemberSearch:
         assert hits["buiten@example.nl"]["alreadyMember"] is False
 
     async def test_on_a_site_the_group_role_comes_along(self, client, app, data, factory):
-        """What someone reaches this site with through the groep says whether a
-        siterol adds anything, so it is in the answer."""
+        """What someone reaches this site with through the group says whether a
+        site role adds anything, so it is in the answer."""
         await _new_member(factory, sub="lid-buiten", email="buiten@example.nl", name="Bea Buiten")
         await _join_group(factory, data.group, data.member_b, Role.READER)
         login(client, app, sub="lid-a", email="a@example.nl")
@@ -2390,7 +2390,7 @@ class TestMemberSearch:
         assert hits["buiten@example.nl"] is None
 
     async def test_on_a_group_the_group_role_stays_out(self, client, app, data):
-        """`groupRole` belongs to the sitezoekveld; on the groep it says nothing
+        """`groupRole` belongs to the site search field; on the group it says nothing
         that `alreadyMember` does not already say."""
         login(client, app, sub="lid-a", email="a@example.nl")
 
@@ -2412,7 +2412,7 @@ class TestMemberSearch:
     async def test_a_platform_admin_searches_without_being_a_group_member(
         self, client, app, data, factory
     ):
-        """Whoever may add someone to the groep may look them up there."""
+        """Whoever may add someone to the group may look them up there."""
         await _new_member(factory, sub="lid-jansen", email="jj@example.nl", name="Joke Jansen")
         login(client, app, sub="admin-sub", email="admin@example.nl")
 

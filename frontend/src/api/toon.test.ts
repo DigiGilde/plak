@@ -1376,7 +1376,7 @@ describe('searching members', () => {
   it('offers a group member on a site, with the role the group gives them', async () => {
     const hits = await toon.searchSiteMembers('team-aurora', 'website', 'ada');
 
-    // Ada is redacteur in the group and has no role of her own on this site:
+    // Ada is editor in the group and has no role of her own on this site:
     // a site role would still widen what she may here.
     expect(hits.map((hit) => hit.alreadyMember)).toEqual([false]);
     expect(hits.map((hit) => hit.groupRole)).toEqual(['editor']);

@@ -101,7 +101,7 @@ function keepsViaGroup(role: Role): string {
  * together, so the name is the first fact and carries nothing of its own.
  * Someone with a site role of their own is marked rather than held back,
  * because the refusal then says what is the matter, which beats a row that
- * cannot be clicked and does not say why. A groepslid is offered like anyone
+ * cannot be clicked and does not say why. A group member is offered like anyone
  * else, with the role they already reach this site with, since a site role
  * only widens.
  *

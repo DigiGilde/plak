@@ -213,7 +213,7 @@ def _cookie_value(response, name: str) -> str:
 
 def _set_cookie_header(response, name: str) -> str:
     headers_ = [k for k in response.headers.get_list("set-cookie") if k.startswith(name + "=")]
-    assert len(headers_) == 1, f"verwachtte precies een Set-Cookie voor {name}: {response.headers}"
+    assert len(headers_) == 1, f"expected exactly one Set-Cookie for {name}: {response.headers}"
     return headers_[0]
 
 
@@ -760,7 +760,7 @@ async def _complete_content_login(client, idp, **kwargs):
 class TestContentLogin:
     """Content-origin login (spec §4a): the same OIDC flow, but the outcome is
     a content session without admin authority. The app in these tests has no
-    DB: that a login succeeds proves no lid record is created (spec §7)."""
+    DB: that a login succeeds proves no member record is created (spec §7)."""
 
     async def test_login_sets_own_login_cookie_and_pkce_state_nonce(self, content_client, idp):
         response = await content_client.get(PATH_CONTENT_LOGIN, params={"returnTo": "/fin/rapport/"})
@@ -1180,7 +1180,7 @@ class TestCleanup:
         )
 
         interval = sessions_mod._CLEANUP_INTERVAL
-        for _ in range(interval - 2):  # store._aanroepen is already at 1 from maak_sessie above
+        for _ in range(interval - 2):  # store._calls is already at 1 from create_session above
             store.create_attempt(state="s", nonce="n", code_verifier="v", return_to="/admin")
         assert session.id in store._sessions  # the cleanup threshold is not reached yet
 

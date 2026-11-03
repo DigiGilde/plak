@@ -43,8 +43,8 @@ Toon needs two hostnames on one component:
 
 | Host | What is there |
 |---|---|
-| `beheer.toon.<domein>` | the admin SPA, the API and the deploy endpoints |
-| `toon.<domein>` | the published content and the content login |
+| `beheer.toon.<domain>` | the admin SPA, the API and the deploy endpoints |
+| `toon.<domain>` | the published content and the content login |
 
 These come from a dotted `domain-format` plus `root-component`, both directly
 on the deployment (not under a service):
@@ -60,7 +60,7 @@ deployments:
     root-component: beheer
 ```
 
-`component.subdomain` yields `{component}.{subdomain}.{domein}`; because the
+`component.subdomain` yields `{component}.{subdomain}.{domain}`; because the
 component is called `beheer` that is `beheer.toon.rijks.app`.
 `root-component` makes that same component also serve the address without that
 first label: `toon.rijks.app`. Two Ingress objects, two Let's Encrypt
@@ -169,8 +169,8 @@ anybody an administrator.
 | `TOON_AUDIT_IP_KEY_PREVIOUS` | user-env-var | optional, only after a rotation: the keys `TOON_AUDIT_IP_KEY` replaced, comma-separated, newest first, each in the format of the key itself. A single key works. See below |
 | `TOON_BOOTSTRAP_ADMIN_SUB` | env-vars | the `sub` of the first platform administrator, otherwise nobody can get in |
 | `TOON_ENVIRONMENT` | env-vars | `productie` |
-| `TOON_BASE_URL` | env-vars | `https://beheer.toon.<domein>` |
-| `TOON_CONTENT_BASE_URL` | env-vars | `https://toon.<domein>` |
+| `TOON_BASE_URL` | env-vars | `https://beheer.toon.<domain>` |
+| `TOON_CONTENT_BASE_URL` | env-vars | `https://toon.<domain>` |
 | `TOON_BEHIND_PROXY` | env-vars | `true`: the HAProxy router stands in front of the pod |
 | `TOON_OIDC_ISS_REQUIRED` | env-vars | `true` |
 | `TOON_IDP_RECHECK_SECONDS` | env-vars | optional, default `900`; how often at most a session is checked again at Keycloak, `0` turns it off |
@@ -406,7 +406,7 @@ URIs are on the client; without the second one every viewer login breaks on
 Toon offers the endpoint from OIDC Back-Channel Logout 1.0 on the admin host:
 
 ```
-POST https://beheer.toon.<domein>/-/oidc/backchannel-logout
+POST https://beheer.toon.<domain>/-/oidc/backchannel-logout
 ```
 
 The endpoint expects a `logout_token` as a form field. A cheap, unverified
@@ -431,7 +431,7 @@ Settings):
 | Field | Value | Why |
 |---|---|---|
 | Front channel logout | Off | While it is on, Keycloak skips back-channel logout for the client entirely, whatever the URL says |
-| Backchannel logout URL | `https://beheer.toon.<domein>/-/oidc/backchannel-logout` | Empty means Keycloak never calls us and `POST /-/oidc/backchannel-logout` is dead code. Per environment its own admin host |
+| Backchannel logout URL | `https://beheer.toon.<domain>/-/oidc/backchannel-logout` | Empty means Keycloak never calls us and `POST /-/oidc/backchannel-logout` is dead code. Per environment its own admin host |
 | Backchannel logout session required | On | Puts `sid` in the logout token, which is what matches the exact session; only the session it is about lapses. Off means the token carries only a `sub`, and every session of that person lapses |
 | Backchannel logout revoke offline sessions | Off | Only adds a `revoke_offline_access` event to the token; Toon keeps no offline sessions and does not act on it |
 | Admin URL | empty | With no back-channel URL, Keycloak would fall back to this one in its own pre-OIDC format, which Toon does not speak |

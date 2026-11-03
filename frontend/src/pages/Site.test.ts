@@ -45,7 +45,7 @@ function makeRouter(): Router {
     routes: [
       { path: '/', name: 'overview', component: Empty },
       { path: '/:group', name: 'group', component: Empty },
-      // Without groep and site in the route: the page should load nothing.
+      // Without group and site in the route: the page should load nothing.
       { path: '/-/los', name: 'los', component: Site },
       {
         path: '/:group/:site',

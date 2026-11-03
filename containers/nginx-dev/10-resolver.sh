@@ -7,7 +7,7 @@ set -eu
 
 ns="$(awk '/^nameserver[ \t]/ { print $2; exit }' /etc/resolv.conf)"
 if [ -z "${ns}" ]; then
-    echo "10-resolver.sh: geen nameserver gevonden in /etc/resolv.conf" >&2
+    echo "10-resolver.sh: no nameserver found in /etc/resolv.conf" >&2
     exit 1
 fi
 case "${ns}" in
@@ -18,4 +18,4 @@ esac
 # Containerfile): /etc/nginx itself is not writable for the nginx user,
 # and on k8s the whole rootfs is read-only.
 echo "resolver ${ns} valid=10s ipv6=off;" > /etc/nginx/resolver.conf
-echo "10-resolver.sh: resolver ${ns} (uit /etc/resolv.conf)"
+echo "10-resolver.sh: resolver ${ns} (from /etc/resolv.conf)"

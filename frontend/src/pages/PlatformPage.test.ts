@@ -33,7 +33,7 @@ describe.each([
   { name: 'Privacy', component: Privacy, title: 'Privacy' },
   { name: 'Toegankelijkheid', component: Accessibility, title: 'Toegankelijkheid' },
   { name: 'Over', component: About, title: 'Over Toon' },
-])('$naam', ({ component, title }) => {
+])('$name', ({ component, title }) => {
   it('shows the title and content', () => {
     wrapper = mount(component, { attachTo: document.body, global: { plugins: [router] } });
     expect(wrapper.find('h1').text()).toBe(title);

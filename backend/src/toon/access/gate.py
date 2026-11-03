@@ -52,7 +52,7 @@ async def decide(
     if isinstance(site, AccessDecision):
         return site
     if site.live_version_id is None:
-        # Also on base publiek: without a live version the site
+        # Also on base public: without a live version the site
         # does not exist to the outside world (spec §5.6).
         return neutral_404(REASON_NO_LIVE_VERSION)
     return await _assess(

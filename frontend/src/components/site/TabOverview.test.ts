@@ -195,7 +195,7 @@ describe('TabOverview: upload', () => {
 
     const file = new File(['x'], 'dist.zip');
     chooseFile(wrapper, file);
-    // Without a bestand field the backend refuses with a 422; simulate that by
+    // Without a file field the backend refuses with a 422; simulate that by
     // letting the fetch return a problem for a moment.
     vi.stubGlobal('fetch', serverErrorFetch());
     await wrapper.find('[data-testid="upload-form"]').trigger('submit');

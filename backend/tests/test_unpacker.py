@@ -321,7 +321,7 @@ class TestPathValidation:
 
     def test_nested_reserved_segment_allowed(self, unpack: UnpackFn):
         # The entry in the root keeps 'docs' an ordinary directory: without
-        # that entry 'docs' would be stripped off (see TestOmhullendeMap).
+        # that entry 'docs' would be stripped off (see TestWrappingDirectory).
         data = make_zip({"index.html": b"h", "docs/_preview/x.html": b"1"})
         assert unpack("site.zip", data) == {"index.html": b"h", "docs/_preview/x.html": b"1"}
 
@@ -676,7 +676,7 @@ class TestBasePath:
 
     def test_base_path_without_index_points_to_the_root(self, unpack: UnpackFn):
         """The nearest index.html is already in the root: then there is no
-        directory to send back as basispad and the field has to go."""
+        directory to send back as base path and the field has to go."""
         entries = {"index.html": b"h", "dist/stijl.css": b"body{}"}
         with pytest.raises(BundleError) as error:
             unpack("site.zip", make_zip(entries), base_path="dist")
@@ -717,7 +717,7 @@ class TestBasePath:
             unpack("site.zip", make_zip(entries), base_path="dist")
         assert reason_of(error) == "RESERVED_SEGMENT"
         # The user wrote 'dist', not 'mijnproject/dist': the message names
-        # their own basispad and not the stripped prefix.
+        # their own base path and not the stripped prefix.
         assert "in the root of base path 'dist'" in str(error.value)
 
 
@@ -1137,7 +1137,7 @@ def test_peak_memory_does_not_grow_with_the_archive(tmp_path: Path, filename: st
     assert count == 2
     assert (target / "nullen.bin").stat().st_size == LARGE
     assert (target / "index.html").is_file()
-    assert peak < 8 * 1024 * 1024, f"piek {peak} bytes voor een archief van {LARGE} bytes"
+    assert peak < 8 * 1024 * 1024, f"peak {peak} bytes for an archive of {LARGE} bytes"
 
 
 def test_peak_memory_grows_not_along_with_the_count_dir_entries(tmp_path: Path) -> None:
@@ -1159,7 +1159,7 @@ def test_peak_memory_grows_not_along_with_the_count_dir_entries(tmp_path: Path) 
         tracemalloc.stop()
 
     assert reason_of(error) == "TOO_MANY_FILES"
-    assert peak < 1024 * 1024, f"piek {peak} bytes voor 100.000 map-entries"
+    assert peak < 1024 * 1024, f"peak {peak} bytes for 100,000 directory entries"
 
 
 def test_limits_from_settings(tmp_path):
@@ -1220,7 +1220,7 @@ class TestFinderJunk:
         with pytest.raises(BundleError) as error:
             unpack("site.zip", make_zip({"__MACOSX/._x": b"rommel", ".DS_Store": b"rommel"}))
         assert reason_of(error) == "EMPTY_ARCHIVE"
-        # Not GEEN_INDEX: adding an index.html does not solve this, because the
+        # Not NO_INDEX: adding an index.html does not solve this, because the
         # message has to say that it held nothing but metadata.
         assert "OS metadata" in str(error.value)
 
