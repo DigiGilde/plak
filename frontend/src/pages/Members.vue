@@ -20,7 +20,7 @@
 // carries whichever of the two is true and colours it.
 //
 // The menu offers only what the API would actually accept. Three things it
-// refuses (yourself, the last active beheerder, the bootstrap account), and
+// refuses (yourself, the last active admin, the bootstrap account), and
 // offering them anyway would be a control that exists to fail.
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
@@ -108,7 +108,7 @@ const sortedMembers = computed<Member[]>(() => {
     );
   }
   if (sortKey.value === 'role') {
-    // Beheerders first when descending: on this page they are what you look
+    // Admins first when descending: on this page they are what you look
     // for. Within one role the list stays alphabetical, so it never looks
     // shuffled.
     const rank = (member: Member): number => (member.platformRole === 'admin' ? 1 : 0);
@@ -187,7 +187,7 @@ function isMe(member: Member): boolean {
   return me.value?.id === member.id;
 }
 
-/** True when removing this member's beheerder role would leave the platform without one. */
+/** True when removing this member's admin role would leave the platform without one. */
 function isLastAdmin(member: Member): boolean {
   if (member.platformRole !== 'admin' || member.status !== 'active') return false;
   return (
@@ -269,7 +269,7 @@ async function changeRole(member: Member, role: 'admin' | 'member'): Promise<voi
   } catch (error) {
     member.platformRole = previous;
     // The backend refuses three cases on purpose (yourself, the last active
-    // beheerder, the bootstrap account); its message says which one.
+    // admin, the bootstrap account); its message says which one.
     notify(t('admin.members.roleFailed', { name: member.name }), error);
   }
 }

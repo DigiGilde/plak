@@ -13,7 +13,7 @@ function builtIndex(): string {
     return readFileSync(distIndexPath, 'utf-8');
   } catch {
     throw new Error(
-      `dist/index.html niet gevonden op ${distIndexPath}. Draai eerst 'npm run build'.`,
+      `dist/index.html not found at ${distIndexPath}. Run 'npm run build' first.`,
     );
   }
 }
@@ -39,8 +39,8 @@ function distFiles(directory = distDir): string[] {
  * both without unsafe-inline. Run it after `npm run build`; without dist/
  * index.html the test fails with a clear message rather than passing silently.
  */
-describe('gebouwde index.html', () => {
-  it('bevat geen inline <script> zonder src', () => {
+describe('built index.html', () => {
+  it('has no inline <script> without src', () => {
     const html = builtIndex();
 
     const scriptTags = [...html.matchAll(SCRIPT_TAG_RE)];
@@ -49,25 +49,25 @@ describe('gebouwde index.html', () => {
     for (const [tag, content] of scriptTags) {
       const hasSrc = /\bsrc\s*=/.test(tag);
       const isEmpty = content.trim().length === 0;
-      expect(hasSrc || isEmpty, `inline script zonder src gevonden: ${tag}`).toBe(true);
+      expect(hasSrc || isEmpty, `inline script without src found: ${tag}`).toBe(true);
     }
   });
 
-  it('bevat geen inline <style> of style-attribuut', () => {
+  it('has no inline <style> or style attribute', () => {
     const html = builtIndex();
 
     const styleTags = [...html.matchAll(STYLE_TAG_RE)];
     for (const [tag] of styleTags) {
-      expect.unreachable(`inline <style> gevonden: ${tag}`);
+      expect.unreachable(`inline <style> found: ${tag}`);
     }
 
     const styleAttributes = [...html.matchAll(/\sstyle\s*=\s*["']/gi)];
-    expect(styleAttributes.length, 'style-attribuut gevonden in dist/index.html').toBe(0);
+    expect(styleAttributes.length, 'style attribute found in dist/index.html').toBe(0);
   });
 });
 
-describe('script-tagpatroon', () => {
-  it.each(['</script >', '</script\t\n foo>'])('ziet elk script apart na %s', (endTag) => {
+describe('script tag pattern', () => {
+  it.each(['</script >', '</script\t\n foo>'])('sees each script separately after %s', (endTag) => {
     const html = `<script src="a.js">${endTag}<script>alert(1)</script>`;
 
     const tags = [...html.matchAll(SCRIPT_TAG_RE)];
@@ -76,7 +76,7 @@ describe('script-tagpatroon', () => {
     expect(tags[1][1]).toBe('alert(1)');
   });
 
-  it('ziet <scriptx> niet aan voor een eindtag', () => {
+  it('does not take <scriptx> for an end tag', () => {
     const tags = [...'<script>alert(1)</scriptx></script>'.matchAll(SCRIPT_TAG_RE)];
 
     expect(tags.length).toBe(1);
@@ -84,15 +84,15 @@ describe('script-tagpatroon', () => {
   });
 });
 
-describe('style-tagpatroon', () => {
-  it.each(['</style >', '</style\t\n foo>'])('ziet een inline <style> die sluit met %s', (endTag) => {
+describe('style tag pattern', () => {
+  it.each(['</style >', '</style\t\n foo>'])('sees an inline <style> that closes with %s', (endTag) => {
     const tags = [...`<style>body{color:red}${endTag}`.matchAll(STYLE_TAG_RE)];
 
     expect(tags.length).toBe(1);
     expect(tags[0][1]).toBe('body{color:red}');
   });
 
-  it('ziet <stylex> niet aan voor een eindtag', () => {
+  it('does not take <stylex> for an end tag', () => {
     const tags = [...'<style>a</stylex></style>'.matchAll(STYLE_TAG_RE)];
 
     expect(tags.length).toBe(1);
@@ -100,21 +100,21 @@ describe('style-tagpatroon', () => {
   });
 });
 
-describe('gebouwde bestanden', () => {
-  it('bevat geen sourcemaps', () => {
+describe('built files', () => {
+  it('has no sourcemaps', () => {
     const maps = distFiles().filter((file) => file.endsWith('.map'));
 
-    expect(maps, `sourcemaps meegeleverd: ${maps.join(', ')}`).toEqual([]);
+    expect(maps, `sourcemaps shipped: ${maps.join(', ')}`).toEqual([]);
   });
 
-  it('roept nergens eval of new Function aan', () => {
+  it('never calls eval or new Function', () => {
     const chunks = distFiles().filter((file) => file.endsWith('.js'));
     expect(chunks.length).toBeGreaterThan(0);
 
     for (const chunk of chunks) {
       const code = readFileSync(chunk, 'utf-8');
-      expect(/\beval\s*\(/.test(code), `eval( gevonden in ${chunk}`).toBe(false);
-      expect(/\bnew\s+Function\s*\(/.test(code), `new Function( gevonden in ${chunk}`).toBe(false);
+      expect(/\beval\s*\(/.test(code), `eval( found in ${chunk}`).toBe(false);
+      expect(/\bnew\s+Function\s*\(/.test(code), `new Function( found in ${chunk}`).toBe(false);
     }
   });
 });

@@ -1,4 +1,4 @@
-"""Tests for auth/members.py: lid upsert only on a /admin visit, active from
+"""Tests for auth/members.py: member upsert only on a /admin visit, active from
 the first login, deactivation, reactivation and bootstrap promotion. Runs
 against the testcontainers PostgreSQL from conftest.py; the mock IdP comes
 from helpers_oidc."""
@@ -304,7 +304,7 @@ class TestBootstrap:
 
     async def test_existing_member_with_bootstrap_sub_becomes_promoted(self, idp, db_environment):
         _, factory = db_environment
-        # First without bootstrap: the lid is created as an ordinary member.
+        # First without bootstrap: the member is created as an ordinary member.
         app = _make_admin_app(idp, factory)
         async with make_test_client(app) as client:
             set_session_cookie(client, app, sub=BOOTSTRAP_SUB)

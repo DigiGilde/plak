@@ -40,7 +40,7 @@ WWW_AUTHENTICATE_BEARER = {"WWW-Authenticate": 'Bearer realm="toon", error="inva
 
 # A 403 is a refusal whatever the method, and so is a 429 (only ApiError(429)
 # raises one, from the audit lookup daily limit; the ratelimit middleware's
-# 429 goes around ApiError, see docs/audit-log.md "Bekende gaten"). A 401 and
+# 429 goes around ApiError, see docs/audit-log.md "Known gaps"). A 401 and
 # a 404 count only on a mutation: on a read, a 401 is "not signed in" (the
 # SPA asks /me on every load to choose between landing page and overview) and
 # a 404 an ordinary miss, while on a mutation the 404 stands in for a 403

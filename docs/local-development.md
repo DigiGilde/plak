@@ -389,13 +389,13 @@ verification with a real id token from the project realm.
 ## Justfile recipes
 
 ```bash
-just             # toont beschikbare commands
-just dev         # start de backend lokaal met uvicorn (reload aan)
-just seed        # vult de draaiende dev-stack met voorbeeldinhoud
-just test        # draait de backend- en CLI-testsuites (testcontainers, zie hieronder)
-just test-cli    # draait alleen de CLI-tests (cli/tests)
-just lint        # ruff check op backend/src, backend/tests en cli/
-just coverage    # de vier suites met dekking
+just             # lists the available commands
+just dev         # runs the backend locally with uvicorn (reload on)
+just seed        # fills the running dev stack with sample content
+just test        # runs the backend and CLI test suites (Testcontainers, see below)
+just test-cli    # runs only the CLI tests (cli/tests)
+just lint        # ruff check on backend/src, backend/tests and cli/
+just coverage    # the four suites with coverage
 ```
 
 `just coverage` measures branch coverage and fails below 100%, the floor

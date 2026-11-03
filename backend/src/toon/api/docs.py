@@ -177,7 +177,7 @@ OPENAPI_TAGS: list[dict[str, str]] = [
 ]
 
 # Swagger UI 5.32.15, verbatim from the npm package swagger-ui-dist; refresh
-# with `just ververs-swagger-ui`. Served ourselves because the admin CSP
+# with `just refresh-swagger-ui`. Served ourselves because the admin CSP
 # allows no CDN.
 SWAGGER_UI_VERSION = "5.32.15"
 

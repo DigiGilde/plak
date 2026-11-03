@@ -1,12 +1,12 @@
 """Interface language for the pages the server renders itself.
 
-The beheer SPA carries its own catalogue; this one covers what a browser gets
+The admin SPA carries its own catalogue; this one covers what a browser gets
 before any JavaScript runs: the screens a visitor meets while logging in or
 while being refused, and the code page of a secret link.
 
 There is no session to read a preference from on the content host, and these
 pages are public, so the language comes from `Accept-Language` alone. A
-member who set a language in the beheer environment keeps that setting there;
+member who set a language in the admin environment keeps that setting there;
 the two are deliberately separate, because a page without a session cannot
 know about it.
 

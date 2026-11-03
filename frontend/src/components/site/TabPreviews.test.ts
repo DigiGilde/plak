@@ -129,7 +129,7 @@ describe('TabPreviews: actions', () => {
     );
   });
 
-  it('toggles the genodigden exception both ways', async () => {
+  it('toggles the invitees exception both ways', async () => {
     const wrapper = makeWrapper();
     await untilIdle();
 

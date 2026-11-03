@@ -63,7 +63,7 @@ async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def _seed_site_with_token(app: FastAPI) -> str:
-    """Active lid, groep team-aurora, site website; returns a CLI access token of that lid."""
+    """Active member, group team-aurora, site website; returns a CLI access token of that member."""
     factory = app.state.session_factory
     async with factory() as db:
         member = Member(sso_subject="sub-ci", email="ci@example.org", status=MemberStatus.ACTIVE)

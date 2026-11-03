@@ -23,7 +23,7 @@ That script (`e2e/run.sh`):
 Knobs: `TOON_E2E_PORT`, `TOON_E2E_OIDC_PORT`, `TOON_E2E_KEEP_UP=1`
 (leave the stack up to debug it), `TOON_E2E_ENGINE` (container engine,
 podman by default). Extra arguments are passed through to Playwright:
-`just e2e --grep sleutel`.
+`just e2e --grep secret`.
 
 The job `e2e` in `.github/workflows/ci.yml` runs this same script on
 every pull request, with `TOON_E2E_ENGINE=docker` because the GitHub

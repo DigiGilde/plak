@@ -1438,7 +1438,7 @@ async def test_unauthenticated_does_not_read_the_body(environment: Environment) 
 
 async def test_truncated_multipart_422_without_version(environment: Environment) -> None:
     """Without a closing boundary the upload is incomplete: fail-closed 422, no
-    versie and no spool leftovers."""
+    version and no spool leftovers."""
     parts_ = _multipart_parts("site.zip", [_zip_bytes()])[:-1]
     async with environment.client() as client:
         resp = await client.post(
@@ -1728,7 +1728,7 @@ async def test_concurrent_same_ref_deploys_give_one_preview_row(environment: Env
     assert len(versions) == 1
     assert versions[0].id == previews[0].version_id
 
-    # Only the file tree of the winning versie is left.
+    # Only the file tree of the winning version is left.
     sitedir = environment.settings.content_root / str(environment.site.id)
     assert {entry.name for entry in sitedir.iterdir()} == {str(previews[0].version_id)}
 

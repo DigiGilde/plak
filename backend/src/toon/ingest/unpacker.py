@@ -12,12 +12,12 @@ The root of the site is settled in three steps:
    new root. That never loses a file, because by definition nothing sits
    beside it, and it makes an archive holding only
    `mijnsite/dist/index.html` work too.
-2. A `basispad` from the caller then wins: that directory becomes the root;
+2. A `base_path` from the caller then wins: that directory becomes the root;
    whatever sits beside it is not published. That is the user confirming the
    proposal from step 3. The path is relative to the root after the peeling,
    but the spelling including the peeled prefix counts just as well, and so
-   does a basispad that the peeling already took away: a fixed
-   `basispad: dist` in a workflow must not depend on whether a LEESMIJ.md
+   does a base path that the peeling already took away: a fixed
+   `base-path: dist` in a workflow must not depend on whether a LEESMIJ.md
    happened to sit beside `dist/` that time.
 3. If that does not yield an `index.html` in the root, the bundle is refused,
    with the index.html paths found as a proposal.
@@ -37,7 +37,7 @@ of a site that only works for the builder.
 Reserved segments (`_preview`, `_version`) are about the root of the published
 tree, not about the path as it sits in the archive: an enclosing directory by
 that name is simply peeled off, and whatever ends up in the root after the
-peeling and the basispad is refused.
+peeling and the base path is refused.
 
 Decompression is checked incrementally against the limits, so a zip/tar bomb
 never gets past them: the sizes from the archive headers are deliberately not
@@ -285,10 +285,10 @@ def _common(links: Sequence[str], right: Sequence[str]) -> int:
 @dataclass(frozen=True)
 class _Root:
     """The chosen root of the site, split by origin: what the peeling took away
-    and what the caller chose as basispad.
+    and what the caller chose as base path.
 
     The split exists for the error messages: the user recognises their own
-    basispad, not the prefix the peeling put in front of it.
+    base path, not the prefix the peeling put in front of it.
     """
 
     peeled: tuple[str, ...] = ()
@@ -303,7 +303,7 @@ class _Scan:
     """Reads only the names from the archive index, never the contents.
 
     Delivers three things: the chain of enclosing directories, the depths at
-    which the basispad occurs in the archive, and (in case the root turns out
+    which the base path occurs in the archive, and (in case the root turns out
     to have no index.html) the shortest index.html paths as a proposal. Memory
     is constant: a single segment list for the chain, at most
     MAX_INDEX_SUGGESTIONS proposals, a single path for the capitalisation
@@ -352,9 +352,9 @@ class _Scan:
         self._bound_at = level if self._bound_at is None else min(self._bound_at, level)
 
     def _note_base(self, segments: list[str]) -> None:
-        """Records at which depths the basispad occurs in this archive path.
+        """Records at which depths the base path occurs in this archive path.
 
-        That way the scan settles which reading of the basispad really exists:
+        That way the scan settles which reading of the base path really exists:
         the documented one (relative to the root after the peeling) or a
         shallower one, in which the user typed the peeled prefix along
         themselves or the peeling already took their directory away.
@@ -389,11 +389,11 @@ class _Scan:
         return self._chain[: self._bound_at]
 
     def pick_root(self) -> _Root:
-        """The root of the site: the peeled prefix, and behind it the basispad at
+        """The root of the site: the peeled prefix, and behind it the base path at
         the deepest place where it really occurs in the archive.
 
         That deepest place is the documented reading as soon as it exists; if
-        the basispad occurs only shallower, that is the only reading the user
+        the base path occurs only shallower, that is the only reading the user
         can have meant. If it occurs nowhere, the documented reading stands and
         the unpacking refuses with BASE_PATH_UNKNOWN."""
         peeled = self.root
@@ -404,8 +404,8 @@ class _Scan:
         return _Root(peeled=tuple(peeled[:depth]), base=tuple(self._base))
 
     def base_case_variant(self) -> str | None:
-        """The path that looks like the basispad but is spelled differently, or
-        None as soon as the basispad itself occurs exactly somewhere."""
+        """The path that looks like the base path but is spelled differently, or
+        None as soon as the base path itself occurs exactly somewhere."""
         if self._base_depths or self._base_variant is None:
             return None
         return "/".join(self._base_variant)
@@ -450,7 +450,7 @@ def _place(raw_value: str, root: _Root, limits: Limits) -> _Placement:
 
     The structural check applies to every entry; the policy limits (reserved
     segment in the root, directory depth) apply only to what gets published,
-    so a `basispad` does not trip over a deep node_modules that the user
+    so a `base_path` does not trip over a deep node_modules that the user
     deliberately kept out of the publication.
     """
     segments = _safe_segments(raw_value)
@@ -461,7 +461,7 @@ def _place(raw_value: str, root: _Root, limits: Limits) -> _Placement:
         return _Placement(inside=False, path=None)
     rest = segments[len(root_segments) :]
     if not rest:
-        # The root itself: proves the basispad exists, writes nothing.
+        # The root itself: proves the base path exists, writes nothing.
         return _Placement(inside=True, path=None)
     _check_policy(segments, raw_value, limits)
     if rest[0] in RESERVED_SEGMENTS:
@@ -470,7 +470,7 @@ def _place(raw_value: str, root: _Root, limits: Limits) -> _Placement:
 
 
 def _validate_base_path(base_path: str | None, limits: Limits) -> tuple[str, ...]:
-    """The same path validation as for an archive entry; an invalid basispad is
+    """The same path validation as for an archive entry; an invalid base path is
     a refusal, never a silent fallback to the archive root."""
     if base_path is None:
         return ()
@@ -496,10 +496,10 @@ class _Outcome:
     index_seen: bool
     suggestions: tuple[str, ...] = ()
     case_variant: str | None = None
-    # The root does exist, but is a file: only possible with a basispad, and
+    # The root does exist, but is a file: only possible with a base path, and
     # the difference between "does not exist" and "is not a directory".
     root_is_file: bool = False
-    # What the peeling took away, and the path that looks like the basispad
+    # What the peeling took away, and the path that looks like the base path
     # but is spelled differently: both only for the error message.
     peeled: str = ""
     base_variant: str | None = None
@@ -634,11 +634,11 @@ def _start_loop(scan: _Scan, limits: Limits) -> _Loop:
     return _Loop(
         tree=_Tree(limits, suggestions),
         root=root,
-        # Without a basispad the chosen root is by construction the root of
-        # the archive; only a supplied basispad can turn out to be unfindable.
+        # Without a base path the chosen root is by construction the root of
+        # the archive; only a supplied base path can turn out to be unfindable.
         root_seen=not root.base,
         # The proposals are relative to the root after the peeling: exactly
-        # the form in which they can be sent back as a basispad.
+        # the form in which they can be sent back as a base path.
         suggestions=suggestions,
         case_variant=scan.case_variant(peeled),
         peeled="/".join(peeled),
@@ -966,7 +966,7 @@ def _unpack_html(source: Path, destination: Destination, limits: Limits) -> _Out
 
 
 def _base_path_unknown_error(base_path: str | None, outcome: _Outcome) -> BundleError:
-    """The basispad occurs nowhere in the archive. The message names the two
+    """The base path occurs nowhere in the archive. The message names the two
     things the user cannot see in their own bundle: a directory that differs
     in capitalisation only, and the prefix the peeling took away."""
     params: dict[str, object] = {"base_path": base_path}
@@ -984,7 +984,7 @@ def _base_path_unknown_error(base_path: str | None, outcome: _Outcome) -> Bundle
 def _suggestion_sentence(shortest: str) -> Msg:
     """What can be done with the nearest index.html. If it already sits in the
     root there is no directory to point at, and the answer is to leave the
-    basispad out."""
+    base path out."""
     if "/" not in shortest:
         return Msg("suggestion.in_root", {"index": INDEX_FILE})
     return Msg("suggestion.nearest", {"path": shortest})
@@ -992,8 +992,8 @@ def _suggestion_sentence(shortest: str) -> Msg:
 
 def _no_index_error(base_path: str | None, outcome: _Outcome) -> BundleError:
     if base_path is not None:
-        # A basispad with no files in it (an empty directory) is the same
-        # problem as a basispad without an index: the directory is no good as
+        # A base path with no files in it (an empty directory) is the same
+        # problem as a base path without an index: the directory is no good as
         # a root, and the candidates point the way to one that is.
         what = "empty" if outcome.count == 0 else "no_index"
         params: dict[str, object] = {"base_path": base_path, "index": INDEX_FILE}
@@ -1061,7 +1061,7 @@ def unpack(
             index_candidates=outcome.suggestions,
         )
     if outcome.count == 0:
-        # With a basispad, "empty" is a statement about that one directory,
+        # With a base path, "empty" is a statement about that one directory,
         # not about the bundle: that one is usually full of files.
         if base_path is not None:
             raise _no_index_error(base_path, outcome)

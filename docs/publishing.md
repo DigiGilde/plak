@@ -91,20 +91,20 @@ resolution, for example in a `Layout.astro` or `404.astro`) use
 ```astro
 ---
 // Layout.astro
-const basis = import.meta.env.BASE_URL;
+const base = import.meta.env.BASE_URL;
 ---
 <nav>
-  <a href={`${basis}over/`}>Over ons</a>
-  <a href={`${basis}contact/`}>Contact</a>
+  <a href={`${base}about/`}>About us</a>
+  <a href={`${base}contact/`}>Contact</a>
 </nav>
 ```
 
 ```astro
 ---
 // 404.astro
-const basis = import.meta.env.BASE_URL;
+const base = import.meta.env.BASE_URL;
 ---
-<p>Pagina niet gevonden. <a href={basis}>Terug naar de homepage</a>.</p>
+<p>Page not found. <a href={base}>Back to the homepage</a>.</p>
 ```
 
 ### Vite example
@@ -581,7 +581,7 @@ document stays as it is either way.
 
 Some Forgejo instances (for example code.overheid.nl, version 15) send
 no `repository_id` claim in the ID token; Toon then matches on
-`eigenaar/repo` and checks again on every deploy through the Forgejo API that
+`owner/repo` and checks again on every deploy through the Forgejo API that
 that name still belongs to the linked ids (see `docs/security.md`).
 
 ### Maintaining the action
@@ -836,9 +836,9 @@ found, shortest first and at most five:
 ```json
 {
   "type": "about:blank",
-  "title": "Onverwerkbare invoer",
+  "title": "Unprocessable input",
   "status": 422,
-  "detail": "geen index.html in de wortel van de bundel. De dichtstbijzijnde staat op 'dist/index.html'. Publiceer de map 'dist' zelf, of stuur het veld basispad mee met de waarde 'dist'",
+  "detail": "No index.html in the root of the bundle. The nearest one sits at 'dist/index.html'. Publish the directory 'dist' itself, or send along the base path field with the value 'dist'",
   "code": "NO_INDEX",
   "indexCandidates": ["dist/index.html"]
 }
@@ -953,8 +953,8 @@ no half upload. The live site stays as it was.
 
 ## 5. Limitations
 
-- **Reserved segments in your dist**: a directory or file `_preview`,
-  `_version` or `_versie` (the old spelling) in the root of your site
+- **Reserved segments in your dist**: a directory or file `_preview`
+  or `_version` in the root of your site
   is refused at ingest with a clear error message. These names
   belong to the platform (see §4 of the design spec) and can therefore not be
   part of your published file tree. This is about the root
@@ -999,7 +999,7 @@ no half upload. The live site stays as it was.
   eight letters or digits (a link shared without its code). Do not use `key`
   as a query parameter of your own site.
 - **Absolute base under `_version`**: if your site was built with an
-  absolute base (for example hardcoded `https://voorbeeld.nl/pad/`), then
+  absolute base (for example hardcoded `https://example.org/path/`), then
   that absolute base inside a `_version/{version-id}/` view still
   points at the live assets, not at the old version being viewed. A site
   that uses relative or environment-dependent base URLs (as in

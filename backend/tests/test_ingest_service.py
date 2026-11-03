@@ -2,7 +2,7 @@
 
 These tests really commit (pointer swap, upsert, concurrency) and therefore
 use sessions of their own with unique slugs per test, instead of the rollback
-fixture db_verbinding from conftest.
+fixture db_connection from conftest.
 """
 
 from __future__ import annotations
@@ -240,7 +240,7 @@ class TestDeploy:
 
     async def test_midway_refused_bundle_leaves_nothing_behind(self, environment: Environment):
         """A good entry followed by a refused one: the partly written work dir
-        disappears completely and no versie is created."""
+        disappears completely and no version is created."""
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as archive:
             archive.writestr("index.html", b"<h1>ok</h1>")
@@ -261,7 +261,7 @@ class TestDeploy:
 
     async def test_bundle_without_index_leaves_nothing_behind(self, environment: Environment):
         """The refusal lands after unpacking; the work dir with the files
-        already written disappears completely and no versie is created."""
+        already written disappears completely and no version is created."""
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as archive:
             archive.writestr("mijnsite/README.md", b"x")
@@ -304,7 +304,7 @@ class TestDeploy:
         assert not (version_dir / "README.md").exists()
 
     async def test_db_error_cleans_files_on(self, environment: Environment):
-        # Non-existent lid: an FK violation on the versie insert.
+        # Non-existent member: an FK violation on the version insert.
         ghost_deployer = Deployer(member_id=uuid.uuid4())
         async with environment.session_factory() as session:
             with pytest.raises(IntegrityError):
@@ -364,7 +364,7 @@ class TestPreviewDeploy:
         assert preview.access_invitees_override is True
         versions = await _versions(environment)
         assert [version.id for version in versions] == [second_one]
-        # Replaced preview versie: row gone and files gone.
+        # Replaced preview version: row gone and files gone.
         assert environment.version_dirs() == {str(second_one)}
         assert first != second_one
 
@@ -383,7 +383,7 @@ class TestPreviewDeploy:
         assert len(await _versions(environment)) == 2
 
     async def test_db_error_cleans_files_on(self, environment: Environment):
-        # Non-existent lid: an FK violation on the versie insert.
+        # Non-existent member: an FK violation on the version insert.
         ghost_deployer = Deployer(member_id=uuid.uuid4())
         async with environment.session_factory() as session:
             with pytest.raises(IntegrityError):
@@ -415,7 +415,7 @@ class TestPreviewDeploy:
         assert winner in results
         versions = await _versions(environment)
         assert [version.id for version in versions] == [winner]
-        # No orphaned files: only the winning versie is on disk.
+        # No orphaned files: only the winning version is on disk.
         assert environment.version_dirs() == {str(winner)}
         assert list((environment.content_root / "_tmp").iterdir()) == []
 

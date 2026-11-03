@@ -7,7 +7,7 @@
  * The confirmation lives in the page, not in a toast: a toast does not survive
  * a remount, and here the confirmation is the entire point.
  *
- * `adressen` is deliberately a list of one: as soon as a site can have more
+ * `addresses` is deliberately a list of one: as soon as a site can have more
  * than one address, the second address joins as an extra row, with the same
  * buttons.
  */

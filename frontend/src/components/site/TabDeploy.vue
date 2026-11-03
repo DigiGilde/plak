@@ -145,7 +145,7 @@ type RepositoryReference =
     };
 
 /**
- * Accepts "eigenaar/repo", and also a pasted repository URL
+ * Accepts "owner/repo", and also a pasted repository URL
  * (https, git@ SSH, with or without ".git", a trailing slash or a
  * "/tree/<branch>" suffix). A URL's host must be github.com or one of
  * `me.ciForgejoHosts`; anything else is reported, not silently ignored.
@@ -530,7 +530,7 @@ permissions:
 jobs:
   publish:
     if: github.event.action != 'closed'
-    runs-on: docker # de runner-label van deze Forgejo-instantie
+    runs-on: docker # the runner label of this Forgejo instance
     enable-openid-connect: true
     steps:
       - uses: actions/checkout@<commit-sha>
@@ -561,7 +561,7 @@ jobs:
 
   teardown:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: docker # de runner-label van deze Forgejo-instantie
+    runs-on: docker # the runner label of this Forgejo instance
     enable-openid-connect: true
     steps:
       - name: Remove preview
@@ -628,10 +628,10 @@ const cliSiteId = computed(() => (siteId.value ? ` --site-id ${siteId.value}` : 
 const cliSnippet = computed(
   () => `toon login --host ${host.value}
 
-# Live: vervangt direct wat bezoekers zien
+# Live: replaces what visitors see right away
 toon publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value}
 
-# Preview: eigen pad, laat de live site ongemoeid
+# Preview: its own path, leaves the live site untouched
 toon publish ./dist --host ${host.value} --site ${siteRef.value}${cliSiteId.value} --preview pr-42
 
 toon logout

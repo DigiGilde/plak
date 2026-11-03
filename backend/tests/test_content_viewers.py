@@ -1,5 +1,5 @@
 """Tests for auth/content_viewers.py: the upsert that keeps a content-only
-SSO viewer traceable for the audit log (spec §7 "Kijken"), without giving
+SSO viewer traceable for the audit log (spec §7 "Looking"), without giving
 them a `members` row."""
 
 from __future__ import annotations

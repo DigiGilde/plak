@@ -488,7 +488,7 @@ async def test_ck_previews_access_override_refuses_half_an_override(
 
 
 async def test_external_sources_defaults_to_on(db_connection: asyncpg.Connection) -> None:
-    """Aan, tenzij je het uitzet: a row that never names the column gets the
+    """On unless you turn it off: a row that never names the column gets the
     permissive value, and the SPA switch is the restriction."""
     group_id = await _make_group(db_connection)
     site_id = await _make_site(db_connection, group_id)
@@ -962,8 +962,8 @@ async def test_last_group_admin_refused_by_trigger(db_connection: asyncpg.Connec
 async def test_deleting_a_group_does_clean_up_the_last_admin_role(
     db_connection: asyncpg.Connection,
 ) -> None:
-    """The trigger must not block the cascade: when the groep itself is deleted
-    the groep no longer exists, and an empty membership is then exactly right."""
+    """The trigger must not block the cascade: when the group itself is deleted
+    the group no longer exists, and an empty membership is then exactly right."""
     group_id, member_id = uuid.uuid4(), uuid.uuid4()
     await db_connection.execute(
         "INSERT INTO groups (id, slug, name, default_access_base) VALUES ($1, $2, $3, 'site_team')",

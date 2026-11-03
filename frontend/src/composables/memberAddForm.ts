@@ -42,7 +42,7 @@ export function useMemberAddForm<Member>(options: MemberAddFormOptions<Member>) 
    * an address in the list.
    */
   const newLabel = ref('');
-  /** Lezer by default: starting narrow makes promoting a deliberate step. */
+  /** Reader by default: starting narrow makes promoting a deliberate step. */
   const newRole = ref<Role>('reader');
   const emptyField = ref(false);
   const identifierField = ref<HTMLElement | null>(null);

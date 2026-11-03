@@ -123,7 +123,7 @@ class TestEveryEndpointIsDescribed:
         for route in _routes(app):
             if route.status_code in (204, 304):
                 if route.response_model is not None:
-                    error.append(f"{sorted(route.methods)} {route.path}: 204 met responsemodel")
+                    error.append(f"{sorted(route.methods)} {route.path}: 204 with a response model")
                 continue
             if not _is_api_model(route.response_model):
                 error.append(f"{sorted(route.methods)} {route.path}: {route.response_model!r}")
@@ -139,7 +139,7 @@ class TestEveryEndpointIsDescribed:
 
     def test_every_endpoint_has_a_known_tag(self, schema) -> None:
         known = {tag["name"] for tag in schema.get("tags", [])}
-        assert known, "de API declareert geen tags"
+        assert known, "the API declares no tags"
         error = [
             f"{m.upper()} {p}"
             for m, p, op in _operations(schema)
@@ -158,19 +158,19 @@ class TestEveryEndpointIsDescribed:
                 if code.startswith("2")
             }
             if not succeeded:
-                error.append(f"{method_.upper()} {path}: geen 2xx-antwoord")
+                error.append(f"{method_.upper()} {path}: no 2xx response")
                 continue
             for code, response in succeeded.items():
                 content = response.get("content", {})
                 if code in WITHOUT_BODY:
                     if content:
-                        error.append(f"{method_.upper()} {path}: {code} hoort geen lichaam te hebben")
+                        error.append(f"{method_.upper()} {path}: {code} should have no body")
                     continue
                 schema_of_response = content.get("application/json", {}).get("schema")
                 if not schema_of_response:
-                    error.append(f"{method_.upper()} {path}: {code} heeft geen responsemodel")
+                    error.append(f"{method_.upper()} {path}: {code} has no response model")
                 elif not (schema_of_response.get("$ref") or schema_of_response.get("items")):
-                    error.append(f"{method_.upper()} {path}: {code} heeft een leeg schema")
+                    error.append(f"{method_.upper()} {path}: {code} has an empty schema")
         assert error == [], error
 
     def test_successful_responses_are_in_the_dutch_described(self, schema) -> None:

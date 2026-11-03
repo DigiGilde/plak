@@ -316,7 +316,7 @@ describe('TabVersions: setting live', () => {
     const wrapper = makeWrapper();
     await untilIdle();
 
-    // The current live version has no "live zetten" action.
+    // The current live version has no "set live" action.
     expect(wrapper.find('[data-testid="set-live-versie-1"]').exists()).toBe(false);
 
     await runAction(wrapper, 'set-live-versie-0');

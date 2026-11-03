@@ -232,7 +232,7 @@ class TestCallbackIss:
 
 class TestRefusalReasons:
     def test_default_reason_says_only_that_the_id_token_layer_refused(self):
-        """A raise-plek without its own reason falls into the neutral bucket,
+        """A raise site without its own reason falls into the neutral bucket,
         not into a code that suggests a cause it did not check."""
         assert OidcError("iets").reason == vocabulary.LOGIN_TOKEN_INVALID
 

@@ -46,7 +46,7 @@ export function startProxy(port: number): Promise<http.Server> {
       // Forward proxy requests carry an absolute URL.
       url = new URL(request.url ?? '');
     } catch {
-      response.writeHead(400).end('ongeldig proxyverzoek');
+      response.writeHead(400).end('invalid proxy request');
       return;
     }
 
@@ -75,7 +75,7 @@ export function startProxy(port: number): Promise<http.Server> {
       },
     );
     forwarded.on('error', (error) => {
-      response.writeHead(502).end(`proxyfout: ${error.message}`);
+      response.writeHead(502).end(`proxy error: ${error.message}`);
     });
     request.pipe(forwarded);
   });

@@ -76,7 +76,7 @@ function makeRouter(): Router {
 }
 
 /**
- * `hecht` only for the axe runs: axe judges the DOM inside the document. If the
+ * `attach` only for the axe runs: axe judges the DOM inside the document. If the
  * sheet really hangs in there it calls showModal(), which jsdom does not have;
  * that is why the sheet tests run detached, just as in Overview.test.
  */

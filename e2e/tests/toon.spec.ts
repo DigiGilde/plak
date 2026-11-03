@@ -74,7 +74,7 @@ let adminPage: Page;
 let secondMemberPage: Page;
 
 // Node-side contexts: anonymous requests per host, plus one for the bearer
-// deploys (the CI path without an Origin header, the way the publiceer action goes).
+// deploys (the CI path without an Origin header, the way the publish action goes).
 let contentApi: APIRequestContext;
 let adminApi: APIRequestContext;
 
@@ -318,7 +318,7 @@ test.describe.serial('Toon E2E (spec 13)', () => {
     cliToken = await cliLoginToken(adminApi, adminPage, ADMIN_URL, ADMIN_SUB, { email: ADMIN_EMAIL });
     expect(cliToken).toMatch(/^tooncli_/);
 
-    // Bearer deploy without an Origin header: the CI path of the publiceer action
+    // Bearer deploy without an Origin header: the CI path of the publish action
     // (a CLI token is accepted the same way).
     const deploy = await adminApi.post(`${API}/sites/${GROUP}/${SITE}/deploys`, {
       headers: { authorization: `Bearer ${cliToken}` },

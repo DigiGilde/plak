@@ -1924,7 +1924,7 @@ async def _group_with_role(
 ) -> Group:
     """Looks up the group and demands a group role of at least `minimum`.
 
-    `platform_admin` lets a platformbeheerder through without a group role; it
+    `platform_admin` lets a platform admin through without a group role; it
     is set only on the actions about people and groups, never about content.
     """
     group = await _group_or_404(db, slug)
@@ -1946,7 +1946,7 @@ async def _site_with_role(
     as for a site that is not there.
 
     Two people are spared that: someone who does have a role and only a
-    narrower one than this action needs, and a platformbeheerder. Both can
+    narrower one than this action needs, and a platform admin. Both can
     already see that the site exists, the first from within the group and the
     second from the detail of any group, so hiding it from them protects
     nothing and only sends them looking for a mistake
@@ -2000,8 +2000,8 @@ def _refuse_bootstrap(request: Request, target: Member) -> None:
 
 
 async def _refuse_last_admin(db: AsyncSession, target: Member) -> None:
-    """A platform without an active beheerder can never let anyone in again:
-    activating a member is itself a beheerder action. So the last one stays."""
+    """A platform without an active admin can never let anyone in again:
+    activating a member is itself an admin action. So the last one stays."""
     if target.platform_role != PlatformRole.ADMIN or target.status != MemberStatus.ACTIVE:
         return
     remaining = await db.scalar(
@@ -3171,7 +3171,7 @@ def make_admin_router() -> APIRouter:
         except IntegrityError as error:
             await db.rollback()
             raise _slug_conflict(error, "group", slug) from None
-        # The creator becomes group beheerder in the same transaction, otherwise
+        # The creator becomes group admin in the same transaction, otherwise
         # they cannot create a site in their own fresh group (403).
         db.add(GroupMember(group_id=group.id, member_id=member.id, role=Role.ADMIN))
         await db.commit()
@@ -3445,7 +3445,7 @@ def make_admin_router() -> APIRouter:
         except IntegrityError as error:
             await db.rollback()
             raise _slug_conflict(error, "site", slug) from None
-        # The creator becomes site beheerder of what they create.
+        # The creator becomes site admin of what they create.
         db.add(
             SiteMember(
                 site_id=site.id, member_id=member.id, role=Role.ADMIN, added_by=member.id
@@ -4820,7 +4820,7 @@ def make_admin_router() -> APIRouter:
         )
         return await _member_out(db, target, request.app.state.settings.bootstrap_admin_sub)
 
-    # -- Auditlog --
+    # -- Audit log --
 
     @router.get(
         "/platform/audit",

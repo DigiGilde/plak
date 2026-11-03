@@ -43,7 +43,7 @@ clusters:
   - odcn-production
 
 users:
-  - email: vul-in@minbzk.nl
+  - email: fill-in@minbzk.nl
     role: admin
 
 # A service-entry is either a bare string or a single-key object keyed by the
@@ -219,7 +219,7 @@ deployments:
           # The `sub` from the ZAD Keycloak of the first platform admin;
           # they thereby get in without a member record. Different per
           # environment.
-          TOON_BOOTSTRAP_ADMIN_SUB: "vul-in"
+          TOON_BOOTSTRAP_ADMIN_SUB: "fill-in"
           # Who runs this installation and how to reach them, shown on the
           # public privacy and accessibility pages. The address is also the
           # mail Contact in security.txt.

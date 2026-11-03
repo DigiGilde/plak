@@ -5,7 +5,7 @@ start of the route that returns nothing and otherwise raises a 403. The role
 computation itself lives in access/roles.py, so that the API and the access
 gate use the same answer.
 
-There is deliberately no platformbeheerder bypass here: the platformbeheerder
+There is deliberately no platform admin bypass here: the platform admin
 manages people and groups, not sites, and gets into a group by visibly
 giving themselves a group role.
 """

@@ -143,7 +143,7 @@ class AccessPolicy:
         """Whether having a session can grant what anonymity cannot.
 
         This, not the base alone, decides the login redirect: base `nobody`
-        plus genodigden still has to send an anonymous visitor to the login,
+        plus invitees still has to send an anonymous visitor to the login,
         while base `nobody` with only secret links must stay a neutral 404.
         """
         return self.base in (AccessBase.SSO, AccessBase.SITE_TEAM) or self.invitees

@@ -190,7 +190,7 @@ const defaultAccess = computed<Access>(
  * The group default, with whatever the user changed on top of it. The two
  * extras belong here as well as on the Toegang tab: without them "Niemand
  * standaard" would publish a site nobody can reach. Turning on the secret link
- * makes the first key on the "klaar" screen (pages/Done.vue); the invitee list
+ * makes the first key on the "done" screen (pages/Done.vue); the invitee list
  * is filled on the Toegang tab afterwards.
  */
 const effectiveAccess = computed<Access>(() => ({
@@ -675,7 +675,7 @@ useSheetOpen(
             <!-- No eligible group also lands here, not on a dead end: creating
                  a group is open to every active member (backend `create_group`),
                  so it is the way out even for someone whose existing groups
-                 all refuse them the editor/beheerder role. -->
+                 all refuse them the editor/admin role. -->
             <nldd-form-field
               v-else-if="noEligibleGroup && !createdGroup"
               :label="t('publish.sheet.groupName.label')"

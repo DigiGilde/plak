@@ -12,7 +12,7 @@
  * "Zet een site online" sits in the header rather than on a tab: the action
  * belongs to the group, not to one part of it, and stays reachable everywhere.
  * It only shows for someone who may actually create a site here (group role
- * editor/beheerder, via `mayCreateSiteIn`); without it the button would only
+ * editor/admin, via `mayCreateSiteIn`); without it the button would only
  * lead to a 403 after the form is filled in.
  *
  * The breadcrumb trail travels to the app shell's footer via the shared

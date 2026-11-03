@@ -367,9 +367,9 @@ async def test_authenticated_counted_per_member_not_per_ip() -> None:
         r3 = await client.get("/-/api/v1/x", headers={"x-test-lid-sub": "lid-1"})
         r4 = await client.get("/-/api/v1/x", headers={"x-test-lid-sub": "lid-2"})
 
-    # same lid, changing (untrusted) IPs: still one shared budget of 2.
+    # same member, changing (untrusted) IPs: still one shared budget of 2.
     assert [r1.status_code, r2.status_code, r3.status_code] == [200, 200, 429]
-    # another lid has a budget of its own, still unused.
+    # another member has a budget of its own, still unused.
     assert r4.status_code == 200
 
 

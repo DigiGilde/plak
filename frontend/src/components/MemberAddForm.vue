@@ -103,7 +103,7 @@ const {
           </nldd-form-field>
 
           <!-- The role is picked while adding, not afterwards: it decides what
-               someone may from their first minute, and lezer as the default
+               someone may from their first minute, and reader as the default
                makes promoting the deliberate step. -->
           <nldd-form-field :label="labels.role">
             <nldd-dropdown>

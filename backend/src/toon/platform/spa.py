@@ -79,8 +79,8 @@ CACHE_OTHER = "no-cache"
 INDEX = "index.html"
 
 MESSAGE_SPA_MISSING = (
-    "De beheeromgeving is niet beschikbaar: de gebouwde SPA ontbreekt. "
-    "Bouw de frontend (npm run build) of wijs TOON_SPA_PATH naar de dist-map.\n"
+    "The admin environment is not available: the built SPA is missing. "
+    "Build the frontend (npm run build) or point TOON_SPA_PATH at the dist directory.\n"
 )
 
 

@@ -706,7 +706,7 @@ async def test_a_stale_key_cookie_does_not_shut_out_a_logged_in_visitor(db):
 
 
 async def test_extras_add_nothing_to_a_public_base(db):
-    """The interface says so, and the gate has to mean it: on base publiek
+    """The interface says so, and the gate has to mean it: on base public
     every visitor is allowed, whatever they hand in."""
     world = await make_world(db, AccessPolicy(AccessBase.PUBLIC, keys=True, invitees=True))
     for name in ("anonymous", "key_query_wrong", "member_outside_group"):
@@ -731,7 +731,7 @@ async def test_closed_base_with_invitees_sends_the_anonymous_to_the_login(db):
 
 
 async def test_closed_base_without_extras_is_reachable_for_nobody(db):
-    """Base niemand standaard and both extras off: the site exists, has a live
+    """Base nobody by default and both extras off: the site exists, has a live
     version, and no visitor in the matrix gets in."""
     world = await make_world(db, AccessPolicy(AccessBase.NOBODY))
     for name in VISITOR_NAMES:

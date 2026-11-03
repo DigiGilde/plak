@@ -56,8 +56,8 @@ publish-audit-head:
     cd backend && uv run python -m toon.audit.checkpoint
 
 # Check the database against a previously published head line (- for stdin)
-verify-audit-head bestand:
-    cd backend && uv run python -m toon.audit.checkpoint --against {{bestand}}
+verify-audit-head file:
+    cd backend && uv run python -m toon.audit.checkpoint --against {{file}}
 
 # Scan the dependencies like the CI job `vulnerabilities` does
 scan:

@@ -253,8 +253,8 @@ async function onRole(row: Row, role: Role): Promise<void> {
   try {
     emit('roleChanged', await props.setRole(row.memberId, role));
   } catch (error) {
-    // The backend refuses a change that would leave the group without a
-    // beheerder; its message says so.
+    // The backend refuses a change that would leave the group without an
+    // admin; its message says so.
     notify(t('group.members.roleChangeFailed', { name: row.name }), error);
   }
 }
