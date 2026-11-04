@@ -1,1 +1,0 @@
-- A screen reader reads the name in the header of the API docs as one word, "Toon", instead of as "T" and "oon".

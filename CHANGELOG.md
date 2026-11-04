@@ -14,6 +14,27 @@ write a fragment and the rest of the model are in
 
 Merged but not released yet: the fragments in [changelog.d/](changelog.d/README.md).
 
+## [2026.11.4]
+
+### Changed
+
+- The comments in the workflow and command examples on the "Deploy" tab are in English, also in the Dutch interface.
+
+### Removed
+
+- The server no longer reads `PLAK_<NAME>` variables and no longer warns about
+  them at startup: every setting is a `TOON_<NAME>` variable.
+- The CLI no longer reads `PLAK_HOST`, `PLAK_SITE_ID`, `PLAK_ACCESS_TOKEN` and
+  `PLAK_CONFIG_DIR`: use `TOON_HOST`, `TOON_SITE_ID`, `TOON_ACCESS_TOKEN` and
+  `TOON_CONFIG_DIR`.
+
+### Fixed
+
+- A screen reader reads the name in the header of the API docs as one word, "Toon", instead of as "T" and "oon".
+- A host the CLI cannot use, such as one with a port that is no number or a bracket that is never closed, stops with an error line and exit code 2 instead of a traceback.
+- The browser tab of the landing page is titled "Toon" for a visitor who is not signed in, no longer "Overview - Toon".
+- Dutch messages name a role by its Dutch label instead of the English identifier, and English messages say "admin" instead of the Dutch word "beheer".
+
 ## [2026.11.2.1]
 
 ### Changed
@@ -387,7 +408,8 @@ The first tagged version: what ran in production on 30 September 2026.
 - Deployment on ZAD as one component, from an image that is scanned by
   Trivy and carries SBOM and provenance attestations.
 
-[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.11.2.1...HEAD
+[Unreleased]: https://github.com/DigiGilde/toon/compare/v2026.11.4...HEAD
+[2026.11.4]: https://github.com/DigiGilde/toon/compare/v2026.11.2.1...v2026.11.4
 [2026.11.2.1]: https://github.com/DigiGilde/toon/compare/v2026.11.2...v2026.11.2.1
 [2026.11.2]: https://github.com/DigiGilde/toon/compare/v2026.11.1...v2026.11.2
 [2026.11.1]: https://github.com/DigiGilde/toon/compare/v2026.10.31...v2026.11.1

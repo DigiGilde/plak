@@ -535,7 +535,7 @@ wheels = [
 
 [[package]]
 name = "toon"
-version = "2026.11.2.1"
+version = "2026.11.4"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

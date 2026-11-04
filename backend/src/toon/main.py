@@ -75,7 +75,7 @@ from toon.security_headers import SecurityHeadersMiddleware, is_https
 from toon.serving.code_page import router as code_router
 from toon.serving.router import router as serving_router
 
-API_VERSION = "1.4.0"
+API_VERSION = "1.4.1"
 
 _logger = logging.getLogger(__name__)
 

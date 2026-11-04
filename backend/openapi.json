@@ -9,7 +9,7 @@
       "url": "https://github.com/DigiGilde/toon/issues",
       "email": "digigilde@rijksoverheid.nl"
     },
-    "version": "1.4.0"
+    "version": "1.4.1"
   },
   "servers": [
     {
@@ -8374,7 +8374,7 @@
           "nobody"
         ],
         "title": "AccessBase",
-        "description": "The base answer to \"who can look at this site\": exactly one per site,\nand never the whole story.\n\n`nobody` grants no access on its own. A site on that base is unreachable unless\none of the two exceptions beside it (secret links, invitees) is on, which is\nwhat makes \"alleen via de uitzonderingen hieronder\" (\"only through the exceptions below\")\nexpressible at all."
+        "description": "The base answer to \"who can look at this site\": exactly one per site,\nand never the whole story.\n\n`nobody` grants no access on its own. A site on that base is unreachable unless\none of the two exceptions beside it (secret links, invitees) is on, which is\nwhat makes \"only through the exceptions below\" expressible at all."
       },
       "AccessBody": {
         "properties": {
@@ -10635,7 +10635,7 @@
           "admin"
         ],
         "title": "Role",
-        "description": "Role within a group or within a site.\n\nA reader looks on, an editor changes content, an admin changes policy: who\nmay look, who may join in, and what disappears for good. The interface\nlabels these lezer, redacteur and beheerder."
+        "description": "Role within a group or within a site.\n\nA reader looks on, an editor changes content, an admin changes policy: who\nmay look, who may join in, and what disappears for good. The interface\nlabels these Reader, Editor and Administrator in English and lezer,\nredacteur and beheerder in Dutch."
       },
       "SandboxBody": {
         "properties": {
