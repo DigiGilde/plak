@@ -1,1 +1,0 @@
-- The comments in the workflow and command examples on the "Deploy" tab are in English, also in the Dutch interface.

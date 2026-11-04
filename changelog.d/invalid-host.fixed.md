@@ -1,1 +1,0 @@
-- A host the CLI cannot use, such as one with a port that is no number or a bracket that is never closed, stops with an error line and exit code 2 instead of a traceback.
